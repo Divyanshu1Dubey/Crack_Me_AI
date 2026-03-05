@@ -1,0 +1,1250 @@
+# Surg Hernia
+Source: https://en.wikipedia.org/wiki/Hernia
+
+Abnormal exit of tissues or organs from the cavity they usually reside in
+Medical condition
+Hernia
+Diagram of an
+indirect inguinal hernia
+(view from the side)
+Specialty
+General surgery
+Symptoms
+Pain especially with coughing, bulging area
+Complications
+Bowel strangulation
+Usual onset
+< 1 year and > 50 years old (groin hernias)
+Risk factors
+Smoking,
+chronic obstructive pulmonary disease
+obesity
+pregnancy
+peritoneal dialysis
+collagen vascular disease
+, connective tissue disease
+Diagnostic method
+Based on symptoms,
+medical imaging
+Treatment
+Observation, surgery
+Frequency
+18.5 million (2015)
+Deaths
+59,800 (2015)
+hernia
+pl.
+hernias
+herniae
+, from
+Latin
+, meaning 'rupture') is the abnormal exit of tissue or an
+organ
+, such as the
+bowel
+, through the wall of the cavity in which it normally resides.
+The term is also used for the normal
+development of the intestinal tract
+, referring to the retraction of the intestine from the extra-embryonal
+navel
+coelom
+into the
+abdomen
+in the healthy embryo at about 7
+weeks.
+Various types of hernias can occur,
+most commonly involving the
+abdomen
+, and specifically the
+groin
+Groin hernias are most commonly
+inguinal
+hernias but may also be
+femoral hernias
+Other types of hernias include
+hiatus
+incisional
+, and
+umbilical hernias
+Symptoms are present in about 66% of people with groin hernias.
+This may include pain or discomfort in the lower abdomen, especially with coughing, exercise, or
+urinating
+defecating
+Often, it gets worse throughout the day and improves when lying down.
+A bulge may appear at the site of hernia, that becomes larger when bending down.
+Groin hernias occur more often on the right than left side.
+The main concern is
+bowel strangulation
+, where the blood supply to part of the bowel is blocked.
+This usually produces severe pain and tenderness in the area.
+Hiatus, or hiatal hernias often result in
+heartburn
+but may also cause chest pain or pain while eating.
+Risk factors for the development of a hernia include
+smoking
+chronic obstructive pulmonary disease
+obesity
+pregnancy
+peritoneal dialysis
+collagen vascular disease
+, and previous open
+appendectomy
+, among others.
+Predisposition to hernias is
+genetic
+and occur more often in certain families.
+Deleterious mutations
+causing predisposition to hernias seem to have
+dominant
+inheritance (especially for men). It is unclear if groin hernias are associated with heavy lifting.
+Hernias can often be diagnosed based on signs and symptoms.
+Occasionally,
+medical imaging
+is used to confirm the diagnosis or rule out other possible causes.
+The diagnosis of
+hiatus hernias
+is often done by
+endoscopy
+Groin hernias that do not cause symptoms in males do not need immediate surgical repair, a practice referred to as "
+watchful waiting
+However most men tend to eventually undergo groin hernia surgery due to the development of pain.
+For women, however, repair is generally recommended due to the higher rate of
+femoral hernias
+, which have more complications.
+If strangulation occurs,
+immediate surgery
+is required.
+Repair may be done by open surgery,
+laparoscopic surgery, or robotic-assisted surgery
+Open surgery has the benefit of possibly being done under
+local anesthesia
+rather than
+general anesthesia
+Laparoscopic surgery generally has less pain following the procedure.
+A hiatus hernia may be treated with lifestyle changes such as raising the head of the bed,
+weight loss
+and adjusting
+eating habits
+The medications
+H2 blockers
+proton pump inhibitors
+may help.
+If the symptoms do not improve with medications, a surgery known as
+laparoscopic Nissen fundoplication
+may be an option.
+Globally in 2019, there were 32.53 million prevalent cases of inguinal, femoral, and abdominal hernias, with a 95% uncertainty interval ranging from 27.71 to 37.79 million. Additionally, there were 13.02 million incident cases, with an uncertainty interval of 10.68 to 15.49 million. These figures reflect a 36.00% increase in prevalent cases and a 63.67% increase in incident cases compared to the numbers reported in 1990.
+About 27% of males and 3% of females develop a groin hernia at some point in their lives.
+Inguinal, femoral and abdominal hernias were present in 18.5 million people and resulted in 59,800 deaths in 2015.
+Groin
+hernias occur most often before the age of 1 and after the age of 50.
+It is not known how commonly hiatus hernias occur, with estimates in North America varying from 10% to 80%.
+The first known description of a hernia dates back to at least 1550 BC, in the
+Ebers Papyrus
+from Egypt.
+Pathogenesis
+Most hernias happen when the muscles and tendons in the belly weaken or get damaged, which makes it hard for them to keep the insides in place and support the body properly. The belly and pelvis act like a container made of muscles, tendons and bones. When pressure builds up inside this container, the muscles push back to keep everything in place. If the pressure gets too high, it may cause the belly's wall to break, leading to a hernia. Once a hernia starts, it keeps enlarging, because the tension on the wall there increases.
+Epidemiology
+About 27% of males and 3% of females develop a groin hernia at some time in their lives.
+In 2013 about 25 million people had a hernia.
+Inguinal, femoral and abdominal hernias resulted in 32,500 deaths globally in 2013 and 50,500 in 1990.
+Healthcare costs associated with abdominal wall hernias account for an annual expenditure of approximately 2.5 to 3 billion dollars.
+Signs and symptoms
+Symptoms and signs vary depending on the type of hernia. By far the most common hernias develop in the
+abdomen
+when a weakness in the abdominal wall evolves into a localized hole, or "defect", through which
+adipose tissue
+, or abdominal organs covered with
+peritoneum
+, may protrude. Another common hernia involves the
+spinal discs
+and causes
+sciatica
+. A
+hiatus hernia
+occurs when the stomach protrudes into the
+mediastinum
+through the esophageal opening in the
+diaphragm
+Hernias might manifest with pain in the area, a noticeable lump, or less specific symptoms caused by pressure on an organ stuck within the hernia, potentially leading to organ dysfunction. Typically, fatty tissue is the initial entrant into a hernia, but it might also involve an organ. Hernias are caused by a disruption or opening in the
+fascia
+, or fibrous tissue, which forms the abdominal wall. It is possible for the bulge associated with a hernia to come and go, but the defect in the tissue will persist.
+Symptoms may or may not be present in some
+inguinal hernias
+. In the case of reducible hernias, a bulge in the
+groin
+or in another abdominal area can often be seen and felt. When standing, such a bulge becomes more obvious. Besides the bulge, other symptoms include pain in the groin that may also include a heavy or dragging sensation, and in men, there is sometimes pain and swelling in the
+scrotum
+around the
+testicular
+area.
+Irreducible abdominal hernias or incarcerated hernias may be painful, but their most relevant symptom is that they cannot return to the abdominal cavity when pushed in. They may be chronic, although painless, and can lead to strangulation (loss of blood supply), obstruction (kinking of intestine), or both. Strangulated hernias are always painful and pain is followed by tenderness.
+Nausea
+vomiting
+, or
+fever
+may occur in these cases due to
+bowel
+obstruction. Also, the hernia bulge, in this case, may turn red, purple or dark and pink.
+In the diagnosis of abdominal hernias,
+imaging
+is the principal means of detecting internal diaphragmatic and other nonpalpable or unsuspected hernias.
+Multidetector CT
+(MDCT) can show with precision the anatomic site of the hernia sac, the contents of the sac, and any complications. MDCT also offers clear detail of the abdominal wall allowing wall hernias to be identified accurately.
+Complications
+Untreated hernia may be complicated by:
+Inflammation
+Obstruction
+of any lumen, such as
+bowel obstruction
+in intestinal hernias
+Strangulation
+Hydrocele
+of the hernial sac
+Hemorrhage
+Autoimmune
+problems
+Irreducibility
+or incarceration, in which it cannot be reduced, or pushed back into place,
+at least not without very much external effort.
+In intestinal hernias, this also substantially increases the risk of bowel obstruction and strangulation.
+Causes
+Causes of hiatus hernia vary depending on each individual. Among the multiple causes, however, are the mechanical causes which include: improper heavy weight lifting, hard
+coughing
+bouts, sharp blows to the abdomen, and incorrect
+posture
+Furthermore, conditions that increase the pressure of the abdominal cavity may also cause hernias or worsen the existing ones. Some examples would be: obesity, straining during a bowel movement or urination (constipation,
+enlarged prostate
+chronic lung disease
+, and also, fluid in the abdominal cavity (
+ascites
+Also, if muscles are weakened due to
+poor nutrition
+smoking
+, and
+overexertion
+, hernias are more likely to occur.
+The physiological school of thought contends that in the case of
+inguinal hernia
+, the above-mentioned are only an
+anatomical
+symptom of the underlying
+physiological
+cause. They contend that the risk of hernia is due to a physiological difference between patients who have hernia and those who do not, namely the presence of
+aponeurotic
+extensions from the
+transversus abdominis
+aponeurotic arch.
+There isn't any proof that being physically active will cause a hernia to get stuck or make an existing hernia worse.
+Abdominal wall hernia may occur due to trauma. If this type of hernia is due to blunt trauma it is an emergency condition and could be associated with various solid organs and hollow viscus injuries.
+Diagnosis
+Inguinal
+Main article:
+Inguinal hernia
+By far, the most common hernias (up to 75% of all abdominal hernias) are inguinal hernias, which are further divided into the more common
+indirect inguinal hernia
+(2/3, depicted here), in which the inguinal canal is entered via a congenital weakness at its entrance (the internal inguinal ring), and the
+direct inguinal hernia
+type (1/3), where the hernia contents push through a weak spot in the back wall of the inguinal canal. An
+indirect inguinal hernia
+and a
+direct inguinal hernia
+can be distinguished by their positioning in relation to the inferior epigastric vessels: an indirect hernia is situated laterally to these vessels, whereas a direct hernia is positioned medially to them. Inguinal hernias are the most common type of hernia in both men and women. In some selected cases, they may require
+surgery
+There are special cases where a direct and indirect hernia appear together. A
+pantaloon hernia
+(or saddlebag hernia) is a combined direct and indirect hernia when the hernial sac protrudes on either side of the
+inferior epigastric vessels
+Additionally, though very rare, two or more indirect hernias may appear together such as in a
+double indirect hernia
+Femoral
+Main article:
+Femoral hernia
+Femoral hernias
+occur just below the
+inguinal ligament
+, when abdominal contents pass into the weak area at the posterior wall of the
+femoral canal
+. They can be hard to distinguish from the inguinal type (especially when ascending cephalad)
+: however, they generally appear more rounded, and, in contrast to inguinal hernias, there is a strong female preponderance in femoral hernias. The incidence of strangulation in femoral hernias is high. Repair techniques are similar for femoral and
+inguinal hernia
+Cooper's hernia
+is a femoral hernia with two sacs, the first being in the femoral canal, and the second passing through a defect in the superficial fascia and appearing almost immediately beneath the skin.
+Umbilical
+Main article:
+Umbilical hernia
+They involve
+protrusion
+of intra-abdominal contents through a weakness at the site of passage of the
+umbilical cord
+through the
+abdominal wall
+. Umbilical hernias in adults are largely acquired, and are more frequent in
+obese
+pregnant
+women. Abnormal
+decussation
+of fibers at the
+linea alba
+may be a contributing factor.
+Incisional
+Main article:
+Incisional hernia
+An incisional hernia occurs when the defect is the result of an incompletely healed surgical wound. When these occur in median
+laparotomy
+incisions in the
+linea alba
+, they are termed
+ventral hernias
+. These occur in about 13% of people at 2 years following surgery.
+Diaphragmatic
+Main article:
+Diaphragmatic hernia
+Higher in the abdomen, an (internal) "diaphragmatic hernia" results when part of the stomach or intestine protrudes into the
+chest cavity
+through a defect in the diaphragm.
+hiatus hernia
+is a particular variant of this type, in which the normal passageway through which the esophagus meets the stomach (
+esophageal hiatus
+) serves as a functional "defect", allowing part of the
+stomach
+to periodically "herniate" into the chest. Hiatus hernias may be either "
+sliding
+", in which the
+gastroesophageal junction
+itself slides through the defect into the
+chest
+, or non-sliding (also known as
+para-esophageal
+), in which case the junction remains fixed while another portion of the stomach moves up through the defect. Non-sliding or para-esophageal hernias can be dangerous as they may allow the stomach to rotate and obstruct. Repair is usually advised.
+congenital diaphragmatic hernia
+is a distinct problem, occurring in up to 1 in 2000 births, and requiring
+pediatric surgery
+. Intestinal organs may herniate through several parts of the
+diaphragm
+, posterolateral (in
+Bochdalek's triangle
+(lumbocostal triangle), resulting in a
+Bochdalek hernia
+), or anteromedial-retrosternal (in the cleft of
+foramina of Morgagni
+(sternocostal triangle), resulting in a
+Morgagni's hernia
+Symptoms of a congenital diaphragmatic hernia include elevated heart rate, abnormal breathing, stomach pain, a sunken stomach, and constipation.
+Other hernias
+Since many organs or parts of organs can herniate through many orifices, it is very difficult to give an exhaustive list of hernias, with all synonyms and
+eponyms
+. The above article deals mostly with "visceral hernias", where the herniating tissue arises within the abdominal cavity. Other hernia types and unusual types of visceral hernias are listed below, in alphabetical order:
+Abdominal wall
+hernias:
+Umbilical hernia
+Epigastric hernia
+: a hernia through the
+linea alba
+above the
+umbilicus
+Spigelian hernia
+, also known as spontaneous lateral ventral hernia
+Amyand's hernia
+: containing the appendix vermiformis within the hernia sac
+Brain herniation
+, sometimes referred to as brain hernia, is a potentially deadly side effect of very high
+intracranial pressure
+that occurs when a part of the
+brain
+is squeezed across structures within the
+skull
+Broad ligament hernia
+, of the uterus.
+Double indirect hernia
+: an indirect inguinal hernia with two hernia sacs, without a concomitant direct hernia component (as seen in a pantaloon hernia).
+Hiatus hernia
+: a hernia due to "short oesophagus" — insufficient elongation — stomach is displaced into the thorax
+Littre's hernia
+: a hernia involving a
+Meckel's diverticulum
+. It is named after the French anatomist
+Alexis Littré
+(1658–1726).
+Lumbar
+hernia: a hernia in the lumbar region (not to be confused with a
+lumbar disc hernia
+), contains the following entities:
+Petit's hernia
+: a hernia through Petit's triangle (inferior lumbar triangle). It is named after French surgeon
+Jean Louis Petit
+(1674–1750).
+Grynfeltt's hernia
+: a hernia through Grynfeltt-Lesshaft triangle (superior lumbar triangle). It is named after physician Joseph Grynfeltt (1840–1913).
+Maydl's hernia
+: two adjacent loops of small intestine are within a hernial sac with a tight neck. The intervening portion of bowel within the abdomen is deprived of its blood supply and eventually becomes necrotic.
+Obturator hernia
+: hernia through
+obturator canal
+Parastomal hernias, which is when tissue protrudes adjacent to a
+stoma
+tract. Evidence comparing different surgical techniques for stoma placement, such as lateral pararectal versus transrectal approaches, has not shown a clear difference in the risk of developing a parastomal hernia, and the certainty of the available evidence is low.
+Paraumbilical hernia
+: a type of umbilical hernia occurring in adults
+Perineal hernia
+: a perineal hernia protrudes through the muscles and fascia of the perineal floor. It may be primary but usually is acquired following perineal prostatectomy, abdominoperineal resection of the rectum, or pelvic exenteration.
+Properitoneal hernia: rare hernia located directly above the
+peritoneum
+, for example, when part of inguinal hernia projects from the
+deep inguinal ring
+to the preperitoneal space.
+Retrocolic hernia
+: entrapment of portions of the small intestine behind the
+mesocolon
+Richter's hernia
+: a hernia involving only one sidewall of the bowel, which can result in bowel strangulation leading to perforation through ischaemia without causing
+bowel obstruction
+or any of its warning signs. It is named after German surgeon
+August Gottlieb Richter
+(1742–1812).
+Sliding hernia
+: occurs when an organ drags along part of the peritoneum, or, in other words, the organ is part of the hernia sac. The
+colon
+and the
+urinary bladder
+are often involved. The term also frequently refers to
+sliding hernias of the stomach
+Sciatic hernia: this hernia in the
+greater sciatic foramen
+most commonly presents as an uncomfortable mass in the gluteal area. Bowel obstruction may also occur. This type of hernia is only a rare cause of
+sciatic
+neuralgia.
+Sports hernia
+: a hernia characterized by chronic groin pain in athletes and a dilated
+superficial inguinal ring
+Tibialis anterior hernia
+: can present as a bulge in the shins. Pain on rest, walking, or during exercise may occur. The bulge can typically not be present unless pressure or flexing of the leg occurs.
+Velpeau hernia
+: a hernia in the groin in front of the femoral blood vessels
+Treatment
+Main articles:
+Hernia repair
+and
+Inguinal hernia surgery
+Truss
+The benefits of the use of an external device to maintain reduction of the hernia without repairing the underlying defect (such as hernia
+trusses
+, trunks, belts, etc.) are unclear.
+Surgery
+Surgery is recommended for some types of hernias to prevent complications such as obstruction of the bowel or strangulation of the tissue, although umbilical hernias and hiatus hernias may be watched, or are treated with medication.
+Most abdominal hernias can be surgically repaired, but surgery has complications. Prior to surgery patients should be medically optimized receive guidance about changing factors that can be controlled, such as quitting smoking, managing medical conditions like diabetes effectively, and working on losing weight.
+Three primary methods can be utilized: open surgery,
+laparoscopy
+, or robotic techniques. Fixing an inguinal hernia using
+laparoscopy
+causes less pain, speeds up recovery, and shows similar low rates of the hernia coming back compared to the traditional open repair method. However, open surgery can be done sometimes without general anesthesia. Using local anesthesia for open groin hernia repair, particularly in patients with additional health issues, leads to fewer complications and reduced costs.
+Studies show that compared to regional or general anesthesia, local anesthesia results in less postoperative pain, shorter recovery times, and decreased unplanned overnight stays.
+However, it might not be enough for repairing large hernias or in patients with abdominal domain loss, where general anesthesia is preferred.
+Laparoscopic mesh surgery
+, as compared to open mesh surgery
+Advantages
+Disadvantages
+Quicker recovery
+Less pain during the first few days following the procedure
+Fewer postoperative complications such as infections, bleeding and
+seromas
+Lower risk of chronic pain
+Needs a surgeon who is highly experienced in inguinal hernia repair (>200 operations/year)
+Longer operation time
+Increased recurrence of primary hernias if a surgeon is not experienced enough
+Robot-assisted
+hernia surgery has also recently gained popularity as safe alternatives to open surgery. Robotic surgery for inguinal hernia repair shows outcomes comparable to laparoscopic surgery. The rates of overall complications, long-lasting postoperative pain, urinary retention, and 30-day re-admission are very similar between these two methods.
+Just like in other areas of general surgery, it has been noted that robotic surgery for inguinal hernia repair takes more time in the operating room compared to the laparoscopic approach.
+Uncomplicated hernias are principally repaired by pushing back, or "reducing", the herniated tissue, and then mending the weakness in muscle tissue (an operation called
+herniorrhaphy
+). If complications have occurred, the surgeon will check the viability of the herniated organ and remove part of it if necessary.
+Muscle reinforcement techniques often involve synthetic materials (a
+mesh prosthesis
+The mesh is placed either over the defect (anterior repair) or under the defect (posterior repair). At times
+staples
+are used to keep the mesh in place. These
+mesh repair methods
+are often called "tension free" repairs because, unlike some
+suture
+methods (e.g., Shouldice), muscle is not pulled together under tension.
+However, this widely used terminology is misleading, as there are many
+tension-free suture methods
+that do not use mesh (e.g., Desarda, Guarnieri, Lipton-Estrin, etc.).
+Evidence suggests that tension-free methods (with or without mesh) often have lower percentage of recurrences and the fastest recovery period compared to
+tension suture methods
+. However, the use of prosthetic mesh appears to have a higher likelihood of causing long-term pain and can also lead to infections.
+Cell-based adjuncts remain under investigation and may alleviate some of these complications.
+The frequency of surgical correction ranges from 10 per 100,000 (U.K.) to 28 per 100,000 (U.S.).
+After elective surgery, the 30-day mortality rate for inguinal or femoral hernia repair stands at 0.1 percent, but it increases to 2.8 to 3.1 percent after urgent surgery.
+When a bowel resection is part of the hernia repair, the mortality rate is even higher.
+Older age, femoral hernias, female sex, and urgent repair are identified as other factors linked to a higher risk of mortality.
+Post-Operative Complications
+Some complications from surgery in order of prevalence include a
+seroma
+hematoma
+formation, urinary retention,
+neuralgias
+, testicular pain/swelling, mesh infection/wound infection, and recurrence.
+A seroma is often seen after an indirect hernia repair and resolves spontaneously over 4–6 weeks. To prevent a seroma it's important to reduce the amount of cutting around the hernia sac where it's connected to the cord structures.
+Additionally, securely attaching the hernia sac to the pubic bone and creating small openings in the tissue around a direct hernia can help.
+In cases of heavy bleeding or extensive cutting, certain surgeons may opt to insert a drain.
+Urinary retention is often seen in elderly patients, these patients can be catheterized prior to surgery if there is a risk.
+Other complications may arise
+post-operatively
+, including rejection of the
+mesh
+that is used to repair the hernia. In the event of a mesh rejection, the mesh will very likely need to be removed. Mesh rejection can be detected by obvious, sometimes localized swelling and pain around the mesh area. Continuous discharge from the scar is likely for a while after the mesh has been removed. A surgically treated hernia can lead to complications such as
+inguinodynia
+Recovery
+Many patients are managed through
+day surgery
+centers and are able to return to work within a week or two, though intense activities are prohibited for a longer period. People who have their hernias repaired with mesh often recover within a month, but pain can last longer. Surgical complications may include pain that lasts more than three months, surgical site infections, nerve and blood vessel injuries, injury to nearby organs, and hernia recurrence. Pain that lasts more than three months occurs in about 10% of people following hernia repair.
+References
+Fitzgibbons RJ, Forse RA (February 2015). "Clinical practice. Groin hernias in adults".
+The New England Journal of Medicine
+372
+(8):
+756–
+763.
+doi
+10.1056/NEJMcp1404068
+PMID
+25693015
+Domino FJ (2014).
+The 5-minute clinical consult 2014
+(22nd ed.). Philadelphia, Pennsylvania: Wolters Kluwer Health/Lippincott Williams & Wilkins. p. 562.
+ISBN
+978-1-4511-8850-9
+Archived
+from the original on 2017-08-22.
+Roman S, Kahrilas PJ (October 2014). "The diagnosis and management of hiatus hernia".
+BMJ
+349
+g6154.
+doi
+10.1136/bmj.g6154
+PMID
+25341679
+S2CID
+7141090
+Vos T, Allen C, Arora M, Barber RM, Bhutta ZA, Brown A, et al. (GBD 2015 Disease and Injury Incidence and Prevalence Collaborators) (October 2016).
+"Global, regional, and national incidence, prevalence, and years lived with disability for 310 diseases and injuries, 1990-2015: a systematic analysis for the Global Burden of Disease Study 2015"
+Lancet
+388
+(10053):
+1545–
+1602.
+doi
+10.1016/S0140-6736(16)31678-6
+PMC
+5055577
+PMID
+27733282
+Wang H, Naghavi M, Allen C, Barber RM, Bhutta ZA, Carter A, et al. (GBD 2015 Mortality and Causes of Death Collaborators) (October 2016).
+"Global, regional, and national life expectancy, all-cause mortality, and cause-specific mortality for 249 causes of death, 1980-2015: a systematic analysis for the Global Burden of Disease Study 2015"
+Lancet
+388
+(10053):
+1459–
+1544.
+doi
+10.1016/s0140-6736(16)31012-1
+PMC
+5388903
+PMID
+27733281
+"Hernia"
+MedlinePlus
+. U.S. National Library of Medicine. 9 August 2014.
+Archived
+from the original on 16 March 2015
+. Retrieved
+12 March
+2015
+Öberg S, Andresen K, Rosenberg J (2017).
+"Etiology of Inguinal Hernias: A Comprehensive Review"
+Frontiers in Surgery
+: 52.
+doi
+10.3389/fsurg.2017.00052
+PMC
+5614933
+PMID
+29018803
+Mihailov E, Nikopensius T, Reigo A, Nikkolo C, Kals M, Aruaas K, et al. (February 2017).
+"Whole-exome sequencing identifies a potential TTN mutation in a multiplex family with inguinal hernia"
+Hernia
+(1):
+95–
+100.
+doi
+10.1007/s10029-016-1491-9
+PMC
+5281683
+PMID
+27115767
+Sezer S, Şimşek N, Celik HT, Erden G, Ozturk G, Düzgün AP, et al. (August 2014). "Association of collagen type I alpha 1 gene polymorphism with inguinal hernia".
+Hernia
+(4):
+507–
+512.
+doi
+10.1007/s10029-013-1147-y
+PMID
+23925543
+S2CID
+22999363
+Gong Y, Shao C, Sun Q, Chen B, Jiang Y, Guo C, et al. (March 1994).
+"Genetic study of indirect inguinal hernia"
+Journal of Medical Genetics
+(3):
+187–
+192.
+doi
+10.1136/jmg.31.3.187
+PMC
+1049739
+PMID
+8014965
+Ma, Q.; Jing, W.; Liu, X.; Liu, J.; Liu, M.; Chen, J. (24 March 2023).
+"Trends of inguinal, femoral, and abdominal hernia from 1990 to 2019"
+International Journal of Surgery
+109
+(3). London, England:
+333–
+342.
+doi
+10.1097/JS9.0000000000000217
+PMC
+10389329
+PMID
+37093073
+Nigam VK (2009).
+Essentials of Abdominal Wall Hernias
+. I. K. International. p. 6.
+ISBN
+978-81-89866-93-8
+Archived
+from the original on 2017-09-08.
+Park, Adrian E.; Roth, J. Scott; Kavic, Stephen M. (2006-05-01).
+"Abdominal Wall Hernia"
+Current Problems in Surgery
+(5):
+326–
+375.
+doi
+10.1067/j.cpsurg.2006.02.004
+ISSN
+0011-3840
+PMID
+16679124
+Vos T, Barber RM, Bell B, Bertozzi-Villa A, Biryukov S, Bolliger I, et al. (Global Burden of Disease Study 2013 Collaborators) (August 2015).
+"Global, regional, and national incidence, prevalence, and years lived with disability for 301 acute and chronic diseases and injuries in 188 countries, 1990-2013: a systematic analysis for the Global Burden of Disease Study 2013"
+Lancet
+386
+(9995):
+743–
+800.
+doi
+10.1016/s0140-6736(15)60692-4
+PMC
+4561509
+PMID
+26063472
+Naghavi M, Wang H, Lozano R, Davis A, Liang X, Zhou M, et al. (GBD 2013 Mortality and Causes of Death Collaborators) (January 2015).
+"Global, regional, and national age-sex specific all-cause and cause-specific mortality for 240 causes of death, 1990-2013: a systematic analysis for the Global Burden of Disease Study 2013"
+Lancet
+385
+(9963):
+117–
+71.
+doi
+10.1016/S0140-6736(14)61682-2
+PMC
+4340604
+PMID
+25530442
+Park AE, Roth JS, Kavic SM. Abdominal wall hernia. Curr Probl Surg. 2006 May;43(5):326-75. doi: 10.1067/j.cpsurg.2006.02.004. PMID 16679124.
+"Inguinal hernia"
+The Mayo Clinic
+Archived
+from the original on 2010-02-13
+. Retrieved
+2010-05-24
+"What is Hernia? - Causes, Symptoms, Diagnosis"
+www.pristyncare.com
+. Retrieved
+2023-12-16
+Lee HK, Park SJ, Yi BH (2010).
+"Multidetector CT reveals diverse variety of abdominal hernias"
+Diagnostic Imaging
+(5):
+27–
+31. Archived from
+the original
+on 2010-06-18
+. Retrieved
+2010-06-25
+Goers TA, Klingensmith ME, Chen LE, Glasgow SC (2008).
+The Washington manual of surgery
+. Philadelphia: Wolters Kluwer Health/Lippincott Williams & Wilkins.
+ISBN
+978-0-7817-7447-5
+"Incarcerated"
+onlinedictionary.datasegment.com
+. Archived from
+the original
+on 2008-11-20.
+Citing: Webster 1913
+"Hiatal Hernia Symptoms, Causes And Relation To Acid Reflux And Heartburn"
+. Archived from
+the original
+on October 28, 2008
+. Retrieved
+2010-05-24
+Balentine JR. Stöppler MC (ed.).
+"Hernia Causes"
+eMedicineHealth.com
+. WebMD.
+Archived
+from the original on 2010-05-31
+. Retrieved
+2010-05-24
+Desarda MP (April 2003).
+"Surgical physiology of inguinal hernia repair--a study of 200 cases"
+BMC Surgery
+doi
+10.1186/1471-2482-3-2
+PMC
+155644
+PMID
+12697071
+Montgomery, John; Dimick, Justin B.; Telem, Dana A. (2018-09-11). "Management of Groin Hernias in Adults-2018".
+JAMA
+320
+(10):
+1029–
+1030.
+doi
+10.1001/jama.2018.10680
+ISSN
+1538-3598
+PMID
+30128503
+S2CID
+205095374
+Jones R (2013).
+"An unexpected finding during an inguinal herniorrhaphy: report of an indirect hernia with two hernia sacs"
+Journal of Pediatric Surgery Case Reports
+(10):
+331–
+332.
+doi
+10.1016/j.epsc.2013.09.002
+Bosanquet DC, Ansell J, Abdelrahman T, Cornish J, Harries R, Stimpson A, et al. (2015).
+"Systematic Review and Meta-Regression of Factors Affecting Midline Incisional Hernia Rates: Analysis of 14,618 Patients"
+PLOS ONE
+(9) e0138745.
+Bibcode
+2015PLoSO..1038745B
+doi
+10.1371/journal.pone.0138745
+PMC
+4577082
+PMID
+26389785
+Arráez-Aybar LA, González-Gómez CC, Torres-García AJ (May 2009).
+"Morgagni-Larrey parasternal diaphragmatic hernia in the adult"
+Revista Española de Enfermedades Digestivas /
+101
+(5):
+357–
+66.
+PMID
+19527083
+"What Are the Symptoms of a Hernia?"
+EverydayHealth.com
+. Retrieved
+2026-02-21
+Ozben V, Aliyeva Z, Barbur E, Guler I, Karahasanoglu T, Baca B (September 2020). "Laparoscopic management of incarcerated broad ligament hernia in a patient with bilateral parametrium defects - a video vignette".
+Colorectal Disease
+(9):
+1197–
+1198.
+doi
+10.1111/codi.15039
+PMID
+32180330
+S2CID
+212739555
+Hiraiwa K, Morozumi K, Miyazaki H, Sotome K, Furukawa A, Nakamaru M (March 2006).
+"Strangulated hernia through a defect of the broad ligament and mobile cecum: a case report"
+World Journal of Gastroenterology
+(9):
+1479–
+80.
+doi
+10.3748/wjg.v12.i9.1479
+PMC
+4124335
+PMID
+16552826
+Hardt, J; Furtwängler, A; Schmidt, C; Post, S; Kroese, LF (2019). "Lateral pararectal versus transrectal stoma placement for prevention of parastomal herniation".
+Cochrane Database of Systematic Reviews
+2019
+(4) CD011832.
+doi
+10.1002/14651858.CD011832.pub2
+PMID
+30950890
+Nguyen JT, Nguyen JL, Wheatley MJ, Nguyen TA (2013).
+"Muscle hernias of the leg: A case report and comprehensive review of the literature"
+The Canadian Journal of Plastic Surgery
+(4):
+243–
+doi
+10.1177/229255031302100408
+PMC
+3910527
+PMID
+24497767
+Masoumi A, Ramogida G (April 2020).
+"Tibialis anterior herniation - a rare clinical entity: a case report and review of the literature"
+The Journal of the Canadian Chiropractic Association
+(1):
+88–
+91.
+PMC
+7250514
+PMID
+32476672
+Sharma N, Kumar N, Verma R, Jhobta A (2017-05-31).
+"Tibialis Anterior Muscle Hernia: A Case of Chronic, Dull Pain and Swelling in Leg Diagnosed by Dynamic Ultrasonography"
+Polish Journal of Radiology
+293–
+295.
+doi
+10.12659/PJR.900846
+PMC
+5462483
+PMID
+28638493
+"Hernia"
+U.K. National Health Service
+Archived
+from the original on 2017-07-14
+. Retrieved
+2017-07-23
+Balentine, Courtney J.; Meier, Jennie; Berger, Miles; Reisch, Joan; Cullum, Munro; Lee, Simon C.; Skinner, Celette Sugg; Brown, Cynthia J. (February 2021).
+"Using Local Anesthesia for Inguinal Hernia Repair Reduces Complications in Older Patients"
+The Journal of Surgical Research
+258
+64–
+72.
+doi
+10.1016/j.jss.2020.08.054
+ISSN
+1095-8673
+PMC
+7968932
+PMID
+33002663
+van Veen, Ruben N.; Mahabier, Chander; Dawson, Imro; Hop, Wim C.; Kok, Niels F. M.; Lange, Johan F.; Jeekel, Johannus (March 2008). "Spinal or local anesthesia in lichtenstein hernia repair: a randomized controlled trial".
+Annals of Surgery
+247
+(3):
+428–
+433.
+doi
+10.1097/SLA.0b013e318165b0ff
+ISSN
+0003-4932
+PMID
+18376185
+S2CID
+22487510
+Klingensmith, Mary E. (2008).
+The Washington Manual of Surgery
+. Philadelphia: Lippincott Williams & Wilkins.
+ISBN
+978-0-7817-7447-5
+"Overview | Laparoscopic surgery for inguinal hernia repair | Guidance | NICE"
+www.nice.org.uk
+. 2004-09-22
+. Retrieved
+2023-11-09
+Solaini, Leonardo; Cavaliere, Davide; Avanzolini, Andrea; Rocco, Giuseppe; Ercolani, Giorgio (2022).
+"Robotic versus laparoscopic inguinal hernia repair: an updated systematic review and meta-analysis"
+Journal of Robotic Surgery
+(4):
+775–
+781.
+doi
+10.1007/s11701-021-01312-6
+ISSN
+1863-2483
+PMC
+9314304
+PMID
+34609697
+Kamtoh G, Pach R, Kibil W, Matyja A, Solecki R, Banas B, Kulig J (September 2014).
+"Effectiveness of mesh hernioplasty in incarcerated inguinal hernias"
+Wideochirurgia i Inne Techniki Maloinwazyjne = Videosurgery and Other Miniinvasive Techniques
+(3):
+415–
+doi
+10.5114/wiitm.2014.43080
+PMC
+4198637
+PMID
+25337167
+"Lichtenstein Tension-Free Hernia Repair - Hernia Care | UCLA Health"
+www.uclahealth.org
+. Retrieved
+2026-02-21
+"Congenital Diaphragmatic Hernia (CDH)"
+www.childrensmercy.org
+. Retrieved
+2026-02-21
+Sohail MR, Smilack JD (June 2004).
+"Hernia repair mesh-associated Mycobacterium goodii infection"
+Journal of Clinical Microbiology
+(6):
+2858–
+60.
+doi
+10.1128/JCM.42.6.2858-2860.2004
+PMC
+427896
+PMID
+15184492
+"Abdominal Wall Hernias: Repair Techniques and Prevention of Recurrence"
+astramd.org
+. Retrieved
+2025-11-27
+Arenal, Juan J.; Rodríguez-Vielba, Paloma; Gallo, Emiliano; Tinoco, Claudia (2002).
+"Hernias of the abdominal wall in patients over the age of 70 years"
+The European Journal of Surgery = Acta Chirurgica
+168
+9):
+460–
+463.
+doi
+10.1080/110241502321116451
+ISSN
+1102-4151
+PMID
+12549685
+Abi-Haidar, Youmna; Sanchez, Vivian; Itani, Kamal M. F. (September 2011). "Risk factors and outcomes of acute versus elective groin hernia surgery".
+Journal of the American College of Surgeons
+213
+(3):
+363–
+369.
+doi
+10.1016/j.jamcollsurg.2011.05.008
+ISSN
+1879-1190
+PMID
+21680204
+Nilsson, Hanna; Stylianidis, Georgios; Haapamäki, Markku; Nilsson, Erik; Nordin, Pär (April 2007).
+"Mortality after groin hernia surgery"
+Annals of Surgery
+245
+(4):
+656–
+660.
+doi
+10.1097/01.sla.0000251364.32698.4b
+ISSN
+0003-4932
+PMC
+1877035
+PMID
+17414617
+Chowbey, Pradeep K; Pithawala, Murtaza; Khullar, Rajesh; Sharma, Anil; Soni, Vandana; Baijal, Manish (September 2006).
+"Complications in groin hernia surgery and the way out"
+Journal of Minimal Access Surgery
+(3):
+174–
+177.
+doi
+10.4103/0972-9941.27734
+ISSN
+0972-9941
+PMC
+2999781
+PMID
+21187992
+External links
+Hernia
+at Wikipedia's
+sister projects
+Definitions
+from Wiktionary
+Media
+from Commons
+Data
+from Wikidata
+"hernia"
+MedlinePlus
+. U.S. National Library of Medicine.
+Classification
+ICD
+K40
+K46
+ICD
+9-CM
+550
+553
+MeSH
+D006547
+External resources
+MedlinePlus
+000960
+eMedicine
+emerg/251
+ped/2559
+Diseases of the
+human digestive system
+Upper GI tract
+Esophagus
+Esophagitis
+Candidal
+Eosinophilic
+Herpetiform
+Rupture
+Boerhaave syndrome
+Mallory–Weiss syndrome
+Zenker's diverticulum
+Barrett's esophagus
+Esophageal motility disorder
+Nutcracker esophagus
+Achalasia
+Esophagogastric junction outflow obstruction
+Diffuse esophageal spasm
+Gastroesophageal reflux disease
+(GERD)
+Laryngopharyngeal reflux
+(LPR)
+Esophageal stricture
+Inlet patch
+Megaesophagus
+Esophageal intramural pseudodiverticulosis
+Acute esophageal necrosis
+Stomach
+Gastritis
+Atrophic
+Ménétrier's disease
+Gastroenteritis
+Peptic (gastric) ulcer
+Cushing ulcer
+Dieulafoy's lesion
+Dyspepsia
+Functional dyspepsia
+Pyloric stenosis
+Achlorhydria
+Gastroparesis
+Gastroptosis
+Portal hypertensive gastropathy
+Gastric antral vascular ectasia
+Gastric dumping syndrome
+Gastric volvulus
+Buried bumper syndrome
+Gastrinoma
+Zollinger–Ellison syndrome
+Lower GI tract
+Enteropathy
+Small intestine
+Duodenum
+Jejunum
+Ileum
+Enteritis
+Duodenitis
+Jejunitis
+Ileitis
+Peptic (duodenal) ulcer
+Curling's ulcer
+Malabsorption
+Coeliac
+Tropical sprue
+Blind loop syndrome
+Small intestinal bacterial overgrowth
+Whipple's
+Short bowel syndrome
+Steatorrhea
+Milroy disease
+Bile acid malabsorption
+Large intestine
+Appendix
+Colon
+Appendicitis
+Colitis
+Pseudomembranous
+Ulcerative
+Ischemic
+Microscopic
+Collagenous
+Lymphocytic
+Dysentery
+Functional colonic disease
+IBS
+Intestinal pseudoobstruction
+Ogilvie syndrome
+Megacolon
+Toxic megacolon
+Diverticulitis
+Diverticulosis
+SCAD
+Large and/or small
+Enterocolitis
+Necrotizing
+Gastroenterocolitis
+IBD
+Crohn's disease
+Vascular
+Abdominal angina
+Mesenteric ischemia
+Angiodysplasia
+Bowel obstruction
+Ileus
+Intussusception
+Volvulus
+Fecal impaction
+Constipation
+Functional
+Diarrhea
+Infectious
+Intestinal adhesions
+Rectum
+Proctitis
+Radiation proctitis
+Proctalgia fugax
+Rectal prolapse
+Internal rectal prolapse
+Anismus
+Solitary rectal ulcer syndrome
+Rectal stricture
+Anal canal
+Anal fissure
+Anal fistula
+Anal abscess
+Hemorrhoid
+Anal dysplasia
+Pruritus ani
+Anal stricture
+GI bleeding
+Blood in stool
+Upper
+Hematemesis
+Melena
+Lower
+Hematochezia
+Accessory
+Liver
+Hepatitis
+Viral hepatitis
+Autoimmune hepatitis
+Alcoholic hepatitis
+Cirrhosis
+PBC
+Fatty liver
+MASLD
+Vascular
+Budd–Chiari syndrome
+Hepatic veno-occlusive disease
+Portal hypertension
+Nutmeg liver
+Alcoholic liver disease
+Liver failure
+Hepatic encephalopathy
+Acute liver failure
+Liver abscess
+Pyogenic
+Amoebic
+Hepatorenal syndrome
+Peliosis hepatis
+Metabolic disorders
+Wilson's disease
+Hemochromatosis
+Gallbladder
+Cholecystitis
+Gallstone / Cholelithiasis
+Cholesterolosis
+Adenomyomatosis
+Postcholecystectomy syndrome
+Porcelain gallbladder
+Bile duct
+Other
+biliary tree
+Cholangitis
+Primary sclerosing cholangitis
+Secondary sclerosing cholangitis
+Ascending
+Cholestasis
+Mirizzi's syndrome
+Biliary fistula
+Haemobilia
+Common bile duct
+Choledocholithiasis
+Biliary dyskinesia
+Sphincter of Oddi dysfunction
+Pancreatic
+Pancreatitis
+Acute
+Chronic
+Hereditary
+Pancreatic abscess
+Pancreatic pseudocyst
+Exocrine pancreatic insufficiency
+Pancreatic fistula
+Other
+Hernia
+Diaphragmatic
+Congenital
+Hiatus
+Inguinal
+Indirect
+Direct
+Umbilical
+Paraumbilical
+Femoral
+Obturator
+Spigelian
+Lumbar
+Petit's
+Grynfeltt–Lesshaft
+Undefined location
+Incisional
+Internal hernia
+Richter's
+Peritoneal
+Peritonitis
+Spontaneous bacterial peritonitis
+Hemoperitoneum
+Pneumoperitoneum
+Congenital
+diaphragm and abdominal wall defects,
+abdominopelvic cavity
+Thoracic diaphragm
+Hernia
+Congenital diaphragmatic hernia
+Bochdalek hernia
+Abdominal wall
+Omphalocele
+Gastroschisis
+Prune belly syndrome
+Authority control databases
+International
+GND
+National
+United States
+France
+BnF data
+Japan
+Czech Republic
+Spain
+Israel
+Other
+Yale LUX
+Retrieved from "
+https://en.wikipedia.org/w/index.php?title=Hernia&oldid=1339585194
