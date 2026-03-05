@@ -142,11 +142,13 @@ python manage.py import_pyqs
 python manage.py import_pyqs --year 2026
 ```
 
+
 ### Method 3: AI-Generated Questions
 Use the website: **http://localhost:3000/generate**
 - Select subject, topic, difficulty
 - AI generates new questions using textbook knowledge
 - Questions are saved to the database
+
 
 ### Method 4: Scrape from Markdown Notes
 ```powershell
@@ -489,3 +491,4 @@ Delete `backend/chroma_db/rag_store.sqlite3` and run `python _train_all.py` agai
 - **Keep facts concise** — "Drug X causes Side Effect Y" is more searchable than long paragraphs
 - **Name files descriptively** — `pharmacology_autonomic_drugs.md` not `notes1.md`
 - **PDFs under 50 MB** — larger ones are auto-skipped (create .md notes instead)
+

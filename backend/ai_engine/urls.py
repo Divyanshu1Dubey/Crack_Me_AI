@@ -7,6 +7,7 @@ urlpatterns = [
     path('mnemonic/', views.GenerateMnemonicView.as_view(), name='ai-mnemonic'),
     path('explain/', views.ExplainConceptView.as_view(), name='ai-explain'),
     path('analyze/', views.AnalyzeQuestionView.as_view(), name='ai-analyze'),
+    path('explain-answer/', views.ExplainAfterAnswerView.as_view(), name='ai-explain-answer'),
 
     # RAG-powered endpoints
     path('rag-search/', views.RAGSearchView.as_view(), name='ai-rag-search'),

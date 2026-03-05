@@ -1,0 +1,736 @@
+﻿General Medicine Questions
+1. The height of the Jugular Venous Pulse is determined by:
+   * (a) Right atrial pressure
+   * (b) Right ventricle pressure
+   * (c) Left atrial pressure
+   * (d) Left ventricle pressure
+2. The SA node is situated at the junction of:
+   * (a) SVC and RA
+   * (b) SVC and LA
+   * (c) LA and LV
+   * (d) IVC and RA
+3. High output cardiac failure is caused by which of the following diseases?
+   * Beri-beri
+   * Severe anaemia
+   * Thyrotoxicosis Select the correct answer using the code given below:
+   * (a) 1 and 2 only
+   * (b) 2 and 3 only
+   * (c) 1 and 3 only
+   * (d) 1, 2 and 3
+4. Reverse splitting of second heart sound is most commonly seen in:
+   * (a) ASD
+   * (b) Severe MR
+   * (c) LBBB
+   * (d) Pulmonary stenosis
+5. Which of the following are major criteria under the Jones Criteria for Acute Rheumatic Fever?
+   * Chorea
+   * Erythema Marginatum
+   * Subcutaneous Nodules
+   * Polyarthralgia Select the correct answer using the code given below:
+   * (a) 1, 2 and 3
+   * (b) 1, 2 and 4
+   * (c) 1, 3 and 4
+   * (d) 2, 3 and 4
+6. A 70-year-old man with dyspnoea on exertion has been found to have a single second heart sound and a loud diamond-shaped, rough quality systolic murmur best heard at the right 2nd intercostal space, radiating to the right carotid artery. Which one of the following is the likely diagnosis?
+   * (a) Patent ductus arteriosus
+   * (b) Ventricular septal defect
+   * (c) Aortic stenosis
+   * (d) Pulmonary hypertension
+7. Which one of the following is the appropriate scoring system used to assess the risk of stroke in patients of non-valvular chronic atrial fibrillation on oral anticoagulation?
+   * (a) HAS-BLED
+   * (b) AMT-4
+   * (c) CURB-65
+   * (d) CHA2DS2VASC
+8. Consider the following statements with regard to pulmonary embolism:
+   * Unexplained breathlessness is the most common symptom.
+   * When congestive heart failure or pneumonia fail to improve despite standard medical treatment, occult pulmonary embolism should be considered.
+   * Patients with high clinical likelihood of venous thromboembolism should first undergo D-dimer testing alone without obligatory imaging tests. Which of the statements given above are correct?
+   * (a) 1 and 2 only
+   * (b) 2 and 3 only
+   * (c) 1 and 3 only
+   * (d) 1, 2 and 3
+9. Consider the following criteria:
+   * Pleural fluid protein : Serum protein ratio > 0.5
+   * Pleural fluid LDH : Serum LDH ratio > 0.6
+   * Pleural fluid LDH > Two-thirds of the upper limit of normal serum LDH
+Which of the above criteria, if present in pleural fluid, will indicate an exudate?
+   * (a) 1 and 2 only
+   * (b) 2 and 3 only
+   * (c) 1 and 3 only
+   * (d) 1, 2 and 3
+   10. Which of the following statements are correct with regard to clubbing?
+   * It usually affects the fingers symmetrically.
+   * It does not involve the toes.
+   * It may be associated with malignant lung conditions.
+   * It may recede following the lung transplantation in cystic fibrosis.
+Select the answer using the code given below:
+   * (a) 1, 2 and 3
+   * (b) 1, 3 and 4
+   * (c) 2, 3 and 4
+   * (d) 1, 2 and 4
+      11. Consider the following statements regarding Lofgren syndrome:
+      * It is an acute illness and is more commonly seen in females.
+      * It is a clinically distinct phenotype of sarcoidosis characterized by peripheral arthropathy and uveitis.
+      * Clinical features include fever, erythema nodosum and bilateral lymphadenopathy.
+Which of the statements given above are correct?
+      * (a) 1 and 2 only
+      * (b) 2 and 3 only
+      * (c) 1 and 3 only
+      * (d) 1, 2 and 3
+         12. Which of the following investigations may be used for the diagnosis of pulmonary tuberculosis?
+         * Nucleic acid amplification
+         * Culture in Middlebrook medium
+         * Light emitting diode fluorescent microscopy with auramine staining
+         * Peripheral blood smear
+Select the correct answer using the code given below:
+         * (a) 1, 2 and 3
+         * (b) 1, 2 and 4
+         * (c) 1, 3 and 4
+         * (d) 2, 3 and 4
+            13. The distance walked in 6 minutes is an indirect measure of which of the following variables of the 'BODE Index' which is used to assess the prognosis in chronic obstructive pulmonary disease?
+            * (a) Body Mass Index
+            * (b) Degree of air flow obstruction
+            * (c) Severity of dyspnoea
+            * (d) Exercise capacity
+            14. A 65-year-old female, a stone-cutter by occupation had multiple well circumscribed nodular opacities in upper and middle zones of a chest X-ray along with mediastinal lymph nodes showing egg-shell calcification. Which one of the following is the most likely etiology?
+            * (a) Byssinosis
+            * (b) Silicosis
+            * (c) Berylliosis
+            * (d) Siderosis
+            15. Which of the following are complications of acute pancreatitis?
+            * Hypoxia
+            * Hypercalcemia
+            * Hyperglycemia
+            * Reduced serum albumin
+Select the correct answer using the code given below:
+            * (a) 1, 2 and 3
+            * (b) 1, 3 and 4
+            * (c) 2 and 3 only
+            * (d) 3 and 4 only
+               16. The Gold Standard for diagnosis of Celiac disease is:
+               * (a) Endoscopic small bowel biopsy
+               * (b) Stool routine microscopy and culture
+               * (c) Abdominal ultrasound
+               * (d) Anti-parietal cell antibodies
+               17. With regard to Helicobacter pylori eradication in peptic ulcer disease, consider the following statements:
+               * Proton-pump inhibitor is taken with two antibiotics.
+               * Treatment is prescribed for at least 7 days.
+               * Treatment of Helicobacter pylori infection leads to vitamin B12 deficiency.
+               * Patients requiring long-term NSAIDs should undergo Helicobacter pylori eradication therapy to reduce ulcer risk.
+Which of the statements given above are correct?
+               * (a) 1, 2 and 3
+               * (b) 1, 2 and 4
+               * (c) 1, 3 and 4
+               * (d) 2, 3 and 4
+                  18. Which of the following are precipitating factors for hepatic encephalopathy?
+                  * Hypokalemia
+                  * Septicemia
+                  * Increased dietary protein load
+Select the correct answer using the code given below:
+                  * (a) 1 and 2 only
+                  * (b) 2 and 3 only
+                  * (c) 1 and 3 only
+                  * (d) 1, 2 and 3
+                     19. Which one of the following statements is correct regarding Upper Gastro Intestinal Bleeding (UGIB)?
+                     * (a) Esophageal varices are the most common cause.
+                     * (b) Eradication of Helicobacter pylori in patients with bleeding ulcers decreases the rebleeding rates to less than 5%.
+                     * (c) Patients with cardiovascular disease on aspirin for secondary prevention should not restart their aspirin.
+                     * (d) Transjugular Intrahepatic Portosystemic Shunt (TIPS) should be considered as therapy only after one week of hospitalization for acute variceal bleeding.
+                     20. Crigler-Najjar syndrome Type-I is inherited as an:
+                     * (a) Autosomal recessive disorder
+                     * (b) Autosomal dominant disorder
+                     * (c) X-linked recessive disorder
+                     * (d) X-linked dominant disorder
+                     21. Whipple's disease is characterized by the infiltration of small intestinal mucosa by 'foamy' macrophages. Which one of the following histological stains is characteristically used to stain them?
+                     * (a) Sudan Black-B
+                     * (b) Gentian violet
+                     * (c) Methylene blue
+                     * (d) Periodic acid Schiff
+                     22. Poorly absorbed antibiotics are often used as adjunctive therapies in patients with hepatic encephalopathy. These may include:
+                     * (a) Tenofovir or Telbivudine
+                     * (b) Sofosbuvir or Velpatasur
+                     * (c) Levofloxacin or Clarithromycin
+                     * (d) Neomycin or Rifaximin
+                     23. When the serum ascites to albumin gradient (SAAG) is less than $1.1\text{ gm/dL}$, then which of the following causes of ascites may be considered?
+                     * Infection
+                     * Malignancy
+                     * Cardiac ascites
+                     * Portal hypertension Select the correct answer using the code given below:
+                     * (a) 1, 3 and 4
+                     * (b) 1 and 2 only
+                     * (c) 3 and 4 only
+                     * (d) 1, 2 and 3
+                     24. A sigmoid configuration along with tapering beak-like deformity at the lower esophageal sphincter on barium swallow is a feature of:
+                     * (a) Diffuse esophageal spasm
+                     * (b) Squamous cell carcinoma of esophagus
+                     * (c) Achalasia cardia
+                     * (d) Barret's esophagus
+                     25. Consider the following findings in urine examination of suspected haematuria:
+                     26. Dipstick test positive for:
+	Urine microscopy
+	Etiology
+	A: Myoglobinuria
+	D: White blood cells
+	G: Glomerular bleeding
+	B: Hematuria
+	E: No red cells
+	H: Intravascular hemolysis
+	C: Hemoglobinuria
+	F: Red cell casts
+	I: Rhabdomyolysis
+	                     27. 
+Which one of the following triplets is correctly matched?
+                        * (a) B, F, G
+                        * (b) A, D, I
+                        * (c) B, E, H
+                        * (d) C, F, H
+                        28. Which of the following statements are correct regarding anti-glomerular basement membrane disease?
+                        * It is a rare autoimmune disease which presents as rapidly progressive glomerulonephritis.
+                        * Antibodies are formed against $\alpha3$ chain of type 4 collagen GBM.
+                        * The $\alpha3$ chain is expressed in basement membrane of glomerulus and the retina.
+                        * The disease may be associated with retinal hemorrhage when it is known as Goodpasture syndrome. Select the answer using the code given below:
+                        * (a) 1 and 2 only
+                        * (b) 2, 3 and 4 only
+                        * (c) 1, 3 and 4 only
+                        * (d) 1, 2, 3 and 4
+                        29. Which of the following are poor prognostic indicators in glomerular disease?
+                        * Female sex
+                        * Hypertension
+                        * Persistent and severe proteinuria
+                        * Elevated creatinine levels at presentation Select the correct answer using the code given below:
+                        * (a) 1 and 3 only
+                        * (b) 2 and 4 only
+                        * (c) 2, 3 and 4 only
+                        * (d) 1, 2, 3 and 4
+                        30. Which of the following are indications for a renal biopsy?
+                        * Chronic kidney disease of uncertain etiology
+                        * Nephritic syndrome
+                        * Uncontrolled severe hypertension
+                        * Renal transplant dysfunction Select the correct answer using the code given below:
+                        * (a) 1, 2 and 3
+                        * (b) 1, 2 and 4
+                        * (c) 1, 3 and 4
+                        * (d) 2, 3 and 4
+                        31. Which of the following is the correct range of Glomerular Filtration Rate (GFR) for Stage 2 chronic kidney disease?
+                        * (a) $60\text{--}89\text{ mL/min/1.73 m}^2$
+                        * (b) $45\text{--}59\text{ mL/min/1.73 m}^2$
+                        * (c) $30\text{--}44\text{ mL/min/1.73 m}^2$
+                        * (d) $15\text{--}29\text{ mL/min/1.73 m}^2$
+                        32. A diagnosis of polycystic ovary syndrome requires the presence of which of the following clinical features?
+                        * Menstrual irregularity
+                        * Clinical or biochemical androgen excess
+                        * Multiple cysts in the ovaries
+                        * $\text{BMI} < 18.5\text{ kg/m}^2$ Select the correct answer using the code given below:
+                        * (a) 1, 2 and 3
+                        * (b) 2, 3 and 4
+                        * (c) 1, 3 and 4
+                        * (d) 1, 2 and 4
+                        33. A young male presented with recent onset urethral discharge and dysuria. On examination, the discharge was profuse and purulent. Microscopy of smears from the discharge revealed Gram-negative diplococci. What is the likely diagnosis?
+                        * (a) Genital herpes
+                        * (b) Chlamydia
+                        * (c) Gonorrhoea
+                        * (d) Syphilis
+                        34. A 40-year-old female with nephritic range proteinuria is found to have low serum complement levels. Which of the following can be the likely etiology?
+                        * Systemic lupus erythematosus
+                        * Post-infectious glomerulonephritis
+                        * Infective endocarditis
+                        * Mesangio-capillary glomerulonephritis Select the correct answer using the code given below:
+                        * (a) 1, 2, 3 and 4
+                        * (b) 1, 2 and 4 only
+                        * (c) 3 and 4 only
+                        * (d) 1, 2 and 3 only
+                        35. Consider the following clinical features:
+                        * Hypomimia
+                        * Dysphonia
+                        * Festination gait
+                        * Cogwheel rigidity Which of the features given above are generally present in Parkinsonism?
+                        * (a) 1, 2, 3 and 4
+                        * (b) 1, 2 and 4 only
+                        * (c) 3 and 4 only
+                        * (d) 1, 2 and 3 only
+                        36. Circuits between the basal ganglia and the motor cortex constitute the extra pyramidal system which controls muscle tone, body posture and the initiation of movement. Lesions of the extra pyramidal system present clinically with:
+                        * Tremor and rigidity
+                        * Seizures
+                        * Urinary incontinence
+                        * Muscle wasting Select the correct answer using the code given below:
+                        * (a) 1 and 2 only
+                        * (b) 3 and 4 only
+                        * (c) 1, 2 and 3
+                        * (d) 1, 2, 3 and 4
+                        37. Consider the following statements regarding Transient Global Amnesia (TGA):
+                        * TGA mainly affects middle aged persons who present with abrupt, discrete loss of anterograde memory lasting for few hours.
+                        * During the episode, the patients are unable to record new memories resulting in repetitive questioning.
+                        * Consciousness is impaired during the episode and the patient is unable to perform even simple motor functions.
+                        * After 4-6 hours, memory function and behaviour return to normal but the patient has complete and persistent amnesia for the duration of the episode. Which of the statements given above are correct?
+                        * (a) 1, 2 and 3
+                        * (b) 1, 2 and 4
+                        * (c) 1, 3 and 4
+                        * (d) 2, 3 and 4
+                        38. Contralateral homonymous lower quadrantanopia is the type of visual loss seen when the lesion is located at which one of the following anatomical locations?
+                        * (a) Frontal lobe
+                        * (b) Temporal lobe
+                        * (c) Parietal lobe
+                        * (d) Occipital lobe
+                        39. Which of the following correctly describes the primary position of the right eye in right 3rd cranial nerve palsy?
+                        * (a) Downwards and outwards
+                        * (b) Downwards and inwards
+                        * (c) Upwards and outwards
+                        * (d) Upwards and inwards
+                        40. Consider the following statements regarding cluster headache:
+                        * The headaches are periodic, beginning at the same time for weeks at a stretch.
+                        * Patients experience severe, unilateral periorbital pain which typically lasts from 30-90 minutes.
+                        * The headache is accompanied with autonomic features such as ipsilateral tearing, nasal congestion and conjunctival injection.
+                        * Subcutaneous injection of Sumatriptan or inhalation of 100% oxygen may be beneficial in halting acute attacks. Which of the statements given above are correct?
+                        * (a) 3 and 4 only
+                        * (b) 1 and 2 only
+                        * (c) 1, 2 and 3
+                        * (d) 1, 2, 3 and 4
+                        41. A 22-year-old lady presented with complaint of chronic daily headache. She has prior history of migraine but increasingly unrelieved with analgesics. She has history of using Sumatriptan almost daily since the last three weeks. What is the most likely diagnosis?
+                        * (a) Sub-arachnoid hemorrhage
+                        * (b) Cluster headache
+                        * (c) Medication overuse headache
+                        * (d) Trigeminal neuralgia
+                        42. Consider the following with regard to trigger factors for seizures:
+                        * Flickering lights
+                        * Recreational drug misuse
+                        * Non-compliance to treatment with antiepileptic drugs
+                        * Sleep deprivation Which of the factors given above are correct?
+                        * (a) 1 and 2 only
+                        * (b) 1, 2, 3 and 4
+                        * (c) 2 and 3 only
+                        * (d) 3 and 4 only
+                        43. A 75-year-old man presented with temporal headache, jaw pain, exacerbated by chewing and talking. Which one of the following investigations will most likely help in diagnosis?
+                        * (a) Temporal artery biopsy
+                        * (b) Electromyography
+                        * (c) MRI of the brain
+                        * (d) Carotid colour Doppler
+                        44. The Rai staging system and Binet staging system are the two widely used staging systems used for staging which of the following hematological malignancies?
+                        * (a) Acute Myeloid Leukemia
+                        * (b) Chronic Myeloid Leukemia
+                        * (c) Acute Lymphoid Leukemia
+                        * (d) Chronic Lymphocytic Leukemia
+                        45. Patients suffering from which of the following conditions commonly present for several years in the dermatology OPD with eczematous or dermatitis skin lesions before being finally diagnosed with a T-cell lymphoma?
+                        * (a) Mycosis fungoides
+                        * (b) Psoriasis
+                        * (c) Acne vulgaris
+                        * (d) Onychomycosis
+                        46. Which of the following is an oral anticoagulant?
+                        * (a) Dabigatran
+                        * (b) Heparin
+                        * (c) Fondaparinux
+                        * (d) Bivalirudin
+                        47. A 39-year-old female presents with severe autoimmune hemolytic anemia. Which of the following should be the initial step in its management?
+                        * (a) Prednisolone
+                        * (b) Rituximab
+                        * (c) Emergency splenectomy
+                        * (d) Plasmapheresis
+                        48. Which one of the following is a cause of Secondary Hyperaldosteronism?
+                        * (a) Adrenal adenoma secreting aldosterone
+                        * (b) Idiopathic bilateral adrenal hyperplasia
+                        * (c) 11-deoxycorticosterone secreting adrenal tumour
+                        * (d) Inadequate renal perfusion due to renal artery stenosis
+                        49. Which one of the following diseases is characterized by destructive lymphoid infiltration of the thyroid gland leading to fibrosis and enlargement of the thyroid gland with an increased risk of developing thyroid lymphoma?
+                        * (a) de Quervain's Thyroiditis
+                        * (b) Multinodular Goitre
+                        * (c) Riedel's thyroiditis
+                        * (d) Hashimoto's thyroiditis
+                        50. A 52-year-old male diabetic presents with recurrent episodes of hypoglycemia. On examination, Pulse: 84 beats/minute, BP: 160/100 mm Hg, Chest and CVS examination unremarkable. Which of the following antihypertensive should be avoided in this patient?
+                        * (a) Propranolol
+                        * (b) Telmisartan
+                        * (c) Torsemide
+                        * (d) Amlodipine
+                        51. Which of the following are correct regarding Cortisol?
+                        * Levels are highest in the morning on waking.
+                        * Cortisol falls dramatically during an illness.
+                        * More than 95% circulating cortisol is protein bound.
+                        * It is the major glucocorticoid in humans and can also activate mineralocorticoid receptors.
+Select the answer using the code given below:
+                        * (a) 1, 3 and 4
+                        * (b) 2, 3 and 4
+                        * (c) 1 and 3 only
+                        * (d) 1 and 2 only
+                           52. A patient presents with history of 'bones, stones and abdominal groans' due to generalised aches and pains and renal calculus colic. Which is the most discriminatory blood investigation?
+                           * (a) Parathyroid hormone assay
+                           * (b) Thyroid function tests (free T3, free T4, TSH)
+                           * (c) Cortisol levels
+                           * (d) Insulin and C-peptide levels
+                           53. With regards to treatment of thyrotoxicosis of Grave's disease, consider the following statements:
+                           * Propylthiouracil is suitable in breastfeeding patients.
+                           * Large goitre is an indication for thyroidectomy.
+                           * Radioiodine is recommended for management in pregnancy.
+                           * Agranulocytosis is a complication associated with carbimazole.
+Which of the statements given above are correct?
+                           * (a) 1, 2 and 3
+                           * (b) 2, 3 and 4
+                           * (c) 1, 2 and 4
+                           * (d) 1, 3 and 4
+                              54. With regard to management of hypothyroidism, consider the following statements:
+                              * Treatment is with levothyroxine replacement.
+                              * It is taken as a single daily dose.
+                              * Average dose is $1.6\text{ }\mu\text{gm/kg/day}$.
+                              * Full dose per weight should be started in those with coronary artery disease.
+Which of the statements given above are correct?
+                              * (a) 1, 2 and 3
+                              * (b) 2, 3 and 4
+                              * (c) 1, 2 and 4
+                              * (d) 1, 3 and 4
+                                 55. Which of the following glucose lowering agent can be given as an injectable drug?
+                                 * (a) Pioglitazone
+                                 * (b) Metformin
+                                 * (c) Sitagliptin
+                                 * (d) Semaglutide
+                                 56. Which of the following findings are seen in Diabetic Retinopathy on fundus examination?
+                                 * Microaneurysm
+                                 * Dot and blot hemorrhage
+                                 * Retinal thickening
+                                 * Neovascularization Select the correct answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 1, 2 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 2, 3 and 4
+                                 57. Which one of the following disorder are caused by enzymatic defects in the heme biosynthesis pathway?
+                                 * (a) Porphyrias
+                                 * (b) Myelodysplastic syndrome
+                                 * (c) Hemophilias
+                                 * (d) Plasma cell disorders
+                                 58. Which of the following is an inhibitor of the intestinal mucosal transporter NPC1L1, responsible for the absorption of dietary and biliary cholesterol?
+                                 * (a) Atorvastatin
+                                 * (b) Fenofibrate
+                                 * (c) Metformin
+                                 * (d) Ezetimibe
+                                 59. Which one of the following is the most appropriate initial treatment for management of severe hypercalcemia?
+                                 * (a) Intravenous infusion of pamidronate
+                                 * (b) Oral phosphate supplementation
+                                 * (c) Intravenous infusion of normal saline
+                                 * (d) Hemodialysis
+                                 60. Which of the following are used in calculating the serum osmolality?
+                                 * Serum sodium
+                                 * Glucose
+                                 * Calcium
+                                 * Blood urea nitrogen Select the correct answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 1, 2 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 2, 3 and 4
+                                 61. A 'slapped cheek' rash is characteristically seen in which of the following infections?
+                                 * (a) Measles
+                                 * (b) Rubella
+                                 * (c) Chickenpox
+                                 * (d) Erythema infectiosum
+                                 62. Which of the following pharmacological agents can be used for the treatment of visceral Leishmaniasis?
+                                 * Pentavalent antimonials
+                                 * Amphotericin B
+                                 * Spiramycin
+                                 * Paromomycin Select the correct answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 1, 2 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 2, 3 and 4
+                                 63. The Sabin-Feldman dye test is an indirect fluorescent antibody test which is used to detect antibodies against which of the following organisms?
+                                 * (a) Toxoplasma gondii
+                                 * (b) Leishmania donovani
+                                 * (c) Coxiella burnetii
+                                 * (d) Trypanosoma cruzi
+                                 64. Cat-scratch disease is caused by infection of which of the following organisms?
+                                 * (a) Chlamydia trachomitis
+                                 * (b) Coxiella burnetii
+                                 * (c) Trypanosoma cruzi
+                                 * (d) Bartonella henselae
+                                 65. Which among the following is the first intermediate host for the parasitic fluke Clonorchis sinensis?
+                                 * (a) Dog
+                                 * (b) Snail
+                                 * (c) Encysts on vegetation
+                                 * (d) Sheep
+                                 66. A calabar swelling, which is a short-lived, inflammatory, oedematous swelling close to a limb joint, is characteristically seen in infection caused by which of the following nematodes?
+                                 * (a) Onchocerca volvulus
+                                 * (b) Mansonella perstans
+                                 * (c) Loa loa
+                                 * (d) Brugia malayi
+                                 67. An ophthalmologist may observe 'Snowflake' deposits on the edges of the cornea, in a patient infected with which of the following filarial worms?
+                                 * (a) Brugia malayi
+                                 * (b) Loa loa
+                                 * (c) Mansonella perstans
+                                 * (d) Onchocerca volvulus
+                                 68. Which among the following are hepatobiliary flukes (trematodes)?
+                                 * Clonorchis sinensis
+                                 * Mansonella perstans
+                                 * Fasciola hepatica
+                                 * Opisthorchis felineus Select the correct answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 1, 2 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 2, 3 and 4
+                                 69. Which among the following parasitic helminths is a nematode and has zoonotic transmission?
+                                 * (a) Taenia saginata
+                                 * (b) Trichinella spiralis
+                                 * (c) Fasciola hepatica
+                                 * (d) Fasciolopsis buski
+                                 70. Which of the following are correct with regard to BCG vaccination?
+                                 * It is a live-attenuated vaccine.
+                                 * It is administered by intramuscular injection.
+                                 * It is derived from Mycobacterium bovis.
+                                 * It is highly immunogenic. Select the answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 2, 3 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 1, 2 and 4
+                                 71. Which of the following immunizations are recommended for persons infected with HIV?
+                                 * Hepatitis B vaccine
+                                 * Influenza virus vaccine
+                                 * Pneumococcal vaccine Select the correct answer using the code given below:
+                                 * (a) 1 and 2 only
+                                 * (b) 2 and 3 only
+                                 * (c) 1 and 3 only
+                                 * (d) 1, 2 and 3
+                                 72. Consider the following statements with regard to Vitamin D deficiency:
+                                 * Vitamin D deficiency is common in northern latitudes.
+                                 * Vitamin D deficiency is more likely to develop in people with dark skin.
+                                 * Exposure to UV light is advisable in patients with Vitamin D deficiency. Which of the statements given above are correct?
+                                 * (a) 1 and 2 only
+                                 * (b) 2 and 3 only
+                                 * (c) 1 and 3 only
+                                 * (d) 1, 2 and 3
+                                 73. Which one of the following statements is characteristic of Purpura fulminans?
+                                 * (a) Non-hemorrhagic bullae usually present over extremities.
+                                 * (b) Present as large ecchymosis with irregular shapes.
+                                 * (c) Auto-immune disorder and never associated with any infection.
+                                 * (d) Asplenic patients are protected and do not develop this disease.
+                                 74. An elderly male presents with papular lesions on his face. The papules are with pearly telangiectatic border on sun-damaged skin. The likely diagnosis is:
+                                 * (a) Squamous cell carcinoma
+                                 * (b) Melanoma
+                                 * (c) Basal cell carcinoma
+                                 * (d) Actinic keratosis
+                                 75. Allergic contact dermatitis is a manifestation of:
+                                 * (a) Type 1 hypersensitivity
+                                 * (b) Type 2 hypersensitivity
+                                 * (c) Type 3 hypersensitivity
+                                 * (d) Type 4 hypersensitivity
+                                 76. Which one of the following is an example of non-scarring alopecia?
+                                 * (a) Linear scleroderma
+                                 * (b) Cutaneous metastases
+                                 * (c) Telogen effluvium
+                                 * (d) Sarcoidosis
+                                 77. Which of the following statements are correct in respect of scabies?
+                                 * Male mite Sarcoptes scabiei are commonly transferred from an infected person to a non-infected person.
+                                 * Norwegian scabies occur in immunodeficient patients.
+                                 * Permethrin cream (5%) is used for treatment.
+                                 * Pruritus intensifies at night and after hot shower.
+Select the answer using the code given below:
+                                 * (a) 1, 2 and 3
+                                 * (b) 1, 2 and 4
+                                 * (c) 1, 3 and 4
+                                 * (d) 2, 3 and 4
+                                    78. Heberden's nodes are present mainly in:
+                                    * (a) Rheumatoid arthritis
+                                    * (b) Osteoarthritis
+                                    * (c) Psoriatic arthritis
+                                    * (d) Gouty arthritis
+                                    79. A patient developed difficulty in standing from a seated position, walking up steps, squatting and lifting arms overhead. Chronic therapy with which of the following drugs is likely to result in such presentation?
+                                    * (a) Acetaminophen
+                                    * (b) Fexofenadine
+                                    * (c) Glucocorticoids
+                                    * (d) Metformin
+                                    80. Hemorrhagic cystisis is a serious side effect of:
+                                    * (a) Leflunomide
+                                    * (b) Mycophenolate mofetil
+                                    * (c) Cyclophosphamide
+                                    * (d) Methotrexate
+                                    81. Schober's test is used in the assessment of which one of the following clinical conditions?
+                                    * (a) Rheumatoid arthritis
+                                    * (b) Systemic Lupus Erythematosus
+                                    * (c) Ankylosing Spondylitis
+                                    * (d) Psoriasis
+                                    82. Urate crystals are described as having the following shape:
+                                    * (a) Short and stout
+                                    * (b) Long and needle-like
+                                    * (c) Small and triangular
+                                    * (d) Large and rhomboid
+                                    83. Anti-citrullinated peptide antibody is useful in diagnosis of:
+                                    * (a) Rheumatoid arthritis
+                                    * (b) Sjogren's syndrome
+                                    * (c) Scleroderma
+                                    * (d) Systemic Lupus Erythematosus
+                                    84. Which one of the following antibodies is commonly associated with Drug-induced Lupus?
+                                    * (a) Anti-centromere antibody
+                                    * (b) Anti-Jo-1 antibody
+                                    * (c) Anti-histone antibody
+                                    * (d) Anti-RNP antibody
+                                    85. Long term treatment of bipolar disorder with lithium carbonate can cause which of the following adverse effects?
+                                    * Weight loss
+                                    * Hypothyroidism
+                                    * Increased levels of parathyroid hormone
+                                    * Nephrogenic diabetes insipidus Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    86. Which of the following antidepressant drugs act by inhibition of monoamine oxidase?
+                                    * Phenelzine
+                                    * Tranylcypromine
+                                    * Dosulepin
+                                    * Moclobemide Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    87. Which of the following are selective serotonin re-uptake inhibitors?
+                                    * Escitalopram
+                                    * Amitriptyline
+                                    * Fluoxetine
+                                    * Sertraline Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    88. Which of the following are First Rank Symptoms of acute schizophrenia?
+                                    * Auditory hallucinations
+                                    * Broadcasting of thoughts
+                                    * Delusional perceptions
+                                    * Delirium Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    89. Consider the following statements regarding Wernicke-Korsakoff syndrome:
+                                    * It is a rare complication of chronic alcohol misuse characterised by opthalmoplegia, ataxia and delirium.
+                                    * There is damage to the mammillary bodies and dorsomedial nuclei of thalamus.
+                                    * The underlying cause is deficiency of Vitamin B12 (Cobalamin).
+                                    * The syndrome can also arise due to malabsorption or protracted vomiting. Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    90. Which of the following are inherited causes of dementia?
+                                    * Alzheimer's disease
+                                    * Huntington's disease
+                                    * Wilson's disease
+                                    * Punch-drunk syndrome Select the correct answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    91. Which of the following are classified as mood-stabilising psychotropic drugs?
+                                    * Lithium
+                                    * Valproate
+                                    * Lamotrigine Select the correct answer using the code given below:
+                                    * (a) 2 and 3 only
+                                    * (b) 1 and 4 only
+                                    * (c) 2, 3 and 4 only
+                                    * (d) 1, 2 and 3
+                                    92. Which of the following are correct regarding acetaminophen?
+                                    * It does not interfere with platelet function.
+                                    * It is toxic to the liver in high doses.
+                                    * It is a non-narcotic analgesic. Select the answer using the code given below:
+                                    * (a) 1 and 2 only
+                                    * (b) 2 and 3 only
+                                    * (c) 1 and 3 only
+                                    * (d) 1, 2 and 3
+                                    93. Which of the following are causes of acquired systemic amyloidosis?
+                                    * Tuberculosis
+                                    * Multiple myeloma
+                                    * Untreated rheumatoid arthritis
+                                    * Chronic osteomyelitis Select the correct answer using the code given below:
+                                    * (a) 1 and 2 only
+                                    * (b) 2 and 3 only
+                                    * (c) 1 and 3 only
+                                    * (d) 1, 2, 3 and 4
+                                    94. Which of the following statements are correct with regard to glucose homeostasis?
+                                    * Insulin level rises postprandially.
+                                    * Major portion of postprandial glucose is used by skeletal muscle.
+                                    * Brain uses glucose in an insulin-dependent manner.
+                                    * Glucagon is secreted during exercise. Select the answer using the code given below:
+                                    * (a) 1, 2 and 3
+                                    * (b) 1, 2 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 2, 3 and 4
+                                    95. Consider the following pancreatic hormones:
+                                    * Insulin
+                                    * Islet amyloid polypeptide or amylin
+                                    * Glucagon
+                                    * Somatostatin Which of the above is/are secreted by beta cells of the pancreatic islets?
+                                    * (a) 1 only
+                                    * (b) 2 and 3
+                                    * (c) 1 and 2
+                                    * (d) 1 and 4
+                                    96. Consider the following statements regarding Acute Respiratory Distress Syndrome (ARDS):
+                                    * Exudative phase lasts from day 7 to day 21 after exposure to a precipitating risk factor.
+                                    * Proliferative phase is characterised by proliferation of type II pneumocytes.
+                                    * Low tidal volume ventilation ($6\text{ mL/kg}$ body weight) has significantly lower mortality in management as compared to high tidal volume ventilation ($12\text{ mL/kg}$ body weight).
+                                    * $PaO_2/FiO_2 \le 100\text{ mm Hg}$ is classified as severe AIDS (sic - likely ARDS). Which of the statements given above are correct?
+                                    * (a) 1, 2 and 3
+                                    * (b) 2, 3 and 4
+                                    * (c) 1, 3 and 4
+                                    * (d) 1, 2 and 4
+                                    97. Consider the following statements regarding organophosphate-induced delayed polyneuropathy (OPIDN):
+                                    * It is a rare complication and occurs 2-3 weeks after acute exposure.
+                                    * It is a feature of poisoning with certain organophosphorus compounds such as triorthocresyl phosphate.
+                                    * Inhibition of acetylcholinesterase causes motor polyneuropathy with no evidence of sensory loss.
+                                    * There is no specific therapy although regular physiotherapy may limit deformity caused by muscle wasting. Which of the statements given above are correct?
+                                    * (a) 1 and 2 only
+                                    * (b) 1, 2 and 3
+                                    * (c) 1, 2 and 4
+                                    * (d) 2, 3 and 4
+                                    98. Consider the following statements regarding paracetamol toxicity:
+                                    * Toxicity is caused by an intermediate reactive metabolite that binds covalently to cellular proteins causing cell death.
+                                    * Antidotes for paracetamol act by replenishing hepatic glutathione and should be administered to all patients with acute poisoning.
+                                    * Intravenous acetyl cysteine is a highly efficacious antidote if administered within 8 hours of the overdose.
+                                    * Methionine may be used as an alternative antidote but it is less effective than acetyl cysteine. Which of the statements given above are correct?
+                                    * (a) 1 and 4 only
+                                    * (b) 1, 2 and 3 only
+                                    * (c) 2, 3 and 4 only
+                                    * (d) 1, 2, 3 and 4
+________________
+
+
+Pediatrics Questions
+                                    97. Which one of the following statements is correct regarding physiology of breastfeeding?
+                                    * (a) Prolactin is responsible for ejection of milk from the glands.
+                                    * (b) Night feeding is important for maintaining prolactin reflex.
+                                    * (c) Oxytocin is responsible for milk secretion by the alveolar epithelial cells.
+                                    * (d) Oxytocin is secreted by the anterior pituitary.
+                                    98. Which one of the following fine motor milestones will appear ahead of others?
+                                    * (a) Copies a cross
+                                    * (b) Copies a circle
+                                    * (c) Draws a circle
+                                    * (d) Draws a cross
+                                    99. In case of hypertensive emergency in a child, blood pressure should be reduced by up to:
+                                    * (a) 10% over the first 8 hours
+                                    * (b) 15% over the first 8 hours
+                                    * (c) 10% in the first hour
+                                    * (d) 15% in the first hour
+                                    100. At what cut-off respiratory rate will you consider "fast breathing" in a 2-year-old child? * (a) $\ge 60$ per minute * (b) $\ge 50$ per minute * (c) $\ge 40$ per minute * (d) $\ge 30$ per minute
+                                    101. Which of the following are used in the management of hyperkalemia? 1. 10% calcium gluconate intravenously 2. Regular insulin and intravenous glucose 3. Nebulized ipratropium bromide 4. Intravenous sodium bicarbonate Select the correct answer using the code given below: * (a) 1, 2 and 3 * (b) 1, 2 and 4 * (c) 1, 3 and 4 * (d) 2, 3 and 4
+                                    102. Nebulized salbutamol is used in the management of which of the following electrolyte abnormality? * (a) Hypernatremia * (b) Hyperkalemia * (c) Hyponatremia * (d) Hypomagnesemia
+                                    103. Which of the following are correct regarding activities under the Weekly Iron and Folic Acid Supplementation (WIFS) programme? 1. Administration of supervised weekly iron-folic acid supplements of $100\text{ mg}$ elemental iron and $500\text{ }\mu\text{g}$ folic acid 2. Administration of supervised weekly iron-folic acid supplements of $60\text{ mg}$ elemental iron and $0.5\text{ mg}$ folic acid 3. Biannual de-worming with albenzadole 4. Annual de-worming with albendazole Select the answer using the code given below: * (a) 1 and 4 * (b) 1 and 3 * (c) 2 and 4 * (d) 2 and 3
+                                    104. Under the Integrated Management of Neonatal and Childhood Illness, caretakers are advised to return immediately to a health facility, if: 1. Any sick child is not able to drink or breast feed. 2. Fast breathing or difficult breathing, in a child who has no pneumonia 3. Blood in stool, in a child with diarrhoea 4. Conjunctivitis in a child with measles Select the correct answer using the code given below: * (a) 1, 2 and 3 * (b) 1, 2 and 4 * (c) 3 and 4 only * (d) 2, 3 and 4
+                                    105. Which of the following statements are correct regarding the fluid management of pediatric inpatients with burn injuries? 1. The Parkland formula estimates the amount of fluid to be replaced over 24 hours. 2. $\text{Volume of fluid (mL)} = 4\text{ mL} \times \text{Weight (kg)} \times \text{Total body surface area burn(\%)}$. 3. Additional maintenance fluid therapy is also to be given to the child. 4. Half of the resuscitation volume should be given over 6 hours and the remaining half over the next 18 hours. Select the answer using code given below: * (a) 1, 2 and 4 * (b) 1, 2 and 3 * (c) 1, 3 and 4 * (d) 2, 3 and 4
+                                    106. Whole Bowel Irrigation (WBI) as a method of gastrointestinal decontamination is useful for poisoning with: * (a) Alcohol * (b) Iron * (c) Kerosene * (d) Organophosphorus
+                                    107. To prevent recurrence, expectant mothers with a previous fetus with neural tube defect should receive folic acid daily at the dose of: * (a) $4\text{ }\mu\text{g}$ * (b) $400\text{ }\mu\text{g}$ * (c) $4\text{ mg}$ * (d) $400\text{ mg}$
+                                    108. Consider the following statements regarding non-invasive prenatal screening (NIPS) for screening high risk pregnancies for aneuploidies: 1. It is carried out on maternal blood. 2. It is done before 10 weeks gestation. 3. It has a negative predictive value of about 98%. 4. Invasive testing is needed for confirmation of a positive test. Which of the statements given above are correct? * (a) 1, 2 and 3 * (b) 1, 2 and 4 * (c) 1, 3 and 4 * (d) 2, 3 and 4
+                                    109. The risk of Down syndrome is 100% in the offspring, if: * (a) Mother only is the carrier of balanced translocation * (b) Father only is the carrier of balanced translocation * (c) Both parents are carriers of balanced translocation * (d) Either parent is a carrier of a translocation between two chromosome 21
+                                    110. Which of the following are examples of genomic imprinting? 1. Angelman syndrome 2. Williams syndrome 3. Prader-Willi syndrome 4. DiGeorge syndrome Select the correct answer using the code given below: * (a) 1 and 3 * (b) 1 and 2 * (c) 2 and 3 * (d) 2 and 4
+                                    111. Poisoning with which of the following drugs causes hypothermia? * (a) Digoxin * (b) Chlorpromazine * (c) Iron * (d) Alcohol
+                                    112. Consider the following pairs: 1. Pink — Cephalosporin 2. Brown — Chloroquine 3. Greenish blue — Phenazopyridine 4. Red-orange — Amitriptyline How many of the pairs given above are correctly matched? * (a) Only one pair * (b) Only two pairs * (c) Only three pairs * (d) All four pairs
+                                    113. Consider the following agents and the cardiac effects in case of overdose or poisoning: 1. Prolonged PR interval — Lithium 2. Prolonged QTc interval — Amiodarone 3. Wide QRS complex — Kerosene ingestion 4. Tachycardia — Organophosphates How many of the pairs given above are correctly matched? * (a) Only one pair * (b) Only two pairs * (c) Only three pairs * (d) All four pairs
+                                    114. If a baby does not begin breathing in response to tactile stimulation, then the baby is assumed to be in: * (a) Primary apnea * (b) Secondary apnea * (c) Tertiary apnea * (d) Cardiorespiratory arrest
+                                    115. Consider the following conditions:
+| Condition | Response to tactile stimulation | Heart Rate | Blood Pressure | Tone |
+| :--- | :--- | :--- | :--- | :--- |
+| A | Yes | Normal | Normal | Normal |
+| B | Yes | Falling | Normal | Decreasing |
+| C | No | Falling | Falling | Decreasing |
+| D | No | Rising | Normal | Normal |
+
+
+**Primary apnea in a neonate is characterized by which one of the above conditions?** [cite: 1141]
+* (a) A [cite: 1149]
+* (b) B [cite: 1151]
+* (c) C [cite: 1152]
+* (d) D [cite: 1153]
+
+
+                                    116. Consider the following statements about human breast milk: 1. 75% of breast milk content is water. 2. Breast milk is poor in taurine and cysteine. 3. Breast milk is particularly rich in omega 3 and omega 6 fatty acids (Note: OCR says omega 2, likely a typo). 4. High lactose content of breast milk helps in absorption of calcium. Which of the statements given above are correct? * (a) 1, 3 and 4 * (b) 1 and 4 only * (c) 1 and 3 only * (d) 3 and 4 only
+                                    117. Which of the following are signs of good attachment during breastfeeding? 1. The baby's nose is at the level of the nipple. 2. The baby's mouth is wide open. 3. The baby's chin touches the breast. 4. The baby's lower lip is everted. Select the correct answer using the code given below: * (a) 1, 2 and 3 * (b) 2, 3 and 4 * (c) 1, 3 and 4 * (d) 1, 2 and 4
+                                    118. A 6-year-old boy has recently started telling his full name, although he cannot recite a poem. His Developmental Quotient (DQ) in the language sphere is: * (a) 33% * (b) 50% * (c) 66% * (d) 83%
+                                    119. Consider the following statements: 1. Hepatitis B vaccine has reduced efficacy, if administered intramuscularly. 2. The maximum time allowed between reconstitution of MMR vaccine and use is 30 minutes. 3. Maternal antibodies do not interfere with cellular immune response to BCG vaccine. 4. DTwP is preferred to DTaP for primary immunization in most children. Which of the statements given above are correct? * (a) 1 and 2 * (b) 1 and 3 * (c) 2 and 4 * (d) 3 and 4
+                                    120. Rotavirus vaccination is avoided during an episode of diarrhoea because: * (a) it might compromise uptake of vaccine * (b) it could trigger an episode of intussusception * (c) Rotavirus vaccine is a live vaccine and hence may cause rotavirus diarrhoea and worsen the diarrhoeal episode * (d) vomiting is a significant adverse effect of Rotavirus vaccine

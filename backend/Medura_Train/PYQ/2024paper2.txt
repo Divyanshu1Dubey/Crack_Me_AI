@@ -1,0 +1,406 @@
+﻿Section: Surgery
+1. Which of the following are risk factors for wound infection?
+1. Malnutrition
+2. Poor perfusion
+3. Antibodies
+4. Foreign body material
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+2. Which types of cancer are associated with exposure to ionizing radiation?
+   1. Leukaemia
+   2. Lung cancer
+   3. Breast cancer
+   4. Lymphoma
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+3. Which of the following are correct regarding Li-Fraumeni syndrome?
+      1. It has autosomal dominant inheritance and is associated with P53 gene.
+      2. It has autosomal recessive inheritance and is associated with P53 gene.
+      3. It is associated with an increased risk of sarcomas and leukaemia.
+      4. It is associated with an increased risk of brain tumours and osteosarcomas.
+Options: (a) 2, 3 and 4; (b) 1, 3 and 4; (c) 1 and 4 only; (d) 1 and 3 only
+4. A 48-year-old smoker presents with complaints of cramping pain in both the calves on walking 100-150 metres, relieved by rest for 2-3 minutes. This presentation is suggestive of: (a) Muscular fatigue (b) Osteoarthritis of the knee (c) Intermittent claudication (d) Neurogenic claudication
+5. A midline neck swelling just below the hyoid bone managed by Sistrunk's operation leads to postoperative need for thyroxine. The diagnosis is: (a) Lateral aberrant thyroid (b) Thyroglossal cyst (c) Solitary thyroid nodule (d) Thyroglossal cyst with functioning thyroid tissue only
+6. A 40-year-old smoker has a white plaque over the lateral border of the tongue. The next step in management is: (a) Oral vitamin C supplementation (b) Oral antifungal treatment (c) Edge biopsy of the lesion (d) Local topical cauterization
+7. Which of the following causes are associated with acute visual loss?
+         1. Obstruction of the central retinal artery
+         2. Vitreous and retinal haemorrhage
+         3. Cataract
+         4. Retinal detachment
+Options: (a) 1, 2 and 3; (b) 1, 3 and 4; (c) 1, 2 and 4; (d) 2, 3 and 4
+8. A 60-year-old lady with a small neck swelling present for 30 years shows a sudden increase in size (twice the size in 2 months). It is firm to hard and moves with deglutition. Likely cause: (a) Cystic degeneration (b) Haemorrhage (c) Malignant transformation (d) Myxomatous transformation
+9. Which of the following chromosomal abnormalities are associated with brain tumours?
+            1. Neurofibromatosis type 1
+            2. Neurofibromatosis type 2
+            3. Peutz-Jeghers syndrome
+            4. Hereditary nonpolyposis colorectal cancer
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+10. Which one of the following is correct regarding "witch's milk"? (a) It is seen in full-term infants. (b) It is seen only in preterm infants. (c) It is caused by stimulation of foetal breast by progesterone. (d) It is caused by stimulation of foetal breast by calcitonin.
+11. Which statements are correct regarding Barrett's oesophagus?
+               1. It is a metaplastic change.
+               2. It is a risk factor for adenocarcinoma.
+               3. NSAIDs are the aetiological factor.
+               4. Endoscopic mucosal resection is effective.
+Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 2 and 4; (d) 1, 3 and 4
+12. Which among the following are complications of liver trauma?
+                  1. Liver abscess
+                  2. Biliary fistula
+                  3. Portal thrombosis
+                  4. Liver failure
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+13. Which of the following are local complications of acute pancreatitis?
+                     1. Pseudocyst
+                     2. Pleural effusion
+                     3. Ileus
+                     4. Acute fluid collection
+Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 2 and 4; (d) 1, 3 and 4
+14. Which of the following are risk factors for pancreatic cancer?
+                        1. Cigarette smoking
+                        2. Diabetes mellitus
+                        3. Caucasian ethnicity
+                        4. Male gender
+Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 2 and 4; (d) 1, 3 and 4
+15. Which of the following are metabolic causes of splenic enlargement? (a) Rickets and Still's disease (b) Amyloid and Gaucher's disease (c) Porphyria and Felty's syndrome (d) Myelofibrosis and Weil's disease
+16. Which statement is correct about mesenteric cysts? (a) Most common in children < 18 years. (b) More common in males. (c) Presents most commonly as a painless abdominal swelling. (d) Percutaneous aspiration is preferred.
+17. Which are features of umbilical hernia in adults?
+                           1. Overweight with thinned midline raphe.
+                           2. Most complain of pain due to tissue tension.
+                           3. Men affected more than women.
+                           4. Repair can be done by Mayo's technique.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+18. What is the most common cause of perforation of the oesophagus? (a) Barotrauma (b) Mediastinitis (c) Iatrogenic infection (d) Malignancy
+19. Which of the following are stages of damage control surgery?
+                              1. Patient's selection
+                              2. Control of haemorrhage
+                              3. Resuscitation in ICU
+                              4. Preventive surgery
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+20. Which statements are correct regarding renal cell carcinoma?
+                                 1. Arises from epithelium of proximal convoluted tubule.
+                                 2. Female preponderance.
+                                 3. Clear cell, papillary and chromophobe are major subtypes.
+                                 4. Surgery is mainstay for organ-confined disease.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+21. Which are features of autosomal dominant polycystic kidney disease?
+                                    1. Cysts in liver, pancreas and arachnoid membrane.
+                                    2. Most common manifestation between 20-30 years.
+                                    3. Renal and extrarenal manifestations.
+                                    4. Men progress to renal failure more rapidly.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+22. Extracorporal Shock Wave Lithotripsy (ESWL) is most commonly used for: (a) Gallbladder stones (b) Urinary tract stones (c) Salivary gland stones (d) Abdominal stony-hard tumour
+23. Which clinical features are related to most brain tumours?
+                                       1. Raised ICP
+                                       2. Seizures
+                                       3. Focal deficit
+                                       4. Headache
+Options: (a) 1, 2, 3 and 4; (b) 1 and 2 only; (c) 1, 2 and 3 only; (d) 2, 3 and 4 only
+24. The most common type of brain tumours associated with neurofibromatosis type 1 is: (a) Astrocytoma (b) Acoustic neuroma (c) Meningioma (d) Medulloblastoma
+25. Which are correct for herniation via foramen of Morgagni?
+                                          1. Occurs posteriorly in chest.
+                                          2. Transverse colon is commonest content.
+                                          3. Defect between sternal and costal attachments.
+                                          4. Congenital hernia type.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+26. A 40-year-old lady has hand stiffness improving through the day, with ulnar deviation at metacarpophalangeal joints. Diagnosis: (a) Osteoarthritis (b) Ankylosing spondylitis (c) Rheumatoid arthritis (d) Tenosynovitis
+27. A 52-year-old diabetic female has shoulder pain and difficulty with overhead abduction. Diagnosis: (a) Rotator cuff tear (b) Frozen shoulder (c) Bacterial arthritis (d) Osteoarthritis
+28. A 20-year-old girl has a cystic, nontender swelling on the dorsum of the left wrist, prominent on plantar flexion. Diagnosis: (a) Ganglion cyst (b) Sebaceous cyst (c) Dermoid cyst (d) Epidermoid cyst
+29. Upper motor neuron lesions are characterized by:
+                                             1. Increased tone spasticity
+                                             2. Hyperreflexia
+                                             3. Absent plantar response
+                                             4. Motor weakness
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+30. A 56-year-old diabetic undergoing pre-anaesthesia checkup with sugar levels in limits. ASA category: (a) ASA 4 (b) ASA 3 (c) ASA 2 (d) ASA 1
+31. Indication for damage control surgery in a 30-year-old RTA victim during emergency laparotomy: (a) BP < 100 mm Hg (b) Acidosis with $pH < 7.32$ (c) Hypothermia $< 36^\circ\text{C}$ (d) Coagulopathy
+32. Which features are benefits of fracture treatment?
+                                                1. Pain relief
+                                                2. Prevention of infection
+                                                3. Anaesthesia
+                                                4. Restoration of anatomy
+Options: (a) 1, 3 and 4; (b) 1, 2 and 3; (c) 1, 2 and 4; (d) 2, 3 and 4
+33. Presence of a bruise over the left mastoid process in an RTA victim indicates: (a) Fracture of mastoid process (b) Injury to external auditory meatus (c) Fracture of the skull base (d) Soft tissue injury to the neck
+34. Hangman's fracture is: (a) Traumatic spondylolisthesis of $C_1$ (b) Traumatic spondylolisthesis of $C_2$ (c) Traumatic spondylolisthesis of $T_1$ (d) Traumatic spondylolisthesis of $L_1$
+35. Which are correct in respect of Systemic Inflammatory Response Syndrome (SIRS)?
+                                                   1. Caused by lipopolysaccharide endotoxin from dying E. coli.
+                                                   2. Same as bacteraemia.
+                                                   3. Results in Multiple Organ Dysfunction Syndrome (MODS).
+                                                   4. White cell counts $> 12 \times 10^9/\text{litre}$.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+36. A nurse asking a surgeon about patient identity, site, and critical events is using: (a) Universal precautions checklist (b) Nurses safety checklist (c) MCI patient safety checklist (d) WHO surgical safety checklist
+37. Which are correct for managing hypertrophic scars?
+                                                      1. Silicone gel sheeting
+                                                      2. Intralesional steroid injections
+                                                      3. Vitamin A gel applications
+                                                      4. Laser treatment
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+38. Daily adult electrolyte requirements?
+                                                         1. Sodium $50-90~\text{mM/day}$
+                                                         2. Calcium $1~\text{mM/day}$
+                                                         3. Potassium $50~\text{mM/day}$
+                                                         4. Magnesium $1~\text{mM/day}$
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+39. Cardiovascular response pattern describing distributive shock:
+                                                            1. Vasodilation
+                                                            2. Reduced peripheral vascular resistance
+                                                            3. Inadequate 'afterload'
+                                                            4. Low cardiac output
+Options: (a) 1, 2 and 4; (b) 1, 3 and 4; (c) 2, 3 and 4; (d) 1, 2 and 3
+40. Best measure of organ perfusion and adequacy of shock therapy: (a) Central venous pressure (b) Pulmonary wedge pressure (c) Urine output (d) Restoring blood pressure/pulse
+________________
+
+
+Section: Gynaecology & Obstetrics
+41. Which statement is correct regarding foetal physiology? (a) Haematopoiesis demonstrated in yolk sac by 14th day. (b) Meconium appears at 16 weeks. (c) Breathing movements identified at 26 weeks. (d) Foetal pancreas secretes insulin as early as 20 weeks.
+42. Advantages of haemodilution during pregnancy:
+                                                               1. Optimum gaseous exchange due to decreased viscosity.
+                                                               2. Protection against supine and erect posture.
+                                                               3. Protection against blood loss during delivery.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+43. Oligohydramnios is defined on USG when:
+                                                                  1. Maximum vertical pocket $< 5~\text{cm}$.
+                                                                  2. AFI $< 5~\text{cm}$.
+Correct statement: (a) 1 only; (b) 2 only; (c) Both 1 and 2; (d) Neither 1 nor 2
+44. Normal endocrine changes in pregnancy:
+                                                                     1. Increase in maternal serum iodine.
+                                                                     2. Increase in CRH.
+                                                                     3. Increase in aldosterone.
+                                                                     4. Increase in ACTH.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+45. Correct features regarding onset of true labour:
+                                                                        1. Regular uterine contractions.
+                                                                        2. Progressive cervical dilation and effacement.
+                                                                        3. Presence of show.
+                                                                        4. Labour and delivery are synonymous.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+46. WHO 2018 Guidelines: Active phase of labour starts from dilation of: (a) $3~\text{cm}$ (b) $4~\text{cm}$ (c) $5~\text{cm}$ (d) $6~\text{cm}$
+47. Engagement diameter in marked deflexion: (a) Occipitofrontal diameter (b) Suboccipitofrontal diameter (c) Mentovertical diameter (d) Suboccipitobregmatic diameter
+48. Onset of labour is initiated by:
+                                                                           1. Uterine distension.
+                                                                           2. Increased CRH and ACTH from foetal HPA axis.
+                                                                           3. Increased progesterone level immediately before labour.
+                                                                           4. Increased synthesis of myometrial oxytocin receptors.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+49. Blood collection between pericranium and skull bone limited by suture line in a 2-day-old baby. Diagnosis: (a) Caput succedaneum (b) Intraventricular haemorrhage (c) Cephalohaematoma (d) Subgaleal haemorrhage
+50. Pathological findings of placenta accreta:
+                                                                              1. Absence of decidua basalis.
+                                                                              2. Absence of Nitabuch's fibrinoid layer.
+                                                                              3. Loss of normal hypoechoic retroplacental myometrial zone on USG.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+51. Correct regarding peripartum cardiomyopathy:
+                                                                                 1. Usually seen in multiparous women.
+                                                                                 2. Echocardiography shows EF $< 45\%$.
+                                                                                 3. ACE inhibitors are contraindicated.
+                                                                                 4. History of prior heart disease mostly present.
+Options: (a) 1 and 2 only; (b) 1, 2 and 3; (c) 3 and 4 only; (d) 1, 3 and 4
+52. Scar tenderness, vaginal bleeding, haematuria, and abnormal FHR in a woman with a previous C-section. Diagnosis: (a) UTI (b) Scar rupture/dehiscence (c) Labour pain (d) Rupture of urinary bladder
+53. Hypotensive woman in labour with previous C-section, absent FHS, and easily palpable foetal parts. Diagnosis: (a) Oligohydramnios (b) Abruptio placentae (c) Uterine rupture (d) Hydatidiform mole
+54. Primigravida at 8 months with BP $160/100$, thrombocytopenia, and increased SGOT/SGPT/LDH. Diagnosis: (a) Obstetric cholestasis (b) Hepatitis B (c) HELLP syndrome (d) Eclampsia
+55. Woman 2 months pregnant with increased bleeding, lower abdominal pain, and products of conception felt through dilated internal os. Diagnosis: (a) Threatened abortion (b) Inevitable abortion (c) Septic abortion (d) Incomplete abortion
+56. Pathology associated with ureteric injury during abdominal hysterectomy: (a) Pelvic endometriosis (b) Adenomyosis (c) Hydrosalpinx (d) Ovarian teratoma
+57. Pathology of stress urinary incontinence:
+                                                                                    1. Hypermobility of urethra.
+                                                                                    2. Ascend of bladder neck above pelvic diaphragm.
+                                                                                    3. Lowered urethral pressure.
+                                                                                    4. Increased detrusor activity.
+Options: (a) 1 and 2; (b) 1 and 3; (c) 2 and 4; (d) 3 and 4
+58. Confirmatory procedure for diagnosis of bicornuate uterus: (a) Dilation with curettage (b) Hysteroscopy (c) Hysteroscopy and laparoscopy (d) Hysterectomy
+59. Correct regarding pelvic cellular tissue:
+                                                                                       1. Supports pelvic organs.
+                                                                                       2. Forms protective sheath for blood vessels/ureter.
+                                                                                       3. Prevents spread of infection.
+                                                                                       4. Marked hypertrophy occurs in pregnancy.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+60. Correct regarding androgen insensitivity syndrome:
+                                                                                          1. X-linked recessive inheritance.
+                                                                                          2. Karyotype 46 XXY.
+                                                                                          3. Called testicular feminization.
+                                                                                          4. Confirmed by gonadal biopsy.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+61. Investigations for unresponsive endometrium in primary amenorrhoea:
+                                                                                             1. Karyotype
+                                                                                             2. Progesterone challenge test
+                                                                                             3. Hormonal studies
+                                                                                             4. Hysterosalpingography
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+62. 16-year-old girl with primary amenorrhoea, normal secondary sexual characters, karyotype 46,XX, normal ovaries/tubes but absent uterus. Diagnosis: (a) Androgen insensitivity syndrome (b) Turner syndrome (c) Mayer-Rokitansky-Küster-Hauser syndrome (d) Primary ovarian failure
+63. 25-year-old with secondary amenorrhoea after D&C, FSH levels 8 IU/L. Probable cause: (a) Sheehan syndrome (b) Asherman syndrome (c) Premature ovarian failure (d) Incomplete abortion
+64. Criteria for hospitalization in pelvic inflammatory disease:
+                                                                                                1. Coexisting pregnancy.
+                                                                                                2. Mild fever responding well to antibiotics.
+                                                                                                3. Suspected tubo-ovarian abscess.
+                                                                                                4. Coexistent HIV infection.
+Options: (a) 1, 3 and 4; (b) 1, 2 and 3; (c) 1, 2 and 4; (d) 2, 3 and 4
+65. Lower abdominal pain, vaginal discharge, and IUD use for 3-4 years, with fever and cervical motion tenderness. Diagnosis: (a) Ectopic pregnancy (b) Acute appendicitis (c) Diverticulitis (d) Acute PID
+66. Risk factors for Pelvic Inflammatory Disease (PID):
+                                                                                                   1. Use of contraceptive pills.
+                                                                                                   2. IUD use.
+                                                                                                   3. Genetic predisposition.
+                                                                                                   4. Sexually active teenagers.
+Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+67. Symptoms of genital tuberculosis:
+                                                                                                      1. Postmenopausal bleeding.
+                                                                                                      2. Infertility.
+                                                                                                      3. Chronic pelvic pain.
+                                                                                                      4. Oligomenorrhoea.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+68. Correct regarding choriocarcinoma: (a) Vaginal bleeding is commonest presenting symptom. (b) 20-30% of molar pregnancies develop it. (c) Primary site is fallopian tube. (d) Highly resistant to chemotherapy.
+69. Favourable factors in prognosis of ovarian malignancy:
+                                                                                                         1. Older age group.
+                                                                                                         2. Well-differentiated tumour.
+                                                                                                         3. Smaller tumour volume.
+                                                                                                         4. Absence of ascites.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+70. Most effective drug in treatment of GTN: (a) Cisplatin (b) Methotrexate (c) Gemcitabine (d) None of the above
+71. Total hysterectomy specimen revealing thecoma-fibroma. Most appropriate statement: (a) 20% are bilateral. (b) Endometrial hyperplasia is often associated. (c) Always associated with gross ascites. (d) Derived from germ cells.
+72. POPQ classification measurement done after reducing prolapse: (a) Genital hiatus (b) Point C (c) Point D (d) Total vaginal length
+73. Essential steps of Fothergill's operation:
+                                                                                                            1. Laparoscopic or vaginal ligation.
+                                                                                                            2. Amputation of cervix.
+                                                                                                            3. Plication of Mackenrodt's ligaments.
+                                                                                                            4. Ant colporrhaphy.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+74. Indications for cold knife conization:
+                                                                                                               1. Inconsistent finding between colposcopy, cytology and biopsy.
+                                                                                                               2. Persistent CIN-1 lesion in women willing for future fertility.
+                                                                                                               3. Carcinoma in situ.
+                                                                                                               4. Unsatisfactory colposcopic finding.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+75. Factors for poor outcome following tuboplasty:
+                                                                                                                  1. Dense pelvic adhesions.
+                                                                                                                  2. Length of reconstructed tube $< 8~\text{cm}$.
+                                                                                                                  3. Bilateral hydrosalpinx.
+                                                                                                                  4. Reversal after 5 years of sterilization.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+76. Ulipristal acetate should not be prescribed for emergency contraception in women with: (a) Glaucoma (b) Liver dysfunction (c) Kidney failure (d) Coagulopathy
+77. Injectable medroxyprogesterone $150~\text{mg/mL}$ is available under the name: (a) Saheli (b) Sayana Press (c) Antara (d) Sahiba
+78. Major complications of oral pills:
+                                                                                                                     1. Cholestasis jaundice.
+                                                                                                                     2. Chloasma and acne.
+                                                                                                                     3. Venous thromboembolism.
+                                                                                                                     4. Breast cancer.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+79. Indications of removal of intrauterine device:
+                                                                                                                        1. Persistent irregular bleeding.
+                                                                                                                        2. Perforation of uterus.
+                                                                                                                        3. Pyelonephritis.
+                                                                                                                        4. Pregnancy with device in situ.
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+80. Most reliable method for a female on liver enzyme inducers: (a) Combined oral contraceptive pill (b) Male condom (c) Diaphragm (d) Depo-Provera injection
+________________
+
+
+Section: Preventive & Social Medicine
+81. Open Vial Policy: partially used vials that can be used over more than one session:
+                                                                                                                           1. BCG vaccine
+                                                                                                                           2. DPT vaccine
+                                                                                                                           3. Hepatitis B vaccine
+                                                                                                                           4. Measles vaccine
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1, 2 and 3; (d) 1, 3 and 4
+82. "Health is a dynamic equilibrium... explains which concept? (a) Biomedical (b) Ecological (c) Psychosocial (d) Holistic
+83. National Health Policy 2017 goal matches:
+                                                                                                                              1. Life expectancy 67.5 to 70 by 2025 (Health status).
+                                                                                                                              2. 90% newborn fully immunized by one year by 2025 (Health systems performance).
+                                                                                                                              3. State sector health spending $> 8\%$ budget by 2020 (Health systems strengthening). Correct pairs: (a) None; (b) One; (c) Two; (d) All three
+84. Management techniques based on behavioural sciences:
+                                                                                                                              1. System analysis
+                                                                                                                              2. Organizational design
+                                                                                                                              3. Personnel management
+                                                                                                                              4. Information systems
+Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+85. Correct matches for end results of planning:
+                                                                                                                                 1. Goal: Always constrained by time.
+                                                                                                                                 2. Objective: Precise, achieved or not.
+                                                                                                                                 3. Target: Permits concept of degree of achievement. Correct pairs: (a) None; (b) One; (c) Two; (d) All three
+86. Correct sequence of planning cycle steps: (a) $3 \rightarrow 4 \rightarrow 1 \rightarrow 2$ (b) $1 \rightarrow 2 \rightarrow 3 \rightarrow 4$ (c) $1 \rightarrow 3 \rightarrow 4 \rightarrow 2$ (d) $2 \rightarrow 3 \rightarrow 4 \rightarrow 1$
+87. Correct regarding incidence rate:
+                                                                                                                                 1. Useful for taking action to control disease.
+                                                                                                                                 2. Rising rates may indicate ineffectiveness of control.
+                                                                                                                                 3. Fluctuation may indicate change in aetiology.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+88. Term for high level infection beginning early in life affecting most child population...: (a) Holoendemic (b) Hyperendemic (c) Hypoendemic (d) Pandemic
+89. Correct regarding dengue virus:
+                                                                                                                                    1. Four distinct serotypes.
+                                                                                                                                    2. One serotype confers lifelong immunity for that serotype.
+                                                                                                                                    3. Secondary infection with serotype 2 leads to severe form.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+90. Correct regarding dengue mosquito:
+                                                                                                                                       1. Infective after extrinsic incubation of 8-10 days.
+                                                                                                                                       2. Remains infective for life.
+                                                                                                                                       3. Genital tract does not get infected.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+91. Best chart to present relationship between BMI and sugar intake for 100 countries: (a) Bar chart (b) Pie diagram (c) Frequency polygon (d) Scatter diagram
+92. Frontline workers recording births/deaths where registration is slow: (a) Registration of vital events (b) Lay reporting (c) Sample registration system (d) Census
+93. Total dependency ratio denominator: (a) Midyear population (b) Population 0 to 65 years (c) Population 15 to 64 years (d) Population 14 to 70 years
+94. UN definition of 'vital events' includes:
+                                                                                                                                          1. Foetal deaths
+                                                                                                                                          2. School admissions
+                                                                                                                                          3. Legal separations
+                                                                                                                                          4. College graduations
+Options: (a) 1 and 2; (b) 1 and 3; (c) 2 and 3; (d) 2 and 4
+95. Correct about Kyasanur Forest Disease (KFD):
+                                                                                                                                             1. Transmitted by ticks.
+                                                                                                                                             2. Originally called 'pig disease'.
+                                                                                                                                             3. First recognized in Karnataka. Correct statements count: (a) None; (b) Only one; (c) Only two; (d) All three
+96. Measles immunization age in low transmission countries: (a) 6 months (b) 9 months (c) 12 months (d) 15-18 months
+97. Monkeypox virus is: (a) ssRNA (b) dsRNA (c) ssDNA (d) dsDNA
+98. Dog scratch with bleeding. PEP option: (a) Wash and Tetanus toxoid (b) Wash and ARV only (c) Wash, ARV and immunoglobulin (d) Wash and antiseptic
+99. Combined disposal of refuse and night soil: (a) Dumping (b) Controlled tipping (c) Incineration (d) Composting
+100. Correct statements about septic tanks:
+                                                                                                                                             1. Recommended for large communities.
+                                                                                                                                             2. No air space between liquid and cover.
+                                                                                                                                             3. Liquid effluent free from all pathogens. Correct statements count: (a) None; (b) Only one; (c) Only two; (d) All three
+101. Nonessential amino acid: (a) Leucine (b) Threonine (c) Tryptophan (d) Proline
+102. Correct order of fat content per 100gm (highest to lowest): (a) $1 \rightarrow 3 \rightarrow 4 \rightarrow 2$ (Buffalo $\rightarrow$ Goat $\rightarrow$ Human $\rightarrow$ Cow) (b) $4 \rightarrow 2 \rightarrow 3 \rightarrow 1$ (c) $2 \rightarrow 1 \rightarrow 4 \rightarrow 3$ (d) $1 \rightarrow 3 \rightarrow 2 \rightarrow 4$
+103. Unsaturated fatty acids:
+                                                                                                                                             1. Lauric acid
+                                                                                                                                             2. Linoleic acid
+                                                                                                                                             3. Oleic acid
+                                                                                                                                             4. Palmitic acid
+Options: (a) 1 and 2; (b) 1 and 4; (c) 2 and 3; (d) 3 and 4
+104. Most widely prevalent stage of iron deficiency in India: (a) Decreased iron stores (b) Fall in transferrin saturation (c) Overt deficiency with impaired Hb synthesis (d) Decrease in circulating Hb concentration
+105. Waist circumference/hip ratio vs BMI as diabetes risk predictors: Correct choice: (a) Both Statement I and II correct, II explains I
+106. Seeking to preserve traditional lifestyles for low CHD levels. Prevention level: (a) Primordial (b) High risk (c) Primary (d) Secondary
+107. 30-year-old in ceramic/pottery industry for 10 years should be screened for: (a) Silicosis (b) Anthracosis (c) Byssinosis (d) Asbestosis
+108. Basophilic stippling of RBC indicates: (a) Asbestosis (b) Farmer's lung (c) Lead poisoning (d) Brucellosis
+109. Genetic disease and Mendelian inheritance matches:
+                                                                                                                                                1. Cystic fibrosis: Autosomal recessive.
+                                                                                                                                                2. Huntington's chorea: Autosomal dominant.
+                                                                                                                                                3. Marfan's syndrome: Recessive sex-linked. Correct matches count: (a) None; (b) One; (c) Two; (d) All three
+110. Thalassemia major signs developing after 6 months due to switch from HbF to HbA. Correct choice: (a) Both Statement I and II correct, II explains I
+111. Publication(s) by WHO:
+                                                                                                                                                1. CD Alert
+                                                                                                                                                2. Morbidity and Mortality Weekly Report
+                                                                                                                                                3. Weekly Epidemiological Record Options: (a) 2 only; (b) 1 and 2; (c) 2 and 3; (d) 3 only
+112. Correct sequence of nuclear family phases: (a) $1 \rightarrow 2 \rightarrow 3 \rightarrow 4$ (b) $4 \rightarrow 3 \rightarrow 1 \rightarrow 2$ (Formation $\rightarrow$ Extension $\rightarrow$ Contraction $\rightarrow$ Dissolution) (c) $1 \rightarrow 4 \rightarrow 3 \rightarrow 2$ (d) $4 \rightarrow 1 \rightarrow 2 \rightarrow 3$
+113. Characteristics of health education rather than propaganda:
+                                                                                                                                                1. Knowledge actively acquired.
+                                                                                                                                                2. Appeals to emotion.
+                                                                                                                                                3. Behaviour centred.
+                                                                                                                                                4. Arouses primitive desires.
+Options: (a) 1 and 2; (b) 1 and 3; (c) 2 and 3; (d) 3 and 4
+114. Correct about LNG-20 (Mirena):
+                                                                                                                                                   1. T-shaped IUD filled with natural progesterone.
+                                                                                                                                                   2. Low pregnancy rate (2 per 1000).
+                                                                                                                                                   3. Associated with large number of ectopic pregnancies.
+                                                                                                                                                   4. Associated with lower blood loss vs copper IUD.
+Options: (a) 2 only; (b) 2 and 4 only; (c) 1, 3 and 4; (d) 2, 3 and 4
+115. Most common cause of maternal mortality in India: (a) Obstetric haemorrhage (b) Obstructed labour (c) Unsafe abortion (d) Toxaemia of pregnancy
+116. Insecticide of choice for IRS in rural National Malaria Control Programme: (a) DDT (b) Malathion (c) Synthetic pyrethroid (d) Temephos
+117. Correct statements for ASHA selection:
+                                                                                                                                                      1. Woman preferably 18 to 25 years.
+                                                                                                                                                      2. Formal education up to at least class ten.
+                                                                                                                                                      3. Resident of the village.
+                                                                                                                                                      4. May be married, widowed or divorced.
+Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 3 and 4 only; (d) 1, 2, 3 and 4
+118. Correct statements regarding CDSCO:
+                                                                                                                                                         1. Headed by DCG(I) at Centre.
+                                                                                                                                                         2. Part of DGHS.
+                                                                                                                                                         3. Under Ministry of Chemicals and Fertilizers.
+                                                                                                                                                         4. Port offices for import/export monitoring.
+Options: (a) 1 and 2 only; (b) 1 and 3; (c) 1, 2 and 4; (d) 2 and 4 only
+119. STI/RTI condition and Kit colour matches:
+                                                                                                                                                            1. Red: Urethral discharge.
+                                                                                                                                                            2. Green: Vaginitis.
+                                                                                                                                                            3. White: Inguinal bubo. Correct matches count: (a) None; (b) One; (c) Two; (d) All three
+120. Based on ELISA table (Infected: 4900 Pos, 100 Neg; Noninfected: 950 Pos, 94050 Neg):
+                                                                                                                                                            1. Sensitivity is 98%.
+                                                                                                                                                            2. Specificity is 99%.
+Correct statement: (a) 1 only; (b) 2 only; (c) Both 1 and 2; (d) Neither 1 nor 2

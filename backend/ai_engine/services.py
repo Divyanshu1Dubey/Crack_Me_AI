@@ -10,6 +10,14 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# Gemini models in order of preference (each has separate quota on free tier)
+GEMINI_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+]
+
 # CMS-specific system prompt
 CMS_SYSTEM_PROMPT = """You are an expert UPSC CMS (Combined Medical Services) exam tutor and medical educator.
 
@@ -39,7 +47,7 @@ class AIService:
     """Enhanced AI service with RAG pipeline integration."""
 
     def __init__(self):
-        self.gemini = None
+        self.gemini_client = None
         self.groq = None
         self._rag = None
         self._init_clients()
@@ -50,10 +58,9 @@ class AIService:
 
         if gemini_key:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=gemini_key)
-                self.gemini = genai.GenerativeModel('gemini-2.0-flash')
-                logger.info("Gemini AI initialized")
+                from google import genai
+                self.gemini_client = genai.Client(api_key=gemini_key)
+                logger.info("Gemini AI initialized (google-genai SDK)")
             except Exception as e:
                 logger.warning(f"Gemini init failed: {e}")
 
@@ -78,24 +85,40 @@ class AIService:
 
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
-        """Call AI with fallback: Gemini → Groq with hard timeouts to prevent hanging."""
-        if self.gemini:
-            try:
-                logger.info("Calling Gemini AI...")
-                full_prompt = f"{system}\n\n{prompt}" if system else prompt
-                response = self.gemini.generate_content(
-                    full_prompt,
-                    generation_config={
+        """Call AI with multi-model fallback: Gemini models → Groq."""
+        from google.genai import types
+
+        # Try each Gemini model (each has its own quota)
+        if self.gemini_client:
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            for model_name in GEMINI_MODELS:
+                try:
+                    logger.info(f"Calling Gemini model: {model_name}...")
+                    config_kwargs = {
                         "temperature": temperature,
                         "max_output_tokens": max_tokens,
-                    },
-                    request_options={"timeout": 30.0}
-                )
-                logger.info("Gemini responded successfully.")
-                return response.text
-            except Exception as e:
-                logger.warning(f"Gemini call failed or timed out: {e}")
+                    }
+                    # Disable thinking for 2.5 models to avoid token budget being eaten by thoughts
+                    if '2.5' in model_name:
+                        config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
 
+                    response = self.gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=full_prompt,
+                        config=types.GenerateContentConfig(**config_kwargs),
+                    )
+                    if response and response.text:
+                        logger.info(f"Gemini [{model_name}] responded successfully.")
+                        return response.text
+                except Exception as e:
+                    error_str = str(e)
+                    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
+                        logger.warning(f"Gemini [{model_name}] quota exhausted, trying next model...")
+                        continue
+                    logger.warning(f"Gemini [{model_name}] failed: {e}")
+                    continue
+
+        # Groq fallback
         if self.groq:
             try:
                 logger.info("Calling Groq AI (fallback)...")
@@ -108,15 +131,14 @@ class AIService:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    timeout=30.0
+                    timeout=20.0
                 )
                 logger.info("Groq responded successfully.")
                 return response.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Groq call failed or timed out: {e}")
+                logger.warning(f"Groq call failed: {e}")
 
-        # Provide a safe fallback instead of erroring out when overwhelmed
-        return "⚠️ I'm currently processing a massive amount of textbook data in the background. My response time is delayed. Please check back in a few moments, or ask another question."
+        return "⚠️ All AI services are temporarily unavailable (quota exceeded or API key issues). Please try again in a few minutes."
 
     # ─── CORE AI ENDPOINTS ───────────────────────────────
 
@@ -171,11 +193,25 @@ Topic: {topic}
 {f'Specific concept: {concept}' if concept else ''}
 {rag_context}
 
-Provide:
-1. A creative, easy-to-remember mnemonic (acronym, story, or association)
-2. What each letter/word stands for
-3. A one-line clinical pearl to reinforce the memory
-4. Alternative memory tricks if available"""
+Provide a well-structured response using markdown formatting:
+
+## Mnemonic for {topic}
+Give a clear mnemonic name (e.g., "I GET SMASHED")
+
+### What each letter stands for:
+- **Letter** — Full form (brief explanation)
+
+### Clinical Pearl
+One powerful clinical correlation
+
+### Alternative Memory Tricks
+- Story association technique
+- Categorization approach (group items logically)
+
+### Textbook Reference
+**Textbook Reference: [Book Name], [Chapter]**
+
+Tag important points with **[High Yield]** and past question references with **[PYQ YYYY]**"""
 
         return self._call_ai(prompt)
 
@@ -367,3 +403,120 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
 - Mention standard textbook chapter to study"""
 
         return self._call_ai(prompt, max_tokens=3000)
+
+    # ─── POST-ANSWER DEEP EXPLANATION ────────────────────
+
+    def explain_after_answer(self, question_text: str, options: dict = None,
+                             correct_answer: str = "", selected_answer: str = "",
+                             subject: str = "", topic: str = "") -> dict:
+        """Generate a rich AI explanation after the user answers a question.
+        Returns textbook location, mnemonic, around-concepts, and deep explanation."""
+        rag_context = ""
+        citations = []
+        if self.rag:
+            try:
+                search_query = f"{subject} {topic} {question_text}" if subject else question_text
+                results = self.rag.search(search_query, n_results=3)
+                if results:
+                    rag_context = "\n\nRELEVANT TEXTBOOK CONTENT:\n"
+                    for r in results:
+                        rag_context += f"\n[{r['book']} p.{r['page']}]: {r['text'][:400]}\n"
+                        citations.append({"book": r.get('book', ''), "page": r.get('page', ''), "text": r.get('text', '')[:150]})
+            except Exception as e:
+                logger.warning(f"RAG search failed: {e}")
+
+        is_correct = selected_answer == correct_answer
+        options_str = ""
+        if options:
+            options_str = "\n".join([f"  {k}: {v}" for k, v in options.items()])
+
+        prompt = f"""A UPSC CMS aspirant just answered a question. Provide a POWERFUL explanation that teaches them deeply.
+
+Question: {question_text}
+Options:
+{options_str}
+Correct Answer: {correct_answer}
+Student Selected: {selected_answer} ({'CORRECT ✅' if is_correct else 'WRONG ❌'})
+{f'Subject: {subject}' if subject else ''}
+{f'Topic: {topic}' if topic else ''}
+{rag_context}
+
+You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
+{{
+  "why_correct": "4-5 line detailed explanation of why {correct_answer} is the right answer. Include mechanism/pathophysiology. Explain clearly as if teaching a student from scratch. Be thorough and include clinical reasoning.",
+  "why_wrong": {{ {', '.join([f'"{opt}": "2-3 lines: Why this is wrong, the key differentiator, and a quick trick to avoid picking this"' for opt in ['A','B','C','D'] if opt != correct_answer])} }},
+  "textbook_reference": {{
+    "book": "Name of standard textbook (Harrison/Ghai/Park/Bailey & Love/Dutta etc.)",
+    "chapter": "Chapter name or number",
+    "page": "Page number or range if known",
+    "section": "Specific section within the chapter"
+  }},
+  "mnemonic": "A creative, catchy mnemonic to remember this concept FOREVER. Use a memorable acronym, story, or funny association. Explain each letter/word. Make it impossible to forget. ALWAYS provide one, never leave blank.",
+  "core_concept": "The fundamental concept being tested — stated clearly in 1 line",
+  "topic_deep_dive": "A comprehensive 6-8 line paragraph that acts as a MINI LECTURE NOTE. Cover: (1) What is this topic about? (2) Key classifications/stages/types (3) Important numbers/values to remember (4) How it connects to clinical practice (5) Common exam traps. Write as if you are a teacher giving a quick but thorough overview to a student who needs to understand the entire topic from this one explanation.",
+  "key_differentiators": [
+    "5-7 one-line comparisons that help differentiate commonly confused conditions/drugs/values in this topic. Format: 'X vs Y — key difference'. These should be HIGH YIELD comparisons."
+  ],
+  "category": "{subject or 'General'}",
+  "sub_category": "{topic or 'General'}",
+  "question_type": "One of: Factual Recall / Clinical Scenario / Calculation / Image-based / Conceptual / Pharmacology / Differential Diagnosis",
+  "around_concepts": [
+    "5-8 closely related concepts that are frequently tested alongside this topic in CMS exams"
+  ],
+  "high_yield_points": [
+    "5-8 bullet points that are the MOST frequently tested facts from this topic in CMS. Each point should be a standalone fact a student can memorize."
+  ],
+  "clinical_pearl": "One powerful real-world clinical correlation that makes this concept click — something a doctor would know from practice",
+  "exam_tip": "A strategic tip for approaching this type of question in the exam — how to eliminate options, time-saving tricks",
+  "quick_revision": "3-4 line ultra-concise summary with the most important facts. A student should be able to read JUST THIS and recall the entire concept before the exam.",
+  "pyq_frequency": "How often this topic appears in CMS PYQs (e.g., 'Asked every year since 2018', 'Asked 4 times in 2018-2024', etc.)",
+  "similar_pyq": "Describe 1-2 similar questions from UPSC CMS PYQs with year and brief description (e.g., 'CMS 2022 Paper 1: Asked about the initial investigation for Cushing syndrome'). If none known, say 'Similar concepts tested in CMS 2020-2024'."
+}}"""
+
+        raw = self._call_ai(prompt, max_tokens=3000, temperature=0.3)
+
+        try:
+            text = raw.strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+            if text.endswith('```'):
+                text = text[:-3]
+            text = text.strip()
+            if text.startswith('json'):
+                text = text[4:].strip()
+            result = json.loads(text)
+            result['citations'] = citations
+            result['is_correct'] = is_correct
+            # Ensure new fields have defaults
+            result.setdefault('category', subject or '')
+            result.setdefault('sub_category', topic or '')
+            result.setdefault('question_type', '')
+            result.setdefault('similar_pyq', '')
+            result.setdefault('topic_deep_dive', '')
+            result.setdefault('key_differentiators', [])
+            result.setdefault('quick_revision', '')
+            return result
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"Failed to parse explain_after_answer JSON: {e}")
+            return {
+                "why_correct": raw[:500] if raw else "AI explanation unavailable.",
+                "why_wrong": {},
+                "textbook_reference": {"book": "", "chapter": "", "page": "", "section": ""},
+                "mnemonic": "",
+                "core_concept": "",
+                "category": subject or "",
+                "sub_category": topic or "",
+                "question_type": "",
+                "around_concepts": [],
+                "high_yield_points": [],
+                "clinical_pearl": "",
+                "exam_tip": "",
+                "topic_deep_dive": "",
+                "key_differentiators": [],
+                "quick_revision": "",
+                "pyq_frequency": "",
+                "similar_pyq": "",
+                "citations": citations,
+                "is_correct": is_correct,
+                "raw_response": raw[:800] if raw else "",
+            }

@@ -69,15 +69,16 @@ class WeakTopicsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        weak_topics = UserTopicPerformance.objects.filter(
+        all_topic_perfs = UserTopicPerformance.objects.filter(
             user=request.user,
-            total_attempts__gte=3
-        ).order_by('correct_answers')
+            total_attempts__gte=1,
+            topic__isnull=False  # Only topics, not subject-level aggregates
+        ).select_related('topic', 'subject').order_by('correct_answers')
 
         weak = []
         strong = []
 
-        for perf in weak_topics:
+        for perf in all_topic_perfs:
             data = TopicPerformanceSerializer(perf).data
             if perf.accuracy < 60:
                 weak.append(data)
@@ -105,8 +106,9 @@ class TopicPerformanceView(APIView):
 
     def get(self, request):
         performances = UserTopicPerformance.objects.filter(
-            user=request.user
-        ).select_related('topic', 'subject').order_by('subject', 'topic')
+            user=request.user,
+            topic__isnull=False  # Only topic-level, not subject-level
+        ).select_related('topic', 'subject').order_by('subject__name', 'topic__name')
         serializer = TopicPerformanceSerializer(performances, many=True)
         return Response(serializer.data)
 

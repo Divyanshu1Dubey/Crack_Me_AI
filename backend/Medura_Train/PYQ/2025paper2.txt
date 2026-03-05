@@ -1,0 +1,324 @@
+﻿Surgery
+1. Vibration white finger refers to:
+   * (a) Buerger’s disease
+   * (b) Raynaud’s syndrome
+   * (c) Acrocyanosis
+   * (d) Takayasu disease
+2. Which of the following are criteria for cancer screening?
+   * I. Screening test should be sensitive and specific
+   * II. Screening test should be acceptable to the screened population
+   * III. The disease should be an uncommon one for screening to be effective
+   * IV. Disease should be recognisable at an early stage
+   * Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
+3. A 45-year-old lady presents with complaints of fatigue, muscle weakness along with bilateral multiple renal calculi... serum calcium levels of 11.4 mg%. What is the next best investigation required to arrive at a diagnosis?
+   * (a) MRI neck
+   * (b) Sestamibi scan
+   * (c) CECT head and neck
+   * (d) NCCT head and neck
+4. Which of the following are the aetiological factors associated with a communicating hydrocephalus?
+   * I. Post haemorrhagic
+   * II. Lesions within the ventricle
+   * III. CSF infection
+   * IV. Raised CSF protein
+   * Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
+5. Which of the following statements are correct regarding a brain abscess?
+   * I. Abscesses arise when the brain is exposed directly as a result of fracture or infection of air sinus.
+   * II. Presenting features include low grade fever, confusion, seizures and focal deficits.
+   * III. MRI with contrast is the initial imaging modality of choice.
+   * IV. The aetological agents include bacteria, fungi, protozoa and viruses.
+   * Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
+6. What is the most common type of tumour of Vermiform Appendix?
+   * (a) Epithelial tumour
+   * (b) Carcinoid tumour
+   * (c) Germ cell tumour
+   * (d) Papillary cell tumour
+7. The earliest specific cystoscopic appearance of Bilharzial cystitis is:
+   * (a) Sandy patches
+   * (b) Ulcers
+   * (c) Pseudo tubercles
+   * (d) Nodules
+8. Which one of the following best describes craniosynostosis?
+   * (a) Delayed fusion... preventing growth perpendicular to the suture.
+   * (b) Premature fusion... preventing growth perpendicular to the suture.
+   * (c) Premature fusion... facilitating growth perpendicular to the suture.
+   * (d) Delayed fusion... facilitating growth perpendicular to the suture.
+9. A 60-year-old female presents with pain in her back... lytic lesions in the vertebrae and ribs. Which of the following organs should be carefully screened?
+   * (a) Small intestine
+   * (b) Large intestine
+   * (c) Adrenal
+   * (d) Breast
+10. Correct regarding Cauda equina syndrome?
+   * I. Symptoms: perineal numbness, painless urinary retention, and fecal incontinence.
+   * II. Urgent MRI required.
+   * III. Common in 45-60 year age group.
+   * IV. Confirmed cases require early surgical decompression.
+   * Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
+11. The commonest site of pressure sore is:
+   * (a) Heel; (b) Sacrum; (c) Ischium; (d) Occiput
+12. Resection of which part of intestine does not significantly affect fluid and electrolyte balance?
+   * (a) Ileum; (b) Proximal jejunum; (c) Distal jejunum; (d) Colon
+13. Good measure of systemic perfusion by ABG is by measurement of:
+   * (a) Bicarbonate; (b) pH; (c) Lactate and/or the base deficit; (d) $PCO_{2}$
+14. Which of the following are congenital abnormalities of the gall bladder?
+   * I. Phrygian cap; II. Floating gall bladder; III. Absence; IV. Spigelian.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+15. Which of the following are functions of the gall bladder?
+   * I. Reservoir for bile; II. Production of bile; III. Secretion of mucus; IV. Concentration.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+16. Which one is correct regarding Budd-Chiari Syndrome (BCS)?
+   * (a) Affects young males.
+   * (b) Liver drainage occluded by IVC thrombus.
+   * (c) Quadrate lobe (Segment 4 and 5) hypertrophies.
+   * (d) Abdominal discomfort and ascites are main features.
+17. Which one is correct regarding splenic artery aneurysm?
+   * (a) Twice as common in men.
+   * (b) Usually in the main arterial trunk.
+   * (c) Caused by blunt trauma.
+   * (d) Generally multiple.
+18. Correct regarding primary survey/management of traumatic head injury?
+   * I. Ensure O2/circulation; II. Exclude hypoglycaemia; III. Check mechanism of injury; IV. Check pupil size.
+   * Codes: (a) I, II, III; (b) II, III, IV; (c) I, II, IV; (d) I, III, IV
+19. Correct regarding ABCDE of trauma care?
+   * I. A: Airway/C-spine; II. B: Breathing; III. C: Control massive external haemorrhage; IV. D: Disability.
+   * Codes: (a) I, II, III; (b) I, III, IV; (c) II, III, IV; (d) I, II, IV
+20. Correct regarding Inguinal hernias in children?
+   * I. Common in full-term boys; II. Repair promptly; III. Always indirect; IV. Frequently transilluminant.
+   * Codes: (a) I, II, III; (b) II, III, IV; (c) I, II, IV; (d) I, III, IV
+21. Most common site of urethral opening in hypospadias is:
+   * (a) Proximal to glans; (b) Penile shaft; (c) Junction of shaft/stratum; (d) Perineum
+22. Which of the following about Minimal Access Surgery are correct?
+   * I. Decreased heat loss; II. Improved visualization; III. Increased herniation; IV. Improved mobility.
+   * Codes: (a) I, II, III; (b) I, III, IV; (c) I, II, IV; (d) II, III, IV
+23. Maximum safe dose for Lignocaine (without adrenaline) is:
+   * (a) $3~mg/kg$; (b) $5~mg/kg$; (c) $7~mg/kg$; (d) $9~mg/kg$
+24. Symptoms commonly experienced by patients with lymphoedema?
+   * I. Swelling; II. Burning; III. Intolerance to cold; IV. Cramps.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+25. Malignancies associated with lymphoedema?
+   * I. Kaposi Sarcoma; II. Squamous cell carcinoma; III. Malignant melanoma; IV. Leukaemia.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+26. Techniques used to close raw area after pilonidal sinus excision to avoid midline wound?
+   * I. Limberg; II. Y-V plasty; III. Z-plasty; IV. Karydakis.
+   * Codes: (a) I, II, IV; (b) I, II, III; (c) II, III, IV; (d) I, III, IV
+27. 45-year-old lady... lump 3x4 cm outer quadrant... firm mobile nodes (level I). Clinical stage?
+   * (a) $cT_{1}N_{1}M_{x}$; (b) $cT_{2}N_{1}M_{x}$; (c) $cT_{3}N_{1}M_{x}$; (d) $cT_{3}N_{2}M_{x}$
+28. Gold standard for diagnosis of oesophageal motility disorders?
+   * (a) Endoscopy; (b) Barium swallow; (c) High resolution manometry; (d) CECT
+29. Aetiological factors for Adenocarcinoma of oesophagus?
+   * I. Barrett's; II. GERD; III. Obesity; IV. Alcohol intake.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+30. Consider statements regarding Plummer-Vinson syndrome:
+   * I. Web, iron deficiency, dysphagia; II. Affects middle-aged women; III. Predisposition to postcricoid cancer; IV. Treatment usually surgical.
+   * Codes: (a) II, III, IV; (b) I, II, IV; (c) I, III, IV; (d) I, II, III
+31. Correct regarding late dumping?
+   * I. 2nd hour after meal; II. Lasts 30-40 mins; III. Symptoms: tremor, faintness; IV. Relieved by lying down.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+32. Not correct regarding Gastric outlet obstruction with peptic ulcer disease?
+   * (a) Hypochloraemic alkalosis is usual.
+   * (b) Endoscopic biopsy essential to exclude malignancy.
+   * (c) Medical therapy has no role.
+   * (d) Operation frequently required with drainage.
+33. Muscle relaxant with quickest onset and spontaneous recovery?
+   * (a) Suxamethonium; (b) Vecuronium; (c) Atracurium; (d) Rocuronium
+34. First imaging choice for 35yo lady with RLQ colicky pain and vomiting?
+   * (a) Contrast CT; (b) Non-contrast CT; (c) Ultrasound; (d) Plain X-ray erect
+35. Mallampati test is used for assessment of:
+   * (a) Tongue size; (b) Jaw protrusion; (c) Breath hold time; (d) Airway
+36. Risk factors for post-operative wound dehiscence?
+   * I. Diabetes; II. Hypertension; III. Renal failure; IV. Jaundice.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+37. Surgical emergency in 15yo child, no consent available, no time to seek authority:
+   * (a) Conservative management; (b) Search for relatives; (c) Hospital Social Worker; (d) Surgery without consent.
+38. Information needed for valid consent for surgical treatment?
+   * I. Condition/reasons; II. Type of surgery; III. Unexpected hazards; IV. Surgeon's experience.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+39. Study results negative for proposed hypothesis. What to do?
+   * (a) Label worthless; (b) Redo with new hypothesis; (c) Report negative results; (d) Redesign/increase sample.
+40. Correct regarding sutures?
+   * I. Barbed sutures eliminate knots; II. Vertical mattress helps eversion; III. Aberdeen knot for continuous suturing; IV. Silk preferred for subcuticular.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+________________
+
+
+Gynaecology & Obstetrics
+41. Chadwick's sign describes:
+   * (a) Dusky hue of vestibule/vagina at 8th week.
+   * (b) Softening of cervix at 6th week.
+   * (c) Fingers apposed below uterus.
+   * (d) Regular rhythmic uterine contraction at 4-8 weeks.
+42. Recommended treatments for pregnant woman with sickle cell disease?
+   * I. Folic acid 1 mg; II. Azathioprine; III. Penicillin prophylaxis; IV. LMWH.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+43. Contraindications to External Cephalic Version (ECV) in breech?
+   * I. Pregnancy < 36 weeks; II. Multiple pregnancy; III. Previous cesarean; IV. Rh isoimmunization.
+   * Codes: (a) I, II, III; (b) II, III, IV; (c) I, II, IV; (d) I, II, III
+44. Hematological findings in pregnant women with thalassemia trait?
+   * (a) Raised $HbA_{2}$ and low MCV; (b) Low MCHC; (c) Low TIBC; (d) Low $HbA_{2}$ and raised MCV
+45. Best drug for maintenance therapy of SLE during pregnancy?
+   * (a) Hydroxychloroquine; (b) Sulfasalazine; (c) Tacrolimus; (d) Progestins
+46. Maternal complications in hyperemesis gravidarum?
+   * I. Wernicke’s; II. Hepatic failure; III. Hypoprothrombinemia; IV. Convulsions.
+   * Codes: (a) I, II, III, IV; (b) I, III, IV only; (c) I, II, IV only; (d) II and III only
+47. Commonest ovarian tumour seen during pregnancy?
+   * (a) Benign cystic teratoma; (b) Mucinous cystadenoma; (c) Endometrioma; (d) Adenocarcinoma
+48. Correct regarding shoulder dystocia?
+   * I. Predicted during early labour; II. Anencephaly is risk factor; III. Turtle neck sign present; IV. Episiotomy always.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+49. Oxytocin drip 30 mlU/min... confusion and fits. Expected electrolyte imbalance?
+   * (a) Hypokalemia; (b) Hyponatremia; (c) Hypocalcemia; (d) Hypernatremia
+50. Factors favour posterior position of the vertex?
+   * I. Anthropoid pelvis; II. Low inclination; III. Placenta anterior; IV. Primary brachycephaly.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+51. Factors associated with cord prolapse during labour?
+   * I. Malpresentations; II. Contracted pelvis; III. Stabilizing induction; IV. Prematurity.
+   * Codes: (a) I-IV; (b) I, II, IV; (c) I, II, III; (d) III, IV
+52. Magnesium toxicity detection in patient receiving magnesium sulphate?
+   * I. Loss of tendon reflexes; II. Increased respiratory rate; III. Chest pain, heart block; IV. Cardiac arrest.
+   * Codes: (a) I, III, IV; (b) II, IV; (c) I, III; (d) III, IV
+53. Which one is correct regarding postpartum psychosis?
+   * (a) Often no family history.
+   * (b) Onset within 4 days of delivery.
+   * (c) Recurrence rate 60-70%.
+   * (d) ECT is first treatment of choice.
+54. Correct in the treatment of cracked nipple?
+   * I. Correct latch on; II. Use breast pump if pain; III. Miconazole lotion if oral thrush.
+   * Codes: (a) I, II; (b) II, III; (c) I, III; (d) I, II, III
+55. Correct regarding puerperal blues?
+   * I. 50% incidence; II. No specific endocrine derangement; III. Treatment is reassurance.
+   * Codes: (a) I, II; (b) II, III; (c) I, III; (d) I, II, III
+56. Matthews Duncan process has been described for:
+   * (a) Central separation of placenta; (b) Marginal separation; (c) Controlled contraction; (d) Reposition of acute inversion.
+57. 4 hours post-delivery, severe perineal pain, rectal tenesmus, bearing down, retention. Diagnosis?
+   * (a) Cervical tear; (b) Vulval hematoma; (c) Supralevator hematoma; (d) Complete perineal tear.
+58. WHO 2018 guidelines, duration of first stage labour:
+   * (a) Latent phase primigravida duration not established.
+   * (b) Multigravida active stage < 6 hours.
+   * (c) Primigravida active stage < 8 hours.
+   * (d) Primigravida active stage < 18 hours.
+59. WHO 2018 guidelines, birthing position:
+   * I. Choice if no epidural; II. Upright if no epidural; III. Lithotomy/supine only recommended if epidural.
+   * Codes: (a) I, II; (b) II, III; (c) I, III; (d) I, II, III
+60. Twin pregnancy ultrasound at 10-13 weeks confirms:
+   * I. Number; II. Viability; III. Chorionicity; IV. Malformation.
+   * Codes: (a) I, II, III only; (b) I, III only; (c) II, IV only; (d) I-IV
+61. Neonatal complications of maternal diabetes?
+   * I. Hyperbilirubinemia; II. Hypercalcemia; III. Cardiomyopathy; IV. Hypoglycemia.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+62. Predictive factors for Fetal Growth Restriction (FGR)?
+   * I. Low 1st trim Beta hCG; II. Abnormal uterine artery Doppler 20-24 weeks; III. Echogenic bowel; IV. Maternal medical disorder.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+63. Primary surveillance tool in the Growth Restricted Fetus?
+   * (a) Uterine artery doppler; (b) Umbilical venous pulsation; (c) MCA doppler; (d) Umbilical artery doppler.
+64. Glands of Cloquet are:
+   * (a) Lymphatic drainage of vulva; (b) of cervix; (c) of uterus; (d) Vagina lubricating glands.
+65. Characteristics of PALM causes of AUB?
+   * I. Structural lesions; II. USG diagnosis; III. Histopathology confirmation.
+   * Codes: (a) I, II; (b) I, III; (c) I, II, III; (d) II, III
+66. Daily suppressive therapy for HSV-1 and HSV-2 is:
+   * (a) Valacyclovir 1 g once daily; (b) Acyclovir 400 mg once; (c) Acyclovir 400 mg thrice; (d) Valacyclovir 1 g twice.
+67. Primary organisms involved in PID?
+   * I. N. gonorrhoeae; II. Chlamydia; III. Mycoplasma hominis; IV. Candida albicans.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+68. Characteristics of dermoid cyst?
+   * I. Germ cell; II. Bilateral 15-20%; III. Torsion common; IV. Rupture common.
+   * Codes: (a) I, III; (b) II, IV; (c) II, III, IV; (d) I, II, III
+69. Not a differential diagnosis of chronic inversion of uterus?
+   * (a) Fibroid polyp; (b) Fungating cervical malignancy; (c) Cervical prolapse; (d) Gartner's cyst.
+70. 28yo P2L2, malodorous grayish-white discharge. Bedside diagnostic criterion?
+   * (a) RBCs in smear; (b) Vaginal $pH<4.5$; (c) Positive 10% KOH test; (d) Positive NAAT test.
+71. Correct regarding hysterosalpingography?
+   * I. Tubal patency post-op; II. Uterine synechiae; III. IUD detection; IV. Subserosal fibroid.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+72. Indications of endometrial sampling?
+   * I. Tuberculosis; II. Polyp; III. Postmenopausal bleeding; IV. AUB.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+73. 30yo P3L3, acute pain/bleeding, OS closed, tubal ligation history, adnexal tenderness. Diagnosis?
+   * (a) Ectopic; (b) PID; (c) Appendicitis; (d) Complete abortion.
+74. Audit in Obstetrics and Gynaecology?
+   * I. Replace out of date practice; II. Educational tool; III. Scientific evidence; IV. Not labour-intensive.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+75. Poor prognostic factors in endometrial adenocarcinoma?
+   * I. ER/PR positivity; II. HER-2/neu expression; III. Serous/clear cell; IV. Aneuploid.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+76. Surgery indicated for Fibroid Uterus if:
+   * I. Symptomatic/failed medical; II. Size > 12 weeks; III. Pedunculated.
+   * Codes: (a) I, II, III; (b) I, II only; (c) II, III only; (d) I, III only.
+77. Measured without straining in POP-Q system?
+   * (a) TVL; (b) Pb; (c) GH; (d) Point D.
+78. Criteria for Le Fort’s operation?
+   * I. Procidentia old age; II. Unfit for long surgery; III. Uterine pathology; IV. Coital function not required.
+   * Codes: (a) I, III, IV; (b) I, II; (c) II, III, IV; (d) I, II, IV
+79. Opening of Bartholin's duct is in the:
+   * (a) Vestibule; (b) Between labia majora/minora; (c) Superficial perineal pouch; (d) Periurethral.
+80. Amsel's diagnostic criteria?
+   * I. pH > 4.5; II. Positive Whiff; III. Clue cells > 20%; IV. Positive culture.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+________________
+
+
+Preventive & Social Medicine
+81. Physical Quality of Life Index (PQLI) indicators?
+   * I. Infant mortality; II. Life expectancy at age one; III. Literacy; IV. Per capita income.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+82. "All-or-none phenomenon", termination of transmission by agent extermination?
+   * (a) Control; (b) Elimination; (c) Eradication; (d) Surveillance.
+83. Objectives for different units, each prepares own short-term plan?
+   * (a) Input-Output; (b) Personnel; (c) Management by objectives; (d) Work sampling.
+84. Panchayati Raj bodies present at the village level?
+   * I. Gram Sabha; II. Gram Panchayat; III. Nyaya Panchayat; IV. Panchayat Samiti.
+   * Codes: (a) I, II; (b) III, IV; (c) I, II, III; (d) II, III, IV
+85. First step in initiating the investigation of a rash/fever epidemic?
+   * (a) Search for cases; (b) Verify diagnosis; (c) Confirm epidemic existence; (d) Define population at risk.
+86. John Snow’s cholera discovery study type:
+   * (a) Uncontrolled; (b) Natural experiment; (c) Risk factor trial; (d) Aetiological agent trial.
+87. ECG table diagnosis (Sensitivity 90%, Specificity 80%):
+   * (a) I only; (b) II only; (c) Both; (d) Neither.
+88. Hospital records not representative because:
+   * I. Miss mild cases; II. Population undefined; III. Cost not recorded; IV. Admission policy varies.
+   * Codes: (a) I, II; (b) II, III; (c) I, II, IV; (d) II, III, IV
+89. Vit A deficiency, first clinically seen sign:
+   * (a) Bitot's spots; (b) Nyctalopia; (c) Conjunctival Xerosis; (d) Corneal Xerosis.
+90. Pigeon chest deformity in children occurs due to deficiency of:
+   * (a) Vit A; (b) Vit D; (c) Vit E; (d) Vit K.
+91. Limiting amino acid in most pulses?
+   * (a) Lysine; (b) Methionine; (c) Threonine; (d) Valine.
+92. Defence mechanisms for problems or failures?
+   * I. Rationalization; II. Regression; III. Projection; IV. Replacement.
+   * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV
+93. Coliforms as faecal indicators because:
+   * I. Abundance; II. Lower resistance; III. Survive less; IV. Easy culture.
+   * Codes: (a) I, IV; (b) II, III; (c) I only; (d) IV only.
+94. Anaemia programme for adolescents:
+   * I. 100 mg iron/500 µg folic weekly; II. Fixed day; III. Albendazole every 3 months.
+   * Codes: (a) I only; (b) II only; (c) I, III; (d) I, II.
+95. Malaria elimination target for 2027?
+   * (a) API < 1/1000; (b) Functional surveillance; (c) No indigenous cases/deaths; (d) Certification process.
+96. PMSMA fixed day of every month:
+   * (a) 1st; (b) 7th; (c) 9th; (d) 15th.
+97. SFD babies weigh less than which percentile?
+   * (a) 2nd; (b) 5th; (c) 10th; (d) 20th.
+98. Stillbirth Rate numerator value 'X' grams?
+   * (a) 500; (b) 750; (c) 1000; (d) 1500.
+99. Triage highest priority color?
+   * (a) Black; (b) Green; (c) Red; (d) Yellow.
+100. Ice-Lined Refrigerator (ILR) statements: * I. Top-opening; II. 3 parts; III. Upper cooler than lower; IV. Not on floor. * Codes: (a) I, II; (b) II, III; (c) III, IV; (d) I, IV.
+101. Major energy contributor in average Indian diet? * (a) Fats; (b) Carbohydrates; (c) Proteins; (d) Vitamins.
+102. Amino Acids statements: * I. Essential from diet; II. Non-essential also needed; III. Biologically incomplete if lacking essential AA; IV. Animal superior to vegetable. * How many correct? (a) 1; (b) 2; (c) 3; (d) 4.
+103. UNICEF GOBI strategies? * I. Growth charts; II. Oral rehydration; III. Better evaluation; IV. Immunization. * Codes: (a) I, II, III; (b) I, II, IV; (c) I, III, IV; (d) II, III, IV.
+104. Limit of daily noise exposure people can tolerate? * (a) 65 dB; (b) 85 dB; (c) 105 dB; (d) 125 dB.
+105. Illumination recommended for general office work? * (a) 100 lux; (b) 200 lux; (c) 400 lux; (d) 900 lux.
+106. Dietary fibres have: * (a) Anabolic effect; (b) Catabolic; (c) No metabolic; (d) Sometimes both.
+107. Egg proteins best because: * I. Biological value; II. Digestibility; III. All essential AA; IV. Calorie content. * Codes: (a) I only; (b) I, II, III; (c) II, III, IV; (d) I, III, IV.
+108. Occupational disease mistaken for lung tuberculosis? * (a) Anthracosis; (b) Silicosis; (c) Siderosis; (d) Byssinosis.
+109. Asbestos variety with strong Mesothelioma association? * (a) Amosite; (b) Anthrophyllite; (c) Crocidolite; (d) Chrysolite.
+110. Human anatomical waste plastic bag color? * (a) Yellow; (b) Red; (c) Blue; (d) Black.
+111. Corrected Effective Temperature deals with: * I. Air velocity; II. Humidity; III. Mean radiant heat; IV. Sweat rate. * Codes: (a) I, III, IV; (b) II, III, IV; (c) I, II, III; (d) I, II only.
+112. DPT/OPV age limits in UIP if no previous doses? * (a) DPT 7, OPV 5; (b) DPT 8, OPV 6; (c) DPT 10, OPV 7; (d) DPT 12, OPV 10.
+113. Yellow fever quarantine duration? * (a) 6 days; (b) 7 days; (c) 8 days; (d) 10 days.
+114. ESI Act maximum sickness benefit days (per 365)? * (a) 30; (b) 61; (c) 91; (d) 121.
+115. Wernicke’s encephalopathy statements: * I. Niacin deficiency; II. Alcoholics; III. Ophthalmoplegia/ataxia; IV. Fasting. * Codes: (a) I, II, III; (b) II, III, IV; (c) I, III, IV; (d) I, II, IV.
+116. Housefly transmission method most commonly: * (a) Propagative; (b) Mechanical; (c) Cyclo-propagative; (d) Cyclo-developmental.
+117. 7yo child current nutritional status indicator? * (a) Birth weight; (b) MUAC; (c) Head circumference; (d) Weight for height.
+118. Home Based Newborn Care (HBNC) statements: * I. Pre-term detection; II. ANM main person; III. Family healthy practices; IV. Improve newborn survival. * Codes: (a) I, II; (b) II, III; (c) I, III, IV; (d) I-IV.
+119. Recessive, sex-linked traits? * I. Retinitis pigmentosa; II. Colour blindness; III. Cystic fibrosis; IV. Duchenne muscular dystrophy. * Codes: (a) I, II, III; (b) I, II, IV; (c) II, III, IV; (d) I, III, IV.
+120. NACO STI/RTI service brand name: * (a) Antara; (b) Chhaya; (c) Sathi; (d) Suraksha.

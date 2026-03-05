@@ -86,6 +86,30 @@ class AnalyzeQuestionView(APIView):
         return Response({'analysis': analysis})
 
 
+class ExplainAfterAnswerView(APIView):
+    """Rich AI explanation after answering a question — textbook refs, mnemonics, related concepts."""
+
+    def get_permissions(self):
+        return _get_permission()
+
+    def post(self, request):
+        question_text = request.data.get('question_text', '')
+        if not question_text:
+            return Response({'error': 'question_text is required'}, status=400)
+
+        options = request.data.get('options', {})
+        correct_answer = request.data.get('correct_answer', '')
+        selected_answer = request.data.get('selected_answer', '')
+        subject = request.data.get('subject', '')
+        topic = request.data.get('topic', '')
+
+        service = AIService()
+        result = service.explain_after_answer(
+            question_text, options, correct_answer, selected_answer, subject, topic
+        )
+        return Response(result)
+
+
 class RAGSearchView(APIView):
     """Semantic search across indexed textbooks."""
 

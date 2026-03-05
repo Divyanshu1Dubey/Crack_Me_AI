@@ -1,0 +1,391 @@
+﻿Section: Surgery
+1. Mycetoma, a chronic, specific, granulomatous, destructive disease, involving the skin and subcutaneous tissue: (a) is a blood-borne infection (b) involves the superficial structure only (c) may be caused by fungi or bacteria (d) frequently causes trophic changes
+2. Which of the following statements are correct regarding Buerger's disease?
+1. It involves small to medium arteries.
+2. It is common in smokers.
+3. It commonly involves lower limb vessels.
+4. Cessation of smoking reverses the disease process. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+3. The most difficult area to visualize using duplex scanning (B-mode ultrasound), especially in an obese patient, is: (a) carotid vessels (b) abdominal aorta above renal vessels (c) aortoiliac segment (d) iliofemoral segment
+4. Which of the following vital structures in the axilla should always be preserved in modified radical mastectomy?
+1. Axillary vein
+2. Nerve to serratus anterior
+3. Nerve to latissimus dorsi
+4. Intercostobrachial nerves Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+5. The most common metabolic abnormality associated with gastric outlet obstruction is: (a) hypochloraemic acidosis (b) hypochloraemic alkalosis (c) hyperchloraemic alkalosis (d) hyperchloraemic acidosis
+6. The 'gold standard' for the diagnosis of GORD (Gastro-Oesophageal Reflux Disease) is: (a) upper GI endoscopy (b) barium meal follow through (c) 24-hour pH recording (d) CT scan
+7. Which of the following factors predispose to the development of incisional hernia?
+1. Malnutrition
+2. Postoperative wound infection
+3. Non-absorbable suture material
+4. Immunocompromised patient Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+8. Which of the following statements regarding papillary thyroid cancer are correct?
+1. It is the most common malignant tumour of thyroid gland.
+2. It is more common in young females.
+3. It has propensity for haematogenous spread.
+4. Distant metastases are uncommon. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+9. Which of the following statements about peptic ulcers is correct? (a) The most common location is the third part of duodenum. (b) It is more commonly seen in females. (c) There is no risk of malignancy in gastric ulcers. (d) Anteriorly located duodenal ulcers are 'more prone for perforation'.
+10. Which of the following statements regarding annular pancreas are correct?
+1. It results from failure of rotation of dorsal pancreatic bud during development.
+2. A ring of pancreatic tissue surrounds the second or third part of duodenum.
+3. It presents with vomiting due to duodenal obstruction.
+4. Duodenoduodenostomy is the preferred treatment of this condition. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 2 and 4; (d) 1, 3 and 4
+11. Which of the following scoring systems are used for assessing the severity of acute pancreatitis?
+1. Ranson and Glasgow score
+2. APACHE score
+3. MELD score
+4. Modified Marshall score Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+12. Which of the following statements regarding a patient of liver trauma are correct?
+1. Liver is the most common organ injured following abdominal trauma.
+2. Surgical exploration (laparotomy) is required in haemodynamically unstable patients and patients with free intraperitoneal fluid on FAST.
+3. Contrast enhanced CT abdomen should be done in haemodynamically stable patients.
+4. Blunt injuries have a higher mortality as compared to penetrating injuries. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+13. The least marked function of a human spleen is: (a) immune function (b) filter function (c) pitting function (d) reservoir function
+14. Which of the following are the causes of retroperitoneal fibrosis?
+1. Continuous Ambulatory Peritoneal Dialysis (CAPD)
+2. Lymphoma
+3. Drugs
+4. Carcinoid tumours Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+15. The most common brain tumour in an adult is: (a) cerebral metastasis (b) glioma (c) pituitary tumour (d) vestibular schwannoma
+16. Which of the following are included in the triad of presentation of brain tumours?
+1. Raised ICP
+2. Seizures
+3. Anopia
+4. Focal deficit Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+17. Triaging is done to prioritize the treatment in case of trauma and the patients are colour coded. The yellow colour code signifies : (a) urgent (b) immediate (c) non-urgent (d) unsalvageable
+18. A 6-year-old boy has recurrent history of pain and swelling below his left ear, which generally lasts for 3-7 days and improves mildly after a course of antibiotics. Sialography shows punctate sialectasis. He should be treated by : (a) prolonged antibiotics bolus doses (b) endoscopic washouts and antibiotics (c) total conservative parotidectomy (d) radiotherapy
+19. Hypotension in an unconscious head injury patient is most commonly due to: (a) pontine haemorrhage (b) extradural haemorrhage (c) intracerebral haemorrhage (d) associated injuries of abdomen or chest
+20. Preoperative investigations done prior to surgery depend upon which of the following?
+1. Type of surgery
+2. Patient origin
+3. Patient comorbidities
+4. Experience of surgeon Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+21. Which of the following are included in Grade II acute cholecystitis as per 'Tokyo Consensus Guidelines for Severity?
+1. Elevated white cell count $(>18000/mm^{3})$
+2. Renal dysfunction
+3. Duration > 72 hours
+4. Marked local inflammation Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+22. The maximum tensile strength that a wound can reach after healing is complete, in comparison to normal skin, is: (α) 20%-30% (b) 30%-50% (c) 50%-60% (d) 60%-80%
+23. The most common site for development of a pressure sore (in debilitated patients) is: (a) heel (b) occiput (c) ischium (d) greater trochanter
+24. Which of the following are included in triple assessment in case of breast?
+1. Clinical assessment
+2. Radiological assessment
+3. Histopathological assessment
+4. Sentinel lymph node biopsy Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+25. Which of the following are the extraintestinal manifestations of Crohn's disease related to disease activity?
+1. Amyloidosis
+2. Pyoderma gangrenosum
+3. Primary sclerosing cholangitis
+4. Arthropathy Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+26. Which one of the following is correct regarding Gastrointestinal Stromal Tumour (GIST)? (a) It arises from epithelial layer. (b) The male to female ratio is 9: 1. (c) 50% arise from stomach. (d) Lymphatic spread is seen commonly.
+27. Which of the following are used in the treatment of achalasia?
+1. Botulinum toxin
+2. Beta blockers
+3. Pneumatic dilation
+4. Heller's myotomy Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+28. Which of the following are the intraoperative features of viable small bowel?
+1. Visible peristalsis
+2. Flabby intestinal musculature
+3. Shiny appearance of small bowel wall
+4. Visible pulsation in the mesenteric artery Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+29. Which of the following statements regarding peptic ulcers are correct?
+1. Duodenal ulcers are more common as compared to gastric ulcers.
+2. Helicobacter pylori and NSAIDs are most common causative agents.
+3. Bleeding is the most common complication associated with posterior duodenal ulcer. Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+30. Which of the following statements are correct with regard to Budd-Chiari syndrome?
+1. Venous drainage of liver is occluded by hepatic vein thrombosis.
+2. It most commonly affects the young males.
+3. It is associated with protein C, protein S and antithrombin III deficiency.
+4. Abdominal discomfort and ascites are the most common features associated with acute thrombosis. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+31. Which of the following are included in Ranson scoring system to predict the severity of acute pancreatitis at the time of admission?
+1. WBC count $>15\times10^{8}/L$
+2. Blood glucose $>200~mg/dL$
+3. $LDH>350~units/L$
+4. $AST>250~units/L$ Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+32. Cystic fibrosis involves which of the following organs?
+1. Lungs
+2. Liver
+3. Pancreas
+4. Kidney Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+33. The commonest variety of peritoneal metastasis is: (a) discrete nodules (b) plaques of varying sizes (c) diffuse adhesion (d) drop metastasis in pelvis
+34. When the hernia extends between the layers of abdominal wall muscles and not directly through them, it is called: (a) Richter's hernia (b) Spigelian hernia (c) Amyand's hernia (d) Littre's hernia
+35. Which of the following are tension-free inguinal hernia repairs?
+1. Stoppa's repair
+2. Lichtenstein's repair
+3. Laparoscopic TEP repair
+4. Desarda's repair Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+36. Which of the following are correct with regard to lung cancer?
+1. Surgical resection has a limited role in curative treatment of lung cancer.
+2. Pattern of disease and prognosis of oat cell carcinoma are different to other varieties in the lungs.
+3. Small cell lung cancer is a type of Neuroendocrine Tumour (NET).
+4. Squamous cancer appears as a cavitating tumour in the lungs. Options: (a) 1 and 2 only; (b) 2, 3 and 4 only; (c) 3 and 4 only; (d) 1, 2, 3 and 4
+37. Which of the following are true about epidermal cyst?
+1. It is lined by stratified squamous epithelium.
+2. It is derived from hair follicle.
+3. It is also called sebaceous cyst.
+4. It is not fixed to the skin. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+38. Which of the following are correct about glomus tumour?
+1. It arises from Sucquet-Hoyer canals.
+2. Its usual site is nail bed.
+3. It is usually a small purple nodule.
+4. It is painless. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+39. Which of the following are correct about Felty's syndrome?
+1. It is associated with rheumatoid arthritis.
+2. It may present with leukopenia.
+3. It may have splenomegaly.
+4. Splenectomy always improves the blood picture. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+40. Anderson-Hynes plasty is a type of repair of: (a) renal pelvis (b) lower ureter (c) urinary bladder (d) glans penis
+________________
+
+
+Section: Gynaecology & Obstetrics
+41. During the first stage of labour, the intrauterine pressure is increased up to: (a) 2-3 mm of Hg (b) 8-10 mm of Hg (c) 40-50 mm of Hg (d) 100-120 mm of Hg
+42. Which of the following are screening tests for cervical cancer?
+1. Pap test
+2. HPV DNA test
+3. Visual inspections with acetic acid
+4. Endocervical curettage Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+43. Heavy menstrual bleeding is a common presentation in which of the following?
+1. Clotting factor deficiency
+2. Fibroid uterus
+3. Adenomyosis
+4. Prolactinoma Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+44. Serum level of CA 125 is raised in which of the following conditions?
+1. Epithelial ovarian cancer
+2. Endometriosis
+3. Pelvic inflammatory disease Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+45. Uterus is supported by which of the following ligaments?
+1. Pubocervical ligament
+2. Cardinal ligament
+3. Uterosacral ligament
+4. Ovarian ligament Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+46. Amongst the following, the Pearl Index is highest with: (a) combined oral contraceptives (b) intrauterine contraceptive devices (c) barrier contraceptives (d) calendar rhythm method
+47. Following vaginal delivery, uterus becomes non-pregnant size by: (a) 9 weeks postpartum (b) 8 weeks postpartum (c) 4 weeks postpartum (d) 6 weeks postpartum
+48. Indications and prerequisites for delivery with the ventouse include which of the following?
+1. Delay in the second stage of labour
+2. Non-reassuring fetal heart rate
+3. Gestation age less than 34 weeks of pregnancy
+4. Vertex presentation Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+49. Which of the following fetal infections are associated with significant intrauterine growth restriction?
+1. Cytomegalovirus infection
+2. Rubella infection
+3. Toxoplasmosis
+4. Human papillomavirus infection Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+50. Missed abortion is not diagnosed if: (a) vaginal bleed is brownish in colour (b) uterus is smaller than gestational age (c) external os is closed (d) USG shows fetus with cardiac activity
+51. As per the PC & PNDT Act, permission will be given to perform the tests for detection of which of the following?
+1. Chromosomal abnormalities
+2. Haemoglobinopathies
+3. Sex-linked genetic diseases Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+52. Which of the following are indications for early clamping of umbilical cord at delivery?
+1. Rh incompatibility
+2. Baby born to a diabetic mother
+3. Maternal anemia
+4. Birth asphyxia Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+53. The definition of gestational hypertension includes which of the following?
+1. Sustained rise of blood pressure to $140/90$ mm of Hg or more at least on two occasions 12 hours apart at any period of pregnancy
+2. Sustained rise of blood pressure to $140/90$ mm of Hg beyond 40 hours of delivery
+3. Sustained rise of blood pressure to $140/90$ mm of Hg on two occasions 4 or more hours apart
+4. Pregnancy should be more than 20 weeks Options: (a) 2 and 4; (b) 3 and 4; (c) 1; (d) 3 only
+54. A 27-year-old female is complaining of grayish white discharge with fishy odour. There is no history of itching associated with discharge. Which one of the following is the most likely diagnosis? : (a) Trichomoniasis (b) Candidiasis (c) Urinary tract infection (d) Bacterial vaginosis
+55. Which of the following are contraindications for insertion of Intrauterine Contraceptive Device (IUCD)?
+1. $Age>35$ years
+2. Suspected pregnancy
+3. Acute pelvic infection
+4. Severe dysmenorrhea Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+56. Regarding the phenomenon of 'lightening' in primigravida at term pregnancy, which one of the following statements is correct?: (a) It is a welcome sign since it indicates descent fetal head into pelvis. (b) There are no bladder or bowel symptoms associated with this phenomenon. (c) It occurs later and just before labour in primigravida compared to multigravida. (d) It is associated with worsening of cardiorespiratory embarrassment in mother.
+57. The first-line treatment of Group B Streptococcal (GBS) infection in pregnancy is: (a) penicillin (b) azithromycin (c) doxycycline (d) vancomycin
+58. Which of the following are included in the combined prenatal screening tests in first trimester?
+1. $\beta$-hCG
+2. MS AFP ($\alpha$-Fetoprotein)
+3. Nuchal translucency
+4. PAPP-A Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+59. In hyperemesis gravidarum, Wernicke's encephalopathy is seen due to the deficiency of: (a) vitamin B6 (b) vitamin B1 (c) vitamin B12 (d) vitamin B4
+60. Which of the following are correct regarding Placental Site Trophoblastic Tumour (PSTT)?
+1. Low serum $\beta$-hCG
+2. Composed mainly of cytotrophoblast
+3. Highly responsive to chemo radiation
+4. Local invasion into myometrium Options: (a) 1, 2, 3 and 4; (b) 1, 2 and 3 only; (c) 1, 3 and 4 only; (d) 2 and 4 only
+61. Metroplasty is the surgical procedure done for which one of the following uterine anomalies?: (a) Septate uterus (b) Arcuate uterus (c) Uterus didelphys (d) Imperforate hymen
+62. Which of the following are the clinical features of hyperprolactinemia?
+1. Hypergonadotropic hypogonadism
+2. Hypogonadotropic hypergonadism
+3. Oligomenorrhea
+4. Heavy menstruation Options: (a) 1 and 3; (b) 1 and 4; (c) 2 and 3; (d) 2 and 4
+63. Which of the following are effective in the management of premenstrual syndrome?
+1. Niacin (vitamin B3)
+2. Combined oral contraceptive pills
+3. Diuretics
+4. Hysterectomy with oophorectomy Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+64. Which one of the following blood tests is the marker of ovarian reserve?: (a) $\beta$-hCG (b) Anti-Mullerian hormone (c) Placental alkaline phosphatase (d) Serum estradiol
+65. In the PALM-COEIN classification by FIGO for abnormal uterine bleeding, o-ovulatory dysfunction is the cause in which one of the following conditions?: (a) Adenomyosis (b) Pelvic inflammatory disease (c) Polycystic ovarian syndrome (d) Ovarian cancer
+66. Which of the following are correct regarding genital warts (condyloma acuminata)?
+1. It is usually single.
+2. It is related to HPV Types 6 and 11.
+3. It can be transmitted sexually.
+4. It can involve vagina and anus. Options: (a) 1, 2, 3 and 4; (b) 2, 3 and 4 only; (c) 1, 2 and 3 only; (d) 1 and 4 only
+67. Which of the following are correct regarding endometrial cancer?
+1. Persistent progesterone stimulation is an important etiology.
+2. It is more common in white population.
+3. HNPCC (Hereditary Nonpolyposis Colorectal Cancer) syndrome is a high risk factor.
+4. Adenocarcinoma is the commonest histopathology. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+68. The reference point 'zero' in POPQ (Pelvic Organ Prolapse Quantification) classification is taken as: (a) ischial spine (b) perineal body (c) mid-vagina (d) hymen
+69. Which of the following are the various treatment options for Twin-Twin Transfusion Syndrome (TTTS)?
+1. Septostomy
+2. Laser photocoagulation
+3. Selective fetal reduction Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+70. Which of the following drugs should be avoided in labouring women with bronchial asthma?
+1. Opioid analgesics
+2. Prostaglandin F2a
+3. Prostaglandin El
+4. Ergometrine Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+71. Which of the following are the complications of malaria in pregnancy?
+1. Thrombocytopenia
+2. Metabolic alkalosis
+3. Hypoglycemia
+4. Disseminated intravascular coagulation Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+72. Which of the following are correct regarding drospirenone?
+1. It is a fourth generation progestin.
+2. It has antiandrogenic property.
+3. It has antimineralocorticoid action.
+4. It is safe in renal failure patients. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+73. Which of the following symptoms are related to ectopic pregnancy?
+1. Acute abdominal pain following amenorrhea
+2. Abdominal pain with bleeding $P/V$
+3. Fainting attack with shoulder pain
+4. Painless continuous bleeding Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+74. Premenstrual Syndrome (PMS) should fulfil which of the following criteria?
+1. It is not related to any organic lesion.
+2. It regularly occurs during the luteal phase and each ovulatory menstruation cycle.
+3. Symptoms must be severe enough to disturb the lifestyle of women and seeks medical help.
+4. Symptoms persist after the period also. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+75. Which of the following statements are correct regarding constriction ring?
+1. Premature rupture of membranes is a high risk factor.
+2. It is situated at the junction of upper and lower uterine segment.
+3. Uterus never ruptures.
+4. The ring is felt per abdomen. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+76. A patient delivered a live healthy baby 4 hours back. Now she has developed persistent severe pain in the perineal region and rectal tenesmus. Local examination reveals a tense and tender purple swelling at the vulva. What is her probable diagnosis? : (a) Cervical tear (b) Perineal tear (c) Pelvic hematoma (d) Ruptured uterus
+77. Which of the following are included in the management of cord prolapse during delivery?
+1. Bladder emptying
+2. Knee-chest position of the patient
+3. Preferably caesarean delivery
+4. Lifting up the presenting part of the cord Options: (a) 2 and 3 only; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+78. Which of the following statements have obstetric significance at the level of plane of least pelvic dimensions?
+1. It is a landmark used for pudendal nerve block analgesia.
+2. Deep transverse arrest usually occurs at this plane.
+3. It is at this plane that the internal rotation of the fetal head occurs during labour.
+4. It marks the beginning of the backward curve of the pelvic axis. Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+79. Which surgery is most likely to disturb the paracervical nerve plexus resulting in atonicity of the bladder?: (a) Vaginal hysterectomy (b) Radical hysterectomy (c) Simple hysterectomy (d) Myomectomy
+80. The patency of fallopian tubes can be clinically tested by which of the following methods?
+1. Sonosalpingogram
+2. Hysterosalpingogram
+3. CT scan
+4. Laparoscopic chromotubation Options: (a) 1, 2 and 4; (b) 1, 3 and 4; (c) 1, 2 and 3; (d) 2, 3 and 4
+________________
+
+
+Section: Preventive & Social Medicine
+81. In swimming pools, the free residual chlorine required for providing adequate protection against bacterial and viral agents should be: (a) $0.5~mg/litre$ (b) $1.0~mg/litre$ (c) $1.5~mg/litre$ (d) $2.0~mg/litre$
+82. Which of the following will be target population for screening of diabetes?
+1. Women who have had a baby weighing more than 4.5 kg
+2. People over 40 years of age
+3. People with family history of diabetes Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1 and 3 only; (d) 1, 2 and 3
+83. With reference to Indian men, who can be categorized to be carrying out 'moderate work', what is the Recommended Dietary Allowance (RDA) of thiamine (in $mg/day)$?: (a) 1-0 (b) 1·4 (c) 1.8 (d) 1.2
+84. For the treatment of kala-azar, the daily dose of miltefosine in a 3-year-old child who weighs 15 kg is: (a) 10 mg (b) 20 mg (c) 30 mg (d) 40 mg
+85. The single most sensitive tool for evaluating the iron status in an individual is: (a) haemoglobin concentration (b) serum iron concentration (c) serum ferritin value (d) serum transferrin saturation
+86. Which of the following criteria must be met by a disease before it is to be considered suitable for a screening programme?
+1. The natural history of the disease should be adequately understood.
+2. No effective treatment should exist for the disease.
+3. The disease should not have a recognizable latent or asymptomatic stage.
+4. There should be a test that can detect the disease prior to onset of signs and symptoms. Options: (a) 1 and 2; (b) 1 and 4; (c) 3 and 4; (d) 2 and 4
+87. As a part of the Universal Immunization Programme in India, the Inactivated Polio Vaccine (IPV) given as fractional IPV by intradermal route is administered at what age/ages?
+1. Birth
+2. 6 weeks
+3. 14 weeks
+4. 9 months Options: (α) 1; (b) 2 only; (c) 2 and 3; (d) 2 and 4
+88. Consider the following: Intravenous tubes, Catheters, Gloves, Blood bags . Which of the above-mentioned biomedical wastes will be segregated in Red bag as per the Biomedical Waste Management Rules, 2016? Options: (a) 1, 2 and 4; (b) 1, 3 and 4; (c) 2, 3 and 4; (d) 1, 2 and 3
+89. Which of the following parameters are required for calculating the Human Development Index?
+1. Life expectancy at birth
+2. Infant mortality rate
+3. Gross national income per capita
+4. Mean years of schooling Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+90. Which of the following statements regarding the Open Vial Policy, 2015 are correct?
+1. It applies only for DPT, TT, Hepatitis B, OPV and Liquid Pentavalent vaccine.
+2. Vaccine vials opened in session-site can be used again provided a vaccine vial monitor has not reached the discard point.
+3. Open vial should never be submerged in water.
+4. Open vials of BCG, Measles and JE should be preserved till the next immunization session. Options: (a) 1, 2, 3 and 4; (b) 1 and 2 only; (c) 1, 2 and 3 only; (d) 3 and 4 only
+91. Which of the following statements are correct in respect of haemophilia?
+1. It is hereditary bleeding disorder.
+2. It has a higher incidence among Asians.
+3. It affects females occasionally and mildly. Options: (a) 1 and 2 only; (b) 1 and 3 only; (c) 2 and 3 only; (d) 1, 2 and 3
+92. To prevent neonatal tetanus in an infant born to a woman who has not been given Tetanus Toxoid (TT) appropriately during pregnancy, what should ideally be done?: (a) Give one dose of TT immediately (b) Injection Antitoxin Serum (ATS) has to be administered with 6 hours of birth (c) Give one dose of TT and one dose of ATS within 6 hours of birth (d) Give one dose of TT and one dose of ATS after 72 hours of birth
+93. What is the shelf life of Dukoral (wc-rBS) oral vaccine used for cholera prevention, when stored at a temperature of $2^{\circ}C$ to $8^{\circ}C?$ : (a) 5 years (b) 3 years (c) 1 year (d) 6 months
+94. Which of the following are correct in respect of incidence rate?
+1. It is a sum total of new and old cases.
+2. It refers to a specified period of time.
+3. It refers to a defined population.
+4. It must include the unit of time in final expression. Options: (a) 2, 3 and 4; (b) 1, 2 and 3; (c) 1, 2 and 4; (d) 1, 3 and 4
+95. Forty patients with diarrhoeal diseases were studied. Their age distribution is given in the table below: Age 0-4 (22 patients), 5-9 (12 patients), 10-14 (6 patients). What is the mean age of the patients in this study? : (a) 2 years (b) 4 years (c) 5 years (d) 6 years
+96. Which one of the following international agencies focuses on the 'Country Health Programming' approach?: (a) The United Nations Development Programme (UNDP) (b) The United Nations Children's Fund (UNICEF) (c) The United Nations Population Fund (UNFPA) (d) The United States Agency for International Development (USAID)
+97. Which of the following statements are true about 'End TB Strategy'?
+1. The strategy goes beyond patient care to promote TB prevention.
+2. The targets are to be achieved by 2035.
+3. The milestone for 2025 is to reduce the TB deaths by 35% compared to 2015.
+4. The strategy identifies four barriers to achieve progress in fight against TB. Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 2 and 4; (d) 1, 3 and 4
+98. Which one of the following is the commonest extra-salivary gland manifestation of mumps in adults?: (a) Pancreatitis (b) Polyarthritis (c) Hydrocephalus (d) Orchitis
+99. All cases of severe measles and all cases of measles in areas with high case fatality rate need to be treated with which of the following vitamins?: (a) Vitamin A (b) Vitamin C (c) Vitamin D (d) Vitamin K
+100. Consider the protein content of the following food items (in terms of grams per 100 grams of food): Cow milk, Meat, Soya bean, Sugar . What is the correct descending order (highest to lowest) of protein content?: (a) $2\rightarrow1\rightarrow3\rightarrow4$ (b) $3\rightarrow1\rightarrow2\rightarrow4$ (c) $3\rightarrow2\rightarrow1\rightarrow4$ (d) $2\rightarrow3\rightarrow4\rightarrow1$
+101. Which of the following are modifiable risk factors for coronary heart disease?
+1. Age
+2. Cigarette smoking
+3. Obesity
+4. Sedentary habits Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+102. Determination of alpha-fetoprotein levels in maternal serum is a useful screening tool for: (a) congenital hypothyroidism (b) Duchenne muscular dystrophy (c) phenylketonuria (d) neural tube defects
+103. Consider the phases of a family life cycle: Contraction, Dissolution, Extension, Formation . What is the correct order of the phases from first to last?: (a) $4\rightarrow3\rightarrow2\rightarrow1$ (b) $2\rightarrow1\rightarrow3\rightarrow4$ (c) $4\rightarrow3\rightarrow1\rightarrow2$ (d) $1\rightarrow2\rightarrow3\rightarrow4$
+104. Which of the following services are provided to pregnant women under the Integrated Child Development Scheme (ICDS)?
+1. Health check-up
+2. Immunization against tetanus
+3. Nutrition and health education
+4. Supplementary nutrition Options: (a) 1 and 2 only; (b) 1, 2 and 4 only; (c) 3 and 4 only; (d) 1, 2, 3 and 4
+105. Which of the following are the principal causes of infant mortality in India?
+1. Acute respiratory infections
+2. Congenital anomalies
+3. Childhood cancers
+4. Diarrhoeal diseases Options: (a) 1, 2 and 3; (b) 2, 3 and 4; (c) 1, 3 and 4; (d) 1, 2 and 4
+106. Throughout history, humans have been adapting environment to the genes more than adapting genes to the environment. Adapting environment to the genes is called : (a) eugenics (b) acculturation (c) euthenics (d) euphenics
+107. In a town, a study was carried out to determine the role of cigarette smoking in causation of lung cancer. It was found that a total of 7000 people were smokers; of them, 70 developed lung cancer. In the same town, 3000 people were non-smokers; of them, 3 developed lung cancer. What is the attributable risk to cigarette smoking for lung cancer? : (a) 10% (b) 30% (c) 60% (d) 90%
+108. A town in the hills had a mid-year population of 250000 in the year 2021. During the same year, the death registry of the town recorded 1500 deaths due to tuberculosis in 365 calendar days. What is the specific death rate for tuberculosis in the town? : (a) 1 (b) 6 (c) 10 (d) 60
+109. Which of the following rare vaccine reactions are known to occur with BCG vaccine?
+1. Suppurative lymphadenitis
+2. Guillain-Barre syndrome
+3. Osteitis
+4. Disseminated infection Options: (a) 1, 2 and 3; (b) 1, 2 and 4; (c) 1, 3 and 4; (d) 2, 3 and 4
+110. Which one of the following vaccines is known to interfere with the Yellow Fever vaccine if administered within 3 weeks of each other?: (a) Typhoid vaccine (b) Cholera vaccine (c) Tetanus toxoid (d) Measles vaccine
+111. Regarding the Vandemataram Scheme, consider the following statements:
+1. It is a voluntary scheme wherein any obstetrician, maternity home, nursing home, MBBS doctor can provide safe motherhood services.
+2. The enrolled doctors must provide iron and folic acid tablets out of their pocket free to the beneficiaries.
+3. The TT injections are provided by the District Medical Officers to the enrolled doctors for free administration to the beneficiaries.
+4. To join the Vandemataram Scheme, the facility must have resources for caesarean section. Options: (a) 1 and 2; (b) 1 and 3 only; (c) 3 and 4 only; (d) 1, 3 and 4
+112. Consider the following measures which can help make 'unlined katcha wells' sanitary: Deepening the bottom, filling with clay/sand, installing hand pump, constructing platform . Which of these measures hold good? Options: (a) 1 and 2 only; (b) 2 and 3 only; (c) 1, 3 and 4 only; (d) 1, 2, 3 and 4
+113. In which way is 'membrane filtration technique' better than 'multiple tube method' for determining the presence of coliform organisms in water?: (a) Membrane filtration technique is much quicker and results can be obtained within 20 hours, while multiple tube method is much longer. (b) Membrane filtration technique is far more cheaper than multiple tube method. (c) Membrane filtration technique is universally available, and hence, easily doable. (d) Membrane filtration technique can be employed by all and sundry, whereas multiple tube method can only be carried out by trained hands.
+114. Of the following amino acids required by the human body, which one falls under the category of 'essential' amino acid?: (a) Arginine (b) Threonine (c) Serine (d) Proline
+115. Consider the following statements with reference to the National Framework for Malaria Elimination in India, 2016-2030:
+1. The goal is to eliminate indigenous cases throughout the country by 2030.
+2. By 2022, transmission is to be interrupted in Category 1 and 2 States/UTs.
+3. By 2026, incidence is to be reduced to less than 1 case per 1000 population in all States and UTs.
+4. By 2030, indigenous transmission is to be interrupted in all States and UTs. Options: (a) 1 and 2 only; (b) 1 and 3 only; (c) 3 and 4 only; (d) 1, 2, 3 and 4
+116. With reference to determinants of 'neonatal mortality', consider the following statements:
+1. Neonatal mortality is directly related to the birth weight of the newborn.
+2. Neonatal mortality is directly related to the gestational age at which the birth takes place.
+3. Neonatal mortality is closely related to the educational status of the mother.
+4. Neonatal mortality is low if the mother's age is between 15-16 years. Options: (a) 1 and 4 only; (b) 2 and 3 only; (c) 1, 2 and 3 only; (d) 1, 2, 3 and 4
+117. As per the definition of the World Health Organization, 'late maternal death' is defined as the death of a woman from direct or indirect obstetric causes, after more than X days but less than one year after termination of pregnancy. What is the correct value of X? : (a) 7 (b) 21 (c) 42 (d) 84
+118. In a newborn, the Apgar score has been recorded at 1 minute: Heart rate 92 per minute, slow/irregular respiratory effort, flaccid muscle tone, no reflex response, body pink/extremities blue. Which one of the following best reflects the Apgar score? : (a) 0 (b) 2 (c) 3 (d) 5
+119. The following table shows some of the pneumoconiosis diseases along with the most implicated causative chemical agents. Which among the following represent the correct combinations? :
+1. Anthracosis - Coal dust
+2. Bagassosis - Silica dust
+3. Byssinosis - Cotton dust
+4. Siderosis - Asbestos Options: (a) 1 and 2; (b) 1 and 4; (c) 3; (d) 4 only
+120. The table shows the 'Total Fertility Rate (TFR)' by the Wealth Index, as per NFHS-4 findings: Lowest 3.17, Second 2.45, Middle 2.07, Fourth 1.84, Highest 1.54, Total 2.18 . Which is/are correct about the information?
+1. The divisions of Wealth Index can be called 'quartiles'.
+2. The information can be presented as a pie chart.
+3. The Wealth Index was calculated by asking about the per capita income.
+4. Each of the higher divisions had lower TFR than the previous division. Options: (a) 1 and 2; (b) 1 and 3; (c) 2 and 3; (d) 2 and 4

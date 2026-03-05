@@ -197,18 +197,23 @@ class TestViewSet(viewsets.ModelViewSet):
             
             if subj:
                 if subj.id not in subject_counts:
-                    subject_counts[subj.id] = {'total': 0, 'correct': 0, 'subject': subj}
+                    subject_counts[subj.id] = {'total': 0, 'correct': 0, 'incorrect': 0, 'subject': subj}
                 subject_counts[subj.id]['total'] += 1
                 if is_correct:
                     subject_counts[subj.id]['correct'] += 1
+                else:
+                    subject_counts[subj.id]['incorrect'] += 1
                     
             if topic:
                 if topic.id not in topic_counts:
-                    topic_counts[topic.id] = {'total': 0, 'correct': 0, 'topic': topic, 'subject': subj}
+                    topic_counts[topic.id] = {'total': 0, 'correct': 0, 'incorrect': 0, 'topic': topic, 'subject': subj}
                 topic_counts[topic.id]['total'] += 1
                 if is_correct:
                     topic_counts[topic.id]['correct'] += 1
+                else:
+                    topic_counts[topic.id]['incorrect'] += 1
 
+        now = timezone.now()
         for subj_id, data in subject_counts.items():
             # Update general subject performance (where topic is null)
             perf, _ = UserTopicPerformance.objects.get_or_create(
@@ -216,6 +221,8 @@ class TestViewSet(viewsets.ModelViewSet):
             )
             perf.total_attempts += data['total']
             perf.correct_answers += data['correct']
+            perf.incorrect_answers += data['incorrect']
+            perf.last_attempted = now
             perf.save()
 
         # 3. Update Topic-level performance
@@ -225,6 +232,8 @@ class TestViewSet(viewsets.ModelViewSet):
             )
             perf.total_attempts += data['total']
             perf.correct_answers += data['correct']
+            perf.incorrect_answers += data['incorrect']
+            perf.last_attempted = now
             perf.save()
             
         return Response(TestAttemptDetailSerializer(attempt, context={'request': request}).data)
@@ -275,6 +284,13 @@ class TestViewSet(viewsets.ModelViewSet):
                 'topic': q.topic.name if q.topic else '',
                 'difficulty': q.difficulty,
                 'book_reference': q.book_name,
+                'chapter': q.chapter or '',
+                'page_number': q.page_number or '',
+                'year': q.year,
+                'paper': q.paper,
+                'times_asked': q.times_asked,
+                'concept_explanation': q.concept_explanation or '',
+                'textbook_references': q.textbook_references or [],
                 'time_taken': resp.time_taken_seconds,
                 'confidence': resp.confidence_level,
                 'concept_tags': q.concept_tags or [],
