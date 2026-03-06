@@ -5,7 +5,7 @@ services:
     region: oregon
     rootDir: backend
     buildCommand: "./build.sh"
-    startCommand: "gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT"
+    startCommand: "gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --timeout 120 --log-level info"
     envVars:
       - key: DJANGO_SECRET_KEY
         generateValue: true
@@ -24,4 +24,4 @@ services:
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: PYTHON_VERSION
-        value: "3.13.0"
+        value: "3.12.0"

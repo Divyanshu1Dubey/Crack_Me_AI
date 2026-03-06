@@ -8,10 +8,20 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import pdfplumber
-import fitz  # PyMuPDF
-
 logger = logging.getLogger(__name__)
+
+# Lazy imports - pdfplumber and fitz are heavy; only load when actually needed
+pdfplumber = None
+fitz = None
+
+def _ensure_pdf_libs():
+    global pdfplumber, fitz
+    if pdfplumber is None:
+        import pdfplumber as _pdfplumber
+        pdfplumber = _pdfplumber
+    if fitz is None:
+        import fitz as _fitz
+        fitz = _fitz
 
 
 class DocumentProcessor:
@@ -39,6 +49,7 @@ class DocumentProcessor:
                 return []
                 
         # PDF parsing — process in batches to avoid memory explosion
+        _ensure_pdf_libs()
         pages = []
         try:
             with pdfplumber.open(file_path) as pdf:
@@ -74,6 +85,7 @@ class DocumentProcessor:
         Returns the output image path or None.
         """
         try:
+            _ensure_pdf_libs()
             os.makedirs(output_dir, exist_ok=True)
             doc = fitz.open(pdf_path)
             if page_num >= len(doc):
@@ -96,6 +108,7 @@ class DocumentProcessor:
     def get_pdf_metadata(pdf_path: str) -> dict:
         """Get PDF metadata (pages, title, etc.)."""
         try:
+            _ensure_pdf_libs()
             doc = fitz.open(pdf_path)
             meta = {
                 "path": pdf_path,

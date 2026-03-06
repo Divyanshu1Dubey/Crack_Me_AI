@@ -5,9 +5,9 @@ import { NextResponse } from 'next/server';
  * Use with cron-job.org (free) to call every 5 minutes.
  */
 export async function GET() {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '');
     try {
-        const res = await fetch(`${backendUrl}/questions/subjects/`, {
+        const res = await fetch(`${backendUrl}/api/health/`, {
             method: 'GET',
             signal: AbortSignal.timeout(30000),
         });

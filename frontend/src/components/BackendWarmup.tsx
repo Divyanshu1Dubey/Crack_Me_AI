@@ -1,7 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const BACKEND_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '');
 
 /**
  * Pings the backend on mount to wake up Render free tier (cold start ~30s).
@@ -10,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 export default function BackendWarmup() {
     useEffect(() => {
         const ping = () => {
-            fetch(`${API_URL}/questions/subjects/`, { method: 'GET' }).catch(() => {});
+            fetch(`${BACKEND_BASE}/api/health/`, { method: 'GET' }).catch(() => {});
         };
         // Immediate ping on page load
         ping();

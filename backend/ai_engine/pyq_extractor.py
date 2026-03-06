@@ -9,8 +9,6 @@ from typing import Optional
 
 from django.conf import settings
 
-from .document_processor import DocumentProcessor, PYQPDFParser
-
 logger = logging.getLogger(__name__)
 
 # CMS-specific system prompt for PYQ extraction
@@ -52,6 +50,7 @@ class PYQExtractor:
     """Extract and enrich PYQ questions using AI."""
 
     def __init__(self):
+        from .document_processor import DocumentProcessor, PYQPDFParser
         self.processor = DocumentProcessor()
         self.parser = PYQPDFParser()
         self._init_ai()
