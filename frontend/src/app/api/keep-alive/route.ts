@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 
+const BACKEND_URL = 'https://crackcms-backend.onrender.com';
+
 /**
  * GET /api/keep-alive — Pings the backend to prevent Render free tier from sleeping.
  * Use with cron-job.org (free) to call every 5 minutes.
  */
 export async function GET() {
-    const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '');
     try {
-        const res = await fetch(`${backendUrl}/api/health/`, {
+        const res = await fetch(`${BACKEND_URL}/api/health/`, {
             method: 'GET',
             signal: AbortSignal.timeout(30000),
         });
