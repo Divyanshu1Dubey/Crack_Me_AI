@@ -138,3 +138,28 @@ class QuestionBookmark(models.Model):
 
     class Meta:
         unique_together = ['user', 'question']
+
+
+class QuestionFeedback(models.Model):
+    """Feedback from students about questions (wrong answers, typos, etc)."""
+    CATEGORY_CHOICES = [
+        ('wrong_answer', 'Wrong Answer'),
+        ('discrepancy', 'Discrepancy in Options'),
+        ('out_of_syllabus', 'Out of Syllabus'),
+        ('typo', 'Typo/Formatting Issue'),
+        ('explanation_needed', 'Better Explanation Needed'),
+        ('other', 'Other'),
+    ]
+
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='feedbacks')
+    user = models.ForeignKey('accounts.CustomUser', on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    comment = models.TextField()
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Feedback on Q{self.question.id}: {self.get_category_display()}"

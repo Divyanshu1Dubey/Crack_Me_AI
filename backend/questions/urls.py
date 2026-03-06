@@ -5,6 +5,7 @@ from . import views
 router = DefaultRouter()
 router.register(r'subjects', views.SubjectViewSet)
 router.register(r'topics', views.TopicViewSet)
+router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'', views.QuestionViewSet, basename='question')
 
 urlpatterns = [

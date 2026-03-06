@@ -2,11 +2,12 @@ from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Subject, Topic, Question, QuestionBookmark
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback
 from .serializers import (
     SubjectSerializer, TopicSerializer,
     QuestionListSerializer, QuestionDetailSerializer,
-    QuestionUploadSerializer, BookmarkSerializer
+    QuestionUploadSerializer, BookmarkSerializer,
+    QuestionFeedbackSerializer
 )
 
 
@@ -100,6 +101,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 Question.objects.filter(is_active=True)
                 .values('difficulty').annotate(count=Count('id'))
             ),
+            'trends': list(
+                Question.objects.filter(is_active=True)
+                .values('year', 'subject__name', 'subject__code')
+                .annotate(count=Count('id'))
+                .order_by('-year', 'subject__name')
+            ),
         }
         return Response(stats)
 
@@ -120,3 +127,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
             
         serializer = QuestionListSerializer(similar, many=True, context={'request': request})
         return Response(serializer.data)
+
+
+class QuestionFeedbackViewSet(viewsets.ModelViewSet):
+    """ViewSet for students to report errors in questions."""
+    queryset = QuestionFeedback.objects.all()
+    serializer_class = QuestionFeedbackSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.AllowAny()]  # Allow even guests to report? Or just authenticated?
+        return [permissions.IsAdminUser()]
+
+    def perform_create(self, serializer):
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        else:
+            serializer.save()

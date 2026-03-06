@@ -144,6 +144,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # AI Configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-483a412014fd4655a85efb8911b5f507')
 
 # Training Data & RAG Configuration
 MEDURA_TRAIN_DIR = BASE_DIR / 'Medura_Train'

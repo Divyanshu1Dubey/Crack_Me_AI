@@ -49,18 +49,21 @@ class AIService:
     def __init__(self):
         self.gemini_client = None
         self.groq = None
+        self.deepseek = None
         self._rag = None
         self._init_clients()
 
     def _init_clients(self):
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '')
         groq_key = getattr(settings, 'GROQ_API_KEY', '')
+        deepseek_key = getattr(settings, 'DEEPSEEK_API_KEY', '')
 
         if gemini_key:
             try:
-                from google import genai
-                self.gemini_client = genai.Client(api_key=gemini_key)
-                logger.info("Gemini AI initialized (google-genai SDK)")
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                self.gemini_client = genai
+                logger.info("Gemini AI initialized (google.generativeai SDK)")
             except Exception as e:
                 logger.warning(f"Gemini init failed: {e}")
 
@@ -71,6 +74,14 @@ class AIService:
                 logger.info("Groq AI initialized")
             except Exception as e:
                 logger.warning(f"Groq init failed: {e}")
+
+        if deepseek_key:
+            try:
+                from openai import OpenAI
+                self.deepseek = OpenAI(api_key=deepseek_key, base_url="https://api.deepseek.com")
+                logger.info("DeepSeek AI initialized")
+            except Exception as e:
+                logger.warning(f"DeepSeek init failed: {e}")
 
     @property
     def rag(self):
@@ -84,50 +95,19 @@ class AIService:
         return self._rag
 
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
-                 temperature: float = 0.3, max_tokens: int = 2048) -> str:
-        """Call AI with multi-model fallback: Gemini models → Groq."""
-        from google.genai import types
-
-        # Try each Gemini model (each has its own quota)
-        if self.gemini_client:
-            full_prompt = f"{system}\n\n{prompt}" if system else prompt
-            for model_name in GEMINI_MODELS:
-                try:
-                    logger.info(f"Calling Gemini model: {model_name}...")
-                    config_kwargs = {
-                        "temperature": temperature,
-                        "max_output_tokens": max_tokens,
-                    }
-                    # Disable thinking for 2.5 models to avoid token budget being eaten by thoughts
-                    if '2.5' in model_name:
-                        config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-
-                    response = self.gemini_client.models.generate_content(
-                        model=model_name,
-                        contents=full_prompt,
-                        config=types.GenerateContentConfig(**config_kwargs),
-                    )
-                    if response and response.text:
-                        logger.info(f"Gemini [{model_name}] responded successfully.")
-                        return response.text
-                except Exception as e:
-                    error_str = str(e)
-                    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
-                        logger.warning(f"Gemini [{model_name}] quota exhausted, trying next model...")
-                        continue
-                    logger.warning(f"Gemini [{model_name}] failed: {e}")
-                    continue
-
-        # Groq fallback
-        if self.groq:
+                 temperature: float = 0.3, max_tokens: int = 2048, is_complex: bool = False) -> str:
+        """Call AI with routing: DeepSeek for complex, Groq for fast, Gemini as fallback."""
+        
+        # --- FAST / SIMPLE OPTION (Priority: Groq) ---
+        if not is_complex and self.groq:
             try:
-                logger.info("Calling Groq AI (fallback)...")
+                logger.info("Calling Groq AI (Fast Option)...")
                 messages = []
                 if system:
                     messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
                 response = self.groq.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="llama-3.1-8b-instant",
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -136,7 +116,95 @@ class AIService:
                 logger.info("Groq responded successfully.")
                 return response.choices[0].message.content
             except Exception as e:
+                logger.warning(f"Groq fast call failed: {e}")
+
+        # --- COMPLEX / DEEP REASONING OPTION (Priority: DeepSeek) ---
+        if is_complex and self.deepseek:
+            try:
+                logger.info("Calling DeepSeek AI (Complex Task)...")
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                response = self.deepseek.chat.completions.create(
+                    model="deepseek-reasoner", # Best for deep, time-taking logical analysis
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=60.0
+                )
+                logger.info("DeepSeek responded successfully.")
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"DeepSeek call failed: {e}")
+
+        # --- GENERAL FALLBACK ---
+        if self.gemini_client:
+            genai = self.gemini_client
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+            for model_name in GEMINI_MODELS:
+                try:
+                    logger.info(f"Calling Gemini model: {model_name}...")
+                    model = genai.GenerativeModel(model_name=model_name)
+                    response = model.generate_content(
+                        full_prompt,
+                        generation_config={
+                            "temperature": temperature,
+                            "max_output_tokens": max_tokens,
+                        }
+                    )
+                    if response and response.text:
+                        logger.info(f"Gemini [{model_name}] responded successfully.")
+                        return response.text
+                except Exception as e:
+                    error_str = str(e)
+                    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
+                        logger.warning(f"Gemini [{model_name}] quota exhausted, trying next model...")
+                        continue
+                    logger.warning(f"Gemini [{model_name}] failed: {e}")
+                    continue
+
+        # If Groq was not the primary, try it as fallback
+        if self.groq and is_complex:
+            try:
+                logger.info("Calling Groq AI (fallback)...")
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                response = self.groq.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=20.0
+                )
+                logger.info("Groq responded successfully.")
+                return response.choices[0].message.content
+            except Exception as e:
+                import traceback
+                print(f"Groq error details: {e}")
                 logger.warning(f"Groq call failed: {e}")
+
+        # If DeepSeek was not the primary, try it as fallback
+        if self.deepseek and not is_complex:
+            try:
+                logger.info("Calling DeepSeek AI (fallback)...")
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                response = self.deepseek.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=30.0
+                )
+                logger.info("DeepSeek responded successfully.")
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"DeepSeek fallback failed: {e}")
 
         return "⚠️ All AI services are temporarily unavailable (quota exceeded or API key issues). Please try again in a few minutes."
 
@@ -370,15 +438,9 @@ Rules:
 
         # Parse JSON from response
         try:
-            # Strip markdown code fences if present
-            text = raw.strip()
-            if text.startswith('```'):
-                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
-            if text.startswith('json'):
-                text = text[4:].strip()
+            import re
+            match = re.search(r'\[.*\]', raw, re.DOTALL)
+            text = match.group(0) if match else raw
             questions = json.loads(text)
             if isinstance(questions, list):
                 return questions[:count]
@@ -472,18 +534,13 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
   "pyq_frequency": "How often this topic appears in CMS PYQs (e.g., 'Asked every year since 2018', 'Asked 4 times in 2018-2024', etc.)",
   "similar_pyq": "Describe 1-2 similar questions from UPSC CMS PYQs with year and brief description (e.g., 'CMS 2022 Paper 1: Asked about the initial investigation for Cushing syndrome'). If none known, say 'Similar concepts tested in CMS 2020-2024'."
 }}"""
-
-        raw = self._call_ai(prompt, max_tokens=3000, temperature=0.3)
+        # Generate Deep Analysis via DeepSeek (complex flag)
+        raw = self._call_ai(prompt, max_tokens=3000, temperature=0.3, is_complex=True)
 
         try:
-            text = raw.strip()
-            if text.startswith('```'):
-                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
-            if text.startswith('json'):
-                text = text[4:].strip()
+            import re
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            text = match.group(0) if match else raw
             result = json.loads(text)
             result['citations'] = citations
             result['is_correct'] = is_correct

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Subject, Topic, Question, QuestionBookmark
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback
 
 
 class SubjectSerializer(serializers.ModelSerializer):
@@ -85,4 +85,11 @@ class BookmarkSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionBookmark
         fields = ['id', 'question', 'question_detail', 'note', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class QuestionFeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestionFeedback
+        fields = ['id', 'question', 'category', 'comment', 'created_at']
         read_only_fields = ['id', 'created_at']
