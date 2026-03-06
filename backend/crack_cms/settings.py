@@ -20,7 +20,7 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
 
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
 
 # Application definition
 INSTALLED_APPS = [
@@ -122,17 +122,17 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOWED_ORIGINS = os.getenv(
+CORS_ALLOWED_ORIGINS = [o for o in os.getenv(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
+).split(',') if o]
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF trusted origins (needed for production)
-CSRF_TRUSTED_ORIGINS = os.getenv(
+CSRF_TRUSTED_ORIGINS = [o for o in os.getenv(
     'CSRF_TRUSTED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
+).split(',') if o]
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
