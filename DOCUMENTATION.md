@@ -10,14 +10,19 @@
 1. [Project Overview](#project-overview)
 2. [How to Start the App](#how-to-start-the-app)
 3. [Adding New Content (Training the AI)](#adding-new-content-training-the-ai)
-4. [Folder Structure Explained](#folder-structure-explained)
-5. [All Management Commands](#all-management-commands)
-6. [API Endpoints](#api-endpoints)
-7. [AI System Architecture](#ai-system-architecture)
-8. [Frontend Pages](#frontend-pages)
-9. [Database Info](#database-info)
-10. [Current Content Stats](#current-content-stats)
-11. [Troubleshooting](#troubleshooting)
+4. [Adding New Questions to the Question Bank](#adding-new-questions-to-the-question-bank)
+5. [Folder Structure Explained](#folder-structure-explained)
+6. [File-by-File Reference](#file-by-file-reference)
+7. [All Management Commands](#all-management-commands)
+8. [API Endpoints](#api-endpoints)
+9. [AI System Architecture](#ai-system-architecture)
+10. [Frontend Pages](#frontend-pages)
+11. [Token System](#token-system-ai-usage-limits--revenue)
+12. [API Keys & Daily Limits](#api-keys--daily-limits)
+13. [Super Admin Token Management](#super-admin-token-management)
+14. [Database Info](#database-info)
+15. [Current Content Stats](#current-content-stats)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -25,7 +30,7 @@
 
 - **Backend**: Django 5.x + Django REST Framework, SQLite database
 - **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts
-- **AI Models**: Google Gemini 2.0 Flash (primary) + Groq LLama 3.3 70B (fallback)
+- **AI Models**: Google Gemini 2.0 Flash + Groq LLama 3.3 70B + DeepSeek Chat — round-robin load balanced
 - **RAG System**: SQLite-based TF-IDF retrieval — searches through indexed textbooks/notes to give AI grounded, accurate answers
 - **Training Data**: 79 books/sources, 4,972+ chunks in the knowledge base
 
@@ -156,6 +161,44 @@ python manage.py scrape_pyqs
 ```
 This parses markdown files in Medura_Train/ for MCQ-formatted questions.
 
+### Method 5: Django Admin Panel (Manual Entry)
+1. Go to **http://localhost:8000/admin/**
+2. Login with your superuser account
+3. Navigate to **Questions → Questions** → click **Add Question**
+4. Fill in:
+   - **Subject** — select from dropdown (Medicine, Surgery, PSM, OBG, Pediatrics)
+   - **Topic** — select the topic within the subject
+   - **Question text** — the full question stem (supports markdown: `**bold**`, `*italic*`)
+   - **Option A/B/C/D** — the four options
+   - **Correct answer** — `A`, `B`, `C`, or `D`
+   - **Explanation** — detailed explanation shown after answering
+   - **Year** — e.g., 2025. Questions with years show as "PYQ 2025" in the question bank
+   - **Difficulty** — easy / medium / hard
+   - **Mnemonic** — optional memory trick
+   - **Book name / Chapter / Page** — optional textbook reference
+   - **Concept tags** — optionally add tags like "Craniosynostosis", "Neonatology"
+5. Click **Save** — question is immediately visible in the Question Bank page
+
+### Method 6: API (Programmatic)
+```bash
+curl -X POST http://localhost:8000/api/questions/questions/ \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": 1,
+    "topic": 5,
+    "question_text": "Which of the following is the most common cause of...?",
+    "option_a": "Option A text",
+    "option_b": "Option B text",
+    "option_c": "Option C text",
+    "option_d": "Option D text",
+    "correct_answer": "B",
+    "explanation": "B is correct because...",
+    "difficulty": "medium",
+    "year": 2025
+  }'
+```
+
 ---
 
 ## Folder Structure Explained
@@ -217,12 +260,77 @@ crack_cms/
 │
 ├── frontend/                         # Next.js Frontend
 │   └── src/
-│       ├── app/                      # All pages (19 routes)
+│       ├── app/                      # All pages (21 routes)
 │       ├── components/               # Sidebar, shared components
 │       └── lib/                      # API client, auth context
 │
 └── DOCUMENTATION.md                  # ⭐ This file
 ```
+
+---
+
+## File-by-File Reference
+
+### Frontend — Key Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/lib/api.ts` | Centralized Axios API client with all endpoint functions (questions, AI, tests, analytics, auth tokens). JWT auto-attached. |
+| `frontend/src/lib/auth.tsx` | AuthProvider context — login, register, logout, token refresh. Wraps entire app. |
+| `frontend/src/components/Sidebar.tsx` | Navigation sidebar — logo, user card, token balance widget, nav links, theme toggle, settings, logout. Responsive. |
+| `frontend/src/components/ThemeToggle.tsx` | Dark/Light theme toggle button (Midnight Aurora / Crystal Cloud). Uses next-themes. |
+| `frontend/src/components/ThemeProvider.tsx` | Wraps next-themes ThemeProvider for the app. |
+| `frontend/src/app/layout.tsx` | Root layout — HTML wrapper, fonts, ThemeProvider, AuthProvider. |
+| `frontend/src/app/page.tsx` | Landing page — hero section, features, CTA. |
+| `frontend/src/app/login/page.tsx` | Login form with JWT authentication. |
+| `frontend/src/app/register/page.tsx` | Registration form for new users. |
+| `frontend/src/app/dashboard/page.tsx` | Dashboard — stats cards, performance charts, subject progress, recent tests. |
+| `frontend/src/app/questions/page.tsx` | **Question Bank** — filterable question list (left), detail view with AI analysis (right). Helper functions: `FormattedText`, `stripMarkdown`, `cleanOptionText`, `cleanAiText`. |
+| `frontend/src/app/tests/page.tsx` | Test list — create new tests, view past test scores. |
+| `frontend/src/app/tests/[id]/page.tsx` | **Test Session** — timed MCQ test mode + review mode with AI deep analysis. |
+| `frontend/src/app/ai-tutor/page.tsx` | AI Tutor — real-time chat with Gemini/Groq AI. Markdown responses. |
+| `frontend/src/app/generate/page.tsx` | AI Question Generator — generate MCQs by subject/topic/difficulty. |
+| `frontend/src/app/simulator/page.tsx` | CMS exam simulator — simulate real exam conditions. |
+| `frontend/src/app/analytics/page.tsx` | Performance analytics — accuracy trends, subject breakdown, study streaks. |
+| `frontend/src/app/roadmap/page.tsx` | AI-generated study roadmap based on weak topics. |
+| `frontend/src/app/bookmarks/page.tsx` | Bookmarked questions list. |
+| `frontend/src/app/textbooks/page.tsx` | Textbook library — browse indexed textbooks and chapters. |
+| `frontend/src/app/resources/page.tsx` | UPSC resources — exam docs, guides. |
+| `frontend/src/app/upload/page.tsx` | Upload training content to AI knowledge base. |
+| `frontend/src/app/tokens/page.tsx` | **Token Wallet** — balance cards, usage bars, purchase options, transaction history. |
+| `frontend/src/app/trends/page.tsx` | PYQ exam trend analysis. |
+| `frontend/src/app/settings/page.tsx` | User settings & preferences. |
+| `frontend/src/app/globals.css` | All CSS — theme variables, glass-card, sidebar, review options, animations, token widgets. |
+
+### Backend — Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/manage.py` | Django management entry point. |
+| `backend/_train_all.py` | **Master training script** — indexes all textbooks, PYQs, web articles into RAG knowledge base. |
+| `backend/crack_cms/settings.py` | Django settings — installed apps, middleware, database config, JWT config. |
+| `backend/crack_cms/urls.py` | Root URL router — maps `/api/auth/`, `/api/questions/`, `/api/tests/`, `/api/ai/`, etc. |
+| `backend/accounts/models.py` | **User model** (`CustomUser`) + Token models (`TokenBalance`, `TokenConfig`, `TokenTransaction`). |
+| `backend/accounts/views.py` | Auth views — register, login, profile, token balance, token purchase, transaction history. |
+| `backend/accounts/serializers.py` | DRF serializers for user, tokens, transactions. |
+| `backend/accounts/urls.py` | Auth URL patterns — `/register/`, `/login/`, `/tokens/`, etc. |
+| `backend/accounts/admin.py` | Admin panel config for users and token models. |
+| `backend/ai_engine/services.py` | **Core AI Service** — `AIService` class with Gemini/Groq integration, RAG retrieval, prompt engineering, JSON parsing with fallback. |
+| `backend/ai_engine/views.py` | AI API views — tutor, explain, mnemonic, analyze-answer, generate-questions. All consume 1 token. Admin bypass. |
+| `backend/ai_engine/rag_pipeline.py` | **RAG engine** — TF-IDF search across SQLite knowledge chunks. |
+| `backend/ai_engine/sqlite_rag.py` | SQLite-based vector store for RAG chunks. |
+| `backend/ai_engine/document_processor.py` | PDF/Markdown text extraction and chunking for indexing. |
+| `backend/ai_engine/pyq_extractor.py` | Extracts MCQs from PYQ PDF papers using AI. |
+| `backend/ai_engine/auto_ingest.py` | Auto-scan and index new files in Medura_Train/. |
+| `backend/ai_engine/similar_questions.py` | Find similar PYQs based on content similarity. |
+| `backend/questions/models.py` | Question, Subject, Topic, QuestionFeedback models. |
+| `backend/questions/views.py` | Question CRUD, filtering, bookmarks, feedback. |
+| `backend/tests_engine/models.py` | Test, TestResult models (test creation, submission, scoring). |
+| `backend/tests_engine/views.py` | Test API — create, submit, review results. |
+| `backend/analytics/models.py` | DailyActivity, TopicPerformance models. |
+| `backend/analytics/views.py` | Dashboard stats, performance data, study roadmap. |
+| `backend/textbooks/models.py` | Textbook, TextbookChapter models. |
+| `backend/resources/views.py` | UPSC resources, exam guide, document catalog. |
 
 ---
 
@@ -257,6 +365,9 @@ Run these from `backend/` with venv activated:
 | POST | `/api/auth/login/` | Login (returns token) |
 | GET | `/api/auth/profile/` | Get user profile |
 | PUT | `/api/auth/profile/` | Update profile |
+| GET | `/api/auth/tokens/` | Get token balance & limits |
+| POST | `/api/auth/tokens/purchase/` | Purchase tokens |
+| GET | `/api/auth/tokens/history/` | Token transaction history |
 
 ### Questions (`/api/questions/`)
 | Method | Endpoint | Description |
@@ -359,7 +470,7 @@ User Question
 
 ---
 
-## Frontend Pages (19 Routes)
+## Frontend Pages (21 Routes)
 
 | Route | Page | Description |
 |-------|------|-------------|
@@ -380,6 +491,8 @@ User Question
 | `/resources` | Resources | UPSC documents, exam guide |
 | `/upload` | Upload | Upload training content |
 | `/settings` | Settings | Profile, preferences |
+| `/tokens` | AI Tokens | View balance, buy tokens, transaction history |
+| `/trends` | Exam Trends | PYQ trend analysis |
 
 ---
 
@@ -423,6 +536,230 @@ python manage.py createsuperuser
 
 ---
 
+## Token System (AI Usage Limits & Revenue)
+
+### Overview
+Every AI-powered feature (tutor, mnemonics, explain, analyze, generate questions, study plan) costs **1 token** per request. This prevents API cost overrun and creates a revenue stream.
+
+### How It Works
+
+| Feature | Free Tokens | Details |
+|---------|-------------|---------|
+| **Daily Free Tokens** | 10/day | Resets at midnight (auto-detected) |
+| **Weekly Free Tokens** | 50/week | Resets every 7 days |
+| **Purchased Tokens** | Never expire | Used after free tokens are exhausted |
+| **Feedback Credits** | +2 per correct report | Earned by reporting question errors (verified by admin) |
+| **Admin Accounts** | Unlimited | Admins (superusers or `is_staff`) bypass all token limits |
+
+### Token Consumption Priority
+1. **Free daily/weekly tokens** are consumed first
+2. **Feedback credits** are consumed next
+3. **Purchased tokens** are consumed last
+
+### AI Features That Cost Tokens (1 token each)
+- AI Tutor (`/api/ai/tutor/`)
+- Mnemonic Generator (`/api/ai/mnemonic/`)
+- Concept Explainer (`/api/ai/explain/`)
+- Question Analyzer (`/api/ai/analyze/`)
+- Answer Explanation (`/api/ai/explain-answer/`)
+- RAG Answer (`/api/ai/rag-answer/`)
+- Study Plan (`/api/ai/study-plan/`)
+- AI Question Generator (`/api/ai/generate-questions/`)
+
+### Features That Are FREE (no token cost)
+- RAG Search (vector search only, no AI generation)
+- Knowledge Upload/Scan/Stats (admin operations)
+- High-Yield Topics (GET endpoint)
+- All Question Bank browsing, test-taking, analytics
+
+### Configuring Token Limits (Admin Panel)
+
+1. Go to **http://localhost:8000/admin/**
+2. Navigate to **Accounts → Token configs**
+3. Edit the single config record to change:
+   - `free_daily_tokens` — default: 10
+   - `free_weekly_tokens` — default: 50
+   - `token_price` — default: ₹1.00
+   - `feedback_reward` — default: 2 tokens per correct report
+   - `min_purchase` / `max_purchase` — purchase limits
+
+### Making Your Account Admin (Unlimited Tokens)
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python manage.py shell
+```
+```python
+from accounts.models import CustomUser
+u = CustomUser.objects.get(username='your_username')
+u.is_staff = True  # This gives admin token bypass
+u.save()
+```
+Or use `python manage.py createsuperuser` to create an admin account.
+
+### Revenue: Token Purchases
+
+When users buy tokens:
+1. Frontend sends `POST /api/auth/tokens/purchase/` with `{ amount: 50 }`
+2. Backend credits the tokens to the user's balance
+3. A `TokenTransaction` record is created for audit
+
+**TODO**: Integrate Razorpay/Stripe for real payment processing. Currently, the purchase endpoint credits tokens directly (for testing). In production:
+1. Create a Razorpay order on the backend
+2. Frontend opens Razorpay checkout
+3. On success, Razorpay sends `payment_id` to your backend
+4. Backend verifies payment with Razorpay API
+5. Only then credits the tokens
+
+### How Feedback Credits Work
+
+1. User reports a question error (via the Flag button on question pages)
+2. Admin reviews at **http://localhost:8000/admin/** → Question Feedbacks
+3. Admin marks feedback as resolved: `PATCH /api/questions/feedback/{id}/resolve/`
+4. System auto-credits 2 tokens to the reporter
+5. A `TokenTransaction` (type: `feedback_reward`) is created
+
+### Frontend Token Integration
+
+- **Sidebar**: Shows live token balance widget (updates on every page navigation)
+- **Tokens page** (`/tokens`): Full balance view, usage bars, purchase options, transaction history
+- **AI buttons**: "Generate AI Analysis" button appears after answering questions (click-only, not auto)
+- **429 Error Handling**: When tokens are exhausted, a friendly "Buy Tokens" banner appears instead of a generic error
+
+---
+
+## API Keys & Daily Limits
+
+### Configured Providers (Round-Robin Load Balanced)
+
+The AI system rotates across **3 providers** to maximize throughput and prevent any single provider from being exhausted first. Each request goes to the next provider in rotation (Gemini → Groq → DeepSeek → Gemini → ...). If one provider fails, it automatically tries the next.
+
+| Provider | Model | Free Tier Limit | Rate Limit | Cost (Paid) |
+|----------|-------|-----------------|------------|-------------|
+| **Google Gemini** | gemini-2.0-flash, gemini-2.0-flash-lite, gemini-1.5-flash, gemini-1.5-pro | **1,500 requests/day per model** (×4 models = ~6,000/day) | 15 requests/minute | Free tier only |
+| **Groq** | llama-3.3-70b-versatile | **14,400 requests/day** | 30 requests/minute | Free tier only |
+| **DeepSeek** | deepseek-chat | **Unlimited** (pay-as-you-go) | 60 requests/minute | $0.14/M input tokens, $0.28/M output tokens |
+
+### Combined Daily Capacity
+
+| Scenario | Calls/Day | Notes |
+|----------|-----------|-------|
+| All 3 providers healthy | **~20,400** | Gemini 6K + Groq 14.4K + DeepSeek unlimited |
+| Gemini + Groq only | **~20,400** | Both free tier |
+| Gemini only | **~6,000** | 4 models × 1,500 RPD each |
+| DeepSeek only | **Unlimited** | Requires account balance |
+
+### How the Round-Robin Works
+
+```
+Request 1 → Gemini (if fails → Groq → DeepSeek)
+Request 2 → Groq   (if fails → DeepSeek → Gemini)
+Request 3 → DeepSeek (if fails → Gemini → Groq)
+Request 4 → Gemini (cycle repeats)
+```
+
+- Thread-safe: uses `threading.Lock` for the counter
+- Auto-disables a provider if its API key is expired (401) or balance is zero (402)
+- Gemini tries 4 models before giving up (handles per-model 429 rate limits)
+
+### How to Configure API Keys
+
+Edit `backend/.env`:
+```
+GEMINI_API_KEY=AIzaSy...your_key
+GROQ_API_KEY=gsk_...your_key
+DEEPSEEK_API_KEY=sk-...your_key
+```
+
+Get your keys at:
+- **Gemini**: https://aistudio.google.com/apikey
+- **Groq**: https://console.groq.com/keys
+- **DeepSeek**: https://platform.deepseek.com/api_keys
+
+### How Many Students Can We Handle?
+
+Assuming an average student makes 20 AI calls/day:
+
+| Daily Calls/Student | Max Students Supported | Provider Mix |
+|---------------------|----------------------|--------------|
+| 10 | ~2,000 | All 3 free tiers |
+| 20 | ~1,000 | All 3 free tiers |
+| 50 | ~400 | All 3 free tiers |
+| 20 | Unlimited | With DeepSeek balance ($0.14/M tokens) |
+
+---
+
+## Super Admin Token Management
+
+### What Super Admin Can Do
+
+From the **Tokens page** (`/tokens`), admin users see an expanded management panel with 3 tabs:
+
+1. **Overview** — See all users, their token balances, daily/weekly usage, total consumed, and platform-wide stats (tokens in circulation, total API capacity)
+2. **Grant/Revoke** — Give tokens to any user (positive amount) or take tokens away (negative amount)
+3. **Transfer** — Move tokens from one user to another (or create from system if no source user)
+
+### Admin API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/auth/tokens/admin/users/` | All users with balances + platform stats |
+| POST | `/api/auth/tokens/admin/grant/` | Grant or revoke tokens for a user |
+| POST | `/api/auth/tokens/admin/transfer/` | Transfer tokens between users |
+
+### Grant Tokens (Example)
+```json
+POST /api/auth/tokens/admin/grant/
+{
+    "user_id": 5,
+    "amount": 50,
+    "note": "Bonus for active participation"
+}
+```
+
+### Revoke Tokens (Example)
+```json
+POST /api/auth/tokens/admin/grant/
+{
+    "user_id": 5,
+    "amount": -20,
+    "note": "Correcting an over-grant"
+}
+```
+
+### Transfer Tokens Between Users
+```json
+POST /api/auth/tokens/admin/transfer/
+{
+    "from_user_id": 5,
+    "to_user_id": 8,
+    "amount": 20,
+    "note": "Redistributing tokens"
+}
+```
+
+### System Grant (No Source User)
+```json
+POST /api/auth/tokens/admin/transfer/
+{
+    "to_user_id": 8,
+    "amount": 100,
+    "note": "Welcome bonus"
+}
+```
+
+### Token Circulation Dashboard
+
+The admin overview shows platform-wide stats:
+- **Total Users** — how many registered users
+- **Tokens In Circulation** — sum of all available tokens across all users
+- **Total Consumed** — total AI calls made platform-wide
+- **API Calls/Day** — combined daily capacity from all providers (~20,400)
+- Per-user breakdown table with: username, email, available, purchased, credits, daily used, total used
+
+---
+
 ## Troubleshooting
 
 ### "Module not found" errors
@@ -442,7 +779,11 @@ python manage.py migrate
   ```
   GEMINI_API_KEY=your_key_here
   GROQ_API_KEY=your_key_here
+  DEEPSEEK_API_KEY=your_key_here
   ```
+- Verify Groq key isn't expired at https://console.groq.com/keys
+- Verify DeepSeek has balance at https://platform.deepseek.com
+- Gemini free tier resets daily — if exhausted, other providers handle requests
 - Test: Go to http://localhost:3000/ai-tutor and ask a question
 
 ### Knowledge base empty

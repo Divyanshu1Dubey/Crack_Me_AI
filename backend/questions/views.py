@@ -130,13 +130,18 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
 
 class QuestionFeedbackViewSet(viewsets.ModelViewSet):
-    """ViewSet for students to report errors in questions."""
+    """
+    ViewSet for students to report errors in questions.
+    
+    POST /questions/feedback/ — Submit feedback (any authenticated user).
+    PATCH /questions/feedback/{id}/resolve/ — Admin marks feedback as correct & rewards tokens.
+    """
     queryset = QuestionFeedback.objects.all()
     serializer_class = QuestionFeedbackSerializer
 
     def get_permissions(self):
         if self.action == 'create':
-            return [permissions.AllowAny()]  # Allow even guests to report? Or just authenticated?
+            return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
     def perform_create(self, serializer):
@@ -144,3 +149,37 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
             serializer.save(user=self.request.user)
         else:
             serializer.save()
+
+    @action(detail=True, methods=['patch'], url_path='resolve')
+    def resolve(self, request, pk=None):
+        """
+        Admin action: Mark feedback as resolved/correct.
+        If the feedback was from a registered user, reward them with token credits.
+        """
+        feedback = self.get_object()
+        if feedback.is_resolved:
+            return Response({'message': 'Already resolved'}, status=400)
+
+        feedback.is_resolved = True
+        feedback.save(update_fields=['is_resolved'])
+
+        # Reward the reporter with token credits
+        if feedback.user:
+            from accounts.models import TokenBalance, TokenConfig, TokenTransaction
+            balance, _ = TokenBalance.objects.get_or_create(user=feedback.user)
+            config = TokenConfig.get_config()
+            reward = config.feedback_reward
+            balance.add_feedback_credit(reward)
+            TokenTransaction.objects.create(
+                user=feedback.user,
+                transaction_type='feedback_reward',
+                amount=reward,
+                note=f'Reward for accepted feedback #{feedback.id}: {feedback.get_category_display()}',
+            )
+            return Response({
+                'message': f'Feedback resolved. User {feedback.user.username} rewarded {reward} tokens.',
+                'rewarded_user': feedback.user.username,
+                'tokens_rewarded': reward,
+            })
+
+        return Response({'message': 'Feedback resolved (no user to reward).'})

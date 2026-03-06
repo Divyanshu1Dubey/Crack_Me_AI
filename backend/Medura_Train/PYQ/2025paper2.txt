@@ -5,11 +5,11 @@
    * (c) Acrocyanosis
    * (d) Takayasu disease
 2. Which of the following are criteria for cancer screening?
-   * I. Screening test should be sensitive and specific
-   * II. Screening test should be acceptable to the screened population
-   * III. The disease should be an uncommon one for screening to be effective
-   * IV. Disease should be recognisable at an early stage
-   * Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
+    I. Screening test should be sensitive and specific
+    II. Screening test should be acceptable to the screened population
+    III. The disease should be an uncommon one for screening to be effective
+    IV. Disease should be recognisable at an early stage
+    Codes: (a) I, II and III; (b) I, II and IV; (c) I, III and IV; (d) II, III and IV
 3. A 45-year-old lady presents with complaints of fatigue, muscle weakness along with bilateral multiple renal calculi... serum calcium levels of 11.4 mg%. What is the next best investigation required to arrive at a diagnosis?
    * (a) MRI neck
    * (b) Sestamibi scan

@@ -1,5 +1,11 @@
 """
 Enhanced AI Engine API Views with RAG integration.
+
+Token System Integration:
+- Every AI call consumes 1 token (checked via consume_ai_token()).
+- Admins (user.is_admin) bypass token limits entirely.
+- Students get free daily/weekly tokens; after exhaustion, they must buy tokens.
+- Token config is managed via Django Admin > Token Configuration.
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,6 +14,7 @@ from rest_framework import status
 from django.conf import settings as django_settings
 
 from .services import AIService
+from accounts.models import TokenBalance
 
 
 def _get_permission():
@@ -15,6 +22,39 @@ def _get_permission():
     if getattr(django_settings, 'DEBUG', False):
         return [AllowAny()]
     return [IsAuthenticated()]
+
+
+def consume_ai_token(request):
+    """
+    Check and consume 1 AI token for the requesting user.
+    
+    Returns:
+        (True, None) — token consumed successfully, proceed with AI call.
+        (False, Response) — insufficient tokens, return the error response.
+    
+    Admin users bypass token limits entirely.
+    Unauthenticated users in DEBUG mode also bypass.
+    """
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        # In DEBUG mode, unauthenticated requests are allowed
+        if getattr(django_settings, 'DEBUG', False):
+            return True, None
+        return False, Response({'error': 'Authentication required'}, status=401)
+
+    # Admins have unlimited tokens
+    if user.is_admin:
+        return True, None
+
+    balance, _ = TokenBalance.objects.get_or_create(user=user)
+    if balance.consume_token():
+        return True, None
+
+    return False, Response({
+        'error': 'insufficient_tokens',
+        'message': 'You have exhausted your AI tokens. Purchase more tokens to continue.',
+        'available': balance.available_tokens,
+    }, status=429)
 
 
 class AskTutorView(APIView):
@@ -28,6 +68,11 @@ class AskTutorView(APIView):
         context = request.data.get('context', '')
         if not question:
             return Response({'error': 'Question is required'}, status=400)
+
+        # Token check — admins bypass
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         service = AIService()
         response = service.ask_tutor(question, context)
@@ -46,6 +91,10 @@ class GenerateMnemonicView(APIView):
         if not topic:
             return Response({'error': 'Topic is required'}, status=400)
 
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
+
         service = AIService()
         mnemonic = service.generate_mnemonic(topic, concept)
         return Response({'mnemonic': mnemonic})
@@ -62,6 +111,10 @@ class ExplainConceptView(APIView):
         level = request.data.get('level', 'basic')
         if not concept:
             return Response({'error': 'Concept is required'}, status=400)
+
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         service = AIService()
         explanation = service.explain_concept(concept, level)
@@ -81,6 +134,10 @@ class AnalyzeQuestionView(APIView):
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
 
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
+
         service = AIService()
         analysis = service.analyze_question(question_text, options, correct_answer)
         return Response({'analysis': analysis})
@@ -96,6 +153,10 @@ class ExplainAfterAnswerView(APIView):
         question_text = request.data.get('question_text', '')
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
+
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         options = request.data.get('options', {})
         correct_answer = request.data.get('correct_answer', '')
@@ -139,6 +200,10 @@ class RAGAnswerView(APIView):
         if not question:
             return Response({'error': 'Question is required'}, status=400)
 
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
+
         service = AIService()
         result = service.rag_answer(question)
         return Response(result)
@@ -170,6 +235,10 @@ class StudyPlanView(APIView):
         weak_topics = request.data.get('weak_topics', [])
         days_remaining = request.data.get('days_remaining', 60)
         user_analytics = request.data.get('analytics', None)
+
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         service = AIService()
         plan = service.generate_study_plan(weak_topics, days_remaining, user_analytics)
@@ -248,6 +317,10 @@ class GenerateQuestionsView(APIView):
         count = min(int(request.data.get('count', 5)), 20)
         if not subject:
             return Response({'error': 'Subject is required'}, status=400)
+
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         service = AIService()
         questions = service.generate_questions(subject, topic, difficulty, count)

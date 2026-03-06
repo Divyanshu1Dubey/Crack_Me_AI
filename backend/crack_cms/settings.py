@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)  # override=True so .env takes priority over system env vars
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -17,6 +17,7 @@ DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
 
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
@@ -127,6 +128,12 @@ CORS_ALLOWED_ORIGINS = os.getenv(
 ).split(',')
 CORS_ALLOW_CREDENTIALS = True
 
+# CSRF trusted origins (needed for production)
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    'CSRF_TRUSTED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000'
+).split(',')
+
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'
@@ -136,15 +143,13 @@ USE_TZ = True
 # Static & Media
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# AI Configuration
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-483a412014fd4655a85efb8911b5f507')
+# AI Configuration (keys loaded at top of file from .env)
 
 # Training Data & RAG Configuration
 MEDURA_TRAIN_DIR = BASE_DIR / 'Medura_Train'

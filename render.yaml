@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: crackcms-backend
+    runtime: python
+    region: oregon
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.13.0"
