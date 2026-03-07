@@ -25,3 +25,5 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: DISABLE_RAG
+        value: "true"

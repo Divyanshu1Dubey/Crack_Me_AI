@@ -6,6 +6,7 @@ to minimize quota exhaustion on any single API.
 """
 import json
 import logging
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Optional
@@ -113,7 +114,9 @@ class AIService:
 
     @property
     def rag(self):
-        """Lazy-load RAG pipeline."""
+        """Lazy-load RAG pipeline. Disabled on production free tier (causes OOM)."""
+        if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
+            return None
         if self._rag is None:
             try:
                 from ai_engine.rag_pipeline import RAGPipeline
