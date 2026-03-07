@@ -685,6 +685,7 @@ body {
 }
 
 /* Light theme overrides */
+html[data-theme="light"],
 [data-theme="light"] {
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;

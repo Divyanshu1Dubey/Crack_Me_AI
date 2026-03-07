@@ -33,6 +33,7 @@ const navItems = [
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
     { href: '/tokens', icon: Coins, label: 'AI Tokens' },
+    { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 interface TokenInfo {
@@ -150,15 +151,11 @@ export default function Sidebar() {
                     })}
                 </nav>
 
-                {/* Bottom section — theme, settings, logout */}
+                {/* Bottom section — theme toggle and logout */}
                 <div className="mt-auto px-4 pb-4 space-y-2 border-t pt-3" style={{ borderColor: 'var(--glass-border)' }}>
                     <div className="px-2">
                         <ThemeToggle />
                     </div>
-                    <Link href="/settings" className={`sidebar-link ${pathname === '/settings' ? 'active' : ''}`}>
-                        <Settings className="w-5 h-5" />
-                        <span className="text-sm">Settings</span>
-                    </Link>
                     <button onClick={handleLogout} className="sidebar-link w-full" style={{ color: '#ef4444' }}>
                         <LogOut className="w-5 h-5" />
                         <span className="text-sm">Logout</span>

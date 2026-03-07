@@ -24,4 +24,7 @@ urlpatterns = [
     path('knowledge/upload/', views.KnowledgeUploadView.as_view(), name='ai-knowledge-upload'),
     path('knowledge/scan/', views.KnowledgeScanView.as_view(), name='ai-knowledge-scan'),
     path('knowledge/stats/', views.KnowledgeStatsView.as_view(), name='ai-knowledge-stats'),
+
+    # Debug / status
+    path('status/', views.AIStatusView.as_view(), name='ai-status'),
 ]

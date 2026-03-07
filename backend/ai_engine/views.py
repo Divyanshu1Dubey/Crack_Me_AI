@@ -7,6 +7,8 @@ Token System Integration:
 - Students get free daily/weekly tokens; after exhaustion, they must buy tokens.
 - Token config is managed via Django Admin > Token Configuration.
 """
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -15,6 +17,8 @@ from django.conf import settings as django_settings
 
 from .services import AIService
 from accounts.models import TokenBalance
+
+logger = logging.getLogger(__name__)
 
 
 def _get_permission():
@@ -373,3 +377,29 @@ class PageScreenshotView(APIView):
                             logger.error(f"Screenshot extraction failed: {e}")
 
         return Response({'error': 'No screenshot available'}, status=404)
+
+
+class AIStatusView(APIView):
+    """Check which AI providers are initialized (for debugging production issues)."""
+
+    def get_permissions(self):
+        return _get_permission()
+
+    def get(self, request):
+        service = AIService()
+        providers = {
+            'gemini': service.gemini_client is not None,
+            'groq': service.groq is not None,
+            'deepseek': service.deepseek is not None,
+        }
+        keys_present = {
+            'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
+            'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
+            'DEEPSEEK_API_KEY': bool(getattr(django_settings, 'DEEPSEEK_API_KEY', '')),
+        }
+        logger.info(f"AI Status check — providers: {providers}, keys_present: {keys_present}")
+        return Response({
+            'providers_initialized': providers,
+            'keys_present': keys_present,
+            'any_available': any(providers.values()),
+        })
