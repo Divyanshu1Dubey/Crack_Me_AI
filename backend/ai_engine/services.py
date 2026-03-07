@@ -27,10 +27,8 @@ logger = logging.getLogger(__name__)
 #
 # Combined theoretical max: ~20,000 API calls/day
 
-# Gemini models (each has separate quota on free tier)
+# Gemini models — only 2 to keep total timeout reasonable on free tier
 GEMINI_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
 ]
@@ -127,7 +125,7 @@ class AIService:
     # ─── PROVIDER CALL METHODS ─────────────────────────────
 
     def _call_gemini(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Try all Gemini models (each has separate free-tier quota)."""
+        """Try Gemini models with 15s timeout per model."""
         if not self.gemini_client:
             return None
         from google.genai import types
@@ -135,25 +133,23 @@ class AIService:
         for model_name in GEMINI_MODELS:
             try:
                 config_kwargs = {"temperature": temperature, "max_output_tokens": max_tokens}
-                if '2.5' in model_name:
-                    config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
 
-                def _gemini_call():
+                def _gemini_call(mn=model_name, ck=config_kwargs):
                     return self.gemini_client.models.generate_content(
-                        model=model_name,
+                        model=mn,
                         contents=full_prompt,
-                        config=types.GenerateContentConfig(**config_kwargs),
+                        config=types.GenerateContentConfig(**ck),
                     )
 
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(_gemini_call)
-                    response = future.result(timeout=30)
+                    response = future.result(timeout=15)
 
                 if response and response.text:
-                    logger.info(f"Gemini [{model_name}] ✓")
+                    logger.info(f"Gemini [{model_name}] OK")
                     return response.text
             except FuturesTimeout:
-                logger.warning(f"Gemini [{model_name}] timed out (30s), trying next...")
+                logger.warning(f"Gemini [{model_name}] timed out (15s), trying next...")
                 continue
             except Exception as e:
                 err = str(e)
@@ -178,11 +174,11 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=25.0
+                timeout=15.0
             )
             text = response.choices[0].message.content
             if text:
-                logger.info("Groq ✓")
+                logger.info("Groq OK")
                 return text
         except Exception as e:
             err = str(e)
@@ -209,11 +205,11 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=25.0
+                timeout=15.0
             )
             text = response.choices[0].message.content
             if text:
-                logger.info("DeepSeek ✓")
+                logger.info("DeepSeek OK")
                 return text
         except Exception as e:
             err = str(e)
@@ -231,32 +227,40 @@ class AIService:
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
         """
-        Call AI with round-robin load balancing across Gemini→Groq→DeepSeek.
-        Each request starts from a different provider to distribute load evenly.
-        On failure, rotates through remaining providers.
+        Call AI with round-robin load balancing. Groq first (fastest),
+        then Gemini, then DeepSeek. Total capped at 45s.
         """
+        import time
         global _call_counter
         providers = [
-            ('gemini', self._call_gemini),
             ('groq', self._call_groq),
+            ('gemini', self._call_gemini),
             ('deepseek', self._call_deepseek),
         ]
 
-        # Get round-robin start index (thread-safe)
         with _counter_lock:
             start = _call_counter % len(providers)
             _call_counter += 1
 
-        # Try each provider starting from the round-robin position
+        deadline = time.time() + 45
+
         for i in range(len(providers)):
+            if time.time() >= deadline:
+                logger.warning("AI call hit 45s deadline, aborting remaining providers")
+                break
             idx = (start + i) % len(providers)
             name, call_fn = providers[idx]
-            logger.info(f"Round-robin → trying {name} (slot {_call_counter})")
-            result = call_fn(prompt, system, temperature, max_tokens)
-            if result:
-                return result
+            remaining = deadline - time.time()
+            logger.info(f"Trying {name} (slot {_call_counter}, {remaining:.0f}s left)")
+            try:
+                result = call_fn(prompt, system, temperature, max_tokens)
+                if result:
+                    return result
+            except Exception as e:
+                logger.warning(f"{name} unexpected error: {e}")
+                continue
 
-        return "⚠️ All AI services are temporarily unavailable. Possible causes:\n- Gemini: Free tier quota exhausted (resets daily)\n- Groq: API key expired — create a new one at console.groq.com/keys\n- DeepSeek: Balance depleted — top up at platform.deepseek.com\n\nPlease try again later or contact the admin."
+        return "All AI services are temporarily unavailable. Please try again in a moment."
 
     # ─── CORE AI ENDPOINTS ───────────────────────────────
 
