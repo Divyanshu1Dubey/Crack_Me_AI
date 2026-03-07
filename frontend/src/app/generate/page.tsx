@@ -78,8 +78,10 @@ export default function GeneratePage() {
         } catch (err: any) {
             if (err?.response?.status === 429) {
                 setQuestions([{ question_text: 'AI Tokens Exhausted — Your daily/weekly tokens are used up. Visit /tokens to buy more.', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
+            } else {
+                const msg = err?.response?.data?.error || err?.message || 'AI service unavailable';
+                setQuestions([{ question_text: `⚠️ ${msg}. Please try again.`, option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
             }
-            // Error handling
         }
         setGenerating(false);
     };
@@ -101,7 +103,10 @@ export default function GeneratePage() {
                 topic: q.topic || '',
             }).then(res => {
                 setAiExplanations(prev => ({ ...prev, [qIdx]: res.data }));
-            }).catch(() => {}).finally(() => {
+            }).catch((err) => {
+                const errMsg = err?.response?.data?.error || 'AI unavailable';
+                setAiExplanations(prev => ({ ...prev, [qIdx]: { why_correct: errMsg, error: true } }));
+            }).finally(() => {
                 setAiLoadingIdx(null);
             });
         }

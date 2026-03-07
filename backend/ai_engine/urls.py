@@ -27,4 +27,5 @@ urlpatterns = [
 
     # Debug / status
     path('status/', views.AIStatusView.as_view(), name='ai-status'),
+    path('test/', views.AITestView.as_view(), name='ai-test'),
 ]

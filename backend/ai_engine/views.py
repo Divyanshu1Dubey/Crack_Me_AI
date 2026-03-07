@@ -434,17 +434,19 @@ class PageScreenshotView(APIView):
 
 class AIStatusView(APIView):
     """Check which AI providers are initialized (for debugging production issues)."""
-
-    def get_permissions(self):
-        return _get_permission()
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        service = AIService()
-        providers = {
-            'gemini': service.gemini_client is not None,
-            'groq': service.groq is not None,
-            'deepseek': service.deepseek is not None,
-        }
+        try:
+            service = AIService()
+            providers = {
+                'gemini': service.gemini_client is not None,
+                'groq': service.groq is not None,
+                'deepseek': service.deepseek is not None,
+            }
+        except Exception as e:
+            logger.error(f"AIService init failed: {e}")
+            providers = {'error': str(e)}
         keys_present = {
             'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
             'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
@@ -454,5 +456,19 @@ class AIStatusView(APIView):
         return Response({
             'providers_initialized': providers,
             'keys_present': keys_present,
-            'any_available': any(providers.values()),
+            'any_available': any(v is True for v in providers.values()) if isinstance(list(providers.values())[0], bool) else False,
         })
+
+
+class AITestView(APIView):
+    """Quick AI ping — tests if any provider can respond (AllowAny for debugging)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            service = AIService()
+            result = service._call_ai("Reply with exactly: OK", system="You are a test bot. Reply with one word only.", temperature=0, max_tokens=10)
+            return Response({'status': 'ok', 'response': result[:100]})
+        except Exception as e:
+            logger.error(f"AI test failed: {e}")
+            return Response({'status': 'error', 'error': str(e)}, status=500)

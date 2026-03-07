@@ -122,6 +122,7 @@ function QuestionsContent() {
     const [aiExplanation, setAiExplanation] = useState<any>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [tokenError, setTokenError] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
@@ -187,6 +188,7 @@ function QuestionsContent() {
         setAiExplanation(null);
         setAiLoading(false);
         setTokenError(false);
+        setAiError(null);
         Promise.all([
             questionsAPI.get(id),
             questionsAPI.getSimilar(id)
@@ -216,6 +218,7 @@ function QuestionsContent() {
         setAiLoading(true);
         setAiExplanation(null);
         setTokenError(false);
+        setAiError(null);
         aiAPI.explainAfterAnswer({
             question_text: d.question_text,
             options: {
@@ -233,6 +236,8 @@ function QuestionsContent() {
         }).catch((err) => {
             if (err?.response?.status === 429) {
                 setTokenError(true);
+            } else {
+                setAiError(err?.response?.data?.error || 'AI service unavailable. Please try again.');
             }
             setAiExplanation(null);
         }).finally(() => {
@@ -509,6 +514,22 @@ function QuestionsContent() {
                                                         <a href="/tokens" className="btn-primary text-xs mt-3 inline-flex">
                                                             <Zap className="w-3 h-3" /> Buy Tokens
                                                         </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* AI Error */}
+                                        {aiError && !tokenError && (
+                                            <div className="glass-card p-4 mt-3" style={{ borderColor: 'rgba(239,68,68,0.3)' }}>
+                                                <div className="flex items-start gap-3">
+                                                    <Brain className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
+                                                    <div>
+                                                        <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>AI Temporarily Unavailable</h5>
+                                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError}</p>
+                                                        <button onClick={fetchAiExplanation} className="text-xs mt-2 font-bold" style={{ color: 'var(--accent-primary)' }}>
+                                                            Retry
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>

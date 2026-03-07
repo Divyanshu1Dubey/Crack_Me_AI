@@ -118,12 +118,14 @@ export const analyticsAPI = {
 };
 
 
-// AI API
+// AI API — 60s timeout for AI calls (Render free tier cold starts + LLM latency)
+const AI_TIMEOUT = 60000;
+
 export const aiAPI = {
-  askTutor: (data: { question: string; context?: string }) => api.post('/ai/tutor/', data),
-  generateMnemonic: (data: { topic: string; concept?: string }) => api.post('/ai/mnemonic/', data),
-  explain: (data: { concept: string; level?: string }) => api.post('/ai/explain/', data),
-  analyzeQuestion: (data: Record<string, string>) => api.post('/ai/analyze/', data),
+  askTutor: (data: { question: string; context?: string }) => api.post('/ai/tutor/', data, { timeout: AI_TIMEOUT }),
+  generateMnemonic: (data: { topic: string; concept?: string }) => api.post('/ai/mnemonic/', data, { timeout: AI_TIMEOUT }),
+  explain: (data: { concept: string; level?: string }) => api.post('/ai/explain/', data, { timeout: AI_TIMEOUT }),
+  analyzeQuestion: (data: Record<string, string>) => api.post('/ai/analyze/', data, { timeout: AI_TIMEOUT }),
   explainAfterAnswer: (data: {
     question_text: string;
     options?: Record<string, string>;
@@ -131,14 +133,14 @@ export const aiAPI = {
     selected_answer?: string;
     subject?: string;
     topic?: string;
-  }) => api.post('/ai/explain-answer/', data),
+  }) => api.post('/ai/explain-answer/', data, { timeout: AI_TIMEOUT }),
   // RAG endpoints
-  ragSearch: (data: { query: string; book?: string; n_results?: number }) => api.post('/ai/rag-search/', data),
-  ragAnswer: (data: { question: string }) => api.post('/ai/rag-answer/', data),
-  textbookReference: (data: { question_text: string }) => api.post('/ai/textbook-reference/', data),
+  ragSearch: (data: { query: string; book?: string; n_results?: number }) => api.post('/ai/rag-search/', data, { timeout: AI_TIMEOUT }),
+  ragAnswer: (data: { question: string }) => api.post('/ai/rag-answer/', data, { timeout: AI_TIMEOUT }),
+  textbookReference: (data: { question_text: string }) => api.post('/ai/textbook-reference/', data, { timeout: AI_TIMEOUT }),
   getScreenshot: (questionId: number) => api.get(`/ai/screenshot/${questionId}/`),
   // Study planning
-  getStudyPlan: (data: { weak_topics?: string[]; days_remaining?: number }) => api.post('/ai/study-plan/', data),
+  getStudyPlan: (data: { weak_topics?: string[]; days_remaining?: number }) => api.post('/ai/study-plan/', data, { timeout: AI_TIMEOUT }),
   getHighYieldTopics: () => api.get('/ai/high-yield/'),
   // Knowledge base management (auto-ingest)
   uploadKnowledge: (file: File, bookName?: string) => {
@@ -150,7 +152,7 @@ export const aiAPI = {
   scanKnowledge: () => api.post('/ai/knowledge/scan/'),
   getKnowledgeStats: () => api.get('/ai/knowledge/stats/'),
   generateQuestions: (data: { subject: string; topic?: string; difficulty?: string; count?: number }) =>
-    api.post('/ai/generate-questions/', data),
+    api.post('/ai/generate-questions/', data, { timeout: AI_TIMEOUT }),
 };
 
 // Textbooks API

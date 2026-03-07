@@ -84,7 +84,7 @@ export default function Sidebar() {
 
             <div className={`sidebar ${open ? 'open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
                 {/* Logo */}
-                <div className="flex items-center gap-3 px-6 mb-8">
+                <div className="flex items-center gap-3 px-6 mb-4">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--gradient-primary)' }}>
                         <Zap className="w-6 h-6 text-white" />
                     </div>
@@ -92,7 +92,7 @@ export default function Sidebar() {
                 </div>
 
                 {/* User */}
-                <div className="px-6 mb-6">
+                <div className="px-6 mb-3">
                     <div className="glass-card p-3">
                         <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: 'var(--gradient-primary)' }}>
@@ -108,7 +108,7 @@ export default function Sidebar() {
 
                 {/* Token Balance Widget */}
                 {tokenInfo && (
-                    <div className="px-6 mb-4">
+                    <div className="px-6 mb-2">
                         <Link href="/tokens" className="block">
                             <div className="token-balance-widget">
                                 <div className="flex items-center justify-between">
@@ -139,7 +139,7 @@ export default function Sidebar() {
                 )}
 
                 {/* Nav Links */}
-                <nav className="space-y-1 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+                <nav className="space-y-1 overflow-y-auto flex-1 min-h-0">
                     {navItems.map((item) => {
                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                         return (
@@ -151,12 +151,12 @@ export default function Sidebar() {
                     })}
                 </nav>
 
-                {/* Bottom section — theme toggle and logout */}
-                <div className="mt-auto px-4 pb-4 space-y-2 border-t pt-3" style={{ borderColor: 'var(--glass-border)' }}>
-                    <div className="px-2">
+                {/* Bottom — theme + logout */}
+                <div className="mt-auto px-4 pb-3 pt-2 border-t" style={{ borderColor: 'var(--glass-border)' }}>
+                    <div className="px-2 mb-2">
                         <ThemeToggle />
                     </div>
-                    <button onClick={handleLogout} className="sidebar-link w-full" style={{ color: '#ef4444' }}>
+                    <button onClick={handleLogout} className="sidebar-link w-full" style={{ color: '#ef4444', padding: '8px 24px' }}>
                         <LogOut className="w-5 h-5" />
                         <span className="text-sm">Logout</span>
                     </button>
