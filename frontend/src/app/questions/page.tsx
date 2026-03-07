@@ -212,7 +212,7 @@ function QuestionsContent() {
      * Fetches AI explanation for the currently viewed question.
      * Called only when user clicks the "Generate AI Analysis" button.
      */
-    const fetchAiExplanation = (retryCount = 0) => {
+    const fetchAiExplanation = (retryCount: number = 0) => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
         setAiLoading(true);
@@ -494,7 +494,7 @@ function QuestionsContent() {
 
                                         {/* Generate AI Analysis button — only shown after answer, before AI loads */}
                                         {showAnswer && !aiExplanation && !aiLoading && !tokenError && (
-                                            <button onClick={fetchAiExplanation}
+                                            <button onClick={() => fetchAiExplanation()}
                                                 className="w-full glass-card p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:scale-[1.01] group mt-3"
                                                 style={{ background: 'rgba(6,182,212,0.04)' }}>
                                                 <Brain className="w-6 h-6 group-hover:animate-pulse" style={{ color: 'var(--accent-primary)' }} />
@@ -531,7 +531,7 @@ function QuestionsContent() {
                                                     <div>
                                                         <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>AI Temporarily Unavailable</h5>
                                                         <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError}</p>
-                                                        <button onClick={fetchAiExplanation} className="text-xs mt-2 font-bold" style={{ color: 'var(--accent-primary)' }}>
+                                                        <button onClick={() => fetchAiExplanation()} className="text-xs mt-2 font-bold" style={{ color: 'var(--accent-primary)' }}>
                                                             Retry
                                                         </button>
                                                     </div>
