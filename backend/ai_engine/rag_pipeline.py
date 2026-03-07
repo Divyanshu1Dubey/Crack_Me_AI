@@ -30,8 +30,13 @@ class RAGPipeline:
     """
 
     COLLECTION_NAME = "crackcms_textbooks"
+    # Max chunks to score per query (prevents OOM on low-memory hosts)
+    MAX_SEARCH_CHUNKS = 2000
 
     def __init__(self):
+        # Abort early on memory-constrained environments
+        if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
+            raise RuntimeError("RAG disabled via DISABLE_RAG env var")
         self._gemini = None
         self._groq = None
         self._db_path = None
@@ -249,14 +254,18 @@ class RAGPipeline:
             )
 
         import heapq
-        top_results = []  # min-heap of (score, counter, dict) — counter breaks ties
+        top_results = []  # min-heap of (score, counter, dict) -- counter breaks ties
         counter = 0
         batch_size = 500
+        chunks_scanned = 0
         while True:
             rows = cursor.fetchmany(batch_size)
             if not rows:
                 break
             for row_id, doc, book, page, source_file, tokens_json in rows:
+                chunks_scanned += 1
+                if chunks_scanned > self.MAX_SEARCH_CHUNKS:
+                    break
                 score = self._tfidf_score(query_tokens, tokens_json)
                 if score > 0:
                     result_dict = {
@@ -272,6 +281,8 @@ class RAGPipeline:
                         heapq.heappush(top_results, item)
                     elif score > top_results[0][0]:
                         heapq.heapreplace(top_results, item)
+            if chunks_scanned > self.MAX_SEARCH_CHUNKS:
+                break
 
         results = [item[2] for item in sorted(top_results, key=lambda x: -x[0])]
         return results

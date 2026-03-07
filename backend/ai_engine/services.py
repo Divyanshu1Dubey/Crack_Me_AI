@@ -396,10 +396,13 @@ Provide:
         """Search textbooks using RAG."""
         if not self.rag:
             return {"results": [], "error": "RAG pipeline not initialized"}
-
-        results = self.rag.search(query, n_results=n_results,
-                                  book_filter=book_filter if book_filter else None)
-        return {"results": results}
+        try:
+            results = self.rag.search(query, n_results=n_results,
+                                      book_filter=book_filter if book_filter else None)
+            return {"results": results}
+        except Exception as e:
+            logger.warning(f"RAG search failed: {e}")
+            return {"results": [], "error": "RAG search failed"}
 
     def rag_answer(self, question: str) -> dict:
         """Get a RAG-grounded answer with citations."""
@@ -408,13 +411,21 @@ Provide:
                 "answer": "RAG pipeline not initialized. Run: python manage.py index_textbooks",
                 "citations": [],
             }
-        return self.rag.rag_answer(question)
+        try:
+            return self.rag.rag_answer(question)
+        except Exception as e:
+            logger.warning(f"RAG answer failed: {e}")
+            return {"answer": "RAG search temporarily unavailable.", "citations": []}
 
     def find_textbook_reference(self, question_text: str) -> list:
         """Find where a topic is discussed in standard textbooks."""
         if not self.rag:
             return []
-        return self.rag.find_textbook_reference(question_text)
+        try:
+            return self.rag.find_textbook_reference(question_text)
+        except Exception as e:
+            logger.warning(f"RAG textbook reference lookup failed: {e}")
+            return []
 
     # ─── STUDY PLANNER ───────────────────────────────────
 
