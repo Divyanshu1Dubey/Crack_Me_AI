@@ -212,7 +212,7 @@ function QuestionsContent() {
      * Fetches AI explanation for the currently viewed question.
      * Called only when user clicks the "Generate AI Analysis" button.
      */
-    const fetchAiExplanation = () => {
+    const fetchAiExplanation = (retryCount = 0) => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
         setAiLoading(true);
@@ -233,15 +233,19 @@ function QuestionsContent() {
             topic: d.topic_name || '',
         }).then(res => {
             setAiExplanation(res.data);
+            setAiLoading(false);
         }).catch((err) => {
             if (err?.response?.status === 429) {
                 setTokenError(true);
+                setAiLoading(false);
+            } else if (retryCount < 1 && !err?.response?.status) {
+                // Network/timeout error — auto-retry once
+                setTimeout(() => fetchAiExplanation(retryCount + 1), 2000);
             } else {
                 setAiError(err?.response?.data?.error || 'AI service unavailable. Please try again.');
+                setAiExplanation(null);
+                setAiLoading(false);
             }
-            setAiExplanation(null);
-        }).finally(() => {
-            setAiLoading(false);
         });
     };
 

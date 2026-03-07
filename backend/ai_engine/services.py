@@ -114,7 +114,10 @@ class AIService:
 
     @property
     def rag(self):
-        """Lazy-load RAG pipeline. Disabled on production free tier (causes OOM)."""
+        """Lazy-load RAG pipeline. Disabled in production (causes OOM on free tier)."""
+        # Disable RAG in production unless explicitly enabled
+        if not getattr(settings, 'DEBUG', False):
+            return None
         if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
             return None
         if self._rag is None:

@@ -118,8 +118,8 @@ export const analyticsAPI = {
 };
 
 
-// AI API — 60s timeout for AI calls (Render free tier cold starts + LLM latency)
-const AI_TIMEOUT = 60000;
+// AI API — 120s timeout for AI calls (Render free tier cold starts + LLM latency)
+const AI_TIMEOUT = 120000;
 
 export const aiAPI = {
   askTutor: (data: { question: string; context?: string }) => api.post('/ai/tutor/', data, { timeout: AI_TIMEOUT }),
