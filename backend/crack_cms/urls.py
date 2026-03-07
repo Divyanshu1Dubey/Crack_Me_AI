@@ -8,8 +8,16 @@ from django.http import JsonResponse
 def health_check(request):
     return JsonResponse({"status": "ok"})
 
+def api_root(request):
+    return JsonResponse({
+        "status": "ok",
+        "service": "CrackCMS API",
+        "endpoints": ["/api/auth/", "/api/questions/", "/api/tests/", "/api/ai/", "/api/analytics/"]
+    })
+
 urlpatterns = [
     path('', health_check, name='health-check'),
+    path('api/', api_root, name='api-root'),
     path('api/health/', health_check, name='health'),
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),

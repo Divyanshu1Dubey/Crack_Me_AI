@@ -5,7 +5,7 @@ services:
     region: oregon
     rootDir: backend
     buildCommand: "./build.sh"
-    startCommand: "gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 --preload --log-level info --access-logfile - --error-logfile -"
+    startCommand: "gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 --log-level info --access-logfile - --error-logfile -"
     envVars:
       - key: DJANGO_SECRET_KEY
         generateValue: true

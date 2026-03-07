@@ -61,6 +61,19 @@ def consume_ai_token(request):
     }, status=429)
 
 
+def refund_ai_token(request):
+    """Refund 1 AI token if the AI call fails after token was consumed."""
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated or user.is_admin:
+        return
+    try:
+        balance = TokenBalance.objects.get(user=user)
+        balance.refund_token()
+        logger.info(f"Refunded 1 AI token for user {user.username}")
+    except TokenBalance.DoesNotExist:
+        pass
+
+
 class AskTutorView(APIView):
     """AI Tutor — RAG-grounded medical Q&A."""
 
@@ -78,9 +91,14 @@ class AskTutorView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        response = service.ask_tutor(question, context)
-        return Response({'response': response})
+        try:
+            service = AIService()
+            response = service.ask_tutor(question, context)
+            return Response({'response': response})
+        except Exception as e:
+            logger.error(f"AskTutor failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class GenerateMnemonicView(APIView):
@@ -99,9 +117,14 @@ class GenerateMnemonicView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        mnemonic = service.generate_mnemonic(topic, concept)
-        return Response({'mnemonic': mnemonic})
+        try:
+            service = AIService()
+            mnemonic = service.generate_mnemonic(topic, concept)
+            return Response({'mnemonic': mnemonic})
+        except Exception as e:
+            logger.error(f"GenerateMnemonic failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class ExplainConceptView(APIView):
@@ -120,9 +143,14 @@ class ExplainConceptView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        explanation = service.explain_concept(concept, level)
-        return Response({'explanation': explanation})
+        try:
+            service = AIService()
+            explanation = service.explain_concept(concept, level)
+            return Response({'explanation': explanation})
+        except Exception as e:
+            logger.error(f"ExplainConcept failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class AnalyzeQuestionView(APIView):
@@ -142,9 +170,14 @@ class AnalyzeQuestionView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        analysis = service.analyze_question(question_text, options, correct_answer)
-        return Response({'analysis': analysis})
+        try:
+            service = AIService()
+            analysis = service.analyze_question(question_text, options, correct_answer)
+            return Response({'analysis': analysis})
+        except Exception as e:
+            logger.error(f"AnalyzeQuestion failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class ExplainAfterAnswerView(APIView):
@@ -168,11 +201,16 @@ class ExplainAfterAnswerView(APIView):
         subject = request.data.get('subject', '')
         topic = request.data.get('topic', '')
 
-        service = AIService()
-        result = service.explain_after_answer(
-            question_text, options, correct_answer, selected_answer, subject, topic
-        )
-        return Response(result)
+        try:
+            service = AIService()
+            result = service.explain_after_answer(
+                question_text, options, correct_answer, selected_answer, subject, topic
+            )
+            return Response(result)
+        except Exception as e:
+            logger.error(f"ExplainAfterAnswer failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class RAGSearchView(APIView):
@@ -208,9 +246,14 @@ class RAGAnswerView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        result = service.rag_answer(question)
-        return Response(result)
+        try:
+            service = AIService()
+            result = service.rag_answer(question)
+            return Response(result)
+        except Exception as e:
+            logger.error(f"RAGAnswer failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class TextbookReferenceView(APIView):
@@ -244,9 +287,14 @@ class StudyPlanView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        plan = service.generate_study_plan(weak_topics, days_remaining, user_analytics)
-        return Response({'study_plan': plan})
+        try:
+            service = AIService()
+            plan = service.generate_study_plan(weak_topics, days_remaining, user_analytics)
+            return Response({'study_plan': plan})
+        except Exception as e:
+            logger.error(f"StudyPlan failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class HighYieldTopicsView(APIView):
@@ -326,9 +374,14 @@ class GenerateQuestionsView(APIView):
         if not ok:
             return err
 
-        service = AIService()
-        questions = service.generate_questions(subject, topic, difficulty, count)
-        return Response({'questions': questions, 'count': len(questions)})
+        try:
+            service = AIService()
+            questions = service.generate_questions(subject, topic, difficulty, count)
+            return Response({'questions': questions, 'count': len(questions)})
+        except Exception as e:
+            logger.error(f"GenerateQuestions failed: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
 class PageScreenshotView(APIView):

@@ -20,7 +20,7 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
 
 
-ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -122,17 +122,17 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOWED_ORIGINS = [o for o in os.getenv(
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:3000'
-).split(',') if o]
+).split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF trusted origins (needed for production)
-CSRF_TRUSTED_ORIGINS = [o for o in os.getenv(
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
     'CSRF_TRUSTED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:3000'
-).split(',') if o]
+).split(',') if o.strip()]
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
@@ -143,7 +143,11 @@ USE_TZ = True
 # Static & Media
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 

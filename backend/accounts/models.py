@@ -135,6 +135,23 @@ class TokenBalance(models.Model):
         self.purchased_tokens += amount
         self.save(update_fields=['purchased_tokens'])
 
+    def refund_token(self):
+        """Refund 1 token (used when AI call fails after token was consumed)."""
+        if self.total_tokens_used > 0:
+            self.total_tokens_used -= 1
+        # Refund in reverse priority: daily/weekly first, then feedback, then purchased
+        config = TokenConfig.get_config()
+        if self.daily_tokens_used > 0 and self.weekly_tokens_used > 0:
+            self.daily_tokens_used -= 1
+            self.weekly_tokens_used -= 1
+            self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
+        elif self.feedback_credits >= 0:
+            self.feedback_credits += 1
+            self.save(update_fields=['feedback_credits', 'total_tokens_used'])
+        else:
+            self.purchased_tokens += 1
+            self.save(update_fields=['purchased_tokens', 'total_tokens_used'])
+
     def add_feedback_credit(self, amount=2):
         """Reward user for accepted feedback (default: +2 tokens)."""
         self.feedback_credits += amount
