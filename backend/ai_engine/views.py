@@ -434,6 +434,7 @@ class PageScreenshotView(APIView):
 
 class AIStatusView(APIView):
     """Check which AI providers are initialized (for debugging production issues)."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -462,6 +463,7 @@ class AIStatusView(APIView):
 
 class AITestView(APIView):
     """Quick AI ping — tests if any provider can respond (AllowAny for debugging)."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):

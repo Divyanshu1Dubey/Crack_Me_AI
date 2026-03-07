@@ -7,6 +7,7 @@ to minimize quota exhaustion on any single API.
 import json
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Optional
 
 from django.conf import settings
@@ -136,14 +137,24 @@ class AIService:
                 config_kwargs = {"temperature": temperature, "max_output_tokens": max_tokens}
                 if '2.5' in model_name:
                     config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-                response = self.gemini_client.models.generate_content(
-                    model=model_name,
-                    contents=full_prompt,
-                    config=types.GenerateContentConfig(**config_kwargs),
-                )
+
+                def _gemini_call():
+                    return self.gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=full_prompt,
+                        config=types.GenerateContentConfig(**config_kwargs),
+                    )
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_gemini_call)
+                    response = future.result(timeout=30)
+
                 if response and response.text:
                     logger.info(f"Gemini [{model_name}] ✓")
                     return response.text
+            except FuturesTimeout:
+                logger.warning(f"Gemini [{model_name}] timed out (30s), trying next...")
+                continue
             except Exception as e:
                 err = str(e)
                 if '429' in err or 'RESOURCE_EXHAUSTED' in err:
