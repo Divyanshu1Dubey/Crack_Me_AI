@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { analyticsAPI } from '@/lib/api';
-import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2 } from 'lucide-react';
+import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download } from 'lucide-react';
 
 interface FeedbackItem {
     id: number;
@@ -88,6 +88,20 @@ export default function FeedbackPage() {
         analyticsAPI.deleteFeedback(id).then(() => loadFeedback()).catch(() => {});
     };
 
+    const downloadCSV = (type: string) => {
+        analyticsAPI.exportCSV(type)
+            .then(res => {
+                const blob = new Blob([res.data], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `crackcms_${type}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(() => {});
+    };
+
     return (
         <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
             <Sidebar />
@@ -99,6 +113,29 @@ export default function FeedbackPage() {
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                     {isAdmin ? 'View and reply to all student feedback' : 'Help us improve CrackCMS — your feedback matters!'}
                 </p>
+
+                {/* Admin Download Buttons */}
+                {isAdmin && (
+                    <div className="glass-card p-4 mb-6">
+                        <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                            <Download className="w-4 h-4" /> Download Data as CSV
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { type: 'users', label: 'Users' },
+                                { type: 'tokens', label: 'Token Balances' },
+                                { type: 'transactions', label: 'Transactions' },
+                                { type: 'feedback', label: 'Feedback' },
+                            ].map(item => (
+                                <button key={item.type} onClick={() => downloadCSV(item.type)}
+                                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+                                    <Download className="w-3.5 h-3.5" /> {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Submit Form (students) */}
                 {!isAdmin && (

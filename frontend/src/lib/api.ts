@@ -123,6 +123,7 @@ export const analyticsAPI = {
     api.patch(`/analytics/feedback/${id}/`, data),
   deleteFeedback: (id: number) => api.delete(`/analytics/feedback/${id}/`),
   exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
+  exportCSV: (type: string) => api.get('/analytics/export/csv/', { params: { type }, responseType: 'blob' }),
 };
 
 

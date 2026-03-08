@@ -14,5 +14,6 @@ urlpatterns = [
     path('feedback/<int:pk>/', views.FeedbackDetailView.as_view(), name='feedback-detail'),
     # Data export for Google Sheets
     path('export/', views.DataExportView.as_view(), name='data-export'),
+    path('export/csv/', views.DataExportCSVView.as_view(), name='data-export-csv'),
 ]
 

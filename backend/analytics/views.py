@@ -1,6 +1,9 @@
+import csv
+from io import StringIO
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
+from django.http import HttpResponse
 from django.db.models import Sum, Avg, Count, F, Q
 from .models import UserTopicPerformance, DailyActivity, Feedback
 from .serializers import TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer
@@ -338,4 +341,47 @@ class DataExportView(APIView):
             ]
 
         return Response(data)
+
+
+class DataExportCSVView(APIView):
+    """Download data as CSV file (admin only). ?type=users|tokens|transactions|feedback"""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from accounts.models import CustomUser, TokenBalance, TokenTransaction
+        export_type = request.query_params.get('type', 'users')
+
+        output = StringIO()
+        writer = csv.writer(output)
+
+        if export_type == 'users':
+            writer.writerow(['ID', 'Username', 'Email', 'First Name', 'Last Name', 'Admin', 'Date Joined', 'Last Login'])
+            for u in CustomUser.objects.all():
+                writer.writerow([u.id, u.username, u.email, u.first_name, u.last_name, u.is_admin, u.date_joined, u.last_login])
+            filename = 'crackcms_users.csv'
+
+        elif export_type == 'tokens':
+            writer.writerow(['Username', 'Purchased Tokens', 'Feedback Credits', 'Available'])
+            for b in TokenBalance.objects.select_related('user').all():
+                writer.writerow([b.user.username, b.purchased_tokens, b.feedback_credits, b.available_tokens])
+            filename = 'crackcms_token_balances.csv'
+
+        elif export_type == 'transactions':
+            writer.writerow(['Username', 'Type', 'Amount', 'Note', 'Date'])
+            for t in TokenTransaction.objects.select_related('user').order_by('-created_at')[:500]:
+                writer.writerow([t.user.username, t.transaction_type, t.amount, t.note, t.created_at])
+            filename = 'crackcms_transactions.csv'
+
+        elif export_type == 'feedback':
+            writer.writerow(['Username', 'Category', 'Rating', 'Title', 'Message', 'Read', 'Admin Reply', 'Date'])
+            for f in Feedback.objects.select_related('user').all():
+                writer.writerow([f.user.username, f.category, f.rating, f.title, f.message, f.is_read, f.admin_reply, f.created_at])
+            filename = 'crackcms_feedback.csv'
+
+        else:
+            return Response({'error': 'Invalid type. Use: users, tokens, transactions, feedback'}, status=400)
+
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
