@@ -24,7 +24,7 @@
 var BACKEND_URL = 'https://crackcms-backend.onrender.com';
 var ADMIN_CREDENTIALS = {
   username: 'admin',         // ← your Django superuser username
-  password: 'YOUR_PASSWORD'  // ← your Django superuser password
+  password: 'Kali2712@'  // ← your Django superuser password
 };
 // ═════════════════════════════════════════════════════
 
@@ -32,7 +32,7 @@ var ADMIN_CREDENTIALS = {
  * Get JWT access token from the backend
  */
 function getAuthToken_() {
-  var url = BACKEND_URL + '/api/accounts/login/';
+  var url = BACKEND_URL + '/api/auth/login/';
   var options = {
     method: 'post',
     contentType: 'application/json',
