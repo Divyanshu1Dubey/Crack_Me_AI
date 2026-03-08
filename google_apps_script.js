@@ -64,7 +64,7 @@ function fetchExportData_(token) {
   var response = UrlFetchApp.fetch(url, options);
   var code = response.getResponseCode();
   if (code === 403) throw new Error('Export denied — your account is not an admin.');
-  if (code !== 200) throw new Error('Export failed (HTTP ' + code + ').');
+  if (code !== 200) throw new Error('Export failed (HTTP ' + code + '): ' + response.getContentText().substring(0, 300));
   return JSON.parse(response.getContentText());
 }
 

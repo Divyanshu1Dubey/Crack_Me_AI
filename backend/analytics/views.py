@@ -294,55 +294,64 @@ class DataExportView(APIView):
         export_type = request.query_params.get('type', 'all')
         data = {}
 
-        if export_type in ('all', 'users'):
-            data['users'] = [
-                {
-                    'id': u.id,
-                    'username': u.username,
-                    'email': u.email,
-                    'first_name': u.first_name,
-                    'last_name': u.last_name,
-                    'is_admin': u.is_admin,
-                    'date_joined': str(u.date_joined),
-                    'last_login': str(u.last_login),
-                } for u in CustomUser.objects.all()
-            ]
+        try:
+            if export_type in ('all', 'users'):
+                data['users'] = [
+                    {
+                        'id': u.id,
+                        'username': u.username,
+                        'email': u.email,
+                        'first_name': u.first_name,
+                        'last_name': u.last_name,
+                        'is_admin': u.is_admin,
+                        'date_joined': str(u.date_joined),
+                        'last_login': str(u.last_login),
+                    } for u in CustomUser.objects.all()
+                ]
 
-        if export_type in ('all', 'tokens'):
-            balances = TokenBalance.objects.select_related('user').all()
-            data['token_balances'] = [
-                {
-                    'username': b.user.username,
-                    'purchased_tokens': b.purchased_tokens,
-                    'feedback_credits': b.feedback_credits,
-                    'available': b.available_tokens,
-                } for b in balances
-            ]
-            txns = TokenTransaction.objects.select_related('user').order_by('-created_at')[:500]
-            data['token_transactions'] = [
-                {
-                    'username': t.user.username,
-                    'type': t.transaction_type,
-                    'amount': t.amount,
-                    'note': t.note,
-                    'created_at': str(t.created_at),
-                } for t in txns
-            ]
+            if export_type in ('all', 'tokens'):
+                balances = TokenBalance.objects.select_related('user').all()
+                token_balances = []
+                for b in balances:
+                    try:
+                        avail = b.available_tokens
+                    except Exception:
+                        avail = b.purchased_tokens + b.feedback_credits
+                    token_balances.append({
+                        'username': b.user.username,
+                        'purchased_tokens': b.purchased_tokens,
+                        'feedback_credits': b.feedback_credits,
+                        'available': avail,
+                    })
+                data['token_balances'] = token_balances
+                txns = TokenTransaction.objects.select_related('user').order_by('-created_at')[:500]
+                data['token_transactions'] = [
+                    {
+                        'username': t.user.username,
+                        'type': t.transaction_type,
+                        'amount': t.amount,
+                        'note': t.note,
+                        'created_at': str(t.created_at),
+                    } for t in txns
+                ]
 
-        if export_type in ('all', 'feedback'):
-            fbs = Feedback.objects.select_related('user').all()
-            data['feedback'] = [
-                {
-                    'username': f.user.username,
-                    'category': f.category,
-                    'rating': f.rating,
-                    'title': f.title,
-                    'message': f.message,
-                    'is_read': f.is_read,
-                    'admin_reply': f.admin_reply,
-                    'created_at': str(f.created_at),
-                } for f in fbs
-            ]
+            if export_type in ('all', 'feedback'):
+                fbs = Feedback.objects.select_related('user').all()
+                data['feedback'] = [
+                    {
+                        'username': f.user.username,
+                        'category': f.category,
+                        'rating': f.rating,
+                        'title': f.title,
+                        'message': f.message,
+                        'is_read': f.is_read,
+                        'admin_reply': f.admin_reply or '',
+                        'created_at': str(f.created_at),
+                    } for f in fbs
+                ]
+        except Exception as e:
+            import traceback
+            return Response({'error': str(e), 'trace': traceback.format_exc()}, status=500)
 
         return Response(data)
 
