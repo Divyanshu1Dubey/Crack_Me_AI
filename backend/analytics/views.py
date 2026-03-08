@@ -295,14 +295,18 @@ class DataExportView(APIView):
         data = {}
 
         if export_type in ('all', 'users'):
-            users = CustomUser.objects.all().values(
-                'id', 'username', 'email', 'first_name', 'last_name',
-                'is_admin', 'date_joined', 'last_login'
-            )
-            data['users'] = list(users)
-            for u in data['users']:
-                u['date_joined'] = str(u['date_joined'])
-                u['last_login'] = str(u['last_login'])
+            data['users'] = [
+                {
+                    'id': u.id,
+                    'username': u.username,
+                    'email': u.email,
+                    'first_name': u.first_name,
+                    'last_name': u.last_name,
+                    'is_admin': u.is_admin,
+                    'date_joined': str(u.date_joined),
+                    'last_login': str(u.last_login),
+                } for u in CustomUser.objects.all()
+            ]
 
         if export_type in ('all', 'tokens'):
             balances = TokenBalance.objects.select_related('user').all()
