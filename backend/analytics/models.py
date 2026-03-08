@@ -49,3 +49,33 @@ class DailyActivity(models.Model):
 
     def __str__(self):
         return f"{self.user.username} | {self.date}: {self.questions_attempted} Qs"
+
+
+class Feedback(models.Model):
+    """General platform feedback from students."""
+    CATEGORY_CHOICES = [
+        ('bug', 'Bug Report'),
+        ('feature', 'Feature Request'),
+        ('content', 'Content Issue'),
+        ('ui', 'UI/UX Feedback'),
+        ('ai', 'AI Quality'),
+        ('general', 'General Feedback'),
+    ]
+    RATING_CHOICES = [(i, str(i)) for i in range(1, 6)]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='feedbacks'
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='general')
+    rating = models.IntegerField(choices=RATING_CHOICES, default=5)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    admin_reply = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username}: {self.title} ({self.get_category_display()})"

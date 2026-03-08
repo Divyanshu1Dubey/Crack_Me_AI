@@ -87,7 +87,8 @@ def parse_md_db(filepath):
     return parsed_questions
 
 def main():
-    md_path = os.path.join('Medura_Train', 'PYQ', 'cms_pyq_database_2018_2024.md')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    md_path = os.path.join(base_dir, 'Medura_Train', 'PYQ', 'cms_pyq_database_2018_2024.md')
     print(f"Parsing {md_path}...")
     
     questions = parse_md_db(md_path)

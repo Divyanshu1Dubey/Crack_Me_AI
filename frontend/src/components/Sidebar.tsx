@@ -14,7 +14,7 @@ import {
     LayoutDashboard, BookOpen, FileText, Brain,
     BarChart3, GraduationCap, Bookmark, LogOut,
     Zap, Settings, Map, FolderOpen, Upload, Sparkles,
-    Menu, X, TrendingUp, Coins
+    Menu, X, TrendingUp, Coins, MessageSquare
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -32,6 +32,7 @@ const navItems = [
     { href: '/upload', icon: Upload, label: 'Upload & Train' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
+    { href: '/feedback', icon: MessageSquare, label: 'Feedback' },
     { href: '/tokens', icon: Coins, label: 'AI Tokens' },
 ];
 

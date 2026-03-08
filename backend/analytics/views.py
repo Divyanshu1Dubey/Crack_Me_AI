@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import permissions
+from rest_framework import permissions, status
 from django.db.models import Sum, Avg, Count, F, Q
-from .models import UserTopicPerformance, DailyActivity
-from .serializers import TopicPerformanceSerializer, DailyActivitySerializer
+from .models import UserTopicPerformance, DailyActivity, Feedback
+from .serializers import TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer
 from tests_engine.models import TestAttempt
 from questions.models import Subject
 
@@ -233,4 +233,109 @@ class PerformanceTrendView(APIView):
             'trend': trend_data,
             'total_tests': len(trend_data),
         })
+
+
+class FeedbackListCreateView(APIView):
+    """Students submit feedback; admins see all feedback."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.is_admin:
+            feedbacks = Feedback.objects.all()
+        else:
+            feedbacks = Feedback.objects.filter(user=request.user)
+        serializer = FeedbackSerializer(feedbacks, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = FeedbackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class FeedbackDetailView(APIView):
+    """Admin can reply to and mark feedback as read."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=403)
+        try:
+            fb = Feedback.objects.get(pk=pk)
+        except Feedback.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+        fb.is_read = True
+        if 'admin_reply' in request.data:
+            fb.admin_reply = request.data['admin_reply']
+        fb.save(update_fields=['is_read', 'admin_reply'])
+        return Response(FeedbackSerializer(fb).data)
+
+    def delete(self, request, pk):
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=403)
+        try:
+            fb = Feedback.objects.get(pk=pk)
+        except Feedback.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+        fb.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DataExportView(APIView):
+    """Export all data as JSON for Google Sheets integration (admin only)."""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from accounts.models import CustomUser, TokenBalance, TokenTransaction
+        export_type = request.query_params.get('type', 'all')
+        data = {}
+
+        if export_type in ('all', 'users'):
+            users = CustomUser.objects.all().values(
+                'id', 'username', 'email', 'first_name', 'last_name',
+                'is_admin', 'date_joined', 'last_login'
+            )
+            data['users'] = list(users)
+            for u in data['users']:
+                u['date_joined'] = str(u['date_joined'])
+                u['last_login'] = str(u['last_login'])
+
+        if export_type in ('all', 'tokens'):
+            balances = TokenBalance.objects.select_related('user').all()
+            data['token_balances'] = [
+                {
+                    'username': b.user.username,
+                    'purchased_tokens': b.purchased_tokens,
+                    'feedback_credits': b.feedback_credits,
+                    'available': b.available_tokens,
+                } for b in balances
+            ]
+            txns = TokenTransaction.objects.select_related('user').order_by('-created_at')[:500]
+            data['token_transactions'] = [
+                {
+                    'username': t.user.username,
+                    'type': t.transaction_type,
+                    'amount': t.amount,
+                    'note': t.note,
+                    'created_at': str(t.created_at),
+                } for t in txns
+            ]
+
+        if export_type in ('all', 'feedback'):
+            fbs = Feedback.objects.select_related('user').all()
+            data['feedback'] = [
+                {
+                    'username': f.user.username,
+                    'category': f.category,
+                    'rating': f.rating,
+                    'title': f.title,
+                    'message': f.message,
+                    'is_read': f.is_read,
+                    'admin_reply': f.admin_reply,
+                    'created_at': str(f.created_at),
+                } for f in fbs
+            ]
+
+        return Response(data)
 

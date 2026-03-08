@@ -115,6 +115,14 @@ export const analyticsAPI = {
   getRecentAttempts: () => api.get('/analytics/recent-attempts/'),
   getScorePrediction: () => api.get('/analytics/score-prediction/'),
   getPerformanceTrend: () => api.get('/analytics/performance-trend/'),
+  // Feedback
+  getFeedback: () => api.get('/analytics/feedback/'),
+  submitFeedback: (data: { category: string; rating: number; title: string; message: string }) =>
+    api.post('/analytics/feedback/', data),
+  replyFeedback: (id: number, data: { admin_reply: string }) =>
+    api.patch(`/analytics/feedback/${id}/`, data),
+  deleteFeedback: (id: number) => api.delete(`/analytics/feedback/${id}/`),
+  exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
 };
 
 
