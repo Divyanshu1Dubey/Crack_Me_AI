@@ -1,345 +1,191 @@
 # Question Bank Management Guide
 
-This guide provides step-by-step instructions for managing questions in your CMS Question Bank system.
+This guide explains all practical ways to manage questions in CrackCMS, with a fixture-first workflow for reliable production deploys.
 
-## 🔍 Current Status Analysis
+## Current Source of Truth
 
-Based on our analysis, your question bank contains:
-- **Total Questions**: 2004
-- **2018**: 235 questions ✅
-- **2019**: 243 questions ✅  
-- **2020**: 257 questions ✅
+- `backend/questions_fixture.json` is the production source for question bank data.
+- `backend/build.sh` loads this fixture during deploy.
+- If you add or edit questions in local DB, re-export the fixture and commit it.
 
-**Key Findings**:
-- All years 2018-2020 have adequate questions in the database
-- **Issue is likely in frontend filtering or display logic**
-- 94.7% of questions lack topics (affects categorization)
-- 90.0% of questions lack explanations (affects learning value)
+## Quick Decision Table
 
-## 🛠️ Step-by-Step Question Management
+- Use `Django Admin` when adding/editing a few questions manually.
+- Use `Upload API` when importing many questions at once.
+- Use `questions_fixture.json` when syncing data to production.
 
-### 1. Adding a New Question Manually
+## Method 1: Add or Edit Questions in Django Admin (Recommended)
 
-#### Via Django Admin (Recommended)
-1. **Access Admin Panel**:
-   - Go to `http://localhost:8000/admin/`
-   - Login with your admin credentials
+1. Start backend server.
+2. Open `http://localhost:8000/admin/`.
+3. Login as admin/superuser.
+4. Go to `Questions`.
+5. To add: click `Add Question`.
+6. To edit: open existing question, update fields.
+7. Save.
 
-2. **Navigate to Questions**:
-   - Click on "Questions" under "QUESTIONS" section
+Required fields for each MCQ:
 
-3. **Add New Question**:
-   - Click "Add question" button
-   - Fill in the required fields:
-     ```
-     Question Text*: The actual question
-     Option A*: First option
-     Option B*: Second option  
-     Option C*: Third option
-     Option D*: Fourth option
-     Correct Answer*: A, B, C, or D
-     Year*: Exam year (e.g., 2020)
-     Subject*: Select from dropdown
-     Topic*: Select appropriate topic (optional but recommended)
-     Difficulty: Easy/Medium/Hard
-     ```
+- `question_text`
+- `option_a`
+- `option_b`
+- `option_c`
+- `option_d`
+- `correct_answer` (`A`/`B`/`C`/`D`)
+- `year`
+- `subject`
 
-4. **Add Explanations (Important)**:
-   ```
-   Explanation: Detailed answer explanation
-   Concept Explanation: From-basics explanation
-     Mnemonic: Memory trick or shortcut
-     Book Name: Reference textbook
-     Chapter: Chapter number/name
-     Page Number: Page reference
-     ```
+Recommended fields:
 
-5. **Save**:
-   - Click "Save" to create the question
-   - Review the question appears correctly
+- `difficulty`
+- `explanation`
+- `topic`
+- `mnemonic`
+- `concept_tags`
 
-#### Via Management Command
-```bash
-# Add single question (advanced)
-python manage.py shell
-```
-```python
-from questions.models import Question, Subject, Subject
+After admin edits, run fixture export (see Method 4) so production gets the same data.
 
-# Get subject
-subject = Subject.objects.get(name='General Medicine')
+## Method 2: Add Questions via API (Single or Bulk)
 
-# Create question
-question = Question.objects.create(
-    question_text="What is the most common cause of acute myocardial infarction?",
-    option_a="Coronary artery thrombosis",
-    option_b="Coronary artery spasm", 
-    option_c="Aortic dissection",
-    option_d="Coronary artery embolism",
-    correct_answer="A",
-    year=2023,
-    subject=subject,
-    difficulty="medium",
-    explanation="Coronary artery thrombosis due to plaque rupture is the most common cause..."
-)
-```
+Base endpoint:
 
-### 2. Editing an Existing Question
+- `POST /api/questions/` (single object)
+- `POST /api/questions/upload/` (array of objects)
 
-#### Via Django Admin
-1. **Find the Question**:
-   - Go to Admin → Questions
-   - Use search or filter by year/subject
-   - Click on the question ID to edit
+Authentication:
 
-2. **Make Changes**:
-   - Edit any field as needed
-   - For multiple choice questions, ensure options are clear
-   - Update explanation if changing answer
+- Admin JWT required.
 
-3. **Save Changes**:
-   - Click "Save" to apply changes
-   - Verify the question displays correctly
+Example bulk payload for `/api/questions/upload/`:
 
-#### Via Management Command
-```bash
-python manage.py shell
-```
-```python
-from questions.models import Question
-
-# Find question
-question = Question.objects.get(id=123)
-
-# Update fields
-question.question_text = "Updated question text"
-question.explanation = "Updated explanation"
-question.save()
-```
-
-### 3. Bulk Import Questions
-
-#### Prepare Data Format
-Create a JSON file with questions:
 ```json
 [
   {
-    "question_text": "Question text here",
-    "option_a": "Option A",
-    "option_b": "Option B", 
-    "option_c": "Option C",
-    "option_d": "Option D",
+    "question_text": "Most common cause of acute myocardial infarction is:",
+    "option_a": "Coronary artery thrombosis",
+    "option_b": "Coronary artery spasm",
+    "option_c": "Aortic dissection",
+    "option_d": "Coronary embolism",
     "correct_answer": "A",
-    "year": 2023,
-    "subject": 1,  # Subject ID
-    "topic": 5,     # Topic ID (optional)
+    "year": 2025,
+    "subject": 1,
+    "topic": null,
     "difficulty": "medium",
-    "explanation": "Detailed explanation here"
+    "concept_tags": ["cardiology", "ischemic heart disease"],
+    "explanation": "Plaque rupture with thrombus formation is the most common mechanism.",
+    "concept_explanation": "ACS pathophysiology basics...",
+    "mnemonic": "Rupture -> clot -> MI",
+    "book_name": "Harrison",
+    "chapter": "Cardiology",
+    "page_number": 1021,
+    "reference_text": "Relevant short reference",
+    "exam_source": "UPSC CMS"
   }
 ]
 ```
 
-#### Import via API
-```bash
-# Use the upload endpoint
-curl -X POST http://localhost:8000/api/questions/upload/ \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @questions.json
+## Method 3: Add Questions Directly in `questions_fixture.json`
+
+You can manually edit `backend/questions_fixture.json`, but do it carefully.
+
+Rules:
+
+1. Keep valid JSON (no trailing commas, matching braces/brackets).
+2. Keep model names unchanged (`questions.question`, `questions.subject`, `questions.topic`).
+3. Each item must include:
+   - `model`
+   - `pk`
+   - `fields`
+4. New question `pk` should be unique (use next available integer).
+5. `fields.subject` must point to a valid subject PK.
+6. `fields.topic` must be valid or `null`.
+
+Recommended validation after manual edit:
+
+```powershell
+cd backend
+python -m json.tool questions_fixture.json > $null
+python manage.py loaddata questions_fixture.json
+python manage.py shell -c "from questions.models import Question; print(Question.objects.count())"
 ```
 
-#### Import via Management Command
-```bash
-# Export current data for reference
-python manage.py sync_data --action=export --file=current_questions.json
+If `loaddata` succeeds and count is expected, commit the fixture.
 
-# After editing, restore (this replaces all data)
-python manage.py sync_data --action=restore --file=updated_questions.json
+## Method 4: Fixture Export Workflow (Best Practice)
+
+After any local DB changes (admin/API/shell), export fixture:
+
+```powershell
+cd backend
+python _export_fixture.py
 ```
 
-### 4. Finding and Fixing Issues
+Then:
 
-#### Check for Questions Without Topics
-```bash
-python manage.py shell
-```
-```python
-from questions.models import Question
+1. Verify file changed as expected.
+2. Commit `backend/questions_fixture.json`.
+3. Push to deploy.
 
-# Find questions without topics
-questions_without_topics = Question.objects.filter(topic__isnull=True)
-print(f"Found {questions_without_topics.count()} questions without topics")
+## Production Deploy Flow
 
-# Assign topics in bulk
-from questions.models import Topic
-medicine_topic = Topic.objects.get(name='Cardiology', subject__name='General Medicine')
+`backend/build.sh` does:
 
-# Update questions containing "heart" or "cardiac"
-heart_questions = questions_without_topics.filter(
-    question_text__icontains='heart'
-)
-heart_questions.update(topic=medicine_topic)
-```
+1. Install requirements
+2. Collect static
+3. Run migrations
+4. Create superuser if env vars exist
+5. Load `questions_fixture.json`
+6. Hard-check that question count is greater than 0
 
-#### Add Explanations to Questions
-```python
-# Find questions without explanations
-no_explanation = Question.objects.filter(explanation='')
-print(f"Found {no_explanation.count()} questions without explanations")
+If fixture is broken or empty, build fails early (prevents silent bad deploy).
 
-# Add explanation to specific question
-question = Question.objects.get(id=123)
-question.explanation = "This is the correct answer because..."
-question.save()
-```
+## FAQ
 
-### 5. Data Quality Improvements
+### If I edit only `questions_fixture.json`, do I need anything else?
 
-#### Fix Question Text Formatting
-```python
-# Clean up question text with formatting issues
-questions = Question.objects.filter(question_text__contains='\n')
-for q in questions:
-    q.question_text = q.question_text.replace('\n', ' ').strip()
-    q.save()
-```
+Yes, two things:
 
-#### Standardize Difficulty Levels
-```python
-# Check difficulty distribution
-from django.db.models import Count
-difficulty_stats = Question.objects.values('difficulty').annotate(count=Count('id'))
-print(list(difficulty_stats))
+1. Ensure JSON is valid and loadable.
+2. Commit and redeploy so Render reloads DB from fixture.
 
-# Update difficulty for specific questions
-Question.objects.filter(year__lt=2020).update(difficulty='medium')
-```
+### Do I need old import scripts now?
 
-## 🐛 Troubleshooting Common Issues
+Not for production question loading if fixture-first workflow is used.
 
-### Issue: Questions Not Showing in Frontend
+- Optional to keep for one-time parsing from raw text/markdown.
+- Not required for normal day-to-day operations.
 
-**Symptoms**: Questions exist in database but don't appear in web interface
+### Can we remove PYQ PDFs and raw import files?
 
-**Solutions**:
-1. **Check API Response**:
-   ```bash
-   curl http://localhost:8000/api/questions/?year=2020
-   ```
+Depends on use:
 
-2. **Verify is_active Status**:
-   ```python
-   from questions.models import Question
-   inactive = Question.objects.filter(is_active=False)
-   print(f"Inactive questions: {inactive.count()}")
-   inactive.update(is_active=True)  # Activate if needed
-   ```
+- Remove if you only care about question bank fixture workflow.
+- Keep if you still use them for RAG training, OCR, or future re-parsing.
 
-3. **Check Frontend Filters**:
-   - Open browser developer tools (F12)
-   - Go to Network tab
-   - Filter by year and check API requests
-   - Look for JavaScript errors in Console tab
+Safe-to-remove candidates (if not needed anymore):
 
-### Issue: CORS Errors
+- `backend/_import_pyq_txt.py`
+- `backend/_import_pyq_md.py`
+- `backend/Medura_Train/PYQ/*.txt`
+- `backend/Medura_Train/PYQ/*.pdf`
+- `backend/Medura_Train/PYQ/cms_pyq_database_2018_2024.md`
 
-**Symptoms**: Frontend can't connect to backend API
+Before deleting, confirm no active command/script/process depends on these files.
 
-**Solutions**:
-1. **Check CORS Settings** in `settings.py`:
-   ```python
-   CORS_ALLOWED_ORIGINS = [
-       "http://localhost:3000",
-       "http://127.0.0.1:3000"
-   ]
-   ```
+## Admin Operational Checklist
 
-2. **Restart Backend Server** after changing settings
+For every question update cycle:
 
-### Issue: Database Sync Problems
+1. Add/edit questions (Admin/API/manual fixture).
+2. Validate data.
+3. Export fixture (`python _export_fixture.py`) unless you edited fixture directly.
+4. Commit code + fixture.
+5. Push and verify production counts (`/api/questions/stats/`, `/api/questions/years/`).
 
-**Symptoms**: Production and localhost show different data
+## Useful Endpoints for Verification
 
-**Solutions**:
-1. **Backup Production Data**:
-   ```bash
-   python manage.py sync_data --action=backup --file=prod_backup.json
-   ```
-
-2. **Transfer to Localhost**:
-   - Copy the backup file to localhost
-   - Run restore command
-   ```bash
-   python manage.py sync_data --action=restore --file=prod_backup.json
-   ```
-
-## 📊 Data Validation Commands
-
-### Run Analysis Scripts
-```bash
-# Comprehensive data analysis
-python manage.py analyze_questions
-
-# API filtering check
-python manage.py check_api_filters
-
-# Environment comparison
-python manage.py environment_comparison
-```
-
-### Regular Maintenance Tasks
-```bash
-# Backup before making changes
-python manage.py sync_data --action=backup
-
-# Export specific years for review
-python manage.py sync_data --action=export --years="2018,2019,2020"
-
-# Check data quality
-python manage.py analyze_questions
-```
-
-## 🚀 Best Practices
-
-1. **Always Backup** before making bulk changes
-2. **Test on localhost** before applying to production
-3. **Use meaningful topics** for better categorization
-4. **Add explanations** to improve learning value
-5. **Regular validation** to catch data issues early
-6. **Document changes** for future reference
-7. **Monitor API responses** for frontend issues
-
-## 📞 Getting Help
-
-If you encounter issues:
-
-1. **Check the logs**: Look at Django admin logs and browser console
-2. **Run analysis scripts**: Use the management commands provided
-3. **Verify API endpoints**: Test with curl or Postman
-4. **Check database state**: Use Django shell for direct inspection
-
-## 🔄 Environment Sync Process
-
-### From Production to Localhost
-1. **Export Production Data**:
-   ```bash
-   python manage.py sync_data --action=backup --file=prod_latest.json
-   ```
-
-2. **Transfer to Local**:
-   - Copy `prod_latest.json` to localhost environment
-
-3. **Import to Local**:
-   ```bash
-   python manage.py sync_data --action=restore --file=prod_latest.json
-   ```
-
-### From Localhost to Production
-1. **Test thoroughly** on localhost
-2. **Backup Production** first
-3. **Export changes** from localhost
-4. **Apply to production** carefully
-
----
-
-**Remember**: The issue you reported (missing 2018-2020 questions) appears to be in the frontend filtering logic, not the backend data. All years have adequate questions in the database.
+- `GET /api/questions/years/`
+- `GET /api/questions/stats/`
+- `GET /api/questions/?year=2018`
+- `GET /api/questions/?year=2019`
+- `GET /api/questions/?year=2020`
