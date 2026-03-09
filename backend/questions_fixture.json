@@ -149,6 +149,17 @@
 },
 {
   "model": "questions.topic",
+  "pk": 60,
+  "fields": {
+    "subject": 1,
+    "name": "Community Acquired Pneumonia (CAP)",
+    "parent": 59,
+    "importance": 7,
+    "description": "Community Acquired Pneumonia (CAP) refers to pneumonia acquired outside hospital settings. The most common causative organism is Streptococcus pneumoniae. Other causes include Mycoplasma pneumoniae, Staphylococcus aureus, and Legionella pneumophila."
+  }
+},
+{
+  "model": "questions.topic",
   "pk": 54,
   "fields": {
     "subject": 1,
@@ -248,6 +259,17 @@
 },
 {
   "model": "questions.topic",
+  "pk": 59,
+  "fields": {
+    "subject": 1,
+    "name": "Pneumonia",
+    "parent": 58,
+    "importance": 8,
+    "description": "Lower respiratory tract infections and classification."
+  }
+},
+{
+  "model": "questions.topic",
   "pk": 57,
   "fields": {
     "subject": 1,
@@ -288,6 +310,17 @@
     "parent": null,
     "importance": 7,
     "description": ""
+  }
+},
+{
+  "model": "questions.topic",
+  "pk": 58,
+  "fields": {
+    "subject": 1,
+    "name": "Respiratory System",
+    "parent": null,
+    "importance": 8,
+    "description": "System-level topic covering airway and lung disorders."
   }
 },
 {
@@ -1838,12 +1871,18 @@
     "correct_answer": "",
     "year": 2025,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -1854,7 +1893,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:44.027Z",
-    "updated_at": "2026-03-05T20:52:44.027Z",
+    "updated_at": "2026-03-09T13:25:01.455Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -2106,7 +2145,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -2120,7 +2161,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.985Z",
-    "updated_at": "2026-03-05T20:52:43.985Z",
+    "updated_at": "2026-03-09T13:25:01.450Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -2372,7 +2413,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -2386,7 +2429,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.939Z",
-    "updated_at": "2026-03-05T20:52:43.939Z",
+    "updated_at": "2026-03-09T13:25:01.446Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -2790,7 +2833,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -2804,7 +2849,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.863Z",
-    "updated_at": "2026-03-05T20:52:43.863Z",
+    "updated_at": "2026-03-09T13:25:01.441Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -3588,7 +3633,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -3602,7 +3649,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.690Z",
-    "updated_at": "2026-03-05T20:52:43.690Z",
+    "updated_at": "2026-03-09T13:25:01.435Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -4612,12 +4659,18 @@
     "correct_answer": "",
     "year": 2025,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -4628,7 +4681,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.532Z",
-    "updated_at": "2026-03-05T20:52:43.532Z",
+    "updated_at": "2026-03-09T13:25:01.427Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -4956,7 +5009,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -4970,7 +5025,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.479Z",
-    "updated_at": "2026-03-05T20:52:43.479Z",
+    "updated_at": "2026-03-09T13:25:01.422Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -5374,7 +5429,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -5388,7 +5445,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.416Z",
-    "updated_at": "2026-03-05T20:52:43.416Z",
+    "updated_at": "2026-03-09T13:25:01.416Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -6324,7 +6381,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -6338,7 +6397,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.275Z",
-    "updated_at": "2026-03-05T20:52:43.275Z",
+    "updated_at": "2026-03-09T13:25:01.411Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7158,12 +7217,18 @@
     "correct_answer": "",
     "year": 2025,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -7174,7 +7239,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.154Z",
-    "updated_at": "2026-03-05T20:52:43.154Z",
+    "updated_at": "2026-03-09T13:25:01.406Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7275,10 +7340,10 @@
     "topic": 57,
     "difficulty": "easy",
     "concept_tags": [
-      "Pressure Ulcer",
       "Decubitus Ulcer",
-      "Skin Conditions",
-      "Patient Care"
+      "Patient Care",
+      "Pressure Ulcer",
+      "Skin Conditions"
     ],
     "explanation": "Pressure sores, also known as decubitus ulcers or bedsores, are localized injuries to the skin and underlying tissue, usually over a bony prominence, as a result of prolonged pressure. The sacrum is the most common site for pressure sores, particularly in bedridden or immobile patients, due to its prominent bony structure and the high pressure it sustains when a patient is lying supine or semi-recumbent for extended periods.",
     "concept_explanation": "",
@@ -7293,7 +7358,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.137Z",
-    "updated_at": "2026-03-06T12:18:26.521Z",
+    "updated_at": "2026-03-09T13:25:01.401Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7319,12 +7384,12 @@
     "difficulty": "medium",
     "concept_tags": [
       "Cauda Equina Syndrome",
+      "Diagnosis",
+      "Emergency Medicine",
       "Neurology",
       "Neurosurgery",
       "Spinal Cord Compression",
-      "Emergency Medicine",
       "Symptoms",
-      "Diagnosis",
       "Treatment"
     ],
     "explanation": "Statement I correctly describes the classic symptoms of Cauda Equina Syndrome (CES): perineal numbness (saddle anesthesia), painless urinary retention, and fecal incontinence. Statement II is correct; an urgent MRI is the gold standard for diagnosing CES and identifying the underlying cause, given the need for prompt intervention. Statement IV is also correct; confirmed cases of CES are neurosurgical emergencies requiring early surgical decompression to relieve pressure on the cauda equina nerves and prevent permanent neurological deficits. Statement III, while conditions like lumbar disc herniation (a common cause of CES) are prevalent in the 45-60 age group, CES itself is a rare condition and can occur at any age due to various etiologies (e.g., trauma, tumors). Therefore, I, II, and IV are the most accurate and critical statements regarding CES.",
@@ -7340,7 +7405,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.131Z",
-    "updated_at": "2026-03-06T12:18:20.326Z",
+    "updated_at": "2026-03-09T13:25:01.397Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7366,10 +7431,10 @@
     "difficulty": "medium",
     "concept_tags": [
       "Bone metastases",
-      "Lytic lesions",
       "Breast cancer",
-      "Oncology",
+      "Lytic lesions",
       "Metastatic disease",
+      "Oncology",
       "Primary tumor screening"
     ],
     "explanation": "Lytic lesions in the vertebrae and ribs of a 60-year-old female are highly suggestive of metastatic disease. Among the given options, breast cancer is a very common malignancy in this demographic and frequently metastasizes to bone, often causing lytic lesions. Therefore, screening for a primary breast tumor is a critical step.",
@@ -7385,7 +7450,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.126Z",
-    "updated_at": "2026-03-06T12:18:10.348Z",
+    "updated_at": "2026-03-09T13:25:01.392Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7410,11 +7475,11 @@
     "topic": 54,
     "difficulty": "medium",
     "concept_tags": [
-      "Craniosynostosis",
       "Congenital Anomaly",
+      "Cranial Sutures",
+      "Craniosynostosis",
       "Pediatrics",
-      "Skull Development",
-      "Cranial Sutures"
+      "Skull Development"
     ],
     "explanation": "Craniosynostosis is a congenital condition characterized by the premature fusion of one or more cranial sutures. This premature fusion prevents the skull from growing perpendicular to the affected suture, leading to an abnormal head shape and potentially other complications.",
     "concept_explanation": "",
@@ -7429,7 +7494,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.121Z",
-    "updated_at": "2026-03-06T12:18:04.191Z",
+    "updated_at": "2026-03-09T13:25:01.387Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7454,11 +7519,11 @@
     "topic": 53,
     "difficulty": "medium",
     "concept_tags": [
-      "Schistosomiasis",
       "Bilharzial Cystitis",
       "Cystoscopy",
-      "Urological Pathology",
-      "Tropical Medicine"
+      "Schistosomiasis",
+      "Tropical Medicine",
+      "Urological Pathology"
     ],
     "explanation": "Sandy patches are considered the earliest specific cystoscopic appearance of Bilharzial cystitis (urinary schistosomiasis). These patches represent granulomas and calcified *Schistosoma haematobium* ova embedded in the bladder mucosa, giving a characteristic granular or 'sandy' texture.",
     "concept_explanation": "",
@@ -7473,7 +7538,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.116Z",
-    "updated_at": "2026-03-06T12:17:57.564Z",
+    "updated_at": "2026-03-09T13:25:01.382Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7500,8 +7565,8 @@
     "concept_tags": [
       "Appendiceal tumors",
       "Carcinoid tumor",
-      "Neuroendocrine tumor",
-      "Gastrointestinal pathology"
+      "Gastrointestinal pathology",
+      "Neuroendocrine tumor"
     ],
     "explanation": "Carcinoid tumors, also known as neuroendocrine tumors, are the most common primary neoplasms of the vermiform appendix, accounting for approximately 50-80% of all appendiceal tumors.",
     "concept_explanation": "",
@@ -7516,7 +7581,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.110Z",
-    "updated_at": "2026-03-06T12:16:22.415Z",
+    "updated_at": "2026-03-09T13:25:01.376Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7543,10 +7608,11 @@
     "concept_tags": [
       "Brain Abscess",
       "CNS Infection",
-      "Neurology",
-      "Neuroimaging",
+      "Clinical Features",
       "Etiology",
-      "Clinical Features"
+      "Neuroimaging",
+      "Neurology",
+      "neurology"
     ],
     "explanation": "Statement I is correct: Brain abscesses can arise from direct extension of infection (e.g., sinusitis, otitis media) or trauma (e.g., skull fracture). Statement II is correct: Common presenting features include headache, low-grade fever, confusion, seizures, and focal neurological deficits. Statement III is correct: MRI with contrast is the most sensitive and specific imaging modality for diagnosing brain abscesses, making it the imaging modality of choice. Statement IV is incorrect: While bacteria, fungi, and protozoa are common etiological agents, viruses typically cause encephalitis or meningitis, not brain abscesses.",
     "concept_explanation": "",
@@ -7561,7 +7627,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.105Z",
-    "updated_at": "2026-03-06T12:16:16.046Z",
+    "updated_at": "2026-03-09T13:25:01.370Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7586,11 +7652,11 @@
     "topic": 50,
     "difficulty": "medium",
     "concept_tags": [
-      "Hydrocephalus",
-      "Communicating Hydrocephalus",
       "CSF Dynamics",
-      "Neurology",
-      "Etiology"
+      "Communicating Hydrocephalus",
+      "Etiology",
+      "Hydrocephalus",
+      "Neurology"
     ],
     "explanation": "Communicating hydrocephalus occurs when there is impaired absorption of cerebrospinal fluid (CSF) at the arachnoid villi, or rarely, overproduction of CSF, while the flow within the ventricular system and into the subarachnoid space remains unobstructed. \nI. Post-hemorrhagic conditions (e.g., subarachnoid or intraventricular hemorrhage) can lead to communicating hydrocephalus by causing inflammation and fibrosis of the arachnoid villi, impairing CSF reabsorption. \nIII. CSF infections (e.g., meningitis) cause inflammation of the meninges and arachnoid villi, leading to fibrosis and impaired CSF absorption. \nIV. Raised CSF protein can increase CSF viscosity or directly block the arachnoid villi, hindering CSF reabsorption. \nII. Lesions within the ventricle typically cause obstructive (non-communicating) hydrocephalus by physically blocking the flow of CSF within the ventricular system, rather than impairing absorption at the arachnoid villi.",
     "concept_explanation": "",
@@ -7605,7 +7671,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.098Z",
-    "updated_at": "2026-03-06T12:16:09.948Z",
+    "updated_at": "2026-03-09T13:25:01.365Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7630,12 +7696,12 @@
     "topic": 49,
     "difficulty": "medium",
     "concept_tags": [
+      "Endocrinology",
       "Hypercalcemia",
-      "Primary Hyperparathyroidism",
       "Parathyroid Adenoma",
-      "Sestamibi Scan",
+      "Primary Hyperparathyroidism",
       "Renal Calculi",
-      "Endocrinology"
+      "Sestamibi Scan"
     ],
     "explanation": "The patient's symptoms (fatigue, muscle weakness, bilateral multiple renal calculi) combined with hypercalcemia (11.4 mg%) are classic manifestations of primary hyperparathyroidism. The next best investigation to localize the hyperfunctioning parathyroid gland, which is essential for surgical planning, is a Technetium-99m Sestamibi scan. This nuclear medicine scan specifically identifies parathyroid adenomas.",
     "concept_explanation": "",
@@ -7650,7 +7716,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.093Z",
-    "updated_at": "2026-03-06T12:16:01.467Z",
+    "updated_at": "2026-03-09T13:25:01.358Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7676,9 +7742,9 @@
     "difficulty": "medium",
     "concept_tags": [
       "Cancer screening",
+      "Epidemiology",
       "Preventive medicine",
       "Public health",
-      "Epidemiology",
       "Screening criteria",
       "Sensitivity",
       "Specificity"
@@ -7696,7 +7762,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T20:52:43.086Z",
-    "updated_at": "2026-03-06T12:15:56.069Z",
+    "updated_at": "2026-03-09T13:25:01.350Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7720,7 +7786,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -7734,7 +7802,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.594Z",
-    "updated_at": "2026-03-06T11:52:59.594Z",
+    "updated_at": "2026-03-09T13:25:01.596Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -7872,7 +7940,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -7886,7 +7956,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.477Z",
-    "updated_at": "2026-03-06T11:52:59.477Z",
+    "updated_at": "2026-03-09T13:25:01.592Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -8176,7 +8246,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "Serum ferritin is the most specific and most sensitive single test. Low ferritin (<12 ng/mL) is virtually diagnostic of iron deficiency.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -8190,7 +8262,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:49:00.041Z",
-    "updated_at": "2026-03-06T11:49:00.041Z",
+    "updated_at": "2026-03-09T13:25:01.587Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -8290,7 +8362,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "IV alteplase can be given within 4.5 hours of symptom onset. Mechanical thrombectomy can be extended to 24 hours in selected cases.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -8304,7 +8378,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:48:59.967Z",
-    "updated_at": "2026-03-06T11:48:59.967Z",
+    "updated_at": "2026-03-09T13:25:01.582Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -10874,7 +10948,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -10888,7 +10964,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:46.062Z",
-    "updated_at": "2026-03-05T17:50:46.062Z",
+    "updated_at": "2026-03-09T13:25:01.576Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -11178,7 +11254,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -11192,7 +11270,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:46.019Z",
-    "updated_at": "2026-03-05T17:50:46.019Z",
+    "updated_at": "2026-03-09T13:25:01.571Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -12356,7 +12434,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -12370,7 +12450,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.845Z",
-    "updated_at": "2026-03-05T17:50:45.845Z",
+    "updated_at": "2026-03-09T13:25:01.567Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -12394,7 +12474,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -12408,7 +12490,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.839Z",
-    "updated_at": "2026-03-05T17:50:45.839Z",
+    "updated_at": "2026-03-09T13:25:01.562Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -12546,7 +12628,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -12560,7 +12644,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.816Z",
-    "updated_at": "2026-03-05T17:50:45.816Z",
+    "updated_at": "2026-03-09T13:25:01.556Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -12622,7 +12706,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -12636,7 +12722,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.804Z",
-    "updated_at": "2026-03-05T17:50:45.804Z",
+    "updated_at": "2026-03-09T13:25:01.551Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -12812,7 +12898,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -12826,7 +12914,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.776Z",
-    "updated_at": "2026-03-05T17:50:45.776Z",
+    "updated_at": "2026-03-09T13:25:01.547Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -13040,7 +13128,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -13054,7 +13144,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.744Z",
-    "updated_at": "2026-03-05T17:50:45.744Z",
+    "updated_at": "2026-03-09T13:25:01.542Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -13114,12 +13204,18 @@
     "correct_answer": "",
     "year": 2024,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -13130,7 +13226,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.733Z",
-    "updated_at": "2026-03-05T17:50:45.733Z",
+    "updated_at": "2026-03-09T13:25:01.537Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -13876,7 +13972,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -13890,7 +13988,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.625Z",
-    "updated_at": "2026-03-05T17:50:45.625Z",
+    "updated_at": "2026-03-09T13:25:01.532Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14066,7 +14164,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -14080,7 +14180,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.585Z",
-    "updated_at": "2026-03-05T17:50:45.585Z",
+    "updated_at": "2026-03-09T13:25:01.527Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14333,8 +14433,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "Case-control → Odds Ratio. Cohort → Relative Risk. Cross-sectional → Prevalence Ratio.",
     "concept_explanation": "",
@@ -14349,7 +14449,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.455Z",
-    "updated_at": "2026-03-04T11:47:17.455Z",
+    "updated_at": "2026-03-09T13:25:01.522Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14383,9 +14483,9 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2022",
       "PYQ_2024",
-      "PYQ_2022"
+      "high_yield"
     ],
     "explanation": "Incidence = new cases during a time period / population at risk. Prevalence = all cases (old + new) at a point.",
     "concept_explanation": "",
@@ -14400,7 +14500,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.449Z",
-    "updated_at": "2026-03-04T11:47:17.449Z",
+    "updated_at": "2026-03-09T13:25:01.517Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14428,8 +14528,8 @@
     "topic": 9,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "Uterine atony = 70-80% of PPH. 4Ts: Tone (atony), Trauma, Tissue (retained), Thrombin (coagulopathy). First-line: uterine massage + oxytocin.",
     "concept_explanation": "",
@@ -14444,7 +14544,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.411Z",
-    "updated_at": "2026-03-04T11:47:17.411Z",
+    "updated_at": "2026-03-09T13:25:01.512Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14475,9 +14575,9 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2021",
       "PYQ_2024",
-      "PYQ_2021"
+      "high_yield"
     ],
     "explanation": "MgSO4 is DOC for both prevention and treatment of eclampsia. Regimens: Pritchard (IM) or Zuspan (IV). Toxicity: loss of knee jerk → respiratory depression.",
     "concept_explanation": "",
@@ -14492,7 +14592,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.404Z",
-    "updated_at": "2026-03-04T11:47:17.404Z",
+    "updated_at": "2026-03-09T13:25:01.507Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14523,8 +14623,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "McBurney point = junction of lateral 1/3 and medial 2/3 of line from ASIS to umbilicus. Maximum tenderness in appendicitis.",
     "concept_explanation": "",
@@ -14539,7 +14639,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.350Z",
-    "updated_at": "2026-03-04T11:47:17.350Z",
+    "updated_at": "2026-03-09T13:25:01.501Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14566,8 +14666,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "Weight: doubles at 5mo, triples at 1yr, quadruples at 2yr. Height: doubles at 4yr.",
     "concept_explanation": "",
@@ -14582,7 +14682,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.293Z",
-    "updated_at": "2026-03-04T11:47:17.293Z",
+    "updated_at": "2026-03-09T13:25:01.496Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14611,9 +14711,9 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2021",
       "PYQ_2024",
-      "PYQ_2021"
+      "high_yield"
     ],
     "explanation": "Social smile at 2 months. Head holding at 3 months. Sitting without support 8 months.",
     "concept_explanation": "",
@@ -14628,7 +14728,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.285Z",
-    "updated_at": "2026-03-04T11:47:17.285Z",
+    "updated_at": "2026-03-09T13:25:01.491Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14657,8 +14757,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "IV/IM artesunate is the DOC for severe/complicated malaria including cerebral malaria. It acts faster and has lower mortality than quinine.",
     "concept_explanation": "",
@@ -14673,7 +14773,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.250Z",
-    "updated_at": "2026-03-04T11:47:17.250Z",
+    "updated_at": "2026-03-09T13:25:01.486Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14700,8 +14800,9 @@
     "topic": 7,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "hematology",
+      "high_yield"
     ],
     "explanation": "Serum ferritin is the most specific and most sensitive single test. Low ferritin (<12 ng/mL) is virtually diagnostic of iron deficiency.",
     "concept_explanation": "",
@@ -14716,7 +14817,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.218Z",
-    "updated_at": "2026-03-04T11:47:17.218Z",
+    "updated_at": "2026-03-09T13:25:01.480Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14828,8 +14929,9 @@
     "topic": 3,
     "difficulty": "medium",
     "concept_tags": [
+      "PYQ_2024",
       "high_yield",
-      "PYQ_2024"
+      "neurology"
     ],
     "explanation": "IV alteplase can be given within 4.5 hours of symptom onset. Mechanical thrombectomy can be extended to 24 hours in selected cases.",
     "concept_explanation": "",
@@ -14844,7 +14946,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.137Z",
-    "updated_at": "2026-03-04T11:47:17.137Z",
+    "updated_at": "2026-03-09T13:25:01.475Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14872,8 +14974,8 @@
     "topic": 6,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "Overnight low-dose dexamethasone suppression test (1mg at 11pm, cortisol at 8am) is the best initial screening test for Cushing syndrome.",
     "concept_explanation": "",
@@ -14888,7 +14990,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.102Z",
-    "updated_at": "2026-03-04T11:47:17.102Z",
+    "updated_at": "2026-03-09T13:25:01.470Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14916,10 +15018,10 @@
     "topic": 2,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024",
+      "PYQ_2019",
       "PYQ_2021",
-      "PYQ_2019"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "MCD accounts for 80% of childhood nephrotic syndrome. It responds well to steroids. Membranous nephropathy is most common in adults.",
     "concept_explanation": "",
@@ -14934,7 +15036,7 @@
     "times_asked": 3,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.052Z",
-    "updated_at": "2026-03-04T11:47:17.052Z",
+    "updated_at": "2026-03-09T13:25:01.465Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -14962,8 +15064,8 @@
     "topic": 1,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2024"
+      "PYQ_2024",
+      "high_yield"
     ],
     "explanation": "Right coronary artery supplies the inferior wall. Inferior STEMI shows ST elevation in leads II, III, aVF.",
     "concept_explanation": "",
@@ -14978,7 +15080,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:16.989Z",
-    "updated_at": "2026-03-04T11:47:16.989Z",
+    "updated_at": "2026-03-09T13:25:01.461Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -18501,7 +18603,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "RAI is contraindicated in thyroid storm (can worsen). Treatment: beta-blockers (propranolol) + PTU (blocks synthesis + peripheral conversion) + iodine (after PTU) + steroids.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -18515,7 +18619,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:48:59.945Z",
-    "updated_at": "2026-03-06T11:48:59.945Z",
+    "updated_at": "2026-03-09T13:25:01.718Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -21237,7 +21341,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "cardiology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -21251,7 +21357,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:44.480Z",
-    "updated_at": "2026-03-05T17:50:44.480Z",
+    "updated_at": "2026-03-09T13:25:01.710Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -22035,7 +22141,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -22049,7 +22157,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:44.352Z",
-    "updated_at": "2026-03-05T17:50:44.352Z",
+    "updated_at": "2026-03-09T13:25:01.702Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -22339,7 +22447,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -22353,7 +22463,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:44.298Z",
-    "updated_at": "2026-03-05T17:50:44.299Z",
+    "updated_at": "2026-03-09T13:25:01.690Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -22871,7 +22981,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -22885,7 +22997,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:44.209Z",
-    "updated_at": "2026-03-05T17:50:44.209Z",
+    "updated_at": "2026-03-09T13:25:01.680Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -23439,12 +23551,18 @@
     "correct_answer": "",
     "year": 2023,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -23455,7 +23573,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:44.123Z",
-    "updated_at": "2026-03-05T17:50:44.123Z",
+    "updated_at": "2026-03-09T13:25:01.670Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -23875,9 +23993,9 @@
     "topic": 9,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2020",
       "PYQ_2023",
-      "PYQ_2020"
+      "high_yield"
     ],
     "explanation": "HPV 16 & 18 cause 70% of cervical cancers. HPV 6 & 11 cause genital warts. Vaccines: bivalent (16,18), quadrivalent (6,11,16,18), nonavalent.",
     "concept_explanation": "",
@@ -23892,7 +24010,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.427Z",
-    "updated_at": "2026-03-04T11:47:17.427Z",
+    "updated_at": "2026-03-09T13:25:01.659Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24102,8 +24220,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "1 lakh (1,00,000) IU at 9 months. Then 2 lakh IU every 6 months till 5 years.",
     "concept_explanation": "",
@@ -24118,7 +24236,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.300Z",
-    "updated_at": "2026-03-04T11:47:17.300Z",
+    "updated_at": "2026-03-09T13:25:01.645Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24146,9 +24264,9 @@
     "topic": 9,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2020",
       "PYQ_2023",
-      "PYQ_2020"
+      "high_yield"
     ],
     "explanation": "Week-wise: Wk1 (bacteremia, fever), Wk2 (rose spots, splenomegaly), Wk3 (intestinal perforation & hemorrhage - Peyer's patches in ileum), Wk4 (recovery/relapse).",
     "concept_explanation": "",
@@ -24163,7 +24281,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.260Z",
-    "updated_at": "2026-03-04T11:47:17.260Z",
+    "updated_at": "2026-03-09T13:25:01.634Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24323,8 +24441,8 @@
     "topic": 3,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "GBS shows elevated protein with normal cell count in CSF = albuminocytological dissociation. MS shows oligoclonal bands.",
     "concept_explanation": "",
@@ -24339,7 +24457,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.153Z",
-    "updated_at": "2026-03-04T11:47:17.153Z",
+    "updated_at": "2026-03-09T13:25:01.628Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24366,9 +24484,9 @@
     "topic": 3,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2020",
       "PYQ_2023",
-      "PYQ_2020"
+      "high_yield"
     ],
     "explanation": "TB meningitis CSF: very high protein, very low glucose (<40% of blood), lymphocytic predominance, cobweb formation on standing. ADA elevated.",
     "concept_explanation": "",
@@ -24383,7 +24501,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.146Z",
-    "updated_at": "2026-03-04T11:47:17.146Z",
+    "updated_at": "2026-03-09T13:25:01.622Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24408,8 +24526,9 @@
     "topic": 6,
     "difficulty": "hard",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "endocrinology",
+      "high_yield"
     ],
     "explanation": "RAI is contraindicated in thyroid storm (can worsen). Treatment: beta-blockers (propranolol) + PTU (blocks synthesis + peripheral conversion) + iodine (after PTU) + steroids.",
     "concept_explanation": "",
@@ -24424,7 +24543,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.112Z",
-    "updated_at": "2026-03-04T11:47:17.112Z",
+    "updated_at": "2026-03-09T13:25:01.616Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24451,8 +24570,8 @@
     "topic": 2,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "FENa <1% indicates avid sodium reabsorption → kidneys are functioning but underperfused (pre-renal). FENa >2% suggests intrinsic renal damage (ATN).",
     "concept_explanation": "",
@@ -24467,7 +24586,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.061Z",
-    "updated_at": "2026-03-04T11:47:17.061Z",
+    "updated_at": "2026-03-09T13:25:01.612Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24494,8 +24613,8 @@
     "topic": 1,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "Mitral stenosis characteristically presents with mid-diastolic murmur at apex (rumbling), and is the most common valvular lesion causing AF. Most common cause is RHD.",
     "concept_explanation": "",
@@ -24510,7 +24629,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.010Z",
-    "updated_at": "2026-03-04T11:47:17.010Z",
+    "updated_at": "2026-03-09T13:25:01.607Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -24537,8 +24656,8 @@
     "topic": 1,
     "difficulty": "hard",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "Arthralgia is a MINOR criterion. Major criteria: Carditis, Polyarthritis, Chorea, Erythema marginatum, Subcutaneous nodules.",
     "concept_explanation": "",
@@ -24553,7 +24672,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.002Z",
-    "updated_at": "2026-03-04T11:47:17.002Z",
+    "updated_at": "2026-03-09T13:25:01.602Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -25621,9 +25740,9 @@
     "topic": 17,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2020",
       "PYQ_2023",
-      "PYQ_2020"
+      "high_yield"
     ],
     "explanation": "VSD is the most common congenital heart disease overall. ASD is the most common acyanotic CHD presenting in adults. TOF is the most common cyanotic CHD.",
     "concept_explanation": "",
@@ -25638,7 +25757,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.541Z",
-    "updated_at": "2026-03-04T11:47:17.541Z",
+    "updated_at": "2026-03-09T13:25:01.737Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -25667,10 +25786,10 @@
     "topic": 15,
     "difficulty": "easy",
     "concept_tags": [
-      "immunization",
-      "newborn",
       "BCG",
-      "OPV"
+      "OPV",
+      "immunization",
+      "newborn"
     ],
     "explanation": "Under India's UIP, at birth: BCG, OPV-0, and Hepatitis B birth dose are given. BCG and OPV-0 are the primary birth vaccines.",
     "concept_explanation": "",
@@ -25685,7 +25804,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.722Z",
-    "updated_at": "2026-03-03T18:25:07.722Z",
+    "updated_at": "2026-03-09T13:25:01.725Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -26583,7 +26702,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -26597,7 +26718,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.090Z",
-    "updated_at": "2026-03-05T17:50:45.090Z",
+    "updated_at": "2026-03-09T13:25:01.767Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -26887,7 +27008,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -26901,7 +27024,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:45.035Z",
-    "updated_at": "2026-03-05T17:50:45.035Z",
+    "updated_at": "2026-03-09T13:25:01.751Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -27002,9 +27125,9 @@
     "topic": 38,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2021",
       "PYQ_2023",
-      "PYQ_2021"
+      "high_yield"
     ],
     "explanation": "Sensitivity = TP/(TP+FN) = ability to detect disease. Specificity = TN/(TN+FP) = ability to rule out. PPV = TP/(TP+FP). NPV = TN/(TN+FN).",
     "concept_explanation": "",
@@ -27019,7 +27142,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.587Z",
-    "updated_at": "2026-03-04T11:47:17.587Z",
+    "updated_at": "2026-03-09T13:25:01.774Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -27087,7 +27210,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -27101,7 +27226,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.573Z",
-    "updated_at": "2026-03-06T11:52:59.573Z",
+    "updated_at": "2026-03-09T13:25:01.791Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -27239,7 +27364,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -27253,7 +27380,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.447Z",
-    "updated_at": "2026-03-06T11:52:59.447Z",
+    "updated_at": "2026-03-09T13:25:01.786Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -28798,8 +28925,8 @@
     "topic": 21,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2023"
+      "PYQ_2023",
+      "high_yield"
     ],
     "explanation": "Charcot triad (fever + jaundice + RUQ pain) = acute cholangitis. Reynolds pentad adds  hypotension + altered mental status = severe/toxic cholangitis.",
     "concept_explanation": "",
@@ -28814,7 +28941,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.553Z",
-    "updated_at": "2026-03-04T11:47:17.553Z",
+    "updated_at": "2026-03-09T13:25:01.780Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -29716,7 +29843,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -29730,7 +29859,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:43.954Z",
-    "updated_at": "2026-03-05T17:50:43.954Z",
+    "updated_at": "2026-03-09T13:25:01.912Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -30628,7 +30757,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -30642,7 +30773,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:43.798Z",
-    "updated_at": "2026-03-05T17:50:43.798Z",
+    "updated_at": "2026-03-09T13:25:01.906Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -31236,7 +31367,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -31250,7 +31383,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.934Z",
-    "updated_at": "2026-03-05T17:50:42.934Z",
+    "updated_at": "2026-03-09T13:25:01.901Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -31388,7 +31521,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -31402,7 +31537,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.903Z",
-    "updated_at": "2026-03-05T17:50:42.903Z",
+    "updated_at": "2026-03-09T13:25:01.896Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -31576,12 +31711,18 @@
     "correct_answer": "",
     "year": 2022,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -31592,7 +31733,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.865Z",
-    "updated_at": "2026-03-05T17:50:42.865Z",
+    "updated_at": "2026-03-09T13:25:01.888Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -32718,7 +32859,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -32732,7 +32875,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.672Z",
-    "updated_at": "2026-03-05T17:50:42.672Z",
+    "updated_at": "2026-03-09T13:25:01.881Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34125,8 +34268,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "MR vaccine first dose at 9 months (completed 270 days). Second dose at 16-24 months.",
     "concept_explanation": "",
@@ -34141,7 +34284,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.483Z",
-    "updated_at": "2026-03-04T11:47:17.483Z",
+    "updated_at": "2026-03-09T13:25:01.875Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34265,8 +34408,9 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "endocrinology",
+      "high_yield"
     ],
     "explanation": "Bilateral RLN injury → both vocal cords in midline (adducted) → stridor → emergency tracheostomy. Unilateral → hoarseness only.",
     "concept_explanation": "",
@@ -34281,7 +34425,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.382Z",
-    "updated_at": "2026-03-04T11:47:17.382Z",
+    "updated_at": "2026-03-09T13:25:01.870Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34394,9 +34538,9 @@
     "topic": 9,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2019",
       "PYQ_2022",
-      "PYQ_2019"
+      "high_yield"
     ],
     "explanation": "Tetralogy of Fallot is the most common cyanotic CHD. Components: VSD + overriding aorta + RV outflow obstruction + RVH. Boot-shaped heart on CXR.",
     "concept_explanation": "",
@@ -34411,7 +34555,7 @@
     "times_asked": 2,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.317Z",
-    "updated_at": "2026-03-04T11:47:17.317Z",
+    "updated_at": "2026-03-09T13:25:01.865Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34528,8 +34672,8 @@
     "topic": 4,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "Gene Xpert (CBNAAT): sensitivity ~98% for smear-positive TB and ~60-70% for smear-negative TB. Also detects rifampicin resistance. RNTCP recommends as initial diagnostic test.",
     "concept_explanation": "",
@@ -34544,7 +34688,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.187Z",
-    "updated_at": "2026-03-04T11:47:17.187Z",
+    "updated_at": "2026-03-09T13:25:01.859Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34573,8 +34717,8 @@
     "topic": 3,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "Lorazepam (IV) is DOC for status epilepticus. Sequence: benzodiazepine (lorazepam/diazepam) → phenytoin/fosphenytoin → phenobarbital → general anesthesia (propofol/midazolam).",
     "concept_explanation": "",
@@ -34589,7 +34733,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.162Z",
-    "updated_at": "2026-03-04T11:47:17.162Z",
+    "updated_at": "2026-03-09T13:25:01.854Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34618,8 +34762,8 @@
     "topic": 6,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "If beta-blockers given first, they block vasodilatory beta-2 receptors → unopposed alpha-1 stimulation → severe hypertensive crisis. Always alpha (phenoxybenzamine) THEN beta.",
     "concept_explanation": "",
@@ -34634,7 +34778,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.121Z",
-    "updated_at": "2026-03-04T11:47:17.121Z",
+    "updated_at": "2026-03-09T13:25:01.849Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34663,8 +34807,8 @@
     "topic": 2,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "RBC casts are pathognomonic of glomerulonephritis (nephritic). They indicate glomerular hemorrhage. Fatty casts and oval fat bodies are seen in nephrotic syndrome.",
     "concept_explanation": "",
@@ -34679,7 +34823,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.070Z",
-    "updated_at": "2026-03-04T11:47:17.070Z",
+    "updated_at": "2026-03-09T13:25:01.843Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34707,8 +34851,8 @@
     "topic": 1,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "CHA₂DS₂-VASc is used to estimate stroke risk in non-valvular atrial fibrillation and guide anticoagulation decisions.",
     "concept_explanation": "",
@@ -34723,7 +34867,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.025Z",
-    "updated_at": "2026-03-04T11:47:17.025Z",
+    "updated_at": "2026-03-09T13:25:01.836Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34748,8 +34892,8 @@
     "topic": 1,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "Beck's triad: hypotension, raised JVP, muffled heart sounds → cardiac tamponade. Pulsus paradoxus is another feature.",
     "concept_explanation": "",
@@ -34764,7 +34908,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.018Z",
-    "updated_at": "2026-03-04T11:47:17.018Z",
+    "updated_at": "2026-03-09T13:25:01.825Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34793,9 +34937,9 @@
     "difficulty": "hard",
     "concept_tags": [
       "PE",
-      "pulmonary embolism",
+      "angiography",
       "diagnosis",
-      "angiography"
+      "pulmonary embolism"
     ],
     "explanation": "Conventional (catheter-based) pulmonary angiography remains the GOLD STANDARD for PE diagnosis. However, CTPA is the most commonly used first-line imaging due to its availability and non-invasive nature.",
     "concept_explanation": "",
@@ -34810,7 +34954,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.766Z",
-    "updated_at": "2026-03-03T18:25:07.766Z",
+    "updated_at": "2026-03-09T13:25:01.813Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34835,8 +34979,8 @@
     "topic": 38,
     "difficulty": "easy",
     "concept_tags": [
-      "mean",
       "central tendency",
+      "mean",
       "statistics"
     ],
     "explanation": "Arithmetic mean is most affected by extreme values (outliers). Median and mode are resistant to outliers. That's why median is preferred for skewed distributions.",
@@ -34852,7 +34996,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.755Z",
-    "updated_at": "2026-03-04T09:52:12.901Z",
+    "updated_at": "2026-03-09T13:25:01.807Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34877,8 +35021,8 @@
     "topic": 21,
     "difficulty": "easy",
     "concept_tags": [
-      "Virchow triad",
       "DVT",
+      "Virchow triad",
       "thrombosis"
     ],
     "explanation": "Virchow's triad: 1) Venous stasis (slow flow) 2) Hypercoagulability 3) Endothelial/vessel wall injury. Arterial hypertension is NOT part of the triad.",
@@ -34894,7 +35038,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.733Z",
-    "updated_at": "2026-03-04T09:52:12.906Z",
+    "updated_at": "2026-03-09T13:25:01.802Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -34919,9 +35063,9 @@
     "topic": 2,
     "difficulty": "medium",
     "concept_tags": [
+      "kidney",
       "nephrotic syndrome",
-      "proteinuria",
-      "kidney"
+      "proteinuria"
     ],
     "explanation": "Nephrotic syndrome consists of: heavy proteinuria (>3.5g/day), hypoalbuminemia, hyperlipidemia, lipiduria, and edema. Hematuria is characteristic of NEPHRITIC syndrome, not nephrotic.",
     "concept_explanation": "",
@@ -34936,7 +35080,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.706Z",
-    "updated_at": "2026-03-03T18:25:07.706Z",
+    "updated_at": "2026-03-09T13:25:01.796Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -35188,7 +35332,9 @@
     "subject": 2,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -35202,7 +35348,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:43.156Z",
-    "updated_at": "2026-03-05T17:50:43.156Z",
+    "updated_at": "2026-03-09T13:25:01.922Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -35949,8 +36095,8 @@
     "topic": 14,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "Social smile appears at 6 weeks (responsive smile to mother). Spontaneous smile may be seen at birth. Other milestones: Head holding 3mo, Sitting 6mo, Standing 9mo, Walking 12mo.",
     "concept_explanation": "",
@@ -35965,7 +36111,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.535Z",
-    "updated_at": "2026-03-04T11:47:17.535Z",
+    "updated_at": "2026-03-09T13:25:01.916Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -36031,7 +36177,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -36045,7 +36193,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.554Z",
-    "updated_at": "2026-03-06T11:52:59.554Z",
+    "updated_at": "2026-03-09T13:25:01.935Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -37666,8 +37814,8 @@
     "topic": 32,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2022"
+      "PYQ_2022",
+      "high_yield"
     ],
     "explanation": "Secretory endometrium on biopsy is the MOST RELIABLE proof that ovulation has occurred. LH surge predicts ovulation. BBT rises after ovulation (progesterone effect).",
     "concept_explanation": "",
@@ -37682,7 +37830,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.572Z",
-    "updated_at": "2026-03-04T11:47:17.572Z",
+    "updated_at": "2026-03-09T13:25:01.927Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -37756,7 +37904,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "Bilateral RLN injury → both vocal cords in midline (adducted) → stridor → emergency tracheostomy. Unilateral → hoarseness only.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -37770,7 +37920,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:49:00.207Z",
-    "updated_at": "2026-03-06T11:49:00.207Z",
+    "updated_at": "2026-03-09T13:25:01.940Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -41828,7 +41978,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -41842,7 +41994,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.373Z",
-    "updated_at": "2026-03-05T17:50:41.373Z",
+    "updated_at": "2026-03-09T13:25:02.056Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42208,7 +42360,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42222,7 +42376,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.317Z",
-    "updated_at": "2026-03-05T17:50:41.317Z",
+    "updated_at": "2026-03-09T13:25:02.051Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42246,7 +42400,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42260,7 +42416,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.311Z",
-    "updated_at": "2026-03-05T17:50:41.312Z",
+    "updated_at": "2026-03-09T13:25:02.045Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42284,7 +42440,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42298,7 +42456,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.306Z",
-    "updated_at": "2026-03-05T17:50:41.306Z",
+    "updated_at": "2026-03-09T13:25:02.040Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42322,7 +42480,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42336,7 +42496,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.301Z",
-    "updated_at": "2026-03-05T17:50:41.301Z",
+    "updated_at": "2026-03-09T13:25:02.033Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42512,7 +42672,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42526,7 +42688,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.272Z",
-    "updated_at": "2026-03-05T17:50:41.272Z",
+    "updated_at": "2026-03-09T13:25:02.026Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -42702,7 +42864,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -42716,7 +42880,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.243Z",
-    "updated_at": "2026-03-05T17:50:41.243Z",
+    "updated_at": "2026-03-09T13:25:02.019Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43044,7 +43208,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -43058,7 +43224,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.195Z",
-    "updated_at": "2026-03-05T17:50:41.195Z",
+    "updated_at": "2026-03-09T13:25:02.014Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43348,7 +43514,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -43362,7 +43530,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.142Z",
-    "updated_at": "2026-03-05T17:50:41.142Z",
+    "updated_at": "2026-03-09T13:25:02.009Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43462,7 +43630,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -43476,7 +43646,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.123Z",
-    "updated_at": "2026-03-05T17:50:41.123Z",
+    "updated_at": "2026-03-09T13:25:02.002Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43500,7 +43670,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -43514,7 +43686,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.118Z",
-    "updated_at": "2026-03-05T17:50:41.118Z",
+    "updated_at": "2026-03-09T13:25:01.996Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43880,7 +44052,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -43894,7 +44068,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.060Z",
-    "updated_at": "2026-03-05T17:50:41.060Z",
+    "updated_at": "2026-03-09T13:25:01.989Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -43994,7 +44168,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -44008,7 +44184,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.040Z",
-    "updated_at": "2026-03-05T17:50:41.040Z",
+    "updated_at": "2026-03-09T13:25:01.983Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44032,7 +44208,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -44046,7 +44224,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.032Z",
-    "updated_at": "2026-03-05T17:50:41.032Z",
+    "updated_at": "2026-03-09T13:25:01.976Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44070,7 +44248,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -44084,7 +44264,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.027Z",
-    "updated_at": "2026-03-05T17:50:41.027Z",
+    "updated_at": "2026-03-09T13:25:01.970Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44489,8 +44669,8 @@
     "topic": 7,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2021"
+      "PYQ_2021",
+      "high_yield"
     ],
     "explanation": "Reed-Sternberg cells (owl-eye appearance, bilobed nucleus) are pathognomonic of Hodgkin lymphoma. They are CD15+ and CD30+ giant cells.",
     "concept_explanation": "",
@@ -44505,7 +44685,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.529Z",
-    "updated_at": "2026-03-04T11:47:17.529Z",
+    "updated_at": "2026-03-09T13:25:01.965Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44577,8 +44757,8 @@
     "topic": 9,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2021"
+      "PYQ_2021",
+      "high_yield"
     ],
     "explanation": "High sensitivity = high true positive rate = few false negatives → good for ruling OUT disease (SNout). High specificity → good for ruling IN (SPin).",
     "concept_explanation": "",
@@ -44593,7 +44773,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.494Z",
-    "updated_at": "2026-03-04T11:47:17.494Z",
+    "updated_at": "2026-03-09T13:25:01.958Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44840,8 +45020,8 @@
     "topic": 7,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2021"
+      "PYQ_2021",
+      "high_yield"
     ],
     "explanation": "Beta-thalassemia major: deficient beta-globin synthesis → compensatory increase in HbF (α2γ2). HbF >90% in beta-thal major. Also elevated with hydroxyurea treatment.",
     "concept_explanation": "",
@@ -44856,7 +45036,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.242Z",
-    "updated_at": "2026-03-04T11:47:17.242Z",
+    "updated_at": "2026-03-09T13:25:01.952Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -44884,8 +45064,8 @@
     "topic": 5,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2021"
+      "PYQ_2021",
+      "high_yield"
     ],
     "explanation": "Crohn's: transmural, skip lesions, non-caseating granulomas, cobblestone, fistulae. UC: mucosal/submucosal only, continuous from rectum, crypt abscess.",
     "concept_explanation": "",
@@ -44900,7 +45080,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.210Z",
-    "updated_at": "2026-03-04T11:47:17.210Z",
+    "updated_at": "2026-03-09T13:25:01.946Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -45673,7 +45853,9 @@
     "subject": 2,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -45687,7 +45869,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.548Z",
-    "updated_at": "2026-03-05T17:50:41.548Z",
+    "updated_at": "2026-03-09T13:25:02.063Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -46091,7 +46273,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -46105,7 +46289,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.160Z",
-    "updated_at": "2026-03-05T17:50:42.160Z",
+    "updated_at": "2026-03-09T13:25:02.086Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -46699,7 +46883,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -46713,7 +46899,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:42.060Z",
-    "updated_at": "2026-03-05T17:50:42.060Z",
+    "updated_at": "2026-03-09T13:25:02.078Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -47537,8 +47723,8 @@
     "difficulty": "easy",
     "concept_tags": [
       "PPH",
-      "uterine atony",
-      "postpartum"
+      "postpartum",
+      "uterine atony"
     ],
     "explanation": "Uterine atony (failure of uterus to contract after delivery) is the MOST COMMON cause of PPH, accounting for ~80% cases. Remember the 4 T's of PPH.",
     "concept_explanation": "",
@@ -47553,7 +47739,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.749Z",
-    "updated_at": "2026-03-03T18:25:07.749Z",
+    "updated_at": "2026-03-09T13:25:02.072Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -47653,7 +47839,9 @@
     "subject": 5,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -47667,7 +47855,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.528Z",
-    "updated_at": "2026-03-06T11:52:59.528Z",
+    "updated_at": "2026-03-09T13:25:02.100Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -47768,8 +47956,8 @@
     "topic": 41,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2021"
+      "PYQ_2021",
+      "high_yield"
     ],
     "explanation": "Measles (R0=12-18) requires 83-94% herd immunity. Formula: HIT = 1 - 1/R0. Higher R0 = higher threshold needed. COVID R0=2-3 needs ~60-70%.",
     "concept_explanation": "",
@@ -47784,7 +47972,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.603Z",
-    "updated_at": "2026-03-04T11:47:17.603Z",
+    "updated_at": "2026-03-09T13:25:02.093Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -49105,7 +49293,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -49119,7 +49309,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-05T17:50:41.739Z",
-    "updated_at": "2026-03-05T17:50:41.739Z",
+    "updated_at": "2026-03-09T13:25:02.112Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -49455,8 +49645,8 @@
     "difficulty": "medium",
     "concept_tags": [
       "McBurney point",
-      "appendicitis",
-      "anatomy"
+      "anatomy",
+      "appendicitis"
     ],
     "explanation": "McBurney's point lies at the junction of the lateral 1/3 and medial 2/3 of a line joining the right ASIS to the umbilicus. Tenderness here suggests acute appendicitis.",
     "concept_explanation": "",
@@ -49471,7 +49661,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.771Z",
-    "updated_at": "2026-03-03T18:25:07.771Z",
+    "updated_at": "2026-03-09T13:25:02.106Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -49648,8 +49838,8 @@
     "topic": 3,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2020"
+      "PYQ_2020",
+      "high_yield"
     ],
     "explanation": "IV Lorazepam (or diazepam) is first-line for status epilepticus. If seizures persist, IV phenytoin/fosphenytoin is added. Refractory cases: midazolam/propofol infusion.",
     "concept_explanation": "",
@@ -49664,7 +49854,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.523Z",
-    "updated_at": "2026-03-04T11:47:17.523Z",
+    "updated_at": "2026-03-09T13:25:02.208Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -49829,8 +50019,8 @@
     "topic": 2,
     "difficulty": "hard",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2020"
+      "PYQ_2020",
+      "high_yield"
     ],
     "explanation": "Absolute creatinine value alone is NOT an indication. Indications (AEIOU): Acidosis (refractory), Electrolytes (hyperkalemia >6.5), Intoxication, Overload (pulmonary edema), Uremia (encephalopathy, pericarditis, bleeding).",
     "concept_explanation": "",
@@ -49845,7 +50035,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.088Z",
-    "updated_at": "2026-03-04T11:47:17.088Z",
+    "updated_at": "2026-03-09T13:25:02.203Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -49878,8 +50068,8 @@
     "topic": 1,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2020"
+      "PYQ_2020",
+      "high_yield"
     ],
     "explanation": "Pulsus paradoxus = exaggerated fall in systolic BP (>10mmHg) during inspiration. Seen in cardiac tamponade, severe asthma, constrictive pericarditis.",
     "concept_explanation": "",
@@ -49894,7 +50084,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.043Z",
-    "updated_at": "2026-03-04T11:47:17.043Z",
+    "updated_at": "2026-03-09T13:25:02.197Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -50300,7 +50490,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -50314,7 +50506,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.845Z",
-    "updated_at": "2026-03-04T09:33:07.845Z",
+    "updated_at": "2026-03-09T13:25:02.192Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -50756,7 +50948,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -50770,7 +50964,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.713Z",
-    "updated_at": "2026-03-04T09:33:07.713Z",
+    "updated_at": "2026-03-09T13:25:02.187Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -50870,7 +51064,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -50884,7 +51080,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.689Z",
-    "updated_at": "2026-03-04T09:33:07.689Z",
+    "updated_at": "2026-03-09T13:25:02.181Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -50908,7 +51104,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -50922,7 +51120,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.682Z",
-    "updated_at": "2026-03-04T09:33:07.682Z",
+    "updated_at": "2026-03-09T13:25:02.171Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -51516,7 +51714,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -51530,7 +51730,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.486Z",
-    "updated_at": "2026-03-04T09:33:07.486Z",
+    "updated_at": "2026-03-09T13:25:02.167Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -51554,7 +51754,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -51568,7 +51770,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.476Z",
-    "updated_at": "2026-03-04T09:33:07.476Z",
+    "updated_at": "2026-03-09T13:25:02.162Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -52276,7 +52478,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -52290,7 +52494,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.274Z",
-    "updated_at": "2026-03-04T09:33:07.274Z",
+    "updated_at": "2026-03-09T13:25:02.157Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -52504,7 +52708,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -52518,7 +52724,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.186Z",
-    "updated_at": "2026-03-04T09:33:07.186Z",
+    "updated_at": "2026-03-09T13:25:02.152Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53036,7 +53242,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53050,7 +53258,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.048Z",
-    "updated_at": "2026-03-04T09:33:07.048Z",
+    "updated_at": "2026-03-09T13:25:02.147Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53226,7 +53434,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53240,7 +53450,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:07.000Z",
-    "updated_at": "2026-03-04T09:33:07.000Z",
+    "updated_at": "2026-03-09T13:25:02.141Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53264,7 +53474,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53278,7 +53490,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:06.990Z",
-    "updated_at": "2026-03-04T09:33:06.990Z",
+    "updated_at": "2026-03-09T13:25:02.136Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53644,7 +53856,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53658,7 +53872,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:06.884Z",
-    "updated_at": "2026-03-04T09:33:06.884Z",
+    "updated_at": "2026-03-09T13:25:02.130Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53682,7 +53896,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "cardiology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53696,7 +53912,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:06.873Z",
-    "updated_at": "2026-03-04T09:33:06.873Z",
+    "updated_at": "2026-03-09T13:25:02.125Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53721,9 +53937,9 @@
     "topic": 30,
     "difficulty": "easy",
     "concept_tags": [
-      "partograph",
+      "WHO",
       "labor monitoring",
-      "WHO"
+      "partograph"
     ],
     "explanation": "Partograph is a graphical record of the progress of labor. It plots cervical dilatation (alert & action lines), fetal heart rate, contractions, and maternal vitals against time.",
     "concept_explanation": "",
@@ -53738,7 +53954,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.777Z",
-    "updated_at": "2026-03-04T09:52:13.671Z",
+    "updated_at": "2026-03-09T13:25:02.119Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -53960,7 +54176,9 @@
     "subject": 2,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "This is a high-yield topic frequently tested in UPSC CMS. Understanding the specific diagnostic criteria is crucial.",
     "concept_explanation": "",
     "mnemonic": "",
@@ -53974,7 +54192,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-06T11:52:59.502Z",
-    "updated_at": "2026-03-06T11:52:59.502Z",
+    "updated_at": "2026-03-09T13:25:02.213Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -55108,9 +55326,9 @@
     "topic": 45,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
+      "PYQ_2018",
       "PYQ_2020",
-      "PYQ_2018"
+      "high_yield"
     ],
     "explanation": "IMR = Deaths <1 year / 1000 live births in that year. NMR = <28 days. PMR = <7 days. IMR is the most sensitive index of health status of a community.",
     "concept_explanation": "",
@@ -55125,7 +55343,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.611Z",
-    "updated_at": "2026-03-04T11:47:17.611Z",
+    "updated_at": "2026-03-09T13:25:02.218Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -56446,7 +56664,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -56460,7 +56680,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:09.934Z",
-    "updated_at": "2026-03-04T09:52:13.082Z",
+    "updated_at": "2026-03-09T13:25:02.223Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -59335,8 +59555,8 @@
     "topic": 5,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2019"
+      "PYQ_2019",
+      "high_yield"
     ],
     "explanation": "Kayser-Fleischer (KF) ring is golden-brown ring at the periphery of cornea due to copper deposition in Descemet membrane. Pathognomonic of Wilson disease (hepatolenticular degeneration).",
     "concept_explanation": "",
@@ -59351,7 +59571,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.518Z",
-    "updated_at": "2026-03-04T11:47:17.518Z",
+    "updated_at": "2026-03-09T13:25:02.264Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -60824,7 +61044,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -60838,7 +61060,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.981Z",
-    "updated_at": "2026-03-04T09:33:02.981Z",
+    "updated_at": "2026-03-09T13:25:02.259Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -61090,7 +61312,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -61104,7 +61328,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.916Z",
-    "updated_at": "2026-03-04T09:33:02.917Z",
+    "updated_at": "2026-03-09T13:25:02.254Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -61242,7 +61466,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -61256,7 +61482,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.881Z",
-    "updated_at": "2026-03-04T09:33:02.881Z",
+    "updated_at": "2026-03-09T13:25:02.250Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -61926,7 +62152,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -61940,7 +62168,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.701Z",
-    "updated_at": "2026-03-04T09:33:02.701Z",
+    "updated_at": "2026-03-09T13:25:02.245Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -61962,12 +62190,18 @@
     "correct_answer": "A",
     "year": 2019,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -61978,7 +62212,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.692Z",
-    "updated_at": "2026-03-04T09:33:02.692Z",
+    "updated_at": "2026-03-09T13:25:02.240Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -62116,7 +62350,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -62130,7 +62366,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.607Z",
-    "updated_at": "2026-03-04T09:33:02.607Z",
+    "updated_at": "2026-03-09T13:25:02.235Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -63180,7 +63416,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "respiratory medicine"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -63194,7 +63432,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:02.315Z",
-    "updated_at": "2026-03-04T09:33:02.315Z",
+    "updated_at": "2026-03-09T13:25:02.229Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -63409,8 +63647,8 @@
     "topic": 13,
     "difficulty": "medium",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2019"
+      "PYQ_2019",
+      "high_yield"
     ],
     "explanation": "Kernicterus = unconjugated (indirect) bilirubin deposition in basal ganglia. Only unconjugated bilirubin crosses BBB. Causes include Rh incompatibility, G6PD deficiency.",
     "concept_explanation": "",
@@ -63425,7 +63663,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.547Z",
-    "updated_at": "2026-03-04T11:47:17.547Z",
+    "updated_at": "2026-03-09T13:25:02.274Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -63949,9 +64187,9 @@
     "topic": 41,
     "difficulty": "easy",
     "concept_tags": [
-      "measles",
+      "communicable disease",
       "incubation period",
-      "communicable disease"
+      "measles"
     ],
     "explanation": "Measles has an incubation period of 10-14 days (average 10 days). The prodromal period is 3-5 days with fever, cough, coryza, conjunctivitis, and Koplik spots.",
     "concept_explanation": "",
@@ -63966,7 +64204,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-03T18:25:07.761Z",
-    "updated_at": "2026-03-04T09:52:14.515Z",
+    "updated_at": "2026-03-09T13:25:02.269Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -64522,7 +64760,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -64536,7 +64776,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:05.094Z",
-    "updated_at": "2026-03-04T09:52:14.203Z",
+    "updated_at": "2026-03-09T13:25:02.279Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -64561,8 +64801,8 @@
     "topic": 40,
     "difficulty": "easy",
     "concept_tags": [
-      "high_yield",
-      "PYQ_2019"
+      "PYQ_2019",
+      "high_yield"
     ],
     "explanation": "Kwashiorkor = protein deficiency → edema, fatty liver, flag sign hair, moon face, miserable. Marasmus = calorie deficiency → wasting, monkey facies, old man appearance, alert.",
     "concept_explanation": "",
@@ -64577,7 +64817,7 @@
     "times_asked": 1,
     "is_active": true,
     "created_at": "2026-03-04T11:47:17.619Z",
-    "updated_at": "2026-03-04T11:47:17.619Z",
+    "updated_at": "2026-03-09T13:25:02.284Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -66012,7 +66252,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -66026,7 +66268,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:05.470Z",
-    "updated_at": "2026-03-04T09:52:13.958Z",
+    "updated_at": "2026-03-09T13:25:02.295Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -68178,7 +68420,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -68192,7 +68436,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:04.772Z",
-    "updated_at": "2026-03-04T09:52:14.353Z",
+    "updated_at": "2026-03-09T13:25:02.289Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -70192,7 +70436,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "neurology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -70206,7 +70452,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:58.012Z",
-    "updated_at": "2026-03-04T09:32:58.012Z",
+    "updated_at": "2026-03-09T13:25:02.338Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -71294,7 +71540,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -71308,7 +71556,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.661Z",
-    "updated_at": "2026-03-04T09:32:57.661Z",
+    "updated_at": "2026-03-09T13:25:02.333Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -71558,12 +71806,18 @@
     "correct_answer": "A",
     "year": 2018,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -71574,7 +71828,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.580Z",
-    "updated_at": "2026-03-04T09:32:57.580Z",
+    "updated_at": "2026-03-09T13:25:02.325Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -71596,12 +71850,19 @@
     "correct_answer": "A",
     "year": 2018,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "hematology",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -71612,7 +71873,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.570Z",
-    "updated_at": "2026-03-04T09:32:57.570Z",
+    "updated_at": "2026-03-09T13:25:02.318Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -71707,15 +71968,21 @@
     "option_b": "Hyporeflexia",
     "option_c": "Clonus",
     "option_d": "Muscle wasting",
-    "correct_answer": "A",
+    "correct_answer": "C",
     "year": 2018,
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
+    "concept_tags": [
+      "Upper Motor Neuron",
+      "Neurological Examination",
+      "Clonus",
+      "Spasticity",
+      "Pyramidal Signs"
+    ],
+    "explanation": "The characteristic features of upper motor neuron (UMN) lesions include clonus, hyperreflexia, spasticity, and positive Babinski sign. Clonus is rhythmic muscle contractions occurring with sustained stretch. Fasciculations and muscle wasting are features of lower motor neuron lesions.",
     "concept_explanation": "",
-    "mnemonic": "",
+    "mnemonic": "CLONUS mnemonic: C-Clonus, L-Loss of inhibition, O-Overactive reflexes, N-No muscle wasting initially, U-Upper motor damage, S-Spasticity.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -71726,7 +71993,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.539Z",
-    "updated_at": "2026-03-04T09:32:57.539Z",
+    "updated_at": "2026-03-09T15:01:59.918Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -71750,7 +72017,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -71764,7 +72033,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.529Z",
-    "updated_at": "2026-03-04T09:32:57.529Z",
+    "updated_at": "2026-03-09T13:25:02.313Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -72014,12 +72283,18 @@
     "correct_answer": "A",
     "year": 2018,
     "subject": 1,
-    "topic": null,
+    "topic": 60,
     "difficulty": "medium",
-    "concept_tags": [],
-    "explanation": "",
-    "concept_explanation": "",
-    "mnemonic": "",
+    "concept_tags": [
+      "community acquired pneumonia",
+      "pneumonia etiology",
+      "respiratory infections",
+      "streptococcus pneumoniae",
+      "typical pneumonia"
+    ],
+    "explanation": "Most common cause of community-acquired pneumonia is Streptococcus pneumoniae. It remains the leading typical bacterial pathogen in adults.",
+    "concept_explanation": "CAP is pneumonia acquired outside healthcare settings. Typical CAP pathogens include S. pneumoniae, H. influenzae, and atypicals such as Mycoplasma.",
+    "mnemonic": "CAP classic: S-pneumo Starts the list.",
     "book_name": "",
     "chapter": "",
     "page_number": "",
@@ -72030,7 +72305,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:32:57.457Z",
-    "updated_at": "2026-03-04T09:32:57.457Z",
+    "updated_at": "2026-03-09T13:25:02.308Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -72320,7 +72595,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "cardiology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -72334,7 +72611,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:23:55.118Z",
-    "updated_at": "2026-03-04T09:23:55.118Z",
+    "updated_at": "2026-03-09T13:25:02.304Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -72396,7 +72673,9 @@
     "subject": 1,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "cardiology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -72410,7 +72689,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:23:55.106Z",
-    "updated_at": "2026-03-04T09:23:55.106Z",
+    "updated_at": "2026-03-09T13:25:02.299Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -73118,7 +73397,9 @@
     "subject": 4,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "hematology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -73132,7 +73413,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.726Z",
-    "updated_at": "2026-03-04T09:52:14.810Z",
+    "updated_at": "2026-03-09T13:25:02.344Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -73954,7 +74235,9 @@
     "subject": 5,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -73968,7 +74251,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.090Z",
-    "updated_at": "2026-03-04T09:52:15.150Z",
+    "updated_at": "2026-03-09T13:25:02.349Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -75132,7 +75415,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -75146,7 +75431,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.848Z",
-    "updated_at": "2026-03-04T09:52:14.727Z",
+    "updated_at": "2026-03-09T13:25:02.373Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -75322,7 +75607,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -75336,7 +75623,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.795Z",
-    "updated_at": "2026-03-04T09:52:14.765Z",
+    "updated_at": "2026-03-09T13:25:02.368Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -75398,7 +75685,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "endocrinology"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -75412,7 +75701,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.776Z",
-    "updated_at": "2026-03-04T09:52:14.776Z",
+    "updated_at": "2026-03-09T13:25:02.363Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -77222,7 +77511,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -77236,7 +77527,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.038Z",
-    "updated_at": "2026-03-04T09:52:15.175Z",
+    "updated_at": "2026-03-09T13:25:02.358Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
@@ -77260,7 +77551,9 @@
     "subject": 3,
     "topic": null,
     "difficulty": "medium",
-    "concept_tags": [],
+    "concept_tags": [
+      "infectious diseases"
+    ],
     "explanation": "",
     "concept_explanation": "",
     "mnemonic": "",
@@ -77274,7 +77567,7 @@
     "times_asked": 0,
     "is_active": true,
     "created_at": "2026-03-04T09:33:00.028Z",
-    "updated_at": "2026-03-04T09:52:15.179Z",
+    "updated_at": "2026-03-09T13:25:02.353Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",
