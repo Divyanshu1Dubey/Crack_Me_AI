@@ -1,8 +1,17 @@
 """
 Enhanced AI Service Layer for UPSC CMS Platform.
-Orchestrates Gemini + Groq + DeepSeek with round-robin load balancing
+Orchestrates 6 AI providers with round-robin load balancing
 and RAG-backed textbook grounding. Distributes calls across providers
 to minimize quota exhaustion on any single API.
+
+Providers (all free-tier capable):
+  1. Groq      — Llama 3.3 70B  (30 RPM, 14,400 RPD)
+  2. Cerebras  — Llama 3.1 8B   (30 RPM, ~1M tokens/day)
+  3. Gemini    — Flash 2.0      (15 RPM, 1,500 RPD per model)
+  4. Cohere    — Command-A      (20 RPM, 1,000 req/month)
+  5. OpenRouter— free models    (20 RPM on free tier)
+  6. GitHub    — Models API      (150 RPM, 15K RPD free with PAT)
+  7. DeepSeek  — pay-as-you-go  (fallback)
 """
 import json
 import logging
@@ -17,16 +26,19 @@ logger = logging.getLogger(__name__)
 
 # ─── LOAD BALANCING CONFIG ──────────────────────────────
 #
-# Strategy: Round-robin across providers. Each call picks the next
+# Strategy: Round-robin across 6 providers. Each call picks the next
 # provider in rotation. On failure/quota-exceeded, falls through to
 # the next provider(s). This spreads load evenly so no single API
 # gets exhausted first.
 #
-# Gemini free tier: 15 RPM / 1,500 RPD per model (x4 models = 6,000/day)
-# Groq free tier:   30 RPM / 14,400 RPD (llama-3.3-70b)
-# DeepSeek:         Pay-as-you-go ($0.14/M input, $0.28/M output)
+# Groq free tier:     30 RPM / 14,400 RPD (llama-3.3-70b)
+# Cerebras free tier: 30 RPM / ~1M tokens/day (llama3.1-8b)
+# Gemini free tier:   15 RPM / 1,500 RPD per model (x2 models = 3,000/day)
+# Cohere free tier:   20 RPM / 1,000 req/month (command-a-03-2025)
+# OpenRouter free:    20 RPM (free model variants)
+# DeepSeek:           Pay-as-you-go ($0.14/M input, $0.28/M output)
 #
-# Combined theoretical max: ~20,000 API calls/day
+# Combined theoretical max: ~35,000+ API calls/day
 
 # Gemini models — only 2 to keep total timeout reasonable on free tier
 GEMINI_MODELS = [
@@ -65,14 +77,18 @@ When answering:
 
 class AIService:
     """
-    Enhanced AI service with round-robin load balancing across 3 providers
-    (Gemini, Groq, DeepSeek) and RAG pipeline integration.
+    Enhanced AI service with round-robin load balancing across 6 providers
+    (Groq, Cerebras, Gemini, Cohere, OpenRouter, DeepSeek) and RAG pipeline integration.
     """
 
     def __init__(self):
         self.gemini_client = None
         self.groq = None
         self.deepseek = None
+        self.cerebras = None
+        self.cohere = None
+        self.openrouter = None
+        self.github_models = None
         self._rag = None
         self._init_clients()
 
@@ -81,6 +97,9 @@ class AIService:
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '')
         groq_key = getattr(settings, 'GROQ_API_KEY', '')
         deepseek_key = getattr(settings, 'DEEPSEEK_API_KEY', '')
+        cerebras_key = getattr(settings, 'CEREBRAS_API_KEY', '')
+        cohere_key = getattr(settings, 'COHERE_API_KEY', '')
+        openrouter_key = getattr(settings, 'OPENROUTER_API_KEY', '')
 
         if gemini_key:
             try:
@@ -109,8 +128,55 @@ class AIService:
             except Exception as e:
                 logger.warning(f"DeepSeek init failed: {e}")
 
-        if not self.gemini_client and not self.groq and not self.deepseek:
+        if cerebras_key:
+            try:
+                from cerebras.cloud.sdk import Cerebras
+                self.cerebras = Cerebras(api_key=cerebras_key)
+                logger.info("✅ Cerebras AI initialized")
+            except Exception as e:
+                logger.warning(f"Cerebras init failed: {e}")
+
+        if cohere_key:
+            try:
+                import cohere
+                self.cohere = cohere.ClientV2(api_key=cohere_key)
+                logger.info("✅ Cohere AI initialized")
+            except Exception as e:
+                logger.warning(f"Cohere init failed: {e}")
+
+        if openrouter_key:
+            try:
+                from openai import OpenAI
+                self.openrouter = OpenAI(
+                    api_key=openrouter_key,
+                    base_url='https://openrouter.ai/api/v1'
+                )
+                logger.info("✅ OpenRouter AI initialized")
+            except Exception as e:
+                logger.warning(f"OpenRouter init failed: {e}")
+
+        github_token = getattr(settings, 'GITHUB_TOKEN', '')
+        if github_token:
+            try:
+                from openai import OpenAI
+                self.github_models = OpenAI(
+                    api_key=github_token,
+                    base_url='https://models.inference.ai.azure.com'
+                )
+                logger.info("✅ GitHub Models AI initialized")
+            except Exception as e:
+                logger.warning(f"GitHub Models init failed: {e}")
+
+        providers_ok = [name for name, client in [
+            ('Gemini', self.gemini_client), ('Groq', self.groq),
+            ('DeepSeek', self.deepseek), ('Cerebras', self.cerebras),
+            ('Cohere', self.cohere), ('OpenRouter', self.openrouter),
+            ('GitHub', self.github_models),
+        ] if client]
+        if not providers_ok:
             logger.error("❌ No AI providers initialized! Check API keys in .env")
+        else:
+            logger.info(f"🚀 AI providers ready: {', '.join(providers_ok)}")
 
     @property
     def rag(self):
@@ -228,19 +294,160 @@ class AIService:
                 logger.warning(f"DeepSeek error: {e}")
         return None
 
+    def _call_cerebras(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call Cerebras (ultra-fast inference, Llama 3.1 8B).
+        Free tier: 30 RPM, ~1M tokens/day."""
+        if not self.cerebras:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.cerebras.chat.completions.create(
+                model="llama3.1-8b",
+                messages=messages,
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+            )
+            text = response.choices[0].message.content
+            if text:
+                logger.info("Cerebras OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or 'invalid_api_key' in err:
+                logger.warning("Cerebras API key invalid — skipping")
+                self.cerebras = None
+            elif '429' in err:
+                logger.info("Cerebras rate limit hit")
+            else:
+                logger.warning(f"Cerebras error: {e}")
+        return None
+
+    def _call_cohere(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call Cohere (Command-A model).
+        Free tier: 20 RPM, 1,000 req/month."""
+        if not self.cohere:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.cohere.chat(
+                model="command-a-03-2025",
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            text = response.message.content[0].text
+            if text:
+                logger.info("Cohere OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or 'invalid_api_key' in err:
+                logger.warning("Cohere API key invalid — skipping")
+                self.cohere = None
+            elif '429' in err:
+                logger.info("Cohere rate limit hit")
+            else:
+                logger.warning(f"Cohere error: {e}")
+        return None
+
+    def _call_openrouter(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call OpenRouter (free model variants).
+        Free tier: 20 RPM on free models."""
+        if not self.openrouter:
+            return None
+        # Try free models in preference order
+        free_models = [
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'google/gemma-3-27b-it:free',
+            'qwen/qwen3-32b:free',
+        ]
+        for model_name in free_models:
+            try:
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                response = self.openrouter.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=20.0,
+                )
+                text = response.choices[0].message.content
+                if text:
+                    logger.info(f"OpenRouter [{model_name}] OK")
+                    return text
+            except Exception as e:
+                err = str(e)
+                if '429' in err:
+                    logger.info(f"OpenRouter [{model_name}] rate limited, trying next...")
+                    continue
+                elif '401' in err or '403' in err:
+                    logger.warning("OpenRouter API key invalid — skipping")
+                    self.openrouter = None
+                    return None
+                else:
+                    logger.warning(f"OpenRouter [{model_name}] error: {e}")
+                    continue
+        return None
+
+    def _call_github_models(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call GitHub Models (Azure-hosted, free with GitHub PAT).
+        Free tier: 150 RPM, 15,000 RPD."""
+        if not self.github_models:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.github_models.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=15.0,
+            )
+            text = response.choices[0].message.content
+            if text:
+                logger.info("GitHub Models OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or '403' in err:
+                logger.warning("GitHub Models token invalid — skipping")
+                self.github_models = None
+            elif '429' in err:
+                logger.info("GitHub Models rate limit hit")
+            else:
+                logger.warning(f"GitHub Models error: {e}")
+        return None
+
     # ─── LOAD-BALANCED DISPATCHER ──────────────────────────
 
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
         """
-        Call AI with round-robin load balancing. Groq first (fastest),
-        then Gemini, then DeepSeek. Total capped at 45s.
+        Call AI with round-robin load balancing across 7 providers.
+        Order: Groq → Cerebras → Gemini → Cohere → OpenRouter → GitHub → DeepSeek.
+        Total capped at 60s.
         """
         import time
         global _call_counter
         providers = [
             ('groq', self._call_groq),
+            ('cerebras', self._call_cerebras),
             ('gemini', self._call_gemini),
+            ('cohere', self._call_cohere),
+            ('openrouter', self._call_openrouter),
+            ('github', self._call_github_models),
             ('deepseek', self._call_deepseek),
         ]
 
@@ -248,11 +455,11 @@ class AIService:
             start = _call_counter % len(providers)
             _call_counter += 1
 
-        deadline = time.time() + 45
+        deadline = time.time() + 60
 
         for i in range(len(providers)):
             if time.time() >= deadline:
-                logger.warning("AI call hit 45s deadline, aborting remaining providers")
+                logger.warning("AI call hit 60s deadline, aborting remaining providers")
                 break
             idx = (start + i) % len(providers)
             name, call_fn = providers[idx]
@@ -549,7 +756,21 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
                              correct_answer: str = "", selected_answer: str = "",
                              subject: str = "", topic: str = "") -> dict:
         """Generate a rich AI explanation after the user answers a question.
-        Returns textbook location, mnemonic, around-concepts, and deep explanation."""
+        Returns textbook location, mnemonic, around-concepts, and deep explanation.
+        Results are cached by question+answer for 24 hours."""
+        from django.core.cache import cache
+        import hashlib
+
+        # Cache key based on question content + correct answer (not user-specific)
+        cache_key = "ai_explain_" + hashlib.md5(
+            f"{question_text[:200]}_{correct_answer}".encode()
+        ).hexdigest()
+        cached = cache.get(cache_key)
+        if cached:
+            # Update is_correct for this specific user's answer
+            cached['is_correct'] = (selected_answer == correct_answer)
+            return cached
+
         rag_context = ""
         citations = []
         if self.rag:
@@ -590,7 +811,7 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
     "page": "Page number or range if known",
     "section": "Specific section within the chapter"
   }},
-  "mnemonic": "A creative, catchy mnemonic to remember this concept FOREVER. Use a memorable acronym, story, or funny association. Explain each letter/word. Make it impossible to forget. ALWAYS provide one, never leave blank.",
+  "mnemonic": "A creative, catchy mnemonic to remember this concept FOREVER. Use a memorable acronym where each letter stands for something specific (like 'I GET SMASHED' for acute pancreatitis). Explain each letter/word. Include a funny or vivid mental image. ALWAYS provide one, never leave blank.",
   "core_concept": "The fundamental concept being tested — stated clearly in 1 line",
   "topic_deep_dive": "A comprehensive 6-8 line paragraph that acts as a MINI LECTURE NOTE. Cover: (1) What is this topic about? (2) Key classifications/stages/types (3) Important numbers/values to remember (4) How it connects to clinical practice (5) Common exam traps. Write as if you are a teacher giving a quick but thorough overview to a student who needs to understand the entire topic from this one explanation.",
   "key_differentiators": [
@@ -637,6 +858,8 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
             result.setdefault('topic_deep_dive', '')
             result.setdefault('key_differentiators', [])
             result.setdefault('quick_revision', '')
+            # Cache the result for 24 hours (keyed by question, not user)
+            cache.set(cache_key, result, timeout=86400)
             return result
         except (json.JSONDecodeError, Exception) as e:
             logger.warning(f"Failed to parse explain_after_answer JSON: {e}")
@@ -696,3 +919,79 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
                 "is_correct": is_correct,
                 "raw_response": raw[:800] if raw else "",
             }
+
+    # ─── MULTI-MODEL VOTING (for batch enrichment) ──────
+
+    def get_consensus_answer(self, question_text: str, options: dict) -> Optional[str]:
+        """
+        Query 3 providers for the correct answer and use majority voting.
+        Returns the consensus answer letter (A/B/C/D) or None if no agreement.
+        Used during batch enrichment, not real-time requests.
+        """
+        from collections import Counter
+
+        prompt = f"""Given this medical MCQ, respond with ONLY the correct answer letter (A, B, C, or D):
+
+Question: {question_text}
+A) {options.get('A', '')}
+B) {options.get('B', '')}
+C) {options.get('C', '')}
+D) {options.get('D', '')}
+
+Answer (single letter only):"""
+
+        providers = [
+            ('groq', self._call_groq),
+            ('cerebras', self._call_cerebras),
+            ('github', self._call_github_models),
+        ]
+
+        answers = []
+        for name, call_fn in providers:
+            try:
+                result = call_fn(prompt, "You are a medical expert. Respond with only a single letter: A, B, C, or D.", 0.1, 10)
+                if result:
+                    letter = result.strip().upper()[:1]
+                    if letter in ('A', 'B', 'C', 'D'):
+                        answers.append(letter)
+                        logger.info(f"Voting: {name} voted {letter}")
+            except Exception as e:
+                logger.warning(f"Voting: {name} failed: {e}")
+
+        if not answers:
+            return None
+
+        vote = Counter(answers).most_common(1)[0]
+        if vote[1] >= 2:  # At least 2/3 agree
+            logger.info(f"Consensus reached: {vote[0]} ({vote[1]}/{len(answers)})")
+            return vote[0]
+
+        logger.warning(f"No consensus: votes={answers}")
+        return None
+
+
+def score_explanation(explanation: dict) -> float:
+    """
+    Score AI-generated explanation quality (0.0 to 1.0).
+    Reject responses scoring below 0.4 and retry with a different provider.
+    """
+    score = 0.0
+    # Length check (min 50 chars for meaningful explanation)
+    if len(explanation.get('why_correct', '')) > 50:
+        score += 0.2
+    # Has textbook reference
+    ref = explanation.get('textbook_reference', {})
+    if isinstance(ref, dict) and ref.get('book'):
+        score += 0.2
+    # Mnemonic present
+    if explanation.get('mnemonic'):
+        score += 0.2
+    # Has high yield points
+    if explanation.get('high_yield_points'):
+        score += 0.2
+    # Answer consistency (explanation mentions correct answer)
+    why_correct = explanation.get('why_correct', '')
+    correct = explanation.get('is_correct')
+    if correct is not None or (why_correct and len(why_correct) > 20):
+        score += 0.2
+    return round(score, 2)

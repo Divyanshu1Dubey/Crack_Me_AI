@@ -1,6 +1,7 @@
 """
 accounts/views.py — Authentication & Token Management API views.
-Endpoints: Register, Login, Profile, Token Balance, Token Purchase, Token History.
+Endpoints: Register, Login, Profile, Token Balance, Token Purchase, Token History,
+           Password Reset (request + confirm).
 Admin users bypass all token limits.
 """
 from rest_framework import status, generics, permissions
@@ -8,6 +9,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from django.conf import settings as django_settings
 from .serializers import (
     RegisterSerializer, UserSerializer, LoginSerializer,
     TokenBalanceSerializer, TokenPurchaseSerializer, TokenTransactionSerializer,
@@ -45,6 +51,7 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = authenticate(
+            request,
             username=serializer.validated_data['username'],
             password=serializer.validated_data['password']
         )
@@ -306,3 +313,54 @@ class AdminTokenTransferView(APIView):
                 'message': f'Granted {amount} tokens to {to_user.username}',
                 'to_balance': TokenBalanceSerializer(to_balance).data,
             })
+
+
+class PasswordResetRequestView(APIView):
+    """Request a password reset email. Sends a link with UID + token."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Always return success to avoid user enumeration
+        try:
+            user = User.objects.get(email=email)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            frontend_url = getattr(django_settings, 'FRONTEND_URL', 'http://localhost:3000')
+            reset_link = f"{frontend_url}/reset-password?uid={uid}&token={token}"
+            send_mail(
+                subject='CrackCMS — Reset Your Password',
+                message=f'Hi {user.first_name or user.username},\n\nClick here to reset your password:\n{reset_link}\n\nThis link expires in 24 hours.\n\n— CrackCMS Team',
+                from_email=django_settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=True,
+            )
+        except User.DoesNotExist:
+            pass  # Silent — prevent email enumeration
+        return Response({'message': 'If an account with that email exists, a reset link has been sent.'})
+
+
+class PasswordResetConfirmView(APIView):
+    """Confirm password reset with UID, token, and new password."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        uid = request.data.get('uid', '')
+        token = request.data.get('token', '')
+        new_password = request.data.get('new_password', '')
+        if not uid or not token or not new_password:
+            return Response({'error': 'uid, token, and new_password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 8:
+            return Response({'error': 'Password must be at least 8 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id)
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response({'error': 'Invalid reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Reset link has expired or is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password has been reset successfully.'})

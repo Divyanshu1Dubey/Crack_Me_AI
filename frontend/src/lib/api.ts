@@ -68,6 +68,10 @@ export const authAPI = {
   login: (data: { username: string; password: string }) => api.post('/auth/login/', data),
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.put('/auth/profile/', data),
+  // Password reset
+  requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
+  confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
+    api.post('/auth/password-reset/confirm/', data),
   // Token system
   getTokenBalance: () => api.get('/auth/tokens/'),
   purchaseTokens: (data: { amount: number; payment_id?: string }) => api.post('/auth/tokens/purchase/', data),
@@ -90,6 +94,10 @@ export const questionsAPI = {
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
+  submitFeedback: (data: { question: number; category: string; comment: string }) =>
+    api.post('/questions/feedback/', data),
+  getFeedback: (params?: Record<string, string>) => api.get('/questions/feedback/', { params }),
+  resolveFeedback: (id: number) => api.patch(`/questions/feedback/${id}/resolve/`),
 };
 
 // Tests API
@@ -124,6 +132,19 @@ export const analyticsAPI = {
   deleteFeedback: (id: number) => api.delete(`/analytics/feedback/${id}/`),
   exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
   exportCSV: (type: string) => api.get('/analytics/export/csv/', { params: { type }, responseType: 'blob' }),
+  // Announcements
+  getAnnouncements: () => api.get('/analytics/announcements/'),
+  createAnnouncement: (data: { title: string; message: string; priority: string; expires_at?: string }) =>
+    api.post('/analytics/announcements/', data),
+  updateAnnouncement: (id: number, data: Record<string, unknown>) =>
+    api.patch(`/analytics/announcements/${id}/`, data),
+  deleteAnnouncement: (id: number) => api.delete(`/analytics/announcements/${id}/`),
+  // Gamification
+  getStreak: () => api.get('/analytics/streak/'),
+  getBadges: () => api.get('/analytics/badges/'),
+  getLeaderboard: (period?: string) => api.get('/analytics/leaderboard/', { params: { period } }),
+  // Admin
+  getAdminDashboard: () => api.get('/analytics/admin-dashboard/'),
 };
 
 
@@ -178,6 +199,33 @@ export const resourcesAPI = {
   getCatalog: () => api.get('/resources/catalog/'),
   getExamGuide: () => api.get('/resources/exam-guide/'),
   downloadUrl: (id: string) => `${api.defaults.baseURL}/resources/download/${id}/`,
+};
+
+// Discussions API
+export const discussionsAPI = {
+  list: (questionId: number) => api.get('/questions/discussions/', { params: { question: questionId } }),
+  create: (data: { question: number; text: string; parent?: number }) => api.post('/questions/discussions/', data),
+  replies: (id: number) => api.get(`/questions/discussions/${id}/replies/`),
+  vote: (id: number, voteType: 'up' | 'down') => api.post(`/questions/discussions/${id}/vote/`, { vote_type: voteType }),
+};
+
+// Notes API
+export const notesAPI = {
+  list: (params?: { question?: number; topic?: number }) => api.get('/questions/notes/', { params }),
+  create: (data: { question?: number; topic?: number; title?: string; content: string }) => api.post('/questions/notes/', data),
+  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
+  delete: (id: number) => api.delete(`/questions/notes/${id}/`),
+};
+
+// Flashcards API
+export const flashcardsAPI = {
+  list: (params?: { subject?: number; due?: string }) => api.get('/questions/flashcards/', { params }),
+  create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string }) =>
+    api.post('/questions/flashcards/', data),
+  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/flashcards/${id}/`, data),
+  delete: (id: number) => api.delete(`/questions/flashcards/${id}/`),
+  review: (id: number, quality: number) => api.post(`/questions/flashcards/${id}/review/`, { quality }),
+  analytics: () => api.get('/questions/flashcards/analytics/'),
 };
 
 export default api;

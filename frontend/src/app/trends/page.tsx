@@ -34,10 +34,10 @@ export default function TrendsPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-8 bg-[var(--bg-primary)]">
+            <div className="min-h-screen flex items-center justify-center p-8 bg-background">
                 <div className="animate-pulse flex flex-col items-center gap-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-[var(--accent-primary)] border-t-transparent animate-spin"></div>
-                    <p className="gradient-text font-bold text-lg">Analyzing Exam Patterns...</p>
+                    <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                    <p className="font-bold text-lg text-foreground">Analyzing Exam Patterns...</p>
                 </div>
             </div>
         );
@@ -49,7 +49,7 @@ export default function TrendsPage() {
     const subjects = stats?.by_subject || [];
 
     return (
-        <div className="min-h-screen p-4 md:p-8 bg-[var(--bg-primary)] text-[var(--text-primary)]">
+        <div className="min-h-screen p-4 md:p-8 bg-background text-foreground">
             <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn">
 
                 {/* Header Section */}

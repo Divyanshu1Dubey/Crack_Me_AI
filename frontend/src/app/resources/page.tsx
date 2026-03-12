@@ -2,6 +2,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { resourcesAPI } from '@/lib/api';
 import {
     FileText, Download, BookOpen, GraduationCap, HelpCircle,
@@ -69,9 +70,11 @@ export default function ResourcesPage() {
     ];
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <BookOpen className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
@@ -363,6 +366,7 @@ export default function ResourcesPage() {
                         )}
                     </>
                 )}
+                </div>
             </div>
         </div>
     );

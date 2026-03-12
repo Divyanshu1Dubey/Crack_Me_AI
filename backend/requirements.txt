@@ -11,3 +11,13 @@ groq>=0.11
 openai>=1.0
 gunicorn>=22.0
 whitenoise>=6.7
+cerebras-cloud-sdk>=1.0
+cohere>=5.0
+together>=2.0
+# Phase 4E: Login security — brute-force protection
+django-axes>=7.0
+# Phase 7: Monitoring & structured logging
+sentry-sdk[django]>=2.0
+python-json-logger>=3.0
+# Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
+django-redis>=5.4

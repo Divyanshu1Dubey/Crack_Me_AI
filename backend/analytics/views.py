@@ -5,8 +5,11 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from django.http import HttpResponse
 from django.db.models import Sum, Avg, Count, F, Q
-from .models import UserTopicPerformance, DailyActivity, Feedback
-from .serializers import TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer
+from django.utils import timezone
+from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
+from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
+                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
+                          UserBadgeSerializer, LeaderboardEntrySerializer)
 from tests_engine.models import TestAttempt
 from questions.models import Subject
 
@@ -397,4 +400,141 @@ class DataExportCSVView(APIView):
         response = HttpResponse(output.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+class AnnouncementListView(APIView):
+    """List active announcements for students, or CRUD for admins."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        now = timezone.now()
+        announcements = Announcement.objects.filter(
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+        )
+        return Response(AnnouncementSerializer(announcements, many=True).data)
+
+    def post(self, request):
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = AnnouncementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AnnouncementDetailView(APIView):
+    """Update/delete announcements (admin only)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            ann = Announcement.objects.get(pk=pk)
+        except Announcement.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AnnouncementSerializer(ann, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            Announcement.objects.get(pk=pk).delete()
+        except Announcement.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StudyStreakView(APIView):
+    """Get current user's study streak and XP."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+        return Response(StudyStreakSerializer(streak).data)
+
+
+class BadgeListView(APIView):
+    """List all badges and which ones the user has earned."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        all_badges = Badge.objects.all()
+        earned = set(UserBadge.objects.filter(user=request.user).values_list('badge_id', flat=True))
+        data = []
+        for badge in all_badges:
+            bd = BadgeSerializer(badge).data
+            bd['earned'] = badge.id in earned
+            data.append(bd)
+        return Response(data)
+
+
+class LeaderboardView(APIView):
+    """Weekly/monthly/all-time leaderboard ranked by XP."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get('period', 'all')
+        streaks = StudyStreak.objects.select_related('user').order_by('-xp_points')[:50]
+
+        entries = []
+        for rank, streak in enumerate(streaks, 1):
+            # Calculate accuracy from test attempts
+            attempts = TestAttempt.objects.filter(user=streak.user, is_completed=True)
+            agg = attempts.aggregate(
+                total_correct=Sum('correct_count'),
+                total_incorrect=Sum('incorrect_count'),
+                tests_done=Count('id'),
+            )
+            total = (agg['total_correct'] or 0) + (agg['total_incorrect'] or 0)
+            accuracy = round((agg['total_correct'] or 0) / total * 100, 1) if total > 0 else 0
+
+            entries.append({
+                'rank': rank,
+                'username': streak.user.username,
+                'user_id': streak.user.id,
+                'xp_points': streak.xp_points,
+                'current_streak': streak.current_streak,
+                'total_study_days': streak.total_study_days,
+                'accuracy': accuracy,
+                'tests_completed': agg['tests_done'] or 0,
+            })
+        return Response(entries)
+
+
+class AdminDashboardView(APIView):
+    """Admin overview: user stats, question quality, AI usage."""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from accounts.models import CustomUser, TokenBalance
+        from questions.models import Question
+
+        total_users = CustomUser.objects.count()
+        active_today = DailyActivity.objects.filter(date=timezone.now().date()).count()
+        total_questions = Question.objects.count()
+        questions_with_answer = Question.objects.exclude(correct_answer='').count()
+        questions_with_explanation = Question.objects.filter(explanation__isnull=False).exclude(explanation='').count()
+        total_tests_taken = TestAttempt.objects.filter(is_completed=True).count()
+        unresolved_feedback = Feedback.objects.filter(is_read=False).count()
+        recent_signups = list(
+            CustomUser.objects.order_by('-date_joined')[:10].values('id', 'username', 'email', 'date_joined')
+        )
+
+        return Response({
+            'total_users': total_users,
+            'active_today': active_today,
+            'total_questions': total_questions,
+            'questions_with_answer': questions_with_answer,
+            'questions_with_explanation': questions_with_explanation,
+            'answer_percentage': round(questions_with_answer / total_questions * 100, 1) if total_questions else 0,
+            'total_tests_taken': total_tests_taken,
+            'unresolved_feedback': unresolved_feedback,
+            'recent_signups': recent_signups,
+        })
 

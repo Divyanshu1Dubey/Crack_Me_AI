@@ -2,12 +2,13 @@ from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard
 from .serializers import (
     SubjectSerializer, TopicSerializer,
     QuestionListSerializer, QuestionDetailSerializer,
     QuestionUploadSerializer, BookmarkSerializer,
-    QuestionFeedbackSerializer
+    QuestionFeedbackSerializer, DiscussionSerializer,
+    NoteSerializer, FlashcardSerializer
 )
 
 
@@ -183,3 +184,187 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
             })
 
         return Response({'message': 'Feedback resolved (no user to reward).'})
+
+
+class DiscussionListCreateView(generics.ListCreateAPIView):
+    """List discussions for a question or create a new one."""
+    serializer_class = DiscussionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        question_id = self.request.query_params.get('question')
+        qs = Discussion.objects.select_related('user').filter(parent__isnull=True)
+        if question_id:
+            qs = qs.filter(question_id=question_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class DiscussionRepliesView(generics.ListAPIView):
+    """List replies to a discussion."""
+    serializer_class = DiscussionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Discussion.objects.filter(parent_id=self.kwargs['pk']).select_related('user')
+
+
+class DiscussionVoteView(generics.GenericAPIView):
+    """Upvote or downvote a discussion."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        vote_type = request.data.get('vote_type')
+        if vote_type not in ('up', 'down'):
+            return Response({'error': 'vote_type must be "up" or "down"'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            discussion = Discussion.objects.get(pk=pk)
+        except Discussion.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        existing = DiscussionVote.objects.filter(user=request.user, discussion=discussion).first()
+        if existing:
+            if existing.vote_type == vote_type:
+                # Remove vote
+                if vote_type == 'up':
+                    discussion.upvotes = max(0, discussion.upvotes - 1)
+                else:
+                    discussion.downvotes = max(0, discussion.downvotes - 1)
+                discussion.save()
+                existing.delete()
+                return Response({'status': 'vote_removed', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
+            else:
+                # Switch vote
+                if vote_type == 'up':
+                    discussion.upvotes += 1
+                    discussion.downvotes = max(0, discussion.downvotes - 1)
+                else:
+                    discussion.downvotes += 1
+                    discussion.upvotes = max(0, discussion.upvotes - 1)
+                existing.vote_type = vote_type
+                existing.save()
+                discussion.save()
+                return Response({'status': 'vote_switched', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
+        else:
+            DiscussionVote.objects.create(user=request.user, discussion=discussion, vote_type=vote_type)
+            if vote_type == 'up':
+                discussion.upvotes += 1
+            else:
+                discussion.downvotes += 1
+            discussion.save()
+            return Response({'status': 'voted', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
+
+
+class NoteListCreateView(generics.ListCreateAPIView):
+    """List and create personal notes."""
+    serializer_class = NoteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Note.objects.filter(user=self.request.user)
+        question_id = self.request.query_params.get('question')
+        topic_id = self.request.query_params.get('topic')
+        if question_id:
+            qs = qs.filter(question_id=question_id)
+        if topic_id:
+            qs = qs.filter(topic_id=topic_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class NoteDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update or delete a note."""
+    serializer_class = NoteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Note.objects.filter(user=self.request.user)
+
+
+class FlashcardListCreateView(generics.ListCreateAPIView):
+    """List and create flashcards."""
+    serializer_class = FlashcardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Flashcard.objects.filter(user=self.request.user).select_related('subject')
+        subject_id = self.request.query_params.get('subject')
+        due = self.request.query_params.get('due')
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+        if due == 'true':
+            from django.utils import timezone
+            from django.db.models import Q
+            qs = qs.filter(Q(next_review__lte=timezone.now()) | Q(next_review__isnull=True))
+        return qs
+
+    def perform_create(self, serializer):
+        from django.utils import timezone
+        serializer.save(user=self.request.user, next_review=timezone.now())
+
+
+class FlashcardDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a flashcard."""
+    serializer_class = FlashcardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Flashcard.objects.filter(user=self.request.user)
+
+
+class FlashcardReviewView(generics.GenericAPIView):
+    """Submit a review result for spaced repetition scheduling."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        quality = request.data.get('quality', 3)
+        if not isinstance(quality, int) or quality < 0 or quality > 5:
+            return Response({'error': 'quality must be 0-5'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            card = Flashcard.objects.get(pk=pk, user=request.user)
+        except Flashcard.DoesNotExist:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        card.schedule_next_review(quality)
+        return Response(FlashcardSerializer(card).data)
+
+
+class FlashcardAnalyticsView(generics.GenericAPIView):
+    """Spaced repetition analytics: retention rate, interval distribution, memory curves."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Avg, Q
+        from django.utils import timezone
+
+        cards = Flashcard.objects.filter(user=request.user)
+        total = cards.count()
+        if total == 0:
+            return Response({
+                'total_cards': 0, 'cards_due_today': 0, 'retention_rate': 0,
+                'avg_ease_factor': 0, 'avg_interval': 0, 'interval_distribution': {},
+            })
+
+        now = timezone.now()
+        due_today = cards.filter(Q(next_review__lte=now) | Q(next_review__isnull=True)).count()
+        aggs = cards.aggregate(
+            avg_ease=Avg('ease_factor'),
+            avg_interval=Avg('interval_days'),
+        )
+
+        return Response({
+            'total_cards': total,
+            'cards_due_today': due_today,
+            'retention_rate': round(cards.filter(ease_factor__gte=2.5).count() / total, 3),
+            'avg_ease_factor': round(aggs['avg_ease'] or 0, 2),
+            'avg_interval': round(aggs['avg_interval'] or 0, 1),
+            'interval_distribution': {
+                '1_day': cards.filter(interval_days=1).count(),
+                '2_7_days': cards.filter(interval_days__range=(2, 7)).count(),
+                '8_30_days': cards.filter(interval_days__range=(8, 30)).count(),
+                '30_plus_days': cards.filter(interval_days__gt=30).count(),
+            },
+        })

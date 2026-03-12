@@ -10,13 +10,20 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { BookOpen, Search, Filter, Bookmark, Eye, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
+import Header from '@/components/Header';
+import DiscussionThread from '@/components/DiscussionThread';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Renders medical question text with proper formatting.
@@ -94,7 +101,7 @@ interface Subject {
 
 export default function QuestionsPage() {
     return (
-        <Suspense fallback={<div style={{ background: 'var(--bg-primary)' }} className="min-h-screen"><Sidebar /><div className="main-content"><div className="glass-card p-8 text-center animate-pulse gradient-text">Loading...</div></div></div>}>
+        <Suspense fallback={<div className="min-h-screen bg-background"><Sidebar /><div className="main-content"><Header /><div className="page-container"><Skeleton className="h-8 w-48 mb-4" /><Skeleton className="h-16 w-full mb-6" /><div className="grid lg:grid-cols-5 gap-6"><div className="lg:col-span-2 space-y-3">{[...Array(5)].map((_,i)=><Skeleton key={i} className="h-24" />)}</div><Skeleton className="lg:col-span-3 h-96" /></div></div></div></div>}>
             <QuestionsContent />
         </Suspense>
     );
@@ -123,6 +130,77 @@ function QuestionsContent() {
     const [aiLoading, setAiLoading] = useState(false);
     const [tokenError, setTokenError] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
+    const [flagOpen, setFlagOpen] = useState(false);
+    const [flagCategory, setFlagCategory] = useState('wrong_answer');
+    const [flagComment, setFlagComment] = useState('');
+    const [flagSubmitting, setFlagSubmitting] = useState(false);
+    const [flagSuccess, setFlagSuccess] = useState(false);
+
+    // Rotating loading messages for AI analysis
+    const loadingMessages = useRef([
+        '🧠 AI is crafting your personalised study notes...',
+        '📚 Scanning Harrison, Bailey & Love, Schwartz...',
+        '💡 Building memory tricks for instant recall...',
+        '🎯 Identifying high-yield exam patterns...',
+        '⚡ Connecting this to frequently tested topics...',
+        '🔬 Analyzing why each option is right or wrong...',
+        '📖 Finding the perfect textbook reference...',
+        '🏥 Preparing clinical pearls for ward rounds...',
+        '🎓 Crafting exam strategy tips just for you...',
+        '🧬 Mapping related concepts for deep understanding...',
+    ]);
+    const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+
+    // ── Keyboard Navigation: A/B/C/D to answer, N/P for next/prev ──
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            // Skip if user is typing in an input/textarea
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+
+            const key = e.key.toLowerCase();
+
+            // A/B/C/D to select answer option (only when viewing a question, before answer is revealed)
+            if (['a', 'b', 'c', 'd'].includes(key) && questionDetail && !showAnswer) {
+                e.preventDefault();
+                handleSelectOption(key.toUpperCase());
+            }
+
+            // N = next question in list
+            if (key === 'n' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const currentIdx = questions.findIndex(q => q.id === selectedQuestion);
+                if (currentIdx < questions.length - 1) {
+                    openQuestion(questions[currentIdx + 1].id);
+                } else if (page < Math.ceil(totalCount / pageSize)) {
+                    // Load next page
+                    handlePageChange(page + 1);
+                }
+            }
+
+            // P = previous question in list
+            if (key === 'p' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const currentIdx = questions.findIndex(q => q.id === selectedQuestion);
+                if (currentIdx > 0) {
+                    openQuestion(questions[currentIdx - 1].id);
+                } else if (page > 1) {
+                    handlePageChange(page - 1);
+                }
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [questionDetail, showAnswer, questions, selectedQuestion, page, totalCount]);
+
+    useEffect(() => {
+        if (!aiLoading) return;
+        setLoadingMsgIndex(0);
+        const interval = setInterval(() => {
+            setLoadingMsgIndex(prev => (prev + 1) % loadingMessages.current.length);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [aiLoading]);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
@@ -266,6 +344,20 @@ function QuestionsContent() {
         fetchQuestions(params);
     };
 
+    const handleFlagSubmit = () => {
+        if (!detail || !flagComment.trim()) return;
+        setFlagSubmitting(true);
+        questionsAPI.submitFeedback({
+            question: detail.id,
+            category: flagCategory,
+            comment: flagComment.trim(),
+        }).then(() => {
+            setFlagSuccess(true);
+            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); }, 2000);
+        }).catch(() => {})
+        .finally(() => setFlagSubmitting(false));
+    };
+
     const diffBadge = (d: string) => {
         const cls = d === 'easy' ? 'badge-easy' : d === 'hard' ? 'badge-hard' : 'badge-medium';
         return <span className={`badge ${cls}`}>{d}</span>;
@@ -275,27 +367,30 @@ function QuestionsContent() {
     const totalPages = Math.ceil(totalCount / pageSize);
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <BookOpen className="w-7 h-7" style={{ color: 'var(--accent-primary)' }} />
+                        <h1 className="text-2xl font-bold flex items-center gap-3 text-foreground">
+                            <BookOpen className="w-6 h-6 text-primary" />
                             CMS Question Bank
                         </h1>
-                        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                        <p className="text-sm mt-1 text-muted-foreground">
                             {totalCount} questions — Master the exam with targeted PYQ practice
                         </p>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="glass-card p-4 mb-6">
+                <Card className="mb-6">
+                    <CardContent className="p-4">
                     <div className="flex flex-wrap gap-3 items-center">
                         <div className="relative flex-1 min-w-[200px]">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                            <input className="input-field pl-10" placeholder="Search questions..."
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input className="pl-10" placeholder="Search questions..."
                                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                         </div>
@@ -313,75 +408,75 @@ function QuestionsContent() {
                             <option value="">All Years</option>
                             {years.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
-                        <button onClick={handleSearch} className="btn-primary">
+                        <Button onClick={handleSearch} size="sm">
                             <Filter className="w-4 h-4" /> Filter
-                        </button>
+                        </Button>
                     </div>
-                </div>
+                    </CardContent>
+                </Card>
 
                 {/* Content */}
-                <div className="grid lg:grid-cols-5 gap-6">
+                <div className="grid lg:grid-cols-5 gap-6" style={{ height: 'calc(100vh - 220px)' }}>
                     {/* Question List */}
-                    <div className="lg:col-span-2 space-y-3">
+                    <div className="lg:col-span-2 overflow-y-auto overscroll-contain pr-1" style={{ scrollbarWidth: 'thin' }}>
+                        <div className="space-y-3">
                         {loading ? (
-                            <div className="glass-card p-8 text-center">
-                                <div className="animate-pulse gradient-text font-semibold">Loading Q-Bank...</div>
+                            <div className="space-y-3">
+                                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                             </div>
                         ) : questions.length === 0 ? (
-                            <div className="glass-card p-8 text-center" style={{ color: 'var(--text-secondary)' }}>
+                            <Card className="p-8 text-center text-muted-foreground">
                                 No questions found. Try adjusting your filters.
-                            </div>
+                            </Card>
                         ) : (
                             <>
                                 {questions.map(q => (
-                                    <div key={q.id} className={`glass-card p-4 cursor-pointer transition-all ${selectedQuestion === q.id ? 'ring-1' : ''}`}
-                                        style={selectedQuestion === q.id ? { borderColor: 'var(--accent-primary)' } : {}}
+                                    <Card key={q.id} className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedQuestion === q.id ? 'ring-2 ring-primary border-primary' : ''}`}
                                         onClick={() => openQuestion(q.id)}>
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                                            <Badge variant="secondary" className="text-xs">
                                                 {q.year} &bull; {q.subject_name}
-                                            </span>
+                                            </Badge>
                                             <div className="flex items-center gap-2">
                                                 {diffBadge(q.difficulty)}
                                                 <button onClick={(e) => handleBookmark(q.id, e)} className="hover:scale-110 transition-transform">
-                                                    <Bookmark className="w-4 h-4" style={{ color: q.is_bookmarked ? '#f59e0b' : 'var(--text-secondary)', fill: q.is_bookmarked ? '#f59e0b' : 'none' }} />
+                                                    <Bookmark className={`w-4 h-4 ${q.is_bookmarked ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground'}`} />
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="text-sm leading-relaxed">{stripMarkdown(q.question_text).slice(0, 150)}{q.question_text.length > 150 ? '...' : ''}</p>
-                                        {q.topic_name && (
-                                            <div className="mt-2">
-                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>
-                                                    {q.topic_name}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
+                                        <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(q.question_text).slice(0, 150)}{q.question_text.length > 150 ? '...' : ''}</p>
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {q.topic_name && <Badge variant="outline" className="text-xs">{q.topic_name}</Badge>}
+                                            {q.year && <Badge variant="outline" className="text-[10px]">PYQ {q.year}</Badge>}
+                                            {q.concept_tags?.includes('high_yield') && (
+                                                <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
+                                            )}
+                                        </div>
+                                    </Card>
                                 ))}
                                 {/* Pagination */}
                                 {totalPages > 1 && (
                                     <div className="flex items-center justify-center gap-2 pt-4">
-                                        <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1}
-                                            className="btn-secondary py-2 px-3 text-sm" style={{ opacity: page <= 1 ? 0.4 : 1 }}>
+                                        <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
                                             <ChevronLeft className="w-4 h-4" />
-                                        </button>
-                                        <span className="text-sm px-3" style={{ color: 'var(--text-secondary)' }}>
+                                        </Button>
+                                        <span className="text-sm px-3 text-muted-foreground">
                                             Page {page} of {totalPages}
                                         </span>
-                                        <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}
-                                            className="btn-secondary py-2 px-3 text-sm" style={{ opacity: page >= totalPages ? 0.4 : 1 }}>
+                                        <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>
                                             <ChevronRight className="w-4 h-4" />
-                                        </button>
+                                        </Button>
                                     </div>
                                 )}
                             </>
                         )}
+                        </div>
                     </div>
 
                     {/* Question Detail */}
-                    <div className="lg:col-span-3">
+                    <div className="lg:col-span-3 overflow-y-auto overscroll-contain" style={{ scrollbarWidth: 'thin' }}>
                         {selectedQuestion && detail ? (
-                            <div className="sticky top-6 space-y-3 animate-fadeInUp" style={{ maxHeight: 'calc(100vh - 3rem)', overflowY: 'auto' }}>
+                            <div className="space-y-3 animate-fadeInUp">
                                 {/* Question Card */}
                                 <div className="glass-card overflow-hidden">
                                     {/* Header Tags */}
@@ -439,6 +534,45 @@ function QuestionsContent() {
                                             </div>
                                         </div>
 
+                                        {/* 🚩 Flag Wrong Answer */}
+                                        <div className="flex justify-end">
+                                            <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); }}
+                                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                                                <Flag className="w-3.5 h-3.5" /> Flag Issue
+                                            </button>
+                                        </div>
+                                        {flagOpen && (
+                                            <div className="glass-card p-4 space-y-3 animate-fadeInUp">
+                                                <h5 className="text-sm font-bold flex items-center gap-2" style={{ color: '#ef4444' }}>
+                                                    <Flag className="w-4 h-4" /> Report an Issue
+                                                </h5>
+                                                {flagSuccess ? (
+                                                    <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted. You&apos;ll earn 2 tokens if accepted.</p>
+                                                ) : (
+                                                    <>
+                                                        <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                            value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
+                                                            <option value="wrong_answer">Wrong Answer</option>
+                                                            <option value="discrepancy">Discrepancy in Options</option>
+                                                            <option value="out_of_syllabus">Out of Syllabus</option>
+                                                            <option value="typo">Typo/Formatting Issue</option>
+                                                            <option value="explanation_needed">Better Explanation Needed</option>
+                                                            <option value="other">Other</option>
+                                                        </select>
+                                                        <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                                                            placeholder="Describe the issue (e.g., correct answer should be B because...)"
+                                                            value={flagComment} onChange={e => setFlagComment(e.target.value)} />
+                                                        <div className="flex gap-2">
+                                                            <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
+                                                                {flagSubmitting ? 'Submitting...' : 'Submit'}
+                                                            </Button>
+                                                            <Button size="sm" variant="ghost" onClick={() => setFlagOpen(false)}>Cancel</Button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* DB Mnemonic */}
                                         {detail.mnemonic && !aiExplanation?.mnemonic && (
                                             <div className="mnemonic-card">
@@ -486,7 +620,7 @@ function QuestionsContent() {
                                             <div className="glass-card p-5 flex items-center gap-4 animate-pulse" style={{ borderColor: 'rgba(6,182,212,0.3)' }}>
                                                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--accent-primary)' }} />
                                                 <div>
-                                                    <span className="text-sm font-bold" style={{ color: 'var(--accent-primary)' }}>🧠 AI is preparing your study material...</span>
+                                                    <span className="text-sm font-bold transition-all duration-500" style={{ color: 'var(--accent-primary)' }}>{loadingMessages.current[loadingMsgIndex]}</span>
                                                     <span className="text-xs block mt-1" style={{ color: 'var(--text-secondary)' }}>Generating mnemonics, topic knowledge, exam tips & more</span>
                                                 </div>
                                             </div>
@@ -710,16 +844,27 @@ function QuestionsContent() {
                                         )}
                                     </div>
                                 )}
+
+                                {/* 💬 Discussion Thread */}
+                                <DiscussionThread questionId={detail.id} />
+
+                                {/* ⌨️ Keyboard Shortcuts Hint */}
+                                <div className="flex flex-wrap items-center gap-3 px-2 py-2 text-[10px] text-muted-foreground">
+                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">A-D</kbd> answer</span>
+                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">N</kbd> next</span>
+                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">P</kbd> prev</span>
+                                </div>
                             </div>
                         ) : (
-                            <div className="glass-card p-16 text-center h-[500px] flex flex-col items-center justify-center">
-                                <BookOpen className="w-16 h-16 mx-auto mb-6" style={{ color: 'var(--text-secondary)', opacity: 0.3 }} />
-                                <p className="text-lg font-medium mb-2">Select a Question</p>
-                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Click any question from the bank to practice and review detailed AI-powered explanations.</p>
-                            </div>
+                            <Card className="p-16 text-center h-[500px] flex flex-col items-center justify-center">
+                                <BookOpen className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
+                                <p className="text-lg font-medium mb-2 text-foreground">Select a Question</p>
+                                <p className="text-sm text-muted-foreground">Click any question from the bank to practice and review detailed AI-powered explanations.</p>
+                            </Card>
                         )}
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

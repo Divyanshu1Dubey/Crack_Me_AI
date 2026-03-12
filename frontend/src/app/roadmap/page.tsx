@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { aiAPI, analyticsAPI } from '@/lib/api';
 import { Map, Target, Brain, TrendingUp, Calendar, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -65,9 +66,11 @@ export default function RoadmapPage() {
     ];
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
                     <Map className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
                     Study Roadmap
@@ -182,6 +185,7 @@ export default function RoadmapPage() {
                         )}
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );

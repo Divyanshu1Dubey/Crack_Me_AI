@@ -15,5 +15,14 @@ urlpatterns = [
     # Data export for Google Sheets
     path('export/', views.DataExportView.as_view(), name='data-export'),
     path('export/csv/', views.DataExportCSVView.as_view(), name='data-export-csv'),
+    # Announcements
+    path('announcements/', views.AnnouncementListView.as_view(), name='announcements'),
+    path('announcements/<int:pk>/', views.AnnouncementDetailView.as_view(), name='announcement-detail'),
+    # Gamification
+    path('streak/', views.StudyStreakView.as_view(), name='study-streak'),
+    path('badges/', views.BadgeListView.as_view(), name='badges'),
+    path('leaderboard/', views.LeaderboardView.as_view(), name='leaderboard'),
+    # Admin
+    path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin-dashboard'),
 ]
 

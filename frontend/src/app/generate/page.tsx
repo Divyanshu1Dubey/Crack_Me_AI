@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { aiAPI, questionsAPI } from '@/lib/api';
 import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target, Lightbulb } from 'lucide-react';
 
@@ -128,7 +129,7 @@ export default function GeneratePage() {
         : ['Medicine', 'Surgery', 'Pediatrics', 'Obstetrics & Gynaecology', 'Preventive & Social Medicine'];
 
     return (
-        <div className="min-h-screen flex" style={{ background: 'var(--bg-primary)' }}>
+        <div className="min-h-screen flex bg-background">
             <Sidebar />
             <main className="flex-1 p-8 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">

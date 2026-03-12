@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
 import {
     Coins, Zap, ShoppingCart, Clock, TrendingUp,
@@ -214,16 +215,18 @@ export default function TokensPage() {
 
     if (authLoading || loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="animate-pulse text-xl gradient-text">Loading Tokens...</div>
             </div>
         );
     }
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 {/* Header */}
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold flex items-center gap-3">
@@ -595,6 +598,7 @@ export default function TokensPage() {
                             })}
                         </div>
                     )}
+                </div>
                 </div>
             </div>
         </div>

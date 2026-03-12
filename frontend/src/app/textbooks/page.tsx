@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { textbooksAPI } from '@/lib/api';
 import { BookOpen, Upload, Search, ExternalLink, FileText, Loader2 } from 'lucide-react';
 
@@ -89,9 +90,11 @@ export default function TextbooksPage() {
     ];
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -255,6 +258,7 @@ export default function TextbooksPage() {
                         )}
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );

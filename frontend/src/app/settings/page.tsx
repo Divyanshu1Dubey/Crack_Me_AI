@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
 import { Settings, User, Key, Bell, Save, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -45,9 +46,11 @@ export default function SettingsPage() {
     };
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
                     <Settings className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
                     Settings
@@ -174,6 +177,7 @@ export default function SettingsPage() {
                             Logout
                         </button>
                     </div>
+                </div>
                 </div>
             </div>
         </div>

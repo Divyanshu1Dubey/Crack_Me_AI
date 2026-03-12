@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import BackendWarmup from "@/components/BackendWarmup";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -11,9 +12,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CrackCMS — AI-Powered UPSC CMS Preparation Platform",
-  description: "The most advanced AI-powered preparation platform for UPSC CMS with PYQ engine, AI tutor, mnemonic generator, and performance analytics.",
-  keywords: "UPSC CMS, medical exam, PYQ, AI tutor, preparation platform",
+  title: "CrackCMS — UPSC CMS Preparation Platform",
+  description: "India's most comprehensive AI-powered preparation platform for UPSC CMS. 3000+ PYQs, AI Tutor, Mock Tests, Analytics & more.",
+  keywords: "UPSC CMS, medical exam, PYQ, AI tutor, preparation platform, CMS exam",
 };
 
 export default function RootLayout({
@@ -23,12 +24,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} antialiased`}>
-        <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
-          <AuthProvider>
-            <BackendWarmup />
-            {children}
-          </AuthProvider>
+      <body className={`${inter.variable} font-sans antialiased`}>
+        <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem>
+          <TooltipProvider>
+            <AuthProvider>
+              <BackendWarmup />
+              {children}
+            </AuthProvider>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>

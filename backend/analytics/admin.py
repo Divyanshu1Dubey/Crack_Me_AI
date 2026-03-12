@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import UserTopicPerformance, DailyActivity, Feedback
+from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 
 @admin.register(UserTopicPerformance)
 class UserTopicPerformanceAdmin(admin.ModelAdmin):
@@ -17,3 +17,24 @@ class FeedbackAdmin(admin.ModelAdmin):
     list_filter = ['category', 'is_read', 'rating']
     search_fields = ['title', 'message', 'user__username']
     readonly_fields = ['user', 'category', 'rating', 'title', 'message', 'created_at']
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ['title', 'priority', 'is_active', 'created_by', 'expires_at', 'created_at']
+    list_filter = ['priority', 'is_active']
+    search_fields = ['title', 'message']
+
+@admin.register(StudyStreak)
+class StudyStreakAdmin(admin.ModelAdmin):
+    list_display = ['user', 'current_streak', 'longest_streak', 'total_study_days', 'xp_points']
+    search_fields = ['user__username']
+
+@admin.register(Badge)
+class BadgeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'icon', 'criteria_type', 'criteria_value', 'xp_reward']
+    list_filter = ['criteria_type']
+
+@admin.register(UserBadge)
+class UserBadgeAdmin(admin.ModelAdmin):
+    list_display = ['user', 'badge', 'earned_at']
+    list_filter = ['badge']

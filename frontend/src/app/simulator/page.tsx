@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { testsAPI, questionsAPI } from '@/lib/api';
 import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar } from 'lucide-react';
 
@@ -67,9 +68,11 @@ export default function SimulatorPage() {
     ];
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <div className="mb-8">
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <GraduationCap className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
@@ -189,6 +192,7 @@ export default function SimulatorPage() {
                         <li>• Don&apos;t guess blindly — skip questions you&apos;re unsure about</li>
                         <li>• Review your results and focus on weak areas after each mock</li>
                     </ul>
+                </div>
                 </div>
             </div>
         </div>

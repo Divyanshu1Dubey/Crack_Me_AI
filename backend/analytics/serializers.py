@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import UserTopicPerformance, DailyActivity, Feedback
+from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 
 
 class TopicPerformanceSerializer(serializers.ModelSerializer):
@@ -31,3 +31,49 @@ class FeedbackSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'category', 'rating', 'title', 'message',
                   'is_read', 'admin_reply', 'created_at']
         read_only_fields = ['id', 'username', 'is_read', 'admin_reply', 'created_at']
+
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True, default='')
+    is_expired = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Announcement
+        fields = ['id', 'title', 'message', 'priority', 'is_active', 'is_expired',
+                  'created_by', 'created_by_name', 'expires_at', 'created_at']
+        read_only_fields = ['id', 'created_by', 'created_by_name', 'created_at']
+
+
+class StudyStreakSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = StudyStreak
+        fields = ['username', 'current_streak', 'longest_streak', 'total_study_days',
+                  'xp_points', 'last_activity_date']
+        read_only_fields = fields
+
+
+class BadgeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Badge
+        fields = ['id', 'name', 'description', 'icon', 'xp_reward', 'criteria_type', 'criteria_value']
+
+
+class UserBadgeSerializer(serializers.ModelSerializer):
+    badge = BadgeSerializer(read_only=True)
+
+    class Meta:
+        model = UserBadge
+        fields = ['id', 'badge', 'earned_at']
+
+
+class LeaderboardEntrySerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    username = serializers.CharField()
+    user_id = serializers.IntegerField()
+    xp_points = serializers.IntegerField()
+    current_streak = serializers.IntegerField()
+    total_study_days = serializers.IntegerField()
+    accuracy = serializers.FloatField()
+    tests_completed = serializers.IntegerField()

@@ -176,7 +176,7 @@ export default function TakeTestPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="animate-pulse text-xl gradient-text">Loading Test...</div>
             </div>
         );
@@ -215,7 +215,7 @@ export default function TakeTestPage() {
         };
 
         return (
-            <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+            <div className="min-h-screen bg-background">
                 {/* Sticky Header */}
                 <div className="sticky top-0 z-50 px-4 md:px-6 py-3 flex items-center justify-between" style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
                     <div className="flex items-center gap-3">
@@ -550,7 +550,7 @@ export default function TakeTestPage() {
                     )}
 
                     {/* ═══ NAVIGATION ═══ */}
-                    <div className="flex items-center justify-between py-4 sticky bottom-0" style={{ background: 'var(--bg-primary)' }}>
+                    <div className="flex items-center justify-between py-4 sticky bottom-0 bg-background">
                         <button onClick={() => setReviewIdx(Math.max(0, reviewIdx - 1))} disabled={reviewIdx <= 0}
                             className="btn-secondary px-5 py-2.5" style={{ opacity: reviewIdx <= 0 ? 0.4 : 1 }}>
                             <ChevronLeft className="w-4 h-4" /> Previous
@@ -572,7 +572,7 @@ export default function TakeTestPage() {
     // ─── RESULTS SCREEN ─────────────────────────────────
     if (submitted && result) {
         return (
-            <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen flex items-center justify-center p-8">
+            <div className="min-h-screen flex items-center justify-center p-8 bg-background">
                 <div className="glass-card p-8 max-w-lg w-full text-center animate-fadeInUp">
                     <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10b981' }} />
                     <h1 className="text-2xl font-bold mb-2">Test Completed!</h1>
@@ -632,7 +632,7 @@ export default function TakeTestPage() {
     const notAnsweredCount = questions.length - answeredCount;
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col bg-background">
             {/* Confirm Dialog */}
             {showConfirm && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>

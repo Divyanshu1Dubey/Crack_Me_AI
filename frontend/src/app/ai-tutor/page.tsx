@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { aiAPI } from '@/lib/api';
 import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -118,9 +119,10 @@ export default function AITutorPage() {
     };
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content flex flex-col" style={{ height: 'calc(100vh - 0px)' }}>
+                <Header />
                 {/* Header */}
                 <div className="mb-4">
                     <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -283,7 +285,7 @@ export default function AITutorPage() {
                             <div className="glass-card p-4 flex items-center gap-2">
                                 <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent-primary)' }} />
                                 <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                    {mode === 'textbook' ? 'Searching textbooks...' : 'Thinking...'}
+                                    {mode === 'textbook' ? '📚 Searching textbooks & references...' : '🧠 Researching your question across medical literature...'}
                                 </span>
                             </div>
                         </div>

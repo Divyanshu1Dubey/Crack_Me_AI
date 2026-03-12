@@ -11,6 +11,16 @@ load_dotenv()  # Load .env file (does not override existing system/Render env va
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ── Sentry Error Tracking ────────────────────────────────────────────
+SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-change-me-in-production-upsc-cms-2024')
 
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
@@ -18,6 +28,11 @@ DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
+CEREBRAS_API_KEY = os.getenv('CEREBRAS_API_KEY', '')
+COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+TOGETHER_API_KEY = os.getenv('TOGETHER_API_KEY', '')
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
 
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]
@@ -43,6 +58,8 @@ INSTALLED_APPS = [
     'ai_engine',
     'textbooks',
     'resources',
+    # Security
+    'axes',
 ]
 
 MIDDLEWARE = [
@@ -55,6 +72,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'crack_cms.urls'
@@ -94,6 +112,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
+
+# django-axes: brute-force login protection
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
+AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
+AXES_LOCKOUT_PARAMETERS = ['username']  # Lock per username, not IP
+AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
 # REST Framework
 REST_FRAMEWORK = {
@@ -153,12 +181,29 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Email — Gmail SMTP for password reset
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'crackwith.ai@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # Gmail App Password
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'CrackCMS <crackwith.ai@gmail.com>')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
 # Logging — ensures API hits and AI errors show up in Render logs
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+        } if not DEBUG else {
             'format': '[{asctime}] {levelname} {name}: {message}',
             'style': '{',
         },
@@ -195,3 +240,25 @@ CHROMA_DB_DIR = str(BASE_DIR / 'chroma_db')
 RAG_CHUNK_SIZE = 500
 RAG_CHUNK_OVERLAP = 50
 TEXTBOOK_SCREENSHOT_DIR = str(MEDIA_ROOT / 'textbook_screenshots')
+
+# ── Cache Configuration ─────────────────────────────────────────────
+# Uses Redis if REDIS_URL is set, otherwise falls back to local memory cache.
+REDIS_URL = os.getenv('REDIS_URL', '')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'TIMEOUT': 86400,  # 24 hours default
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'crackcms-cache',
+        }
+    }

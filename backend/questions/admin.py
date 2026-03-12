@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.html import format_html
-from .models import Subject, Topic, Question, QuestionBookmark
+from .models import Subject, Topic, Question, QuestionBookmark, Discussion, Note, Flashcard
 
 
 @admin.register(Subject)
@@ -117,3 +117,40 @@ class QuestionBookmarkAdmin(admin.ModelAdmin):
     def question_preview(self, obj):
         return obj.question.question_text[:50] + '...' if len(obj.question.question_text) > 50 else obj.question.question_text
     question_preview.short_description = 'Question'
+
+
+@admin.register(Discussion)
+class DiscussionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'question', 'text_preview', 'upvotes', 'is_pinned', 'created_at']
+    list_filter = ['is_pinned']
+    search_fields = ['text', 'user__username']
+    actions = ['pin_discussions', 'unpin_discussions']
+
+    def text_preview(self, obj):
+        return obj.text[:60]
+    text_preview.short_description = 'Text'
+
+    def pin_discussions(self, request, queryset):
+        queryset.update(is_pinned=True)
+    pin_discussions.short_description = 'Pin selected discussions'
+
+    def unpin_discussions(self, request, queryset):
+        queryset.update(is_pinned=False)
+    unpin_discussions.short_description = 'Unpin selected discussions'
+
+
+@admin.register(Note)
+class NoteAdmin(admin.ModelAdmin):
+    list_display = ['user', 'title', 'question', 'topic', 'updated_at']
+    search_fields = ['title', 'content', 'user__username']
+
+
+@admin.register(Flashcard)
+class FlashcardAdmin(admin.ModelAdmin):
+    list_display = ['user', 'front_preview', 'difficulty', 'review_count', 'next_review']
+    list_filter = ['difficulty']
+    search_fields = ['front', 'back', 'user__username']
+
+    def front_preview(self, obj):
+        return obj.front[:50]
+    front_preview.short_description = 'Front'

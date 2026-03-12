@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
 import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download } from 'lucide-react';
 
@@ -103,9 +104,11 @@ export default function FeedbackPage() {
     };
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
                     <MessageSquare className="w-6 h-6" style={{ color: '#8b5cf6' }} />
                     {isAdmin ? 'Student Feedback' : 'Send Feedback'}
@@ -295,6 +298,7 @@ export default function FeedbackPage() {
                             ))}
                         </div>
                     )}
+                </div>
                 </div>
             </div>
         </div>

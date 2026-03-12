@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { aiAPI } from '@/lib/api';
 import { Upload, Brain, FolderSearch, Database, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -77,7 +78,7 @@ export default function UploadPage() {
     if (authLoading) return null;
 
     return (
-        <div className="min-h-screen flex" style={{ background: 'var(--bg-primary)' }}>
+        <div className="min-h-screen flex bg-background">
             <Sidebar />
             <main className="flex-1 p-8 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">

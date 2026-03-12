@@ -1,0 +1,14 @@
+# Security Scanning Configuration
+# Run these tools to check for vulnerabilities
+
+[bandit]
+# Python security linter - SAST scanning
+# Install: pip install bandit
+# Run: bandit -r backend/ -c .bandit.yml
+skips = B101,B601
+exclude_dirs = backend/__pycache__,backend/migrations,backend/.venv
+
+[safety]
+# Dependency vulnerability scanner
+# Install: pip install safety
+# Run: safety check -r backend/requirements.txt

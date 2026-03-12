@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, Note, Flashcard
 
 
 class SubjectSerializer(serializers.ModelSerializer):
@@ -93,3 +93,46 @@ class QuestionFeedbackSerializer(serializers.ModelSerializer):
         model = QuestionFeedback
         fields = ['id', 'question', 'category', 'comment', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class DiscussionSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    reply_count = serializers.SerializerMethodField()
+    user_vote = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Discussion
+        fields = ['id', 'question', 'user', 'username', 'parent', 'text',
+                  'upvotes', 'downvotes', 'is_pinned', 'reply_count', 'user_vote',
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'username', 'upvotes', 'downvotes',
+                            'is_pinned', 'created_at', 'updated_at']
+
+    def get_reply_count(self, obj):
+        return obj.replies.count()
+
+    def get_user_vote(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            vote = obj.votes.filter(user=request.user).first()
+            return vote.vote_type if vote else None
+        return None
+
+
+class NoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Note
+        fields = ['id', 'question', 'topic', 'title', 'content', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FlashcardSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+
+    class Meta:
+        model = Flashcard
+        fields = ['id', 'question', 'subject', 'subject_name', 'front', 'back',
+                  'difficulty', 'next_review', 'review_count', 'ease_factor',
+                  'interval_days', 'created_at']
+        read_only_fields = ['id', 'review_count', 'ease_factor', 'interval_days',
+                            'next_review', 'created_at']

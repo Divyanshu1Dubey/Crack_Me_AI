@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class Subject(models.Model):
@@ -163,3 +164,92 @@ class QuestionFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback on Q{self.question.id}: {self.get_category_display()}"
+
+
+class Discussion(models.Model):
+    """Per-question discussion threads for doubt clearing."""
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='discussions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='discussions')
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
+    text = models.TextField()
+    upvotes = models.IntegerField(default=0)
+    downvotes = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-upvotes', '-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} on Q{self.question.id}: {self.text[:60]}"
+
+
+class DiscussionVote(models.Model):
+    """Track individual votes on discussions to prevent duplicate voting."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    discussion = models.ForeignKey(Discussion, on_delete=models.CASCADE, related_name='votes')
+    vote_type = models.CharField(max_length=4, choices=[('up', 'Upvote'), ('down', 'Downvote')])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'discussion']
+
+
+class Note(models.Model):
+    """Personal notes per question or topic."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notes')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, null=True, blank=True, related_name='notes')
+    topic = models.ForeignKey('questions.Topic', on_delete=models.CASCADE, null=True, blank=True, related_name='notes')
+    title = models.CharField(max_length=200, blank=True)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.user.username}: {self.title or self.content[:40]}"
+
+
+class Flashcard(models.Model):
+    """Flashcards for spaced repetition review."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='flashcards')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, null=True, blank=True, related_name='flashcards')
+    subject = models.ForeignKey('questions.Subject', on_delete=models.CASCADE, null=True, blank=True)
+    front = models.TextField(help_text="Question or prompt side")
+    back = models.TextField(help_text="Answer or explanation side")
+    difficulty = models.CharField(max_length=10, choices=[
+        ('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')
+    ], default='medium')
+    next_review = models.DateTimeField(null=True, blank=True)
+    review_count = models.IntegerField(default=0)
+    ease_factor = models.FloatField(default=2.5, help_text="SM-2 algorithm ease factor")
+    interval_days = models.IntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['next_review', '-created_at']
+
+    def schedule_next_review(self, quality):
+        """SM-2 spaced repetition algorithm. quality: 0-5"""
+        from django.utils import timezone
+        import datetime
+        if quality < 3:
+            self.interval_days = 1
+            self.review_count = 0
+        else:
+            if self.review_count == 0:
+                self.interval_days = 1
+            elif self.review_count == 1:
+                self.interval_days = 6
+            else:
+                self.interval_days = round(self.interval_days * self.ease_factor)
+            self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+        self.review_count += 1
+        self.next_review = timezone.now() + datetime.timedelta(days=self.interval_days)
+        self.save()
+
+    def __str__(self):
+        return f"{self.user.username}: {self.front[:50]}"

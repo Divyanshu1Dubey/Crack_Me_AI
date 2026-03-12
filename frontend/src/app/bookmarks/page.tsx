@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { questionsAPI } from '@/lib/api';
 import { Bookmark, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -50,9 +51,11 @@ export default function BookmarksPage() {
     };
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
                     <Bookmark className="w-6 h-6" style={{ color: '#f59e0b' }} fill="#f59e0b" />
                     Bookmarks
@@ -98,6 +101,7 @@ export default function BookmarksPage() {
                         ))}
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );

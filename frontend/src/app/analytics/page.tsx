@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
 import { BarChart3, Target, TrendingDown, TrendingUp, Lightbulb, Activity, Brain, Calendar } from 'lucide-react';
 import {
@@ -107,9 +108,11 @@ export default function AnalyticsPage() {
     })).filter(s => s.value > 0);
 
     return (
-        <div style={{ background: 'var(--bg-primary)' }} className="min-h-screen">
+        <div className="min-h-screen bg-background">
             <Sidebar />
             <div className="main-content">
+                <Header />
+                <div className="page-container">
                 <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
                     <BarChart3 className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
                     Performance Analytics
@@ -380,6 +383,7 @@ export default function AnalyticsPage() {
                         </div>
                     </>
                 )}
+                </div>
             </div>
         </div>
     );
