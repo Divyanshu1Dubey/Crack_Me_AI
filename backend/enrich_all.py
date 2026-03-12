@@ -1,6 +1,6 @@
 """
-MASTER Question Enrichment — uses ALL 7 cloud AI providers + Ollama fallback.
-Round-robin load balancing across: Groq, Cerebras, Gemini, GitHub Models, OpenRouter, Cohere, DeepSeek, Ollama.
+MASTER Question Enrichment — uses ALL cloud AI providers + Ollama fallback.
+Round-robin load balancing across: Groq, Cerebras, Gemini, GitHub Models, OpenRouter(x2), Cohere, HuggingFace, AIML, Mistral, DeepSeek(last/paid), Ollama.
 Resume-safe, rate-limit aware, auto-saves progress.
 
 Usage:
@@ -128,6 +128,20 @@ def init_providers():
         except Exception as e:
             log.warning(f"OpenRouter init failed: {e}")
 
+    # 5b. OpenRouter Key 2 (second free-tier key for more RPM)
+    openrouter_key2 = os.getenv('OPENROUTER_API_KEY2', '')
+    if openrouter_key2:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=openrouter_key2, base_url='https://openrouter.ai/api/v1')
+            providers.append({
+                'name': 'OpenRouter2', 'client': client, 'type': 'openai',
+                'model': 'meta-llama/llama-3.3-70b-instruct:free', 'rpm': 15, 'last_call': 0, 'calls': 0, 'errors': 0
+            })
+            log.info("✅ OpenRouter2 ready")
+        except Exception as e:
+            log.warning(f"OpenRouter2 init failed: {e}")
+
     # 6. Cohere (Command-A) — 20 RPM, 1000/month
     cohere_key = os.getenv('COHERE_API_KEY', '')
     if cohere_key:
@@ -142,7 +156,49 @@ def init_providers():
         except Exception as e:
             log.warning(f"Cohere init failed: {e}")
 
-    # 7. DeepSeek (pay-as-you-go) — fallback
+    # 7. HuggingFace Inference API (free tier)
+    hf_key = os.getenv('HUGGINGFACE_API_KEY', '')
+    if hf_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=hf_key, base_url='https://router.huggingface.co/novita/v3/openai')
+            providers.append({
+                'name': 'HuggingFace', 'client': client, 'type': 'openai',
+                'model': 'meta-llama/llama-3.3-70b-instruct', 'rpm': 10, 'last_call': 0, 'calls': 0, 'errors': 0
+            })
+            log.info("✅ HuggingFace ready")
+        except Exception as e:
+            log.warning(f"HuggingFace init failed: {e}")
+
+    # 8. AIML API (free tier)
+    aiml_key = os.getenv('AIML_API_KEY', '')
+    if aiml_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=aiml_key, base_url='https://api.aimlapi.com/v1')
+            providers.append({
+                'name': 'AIML', 'client': client, 'type': 'openai',
+                'model': 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 'rpm': 10, 'last_call': 0, 'calls': 0, 'errors': 0
+            })
+            log.info("✅ AIML ready")
+        except Exception as e:
+            log.warning(f"AIML init failed: {e}")
+
+    # 10. Mistral (free tier)
+    mistral_key = os.getenv('MISTRAL_API_KEY', '')
+    if mistral_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=mistral_key, base_url='https://api.mistral.ai/v1')
+            providers.append({
+                'name': 'Mistral', 'client': client, 'type': 'openai',
+                'model': 'mistral-small-latest', 'rpm': 25, 'last_call': 0, 'calls': 0, 'errors': 0
+            })
+            log.info("✅ Mistral ready")
+        except Exception as e:
+            log.warning(f"Mistral init failed: {e}")
+
+    # 11. DeepSeek (PAID — last priority, needs balance top-up)
     deepseek_key = os.getenv('DEEPSEEK_API_KEY', '')
     if deepseek_key:
         try:
@@ -152,7 +208,7 @@ def init_providers():
                 'name': 'DeepSeek', 'client': client, 'type': 'openai',
                 'model': 'deepseek-chat', 'rpm': 25, 'last_call': 0, 'calls': 0, 'errors': 0
             })
-            log.info("✅ DeepSeek ready")
+            log.info("⚠️ DeepSeek ready (PAID — last priority)")
         except Exception as e:
             log.warning(f"DeepSeek init failed: {e}")
 

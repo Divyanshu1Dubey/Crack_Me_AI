@@ -19,10 +19,10 @@ GROQ_KEY = os.getenv('GROQ_API_KEY', '')
 OLLAMA_URL = 'http://localhost:11434/api/chat'
 OLLAMA_MODEL = 'llama3.2:3b'
 
-SYSTEM = """You are a UPSC CMS medical exam expert. You MUST return ONLY a valid JSON array wrapped in [ ]. No other text.
-For each question return one object in this exact format:
-{"correct_answer":"A/B/C/D","explanation":"2-3 sentences","concept_explanation":"1 sentence","mnemonic":"memory aid or empty","concept_tags":["tag1","tag2"],"concept_keywords":["kw1","kw2"],"book_name":"textbook","chapter":"section","difficulty":"easy/medium/hard","learning_technique":"study tip","shortcut_tip":"exam trick or empty"}
-IMPORTANT: Wrap ALL objects in a JSON array like [{...},{...}]. Books: PSM=Park's, Pharma=KDT, Path=Robbins, Med=Harrison's, Surg=Bailey&Love, Anat=BDChaurasia."""
+SYSTEM = """You are a UPSC CMS medical exam expert. Return ONLY a single JSON object (no markdown, no extra text).
+Format:
+{"correct_answer":"A/B/C/D","explanation":"2-3 sentences","concept_explanation":"1 sentence","mnemonic":"memory aid or empty string","concept_tags":["tag1","tag2"],"concept_keywords":["kw1","kw2"],"book_name":"textbook","chapter":"section","difficulty":"easy/medium/hard","learning_technique":"study tip","shortcut_tip":"exam trick or empty string"}
+Books: PSM=Park's, Pharma=KDT, Path=Robbins, Med=Harrison's, Surg=Bailey&Love, Peds=Ghai, OBG=Dutta, Anat=BDChaurasia."""
 
 
 def build_prompt(batch):
@@ -79,11 +79,7 @@ def call_groq(prompt, attempt=0):
 
 
 def call_llm(prompt):
-    """Try Groq first (faster, smarter), fallback to Ollama."""
-    result = call_groq(prompt)
-    if result:
-        return result, 'groq'
-    log.warning("  Groq failed, trying Ollama fallback...")
+    """Use Ollama only — no cloud APIs, no token cost."""
     result = call_ollama(prompt)
     if result:
         return result, 'ollama'
@@ -205,7 +201,7 @@ def main():
         log.info("All done!")
         return
 
-    BATCH_SIZE = 2  # 2 per batch for balance of speed + reliability from 3B model
+    BATCH_SIZE = 1  # 1 per batch — most reliable for 3B model
     batches = [todo[i:i+BATCH_SIZE] for i in range(0, len(todo), BATCH_SIZE)]
     total = len(batches)
     log.info(f"Batches: {total} ({BATCH_SIZE} questions each)")
@@ -255,8 +251,8 @@ def main():
                      f"fail={failed} | {rate:.0f} q/min | ~{remaining:.0f}min left | "
                      f"ollama={ollama_count} groq={groq_count}")
 
-        # Rate limit for Groq: ~30 req/min = 2s between calls
-        time.sleep(2.5)
+        # No rate limit needed for local Ollama
+        time.sleep(0.5)
 
     # Final save
     log.info("\nFinal save...")

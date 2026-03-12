@@ -1,17 +1,20 @@
 """
 Enhanced AI Service Layer for UPSC CMS Platform.
-Orchestrates 6 AI providers with round-robin load balancing
+Orchestrates 10 AI providers with round-robin load balancing
 and RAG-backed textbook grounding. Distributes calls across providers
 to minimize quota exhaustion on any single API.
 
-Providers (all free-tier capable):
-  1. Groq      — Llama 3.3 70B  (30 RPM, 14,400 RPD)
-  2. Cerebras  — Llama 3.1 8B   (30 RPM, ~1M tokens/day)
-  3. Gemini    — Flash 2.0      (15 RPM, 1,500 RPD per model)
-  4. Cohere    — Command-A      (20 RPM, 1,000 req/month)
-  5. OpenRouter— free models    (20 RPM on free tier)
-  6. GitHub    — Models API      (150 RPM, 15K RPD free with PAT)
-  7. DeepSeek  — pay-as-you-go  (fallback)
+Providers (all free-tier capable unless noted):
+  1. Groq       — Llama 3.3 70B   (30 RPM, 14,400 RPD)
+  2. Cerebras   — Llama 3.1 8B    (30 RPM, ~1M tokens/day)
+  3. Gemini     — Flash 2.0       (15 RPM, 1,500 RPD per model)
+  4. Cohere     — Command-A       (20 RPM, 1,000 req/month)
+  5. OpenRouter — free models     (20 RPM on free tier)
+  6. OpenRouter2— free models     (20 RPM, second key)
+  7. GitHub     — Models API      (150 RPM, 15K RPD free with PAT)
+  8. HuggingFace— Llama 3.3 70B   (~10 RPM free)
+  9. Mistral    — mistral-small   (~30 RPM free)
+ 10. DeepSeek   — pay-as-you-go   (LAST — paid, needs balance)
 """
 import json
 import logging
@@ -52,26 +55,55 @@ _counter_lock = threading.Lock()
 
 # CMS-specific system prompt
 CMS_SYSTEM_PROMPT = """You are an expert UPSC CMS (Combined Medical Services) exam tutor and medical educator.
+You have deep knowledge of the complete CMS exam pattern: 2 papers, 120 MCQs each, 250 marks per paper,
+conducted annually by UPSC for recruitment as Medical Officers in Indian government services (Railways, NDMC, CHS, etc.).
 
 Your knowledge covers the complete CMS syllabus:
-- Paper 1: General Medicine (Cardiology, Nephrology, Endocrinology, Neurology, etc.) + Pediatrics
-- Paper 2: Surgery + Obstetrics & Gynaecology + Preventive & Social Medicine (PSM)
+
+**Paper I – General Medicine & Pediatrics (250 marks):**
+- General Medicine: Cardiology (MI, HF, valvular), Nephrology (AKI, CKD, GN), Endocrinology (DM, thyroid, adrenal),
+  Neurology (stroke, epilepsy, meningitis), Pulmonology (COPD, pneumonia, TB), Gastroenterology (cirrhosis, IBD, hepatitis),
+  Hematology (anemias, leukemias, coagulopathies), Infectious Diseases (HIV, malaria, dengue, COVID-19),
+  Rheumatology (SLE, RA), Dermatology (leprosy, fungal), Psychiatry (depression, schizophrenia, substance abuse),
+  Pharmacology (drug interactions, ADRs, essential medicines), Toxicology, Emergency Medicine, Radiology basics
+- Pediatrics: Growth & development, immunization schedule (NIS), neonatal disorders, pediatric infections,
+  congenital anomalies, childhood malignancies, nutrition & vitamin deficiencies, genetic disorders
+
+**Paper II – Surgery, OBG & Preventive/Social Medicine (250 marks):**
+- Surgery: General surgery (hernias, appendicitis, thyroid), Orthopedics (fractures, tumors), Ophthalmology (glaucoma,
+  cataract, retinal), ENT (otitis, sinusitis, tumors), Urology (stones, BPH), Neurosurgery, Anesthesia basics,
+  Surgical emergencies, Pre/post-op care, Trauma management (ATLS)
+- OBG: Normal & abnormal labor, high-risk pregnancy (PIH, GDM, APH, PPH), contraception, infertility,
+  gynecological malignancies, menstrual disorders, STIs, MTP Act
+- PSM/Community Medicine: Epidemiology, biostatistics, National Health Programs (RNTCP, NVBDCP, NRHM, NPCDCS),
+  nutrition, sanitation, occupational health, health indicators (IMR, MMR, TFR), vaccines, disease surveillance,
+  WASH, environmental health, health planning & management, medical ethics, laws (MCI, PCPNDT, COTPA)
 
 Standard textbooks you reference:
-- Harrison's Principles of Internal Medicine (Medicine)
-- Ghai Essential Pediatrics (Pediatrics)
+- Harrison's Principles of Internal Medicine, 21st ed (Medicine)
+- Robbins Pathologic Basis of Disease (Pathology)
+- KD Tripathi Essentials of Medical Pharmacology (Pharmacology)
+- Ghai Essential Pediatrics, 10th ed (Pediatrics)
 - Nelson Textbook of Pediatrics (Pediatrics)
-- Park's Textbook of Preventive & Social Medicine (PSM)
-- Bailey & Love (Surgery)
-- Dutta's Textbook of Obstetrics & Gynaecology (OBG)
+- Park's Textbook of Preventive & Social Medicine, 26th ed (PSM)
+- Bailey & Love's Short Practice of Surgery (Surgery)
+- SRB's Manual of Surgery (Surgery)
+- Dutta's Textbook of Obstetrics, 10th ed (OBG)
+- Shaw's Textbook of Gynaecology (OBG)
+- Parson's Diseases of the Eye (Ophthalmology)
+- Dhingra ENT (ENT)
+- Mahajan & Gupta Textbook of Preventive & Social Medicine (PSM)
 
 When answering:
-1. Be precise, exam-focused, and cite specific textbook references using exactly: **Textbook Reference: [Book Name], [Chapter]**
-2. Important concepts MUST be tagged with exactly **[High Yield]**
+1. Be precise, exam-focused, and cite specific textbook references using exactly: **Textbook Reference: [Book Name], [Chapter/Page]**
+2. Important concepts that are commonly tested MUST be tagged with exactly **[High Yield]**
 3. If related to past questions, tag with **[PYQ YYYY]** (e.g., [PYQ 2021])
-4. Provide mnemonics and memory tricks when helpful
-5. Explain concepts from basics for deep understanding
-6. Give clinical correlations when relevant
+4. Provide mnemonics and memory tricks when helpful (e.g., DANISH for causes of pancreatitis)
+5. Explain concepts from basics for deep understanding — assume MBBS-level knowledge
+6. Give clinical correlations and differential diagnoses when relevant
+7. For MCQs: explain why each option is correct/incorrect with reasoning
+8. Highlight recent exam trends and frequently repeated topics
+9. Use tables and structured formats for comparisons (e.g., Type 1 vs Type 2 DM)
 """
 
 
@@ -88,7 +120,10 @@ class AIService:
         self.cerebras = None
         self.cohere = None
         self.openrouter = None
+        self.openrouter2 = None
         self.github_models = None
+        self.huggingface = None
+        self.mistral = None
         self._rag = None
         self._init_clients()
 
@@ -167,16 +202,56 @@ class AIService:
             except Exception as e:
                 logger.warning(f"GitHub Models init failed: {e}")
 
+        # OpenRouter key 2 (second free-tier key for more RPM)
+        openrouter_key2 = os.getenv('OPENROUTER_API_KEY2', '')
+        if openrouter_key2:
+            try:
+                from openai import OpenAI
+                self.openrouter2 = OpenAI(
+                    api_key=openrouter_key2,
+                    base_url='https://openrouter.ai/api/v1'
+                )
+                logger.info("✅ OpenRouter2 AI initialized")
+            except Exception as e:
+                logger.warning(f"OpenRouter2 init failed: {e}")
+
+        # HuggingFace Inference API (free tier)
+        hf_key = getattr(settings, 'HUGGINGFACE_API_KEY', '') or os.getenv('HUGGINGFACE_API_KEY', '')
+        if hf_key:
+            try:
+                from openai import OpenAI
+                self.huggingface = OpenAI(
+                    api_key=hf_key,
+                    base_url='https://router.huggingface.co/novita/v3/openai'
+                )
+                logger.info("✅ HuggingFace AI initialized")
+            except Exception as e:
+                logger.warning(f"HuggingFace init failed: {e}")
+
+        # Mistral (free tier)
+        mistral_key = getattr(settings, 'MISTRAL_API_KEY', '') or os.getenv('MISTRAL_API_KEY', '')
+        if mistral_key:
+            try:
+                from openai import OpenAI
+                self.mistral = OpenAI(
+                    api_key=mistral_key,
+                    base_url='https://api.mistral.ai/v1'
+                )
+                logger.info("✅ Mistral AI initialized")
+            except Exception as e:
+                logger.warning(f"Mistral init failed: {e}")
+
         providers_ok = [name for name, client in [
             ('Gemini', self.gemini_client), ('Groq', self.groq),
-            ('DeepSeek', self.deepseek), ('Cerebras', self.cerebras),
-            ('Cohere', self.cohere), ('OpenRouter', self.openrouter),
-            ('GitHub', self.github_models),
+            ('Cerebras', self.cerebras), ('Cohere', self.cohere),
+            ('OpenRouter', self.openrouter), ('OpenRouter2', self.openrouter2),
+            ('GitHub', self.github_models), ('HuggingFace', self.huggingface),
+            ('Mistral', self.mistral), ('DeepSeek', self.deepseek),
         ] if client]
         if not providers_ok:
             logger.error("❌ No AI providers initialized! Check API keys in .env")
         else:
-            logger.info(f"🚀 AI providers ready: {', '.join(providers_ok)}")
+            logger.info(f"🚀 {len(providers_ok)} AI providers ready: {', '.join(providers_ok)}")
 
     @property
     def rag(self):
@@ -304,16 +379,25 @@ class AIService:
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-            response = self.cerebras.chat.completions.create(
-                model="llama3.1-8b",
-                messages=messages,
-                temperature=temperature,
-                max_completion_tokens=max_tokens,
-            )
+
+            def _cerebras_call():
+                return self.cerebras.chat.completions.create(
+                    model="llama3.1-8b",
+                    messages=messages,
+                    temperature=temperature,
+                    max_completion_tokens=max_tokens,
+                )
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_cerebras_call)
+                response = future.result(timeout=15)
+
             text = response.choices[0].message.content
             if text:
                 logger.info("Cerebras OK")
                 return text
+        except FuturesTimeout:
+            logger.warning("Cerebras timed out (15s)")
         except Exception as e:
             err = str(e)
             if '401' in err or 'invalid_api_key' in err:
@@ -335,16 +419,25 @@ class AIService:
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-            response = self.cohere.chat(
-                model="command-a-03-2025",
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+
+            def _cohere_call():
+                return self.cohere.chat(
+                    model="command-a-03-2025",
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_cohere_call)
+                response = future.result(timeout=15)
+
             text = response.message.content[0].text
             if text:
                 logger.info("Cohere OK")
                 return text
+        except FuturesTimeout:
+            logger.warning("Cohere timed out (15s)")
         except Exception as e:
             err = str(e)
             if '401' in err or 'invalid_api_key' in err:
@@ -430,14 +523,119 @@ class AIService:
                 logger.warning(f"GitHub Models error: {e}")
         return None
 
+    def _call_huggingface(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call HuggingFace Inference API (OpenAI-compatible).
+        Free tier: generous limits, Llama 3.3 70B."""
+        if not self.huggingface:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.huggingface.chat.completions.create(
+                model="meta-llama/llama-3.3-70b-instruct",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=20.0,
+            )
+            text = response.choices[0].message.content
+            if text:
+                logger.info("HuggingFace OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or '403' in err:
+                logger.warning("HuggingFace API key invalid — skipping")
+                self.huggingface = None
+            elif '429' in err:
+                logger.info("HuggingFace rate limit hit")
+            else:
+                logger.warning(f"HuggingFace error: {e}")
+        return None
+
+    def _call_mistral(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call Mistral AI (OpenAI-compatible).
+        Free tier: 1 RPM / 500K tokens/month on mistral-small-latest."""
+        if not self.mistral:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.mistral.chat.completions.create(
+                model="mistral-small-latest",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=15.0,
+            )
+            text = response.choices[0].message.content
+            if text:
+                logger.info("Mistral OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or '403' in err:
+                logger.warning("Mistral API key invalid — skipping")
+                self.mistral = None
+            elif '429' in err:
+                logger.info("Mistral rate limit hit")
+            else:
+                logger.warning(f"Mistral error: {e}")
+        return None
+
+    def _call_openrouter2(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call OpenRouter with second API key — tries 3 free models."""
+        if not self.openrouter2:
+            return None
+        free_models = [
+            "deepseek/deepseek-r1-0528:free",
+            "google/gemini-2.5-flash-preview-05-20",
+            "meta-llama/llama-4-maverick:free",
+        ]
+        for model_name in free_models:
+            try:
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+                response = self.openrouter2.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=20.0,
+                )
+                text = response.choices[0].message.content
+                if text:
+                    logger.info(f"OpenRouter2 [{model_name}] OK")
+                    return text
+            except Exception as e:
+                err = str(e)
+                if '429' in err:
+                    logger.info(f"OpenRouter2 [{model_name}] rate limited, trying next...")
+                    continue
+                elif '401' in err or '403' in err:
+                    logger.warning("OpenRouter2 API key invalid — skipping")
+                    self.openrouter2 = None
+                    return None
+                else:
+                    logger.warning(f"OpenRouter2 [{model_name}] error: {e}")
+                    continue
+        return None
+
     # ─── LOAD-BALANCED DISPATCHER ──────────────────────────
 
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
         """
-        Call AI with round-robin load balancing across 7 providers.
-        Order: Groq → Cerebras → Gemini → Cohere → OpenRouter → GitHub → DeepSeek.
-        Total capped at 60s.
+        Call AI with round-robin load balancing across 10 providers.
+        Order: Groq → Cerebras → Gemini → Cohere → OpenRouter → GitHub →
+               HuggingFace → Mistral → OpenRouter2 → DeepSeek(paid/last).
+        Total capped at 120s.
         """
         import time
         global _call_counter
@@ -448,6 +646,9 @@ class AIService:
             ('cohere', self._call_cohere),
             ('openrouter', self._call_openrouter),
             ('github', self._call_github_models),
+            ('huggingface', self._call_huggingface),
+            ('mistral', self._call_mistral),
+            ('openrouter2', self._call_openrouter2),
             ('deepseek', self._call_deepseek),
         ]
 
@@ -455,11 +656,11 @@ class AIService:
             start = _call_counter % len(providers)
             _call_counter += 1
 
-        deadline = time.time() + 60
+        deadline = time.time() + 120
 
         for i in range(len(providers)):
             if time.time() >= deadline:
-                logger.warning("AI call hit 60s deadline, aborting remaining providers")
+                logger.warning("AI call hit 120s deadline, aborting remaining providers")
                 break
             idx = (start + i) % len(providers)
             name, call_fn = providers[idx]

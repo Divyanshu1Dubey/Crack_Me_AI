@@ -33,6 +33,9 @@ COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 TOGETHER_API_KEY = os.getenv('TOGETHER_API_KEY', '')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')
+AIML_API_KEY = os.getenv('AIML_API_KEY', '')
+MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]

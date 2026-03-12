@@ -145,6 +145,104 @@ def test_deepseek():
         if '402' in err or 'Insufficient' in err: return 'NO_BALANCE', 'Balance depleted (pay-as-you-go)'
         return 'ERROR', err[:100]
 
+def test_openrouter2():
+    key = os.getenv('OPENROUTER_API_KEY2', '')
+    if not key:
+        return 'NO_KEY', 'OPENROUTER_API_KEY2 not set in .env'
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, base_url='https://openrouter.ai/api/v1')
+        r = client.chat.completions.create(
+            model='meta-llama/llama-3.3-70b-instruct:free',
+            messages=[{'role': 'user', 'content': TEST_PROMPT}],
+            max_tokens=100, temperature=0.1, timeout=15.0
+        )
+        return 'OK', r.choices[0].message.content[:80]
+    except Exception as e:
+        err = str(e)
+        if '429' in err: return 'RATE_LIMITED', 'Rate limit hit (free: 20 RPM)'
+        if '401' in err or '403' in err: return 'INVALID', 'API key invalid'
+        if '402' in err: return 'NO_BALANCE', 'Credits exhausted'
+        return 'ERROR', err[:100]
+
+def test_huggingface():
+    key = os.getenv('HUGGINGFACE_API_KEY', '')
+    if not key:
+        return 'NO_KEY', 'HUGGINGFACE_API_KEY not set in .env'
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, base_url='https://router.huggingface.co/novita/v3/openai')
+        r = client.chat.completions.create(
+            model='meta-llama/llama-3.3-70b-instruct',
+            messages=[{'role': 'user', 'content': TEST_PROMPT}],
+            max_tokens=100, temperature=0.1, timeout=30.0
+        )
+        return 'OK', r.choices[0].message.content[:80]
+    except Exception as e:
+        err = str(e)
+        if '429' in err: return 'RATE_LIMITED', 'Rate limit hit'
+        if '401' in err or '403' in err: return 'INVALID', 'Token invalid or expired'
+        return 'ERROR', err[:100]
+
+def test_aiml():
+    key = os.getenv('AIML_API_KEY', '')
+    if not key:
+        return 'NO_KEY', 'AIML_API_KEY not set in .env'
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, base_url='https://api.aimlapi.com/v1')
+        r = client.chat.completions.create(
+            model='meta-llama/Llama-3.3-70B-Instruct-Turbo',
+            messages=[{'role': 'user', 'content': TEST_PROMPT}],
+            max_tokens=100, temperature=0.1, timeout=15.0
+        )
+        return 'OK', r.choices[0].message.content[:80]
+    except Exception as e:
+        err = str(e)
+        if '429' in err: return 'RATE_LIMITED', 'Rate limit hit'
+        if '401' in err or '403' in err: return 'INVALID', 'API key invalid'
+        return 'ERROR', err[:100]
+
+def test_together():
+    key = os.getenv('TOGETHER_API_KEY', '')
+    if not key:
+        return 'NO_KEY', 'TOGETHER_API_KEY not set in .env'
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, base_url='https://api.together.xyz/v1')
+        r = client.chat.completions.create(
+            model='meta-llama/Llama-3.3-70B-Instruct-Turbo',
+            messages=[{'role': 'user', 'content': TEST_PROMPT}],
+            max_tokens=100, temperature=0.1, timeout=15.0
+        )
+        return 'OK', r.choices[0].message.content[:80]
+    except Exception as e:
+        err = str(e)
+        if '429' in err: return 'RATE_LIMITED', 'Rate limit hit'
+        if '401' in err or '403' in err: return 'INVALID', 'API key invalid'
+        if '402' in err: return 'NO_BALANCE', 'Credits exhausted'
+        return 'ERROR', err[:100]
+
+def test_mistral():
+    key = os.getenv('MISTRAL_API_KEY', '')
+    if not key:
+        return 'NO_KEY', 'MISTRAL_API_KEY not set in .env'
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key, base_url='https://api.mistral.ai/v1')
+        r = client.chat.completions.create(
+            model='mistral-small-latest',
+            messages=[{'role': 'user', 'content': TEST_PROMPT}],
+            max_tokens=100, temperature=0.1, timeout=15.0
+        )
+        return 'OK', r.choices[0].message.content[:80]
+    except Exception as e:
+        err = str(e)
+        if '429' in err: return 'RATE_LIMITED', 'Rate limit hit'
+        if '401' in err or '403' in err: return 'INVALID', 'API key invalid — check https://console.mistral.ai/api-keys'
+        if '402' in err: return 'NO_BALANCE', 'Credits exhausted'
+        return 'ERROR', err[:100]
+
 def test_ollama():
     import requests
     try:
@@ -174,9 +272,14 @@ tests = [
     ('Gemini (Flash 2.0)', '15 RPM, 1,500 RPD', 'Free', test_gemini),
     ('GitHub Models (GPT-4o-mini)', '150 RPM, 15K RPD', 'Free with PAT', test_github),
     ('OpenRouter (Llama 3.3 70B)', '20 RPM (free tier)', 'Free', test_openrouter),
+    ('OpenRouter2 (Key 2)', '20 RPM (free tier)', 'Free', test_openrouter2),
     ('Cohere (Command-A)', '20 RPM, 1,000/month', 'Free', test_cohere),
-    ('DeepSeek (deepseek-chat)', 'No strict limit', 'Pay-as-you-go', test_deepseek),
+    ('HuggingFace (Llama 3.3 70B)', '~10 RPM', 'Free', test_huggingface),
+    ('AIML (Llama 3.3 70B)', '~10 RPM', 'Free', test_aiml),
+    ('Together (Llama 3.3 70B)', 'Varies', 'Free $25 credit', test_together),
+    ('Mistral (mistral-small)', '~30 RPM', 'Free tier', test_mistral),
     ('Ollama (Local)', 'Unlimited', 'Free (local)', test_ollama),
+    ('DeepSeek (deepseek-chat)', 'No strict limit', 'PAID (last)', test_deepseek),
 ]
 
 print("=" * 70)
@@ -207,11 +310,15 @@ if working < 3:
     print("   Consider refreshing expired API keys.")
 print()
 print("To fix non-working keys:")
-print("  Groq:       https://console.groq.com/keys")
-print("  Cerebras:   https://cloud.cerebras.ai/")
-print("  Gemini:     https://aistudio.google.com/apikey")
-print("  GitHub:     https://github.com/settings/tokens (needs 'models' scope)")
-print("  OpenRouter: https://openrouter.ai/keys")
-print("  Cohere:     https://dashboard.cohere.com/api-keys")
-print("  DeepSeek:   https://platform.deepseek.com/api_keys")
-print("  Ollama:     https://ollama.ai/download → ollama pull llama3.2:3b → ollama serve")
+print("  Groq:        https://console.groq.com/keys")
+print("  Cerebras:    https://cloud.cerebras.ai/")
+print("  Gemini:      https://aistudio.google.com/apikey")
+print("  GitHub:      https://github.com/settings/tokens (needs 'models' scope)")
+print("  OpenRouter:  https://openrouter.ai/keys")
+print("  Cohere:      https://dashboard.cohere.com/api-keys")
+print("  DeepSeek:    https://platform.deepseek.com/api_keys (PAID — needs balance top-up)")
+print("  HuggingFace: https://huggingface.co/settings/tokens")
+print("  Mistral:     https://console.mistral.ai/api-keys")
+print("  AIML:        https://aimlapi.com/app/keys")
+print("  Together:    https://api.together.xyz/settings/api-keys")
+print("  Ollama:      https://ollama.ai/download → ollama pull llama3.2:3b → ollama serve")
