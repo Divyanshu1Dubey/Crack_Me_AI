@@ -305,7 +305,7 @@ NATIONAL_HEALTH_PROGRAMS = {
         {"name": "National Tuberculosis Elimination Programme (NTEP)", "target_year": 2025},
         {"name": "National Vector Borne Disease Control Programme (NVBDCP)", "diseases": ["Malaria", "Dengue", "Chikungunya", "JE", "Kala-azar", "Filariasis"]},
         {"name": "National AIDS Control Programme (NACP)", "current_phase": "Phase V"},
-        {"name": "National Leprosy Eradication Programme (NLEP)", "elimination_target": "<1/10000},
+        {"name": "National Leprosy Eradication Programme (NLEP)", "elimination_target": "<1/10000"},
         {"name": "Revised National TB Control Programme", "strategy": "DOTS plus"},
         {"name": "Universal Immunization Programme (UIP)", "vaccines": ["BCG", "OPV", "DPT", "Hepatitis B", "Measles", "JE", "Rotavirus", "PCV", "IPV"]},
     ],
