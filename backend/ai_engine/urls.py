@@ -28,4 +28,10 @@ urlpatterns = [
     # Debug / status
     path('status/', views.AIStatusView.as_view(), name='ai-status'),
     path('test/', views.AITestView.as_view(), name='ai-test'),
+
+    # Chat history
+    path('chat/sessions/', views.ChatSessionListCreateView.as_view(), name='chat-sessions'),
+    path('chat/sessions/<int:pk>/', views.ChatSessionDetailView.as_view(), name='chat-session-detail'),
+    path('chat/sessions/<int:session_id>/messages/', views.ChatMessageListView.as_view(), name='chat-messages'),
+    path('chat/sessions/<int:session_id>/messages/add/', views.ChatMessageCreateView.as_view(), name='chat-message-add'),
 ]

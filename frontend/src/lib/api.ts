@@ -183,6 +183,14 @@ export const aiAPI = {
   getKnowledgeStats: () => api.get('/ai/knowledge/stats/'),
   generateQuestions: (data: { subject: string; topic?: string; difficulty?: string; count?: number }) =>
     api.post('/ai/generate-questions/', data, { timeout: AI_TIMEOUT }),
+  // Chat history
+  getChatSessions: () => api.get('/ai/chat/sessions/'),
+  createChatSession: (data: { mode?: string; title?: string }) => api.post('/ai/chat/sessions/', data),
+  getChatSession: (id: number) => api.get(`/ai/chat/sessions/${id}/`),
+  deleteChatSession: (id: number) => api.delete(`/ai/chat/sessions/${id}/`),
+  getChatMessages: (sessionId: number) => api.get(`/ai/chat/sessions/${sessionId}/messages/`),
+  addChatMessage: (sessionId: number, data: { role: string; content: string; mode?: string; citations?: Array<{ book: string; page: number; excerpt: string; relevance: number }> }) =>
+    api.post(`/ai/chat/sessions/${sessionId}/messages/add/`, data),
 };
 
 // Textbooks API

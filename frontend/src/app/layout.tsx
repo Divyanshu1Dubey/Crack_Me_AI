@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import BackendWarmup from "@/components/BackendWarmup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const inter = Inter({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-manrope",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
 });
 
 export const metadata: Metadata = {
-  title: "CrackCMS — UPSC CMS Preparation Platform",
-  description: "India's most comprehensive AI-powered preparation platform for UPSC CMS. 3000+ PYQs, AI Tutor, Mock Tests, Analytics & more.",
+  title: "CrackCMS | UPSC CMS Preparation Platform",
+  description:
+    "Doctor-first UPSC CMS preparation with PYQs, AI tutoring, analytics, and branded password recovery flows.",
   keywords: "UPSC CMS, medical exam, PYQ, AI tutor, preparation platform, CMS exam",
+  icons: {
+    icon: [{ url: "/crack-cms-logo.jpg", type: "image/jpeg" }],
+    apple: [{ url: "/crack-cms-logo.jpg", type: "image/jpeg" }],
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem>
           <TooltipProvider>
             <AuthProvider>

@@ -88,11 +88,16 @@ def test_database():
     # 1.2 Question count
     try:
         from questions.models import Question
-        count = Question.objects.count()
-        if count >= 2000:
-            ok("Question count", f"{count} questions in DB")
+        active_questions = Question.objects.filter(is_active=True)
+        inactive_count = Question.objects.filter(is_active=False).count()
+        count = active_questions.count()
+        if count >= 1900:
+            detail = f"{count} active questions in DB"
+            if inactive_count:
+                detail += f" ({inactive_count} inactive drafts excluded)"
+            ok("Question count", detail)
         elif count > 0:
-            fail("Question count", f"Only {count} questions (expected 2000+)")
+            fail("Question count", f"Only {count} active questions (expected 1900+)")
         else:
             fail("Question count", "0 questions — run: python manage.py loaddata questions_fixture.json")
     except Exception as e:
@@ -101,9 +106,10 @@ def test_database():
     # 1.3 Enrichment quality
     try:
         from questions.models import Question
-        total = Question.objects.count()
-        with_answer = Question.objects.exclude(correct_answer='').exclude(correct_answer__isnull=True).count()
-        with_explanation = Question.objects.exclude(explanation='').exclude(explanation__isnull=True).count()
+        active_questions = Question.objects.filter(is_active=True)
+        total = active_questions.count()
+        with_answer = active_questions.exclude(correct_answer='').exclude(correct_answer__isnull=True).count()
+        with_explanation = active_questions.exclude(explanation='').exclude(explanation__isnull=True).count()
         pct = (with_answer / total * 100) if total else 0
         if pct >= 99:
             ok("Enrichment coverage", f"{with_answer}/{total} with answers ({pct:.0f}%), {with_explanation} with explanations")
@@ -648,7 +654,7 @@ def test_auth_flow():
         }, content_type='application/json')
         if r.status_code == 200:
             data = r.json()
-            token = data.get('access', '')
+            token = data.get('access', '') or data.get('tokens', {}).get('access', '')
             if token:
                 ok("Login", "Got JWT access token")
             else:

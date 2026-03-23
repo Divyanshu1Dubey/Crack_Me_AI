@@ -15,7 +15,7 @@ from questions.models import Subject, Topic, Question
 # Serialize all objects required for question bank runtime.
 subjects = list(Subject.objects.all())
 topics = list(Topic.objects.all())
-questions = list(Question.objects.all())
+questions = list(Question.objects.filter(is_active=True))
 
 all_objects = subjects + topics + questions
 data = serializers.serialize('json', all_objects, indent=2)

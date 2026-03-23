@@ -1,31 +1,114 @@
 """
-accounts/views.py — Authentication & Token Management API views.
-Endpoints: Register, Login, Profile, Token Balance, Token Purchase, Token History,
-           Password Reset (request + confirm).
-Admin users bypass all token limits.
+accounts/views.py - Authentication and token-management API views.
+Endpoints: register, login, profile, token balance, token purchase, token history,
+password reset request, and password reset confirm.
+Admin users bypass token limits.
 """
-from rest_framework import status, generics, permissions
+
+import logging
+
+from django.conf import settings as django_settings
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import EmailMultiAlternatives
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
-from django.conf import settings as django_settings
-from .serializers import (
-    RegisterSerializer, UserSerializer, LoginSerializer,
-    TokenBalanceSerializer, TokenPurchaseSerializer, TokenTransactionSerializer,
-    AdminTokenTransferSerializer, AdminTokenGrantSerializer, AdminUserTokenSerializer,
-)
+
 from .models import TokenBalance, TokenConfig, TokenTransaction
+from .serializers import (
+    AdminTokenGrantSerializer,
+    AdminTokenTransferSerializer,
+    AdminUserTokenSerializer,
+    LoginSerializer,
+    RegisterSerializer,
+    TokenBalanceSerializer,
+    TokenPurchaseSerializer,
+    TokenTransactionSerializer,
+    UserSerializer,
+)
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+def build_auth_response(user):
+    """Return a backwards-compatible auth payload for frontend and tests."""
+    refresh = RefreshToken.for_user(user)
+    access_token = str(refresh.access_token)
+    refresh_token = str(refresh)
+    return {
+        "user": UserSerializer(user).data,
+        "tokens": {
+            "refresh": refresh_token,
+            "access": access_token,
+        },
+        "refresh": refresh_token,
+        "access": access_token,
+    }
+
+
+def send_password_reset_email(user, reset_link):
+    """Send a branded password reset email."""
+    display_name = user.first_name or user.username
+    subject = "CrackCMS | Reset your password"
+    text_body = (
+        f"Hi {display_name},\n\n"
+        "We received a request to reset your CrackCMS password.\n\n"
+        f"Reset your password here:\n{reset_link}\n\n"
+        "If you did not request this, you can ignore this email.\n\n"
+        "CrackCMS Team"
+    )
+    html_body = f"""
+    <div style="background:#f4f7fb;padding:32px 16px;font-family:Arial,sans-serif;color:#142334;">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #d5e0eb;border-radius:24px;overflow:hidden;">
+        <div style="padding:32px;background:linear-gradient(135deg,#0b728f 0%,#0f766e 55%,#f59e0b 100%);color:#ffffff;">
+          <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.8;">CrackCMS Account Security</p>
+          <h1 style="margin:0;font-size:28px;line-height:1.1;">Reset your password</h1>
+          <p style="margin:14px 0 0;font-size:15px;line-height:1.6;opacity:0.9;">
+            Keep your UPSC CMS preparation moving with a secure reset link.
+          </p>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">Hi {display_name},</p>
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.7;">
+            We received a request to reset your CrackCMS password. Use the button below to choose a new one.
+          </p>
+          <p style="margin:0 0 24px;">
+            <a href="{reset_link}" style="display:inline-block;padding:14px 20px;border-radius:14px;background:#0b728f;color:#ffffff;text-decoration:none;font-weight:700;">
+              Reset Password
+            </a>
+          </p>
+          <p style="margin:0 0 12px;font-size:13px;line-height:1.7;color:#5b6f85;">
+            If the button does not open, copy this link into your browser:
+          </p>
+          <p style="margin:0 0 20px;font-size:13px;line-height:1.7;word-break:break-word;color:#14586a;">
+            {reset_link}
+          </p>
+          <p style="margin:0;font-size:13px;line-height:1.7;color:#5b6f85;">
+            If you did not request this reset, you can safely ignore this email.
+          </p>
+        </div>
+      </div>
+    </div>
+    """
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=django_settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+    )
+    email.attach_alternative(html_body, "text/html")
+    email.send(fail_silently=False)
 
 
 class RegisterView(generics.CreateAPIView):
-    """Register a new user account. Auto-creates token balance."""
+    """Register a new user account and auto-create token balance."""
+
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
@@ -33,18 +116,12 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-        }, status=status.HTTP_201_CREATED)
+        return Response(build_auth_response(user), status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
-    """Login with username and password, returns JWT tokens + token balance."""
+    """Login with username and password and return JWT tokens."""
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -52,28 +129,21 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         user = authenticate(
             request,
-            username=serializer.validated_data['username'],
-            password=serializer.validated_data['password']
+            username=serializer.validated_data["username"],
+            password=serializer.validated_data["password"],
         )
         if not user:
             return Response(
-                {'error': 'Invalid credentials'},
-                status=status.HTTP_401_UNAUTHORIZED
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
-        # Ensure token balance exists
         TokenBalance.objects.get_or_create(user=user)
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-        })
+        return Response(build_auth_response(user))
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
-    """Get or update the current user profile (includes token info)."""
+    """Get or update the current user profile."""
+
     serializer_class = UserSerializer
 
     def get_object(self):
@@ -81,10 +151,8 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 
 class TokenBalanceView(APIView):
-    """
-    GET: Return current user's token balance & limits.
-    Used by the frontend to show remaining tokens.
-    """
+    """Return the current user's token balance and limits."""
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -95,46 +163,44 @@ class TokenBalanceView(APIView):
 
 class TokenPurchaseView(APIView):
     """
-    POST: Purchase tokens. In production, integrate with payment gateway (Razorpay/Stripe).
-    For now, accepts payment_id and amount to credit tokens.
-    
-    Body: { "amount": 50, "payment_id": "pay_xxx" }
+    POST: Purchase tokens. In production, integrate with a payment gateway.
+    For now, the endpoint accepts payment_id and amount and credits tokens directly.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = TokenPurchaseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        amount = serializer.validated_data['amount']
-        payment_id = serializer.validated_data.get('payment_id', '')
+        amount = serializer.validated_data["amount"]
+        payment_id = serializer.validated_data.get("payment_id", "")
         config = TokenConfig.get_config()
         price = float(config.token_price) * amount
-
-        # TODO: In production, verify payment_id with Razorpay/Stripe API here
-        # For now, we trust the payment_id and credit tokens directly
 
         balance, _ = TokenBalance.objects.get_or_create(user=request.user)
         balance.add_purchased_tokens(amount)
 
-        # Record the transaction
         TokenTransaction.objects.create(
             user=request.user,
-            transaction_type='purchase',
+            transaction_type="purchase",
             amount=amount,
             price_paid=price,
             payment_id=payment_id,
-            note=f'Purchased {amount} tokens at ₹{config.token_price}/token',
+            note=f"Purchased {amount} tokens at INR {config.token_price}/token",
         )
 
-        return Response({
-            'message': f'{amount} tokens added successfully!',
-            'balance': TokenBalanceSerializer(balance).data,
-        })
+        return Response(
+            {
+                "message": f"{amount} tokens added successfully!",
+                "balance": TokenBalanceSerializer(balance).data,
+            }
+        )
 
 
 class TokenTransactionHistoryView(APIView):
-    """GET: Return user's token transaction history."""
+    """Return the user's recent token transactions."""
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -143,70 +209,64 @@ class TokenTransactionHistoryView(APIView):
         return Response(serializer.data)
 
 
-# ─── SUPER ADMIN TOKEN MANAGEMENT ───────────────────────
-
 class AdminTokenOverviewView(APIView):
-    """
-    GET: Super admin view — all users' token balances + platform totals.
-    Shows total tokens in circulation, per-user breakdown, daily API call budget.
-    """
+    """Super-admin view with platform token totals and user balances."""
+
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
-        balances = TokenBalance.objects.select_related('user').all()
+        balances = TokenBalance.objects.select_related("user").all()
         serializer = AdminUserTokenSerializer(balances, many=True)
         config = TokenConfig.get_config()
 
-        # Platform-wide token stats
         total_users = User.objects.count()
         total_purchased = sum(b.purchased_tokens for b in balances)
         total_feedback = sum(b.feedback_credits for b in balances)
         total_consumed = sum(b.total_tokens_used for b in balances)
         total_available = sum(b.available_tokens for b in balances)
 
-        return Response({
-            'platform_stats': {
-                'total_users': total_users,
-                'total_purchased_tokens': total_purchased,
-                'total_feedback_credits': total_feedback,
-                'total_tokens_consumed': total_consumed,
-                'total_available_tokens': total_available,
-                'free_daily_per_user': config.free_daily_tokens,
-                'free_weekly_per_user': config.free_weekly_tokens,
-                'max_free_daily_calls': total_users * config.free_daily_tokens,
-                'max_free_weekly_calls': total_users * config.free_weekly_tokens,
-                'api_budget': {
-                    'gemini_daily_limit': 6000,
-                    'groq_daily_limit': 14400,
-                    'deepseek_daily_limit': 'pay-as-you-go',
-                    'combined_daily_capacity': 20400,
-                    'note': 'Gemini: 4 models x 1500 RPD each. Groq: 14400 RPD. DeepSeek: unlimited (paid).',
+        return Response(
+            {
+                "platform_stats": {
+                    "total_users": total_users,
+                    "total_purchased_tokens": total_purchased,
+                    "total_feedback_credits": total_feedback,
+                    "total_tokens_consumed": total_consumed,
+                    "total_available_tokens": total_available,
+                    "free_daily_per_user": config.free_daily_tokens,
+                    "free_weekly_per_user": config.free_weekly_tokens,
+                    "max_free_daily_calls": total_users * config.free_daily_tokens,
+                    "max_free_weekly_calls": total_users * config.free_weekly_tokens,
+                    "api_budget": {
+                        "gemini_daily_limit": 6000,
+                        "groq_daily_limit": 14400,
+                        "deepseek_daily_limit": "pay-as-you-go",
+                        "combined_daily_capacity": 20400,
+                        "note": "Gemini: 4 models x 1500 RPD each. Groq: 14400 RPD. DeepSeek: unlimited (paid).",
+                    },
                 },
-            },
-            'users': serializer.data,
-        })
+                "users": serializer.data,
+            }
+        )
 
 
 class AdminTokenGrantView(APIView):
-    """
-    POST: Super admin grants or revokes tokens for a specific user.
-    Body: { "user_id": 5, "amount": 50, "note": "Bonus for being active" }
-    Use negative amount to revoke tokens.
-    """
+    """Grant or revoke tokens for a specific user."""
+
     permission_classes = [permissions.IsAdminUser]
 
     def post(self, request):
         serializer = AdminTokenGrantSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data['user_id']
-        amount = serializer.validated_data['amount']
-        note = serializer.validated_data.get('note', '')
+        user_id = serializer.validated_data["user_id"]
+        amount = serializer.validated_data["amount"]
+        note = serializer.validated_data.get("note", "")
 
         try:
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({'error': f'User ID {user_id} not found'}, status=404)
+            return Response({"error": f"User ID {user_id} not found"}, status=404)
 
         balance, _ = TokenBalance.objects.get_or_create(user=target_user)
 
@@ -214,52 +274,52 @@ class AdminTokenGrantView(APIView):
             balance.add_purchased_tokens(amount)
             TokenTransaction.objects.create(
                 user=target_user,
-                transaction_type='admin_grant',
+                transaction_type="admin_grant",
                 amount=amount,
-                note=note or f'Admin granted {amount} tokens',
+                note=note or f"Admin granted {amount} tokens",
             )
-            return Response({
-                'message': f'Granted {amount} tokens to {target_user.username}',
-                'balance': TokenBalanceSerializer(balance).data,
-            })
-        else:
-            # Revoke (negative amount)
-            revoke_amount = abs(amount)
-            balance.purchased_tokens = max(0, balance.purchased_tokens - revoke_amount)
-            balance.save(update_fields=['purchased_tokens'])
-            TokenTransaction.objects.create(
-                user=target_user,
-                transaction_type='admin_revoke',
-                amount=-revoke_amount,
-                note=note or f'Admin revoked {revoke_amount} tokens',
+            return Response(
+                {
+                    "message": f"Granted {amount} tokens to {target_user.username}",
+                    "balance": TokenBalanceSerializer(balance).data,
+                }
             )
-            return Response({
-                'message': f'Revoked {revoke_amount} tokens from {target_user.username}',
-                'balance': TokenBalanceSerializer(balance).data,
-            })
+
+        revoke_amount = abs(amount)
+        balance.purchased_tokens = max(0, balance.purchased_tokens - revoke_amount)
+        balance.save(update_fields=["purchased_tokens"])
+        TokenTransaction.objects.create(
+            user=target_user,
+            transaction_type="admin_revoke",
+            amount=-revoke_amount,
+            note=note or f"Admin revoked {revoke_amount} tokens",
+        )
+        return Response(
+            {
+                "message": f"Revoked {revoke_amount} tokens from {target_user.username}",
+                "balance": TokenBalanceSerializer(balance).data,
+            }
+        )
 
 
 class AdminTokenTransferView(APIView):
-    """
-    POST: Super admin transfers tokens between users.
-    Body: { "from_user_id": 5, "to_user_id": 8, "amount": 20, "note": "..." }
-    If from_user_id is omitted, tokens are created (granted from system).
-    """
+    """Transfer tokens between users or grant them from the system."""
+
     permission_classes = [permissions.IsAdminUser]
 
     def post(self, request):
         serializer = AdminTokenTransferSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        to_user_id = serializer.validated_data['to_user_id']
-        amount = serializer.validated_data['amount']
-        note = serializer.validated_data.get('note', '')
-        from_user_id = serializer.validated_data.get('from_user_id')
+        to_user_id = serializer.validated_data["to_user_id"]
+        amount = serializer.validated_data["amount"]
+        note = serializer.validated_data.get("note", "")
+        from_user_id = serializer.validated_data.get("from_user_id")
 
         try:
             to_user = User.objects.get(id=to_user_id)
         except User.DoesNotExist:
-            return Response({'error': f'Target user ID {to_user_id} not found'}, status=404)
+            return Response({"error": f"Target user ID {to_user_id} not found"}, status=404)
 
         to_balance, _ = TokenBalance.objects.get_or_create(user=to_user)
 
@@ -267,100 +327,116 @@ class AdminTokenTransferView(APIView):
             try:
                 from_user = User.objects.get(id=from_user_id)
             except User.DoesNotExist:
-                return Response({'error': f'Source user ID {from_user_id} not found'}, status=404)
+                return Response({"error": f"Source user ID {from_user_id} not found"}, status=404)
 
             from_balance, _ = TokenBalance.objects.get_or_create(user=from_user)
 
             if from_balance.purchased_tokens < amount:
-                return Response({
-                    'error': f'{from_user.username} only has {from_balance.purchased_tokens} purchased tokens'
-                }, status=400)
+                return Response(
+                    {"error": f"{from_user.username} only has {from_balance.purchased_tokens} purchased tokens"},
+                    status=400,
+                )
 
-            # Deduct from source
             from_balance.purchased_tokens -= amount
-            from_balance.save(update_fields=['purchased_tokens'])
+            from_balance.save(update_fields=["purchased_tokens"])
             TokenTransaction.objects.create(
                 user=from_user,
-                transaction_type='admin_transfer',
+                transaction_type="admin_transfer",
                 amount=-amount,
-                note=note or f'Admin transferred {amount} tokens to {to_user.username}',
+                note=note or f"Admin transferred {amount} tokens to {to_user.username}",
             )
 
-            # Add to target
             to_balance.add_purchased_tokens(amount)
             TokenTransaction.objects.create(
                 user=to_user,
-                transaction_type='admin_transfer',
+                transaction_type="admin_transfer",
                 amount=amount,
-                note=note or f'Admin transferred {amount} tokens from {from_user.username}',
+                note=note or f"Admin transferred {amount} tokens from {from_user.username}",
             )
 
-            return Response({
-                'message': f'Transferred {amount} tokens from {from_user.username} to {to_user.username}',
-                'from_balance': TokenBalanceSerializer(from_balance).data,
-                'to_balance': TokenBalanceSerializer(to_balance).data,
-            })
-        else:
-            # System grant (no source)
-            to_balance.add_purchased_tokens(amount)
-            TokenTransaction.objects.create(
-                user=to_user,
-                transaction_type='admin_grant',
-                amount=amount,
-                note=note or f'Admin granted {amount} tokens (system)',
+            return Response(
+                {
+                    "message": f"Transferred {amount} tokens from {from_user.username} to {to_user.username}",
+                    "from_balance": TokenBalanceSerializer(from_balance).data,
+                    "to_balance": TokenBalanceSerializer(to_balance).data,
+                }
             )
-            return Response({
-                'message': f'Granted {amount} tokens to {to_user.username}',
-                'to_balance': TokenBalanceSerializer(to_balance).data,
-            })
+
+        to_balance.add_purchased_tokens(amount)
+        TokenTransaction.objects.create(
+            user=to_user,
+            transaction_type="admin_grant",
+            amount=amount,
+            note=note or f"Admin granted {amount} tokens (system)",
+        )
+        return Response(
+            {
+                "message": f"Granted {amount} tokens to {to_user.username}",
+                "to_balance": TokenBalanceSerializer(to_balance).data,
+            }
+        )
 
 
 class PasswordResetRequestView(APIView):
-    """Request a password reset email. Sends a link with UID + token."""
+    """Request a password reset email. Sends a link with uid and token."""
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get('email', '').strip().lower()
+        email = request.data.get("email", "").strip().lower()
         if not email:
-            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        # Always return success to avoid user enumeration
-        try:
-            user = User.objects.get(email=email)
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        users = User.objects.filter(email=email)
+        if not users.exists():
+            return Response({"message": "If an account with that email exists, a reset link has been sent."})
+            
+        for user in users:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            frontend_url = getattr(django_settings, 'FRONTEND_URL', 'http://localhost:3000')
+            frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:3000")
             reset_link = f"{frontend_url}/reset-password?uid={uid}&token={token}"
-            send_mail(
-                subject='CrackCMS — Reset Your Password',
-                message=f'Hi {user.first_name or user.username},\n\nClick here to reset your password:\n{reset_link}\n\nThis link expires in 24 hours.\n\n— CrackCMS Team',
-                from_email=django_settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        except User.DoesNotExist:
-            pass  # Silent — prevent email enumeration
-        return Response({'message': 'If an account with that email exists, a reset link has been sent.'})
+            try:
+                send_password_reset_email(user, reset_link)
+            except Exception as exc:
+                logger.warning("Password reset email failed for user_id=%s: %s", user.pk, exc)
+
+        return Response({"message": "If an account with that email exists, a reset link has been sent."})
 
 
 class PasswordResetConfirmView(APIView):
-    """Confirm password reset with UID, token, and new password."""
+    """Confirm password reset with uid, token, and new password."""
+
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        uid = request.data.get('uid', '')
-        token = request.data.get('token', '')
-        new_password = request.data.get('new_password', '')
+        uid = request.data.get("uid", "")
+        token = request.data.get("token", "")
+        new_password = request.data.get("new_password", "")
         if not uid or not token or not new_password:
-            return Response({'error': 'uid, token, and new_password are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        if len(new_password) < 8:
-            return Response({'error': 'Password must be at least 8 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "uid, token, and new_password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             user_id = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=user_id)
         except (User.DoesNotExist, ValueError, TypeError):
-            return Response({'error': 'Invalid reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid reset link."}, status=status.HTTP_400_BAD_REQUEST)
+
         if not default_token_generator.check_token(user, token):
-            return Response({'error': 'Reset link has expired or is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Reset link has expired or is invalid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user=user)
+        except Exception as exc:
+            message = exc.messages[0] if getattr(exc, "messages", None) else "Password is too weak."
+            return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
         user.set_password(new_password)
         user.save()
-        return Response({'message': 'Password has been reset successfully.'})
+        return Response({"message": "Password has been reset successfully."})

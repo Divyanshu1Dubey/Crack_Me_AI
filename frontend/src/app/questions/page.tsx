@@ -372,17 +372,9 @@ function QuestionsContent() {
             <div className="main-content">
                 <Header />
                 <div className="page-container">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3 text-foreground">
-                            <BookOpen className="w-6 h-6 text-primary" />
-                            CMS Question Bank
-                        </h1>
-                        <p className="text-sm mt-1 text-muted-foreground">
-                            1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
-                        </p>
-                    </div>
-                </div>
+                <p className="text-sm mb-6 text-muted-foreground">
+                    1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
+                </p>
 
                 {/* Filters */}
                 <Card className="mb-6">
@@ -446,8 +438,8 @@ function QuestionsContent() {
                                         </div>
                                         <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(q.question_text).slice(0, 150)}{q.question_text.length > 150 ? '...' : ''}</p>
                                         <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {q.topic_name && <Badge variant="outline" className="text-xs">{q.topic_name}</Badge>}
-                                            {q.year && <Badge variant="outline" className="text-[10px]">PYQ {q.year}</Badge>}
+                                            {q.topic_name && <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-900 border-border">{q.topic_name}</Badge>}
+                                            {q.year && <Badge variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-900 border-border">PYQ {q.year}</Badge>}
                                             {q.concept_tags?.includes('high_yield') && (
                                                 <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
                                             )}
@@ -479,12 +471,11 @@ function QuestionsContent() {
                             <div className="space-y-3 animate-fadeInUp">
                                 {/* Question Card */}
                                 <div className="glass-card overflow-hidden">
-                                    {/* Header Tags */}
-                                    <div className="px-5 py-3 flex flex-wrap items-center gap-2" style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
-                                        <span className="review-tag review-tag-cyan">PYQ {String(detail.year)}</span>
-                                        <span className="review-tag review-tag-purple">{String(detail.subject_name)}</span>
-                                        {detail.topic_name && <span className="review-tag" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>{String(detail.topic_name)}</span>}
-                                        {detail.difficulty && <span className={`review-tag ${detail.difficulty === 'hard' ? 'review-tag-red' : detail.difficulty === 'medium' ? 'review-tag-amber' : 'review-tag-green'}`}>{detail.difficulty}</span>}
+                                    <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-900/50">
+                                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
+                                        <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
+                                        {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
+                                        {detail.difficulty && <Badge variant="outline" className="pointer-events-none capitalize">{detail.difficulty}</Badge>}
                                     </div>
 
                                     {/* Question Text — rendered with markdown */}
@@ -505,12 +496,12 @@ function QuestionsContent() {
 
                                                 return (
                                                     <div key={opt}
-                                                        className={`review-option ${showAnswer && isCorrect ? 'review-option-correct' : ''} ${isWrong ? 'review-option-wrong' : ''} ${!showAnswer && isSelected ? 'review-option-selected' : ''} cursor-pointer`}
+                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${showAnswer ? (isCorrect ? 'border-emerald-500 bg-emerald-500/5' : isWrong ? 'border-red-500/50 opacity-70' : 'border-border/40 opacity-50') : (isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted')}`}
                                                         onClick={() => handleSelectOption(opt)}>
-                                                        <div className={`review-option-dot ${showAnswer && isCorrect ? 'correct' : ''} ${isWrong ? 'wrong' : ''} ${!showAnswer && isSelected ? 'selected' : ''}`}>{opt}</div>
+                                                        <div className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${showAnswer ? (isCorrect ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground') : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}`}>{opt}</div>
                                                         <div className="flex-1 text-sm font-medium">{cleanOptionText(String(optionText))}</div>
-                                                        {showAnswer && isCorrect && <span className="review-option-label correct">✓ Correct</span>}
-                                                        {isWrong && <span className="review-option-label wrong">✗ Wrong</span>}
+                                                        {showAnswer && isCorrect && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✓ Correct</span>}
+                                                        {isWrong && <span className="text-xs font-bold text-red-600 dark:text-red-400">✗ Wrong</span>}
                                                     </div>
                                                 );
                                             })}
@@ -526,13 +517,12 @@ function QuestionsContent() {
                                 {showAnswer && (
                                     <div className="space-y-3 animate-fadeInUp">
                                         {/* ✅ Correct Answer */}
-                                        <div className="explanation-card explanation-card-green">
-                                            <div className="explanation-card-accent green"></div>
-                                            <div className="p-4 pl-5">
-                                                <h4 className="explanation-card-title green"><CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}</h4>
-                                                {detail.explanation && <p className="text-sm leading-relaxed mt-1.5" style={{ color: 'var(--text-secondary)', lineHeight: '1.7' }}>{String(detail.explanation)}</p>}
-                                            </div>
-                                        </div>
+                                        <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900/50">
+                                            <CardContent className="p-4">
+                                                <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}</h4>
+                                                {detail.explanation && <p className="text-sm leading-relaxed mt-2 text-emerald-900/80 dark:text-emerald-100/70">{String(detail.explanation)}</p>}
+                                            </CardContent>
+                                        </Card>
 
                                         {/* 🚩 Flag Wrong Answer */}
                                         <div className="flex justify-end">
@@ -629,12 +619,11 @@ function QuestionsContent() {
                                         {/* Generate AI Analysis button — only shown after answer, before AI loads */}
                                         {showAnswer && !aiExplanation && !aiLoading && !tokenError && (
                                             <button onClick={() => fetchAiExplanation()}
-                                                className="w-full glass-card p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:scale-[1.01] group mt-3"
-                                                style={{ background: 'rgba(6,182,212,0.04)' }}>
-                                                <Brain className="w-6 h-6 group-hover:animate-pulse" style={{ color: 'var(--accent-primary)' }} />
+                                                className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-3">
+                                                <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                                 <div className="text-left">
-                                                    <span className="text-sm font-bold block" style={{ color: 'var(--accent-primary)' }}>Generate AI Analysis</span>
-                                                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Click to get mnemonics, explanations, exam tips & more</span>
+                                                    <span className="text-sm font-bold block text-blue-700 dark:text-blue-300">Generate AI Analysis</span>
+                                                    <span className="text-xs text-muted-foreground">Click to get mnemonics, explanations, exam tips & more</span>
                                                 </div>
                                             </button>
                                         )}
@@ -677,10 +666,10 @@ function QuestionsContent() {
                                         {aiExplanation && !aiLoading && (
                                             <div className="space-y-3">
                                                 {/* Section Header */}
-                                                <div className="flex items-center gap-2 px-1 pt-1">
-                                                    <Brain className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
-                                                    <span className="font-bold text-sm gradient-text tracking-wide">AI-POWERED DEEP ANALYSIS</span>
-                                                    <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, var(--glass-border), transparent)' }}></div>
+                                                <div className="flex items-center gap-2 px-1 pt-1 opacity-80">
+                                                    <Brain className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                    <span className="font-bold text-xs tracking-wider text-blue-600 dark:text-blue-400 uppercase">AI-Powered Deep Analysis</span>
+                                                    <div className="flex-1 h-px bg-border ml-2"></div>
                                                 </div>
 
                                                 {/* 🧠 Mnemonic — ALWAYS FIRST */}

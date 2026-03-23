@@ -1,11 +1,12 @@
 'use client';
+
 import { useState } from 'react';
-import { authAPI } from '@/lib/api';
-import { Mail, ArrowLeft, Zap } from 'lucide-react';
 import Link from 'next/link';
+import { ArrowLeft, Mail, MailCheck } from 'lucide-react';
+import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { authAPI } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
@@ -28,64 +29,61 @@ export default function ForgotPasswordPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background px-4">
-            <Card className="w-full max-w-md">
-                <CardContent className="p-8">
-                    <div className="text-center mb-6">
-                        <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
-                            <Zap className="w-6 h-6 text-primary-foreground" />
-                        </div>
-                        <h1 className="text-2xl font-bold text-foreground">Reset Password</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Enter your email and we&apos;ll send you a reset link
+        <AuthShell
+            badge="Account Recovery"
+            title="Regain Access"
+            description="Enter your registered email address to receive a secure password reset link."
+            highlights={[
+                'Secure reset links remain active for 24 hours.',
+                'Ensure to check both your inbox and spam folders.',
+                'Regain access to your study dashboard seamlessly.',
+            ]}
+        >
+            {submitted ? (
+                <div className="space-y-5 text-center">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                        <MailCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
+                    </div>
+                    <div>
+                        <p className="text-lg font-semibold text-foreground">Check your email</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            If an account with that email exists, CrackCMS has sent a reset link. Check your inbox and spam folder.
                         </p>
                     </div>
-
-                    {submitted ? (
-                        <div className="text-center space-y-4">
-                            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto">
-                                <Mail className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <p className="text-sm text-foreground font-medium">Check your email!</p>
-                            <p className="text-xs text-muted-foreground">
-                                If an account with that email exists, we&apos;ve sent a password reset link.
-                                Check your inbox (and spam folder).
-                            </p>
-                            <Link href="/login">
-                                <Button variant="outline" className="mt-4">
-                                    <ArrowLeft className="w-4 h-4 mr-2" /> Back to Login
-                                </Button>
-                            </Link>
+                    <Button asChild variant="outline" className="rounded-2xl">
+                        <Link href="/login">
+                            <ArrowLeft className="w-4 h-4" /> Back to Login
+                        </Link>
+                    </Button>
+                </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground">Email Address</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                type="email"
+                                name="email"
+                                className="pl-10"
+                                placeholder="you@example.com"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                required
+                            />
                         </div>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium mb-1.5 block text-foreground">Email Address</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                    <Input
-                                        type="email"
-                                        className="pl-10"
-                                        placeholder="you@example.com"
-                                        value={email}
-                                        onChange={e => setEmail(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                            </div>
-                            {error && <p className="text-sm text-destructive">{error}</p>}
-                            <Button type="submit" className="w-full" disabled={loading}>
-                                {loading ? 'Sending...' : 'Send Reset Link'}
-                            </Button>
-                            <div className="text-center">
-                                <Link href="/login" className="text-sm text-primary hover:underline">
-                                    Back to Login
-                                </Link>
-                            </div>
-                        </form>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
+                    </div>
+                    {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                    <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
+                        {loading ? 'Sending...' : 'Send Reset Link'}
+                    </Button>
+                    <div className="text-center">
+                        <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+                            Back to Login
+                        </Link>
+                    </div>
+                </form>
+            )}
+        </AuthShell>
     );
 }

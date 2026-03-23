@@ -14,7 +14,7 @@ interface KnowledgeStats {
 }
 
 export default function UploadPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { isAuthenticated, loading: authLoading, user } = useAuth();
     const router = useRouter();
     const [stats, setStats] = useState<KnowledgeStats | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -24,8 +24,13 @@ export default function UploadPage() {
     const [bookName, setBookName] = useState('');
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.push('/login');
-    }, [authLoading, isAuthenticated, router]);
+        if (!authLoading && !isAuthenticated) {
+            router.push('/login');
+        } else if (!authLoading && user && user.role !== 'admin') {
+            // Non-admin users cannot access this page
+            router.push('/dashboard');
+        }
+    }, [authLoading, isAuthenticated, user, router]);
 
     useEffect(() => {
         if (isAuthenticated) fetchStats();

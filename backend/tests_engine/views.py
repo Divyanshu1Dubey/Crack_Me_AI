@@ -165,9 +165,9 @@ class TestViewSet(viewsets.ModelViewSet):
         attempt.save()
 
         # Update Analytics Dashboard
-        from analytics.models import UserTopicPerformance, DailyActivity
+        from analytics.models import UserTopicPerformance, DailyActivity, StudyStreak
         from django.db.models import F
-        
+
         # 1. Update Daily Activity
         today = timezone.now().date()
         daily, _ = DailyActivity.objects.get_or_create(user=request.user, date=today)
@@ -177,7 +177,14 @@ class TestViewSet(viewsets.ModelViewSet):
         daily.time_spent_minutes += max(1, int(attempt.time_taken_seconds / 60))
         daily.save()
 
-        # 2. Update Subject-wise Performance
+        # 2. Update Study Streak and XP
+        streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+        streak.record_activity()  # Updates streak count
+        # Award XP: 10 per correct answer, 5 bonus for completing test
+        xp_earned = (correct * 10) + 5
+        streak.add_xp(xp_earned)
+
+        # 3. Update Subject-wise Performance
         subject_counts = {}
         topic_counts = {}
         for ans_data in serializer.validated_data['answers']:
@@ -225,7 +232,7 @@ class TestViewSet(viewsets.ModelViewSet):
             perf.last_attempted = now
             perf.save()
 
-        # 3. Update Topic-level performance
+        # 4. Update Topic-level performance
         for topic_id, data in topic_counts.items():
             perf, _ = UserTopicPerformance.objects.get_or_create(
                 user=request.user, subject=data['subject'], topic=data['topic']

@@ -117,18 +117,11 @@ export default function TrendsPage() {
                 ) : (
                 <div className="space-y-8 animate-fadeIn">
 
-                {/* Page Header */}
+                {/* Page Description */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2" style={{ color: 'var(--accent-primary)' }}>
-                            <TrendingUp className="w-5 h-5" />
-                            <span className="text-sm font-bold tracking-widest uppercase">Analytics Intelligence</span>
-                        </div>
-                        <h1 className="text-2xl md:text-3xl font-black gradient-text">Exam Trends & Weightage</h1>
-                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                            Track the evolution of UPSC CMS papers. Identify high-yield subjects and master the changing exam pattern.
-                        </p>
-                    </div>
+                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                        Track the evolution of UPSC CMS papers. Identify high-yield subjects and master the changing exam pattern.
+                    </p>
                     <div className="flex items-center gap-3 p-2 glass-card rounded-2xl">
                         <div className="p-3 rounded-xl text-white" style={{ background: 'var(--accent-primary)' }}>
                             <Calendar className="w-5 h-5" />

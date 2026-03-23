@@ -214,12 +214,13 @@ class Note(models.Model):
 
 
 class Flashcard(models.Model):
-    """Flashcards for spaced repetition review."""
+    """Flashcards for spaced repetition review with personal notes."""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='flashcards')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, null=True, blank=True, related_name='flashcards')
     subject = models.ForeignKey('questions.Subject', on_delete=models.CASCADE, null=True, blank=True)
     front = models.TextField(help_text="Question or prompt side")
     back = models.TextField(help_text="Answer or explanation side")
+    personal_note = models.TextField(blank=True, help_text="User's personal study notes for this card")
     difficulty = models.CharField(max_length=10, choices=[
         ('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')
     ], default='medium')

@@ -85,15 +85,9 @@ export default function ResourcesPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <BookOpen className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                        CMS Study Hub
-                    </h1>
-                    <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material
-                    </p>
-                </div>
+                <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+                    Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material
+                </p>
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2">

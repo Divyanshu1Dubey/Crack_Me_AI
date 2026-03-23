@@ -458,7 +458,8 @@ class AIService:
         free_models = [
             'meta-llama/llama-3.3-70b-instruct:free',
             'google/gemma-3-27b-it:free',
-            'qwen/qwen3-32b:free',
+            'qwen/qwen-2.5-72b-instruct:free',
+            'mistralai/mistral-7b-instruct:free',
         ]
         for model_name in free_models:
             try:
@@ -593,8 +594,8 @@ class AIService:
             return None
         free_models = [
             "deepseek/deepseek-r1-0528:free",
-            "google/gemini-2.5-flash-preview-05-20",
-            "meta-llama/llama-4-maverick:free",
+            "google/gemma-2-9b-it:free",
+            "microsoft/phi-3-medium-128k-instruct:free",
         ]
         for model_name in free_models:
             try:

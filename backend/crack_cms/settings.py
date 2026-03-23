@@ -5,6 +5,7 @@ AI-Powered UPSC CMS Preparation Platform
 import os
 from pathlib import Path
 from datetime import timedelta
+import dj_database_url
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env file (does not override existing system/Render env vars)
@@ -21,7 +22,11 @@ if SENTRY_DSN:
         send_default_pii=False,
     )
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-change-me-in-production-upsc-cms-2024')
+SECRET_KEY = (
+    os.getenv('DJANGO_SECRET_KEY')
+    or os.getenv('SECRET_KEY')
+    or 'django-insecure-change-me-in-production-upsc-cms-2024'
+)
 
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
@@ -99,12 +104,22 @@ TEMPLATES = [
 WSGI_APPLICATION = 'crack_cms.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Auth
 AUTH_USER_MODEL = 'accounts.CustomUser'
@@ -123,7 +138,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
 AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
-AXES_LOCKOUT_PARAMETERS = ['username']  # Lock per username, not IP
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']  # Lock by username and IP
 AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
 # REST Framework
@@ -185,13 +200,22 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Email — Gmail SMTP for password reset
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'crackwith.ai@gmail.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # Gmail App Password
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'CrackCMS <crackwith.ai@gmail.com>')
+# In development, use console backend if credentials are missing
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER') or os.getenv('SMTP_USERNAME', 'crackwith.ai@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') or os.getenv('SMTP_PASSWORD', '')
+
+# Choose email backend based on credentials availability
+if EMAIL_HOST_PASSWORD and EMAIL_HOST_PASSWORD.strip():
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+else:
+    # Fallback to console output for development (passwords visible in console logs)
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USER}>')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Logging — ensures API hits and AI errors show up in Render logs

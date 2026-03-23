@@ -7,11 +7,45 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { testsAPI, aiAPI } from '@/lib/api';
+import { testsAPI, aiAPI, questionsAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
+
+const IsolatedTimer = memo(function IsolatedTimer({ initialSeconds, isSubmitted, onTimeUp }: { initialSeconds: number, isSubmitted: boolean, onTimeUp: () => void }) {
+    const [timeLeft, setTimeLeft] = useState(initialSeconds);
+    const onTimeUpRef = useRef(onTimeUp);
+    
+    useEffect(() => { onTimeUpRef.current = onTimeUp; }, [onTimeUp]);
+
+    useEffect(() => {
+        if (timeLeft > 0 && !isSubmitted) {
+            const timer = setInterval(() => {
+                setTimeLeft(prev => {
+                    if (prev <= 1) {
+                        onTimeUpRef.current();
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [isSubmitted, timeLeft > 0]);
+
+    const formatTime = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-2 rounded-lg ${timeLeft < 300 ? 'animate-pulse bg-red-500/15 text-red-500' : 'bg-card text-foreground'}`}>
+            ⏱ {formatTime(timeLeft)}
+        </div>
+    );
+});
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare } from 'lucide-react';
 
 /**
@@ -65,7 +99,7 @@ export default function TakeTestPage() {
     const [currentIdx, setCurrentIdx] = useState(0);
     const [answers, setAnswers] = useState<Record<number, string>>({});
     const [marked, setMarked] = useState<Set<number>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(0);
+    const [initialTimeLimit, setInitialTimeLimit] = useState(0);
     const [submitted, setSubmitted] = useState(false);
     const [result, setResult] = useState<Record<string, any> | null>(null);
     const [reviewData, setReviewData] = useState<any[] | null>(null);
@@ -76,6 +110,11 @@ export default function TakeTestPage() {
     const [reviewAiExplanations, setReviewAiExplanations] = useState<Record<number, any>>({});
     const [reviewAiLoading, setReviewAiLoading] = useState(false);
     const [reviewTokenError, setReviewTokenError] = useState(false);
+    const [flagOpen, setFlagOpen] = useState(false);
+    const [flagCategory, setFlagCategory] = useState('incomplete_question');
+    const [flagComment, setFlagComment] = useState('');
+    const [flagSubmitting, setFlagSubmitting] = useState(false);
+    const [flagSuccess, setFlagSuccess] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimes = useRef<Record<number, number>>({});
     const timeSpent = useRef<Record<number, number>>({});
@@ -88,35 +127,14 @@ export default function TakeTestPage() {
                 setTest(res.data.test);
                 setQuestions(res.data.questions);
                 setAttemptId(res.data.attempt_id);
-                setTimeLeft(res.data.test.time_limit_minutes * 60);
+                setInitialTimeLimit(res.data.test.time_limit_minutes * 60);
                 startTimes.current[0] = Date.now();
             }).finally(() => setLoading(false));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authLoading, isAuthenticated, testId]);
 
-    // Timer — uses ref to avoid stale closure
-    useEffect(() => {
-        if (timeLeft > 0 && !submitted) {
-            timerRef.current = setInterval(() => {
-                setTimeLeft(prev => {
-                    if (prev <= 1) {
-                        doSubmitRef.current();
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        }
-        return () => { if (timerRef.current) clearInterval(timerRef.current); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [submitted, timeLeft > 0]);
-
-    const formatTime = (s: number) => {
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-    };
+    // Timer ref handling eliminated due to isolated timer component
 
     const selectAnswer = (option: string) => {
         if (submitted) return;
@@ -306,6 +324,60 @@ export default function TakeTestPage() {
                                     );
                                 })}
                             </div>
+
+                            {/* Flag Question Button */}
+                            <div className="flex justify-end mt-4">
+                                <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); }}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                                    <Flag className="w-3.5 h-3.5" /> Report Issue
+                                </button>
+                            </div>
+                            {flagOpen && (
+                                <div className="glass-card p-4 mt-3 space-y-3 animate-fadeInUp">
+                                    <h5 className="text-sm font-bold flex items-center gap-2" style={{ color: '#ef4444' }}>
+                                        <Flag className="w-4 h-4" /> Report an Issue with this Question
+                                    </h5>
+                                    {flagSuccess ? (
+                                        <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted.</p>
+                                    ) : (
+                                        <>
+                                            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
+                                                <option value="incomplete_question">Incomplete Question</option>
+                                                <option value="wrong_answer">Wrong Answer</option>
+                                                <option value="discrepancy">Discrepancy in Options</option>
+                                                <option value="missing_options">Missing Options</option>
+                                                <option value="typo">Typo/Formatting Issue</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                            <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                                                placeholder="Describe the issue (e.g., question text is incomplete, options are cut off...)"
+                                                value={flagComment} onChange={e => setFlagComment(e.target.value)} />
+                                            <div className="flex gap-2">
+                                                <button
+                                                    className="btn-primary text-xs px-3 py-1.5"
+                                                    onClick={() => {
+                                                        if (!flagComment.trim() || !rq) return;
+                                                        setFlagSubmitting(true);
+                                                        questionsAPI.submitFeedback({
+                                                            question: rq.id,
+                                                            category: flagCategory,
+                                                            comment: flagComment.trim(),
+                                                        }).then(() => {
+                                                            setFlagSuccess(true);
+                                                            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); }, 2000);
+                                                        }).catch(() => {})
+                                                        .finally(() => setFlagSubmitting(false));
+                                                    }}
+                                                    disabled={flagSubmitting || !flagComment.trim()}>
+                                                    {flagSubmitting ? 'Submitting...' : 'Submit'}
+                                                </button>
+                                                <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => setFlagOpen(false)}>Cancel</button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -428,116 +500,89 @@ export default function TakeTestPage() {
                                 )}
                             </div>
 
-                            {/* 📖 TOPIC DEEP DIVE — The learning section */}
-                            {aiExp.topic_deep_dive && (
-                                <div className="explanation-card explanation-card-indigo animate-fadeInUp">
-                                    <div className="explanation-card-accent indigo"></div>
-                                    <div className="p-5 pl-6">
-                                        <h4 className="explanation-card-title indigo"><BookOpen className="w-4 h-4" /> 📖 Topic Deep Dive — Learn the Bigger Picture</h4>
-                                        <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>{aiExp.topic_deep_dive}</p>
+                            {/* 📖 DETAILED ANALYSIS & TAKEAWAYS */}
+                            <details className="glass-card mt-2 group cursor-pointer [&_summary::-webkit-details-marker]:hidden">
+                                <summary className="px-5 py-4 font-bold text-sm flex items-center justify-between transition-colors hover:bg-accent/50" style={{ color: 'var(--accent-primary)' }}>
+                                    <div className="flex items-center gap-2">
+                                        <BookOpen className="w-4 h-4" />
+                                        View Detailed Analysis & Exam Tips
                                     </div>
-                                </div>
-                            )}
-
-                            {/* ⚡ HIGH YIELD + KEY DIFFERENTIATORS — Side by side */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {aiExp.high_yield_points?.length > 0 && (
-                                    <div className="glass-card p-4">
-                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
-                                            <Zap className="w-3.5 h-3.5" /> ⚡ High Yield Points
-                                        </h5>
-                                        <ul className="space-y-2">
-                                            {aiExp.high_yield_points.map((p: string, i: number) => (
-                                                <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                                    <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
-                                                    <span>{p}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                                {aiExp.key_differentiators?.length > 0 && (
-                                    <div className="glass-card p-4">
-                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                                            <ArrowRight className="w-3.5 h-3.5" /> ⚖️ Key Differentiators
-                                        </h5>
-                                        <ul className="space-y-2">
-                                            {aiExp.key_differentiators.map((d: string, i: number) => (
-                                                <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
-                                                    {d}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* 📚 Reference + 💎 Clinical Pearl + 🎓 Exam Tip — 3 cols */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {aiExp.textbook_reference?.book && (
-                                    <div className="glass-card p-4 flex items-start gap-2.5">
-                                        <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
+                                    <span className="group-open:rotate-180 transition-transform duration-200">▼</span>
+                                </summary>
+                                <div className="p-5 border-t border-border/50 space-y-5 cursor-default bg-card/30">
+                                    {aiExp.topic_deep_dive && (
                                         <div>
-                                            <h6 className="text-xs font-bold mb-1" style={{ color: '#8b5cf6' }}>📚 Textbook</h6>
-                                            <p className="text-xs font-semibold">{aiExp.textbook_reference.book}</p>
-                                            {aiExp.textbook_reference.chapter && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Ch: {aiExp.textbook_reference.chapter}</p>}
-                                            {aiExp.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {aiExp.textbook_reference.page}</p>}
+                                            <h4 className="font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#6366f1' }}><BookOpen className="w-3.5 h-3.5" /> Topic Deep Dive</h4>
+                                            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExp.topic_deep_dive}</p>
                                         </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {aiExp.high_yield_points?.length > 0 && (
+                                            <div>
+                                                <h5 className="font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}><Zap className="w-3.5 h-3.5" /> High Yield Points</h5>
+                                                <ul className="space-y-1">
+                                                    {aiExp.high_yield_points.map((p: string, i: number) => <li key={i} className="text-xs flex gap-2" style={{ color: 'var(--text-secondary)' }}><span style={{ color: '#ec4899' }}>▸</span><span>{p}</span></li>)}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {aiExp.key_differentiators?.length > 0 && (
+                                            <div>
+                                                <h5 className="font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#f59e0b' }}><ArrowRight className="w-3.5 h-3.5" /> Key Differentiators</h5>
+                                                <ul className="space-y-1">
+                                                    {aiExp.key_differentiators.map((d: string, i: number) => <li key={i} className="text-xs" style={{ color: 'var(--text-secondary)' }}>• {d}</li>)}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                                {aiExp.clinical_pearl && (
-                                    <div className="glass-card p-4 flex items-start gap-2.5">
-                                        <Sparkles className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
-                                        <div>
-                                            <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExp.clinical_pearl}</p>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        {aiExp.textbook_reference?.book && (
+                                            <div>
+                                                <h6 className="font-bold text-xs mb-1" style={{ color: '#8b5cf6' }}>📚 Reference</h6>
+                                                <p className="text-xs font-semibold">{aiExp.textbook_reference.book}</p>
+                                                {aiExp.textbook_reference.chapter && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Ch: {aiExp.textbook_reference.chapter}</p>}
+                                                {aiExp.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {aiExp.textbook_reference.page}</p>}
+                                            </div>
+                                        )}
+                                        {aiExp.clinical_pearl && (
+                                            <div>
+                                                <h6 className="font-bold text-xs mb-1" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
+                                                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{aiExp.clinical_pearl}</p>
+                                            </div>
+                                        )}
+                                        {aiExp.exam_tip && (
+                                            <div>
+                                                <h6 className="font-bold text-xs mb-1" style={{ color: '#f59e0b' }}>🎓 Exam Tip</h6>
+                                                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{aiExp.exam_tip}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {aiExp.quick_revision && (
+                                        <div className="p-3 rounded-lg" style={{ background: 'rgba(6,182,212,0.05)', borderLeft: '3px solid var(--accent-primary)' }}>
+                                            <h5 className="font-bold text-xs uppercase tracking-wider mb-1" style={{ color: 'var(--accent-primary)' }}>📝 Quick Revision</h5>
+                                            <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{aiExp.quick_revision}</p>
                                         </div>
-                                    </div>
-                                )}
-                                {aiExp.exam_tip && (
-                                    <div className="glass-card p-4 flex items-start gap-2.5">
-                                        <GraduationCap className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
-                                        <div>
-                                            <h6 className="text-xs font-bold mb-1" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
-                                            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExp.exam_tip}</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
 
-                            {/* ⚡ QUICK REVISION BOX — Highlighted */}
-                            {aiExp.quick_revision && (
-                                <div className="quick-revision-card animate-fadeInUp">
-                                    <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'var(--gradient-primary)' }}></div>
-                                    <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
-                                        <Lightbulb className="w-3.5 h-3.5" /> 📝 Quick Revision — Read Before Exam
-                                    </h5>
-                                    <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>{aiExp.quick_revision}</p>
-                                </div>
-                            )}
-
-                            {/* 🔗 Related Concepts */}
-                            {aiExp.around_concepts?.length > 0 && (
-                                <div className="glass-card p-4">
-                                    <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#6366f1' }}>🔗 Related Concepts (Often Asked Together)</h5>
-                                    <div className="flex flex-wrap gap-2">
-                                        {aiExp.around_concepts.map((c: string, i: number) => (
-                                            <span key={i} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.15)' }}>{c}</span>
-                                        ))}
+                                    {/* Related Concepts & PYQ Intelligence grouped together */}
+                                    <div className="flex flex-col sm:flex-row gap-4 pt-2 border-t border-border/50">
+                                        {aiExp.around_concepts?.length > 0 && (
+                                            <div className="flex-1">
+                                                <h5 className="font-bold text-xs uppercase tracking-wider mb-1" style={{ color: '#6366f1' }}>🔗 Related Concepts</h5>
+                                                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{aiExp.around_concepts.join(', ')}</p>
+                                            </div>
+                                        )}
+                                        {(aiExp.pyq_frequency || aiExp.similar_pyq) && (
+                                            <div className="flex-1">
+                                                <h5 className="font-bold text-xs uppercase tracking-wider mb-1" style={{ color: '#ec4899' }}>📊 PYQ Intelligence</h5>
+                                                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{aiExp.pyq_frequency ? `Frequency: ${aiExp.pyq_frequency}` : ''} {aiExp.similar_pyq ? `| Similar: ${aiExp.similar_pyq}` : ''}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            )}
-
-                            {/* 📊 PYQ Intelligence */}
-                            {(aiExp.pyq_frequency || aiExp.similar_pyq) && (
-                                <div className="glass-card p-4">
-                                    <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
-                                        <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
-                                    </h5>
-                                    {aiExp.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {aiExp.pyq_frequency}</p>}
-                                    {aiExp.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {aiExp.similar_pyq}</p>}
-                                </div>
-                            )}
+                            </details>
 
                             {/* Retry button if AI failed */}
                             {!aiExp.mnemonic && !aiExp.why_correct && (
@@ -665,10 +710,9 @@ export default function TakeTestPage() {
                     <div className="text-sm px-3 py-1 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{test?.title}</div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-2 rounded-lg ${timeLeft < 300 ? 'animate-pulse' : ''}`}
-                        style={{ background: timeLeft < 300 ? 'rgba(239,68,68,0.15)' : 'var(--bg-card)', color: timeLeft < 300 ? '#ef4444' : 'var(--text-primary)' }}>
-                        ⏱ {formatTime(timeLeft)}
-                    </div>
+                    {initialTimeLimit > 0 && (
+                        <IsolatedTimer initialSeconds={initialTimeLimit} isSubmitted={submitted} onTimeUp={doSubmit} />
+                    )}
                 </div>
             </div>
 
@@ -680,8 +724,8 @@ export default function TakeTestPage() {
                     <div className="px-6 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
                         <span className="font-bold text-lg">Question {currentIdx + 1}</span>
                         <div className="flex gap-2 text-sm">
-                            <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>{currentQ.subject_name}</span>
-                            {currentQ.topic_name && <span className="badge" style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-secondary)' }}>{currentQ.topic_name}</span>}
+                            <span className="badge" style={{ background: 'rgba(29,78,216,0.1)', color: 'var(--accent-primary)' }}>{currentQ.subject_name}</span>
+                            {currentQ.topic_name && <span className="badge" style={{ background: 'rgba(29,78,216,0.1)', color: 'var(--accent-primary)' }}>{currentQ.topic_name}</span>}
                         </div>
                     </div>
 
@@ -696,17 +740,12 @@ export default function TakeTestPage() {
                                 const isSelected = answers[currentQ.id] === opt;
                                 return (
                                     <div key={opt}
-                                        className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border-2"
-                                        style={{
-                                            borderColor: isSelected ? 'var(--accent-primary)' : 'var(--glass-border)',
-                                            background: isSelected ? 'rgba(6,182,212,0.08)' : 'var(--bg-secondary)',
-                                        }}
+                                        className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border ${isSelected ? 'border-primary bg-primary/5' : 'border-border/50 bg-card hover:bg-accent/30'}`}
                                         onClick={() => selectAnswer(opt)}>
-                                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                                            style={{ background: isSelected ? 'var(--accent-primary)' : 'var(--bg-card)', color: isSelected ? 'white' : 'var(--text-secondary)' }}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:bg-accent'}`}>
                                             {opt}
                                         </div>
-                                        <div className="font-medium">{String(optionText)}</div>
+                                        <div className="font-medium text-foreground">{String(optionText)}</div>
                                     </div>
                                 );
                             })}
@@ -715,17 +754,17 @@ export default function TakeTestPage() {
 
                     <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
                         <div className="flex gap-3">
-                            <button onClick={handleClear} className="btn-secondary text-sm">Clear</button>
-                            <button onClick={handleMarkAndNext} className="text-sm px-4 py-2 rounded-lg font-semibold transition-colors"
-                                style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
+                            <button onClick={handleClear} className="btn-secondary text-sm px-4 py-2 hover:bg-muted font-medium border border-border/60 rounded-lg">Clear</button>
+                            <button onClick={handleMarkAndNext} className="text-sm px-4 py-2 rounded-lg font-medium transition-colors"
+                                style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' }}>
                                 Mark & Next
                             </button>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => goTo(Math.max(0, currentIdx - 1))} disabled={currentIdx === 0} className="btn-secondary text-sm">
+                            <button onClick={() => goTo(Math.max(0, currentIdx - 1))} disabled={currentIdx === 0} className="btn-secondary text-sm px-4 py-2 border border-border/60 rounded-lg hover:bg-muted font-medium text-foreground">
                                 <ChevronLeft className="w-4 h-4" /> Prev
                             </button>
-                            <button onClick={handleSaveAndNext} className="btn-primary text-sm">
+                            <button onClick={handleSaveAndNext} className="btn-primary text-sm px-5 py-2 hover:bg-primary/90 font-medium">
                                 Save & Next <ChevronRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -765,14 +804,14 @@ export default function TakeTestPage() {
                                     const answered = !!answers[q.id];
                                     const isMarked = marked.has(i);
                                     const isCurrent = i === currentIdx;
-                                    let bg = 'var(--bg-card)'; let color = 'var(--text-secondary)'; let border = 'var(--glass-border)';
-                                    if (answered) { bg = '#10b981'; color = 'white'; border = '#059669'; }
-                                    else if (isMarked) { bg = '#8b5cf6'; color = 'white'; border = '#7c3aed'; }
+                                    let bg = 'var(--bg-card)'; let color = 'var(--text-primary)'; let border = 'var(--glass-border)';
+                                    if (answered) { bg = '#2563eb'; color = 'white'; border = '#1d4ed8'; }
+                                    else if (isMarked) { bg = '#d97706'; color = 'white'; border = '#b45309'; }
                                     else if (startTimes.current[i]) { bg = '#ef4444'; color = 'white'; border = '#dc2626'; }
                                     return (
                                         <button key={i} onClick={() => goTo(i)}
-                                            className="w-full aspect-square rounded flex items-center justify-center text-xs font-bold transition-all"
-                                            style={{ background: bg, color, border: `2px solid ${border}`, outline: isCurrent ? '2px solid var(--accent-primary)' : 'none', outlineOffset: '2px', transform: isCurrent ? 'scale(1.1)' : 'none' }}>
+                                            className="w-full aspect-square rounded flex items-center justify-center text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50"
+                                            style={{ background: bg, color, border: `1px solid ${border}`, outline: isCurrent ? '2px solid var(--accent-primary)' : 'none', outlineOffset: '2px', transform: isCurrent ? 'scale(1.05)' : 'none' }}>
                                             {i + 1}
                                         </button>
                                     );
@@ -783,7 +822,7 @@ export default function TakeTestPage() {
                             <button onClick={handleSubmit}
                                 className="w-full py-3 rounded-lg font-bold text-lg flex justify-center items-center gap-2 transition-colors"
                                 style={{ background: '#10b981', color: 'white' }}>
-                                <Send className="w-5 h-5" /> Submit Test
+                                <Send className="w-5 h-5" /> Submit Simulator
                             </button>
                         </div>
                     </div>

@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
-import { Settings, User, Key, Bell, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, isAuthenticated, loading: authLoading, logout, refreshProfile } = useAuth();
@@ -131,20 +131,6 @@ export default function SettingsPage() {
                         )}
                     </div>
 
-                    {/* AI Configuration */}
-                    <div className="glass-card p-6">
-                        <h3 className="font-bold mb-4 flex items-center gap-2">
-                            <Key className="w-5 h-5" style={{ color: '#f59e0b' }} />
-                            AI Configuration
-                        </h3>
-                        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-                            AI features (tutor, mnemonic generator, concept explainer) require Gemini and/or Groq API keys configured in the backend .env file.
-                        </p>
-                        <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', color: '#f59e0b' }}>
-                            Set GEMINI_API_KEY and GROQ_API_KEY in backend/.env
-                        </div>
-                    </div>
-
                     {/* Preferences */}
                     <div className="glass-card p-6">
                         <h3 className="font-bold mb-4 flex items-center gap-2">
@@ -169,11 +155,13 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    {/* Danger Zone */}
-                    <div className="glass-card p-6" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
-                        <h3 className="font-bold mb-4" style={{ color: '#ef4444' }}>Danger Zone</h3>
-                        <button onClick={() => { logout(); router.push('/'); }} className="text-sm px-4 py-2 rounded-lg transition-colors"
-                            style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    {/* Logout */}
+                    <div className="glass-card p-6">
+                        <h3 className="font-bold mb-4 flex items-center gap-2">
+                            <LogOut className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+                            Session
+                        </h3>
+                        <button onClick={() => { logout(); router.push('/'); }} className="btn-secondary text-sm">
                             Logout
                         </button>
                     </div>

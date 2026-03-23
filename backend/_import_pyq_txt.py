@@ -34,9 +34,16 @@ subjects_data = [
 for name, code, color in subjects_data:
     Subject.objects.get_or_create(code=code, defaults={"name": name, "color": color})
 
+# Improved pattern: Match questions that have 4 options (a), (b), (c), (d)
+# This prevents matching numbered statements (1., 2., 3., 4.) within questions
 QUESTION_PATTERN = re.compile(
-    r'(?:^|\n)\s*(?:Q\.?\s*)?(\d{1,3})[.)]\s*(.+?)(?=\n\s*(?:Q\.?\s*)?\d{1,3}[.)]\s|\Z)',
-    re.DOTALL
+    r'(?:^|\n)\s*(?:Q\.?\s*)?(\d{1,3})[.)]\s*(.+?Options:\s*\([a-dA-D]\).+?\([a-dA-D]\).+?\([a-dA-D]\).+?\([a-dA-D]\)[^()]*?)(?=\n\s*(?:Q\.?\s*)?\d{1,3}[.)]\s[A-Z]|\nSection:|\n_{3,}|\Z)',
+    re.DOTALL | re.IGNORECASE
+)
+# Alternative simpler pattern for questions without "Options:" prefix
+QUESTION_PATTERN_SIMPLE = re.compile(
+    r'(?:^|\n)\s*(?:Q\.?\s*)?(\d{1,3})[.)]\s*([^:]+:\s*\([a-dA-D]\).+?\([a-dA-D]\).+?\([a-dA-D]\).+?\([a-dA-D]\)[^()]*?)(?=\n\s*(?:Q\.?\s*)?\d{1,3}[.)]\s[A-Z]|\nSection:|\n_{3,}|\Z)',
+    re.DOTALL | re.IGNORECASE
 )
 OPTION_PATTERN = re.compile(
     r'\(\s*([a-dA-D])\s*\)\s*(.+?)(?=\(\s*[a-dA-D]\s*\)|\Z)',
@@ -64,12 +71,39 @@ def detect_subject_from_text(text, position):
     return "MED"
 
 def parse_questions(text, year, paper):
-    """Parse questions from text content."""
+    """Parse questions from text content.
+
+    Improved parsing that handles statement-based questions like:
+    '38. Which of the following are correct about X?
+    1. Statement one.
+    2. Statement two.
+    3. Statement three.
+    4. Statement four. Options: (a) 1,2,3; (b) 2,3,4...'
+    """
     questions = []
+    seen_numbers = set()
+
+    # Try both patterns - with and without "Options:" prefix
+    all_matches = []
     for match in QUESTION_PATTERN.finditer(text):
+        all_matches.append(match)
+    for match in QUESTION_PATTERN_SIMPLE.finditer(text):
+        # Avoid duplicates
+        if not any(m.start() == match.start() for m in all_matches):
+            all_matches.append(match)
+
+    # Sort by position in text
+    all_matches.sort(key=lambda m: m.start())
+
+    for match in all_matches:
         q_num = int(match.group(1))
         q_body = match.group(2).strip()
-        
+
+        # Skip if we've already seen this question number (duplicate match)
+        if q_num in seen_numbers:
+            continue
+        seen_numbers.add(q_num)
+
         # Extract options
         options = {}
         opt_matches = list(OPTION_PATTERN.finditer(q_body))

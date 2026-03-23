@@ -11,9 +11,10 @@ import logging
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework import status
 from django.conf import settings as django_settings
+from django.db.utils import OperationalError, ProgrammingError
 
 from .services import AIService
 from accounts.models import TokenBalance
@@ -21,11 +22,29 @@ from accounts.models import TokenBalance
 logger = logging.getLogger(__name__)
 
 
+class IsAdminUser(BasePermission):
+    """Custom permission to only allow admin users."""
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            (hasattr(request.user, 'is_admin') and request.user.is_admin or request.user.is_superuser)
+        )
+
+
 def _get_permission():
     """Allow unauthenticated access in DEBUG mode for development."""
     if getattr(django_settings, 'DEBUG', False):
         return [AllowAny()]
     return [IsAuthenticated()]
+
+
+def _get_admin_permission():
+    """Only allow admin users (for upload/train features)."""
+    if getattr(django_settings, 'DEBUG', False):
+        return [AllowAny()]  # Allow in debug for testing
+    return [IsAdminUser()]
 
 
 def consume_ai_token(request):
@@ -310,10 +329,10 @@ class HighYieldTopicsView(APIView):
 
 
 class KnowledgeUploadView(APIView):
-    """Upload a file (PDF/MD/TXT) to add to AI knowledge base."""
+    """Upload a file (PDF/MD/TXT) to add to AI knowledge base. Admin only."""
 
     def get_permissions(self):
-        return _get_permission()
+        return _get_admin_permission()
 
     def post(self, request):
         from .auto_ingest import AutoIngestService
@@ -329,10 +348,10 @@ class KnowledgeUploadView(APIView):
 
 
 class KnowledgeScanView(APIView):
-    """Scan for new files in Medura_Train and auto-index them."""
+    """Scan for new files in Medura_Train and auto-index them. Admin only."""
 
     def get_permissions(self):
-        return _get_permission()
+        return _get_admin_permission()
 
     def post(self, request):
         from .auto_ingest import AutoIngestService
@@ -474,3 +493,116 @@ class AITestView(APIView):
         except Exception as e:
             logger.error(f"AI test failed: {e}")
             return Response({'status': 'error', 'error': str(e)}, status=500)
+
+
+# =============================================================================
+# CHAT HISTORY VIEWS
+# =============================================================================
+
+from rest_framework import generics
+from .models import ChatSession, ChatMessage
+from .serializers import ChatSessionSerializer, ChatSessionDetailSerializer, ChatMessageSerializer
+
+
+class ChatSessionListCreateView(generics.ListCreateAPIView):
+    """
+    List user's chat sessions or create a new one.
+    GET: Returns all non-archived sessions for the authenticated user.
+    POST: Creates a new chat session.
+    """
+    serializer_class = ChatSessionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        try:
+            return ChatSession.objects.filter(
+                user=self.request.user,
+                is_archived=False
+            ).order_by('-updated_at')[:50]  # Keep last 50 sessions
+        except (OperationalError, ProgrammingError) as e:
+            logger.warning(f"ChatSession table unavailable: {e}")
+            return ChatSession.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class ChatSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Get, update, or delete a specific chat session.
+    """
+    serializer_class = ChatSessionDetailSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        try:
+            return ChatSession.objects.filter(user=self.request.user)
+        except (OperationalError, ProgrammingError) as e:
+            logger.warning(f"ChatSession detail lookup failed (schema unavailable): {e}")
+            return ChatSession.objects.none()
+
+    def perform_destroy(self, instance):
+        # Soft delete by archiving
+        instance.is_archived = True
+        instance.save()
+
+
+class ChatMessageListView(generics.ListAPIView):
+    """
+    Get all messages in a specific chat session.
+    """
+    serializer_class = ChatMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        session_id = self.kwargs.get('session_id')
+        try:
+            return ChatMessage.objects.filter(
+                session_id=session_id,
+                session__user=self.request.user
+            )
+        except (OperationalError, ProgrammingError) as e:
+            logger.warning(f"ChatMessage table unavailable: {e}")
+            return ChatMessage.objects.none()
+
+
+class ChatMessageCreateView(APIView):
+    """
+    Add a message to a chat session (used when saving AI responses).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        try:
+            session = ChatSession.objects.get(id=session_id, user=request.user)
+        except (OperationalError, ProgrammingError) as e:
+            logger.warning(f"Chat schema unavailable during message create: {e}")
+            return Response({'error': 'Chat history storage is not initialized yet.'}, status=503)
+        except ChatSession.DoesNotExist:
+            return Response({'error': 'Session not found'}, status=404)
+
+        role = request.data.get('role', 'user')
+        content = request.data.get('content', '')
+        mode = request.data.get('mode', '')
+        citations = request.data.get('citations', [])
+
+        if not content:
+            return Response({'error': 'Content is required'}, status=400)
+
+        message = ChatMessage.objects.create(
+            session=session,
+            role=role,
+            content=content,
+            mode=mode,
+            citations=citations
+        )
+
+        # Update session title from first user message
+        if role == 'user' and not session.title:
+            session.title = content[:100]
+            session.save()
+
+        # Update session's updated_at timestamp
+        session.save()
+
+        return Response(ChatMessageSerializer(message).data, status=201)

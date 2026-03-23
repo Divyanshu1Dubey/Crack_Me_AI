@@ -479,8 +479,27 @@ class LeaderboardView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         period = request.query_params.get('period', 'all')
-        streaks = StudyStreak.objects.select_related('user').order_by('-xp_points')[:50]
+
+        # Auto-create StudyStreak for current user if missing
+        StudyStreak.objects.get_or_create(user=request.user)
+
+        # Find users with test activity but no streak, create for them
+        users_with_tests = TestAttempt.objects.filter(is_completed=True).values_list('user_id', flat=True).distinct()
+        existing_streaks = StudyStreak.objects.values_list('user_id', flat=True)
+        missing_users = set(users_with_tests) - set(existing_streaks)
+        for user_id in missing_users:
+            try:
+                user = User.objects.get(id=user_id)
+                StudyStreak.objects.get_or_create(user=user)
+            except User.DoesNotExist:
+                pass
+
+        # Get streaks ordered by XP
+        streaks = StudyStreak.objects.select_related('user').order_by('-xp_points', '-current_streak')[:50]
 
         entries = []
         for rank, streak in enumerate(streaks, 1):

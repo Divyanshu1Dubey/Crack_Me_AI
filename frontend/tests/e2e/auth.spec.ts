@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Login Flow', () => {
     test('should show login page', async ({ page }) => {
         await page.goto('/login');
-        await expect(page.locator('h1')).toContainText(/sign in|login|welcome/i);
+        await expect(page.locator('h2')).toContainText(/sign in|login|welcome/i);
         await expect(page.locator('input[name="username"], input[type="text"]')).toBeVisible();
         await expect(page.locator('input[type="password"]')).toBeVisible();
         await expect(page.locator('button[type="submit"]')).toBeVisible();
@@ -34,7 +34,7 @@ test.describe('Login Flow', () => {
 test.describe('Registration Page', () => {
     test('should show register form', async ({ page }) => {
         await page.goto('/register');
-        await expect(page.locator('h1')).toContainText(/create account|register|sign up/i);
+        await expect(page.locator('h2')).toContainText(/create.*account|register|sign up/i);
     });
 
     test('should show password strength indicator', async ({ page }) => {
@@ -55,6 +55,6 @@ test.describe('Public Pages', () => {
 
     test('should load forgot password page', async ({ page }) => {
         await page.goto('/forgot-password');
-        await expect(page.locator('h1')).toContainText(/forgot|reset/i);
+        await expect(page.locator('h2')).toContainText(/forgot|reset/i);
     });
 });

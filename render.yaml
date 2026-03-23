@@ -17,6 +17,16 @@ services:
         sync: false
       - key: CSRF_TRUSTED_ORIGINS
         sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
@@ -38,6 +48,10 @@ services:
       - key: HUGGINGFACE_API_KEY
         sync: false
       - key: MISTRAL_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SENTRY_DSN
         sync: false
       - key: PYTHON_VERSION
         value: "3.12.0"

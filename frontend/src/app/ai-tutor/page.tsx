@@ -2,16 +2,16 @@
  * ai-tutor/page.tsx — AI Medical Tutor chat interface.
  * Real-time chat with Gemini/Groq AI for CMS exam preparation.
  * Features: suggested starter prompts, markdown-rendered responses,
- * chat history, auto-scroll, token consumption with 429 handling.
+ * chat history sidebar, auto-scroll to AI answer top, token consumption with 429 handling.
  */
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI } from '@/lib/api';
-import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText } from 'lucide-react';
+import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {
@@ -21,6 +21,16 @@ interface Message {
     citations?: Array<{ book: string; page: number; excerpt: string; relevance: number }>;
 }
 
+interface ChatSession {
+    id: number;
+    title: string;
+    mode: string;
+    created_at: string;
+    updated_at: string;
+    message_count: number;
+    last_message_preview?: string;
+}
+
 export default function AITutorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -28,17 +38,87 @@ export default function AITutorPage() {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [mode, setMode] = useState<'tutor' | 'mnemonic' | 'explain' | 'textbook' | 'analyze'>('tutor');
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+    const [showHistory, setShowHistory] = useState(false);
+    const [loadingSessions, setLoadingSessions] = useState(false);
     const chatRef = useRef<HTMLDivElement>(null);
+    const lastAiMessageRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) router.push('/login');
     }, [authLoading, isAuthenticated, router]);
 
+    // Load chat sessions on mount
     useEffect(() => {
-        if (chatRef.current) {
-            chatRef.current.scrollTop = chatRef.current.scrollHeight;
+        if (isAuthenticated) {
+            loadSessions();
         }
-    }, [messages]);
+    }, [isAuthenticated]);
+
+    const loadSessions = async () => {
+        setLoadingSessions(true);
+        try {
+            const res = await aiAPI.getChatSessions();
+            setSessions(res.data || []);
+        } catch {
+            // Keep chat usable even if history endpoint is temporarily unavailable.
+            setSessions([]);
+        } finally {
+            setLoadingSessions(false);
+        }
+    };
+
+    const loadSession = async (sessionId: number) => {
+        try {
+            const res = await aiAPI.getChatSession(sessionId);
+            setMessages(res.data.messages || []);
+            setCurrentSessionId(sessionId);
+            setMode(res.data.mode || 'tutor');
+            setShowHistory(false);
+            // Scroll to top when loading a session
+            setTimeout(() => {
+                if (chatRef.current) {
+                    chatRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }, 100);
+        } catch {
+            setShowHistory(false);
+        }
+    };
+
+    const startNewChat = () => {
+        setMessages([]);
+        setCurrentSessionId(null);
+        setShowHistory(false);
+    };
+
+    const deleteSession = async (sessionId: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await aiAPI.deleteChatSession(sessionId);
+            setSessions(prev => prev.filter(s => s.id !== sessionId));
+            if (currentSessionId === sessionId) {
+                startNewChat();
+            }
+        } catch {
+            // Ignore deletion failures silently to avoid breaking chat flow.
+        }
+    };
+
+    // Scroll to show the AI answer from top when it's generated
+    const scrollToLatestAiMessage = useCallback(() => {
+        // Wait for render, then scroll to last AI message
+        setTimeout(() => {
+            if (lastAiMessageRef.current && chatRef.current) {
+                const messageTop = lastAiMessageRef.current.offsetTop;
+                chatRef.current.scrollTo({
+                    top: Math.max(0, messageTop - 20), // 20px padding from top
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
+    }, []);
 
     const handleSend = async () => {
         if (!input.trim() || loading) return;
@@ -69,8 +149,13 @@ export default function AITutorPage() {
                 response = res.data.analysis;
             }
             setMessages(prev => [...prev, { role: 'ai', content: response, type: mode, citations }]);
-        } catch (err: any) {
-            const is429 = err?.response?.status === 429;
+            // Scroll to show AI answer from top after it's added
+            scrollToLatestAiMessage();
+            // Refresh sessions to include the new one
+            loadSessions();
+        } catch (err: unknown) {
+            const statusCode = (err as { response?: { status?: number } })?.response?.status;
+            const is429 = statusCode === 429;
             setMessages(prev => [...prev, {
                 role: 'ai',
                 content: is429
@@ -78,17 +163,46 @@ export default function AITutorPage() {
                     : '⚠️ Failed to get a response. Please check your API keys in backend/.env and try again.',
                 type: mode
             }]);
+            scrollToLatestAiMessage();
         } finally {
             setLoading(false);
         }
     };
 
+    // Format date for display
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+    };
+
+    // Get mode icon for history
+    const getModeIcon = (m: string) => {
+        switch (m) {
+            case 'tutor': return Brain;
+            case 'mnemonic': return Sparkles;
+            case 'explain': return BookOpen;
+            case 'textbook': return Search;
+            case 'analyze': return FileText;
+            default: return MessageSquare;
+        }
+    };
+
     const modes = [
-        { key: 'tutor' as const, label: 'AI Tutor', icon: Brain, color: '#06b6d4', desc: 'Ask any medical question' },
-        { key: 'mnemonic' as const, label: 'Mnemonic', icon: Sparkles, color: '#f59e0b', desc: 'Generate memory tricks' },
-        { key: 'explain' as const, label: 'Explain', icon: BookOpen, color: '#8b5cf6', desc: 'Concept from basics' },
-        { key: 'textbook' as const, label: 'Textbook Search', icon: Search, color: '#10b981', desc: 'Search standard textbooks via RAG' },
-        { key: 'analyze' as const, label: 'Analyze Q', icon: FileText, color: '#ec4899', desc: 'Analyze a CMS question' },
+        { key: 'tutor' as const, label: 'AI Tutor', icon: Brain, color: '#0e7490', desc: 'Ask any medical question' },
+        { key: 'mnemonic' as const, label: 'Mnemonic', icon: Sparkles, color: '#d97706', desc: 'Generate memory tricks' },
+        { key: 'explain' as const, label: 'Explain', icon: BookOpen, color: '#0284c7', desc: 'Concept from basics' },
+        { key: 'textbook' as const, label: 'Textbook Search', icon: Search, color: '#0f766e', desc: 'Search standard textbooks via RAG' },
+        { key: 'analyze' as const, label: 'Analyze Q', icon: FileText, color: '#0369a1', desc: 'Analyze a CMS question' },
     ];
 
     const suggestions: Record<string, string[]> = {
@@ -123,23 +237,117 @@ export default function AITutorPage() {
             <Sidebar />
             <div className="main-content flex flex-col" style={{ height: 'calc(100vh - 0px)' }}>
                 <Header />
-                {/* Header */}
-                <div className="mb-4">
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <Brain className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                        AI Tutor
-                    </h1>
-                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Your personal CMS preparation assistant — now with textbook RAG search</p>
+                {/* Header with History Toggle */}
+                <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold flex items-center gap-2">
+                            <Brain className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                            AI Tutor
+                        </h1>
+                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Doctor-ready assistant with textbook search, concept coaching, and exam-mode reasoning</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={startNewChat}
+                            className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all hover:-translate-y-0.5"
+                            style={{
+                                background: 'rgba(14, 116, 144, 0.08)',
+                                borderColor: 'rgba(14, 116, 144, 0.28)',
+                                color: '#0e7490',
+                            }}>
+                            <Plus className="w-4 h-4" />
+                            New Chat
+                        </button>
+                        <button
+                            onClick={() => setShowHistory(!showHistory)}
+                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all hover:-translate-y-0.5 ${showHistory ? 'scale-[1.02]' : ''}`}
+                            style={{
+                                background: showHistory ? 'rgba(2, 132, 199, 0.15)' : 'rgba(139, 149, 168, 0.05)',
+                                borderColor: showHistory ? '#0284c7' : 'transparent',
+                                color: showHistory ? '#0284c7' : 'var(--text-secondary)',
+                            }}>
+                            <History className="w-4 h-4" />
+                            History {sessions.length > 0 && `(${sessions.length})`}
+                        </button>
+                    </div>
                 </div>
+
+                {/* Chat History Panel */}
+                {showHistory && (
+                    <div className="mb-4 glass-card p-4 animate-fadeInUp" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold flex items-center gap-2">
+                                <History className="w-4 h-4" style={{ color: '#0284c7' }} />
+                                Chat History
+                            </h3>
+                            <button onClick={() => setShowHistory(false)} className="p-1 hover:bg-white/10 rounded">
+                                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                            </button>
+                        </div>
+                        {loadingSessions ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--accent-primary)' }} />
+                            </div>
+                        ) : sessions.length === 0 ? (
+                            <div className="text-center py-8">
+                                <MessageSquare className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--text-secondary)', opacity: 0.5 }} />
+                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No chat history yet</p>
+                                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>Start a conversation to save it here</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {sessions.map(session => {
+                                    const ModeIcon = getModeIcon(session.mode);
+                                    const isActive = currentSessionId === session.id;
+                                    return (
+                                        <div
+                                            key={session.id}
+                                            onClick={() => loadSession(session.id)}
+                                            className={`group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all ${isActive ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
+                                            style={{
+                                                background: isActive ? 'rgba(14, 116, 144, 0.12)' : 'rgba(139, 149, 168, 0.05)',
+                                                border: `1px solid ${isActive ? 'rgba(14, 116, 144, 0.28)' : 'transparent'}`,
+                                            }}>
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                style={{ background: isActive ? 'var(--gradient-primary)' : 'rgba(139, 149, 168, 0.1)' }}>
+                                                <ModeIcon className="w-4 h-4" style={{ color: isActive ? 'white' : 'var(--text-secondary)' }} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium truncate" style={{ color: isActive ? '#0e7490' : 'var(--text-primary)' }}>
+                                                    {session.title || 'Untitled Chat'}
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                                        <Clock className="w-3 h-3 inline mr-1" />
+                                                        {formatDate(session.updated_at)}
+                                                    </span>
+                                                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(139, 149, 168, 0.1)', color: 'var(--text-secondary)' }}>
+                                                        {session.message_count} msgs
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={(e) => deleteSession(session.id, e)}
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all hover:bg-red-500/20"
+                                                style={{ color: '#ef4444' }}>
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Mode Selector */}
                 <div className="flex flex-wrap gap-2 mb-4">
                     {modes.map(m => (
                         <button key={m.key} onClick={() => setMode(m.key)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${mode === m.key ? 'scale-105' : ''}`}
+                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${mode === m.key ? 'scale-[1.02]' : ''}`}
                             style={{
                                 background: mode === m.key ? `${m.color}20` : 'rgba(139, 149, 168, 0.05)',
-                                border: `1px solid ${mode === m.key ? m.color : 'transparent'}`,
+                                borderColor: mode === m.key ? m.color : 'transparent',
                                 color: mode === m.key ? m.color : 'var(--text-secondary)',
                             }}>
                             <m.icon className="w-4 h-4" />
@@ -149,7 +357,8 @@ export default function AITutorPage() {
                 </div>
 
                 {/* Chat Area */}
-                <div ref={chatRef} className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                <div className="relative flex-1">
+                    <div ref={chatRef} className="h-full overflow-y-auto space-y-4 mb-4 pr-2" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                     {messages.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center animate-float"
@@ -165,16 +374,22 @@ export default function AITutorPage() {
                             <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
                                 {(suggestions[mode] || []).map((s, i) => (
                                     <button key={i} onClick={() => { setInput(s); }}
-                                        className="text-xs px-4 py-2 rounded-xl transition-all hover:scale-105"
-                                        style={{ background: 'rgba(6, 182, 212, 0.08)', border: '1px solid rgba(6, 182, 212, 0.2)', color: 'var(--accent-primary)' }}>
+                                        className="text-xs px-4 py-2 rounded-xl transition-all hover:-translate-y-0.5"
+                                        style={{ background: 'rgba(14, 116, 144, 0.08)', border: '1px solid rgba(14, 116, 144, 0.2)', color: 'var(--accent-primary)' }}>
                                         {s}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        messages.map((msg, i) => (
-                            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''} animate-fadeInUp`}>
+                        messages.map((msg, i) => {
+                            const isLastAiMessage = msg.role === 'ai' && i === messages.length - 1;
+                            return (
+                            <div
+                                key={i}
+                                ref={isLastAiMessage ? lastAiMessageRef : null}
+                                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''} animate-fadeInUp`}
+                            >
                                 {msg.role === 'ai' && (
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                                         style={{ background: 'var(--gradient-primary)' }}>
@@ -275,7 +490,8 @@ export default function AITutorPage() {
                                     </div>
                                 )}
                             </div>
-                        ))
+                        );
+                        })
                     )}
                     {loading && (
                         <div className="flex gap-3 animate-fadeInUp">
@@ -292,8 +508,24 @@ export default function AITutorPage() {
                     )}
                 </div>
 
+                    {/* Scroll to top button - shows when there are messages */}
+                    {messages.length > 3 && (
+                        <button
+                            onClick={() => chatRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                            className="absolute bottom-4 right-4 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+                            style={{
+                                background: 'var(--gradient-primary)',
+                                border: '1px solid var(--glass-border)',
+                            }}
+                            title="Scroll to top"
+                        >
+                            <ChevronDown className="w-5 h-5 text-white rotate-180" />
+                        </button>
+                    )}
+                </div>
+
                 {/* Input */}
-                <div className="glass-card p-3 flex items-center gap-3">
+                <div className="glass-card p-3 flex items-center gap-3 sticky bottom-0">
                     <input
                         className="input-field flex-1"
                         placeholder={
@@ -308,7 +540,7 @@ export default function AITutorPage() {
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                         disabled={loading}
                     />
-                    <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary py-3 px-4">
+                    <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary py-3 px-4 rounded-xl">
                         <Send className="w-5 h-5" />
                     </button>
                 </div>
