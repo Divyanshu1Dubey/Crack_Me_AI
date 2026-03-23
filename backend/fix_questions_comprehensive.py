@@ -12,8 +12,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'crack_cms.settings'
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 django.setup()
 
-from questions.models import Subject, Question
-from django.db.models import Q
+from questions.models import Question
 
 # Known bad patterns
 BAD_QUESTION_PATTERNS = [
