@@ -118,6 +118,9 @@ WSGI_APPLICATION = 'crack_cms.wsgi.application'
 
 # Database
 DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+# Use in-memory SQLite for GitHub CI to avoid LFS pointer file issues
+IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
+
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.parse(
@@ -125,6 +128,13 @@ if DATABASE_URL:
             conn_max_age=600,
             ssl_require=not DEBUG,
         )
+    }
+elif IS_CI:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
     }
 else:
     DATABASES = {

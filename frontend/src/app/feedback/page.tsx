@@ -49,12 +49,7 @@ export default function FeedbackPage() {
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
 
-    const isAdmin = (user as any)?.is_admin;
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) loadFeedback();
-    }, [authLoading, isAuthenticated, router]);
+    const isAdmin = user?.role === 'admin';
 
     const loadFeedback = () => {
         analyticsAPI.getFeedback()
@@ -62,6 +57,11 @@ export default function FeedbackPage() {
             .catch(() => {})
             .finally(() => setLoading(false));
     };
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
+        if (isAuthenticated) loadFeedback();
+    }, [authLoading, isAuthenticated, router]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

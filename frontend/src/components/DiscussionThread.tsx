@@ -27,6 +27,12 @@ export default function DiscussionThread({ questionId }: { questionId: number })
     const [replies, setReplies] = useState<Record<number, Discussion[]>>({});
     const [replyTo, setReplyTo] = useState<number | null>(null);
     const [replyText, setReplyText] = useState('');
+    const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         setExpanded(false);
@@ -82,7 +88,7 @@ export default function DiscussionThread({ questionId }: { questionId: number })
     };
 
     const timeAgo = (dateStr: string) => {
-        const diff = Date.now() - new Date(dateStr).getTime();
+        const diff = now - new Date(dateStr).getTime();
         const mins = Math.floor(diff / 60000);
         if (mins < 60) return `${mins}m ago`;
         const hrs = Math.floor(mins / 60);

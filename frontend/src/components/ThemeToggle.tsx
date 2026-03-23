@@ -15,7 +15,7 @@ export default function ThemeToggle() {
         setMounted(true);
     }, []);
 
-    if (!mounted) return null;
+    if (!mounted) return <div className="p-2 w-8.5 h-8.5" />; // Placeholder to avoid hydration mismatch
 
     const isDark = resolvedTheme === 'dark';
 
