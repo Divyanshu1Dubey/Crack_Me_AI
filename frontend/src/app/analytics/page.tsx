@@ -49,12 +49,18 @@ interface HeatmapDay {
 
 const CHART_COLORS = ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface CustomTooltipProps {
+    active?: boolean;
+    payload?: Array<{ color: string; name: string; value: number | string }>;
+    label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (!active || !payload?.length) return null;
     return (
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
             <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}>{label}</p>
-            {payload.map((p: any, i: number) => (
+            {payload.map((p, i: number) => (
                 <p key={i} style={{ color: p.color }}>{p.name}: {p.value}{typeof p.value === 'number' && p.name?.includes('ccuracy') ? '%' : ''}</p>
             ))}
         </div>
@@ -69,7 +75,7 @@ export default function AnalyticsPage() {
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [allPerf, setAllPerf] = useState<TopicPerf[]>([]);
     const [trend, setTrend] = useState<TrendPoint[]>([]);
-    const [prediction, setPrediction] = useState<any>(null);
+    const [prediction, setPrediction] = useState<Record<string, unknown> | null>(null);
     const [heatmap, setHeatmap] = useState<HeatmapDay[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -218,7 +224,7 @@ export default function AnalyticsPage() {
                                 ) : (
                                     <ResponsiveContainer width="100%" height={250}>
                                         <PieChart>
-                                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value" nameKey="name" label={({ name, payload }: any) => `${name} (${payload?.accuracy ?? 0}%)`}>
+                                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value" nameKey="name" label={({ name, payload }: { name: string; payload: { accuracy: number } }) => `${name} (${payload?.accuracy ?? 0}%)`}>
                                                 {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                                             </Pie>
                                             <Tooltip content={<CustomTooltip />} />

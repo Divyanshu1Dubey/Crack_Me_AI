@@ -87,7 +87,7 @@ const HIGH_YIELD_TOPICS = [
 ];
 
 export default function TrendsPage() {
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<{ trends: TrendItem[]; by_subject: any[]; total: number } | null>(null);
     const [loading, setLoading] = useState(true);
     const [expandedSubject, setExpandedSubject] = useState<number | null>(0);
 
@@ -195,7 +195,7 @@ export default function TrendsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--glass-border)]">
-                                {subjects.map((sub: any) => (
+                                {subjects.map((sub: { code: string; color: string; name: string }) => (
                                     <tr key={sub.code} className="hover:bg-[var(--accent-primary)]/5 transition-colors group">
                                         <td className="p-6">
                                             <div className="flex items-center gap-4">

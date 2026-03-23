@@ -15,7 +15,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 
 interface DashboardData {
     total_users: number;
@@ -58,7 +57,7 @@ export default function AdminDashboardPage() {
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'feedback'>('overview');
     // Users & token management
-    const [userList, setUserList] = useState<any[]>([]);
+    const [userList, setUserList] = useState<Record<string, unknown>[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
     const [grantUserId, setGrantUserId] = useState('');
     const [grantAmount, setGrantAmount] = useState('');
@@ -66,7 +65,7 @@ export default function AdminDashboardPage() {
     const [granting, setGranting] = useState(false);
     const [grantMsg, setGrantMsg] = useState('');
     // Feedback queue
-    const [feedbackList, setFeedbackList] = useState<any[]>([]);
+    const [feedbackList, setFeedbackList] = useState<Record<string, unknown>[]>([]);
     const [feedbackLoading, setFeedbackLoading] = useState(false);
 
     useEffect(() => {
@@ -143,8 +142,9 @@ export default function AdminDashboardPage() {
             setGrantAmount('');
             setGrantNote('');
             fetchUsers();
-        } catch (err: any) {
-            setGrantMsg(err?.response?.data?.error || 'Failed to grant tokens');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setGrantMsg(error.response?.data?.error || 'Failed to grant tokens');
         }
         setGranting(false);
     };
@@ -428,17 +428,17 @@ export default function AdminDashboardPage() {
                                                 </thead>
                                                 <tbody>
                                                     {userList.map((u: any) => (
-                                                        <tr key={u.id || u.user_id} className="border-b last:border-0 hover:bg-muted/50">
-                                                            <td className="py-2 pr-4 text-muted-foreground">{u.id || u.user_id}</td>
-                                                            <td className="py-2 pr-4 font-medium">{u.username}</td>
-                                                            <td className="py-2 pr-4 text-muted-foreground">{u.email || '—'}</td>
+                                                        <tr key={String(u.id || u.user_id)} className="border-b last:border-0 hover:bg-muted/50">
+                                                            <td className="py-2 pr-4 text-muted-foreground">{String(u.id || u.user_id)}</td>
+                                                            <td className="py-2 pr-4 font-medium">{String(u.username)}</td>
+                                                            <td className="py-2 pr-4 text-muted-foreground">{String(u.email || '—')}</td>
                                                             <td className="py-2 pr-4">
                                                                 <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">
-                                                                    {u.role || 'student'}
+                                                                    {String(u.role || 'student')}
                                                                 </Badge>
                                                             </td>
                                                             <td className="py-2 pr-4 text-right font-medium">
-                                                                {u.available_tokens ?? u.total_tokens ?? '—'}
+                                                                {String(u.available_tokens ?? u.total_tokens ?? '—')}
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -473,20 +473,20 @@ export default function AdminDashboardPage() {
                                 ) : (
                                     <div className="space-y-3">
                                         {feedbackList.map((f: any) => (
-                                            <div key={f.id} className={`p-4 rounded-lg border ${f.is_resolved ? 'opacity-60' : ''}`}>
+                                            <div key={String(f.id)} className={`p-4 rounded-lg border ${f.is_resolved ? 'opacity-60' : ''}`}>
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <Badge variant="outline" className="text-[10px]">{f.category}</Badge>
-                                                            <span className="text-xs text-muted-foreground">Q#{f.question}</span>
+                                                            <Badge variant="outline" className="text-[10px]">{String(f.category)}</Badge>
+                                                            <span className="text-xs text-muted-foreground">Q#{String(f.question)}</span>
                                                             {f.is_resolved && (
                                                                 <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
                                                                     <CheckCircle className="w-3 h-3 mr-0.5" /> Resolved
                                                                 </Badge>
                                                             )}
                                                         </div>
-                                                        <p className="text-sm">{f.comment}</p>
-                                                        <p className="text-xs text-muted-foreground mt-1">{new Date(f.created_at).toLocaleString()}</p>
+                                                        <p className="text-sm">{String(f.comment)}</p>
+                                                        <p className="text-xs text-muted-foreground mt-1">{new Date(String(f.created_at)).toLocaleString()}</p>
                                                     </div>
                                                     {!f.is_resolved && (
                                                         <Button size="sm" variant="outline" onClick={() => handleResolveFeedback(f.id)}>

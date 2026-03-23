@@ -9,9 +9,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
 import { aiAPI, questionsAPI } from '@/lib/api';
-import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target, Lightbulb } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target } from 'lucide-react';
 
 interface GeneratedQuestion {
     question_text: string;
@@ -45,7 +44,7 @@ export default function GeneratePage() {
     const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [showExplanations, setShowExplanations] = useState<Record<number, boolean>>({});
-    const [aiExplanations, setAiExplanations] = useState<Record<number, any>>({});
+    const [aiExplanations, setAiExplanations] = useState<Record<number, Record<string, unknown>>>({});
     const [aiLoadingIdx, setAiLoadingIdx] = useState<number | null>(null);
 
     useEffect(() => {
@@ -76,11 +75,12 @@ export default function GeneratePage() {
             if (res.data?.questions) {
                 setQuestions(res.data.questions.filter((q: GeneratedQuestion) => !q.error));
             }
-        } catch (err: any) {
-            if (err?.response?.status === 429) {
+        } catch (err: unknown) {
+            const error = err as { response?: { status?: number; data?: { error?: string } }; message?: string };
+            if (error.response?.status === 429) {
                 setQuestions([{ question_text: 'AI Tokens Exhausted — Your daily/weekly tokens are used up. Visit /tokens to buy more.', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
             } else {
-                const msg = err?.response?.data?.error || err?.message || 'AI service unavailable';
+                const msg = error.response?.data?.error || error.message || 'AI service unavailable';
                 setQuestions([{ question_text: `⚠️ ${msg}. Please try again.`, option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
             }
         }
@@ -359,22 +359,22 @@ export default function GeneratePage() {
                                             <div className="flex flex-wrap gap-1.5">
                                                 {aiExplanations[idx].category && (
                                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(6,182,212,0.1)', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.2)' }}>
-                                                        📂 {aiExplanations[idx].category}
+                                                        📂 {String(aiExplanations[idx].category)}
                                                     </span>
                                                 )}
                                                 {aiExplanations[idx].sub_category && (
                                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                        📁 {aiExplanations[idx].sub_category}
+                                                        📁 {String(aiExplanations[idx].sub_category)}
                                                     </span>
                                                 )}
                                                 {aiExplanations[idx].question_type && (
                                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
-                                                        🏷️ {aiExplanations[idx].question_type}
+                                                        🏷️ {String(aiExplanations[idx].question_type)}
                                                     </span>
                                                 )}
                                                 {aiExplanations[idx].core_concept && (
                                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                                        🎯 {aiExplanations[idx].core_concept}
+                                                        🎯 {String(aiExplanations[idx].core_concept)}
                                                     </span>
                                                 )}
                                             </div>
@@ -382,15 +382,15 @@ export default function GeneratePage() {
                                             {aiExplanations[idx].why_correct && (
                                                 <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
                                                     <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>✅ Why Correct</h6>
-                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].why_correct}</p>
+                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{String(aiExplanations[idx].why_correct)}</p>
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].why_wrong && Object.keys(aiExplanations[idx].why_wrong).length > 0 && (
+                                            {aiExplanations[idx].why_wrong && typeof aiExplanations[idx].why_wrong === 'object' && Object.keys(aiExplanations[idx].why_wrong as object).length > 0 && (
                                                 <div className="p-3 rounded-lg" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
                                                     <h6 className="text-xs font-bold mb-1" style={{ color: '#ef4444' }}>❌ Why Others Wrong</h6>
                                                     <div className="space-y-1">
-                                                        {Object.entries(aiExplanations[idx].why_wrong).map(([k, v]) => (
+                                                        {Object.entries(aiExplanations[idx].why_wrong as Record<string, string>).map(([k, v]) => (
                                                             <p key={k} className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                                                 <strong className="font-bold" style={{ color: '#ef4444' }}>{k}:</strong> {String(v)}
                                                             </p>
@@ -399,15 +399,15 @@ export default function GeneratePage() {
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].textbook_reference?.book && (
+                                            {aiExplanations[idx].textbook_reference && typeof aiExplanations[idx].textbook_reference === 'object' && (aiExplanations[idx].textbook_reference as any).book && (
                                                 <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
                                                     <BookMarked className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#8b5cf6' }} />
                                                     <div>
                                                         <h6 className="text-xs font-bold" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
-                                                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].textbook_reference.book}</p>
-                                                        {aiExplanations[idx].textbook_reference.chapter && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Chapter: {aiExplanations[idx].textbook_reference.chapter}</p>}
-                                                        {aiExplanations[idx].textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Page: {aiExplanations[idx].textbook_reference.page}</p>}
-                                                        {aiExplanations[idx].textbook_reference.section && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Section: {aiExplanations[idx].textbook_reference.section}</p>}
+                                                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{String((aiExplanations[idx].textbook_reference as any).book)}</p>
+                                                        {(aiExplanations[idx].textbook_reference as any).chapter && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Chapter: {String((aiExplanations[idx].textbook_reference as any).chapter)}</p>}
+                                                        {(aiExplanations[idx].textbook_reference as any).page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Page: {String((aiExplanations[idx].textbook_reference as any).page)}</p>}
+                                                        {(aiExplanations[idx].textbook_reference as any).section && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Section: {String((aiExplanations[idx].textbook_reference as any).section)}</p>}
                                                     </div>
                                                 </div>
                                             )}
@@ -417,27 +417,27 @@ export default function GeneratePage() {
                                                     <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
                                                     <div>
                                                         <h6 className="text-xs font-bold" style={{ color: '#f59e0b' }}>💡 Mnemonic</h6>
-                                                        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].mnemonic}</p>
+                                                        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{String(aiExplanations[idx].mnemonic)}</p>
                                                     </div>
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].high_yield_points?.length > 0 && (
+                                            {Array.isArray(aiExplanations[idx].high_yield_points) && (aiExplanations[idx].high_yield_points as any[]).length > 0 && (
                                                 <div className="p-3 rounded-lg" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
                                                     <h6 className="text-xs font-bold mb-1" style={{ color: '#ec4899' }}>🔥 High Yield Points</h6>
                                                     <ul className="space-y-0.5">
-                                                        {aiExplanations[idx].high_yield_points.map((p: string, i: number) => (
+                                                        {(aiExplanations[idx].high_yield_points as string[]).map((p: string, i: number) => (
                                                             <li key={i} className="text-xs flex gap-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}><span style={{ color: '#ec4899' }}>•</span>{p}</li>
                                                         ))}
                                                     </ul>
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].around_concepts?.length > 0 && (
+                                            {Array.isArray(aiExplanations[idx].around_concepts) && (aiExplanations[idx].around_concepts as any[]).length > 0 && (
                                                 <div>
                                                     <h6 className="text-xs font-bold mb-1.5" style={{ color: '#6366f1' }}>🔗 Related Concepts</h6>
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {aiExplanations[idx].around_concepts.map((c: string, i: number) => (
+                                                        {(aiExplanations[idx].around_concepts as string[]).map((c: string, i: number) => (
                                                             <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>{c}</span>
                                                         ))}
                                                     </div>
@@ -448,13 +448,13 @@ export default function GeneratePage() {
                                                 {aiExplanations[idx].clinical_pearl && (
                                                     <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
                                                         <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].clinical_pearl}</p>
+                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{String(aiExplanations[idx].clinical_pearl)}</p>
                                                     </div>
                                                 )}
                                                 {aiExplanations[idx].exam_tip && (
                                                     <div className="p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
                                                         <h6 className="text-xs font-bold mb-1" style={{ color: '#f59e0b' }}>🎓 Exam Tip</h6>
-                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].exam_tip}</p>
+                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{String(aiExplanations[idx].exam_tip)}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -464,13 +464,13 @@ export default function GeneratePage() {
                                                 {aiExplanations[idx].pyq_frequency && (
                                                     <div className="p-2.5 rounded-lg flex items-center gap-2" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
                                                         <Target className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#ec4899' }} />
-                                                        <span className="text-xs font-medium" style={{ color: '#ec4899' }}>PYQ: {aiExplanations[idx].pyq_frequency}</span>
+                                                        <span className="text-xs font-medium" style={{ color: '#ec4899' }}>PYQ: {String(aiExplanations[idx].pyq_frequency)}</span>
                                                     </div>
                                                 )}
                                                 {aiExplanations[idx].similar_pyq && (
                                                     <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
                                                         <Target className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: '#6366f1' }} />
-                                                        <span className="text-xs font-medium" style={{ color: '#6366f1' }}>📋 {aiExplanations[idx].similar_pyq}</span>
+                                                        <span className="text-xs font-medium" style={{ color: '#6366f1' }}>📋 {String(aiExplanations[idx].similar_pyq)}</span>
                                                     </div>
                                                 )}
                                             </div>

@@ -24,10 +24,14 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
 
     useEffect(() => {
         if (open) {
-            setQuery('');
-            setResults([]);
-            setSelectedIndex(0);
-            setTimeout(() => inputRef.current?.focus(), 50);
+            // Use setTimeout to avoid synchronous setState during render/effect
+            const timer = setTimeout(() => {
+                setQuery('');
+                setResults([]);
+                setSelectedIndex(0);
+                inputRef.current?.focus();
+            }, 50);
+            return () => clearTimeout(timer);
         }
     }, [open]);
 

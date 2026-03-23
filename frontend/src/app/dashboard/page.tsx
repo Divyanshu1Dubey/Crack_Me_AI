@@ -17,32 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-
-interface DashboardData {
-    overall: {
-        total_tests: number;
-        avg_score: number;
-        total_questions: number;
-        total_correct: number;
-        total_incorrect: number;
-        overall_accuracy: number;
-        total_time_hours: number;
-    };
-    subject_performance: Array<{
-        subject: string;
-        code: string;
-        color: string;
-        total_attempts: number;
-        correct: number;
-        accuracy: number;
-    }>;
-}
-
-interface QuestionStats {
-    total: number;
-    by_subject: Array<{ name: string; code: string; count: number }>;
-    by_difficulty: Array<{ difficulty: string; count: number }>;
-}
+import Image from 'next/image';
 
 interface HeatmapDay {
     date: string;
@@ -50,15 +25,6 @@ interface HeatmapDay {
     correct_answers: number;
     time_spent_minutes: number;
     tests_completed: number;
-}
-
-interface StudyStreakData {
-    username: string;
-    current_streak: number;
-    longest_streak: number;
-    total_study_days: number;
-    xp_points: number;
-    last_activity_date: string | null;
 }
 
 // SWR fetchers with caching
@@ -268,7 +234,7 @@ export default function DashboardPage() {
                     {/* Hero */}
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
-                            <img src="/dashboard_hero.png" alt="Medical Hero" className="h-full w-full object-cover object-left" />
+                            <Image src="/dashboard_hero.png" alt="Medical Hero" fill className="object-cover object-left" priority />
                             <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-transparent"></div>
                         </div>
                         <CardContent className="p-0 relative z-10">
@@ -543,7 +509,7 @@ export default function DashboardPage() {
 
                                     <div className="space-y-2">
                                         <p className="text-xs font-medium text-muted-foreground">By Subject</p>
-                                        {(stats?.by_subject || []).slice(0, 5).map((item: any, idx: number) => (
+                                        {(stats?.by_subject || []).slice(0, 5).map((item: { name: string; count: number }, idx: number) => (
                                             <div key={idx} className="flex items-center justify-between text-sm">
                                                 <span className="text-foreground">{item.name}</span>
                                                 <Badge variant="secondary">{item.count}</Badge>
@@ -554,7 +520,7 @@ export default function DashboardPage() {
                                     <div className="space-y-2">
                                         <p className="text-xs font-medium text-muted-foreground">Difficulty Levels</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {(stats?.by_difficulty || []).map((d: any, idx: number) => (
+                                            {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number }, idx: number) => (
                                                 <Badge key={idx} variant="outline" className="capitalize">{d.difficulty}: {d.count}</Badge>
                                             ))}
                                         </div>
