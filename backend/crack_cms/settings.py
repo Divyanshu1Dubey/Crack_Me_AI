@@ -16,9 +16,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 if SENTRY_DSN:
     import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.httpx import HttpxIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+    import logging
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        traces_sample_rate=0.1,
+        integrations=[
+            DjangoIntegration(),
+            HttpxIntegration(), 
+            LoggingIntegration(
+                level=logging.INFO,       
+                event_level=logging.ERROR 
+            ),
+        ],
+        traces_sample_rate=1.0, 
         send_default_pii=True,
     )
 
