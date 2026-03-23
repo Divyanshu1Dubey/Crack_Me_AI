@@ -1,0 +1,26 @@
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('ai_engine', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.RenameIndex(
+            model_name='chatmessage',
+            new_name='ai_engine_c_session_b8fb58_idx',
+            old_name='ai_engine_c_session_a6c7f8_idx',
+        ),
+        migrations.RenameIndex(
+            model_name='chatsession',
+            new_name='ai_engine_c_user_id_7eba80_idx',
+            old_name='ai_engine_c_user_id_8dff4f_idx',
+        ),
+        migrations.RenameIndex(
+            model_name='chatsession',
+            new_name='ai_engine_c_user_id_be7f98_idx',
+            old_name='ai_engine_c_user_id_27e75e_idx',
+        ),
+    ]

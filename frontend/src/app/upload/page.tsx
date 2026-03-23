@@ -32,10 +32,6 @@ export default function UploadPage() {
         }
     }, [authLoading, isAuthenticated, user, router]);
 
-    useEffect(() => {
-        if (isAuthenticated) fetchStats();
-    }, [isAuthenticated]);
-
     const fetchStats = async () => {
         try {
             const res = await aiAPI.getKnowledgeStats();
@@ -44,6 +40,10 @@ export default function UploadPage() {
             // Stats might not be available yet
         }
     };
+
+    useEffect(() => {
+        if (isAuthenticated) fetchStats();
+    }, [isAuthenticated]);
 
     const handleUpload = async () => {
         if (!selectedFile) return;

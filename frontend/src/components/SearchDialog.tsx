@@ -22,14 +22,18 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+    const resetSearch = useCallback(() => {
+        setQuery('');
+        setResults([]);
+        setSelectedIndex(0);
+    }, []);
+
     useEffect(() => {
         if (open) {
-            setQuery('');
-            setResults([]);
-            setSelectedIndex(0);
+            resetSearch();
             setTimeout(() => inputRef.current?.focus(), 50);
         }
-    }, [open]);
+    }, [open, resetSearch]);
 
     const searchQuestions = useCallback((q: string) => {
         if (q.length < 2) { setResults([]); return; }

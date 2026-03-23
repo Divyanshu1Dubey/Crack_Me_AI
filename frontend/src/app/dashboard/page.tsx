@@ -543,7 +543,7 @@ export default function DashboardPage() {
 
                                     <div className="space-y-2">
                                         <p className="text-xs font-medium text-muted-foreground">By Subject</p>
-                                        {(stats?.by_subject || []).slice(0, 5).map((item: any, idx: number) => (
+                                        {(stats?.by_subject || []).slice(0, 5).map((item: { name: string; count: number }, idx: number) => (
                                             <div key={idx} className="flex items-center justify-between text-sm">
                                                 <span className="text-foreground">{item.name}</span>
                                                 <Badge variant="secondary">{item.count}</Badge>
@@ -554,7 +554,7 @@ export default function DashboardPage() {
                                     <div className="space-y-2">
                                         <p className="text-xs font-medium text-muted-foreground">Difficulty Levels</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {(stats?.by_difficulty || []).map((d: any, idx: number) => (
+                                            {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number }, idx: number) => (
                                                 <Badge key={idx} variant="outline" className="capitalize">{d.difficulty}: {d.count}</Badge>
                                             ))}
                                         </div>
