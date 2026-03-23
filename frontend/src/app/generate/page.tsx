@@ -11,7 +11,30 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI, questionsAPI } from '@/lib/api';
-import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target, Lightbulb } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target } from 'lucide-react';
+
+interface AIExplanation {
+    category?: string;
+    sub_category?: string;
+    question_type?: string;
+    core_concept?: string;
+    why_correct?: string;
+    why_wrong?: Record<string, string>;
+    textbook_reference?: {
+        book?: string;
+        chapter?: string;
+        page?: string;
+        section?: string;
+    };
+    mnemonic?: string;
+    high_yield_points?: string[];
+    around_concepts?: string[];
+    clinical_pearl?: string;
+    exam_tip?: string;
+    pyq_frequency?: string;
+    similar_pyq?: string;
+    error?: boolean;
+}
 
 interface GeneratedQuestion {
     question_text: string;
@@ -45,7 +68,7 @@ export default function GeneratePage() {
     const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [showExplanations, setShowExplanations] = useState<Record<number, boolean>>({});
-    const [aiExplanations, setAiExplanations] = useState<Record<number, any>>({});
+    const [aiExplanations, setAiExplanations] = useState<Record<number, AIExplanation>>({});
     const [aiLoadingIdx, setAiLoadingIdx] = useState<number | null>(null);
 
     useEffect(() => {
@@ -76,11 +99,12 @@ export default function GeneratePage() {
             if (res.data?.questions) {
                 setQuestions(res.data.questions.filter((q: GeneratedQuestion) => !q.error));
             }
-        } catch (err: any) {
-            if (err?.response?.status === 429) {
+        } catch (err: unknown) {
+            const error = err as { response?: { status?: number; data?: { error?: string } }; message?: string };
+            if (error?.response?.status === 429) {
                 setQuestions([{ question_text: 'AI Tokens Exhausted — Your daily/weekly tokens are used up. Visit /tokens to buy more.', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
             } else {
-                const msg = err?.response?.data?.error || err?.message || 'AI service unavailable';
+                const msg = error?.response?.data?.error || error?.message || 'AI service unavailable';
                 setQuestions([{ question_text: `⚠️ ${msg}. Please try again.`, option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
             }
         }
@@ -422,7 +446,7 @@ export default function GeneratePage() {
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].high_yield_points?.length > 0 && (
+                                            {aiExplanations[idx].high_yield_points && aiExplanations[idx].high_yield_points.length > 0 && (
                                                 <div className="p-3 rounded-lg" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
                                                     <h6 className="text-xs font-bold mb-1" style={{ color: '#ec4899' }}>🔥 High Yield Points</h6>
                                                     <ul className="space-y-0.5">
@@ -433,7 +457,7 @@ export default function GeneratePage() {
                                                 </div>
                                             )}
 
-                                            {aiExplanations[idx].around_concepts?.length > 0 && (
+                                            {aiExplanations[idx].around_concepts && aiExplanations[idx].around_concepts.length > 0 && (
                                                 <div>
                                                     <h6 className="text-xs font-bold mb-1.5" style={{ color: '#6366f1' }}>🔗 Related Concepts</h6>
                                                     <div className="flex flex-wrap gap-1.5">

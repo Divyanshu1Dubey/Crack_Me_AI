@@ -26,6 +26,19 @@ interface TrendItem {
     count: number;
 }
 
+interface SubjectStat {
+    name: string;
+    code: string;
+    count: number;
+    color?: string;
+}
+
+interface StatsData {
+    total: number;
+    trends: TrendItem[];
+    by_subject: SubjectStat[];
+}
+
 // High-yield PYQ topics with star ratings
 const HIGH_YIELD_TOPICS = [
     {
@@ -87,7 +100,7 @@ const HIGH_YIELD_TOPICS = [
 ];
 
 export default function TrendsPage() {
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<StatsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [expandedSubject, setExpandedSubject] = useState<number | null>(0);
 
@@ -195,7 +208,7 @@ export default function TrendsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--glass-border)]">
-                                {subjects.map((sub: any) => (
+                                {subjects.map((sub: SubjectStat) => (
                                     <tr key={sub.code} className="hover:bg-[var(--accent-primary)]/5 transition-colors group">
                                         <td className="p-6">
                                             <div className="flex items-center gap-4">

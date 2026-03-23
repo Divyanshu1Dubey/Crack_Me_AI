@@ -42,11 +42,6 @@ export default function LeaderboardPage() {
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState<string>('all');
 
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) fetchLeaderboard();
-    }, [isAuthenticated, authLoading, router]);
-
     const fetchLeaderboard = (p?: string) => {
         setLoading(true);
         analyticsAPI.getLeaderboard(p || period)
@@ -56,6 +51,11 @@ export default function LeaderboardPage() {
             .catch(() => setEntries([]))
             .finally(() => setLoading(false));
     };
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
+        if (isAuthenticated) fetchLeaderboard();
+    }, [isAuthenticated, authLoading, router]);
 
     const handlePeriod = (p: string) => {
         setPeriod(p);
