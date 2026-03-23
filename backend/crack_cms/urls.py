@@ -14,8 +14,11 @@ def api_root(request):
         "service": "CrackCMS API",
         "endpoints": ["/api/auth/", "/api/questions/", "/api/tests/", "/api/ai/", "/api/analytics/"]
     })
+def trigger_error(request):
+    division_by_zero = 1 / 0
 
 urlpatterns = [
+    path('sentry-debug/', trigger_error),
     path('', health_check, name='health-check'),
     path('api/', api_root, name='api-root'),
     path('api/health/', health_check, name='health'),

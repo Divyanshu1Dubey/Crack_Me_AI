@@ -19,7 +19,7 @@ if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         traces_sample_rate=0.1,
-        send_default_pii=False,
+        send_default_pii=True,
     )
 
 SECRET_KEY = (
