@@ -379,7 +379,7 @@ function QuestionsContent() {
                             CMS Question Bank
                         </h1>
                         <p className="text-sm mt-1 text-muted-foreground">
-                            {totalCount} questions — Master the exam with targeted PYQ practice
+                            1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                         </p>
                     </div>
                 </div>

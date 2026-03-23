@@ -44,8 +44,18 @@ export default function ResourcesPage() {
         }).finally(() => setLoading(false));
     }, []);
 
-    const downloadResource = (id: string) => {
-        window.open(resourcesAPI.downloadUrl(id), '_blank');
+    const downloadResource = async (id: string) => {
+        const url = resourcesAPI.downloadUrl(id);
+        try {
+            const res = await fetch(url, { method: 'HEAD' });
+            if (!res.ok) {
+                alert('This document is currently unavailable for download. Please check back later or contact support.');
+                return;
+            }
+        } catch {
+            // Network error — try opening anyway
+        }
+        window.open(url, '_blank');
     };
 
     const categoryIcons: Record<string, any> = {
@@ -78,7 +88,7 @@ export default function ResourcesPage() {
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <BookOpen className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                        Resources & CMS Guide
+                        CMS Study Hub
                     </h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
                         Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material

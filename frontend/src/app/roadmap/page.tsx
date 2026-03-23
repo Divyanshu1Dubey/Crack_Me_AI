@@ -71,12 +71,12 @@ export default function RoadmapPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container">
-                <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
                     <Map className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-                    Study Roadmap
+                    AI-Powered Personalized Study Plan
                 </h1>
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                    AI-powered personalized study plan for UPSC CMS
+                    Designed specifically for UPSC CMS — tailored to your weak areas and exam timeline
                 </p>
 
                 {/* Phase Timeline */}
