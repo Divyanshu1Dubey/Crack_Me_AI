@@ -6,7 +6,7 @@ try:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, question_text, option_a FROM questions_question WHERE year=2025 LIMIT 20")
+    cursor.execute("SELECT id, question_text, option_a FROM questions_question WHERE year=? LIMIT 20", (2025,))
     rows = cursor.fetchall()
     print(f"Total 2025 questions found (sample 20): {len(rows)}")
     for r in rows:
