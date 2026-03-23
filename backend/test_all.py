@@ -80,7 +80,7 @@ def test_database():
     try:
         from django.db import connection
         with connection.cursor() as c:
-            c.execute("SELECT 1")
+            c.execute("SELECT %s", [1])
         ok("DB connection", "SQLite responding")
     except Exception as e:
         fail("DB connection", str(e))
