@@ -9,7 +9,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'crack_cms.settings'
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 django.setup()
 
-from questions.models import Subject, Question
+from questions.models import Question
 
 # Known bad parses - questions that are actually statements within other questions
 # These have very short text or contain only a single statement
