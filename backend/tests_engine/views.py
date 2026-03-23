@@ -120,15 +120,20 @@ class TestViewSet(viewsets.ModelViewSet):
         incorrect = 0
         unanswered = 0
 
+        # Pre-fetch all questions to avoid N+1 queries
+        question_ids = [ans.get('question_id') for ans in serializer.validated_data['answers']]
+        questions_map = Question.objects.in_bulk(question_ids)
+
+        responses_to_create = []
+
         for ans_data in serializer.validated_data['answers']:
             question_id = ans_data.get('question_id')
             selected = ans_data.get('selected_answer', '')
             time_taken = ans_data.get('time_taken_seconds')
             confidence = ans_data.get('confidence_level')
 
-            try:
-                question = Question.objects.get(id=question_id)
-            except Question.DoesNotExist:
+            question = questions_map.get(question_id)
+            if not question:
                 continue
 
             is_correct = None
@@ -141,14 +146,17 @@ class TestViewSet(viewsets.ModelViewSet):
             else:
                 unanswered += 1
 
-            QuestionResponse.objects.create(
+            responses_to_create.append(QuestionResponse(
                 attempt=attempt,
                 question=question,
                 selected_answer=selected.upper() if selected else None,
                 is_correct=is_correct,
                 time_taken_seconds=time_taken,
                 confidence_level=confidence,
-            )
+            ))
+
+        if responses_to_create:
+            QuestionResponse.objects.bulk_create(responses_to_create)
 
         # Calculate score
         score = correct - (incorrect * test.negative_mark_value if test.negative_marking else 0)
@@ -193,9 +201,8 @@ class TestViewSet(viewsets.ModelViewSet):
             if not selected:
                 continue
                 
-            try:
-                question = Question.objects.get(id=question_id)
-            except Question.DoesNotExist:
+            question = questions_map.get(question_id)
+            if not question:
                 continue
                 
             is_correct = (selected.upper() == question.correct_answer)
