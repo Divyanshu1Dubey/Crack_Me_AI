@@ -125,7 +125,7 @@ export default function DashboardPage() {
         router.push('/login');
     }
 
-    const heatmapByDate = useMemo(() => {
+    const heatmapByDate = useMemo<Map<string, HeatmapDay>>(() => {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));
     }, [heatmap]);
 
@@ -135,7 +135,7 @@ export default function DashboardPage() {
         return today.toISOString().slice(0, 10);
     }, []);
 
-    const todayActivity = useMemo(() => {
+    const todayActivity = useMemo<HeatmapDay>(() => {
         const fall: HeatmapDay = {
             date: todayKey,
             questions_attempted: 0,
