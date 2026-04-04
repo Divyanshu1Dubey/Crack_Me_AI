@@ -38,9 +38,9 @@ const AuthContext = createContext<AuthContextType>({
     login: async () => {
         throw new Error('AuthProvider is not mounted');
     },
-    register: async () => { },
-    logout: () => { },
-    refreshProfile: async () => { },
+    register: async () => undefined,
+    logout: () => undefined,
+    refreshProfile: async () => undefined,
     isAuthenticated: false,
     isSupabaseAuth: false,
 });
@@ -170,8 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
             if (error) throw new Error(error.message || 'Registration failed');
-            if (data.user) {
-                setUser(mapSupabaseUser(data.user));
+            if (data.session?.user) {
+                setUser(mapSupabaseUser(data.session.user));
             }
             return;
         }

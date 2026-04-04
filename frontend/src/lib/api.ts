@@ -13,7 +13,7 @@
  */
 import axios from 'axios';
 
-const USE_API_PROXY = (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'true') === 'true';
+const USE_API_PROXY = (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
 const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
 const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
@@ -22,6 +22,27 @@ const normalizeApiBaseUrl = (url: string) => {
   const normalized = url.replace(/\/+$/, '');
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
+
+const isLocalhostApiUrl = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
+const isAppRunningLocally = () => {
+  if (typeof window === 'undefined') {
+    return process.env.NODE_ENV !== 'production';
+  }
+  const host = window.location.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+};
+
+const shouldIgnoreConfiguredApiUrl = (url: string) =>
+  isLocalhostApiUrl(url) && !isAppRunningLocally();
 
 const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
@@ -34,6 +55,9 @@ const resolveApiBaseUrl = () => {
   const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
   if (configured) {
     const normalized = normalizeApiBaseUrl(configured);
+    if (shouldIgnoreConfiguredApiUrl(normalized)) {
+      return DEFAULT_PRODUCTION_API_URL;
+    }
     if (isKnownUnhealthyApiHost(normalized)) {
       return DEFAULT_PRODUCTION_API_URL;
     }
@@ -48,9 +72,10 @@ const resolveApiBaseUrl = () => {
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
+const configuredFallback = normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
 const FALLBACK_API_BASE_URL = USE_API_PROXY
   ? API_BASE_URL
-  : normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
+  : (shouldIgnoreConfiguredApiUrl(configuredFallback) ? DEFAULT_PRODUCTION_API_URL : configuredFallback);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
