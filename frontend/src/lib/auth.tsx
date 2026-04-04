@@ -166,6 +166,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             options: { redirectTo },
         });
         if (error) {
+            const message = (error.message || '').toLowerCase();
+            if (message.includes('provider') && message.includes('not enabled')) {
+                throw new Error('Google sign-in is not enabled in Supabase yet. Enable Google provider in Supabase Auth > Providers and add OAuth client credentials.');
+            }
             throw new Error(error.message || 'Google sign-in failed');
         }
     };
