@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "icons:download": "node scripts/download-icons.mjs icons/icons-manifest.json public/icons/custom"
   },
   "dependencies": {
     "@datadog/browser-logs": "^6.32.0",
