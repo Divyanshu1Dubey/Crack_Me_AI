@@ -2,15 +2,33 @@ import { NextRequest } from 'next/server';
 
 const DEFAULT_BACKEND_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
+const LEGACY_UNHEALTHY_API_HOSTS = [
+  'crackcms-vsthc.ondigitalocean.app',
+  'crackcms-backend.onrender.com',
+  '.onrender.com',
+];
 
 const normalizeApiBaseUrl = (url: string) => {
   const normalized = url.replace(/\/+$/, '');
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
 
-const PRIMARY_BACKEND_API_BASE_URL = normalizeApiBaseUrl(
-  (process.env.BACKEND_API_URL || DEFAULT_BACKEND_API_URL).trim()
-);
+const isKnownUnhealthyApiHost = (url: string) =>
+  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
+
+const resolveBackendApiBaseUrl = () => {
+  const configured = (process.env.BACKEND_API_URL || '').trim();
+  if (!configured) return DEFAULT_BACKEND_API_URL;
+
+  const normalized = normalizeApiBaseUrl(configured);
+  if (isKnownUnhealthyApiHost(normalized)) {
+    return DEFAULT_BACKEND_API_URL;
+  }
+
+  return normalized;
+};
+
+const PRIMARY_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl();
 const FALLBACK_BACKEND_API_BASE_URL = normalizeApiBaseUrl(DEFAULT_BACKEND_API_URL);
 
 const HOP_BY_HOP_HEADERS = new Set([
