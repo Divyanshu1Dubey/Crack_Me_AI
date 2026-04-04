@@ -13,7 +13,16 @@
  */
 import axios from 'axios';
 
-const USE_API_PROXY = (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
+const isAppRunningLocally = () => {
+  if (typeof window === 'undefined') {
+    return process.env.NODE_ENV !== 'production';
+  }
+
+  const host = window.location.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+};
+
+const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
 const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
 const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
@@ -31,14 +40,6 @@ const isLocalhostApiUrl = (url: string) => {
   } catch {
     return false;
   }
-};
-
-const isAppRunningLocally = () => {
-  if (typeof window === 'undefined') {
-    return process.env.NODE_ENV !== 'production';
-  }
-  const host = window.location.hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 };
 
 const shouldIgnoreConfiguredApiUrl = (url: string) =>

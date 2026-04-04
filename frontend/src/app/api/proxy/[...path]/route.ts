@@ -58,8 +58,7 @@ const sanitizePathParts = (pathParts: string[]) => {
 
 const buildTargetUrl = (baseUrl: string, request: NextRequest, pathParts: string[]) => {
   const safePathParts = sanitizePathParts(pathParts);
-  const trailingSlash = request.nextUrl.pathname.endsWith('/');
-  const path = `${safePathParts.join('/')}${trailingSlash ? '/' : ''}`;
+  const path = `${safePathParts.join('/')}/`;
   const target = `${baseUrl}/${path}`;
   const url = new URL(target);
   url.search = request.nextUrl.search;
