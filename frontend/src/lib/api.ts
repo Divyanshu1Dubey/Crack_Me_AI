@@ -94,6 +94,10 @@ export const extractApiErrorMessage = (payload: unknown, fallback = 'Request fai
   if (typeof payload === 'string') {
     const cleaned = payload.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!cleaned) return fallback;
+    const operationalError = cleaned.match(/OperationalError at/i);
+    if (operationalError) {
+      return 'Server database is not ready. Please try again in a minute.';
+    }
     const notFound = cleaned.match(/Page not found/i);
     if (notFound) return 'Service endpoint not found. Please verify API URL configuration.';
     return cleaned.slice(0, 220);

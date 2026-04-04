@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import DatabaseError
 from .models import TokenBalance, TokenConfig, TokenTransaction
 
 User = get_user_model()
@@ -25,7 +26,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop('password2')
         user = User.objects.create_user(**validated_data)
         # Auto-create token balance for new users
-        TokenBalance.objects.get_or_create(user=user)
+        try:
+            TokenBalance.objects.get_or_create(user=user)
+        except DatabaseError:
+            # Keep registration functional even if token tables are not migrated yet.
+            pass
         return user
 
 
@@ -42,8 +47,21 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_token_info(self, obj):
         """Return current token balance summary for the user."""
-        balance, _ = TokenBalance.objects.get_or_create(user=obj)
-        config = TokenConfig.get_config()
+        try:
+            balance, _ = TokenBalance.objects.get_or_create(user=obj)
+            config = TokenConfig.get_config()
+        except DatabaseError:
+            return {
+                'available': 0,
+                'purchased': 0,
+                'feedback_credits': 0,
+                'daily_used': 0,
+                'weekly_used': 0,
+                'daily_limit': 0,
+                'weekly_limit': 0,
+                'total_used': 0,
+                'is_admin': obj.is_admin,
+            }
         return {
             'available': balance.available_tokens,
             'purchased': balance.purchased_tokens,

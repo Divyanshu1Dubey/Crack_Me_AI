@@ -12,6 +12,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.db import DatabaseError
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, permissions, status
@@ -137,7 +138,10 @@ class LoginView(APIView):
                 {"error": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        TokenBalance.objects.get_or_create(user=user)
+        try:
+            TokenBalance.objects.get_or_create(user=user)
+        except DatabaseError:
+            logger.exception("Token tables unavailable during login for user=%s", user.id)
         return Response(build_auth_response(user))
 
 
@@ -387,11 +391,8 @@ class PasswordResetRequestView(APIView):
         if not email:
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        users = User.objects.filter(email=email)
-        if not users.exists():
-            return Response({"message": "If an account with that email exists, a reset link has been sent."})
-            
-        for user in users:
+        try:
+            user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:3000")
@@ -400,6 +401,8 @@ class PasswordResetRequestView(APIView):
                 send_password_reset_email(user, reset_link)
             except Exception as exc:
                 logger.warning("Password reset email failed for user_id=%s: %s", user.pk, exc)
+        except User.DoesNotExist:
+            pass
 
         return Response({"message": "If an account with that email exists, a reset link has been sent."})
 
