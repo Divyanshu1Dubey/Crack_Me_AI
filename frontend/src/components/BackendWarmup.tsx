@@ -1,7 +1,29 @@
 'use client';
 import { useEffect } from 'react';
 
-const BACKEND_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '');
+const DEFAULT_LOCAL_BACKEND_BASE = 'http://localhost:8000';
+const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackcms-backend.onrender.com';
+const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
+
+const resolveBackendBase = () => {
+    const configuredApi = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    if (configuredApi) {
+        const normalized = configuredApi.replace(/\/+$/, '');
+        const configuredBase = normalized.replace(/\/api$/, '');
+        if (LEGACY_UNHEALTHY_API_HOSTS.some((host) => configuredBase.includes(host))) {
+            return DEFAULT_PRODUCTION_BACKEND_BASE;
+        }
+        return configuredBase;
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        return DEFAULT_PRODUCTION_BACKEND_BASE;
+    }
+
+    return DEFAULT_LOCAL_BACKEND_BASE;
+};
+
+const BACKEND_BASE = resolveBackendBase();
 
 /**
  * Pings the backend on mount to wake up Render free tier (cold start ~30s).

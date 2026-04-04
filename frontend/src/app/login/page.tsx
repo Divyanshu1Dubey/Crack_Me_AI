@@ -8,6 +8,7 @@ import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
+import { extractApiErrorMessage } from '@/lib/api';
 
 export default function LoginPage() {
     const [username, setUsername] = useState('');
@@ -27,8 +28,8 @@ export default function LoginPage() {
             const hasAdminAccess = signedInUser.role === 'admin' || signedInUser.is_admin;
             router.push(hasAdminAccess ? '/admin' : '/dashboard');
         } catch (err: unknown) {
-            const error = err as { response?: { data?: { error?: string; detail?: string } } };
-            setError(error.response?.data?.error || error.response?.data?.detail || 'Invalid username or password');
+            const error = err as { response?: { data?: unknown } };
+            setError(extractApiErrorMessage(error.response?.data, 'Invalid username or password'));
         } finally {
             setLoading(false);
         }

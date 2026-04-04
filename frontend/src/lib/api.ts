@@ -13,15 +13,39 @@
  */
 import axios from 'axios';
 
-const resolveApiBaseUrl = () => {
-  const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-  if (!configured) return 'http://localhost:8000/api';
+const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
+const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
+const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
 
-  const normalized = configured.replace(/\/+$/, '');
+const normalizeApiBaseUrl = (url: string) => {
+  const normalized = url.replace(/\/+$/, '');
   return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 };
 
+const isKnownUnhealthyApiHost = (url: string) =>
+  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
+
+const resolveApiBaseUrl = () => {
+  const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (configured) {
+    const normalized = normalizeApiBaseUrl(configured);
+    if (isKnownUnhealthyApiHost(normalized)) {
+      return DEFAULT_PRODUCTION_API_URL;
+    }
+    return normalized;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return DEFAULT_PRODUCTION_API_URL;
+  }
+
+  return DEFAULT_LOCAL_API_URL;
+};
+
 const API_BASE_URL = resolveApiBaseUrl();
+const FALLBACK_API_BASE_URL = normalizeApiBaseUrl(
+  (process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim()
+);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -45,17 +69,39 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = (error.config || {}) as {
+      _retry?: boolean;
+      _apiBaseFailover?: boolean;
+      baseURL?: string;
+      headers?: Record<string, string>;
+    };
+    const status = error.response?.status as number | undefined;
+    const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
+
+    const shouldFailover =
+      !originalRequest._apiBaseFailover &&
+      currentBaseUrl !== FALLBACK_API_BASE_URL &&
+      (status === 502 || status === 503 || status === 504);
+
+    if (shouldFailover) {
+      originalRequest._apiBaseFailover = true;
+      originalRequest.baseURL = FALLBACK_API_BASE_URL;
+      return api(originalRequest);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          const { data } = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
+          const refreshBaseUrl = originalRequest.baseURL || API_BASE_URL;
+          const { data } = await axios.post(`${refreshBaseUrl}/auth/token/refresh/`, {
             refresh: refreshToken,
           });
           localStorage.setItem('access_token', data.access);
-          originalRequest.headers.Authorization = `Bearer ${data.access}`;
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${data.access}`;
+          }
           return api(originalRequest);
         }
       } catch {
@@ -92,6 +138,17 @@ export const authAPI = {
 
 export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {
   if (typeof payload === 'string') {
+    const lowerPayload = payload.toLowerCase();
+    if (
+      lowerPayload.includes('<!doctype html') ||
+      lowerPayload.includes('<html') ||
+      lowerPayload.includes('body,html{height:100%') ||
+      lowerPayload.includes('gateway timeout') ||
+      lowerPayload.includes('status code 504')
+    ) {
+      return 'Service is temporarily unavailable (gateway timeout). Please try again in 30-60 seconds.';
+    }
+
     const cleaned = payload.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!cleaned) return fallback;
     const operationalError = cleaned.match(/OperationalError at/i);
