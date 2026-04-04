@@ -8,14 +8,13 @@ import Header from '@/components/Header';
 import { analyticsAPI, authAPI, questionsAPI } from '@/lib/api';
 import {
     Users, BookOpen, FileText, AlertTriangle, TrendingUp,
-    CheckCircle, XCircle, Clock, Shield, Megaphone, Plus, Trash2,
+    CheckCircle, Clock, Shield, Megaphone, Plus, Trash2,
     Zap, MessageSquare, Gift
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 
 interface DashboardData {
     total_users: number;
@@ -50,6 +49,7 @@ const priorityColors: Record<string, string> = {
 export default function AdminDashboardPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
+    const hasAdminAccess = user?.role === 'admin' || user?.is_admin;
     const [data, setData] = useState<DashboardData | null>(null);
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
@@ -70,11 +70,11 @@ export default function AdminDashboardPage() {
     const [feedbackLoading, setFeedbackLoading] = useState(false);
 
     useEffect(() => {
-        if (!authLoading && (!isAuthenticated || user?.role !== 'admin')) {
+        if (!authLoading && (!isAuthenticated || !hasAdminAccess)) {
             router.push('/dashboard');
             return;
         }
-        if (isAuthenticated && user?.role === 'admin') {
+        if (isAuthenticated && hasAdminAccess) {
             Promise.all([
                 analyticsAPI.getAdminDashboard().catch(() => ({ data: null })),
                 analyticsAPI.getAnnouncements().catch(() => ({ data: [] })),
@@ -84,7 +84,7 @@ export default function AdminDashboardPage() {
                 setLoading(false);
             });
         }
-    }, [isAuthenticated, authLoading, user, router]);
+    }, [isAuthenticated, authLoading, hasAdminAccess, router]);
 
     const handleCreateAnnouncement = async () => {
         if (!form.title.trim() || !form.message.trim()) return;

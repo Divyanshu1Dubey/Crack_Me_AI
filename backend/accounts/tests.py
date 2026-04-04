@@ -82,3 +82,38 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
         self.assertTrue(user.check_password("NewPass123!"))
+
+    def test_login_accepts_case_insensitive_username(self):
+        user = User.objects.create_user(
+            username="CaseUser",
+            email="case@example.com",
+            password="StrongPass123!",
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "caseuser", "password": "StrongPass123!"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["user"]["id"], user.id)
+
+    def test_superuser_login_reports_admin_role(self):
+        admin = User.objects.create_superuser(
+            username="admincase",
+            email="admincase@example.com",
+            password="StrongPass123!",
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": admin.username, "password": "StrongPass123!"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["user"]["role"], "admin")
+        self.assertTrue(payload["user"]["is_admin"])

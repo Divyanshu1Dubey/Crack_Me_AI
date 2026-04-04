@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cracklabs.app';
+
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
 
@@ -31,43 +33,43 @@ export default function LandingPage() {
       icon: BookOpen,
       title: 'Clinical PYQ Atlas',
       desc: '1900+ active previous year questions with textbook-linked explanations and high-yield clinical framing.',
-      color: 'text-indigo-700 dark:text-indigo-300',
-      bg: 'bg-indigo-100 dark:bg-indigo-500/15',
+      color: 'text-emerald-700 dark:text-emerald-300',
+      bg: 'bg-emerald-100 dark:bg-emerald-500/15',
     },
     {
       icon: Brain,
       title: 'Doctor-Grade AI Tutor',
       desc: 'Ask diagnosis, management, pathology, and medicine logic exactly like viva and exam day reasoning.',
-      color: 'text-blue-700 dark:text-blue-300',
-      bg: 'bg-blue-100 dark:bg-blue-500/15',
+      color: 'text-teal-700 dark:text-teal-300',
+      bg: 'bg-teal-100 dark:bg-teal-500/15',
     },
     {
       icon: Target,
       title: 'Smart Exam Engine',
       desc: 'Adaptive testing with CMS scoring style, negative marking, and targeted follow-up practice blocks.',
-      color: 'text-sky-700 dark:text-sky-300',
-      bg: 'bg-sky-100 dark:bg-sky-500/15',
+      color: 'text-teal-700 dark:text-teal-300',
+      bg: 'bg-teal-100 dark:bg-teal-500/15',
     },
     {
       icon: Sparkles,
       title: 'Rapid Recall AI',
       desc: 'Generate mnemonics and instant one-minute revision capsules for high-yield retention.',
-      color: 'text-indigo-700 dark:text-indigo-300',
-      bg: 'bg-indigo-100 dark:bg-indigo-500/15',
+      color: 'text-amber-700 dark:text-amber-300',
+      bg: 'bg-amber-100 dark:bg-amber-500/15',
     },
     {
       icon: BarChart3,
       title: 'Performance Command Center',
       desc: 'Track weak systems, monitor daily streaks, and get guided next-step recommendations.',
-      color: 'text-blue-700 dark:text-blue-300',
-      bg: 'bg-blue-100 dark:bg-blue-500/15',
+      color: 'text-amber-700 dark:text-amber-300',
+      bg: 'bg-amber-100 dark:bg-amber-500/15',
     },
     {
       icon: GraduationCap,
       title: 'Full CMS Simulators',
       desc: 'Paper-style mocks with strict timing, review analytics, and practical exam pressure simulation.',
-      color: 'text-sky-700 dark:text-sky-300',
-      bg: 'bg-sky-100 dark:bg-sky-500/15',
+      color: 'text-rose-700 dark:text-rose-300',
+      bg: 'bg-rose-100 dark:bg-rose-500/15',
     },
   ];
 
@@ -100,6 +102,34 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-transparent">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@graph': [
+              {
+                '@type': 'Organization',
+                name: 'CrackCMS',
+                url: siteUrl,
+                logo: `${siteUrl}/crack-cms-logo.jpg`,
+                description: 'Doctor-first UPSC CMS preparation platform for medical aspirants.',
+              },
+              {
+                '@type': 'WebSite',
+                name: 'CrackCMS',
+                url: siteUrl,
+                potentialAction: {
+                  '@type': 'SearchAction',
+                  target: `${siteUrl}/questions?search={search_term_string}`,
+                  'query-input': 'required name=search_term_string',
+                },
+              },
+            ],
+          }),
+        }}
+      />
+
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -114,6 +144,9 @@ export default function LandingPage() {
                 <Button variant="ghost" asChild className="hidden sm:inline-flex">
                   <Link href="/login">Log in</Link>
                 </Button>
+                <Button variant="ghost" asChild className="hidden lg:inline-flex text-muted-foreground">
+                  <Link href="/admin/login">Admin</Link>
+                </Button>
                 <Button asChild className="rounded-xl">
                   <Link href="/register">Start Free <ChevronRight className="w-4 h-4" /></Link>
                 </Button>
@@ -127,25 +160,25 @@ export default function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-14 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-7">
-            <Badge variant="secondary" className="mb-5 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.11em] text-blue-600 dark:text-blue-400">
+            <Badge variant="secondary" className="mb-5 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.11em]">
               <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Intelligent Study System
+                Secure account recovery. Smart study system.
             </Badge>
 
             <h1 className="text-4xl font-bold leading-[1.02] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              The Most Powerful & Addictive 
-              <span className="gradient-text"> UPSC CMS Prep System</span>
+              A Modern UPSC CMS System for
+              <span className="gradient-text"> Doctor-Led AI Preparation</span>
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Stop boring lectures. Build consistency with a gamified medical prep operating system: question bank, AI tutor, high-yield revision,
-              and analytics that actually make you want to study every day.
+              Build consistency with a complete medical prep operating system: question bank, AI tutor, high-yield revision,
+              real-pattern mock tests, and analytics that tell you exactly what to do next.
             </p>
 
             <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <Button size="xl" asChild className="w-full rounded-2xl sm:w-auto">
                 <Link href={isAuthenticated ? '/dashboard' : '/register'}>
-                  Start Preparing For Free
+                  Start Preparing
                   <ChevronRight className="w-5 h-5" />
                 </Link>
               </Button>
@@ -171,29 +204,29 @@ export default function LandingPage() {
           </div>
 
           <div className="lg:col-span-5">
-            <Card className="relative overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-blue-600 via-indigo-600 to-sky-600 text-white shadow-2xl">
+            <Card className="relative overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-amber-600 text-white shadow-2xl">
               <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
               <CardContent className="p-6 sm:p-7">
                 <BrandMark light priority />
                 <div className="space-y-3">
                   {[
                     { label: 'Today Target', value: '30 question sprint' },
-                    { label: 'AI Explanations', value: 'Mnemonics & deep topic dives' },
-                    { label: 'Smart Analytics', value: 'Heatmaps & predictive scoring' },
+                    { label: 'Recovery Flow', value: 'SMTP-backed password reset' },
+                    { label: 'AI Routing', value: '10 configured providers with fallback order' },
                   ].map((item) => (
                     <div key={item.label} className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-sm">
-                      <p className="text-[11px] uppercase tracking-[0.1em] text-blue-100">{item.label}</p>
+                      <p className="text-[11px] uppercase tracking-[0.1em] text-emerald-100">{item.label}</p>
                       <p className="mt-1 text-sm font-semibold">{item.value}</p>
                     </div>
                   ))}
                 </div>
                 <div className="mt-5 rounded-2xl border border-white/20 bg-slate-950/15 p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-100">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
                     <Stethoscope className="h-3.5 w-3.5" />
                     Clinical Exam Cockpit
                   </div>
                   <p className="mt-2 text-sm text-white/88">
-                    One place for question practice, mocks, AI explanations, and predictive analytics aligned with the real CMS pattern.
+                    One place for question practice, mocks, AI explanations, analytics, and account recovery that does not look bolted on.
                   </p>
                 </div>
               </CardContent>
@@ -220,7 +253,7 @@ export default function LandingPage() {
               <p className="text-sm font-semibold text-foreground">Campus Community Momentum</p>
               <p className="text-xs text-muted-foreground">Students from leading medical colleges are actively preparing here.</p>
             </div>
-            <Badge className="bg-blue-600 text-white hover:bg-blue-600">2,900+ active this week</Badge>
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">2,900+ active this week</Badge>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {campuses.map((campus) => (
@@ -234,7 +267,7 @@ export default function LandingPage() {
               <div key={profile.name} className="rounded-2xl border border-border bg-background/80 p-3">
                 <p className="text-sm font-semibold text-foreground">{profile.name}</p>
                 <p className="text-xs text-muted-foreground">{profile.college}</p>
-                <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">{profile.progress}</p>
+                <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">{profile.progress}</p>
               </div>
             ))}
           </div>
@@ -279,14 +312,14 @@ export default function LandingPage() {
             {subjects.map((s, i) => (
               <Card key={i} className="transition-colors hover:border-primary/30">
                 <CardContent className="p-5 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-blue-500 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                   <span className="font-medium text-foreground">{s}</span>
                 </CardContent>
               </Card>
             ))}
             <Card className="hover:border-primary/30 transition-colors">
               <CardContent className="p-5 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-blue-500 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                 <span className="font-medium text-foreground">AI-Powered Analysis</span>
               </CardContent>
             </Card>

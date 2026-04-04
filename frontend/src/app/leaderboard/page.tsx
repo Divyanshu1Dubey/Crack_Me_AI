@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
 import { Trophy, Medal, Flame, Zap, Target, TrendingUp } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface LeaderboardEntry {
@@ -42,7 +41,7 @@ export default function LeaderboardPage() {
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState<string>('all');
 
-    const fetchLeaderboard = (p?: string) => {
+    const fetchLeaderboard = useCallback((p?: string) => {
         setLoading(true);
         analyticsAPI.getLeaderboard(p || period)
             .then(res => {
@@ -50,12 +49,15 @@ export default function LeaderboardPage() {
             })
             .catch(() => setEntries([]))
             .finally(() => setLoading(false));
-    };
+    }, [period]);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) fetchLeaderboard();
-    }, [isAuthenticated, authLoading, router]);
+        if (isAuthenticated) {
+            const timer = setTimeout(() => fetchLeaderboard(), 0);
+            return () => clearTimeout(timer);
+        }
+    }, [isAuthenticated, authLoading, router, fetchLeaderboard]);
 
     const handlePeriod = (p: string) => {
         setPeriod(p);

@@ -1,0 +1,21 @@
+{
+  "name": "CrackCMS",
+  "short_name": "CrackCMS",
+  "description": "Doctor-first UPSC CMS preparation with PYQs, AI tutoring, analytics, and adaptive tests.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/crack-cms-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/crack-cms-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

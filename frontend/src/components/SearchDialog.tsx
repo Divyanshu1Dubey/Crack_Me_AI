@@ -22,18 +22,18 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-    const resetSearch = useCallback(() => {
+    const handleClose = useCallback(() => {
         setQuery('');
         setResults([]);
         setSelectedIndex(0);
-    }, []);
+        onClose();
+    }, [onClose]);
 
     useEffect(() => {
         if (open) {
-            resetSearch();
             setTimeout(() => inputRef.current?.focus(), 50);
         }
-    }, [open, resetSearch]);
+    }, [open]);
 
     const searchQuestions = useCallback((q: string) => {
         if (q.length < 2) { setResults([]); return; }
@@ -53,7 +53,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
     };
 
     const handleSelect = (id: number) => {
-        onClose();
+        handleClose();
         router.push(`/questions?q=${id}`);
     };
 
@@ -71,7 +71,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
                 handleSelect(results[selectedIndex].id);
             }
         } else if (e.key === 'Escape') {
-            onClose();
+            handleClose();
         }
     };
 
@@ -89,7 +89,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
     ];
 
     const handleActionSelect = (path: string) => {
-        onClose();
+        handleClose();
         router.push(path);
     };
 
@@ -100,7 +100,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]" onClick={handleClose}>
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
             <div className="relative w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
                 onClick={e => e.stopPropagation()}>
@@ -117,7 +117,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
                         onKeyDown={handleKeyDown}
                     />
                     {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                    <button onClick={onClose} className="p-1 rounded hover:bg-accent">
+                    <button onClick={handleClose} className="p-1 rounded hover:bg-accent">
                         <X className="w-4 h-4 text-muted-foreground" />
                     </button>
                 </div>

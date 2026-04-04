@@ -36,14 +36,22 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile — includes token balance info."""
+    role = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
     token_info = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'phone', 'role', 'target_exam', 'target_year', 'avatar_url',
-                  'created_at', 'token_info']
+                  'created_at', 'is_admin', 'token_info']
         read_only_fields = ['id', 'role', 'created_at', 'token_info']
+
+    def get_role(self, obj):
+        return 'admin' if obj.is_admin else 'student'
+
+    def get_is_admin(self, obj):
+        return obj.is_admin
 
     def get_token_info(self, obj):
         """Return current token balance summary for the user."""

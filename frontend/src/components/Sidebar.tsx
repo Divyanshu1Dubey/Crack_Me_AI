@@ -109,7 +109,7 @@ export default function Sidebar() {
         router.push('/');
     };
 
-    const isAdmin = user?.role === 'admin';
+    const isAdmin = user?.role === 'admin' || user?.is_admin;
 
     return (
         <>

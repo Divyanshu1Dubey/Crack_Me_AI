@@ -1,9 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
 import { aiAPI } from '@/lib/api';
 import { Upload, Brain, FolderSearch, Database, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -26,24 +25,27 @@ export default function UploadPage() {
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             router.push('/login');
-        } else if (!authLoading && user && user.role !== 'admin') {
+        } else if (!authLoading && user && user.role !== 'admin' && !user.is_admin) {
             // Non-admin users cannot access this page
             router.push('/dashboard');
         }
     }, [authLoading, isAuthenticated, user, router]);
 
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         try {
             const res = await aiAPI.getKnowledgeStats();
             setStats(res.data);
         } catch {
             // Stats might not be available yet
         }
-    };
+    }, []);
 
     useEffect(() => {
-        if (isAuthenticated) fetchStats();
-    }, [isAuthenticated]);
+        if (isAuthenticated) {
+            const timer = setTimeout(() => fetchStats(), 0);
+            return () => clearTimeout(timer);
+        }
+    }, [isAuthenticated, fetchStats]);
 
     const handleUpload = async () => {
         if (!selectedFile) return;

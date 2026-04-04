@@ -5,6 +5,7 @@ set -o errexit
 pip install --no-cache-dir -r requirements.txt
 python manage.py collectstatic --no-input
 python manage.py migrate --no-input
+python manage.py bootstrap_admin
 
 # Auto-create superuser if env vars are set (no shell on free tier)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then

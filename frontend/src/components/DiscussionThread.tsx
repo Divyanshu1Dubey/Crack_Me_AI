@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useEffect, useState } from 'react';
 import { discussionsAPI } from '@/lib/api';
@@ -27,7 +26,7 @@ export default function DiscussionThread({ questionId }: { questionId: number })
     const [replies, setReplies] = useState<Record<number, Discussion[]>>({});
     const [replyTo, setReplyTo] = useState<number | null>(null);
     const [replyText, setReplyText] = useState('');
-    const [now, setNow] = useState(Date.now());
+    const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 60000);
@@ -35,16 +34,20 @@ export default function DiscussionThread({ questionId }: { questionId: number })
     }, []);
 
     useEffect(() => {
-        setExpanded(false);
-        setDiscussions([]);
-        setLoading(true);
-        discussionsAPI.list(questionId)
-            .then(res => {
-                const data = Array.isArray(res.data) ? res.data : res.data?.results || [];
-                setDiscussions(data);
-            })
-            .catch(() => setDiscussions([]))
-            .finally(() => setLoading(false));
+        const timer = setTimeout(() => {
+            setExpanded(false);
+            setDiscussions([]);
+            setLoading(true);
+            discussionsAPI.list(questionId)
+                .then(res => {
+                    const data = Array.isArray(res.data) ? res.data : res.data?.results || [];
+                    setDiscussions(data);
+                })
+                .catch(() => setDiscussions([]))
+                .finally(() => setLoading(false));
+        }, 0);
+
+        return () => clearTimeout(timer);
     }, [questionId]);
 
     const handlePost = async () => {

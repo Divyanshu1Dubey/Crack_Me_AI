@@ -102,6 +102,13 @@ export default function LoginPage() {
                     Create one <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
                 </Link>
             </p>
+
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+                Admin?{' '}
+                <Link href="/admin/login" className="font-semibold text-primary hover:underline">
+                    Sign in to admin panel
+                </Link>
+            </p>
         </AuthShell>
     );
 }
