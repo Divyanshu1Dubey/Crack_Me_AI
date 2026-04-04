@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { useAuth } from '@/lib/auth';
+import { extractApiErrorMessage } from '@/lib/api';
 
 export default function RegisterPage() {
     const [form, setForm] = useState({ username: '', email: '', password: '', password2: '', first_name: '', last_name: '' });
@@ -34,8 +35,8 @@ export default function RegisterPage() {
             await register(form);
             router.push('/dashboard');
         } catch (err: unknown) {
-            const error = err as { response?: { data?: Record<string, string[]> } };
-            setError(error.response?.data ? Object.values(error.response.data).flat().join(', ') : 'Registration failed');
+            const error = err as { response?: { data?: unknown } };
+            setError(extractApiErrorMessage(error.response?.data, 'Registration failed'));
         } finally {
             setLoading(false);
         }

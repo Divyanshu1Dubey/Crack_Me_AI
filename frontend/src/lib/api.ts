@@ -13,7 +13,15 @@
  */
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const resolveApiBaseUrl = () => {
+  const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (!configured) return 'http://localhost:8000/api';
+
+  const normalized = configured.replace(/\/+$/, '');
+  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -80,6 +88,27 @@ export const authAPI = {
   adminGetAllUsers: () => api.get('/auth/tokens/admin/users/'),
   adminGrantTokens: (data: { user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/grant/', data),
   adminTransferTokens: (data: { from_user_id?: number; to_user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/transfer/', data),
+};
+
+export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {
+  if (typeof payload === 'string') {
+    const cleaned = payload.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return fallback;
+    const notFound = cleaned.match(/Page not found/i);
+    if (notFound) return 'Service endpoint not found. Please verify API URL configuration.';
+    return cleaned.slice(0, 220);
+  }
+
+  if (payload && typeof payload === 'object') {
+    const entries = Object.values(payload as Record<string, unknown>).flatMap((value) => {
+      if (Array.isArray(value)) return value.map(String);
+      if (typeof value === 'string') return [value];
+      return [];
+    });
+    if (entries.length > 0) return entries.join(', ');
+  }
+
+  return fallback;
 };
 
 // Questions API
