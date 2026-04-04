@@ -70,6 +70,21 @@ def _repair_schema_if_needed(exc):
             return False
 
 
+def _fallback_authenticate(identifier, password):
+    """Try case-insensitive username/email auth for valid credentials."""
+    ident = (identifier or "").strip()
+    if not ident or not password:
+        return None
+
+    user = User.objects.filter(username__iexact=ident).first()
+    if user is None and "@" in ident:
+        user = User.objects.filter(email__iexact=ident).first()
+
+    if user and user.is_active and user.check_password(password):
+        return user
+    return None
+
+
 def build_auth_response(user):
     """Return a backwards-compatible auth payload for frontend and tests."""
     refresh = RefreshToken.for_user(user)
@@ -173,11 +188,17 @@ class LoginView(APIView):
             try:
                 serializer = LoginSerializer(data=request.data)
                 serializer.is_valid(raise_exception=True)
+                username_or_email = serializer.validated_data["username"]
+                password = serializer.validated_data["password"]
                 user = authenticate(
                     request,
-                    username=serializer.validated_data["username"],
-                    password=serializer.validated_data["password"],
+                    username=username_or_email,
+                    password=password,
                 )
+
+                if not user:
+                    user = _fallback_authenticate(username_or_email, password)
+
                 if not user:
                     return Response(
                         {"error": "Invalid credentials"},

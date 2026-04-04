@@ -25,8 +25,9 @@ export default function LoginPage() {
         try {
             await login(username, password);
             router.push('/dashboard');
-        } catch {
-            setError('Invalid username or password');
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string; detail?: string } } };
+            setError(error.response?.data?.error || error.response?.data?.detail || 'Invalid username or password');
         } finally {
             setLoading(false);
         }
