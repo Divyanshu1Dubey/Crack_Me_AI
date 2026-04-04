@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-const DEFAULT_BACKEND_API_URL = 'https://crackcms-backend.onrender.com/api';
+const DEFAULT_BACKEND_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
 
 const normalizeApiBaseUrl = (url: string) => {

@@ -586,7 +586,7 @@ def test_config():
     if has_whitenoise:
         ok("WhiteNoise middleware", "Static file serving ready")
     else:
-        fail("WhiteNoise middleware", "Missing — needed for Render deployment")
+        fail("WhiteNoise middleware", "Missing — needed for deployment")
 
     # 6.4 Fixture file
     fixture = Path(__file__).parent / 'questions_fixture.json'
@@ -598,9 +598,9 @@ def test_config():
     # 6.5 Build script
     build = Path(__file__).parent / 'build.sh'
     if build.exists():
-        ok("build.sh", "Present for Render deployment")
+        ok("build.sh", "Present for deployment")
     else:
-        fail("build.sh", "Missing — Render won't build correctly")
+        fail("build.sh", "Missing — deployment won't build correctly")
 
     # 6.6 Requirements.txt
     reqs = Path(__file__).parent / 'requirements.txt'

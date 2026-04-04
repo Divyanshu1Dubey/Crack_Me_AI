@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Render build script for CrackCMS backend
+# Backend build script for CrackCMS
 set -o errexit
 
 pip install --no-cache-dir -r requirements.txt
@@ -12,7 +12,7 @@ if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
   python manage.py createsuperuser --no-input || true
 fi
 
-# Load all questions from fixture (SQLite is ephemeral on Render free tier)
+# Load all questions from fixture (SQLite is ephemeral on this build environment)
 echo "Loading question bank fixture..."
 python manage.py loaddata questions_fixture.json
 

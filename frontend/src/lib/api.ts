@@ -24,7 +24,7 @@ const isAppRunningLocally = () => {
 
 const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
-const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
+const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
 const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
 
 const normalizeApiBaseUrl = (url: string) => {
@@ -270,7 +270,7 @@ export const analyticsAPI = {
 };
 
 
-// AI API — 120s timeout for AI calls (Render free tier cold starts + LLM latency)
+// AI API — 120s timeout for AI calls (backend cold starts + LLM latency)
 const AI_TIMEOUT = 120000;
 
 export const aiAPI = {

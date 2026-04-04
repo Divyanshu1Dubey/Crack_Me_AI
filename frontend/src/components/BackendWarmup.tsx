@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 
 const DEFAULT_LOCAL_BACKEND_BASE = 'http://localhost:8000';
-const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackcms-backend.onrender.com';
+const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackcms-vsthc.ondigitalocean.app';
 const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
 
 const resolveBackendBase = () => {
@@ -26,8 +26,8 @@ const resolveBackendBase = () => {
 const BACKEND_BASE = resolveBackendBase();
 
 /**
- * Pings the backend on mount to wake up Render free tier (cold start ~30s).
- * Also pings every 4 minutes to keep it alive while users are browsing.
+ * Pings the backend on mount to wake it up after cold starts.
+ * Also pings every 4 minutes to keep it responsive while users are browsing.
  */
 export default function BackendWarmup() {
     useEffect(() => {

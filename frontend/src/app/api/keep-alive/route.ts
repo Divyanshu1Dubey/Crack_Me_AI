@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 
-const BACKEND_URL = 'https://crackcms-backend.onrender.com';
+const BACKEND_URL = 'https://crackcms-vsthc.ondigitalocean.app';
 
 /**
- * GET /api/keep-alive — Pings the backend to prevent Render free tier from sleeping.
- * Use with cron-job.org (free) to call every 5 minutes.
+ * GET /api/keep-alive — Pings the backend to prevent it from sleeping.
+ * Use with cron-job.org (free) or your scheduler to call every 5 minutes.
  */
 export async function GET() {
     try {
