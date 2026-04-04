@@ -6,12 +6,14 @@ Admin users bypass token limits.
 """
 
 import logging
+from threading import Lock
 
 from django.conf import settings as django_settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.management import call_command
 from django.db import DatabaseError
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -35,6 +37,37 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+_SCHEMA_REPAIR_LOCK = Lock()
+
+
+def _is_schema_db_error(exc):
+    """Detect table/column migration drift errors from SQLite/PostgreSQL."""
+    message = str(exc).lower()
+    hints = (
+        "no such table",
+        "no such column",
+        "relation",
+        "does not exist",
+        "undefined table",
+        "undefined column",
+        "has no column named",
+    )
+    return any(hint in message for hint in hints)
+
+
+def _repair_schema_if_needed(exc):
+    """Run migrations once when auth endpoints hit schema-missing errors."""
+    if not _is_schema_db_error(exc):
+        return False
+
+    with _SCHEMA_REPAIR_LOCK:
+        try:
+            logger.warning("Schema error detected in auth flow. Running migrate once.")
+            call_command("migrate", interactive=False, verbosity=0)
+            return True
+        except Exception:
+            logger.exception("Runtime schema repair failed")
+            return False
 
 
 def build_auth_response(user):
@@ -114,10 +147,20 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response(build_auth_response(user), status=status.HTTP_201_CREATED)
+        for attempt in range(2):
+            try:
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                user = serializer.save()
+                return Response(build_auth_response(user), status=status.HTTP_201_CREATED)
+            except DatabaseError as exc:
+                logger.exception("Register DB error (attempt=%s)", attempt + 1)
+                if attempt == 0 and _repair_schema_if_needed(exc):
+                    continue
+                return Response(
+                    {"error": "Server database is not ready. Please try again in a minute."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
 
 class LoginView(APIView):
@@ -126,23 +169,37 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = authenticate(
-            request,
-            username=serializer.validated_data["username"],
-            password=serializer.validated_data["password"],
-        )
-        if not user:
-            return Response(
-                {"error": "Invalid credentials"},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        try:
-            TokenBalance.objects.get_or_create(user=user)
-        except DatabaseError:
-            logger.exception("Token tables unavailable during login for user=%s", user.id)
-        return Response(build_auth_response(user))
+        for attempt in range(2):
+            try:
+                serializer = LoginSerializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                user = authenticate(
+                    request,
+                    username=serializer.validated_data["username"],
+                    password=serializer.validated_data["password"],
+                )
+                if not user:
+                    return Response(
+                        {"error": "Invalid credentials"},
+                        status=status.HTTP_401_UNAUTHORIZED,
+                    )
+
+                try:
+                    TokenBalance.objects.get_or_create(user=user)
+                except DatabaseError as exc:
+                    logger.exception("Token tables unavailable during login for user=%s", user.id)
+                    if attempt == 0 and _repair_schema_if_needed(exc):
+                        continue
+
+                return Response(build_auth_response(user))
+            except DatabaseError as exc:
+                logger.exception("Login DB error (attempt=%s)", attempt + 1)
+                if attempt == 0 and _repair_schema_if_needed(exc):
+                    continue
+                return Response(
+                    {"error": "Server database is not ready. Please try again in a minute."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
