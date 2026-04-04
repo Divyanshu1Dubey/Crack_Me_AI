@@ -28,6 +28,10 @@ export default function LoginPage() {
             const hasAdminAccess = signedInUser.role === 'admin' || signedInUser.is_admin;
             router.push(hasAdminAccess ? '/admin' : '/dashboard');
         } catch (err: unknown) {
+            if (err instanceof Error && err.message) {
+                setError(err.message);
+                return;
+            }
             const error = err as { response?: { data?: unknown } };
             setError(extractApiErrorMessage(error.response?.data, 'Invalid username or password'));
         } finally {

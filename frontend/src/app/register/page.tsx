@@ -35,6 +35,10 @@ export default function RegisterPage() {
             await register(form);
             router.push('/dashboard');
         } catch (err: unknown) {
+            if (err instanceof Error && err.message) {
+                setError(err.message);
+                return;
+            }
             const error = err as { response?: { data?: unknown } };
             setError(extractApiErrorMessage(error.response?.data, 'Registration failed'));
         } finally {

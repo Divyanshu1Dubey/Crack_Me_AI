@@ -7,9 +7,11 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authAPI } from './api';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { getSupabaseBrowserClient, isSupabaseAuthEnabled } from './supabase';
 
 interface User {
-    id: number;
+    id: number | string;
     username: string;
     email: string;
     first_name: string;
@@ -41,11 +43,59 @@ const AuthContext = createContext<AuthContextType>({
     isAuthenticated: false,
 });
 
+const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
+
+const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
+    const metadata = supabaseUser.user_metadata || {};
+    const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
+
+    return {
+        id: supabaseUser.id,
+        username: String(metadata.username || usernameFromEmail),
+        email: supabaseUser.email || '',
+        first_name: String(metadata.first_name || ''),
+        last_name: String(metadata.last_name || ''),
+        role: 'student',
+        is_admin: false,
+        target_exam: 'UPSC CMS',
+    };
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (SUPABASE_AUTH_ENABLED) {
+            const supabase = getSupabaseBrowserClient();
+            if (!supabase) {
+                setLoading(false);
+                return;
+            }
+
+            let mounted = true;
+
+            supabase.auth
+                .getSession()
+                .then(({ data }) => {
+                    if (!mounted) return;
+                    setUser(data.session?.user ? mapSupabaseUser(data.session.user) : null);
+                })
+                .finally(() => {
+                    if (mounted) setLoading(false);
+                });
+
+            const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+                if (!mounted) return;
+                setUser(session?.user ? mapSupabaseUser(session.user) : null);
+            });
+
+            return () => {
+                mounted = false;
+                listener.subscription.unsubscribe();
+            };
+        }
+
         const token = localStorage.getItem('access_token');
         if (token) {
             authAPI.getProfile()
@@ -61,6 +111,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (username: string, password: string) => {
+        if (SUPABASE_AUTH_ENABLED) {
+            const supabase = getSupabaseBrowserClient();
+            if (!supabase) {
+                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+            }
+
+            const identifier = username.trim();
+            if (!identifier.includes('@')) {
+                throw new Error('Use your email to sign in while Supabase auth is enabled.');
+            }
+
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: identifier,
+                password,
+            });
+
+            if (error) throw new Error(error.message || 'Login failed');
+
+            const signedInUser = data.user || data.session?.user;
+            if (!signedInUser) throw new Error('Login failed. Please try again.');
+
+            const mapped = mapSupabaseUser(signedInUser);
+            setUser(mapped);
+            return mapped;
+        }
+
         const { data } = await authAPI.login({ username, password });
         localStorage.setItem('access_token', data.tokens.access);
         localStorage.setItem('refresh_token', data.tokens.refresh);
@@ -69,6 +145,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const register = async (formData: Record<string, string>) => {
+        if (SUPABASE_AUTH_ENABLED) {
+            const supabase = getSupabaseBrowserClient();
+            if (!supabase) {
+                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+            }
+
+            const email = (formData.email || '').trim();
+            const password = formData.password || '';
+            const username = (formData.username || '').trim();
+
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        username,
+                        first_name: (formData.first_name || '').trim(),
+                        last_name: (formData.last_name || '').trim(),
+                    },
+                },
+            });
+
+            if (error) throw new Error(error.message || 'Registration failed');
+            if (data.user) {
+                setUser(mapSupabaseUser(data.user));
+            }
+            return;
+        }
+
         const { data } = await authAPI.register(formData);
         localStorage.setItem('access_token', data.tokens.access);
         localStorage.setItem('refresh_token', data.tokens.refresh);
@@ -76,12 +181,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = () => {
+        if (SUPABASE_AUTH_ENABLED) {
+            const supabase = getSupabaseBrowserClient();
+            supabase?.auth.signOut();
+            setUser(null);
+            return;
+        }
+
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         setUser(null);
     };
 
     const refreshProfile = async () => {
+        if (SUPABASE_AUTH_ENABLED) {
+            const supabase = getSupabaseBrowserClient();
+            if (!supabase) return;
+            const { data } = await supabase.auth.getUser();
+            setUser(data.user ? mapSupabaseUser(data.user) : null);
+            return;
+        }
+
         try {
             const res = await authAPI.getProfile();
             setUser(res.data);
