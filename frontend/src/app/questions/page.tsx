@@ -14,7 +14,7 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
-import { questionsAPI, aiAPI } from '@/lib/api';
+import { questionsAPI, aiAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { BookOpen, Search, Filter, Bookmark, Eye, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
 import Header from '@/components/Header';
@@ -119,6 +119,7 @@ function QuestionsContent() {
     const [selectedDifficulty, setSelectedDifficulty] = useState('');
     const [selectedYear, setSelectedYear] = useState('');
     const [years, setYears] = useState<number[]>([]);
+    const [listError, setListError] = useState<string | null>(null);
     const [selectedQuestion, setSelectedQuestion] = useState<number | null>(null);
     const [questionDetail, setQuestionDetail] = useState<any>(null);
     const [showAnswer, setShowAnswer] = useState(false);
@@ -205,6 +206,7 @@ function QuestionsContent() {
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
+            setListError(null);
             Promise.all([
                 questionsAPI.list({ page: 1, page_size: pageSize }),
                 questionsAPI.getSubjects(),
@@ -215,7 +217,14 @@ function QuestionsContent() {
                 setTotalCount(qData.count || (qData.results || qData || []).length);
                 setSubjects(sRes.data.results || sRes.data || []);
                 setYears(yRes.data.results || yRes.data || []);
-            }).catch(() => { }).finally(() => setLoading(false));
+            }).catch((err: unknown) => {
+                const apiError = err as { response?: { data?: unknown } };
+                if (apiError.response?.data) {
+                    setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
+                    return;
+                }
+                setListError('Unable to load questions right now. Please refresh and try again.');
+            }).finally(() => setLoading(false));
         }
     }, [authLoading, isAuthenticated, router]);
 
@@ -230,11 +239,19 @@ function QuestionsContent() {
 
     const fetchQuestions = (params: Record<string, string | number>) => {
         setLoading(true);
+        setListError(null);
         questionsAPI.list(params).then(res => {
             const d = res.data;
             setQuestions(d.results || d || []);
             setTotalCount(d.count || (d.results || d || []).length);
-        }).catch(() => { }).finally(() => setLoading(false));
+        }).catch((err: unknown) => {
+            const apiError = err as { response?: { data?: unknown } };
+            if (apiError.response?.data) {
+                setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
+                return;
+            }
+            setListError('Unable to load questions right now. Please refresh and try again.');
+        }).finally(() => setLoading(false));
     };
 
     useEffect(() => {
@@ -416,6 +433,10 @@ function QuestionsContent() {
                             <div className="space-y-3">
                                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                             </div>
+                        ) : listError ? (
+                            <Card className="p-8 text-center text-destructive">
+                                {listError}
+                            </Card>
                         ) : questions.length === 0 ? (
                             <Card className="p-8 text-center text-muted-foreground">
                                 No questions found. Try adjusting your filters.

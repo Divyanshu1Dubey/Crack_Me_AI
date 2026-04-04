@@ -9,7 +9,9 @@ let browserClient: SupabaseClient | null = null;
 export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseAnonKey);
 
 export const isSupabaseAuthEnabled = () =>
-  isSupabaseConfigured() && (process.env.NEXT_PUBLIC_USE_SUPABASE_AUTH ?? 'true') === 'true';
+  isSupabaseConfigured()
+  && (process.env.NEXT_PUBLIC_AUTH_PROVIDER || '').toLowerCase() === 'supabase'
+  && (process.env.NEXT_PUBLIC_USE_SUPABASE_AUTH ?? 'false') === 'true';
 
 export const getSupabaseBrowserClient = () => {
   if (!isSupabaseConfigured()) return null;

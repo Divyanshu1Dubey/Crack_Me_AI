@@ -16,7 +16,7 @@ export default function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { register, loginWithGoogle, isSupabaseAuth } = useAuth();
+    const { register } = useAuth();
     const router = useRouter();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,22 +49,6 @@ export default function RegisterPage() {
                 return;
             }
             setError('Registration failed');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleGoogleSignUp = async () => {
-        setError('');
-        setLoading(true);
-        try {
-            await loginWithGoogle();
-        } catch (err: unknown) {
-            if (err instanceof Error && err.message) {
-                setError(err.message);
-            } else {
-                setError('Google sign-up failed. Please try again.');
-            }
         } finally {
             setLoading(false);
         }
@@ -175,12 +159,6 @@ export default function RegisterPage() {
                 <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
                     {loading ? 'Creating account...' : (<><UserPlus className="w-5 h-5" /> Create Account</>)}
                 </Button>
-
-                {isSupabaseAuth && (
-                    <Button type="button" variant="outline" className="w-full rounded-2xl" size="lg" onClick={handleGoogleSignUp} disabled={loading}>
-                        Continue with Google
-                    </Button>
-                )}
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">

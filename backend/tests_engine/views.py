@@ -54,15 +54,21 @@ class TestViewSet(viewsets.ModelViewSet):
             q_filter &= Q(year=year)
             title_parts.append(f"PYQ {year}")
         elif test_type == 'paper1':
-            q_filter &= Q(subject__paper=1)
+            q_filter &= (Q(subject__paper=1) | Q(paper=1))
             title_parts.append("Paper 1 Mock")
             num_questions = 120
         elif test_type == 'paper2':
-            q_filter &= Q(subject__paper=2)
+            q_filter &= (Q(subject__paper=2) | Q(paper=2))
             title_parts.append("Paper 2 Mock")
             num_questions = 120
 
         questions = list(Question.objects.filter(q_filter).values_list('id', flat=True))
+        if not questions:
+            return Response(
+                {'error': 'No active questions found for this simulation type. Please check question imports and paper mapping.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if len(questions) > num_questions:
             questions = random.sample(questions, num_questions)
 

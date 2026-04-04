@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { testsAPI, questionsAPI } from '@/lib/api';
+import { extractApiErrorMessage } from '@/lib/api';
 import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar } from 'lucide-react';
 
 interface Subject { id: number; name: string; code: string; }
@@ -40,7 +41,9 @@ export default function SimulatorPage() {
             const res = await testsAPI.generate({ test_type: paper, num_questions: 120 });
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
-            const msg = err && typeof err === 'object' && 'response' in err ? (err as { response?: { data?: { error?: string } } }).response?.data?.error : undefined;
+            const msg = err && typeof err === 'object' && 'response' in err
+                ? extractApiErrorMessage((err as { response?: { data?: unknown } }).response?.data, '')
+                : '';
             setError(msg || 'Failed to generate simulation. Make sure there are enough questions in the database.');
         } finally {
             setGenerating(false);
@@ -55,7 +58,9 @@ export default function SimulatorPage() {
             const res = await testsAPI.pyqSimulation({ year: pyqYear });
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
-            const msg = err && typeof err === 'object' && 'response' in err ? (err as { response?: { data?: { error?: string } } }).response?.data?.error : undefined;
+            const msg = err && typeof err === 'object' && 'response' in err
+                ? extractApiErrorMessage((err as { response?: { data?: unknown } }).response?.data, '')
+                : '';
             setError(msg || `Failed to start PYQ simulation for ${pyqYear}. No questions may exist for that year.`);
         } finally {
             setGenerating(false);

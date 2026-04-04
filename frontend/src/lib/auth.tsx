@@ -25,7 +25,6 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     login: (identifier: string, password: string) => Promise<User>;
-    loginWithGoogle: () => Promise<void>;
     register: (data: Record<string, string>) => Promise<void>;
     logout: () => void;
     refreshProfile: () => Promise<void>;
@@ -37,9 +36,6 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     login: async () => {
-        throw new Error('AuthProvider is not mounted');
-    },
-    loginWithGoogle: async () => {
         throw new Error('AuthProvider is not mounted');
     },
     register: async () => { },
@@ -150,30 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return data.user;
     };
 
-    const loginWithGoogle = async () => {
-        if (!SUPABASE_AUTH_ENABLED) {
-            throw new Error('Google sign-in is available when Supabase auth is enabled.');
-        }
-
-        const supabase = getSupabaseBrowserClient();
-        if (!supabase) {
-            throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-        }
-
-        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined;
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo },
-        });
-        if (error) {
-            const message = (error.message || '').toLowerCase();
-            if (message.includes('provider') && message.includes('not enabled')) {
-                throw new Error('Google sign-in is not enabled in Supabase yet. Enable Google provider in Supabase Auth > Providers and add OAuth client credentials.');
-            }
-            throw new Error(error.message || 'Google sign-in failed');
-        }
-    };
-
     const register = async (formData: Record<string, string>) => {
         if (SUPABASE_AUTH_ENABLED) {
             const supabase = getSupabaseBrowserClient();
@@ -243,7 +215,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user,
             loading,
             login,
-            loginWithGoogle,
             register,
             logout,
             refreshProfile,

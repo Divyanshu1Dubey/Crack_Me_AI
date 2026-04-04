@@ -16,7 +16,7 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login, loginWithGoogle, isSupabaseAuth } = useAuth();
+    const { login, isSupabaseAuth } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -42,22 +42,6 @@ export default function LoginPage() {
                 return;
             }
             setError('Invalid username or password');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleGoogleSignIn = async () => {
-        setError('');
-        setLoading(true);
-        try {
-            await loginWithGoogle();
-        } catch (err: unknown) {
-            if (err instanceof Error && err.message) {
-                setError(err.message);
-            } else {
-                setError('Google sign-in failed. Please try again.');
-            }
         } finally {
             setLoading(false);
         }
@@ -126,12 +110,6 @@ export default function LoginPage() {
                 <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
                     {loading ? 'Signing in...' : (<><LogIn className="w-5 h-5" /> Sign In</>)}
                 </Button>
-
-                {isSupabaseAuth && (
-                    <Button type="button" variant="outline" className="w-full rounded-2xl" size="lg" onClick={handleGoogleSignIn} disabled={loading}>
-                        Continue with Google
-                    </Button>
-                )}
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
