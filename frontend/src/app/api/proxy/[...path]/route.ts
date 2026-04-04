@@ -17,6 +17,10 @@ const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
 
 const resolveBackendApiBaseUrl = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return DEFAULT_BACKEND_API_URL;
+  }
+
   const configured = (process.env.BACKEND_API_URL || '').trim();
   if (!configured) return DEFAULT_BACKEND_API_URL;
 

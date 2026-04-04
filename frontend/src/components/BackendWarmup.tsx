@@ -10,6 +10,10 @@ const LEGACY_UNHEALTHY_API_HOSTS = [
 ];
 
 const resolveBackendBase = () => {
+    if (process.env.NODE_ENV === 'production') {
+        return DEFAULT_PRODUCTION_BACKEND_BASE;
+    }
+
     const configuredApi = (process.env.NEXT_PUBLIC_API_URL || '').trim();
     if (configuredApi) {
         const normalized = configuredApi.replace(/\/+$/, '');
@@ -18,10 +22,6 @@ const resolveBackendBase = () => {
             return DEFAULT_PRODUCTION_BACKEND_BASE;
         }
         return configuredBase;
-    }
-
-    if (process.env.NODE_ENV === 'production') {
-        return DEFAULT_PRODUCTION_BACKEND_BASE;
     }
 
     return DEFAULT_LOCAL_BACKEND_BASE;

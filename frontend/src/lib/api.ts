@@ -53,6 +53,10 @@ const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
 
 const resolveApiBaseUrl = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return DEFAULT_PRODUCTION_API_URL;
+  }
+
   if (USE_API_PROXY) {
     return '/api/proxy';
   }
@@ -67,10 +71,6 @@ const resolveApiBaseUrl = () => {
       return DEFAULT_PRODUCTION_API_URL;
     }
     return normalized;
-  }
-
-  if (process.env.NODE_ENV === 'production') {
-    return DEFAULT_PRODUCTION_API_URL;
   }
 
   return DEFAULT_LOCAL_API_URL;
