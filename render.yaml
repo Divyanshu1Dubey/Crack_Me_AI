@@ -53,6 +53,20 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      - key: DD_TRACE_ENABLED
+        value: "false"
+      - key: DD_LOGS_INJECTION
+        value: "true"
+      - key: DD_SERVICE
+        value: "crackcms-backend"
+      - key: DD_ENV
+        sync: false
+      - key: DD_VERSION
+        sync: false
+      - key: DD_AGENT_HOST
+        sync: false
+      - key: DD_SITE
+        value: "datadoghq.com"
       - key: PYTHON_VERSION
         value: "3.12.0"
       - key: DISABLE_RAG
