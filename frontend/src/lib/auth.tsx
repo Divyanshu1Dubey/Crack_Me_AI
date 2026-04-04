@@ -22,7 +22,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (username: string, password: string) => Promise<void>;
+    login: (username: string, password: string) => Promise<User>;
     register: (data: Record<string, string>) => Promise<void>;
     logout: () => void;
     refreshProfile: () => Promise<void>;
@@ -32,7 +32,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
-    login: async () => { },
+    login: async () => {
+        throw new Error('AuthProvider is not mounted');
+    },
     register: async () => { },
     logout: () => { },
     refreshProfile: async () => { },
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('access_token', data.tokens.access);
         localStorage.setItem('refresh_token', data.tokens.refresh);
         setUser(data.user);
+        return data.user;
     };
 
     const register = async (formData: Record<string, string>) => {

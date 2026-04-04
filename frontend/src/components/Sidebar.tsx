@@ -8,19 +8,14 @@ import { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import {
-    LayoutDashboard, BookOpen, FileText, Brain,
-    BarChart3, GraduationCap, Bookmark, LogOut,
-    Map, FolderOpen, Upload, Sparkles,
-    Menu, X, TrendingUp, MessageSquare, Trophy,
-    Shield, Layers, Stethoscope
-} from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
+import CustomIcon from '@/components/CustomIcon';
 
 interface NavItem {
     href: string;
-    icon: React.ComponentType<{ className?: string }>;
+    iconName: string;
     label: string;
     adminOnly?: boolean;
 }
@@ -34,37 +29,37 @@ const navSections: NavSection[] = [
     {
         title: 'Study',
         items: [
-            { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-            { href: '/questions', icon: BookOpen, label: 'Question Bank' },
-            { href: '/tests', icon: FileText, label: 'Tests' },
-            { href: '/flashcards', icon: Layers, label: 'Flashcards' },
-            { href: '/simulator', icon: GraduationCap, label: 'CMS Simulator' },
+            { href: '/dashboard', iconName: 'dashboard-layout', label: 'Dashboard' },
+            { href: '/questions', iconName: 'question-bank-book', label: 'Question Bank' },
+            { href: '/tests', iconName: 'tests-check', label: 'Tests' },
+            { href: '/flashcards', iconName: 'flashcards-cards', label: 'Flashcards' },
+            { href: '/simulator', iconName: 'simulator-target', label: 'CMS Simulator' },
         ]
     },
     {
         title: 'AI Tools',
         items: [
-            { href: '/ai-tutor', icon: Brain, label: 'AI Tutor' },
-            { href: '/generate', icon: Sparkles, label: 'AI Questions' },
-            { href: '/roadmap', icon: Map, label: 'AI Study Plan' },
+            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor' },
+            { href: '/generate', iconName: 'ai-questions-creativity', label: 'AI Questions' },
+            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan' },
         ]
     },
     {
         title: 'Resources',
         items: [
-            { href: '/resources', icon: FolderOpen, label: 'Resources' },
-            { href: '/textbooks', icon: BookOpen, label: 'Textbooks' },
-            { href: '/trends', icon: TrendingUp, label: 'Exam Trends' },
-            { href: '/upload', icon: Upload, label: 'Upload & Train', adminOnly: true },
+            { href: '/resources', iconName: 'resources-folder', label: 'Resources' },
+            { href: '/textbooks', iconName: 'textbooks-open-book', label: 'Textbooks' },
+            { href: '/trends', iconName: 'trends-graph', label: 'Exam Trends' },
+            { href: '/upload', iconName: 'upload-train', label: 'Upload & Train', adminOnly: true },
         ]
     },
     {
         title: 'Account',
         items: [
-            { href: '/analytics', icon: BarChart3, label: 'Analytics' },
-            { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
-            { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
-            { href: '/feedback', icon: MessageSquare, label: 'Feedback' },
+            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics' },
+            { href: '/leaderboard', iconName: 'leaderboard-trophy', label: 'Leaderboard' },
+            { href: '/bookmarks', iconName: 'bookmarks-ribbon', label: 'Bookmarks' },
+            { href: '/feedback', iconName: 'feedback-chat', label: 'Feedback' },
         ]
     },
 ];
@@ -126,7 +121,7 @@ export default function Sidebar() {
                     <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
                         <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
-                            <Stethoscope className="w-3 h-3" />
+                            <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
                             Real Exam Workflow
                         </div>
                     </div>
@@ -147,7 +142,12 @@ export default function Sidebar() {
                                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                                         return (
                                             <Link key={item.href} href={item.href} onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${isActive ? 'active' : ''}`}>
-                                                <item.icon className="w-[18px] h-[18px] shrink-0" />
+                                                <CustomIcon
+                                                    name={item.iconName}
+                                                    label={item.label}
+                                                    className="w-[18px] h-[18px] shrink-0"
+                                                    variant={isActive ? 'active' : 'default'}
+                                                />
                                                 <span className="sidebar-label text-sm">{item.label}</span>
                                             </Link>
                                         );
@@ -162,7 +162,7 @@ export default function Sidebar() {
                                 <div className="section-title sidebar-section-title mb-2">Admin</div>
                                 <div className="space-y-0.5">
                                     <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
-                                        <Shield className="w-[18px] h-[18px] shrink-0" />
+                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-[18px] h-[18px] shrink-0" variant={pathname?.startsWith('/admin') ? 'active' : 'default'} />
                                         <span className="sidebar-label text-sm">Admin Panel</span>
                                     </Link>
                                 </div>
@@ -179,7 +179,7 @@ export default function Sidebar() {
                         <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Take one timed test daily and review your top 3 weak tags.</p>
                     </div>
                     <button onClick={handleLogout} className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <LogOut className="w-[18px] h-[18px]" />
+                        <CustomIcon name="logout-exit" label="Sign Out" className="w-[18px] h-[18px]" variant="active" />
                         <span className="sidebar-label text-sm">Sign Out</span>
                     </button>
                 </div>

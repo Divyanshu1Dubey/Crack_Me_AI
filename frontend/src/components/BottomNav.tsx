@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, FileText, Brain, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CustomIcon from '@/components/CustomIcon';
 
 const items = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
-  { href: '/questions', icon: BookOpen, label: 'Questions' },
-  { href: '/tests', icon: FileText, label: 'Tests' },
-  { href: '/ai-tutor', icon: Brain, label: 'AI Tutor' },
-  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/dashboard', iconName: 'dashboard-layout', label: 'Home' },
+  { href: '/questions', iconName: 'question-bank-book', label: 'Questions' },
+  { href: '/tests', iconName: 'tests-check', label: 'Tests' },
+  { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor' },
+  { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics' },
 ];
 
 export default function BottomNav() {
@@ -30,7 +30,12 @@ export default function BottomNav() {
                 isActive ? "bg-primary/10 text-primary" : "text-muted-foreground"
               )}
             >
-              <item.icon className={cn("w-5 h-5", isActive && "stroke-[2.5]")} />
+              <CustomIcon
+                name={item.iconName}
+                label={item.label}
+                className="w-5 h-5"
+                variant={isActive ? 'active' : 'subtle'}
+              />
               <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           );

@@ -7,42 +7,18 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
-    ArrowRight, Award, BookOpen, Brain,
+    ArrowRight, Award, BookOpen,
     Calendar, CheckCircle2, Clock, FileText, Flame,
-    HeartPulse, Sparkles, Stethoscope, Target, TrendingUp, Zap
+    HeartPulse
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-
-interface DashboardData {
-    overall: {
-        total_tests: number;
-        avg_score: number;
-        total_questions: number;
-        total_correct: number;
-        total_incorrect: number;
-        overall_accuracy: number;
-        total_time_hours: number;
-    };
-    subject_performance: Array<{
-        subject: string;
-        code: string;
-        color: string;
-        total_attempts: number;
-        correct: number;
-        accuracy: number;
-    }>;
-}
-
-interface QuestionStats {
-    total: number;
-    by_subject: Array<{ name: string; code: string; count: number }>;
-    by_difficulty: Array<{ difficulty: string; count: number }>;
-}
+import CustomIcon from '@/components/CustomIcon';
 
 interface HeatmapDay {
     date: string;
@@ -50,15 +26,6 @@ interface HeatmapDay {
     correct_answers: number;
     time_spent_minutes: number;
     tests_completed: number;
-}
-
-interface StudyStreakData {
-    username: string;
-    current_streak: number;
-    longest_streak: number;
-    total_study_days: number;
-    xp_points: number;
-    last_activity_date: string | null;
 }
 
 // SWR fetchers with caching
@@ -69,10 +36,10 @@ const streakFetcher = () => analyticsAPI.getStreak().then(r => r.data).catch(() 
 
 // Static data moved outside component to prevent re-renders
 const QUICK_ACTIONS = [
-    { label: 'Practice Questions', icon: BookOpen, href: '/questions', color: 'text-sky-700 dark:text-sky-300', bg: 'bg-sky-100 dark:bg-sky-500/15' },
-    { label: 'Take Mock Test', icon: FileText, href: '/tests', color: 'text-cyan-700 dark:text-cyan-300', bg: 'bg-cyan-100 dark:bg-cyan-500/15' },
-    { label: 'AI Study Assistant', icon: Brain, href: '/ai-tutor', color: 'text-indigo-700 dark:text-indigo-300', bg: 'bg-indigo-100 dark:bg-indigo-500/15' },
-    { label: 'CMS Simulator', icon: Target, href: '/simulator', color: 'text-violet-700 dark:text-violet-300', bg: 'bg-violet-100 dark:bg-violet-500/15' },
+    { label: 'Practice Questions', iconName: 'question-bank-book', href: '/questions', bg: 'bg-sky-100 dark:bg-sky-500/15' },
+    { label: 'Take Mock Test', iconName: 'tests-check', href: '/tests', bg: 'bg-cyan-100 dark:bg-cyan-500/15' },
+    { label: 'AI Study Assistant', iconName: 'ai-tutor-brain', href: '/ai-tutor', bg: 'bg-indigo-100 dark:bg-indigo-500/15' },
+    { label: 'CMS Simulator', iconName: 'simulator-target', href: '/simulator', bg: 'bg-violet-100 dark:bg-violet-500/15' },
 ] as const;
 
 const CAMPUS_MOMENTUM = [
@@ -267,15 +234,15 @@ export default function DashboardPage() {
                 <div className="page-container space-y-6 pb-8">
                     {/* Hero */}
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
-                        <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
-                            <img src="/dashboard_hero.png" alt="Medical Hero" className="h-full w-full object-cover object-left" />
+                        <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block relative">
+                            <Image src="/dashboard_hero.png" alt="Medical Hero" fill sizes="(min-width: 768px) 33vw, 0px" className="object-cover object-left" />
                             <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-transparent"></div>
                         </div>
                         <CardContent className="p-0 relative z-10">
                             <div className="grid md:grid-cols-3">
                                 <div className="md:col-span-2 p-6 md:p-8">
                                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium mb-4 text-blue-200">
-                                        <Stethoscope className="w-3.5 h-3.5" />
+                                        <CustomIcon name="medical-stethoscope" label="Medical" className="w-3.5 h-3.5" variant="active" />
                                         UPSC CMS Prep Dashboard
                                     </div>
                                     <h1 className="text-2xl md:text-3xl font-bold mb-2">
@@ -317,15 +284,15 @@ export default function DashboardPage() {
                     {/* KPI Strip */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                            { icon: FileText, value: overall.total_tests, label: 'Tests Completed', accent: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-                            { icon: Target, value: `${overall.total_questions}`, label: 'Questions Solved', accent: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-                            { icon: Clock, value: `${overall.total_time_hours}h`, label: 'Study Time', accent: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-                            { icon: Zap, value: `${streak?.xp_points || 0}`, label: 'XP Points', accent: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            { iconName: 'tests-check', value: overall.total_tests, label: 'Tests Completed', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            { iconName: 'question-bank-book', value: `${overall.total_questions}`, label: 'Questions Solved', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            { iconName: 'dashboard-layout', value: `${overall.total_time_hours}h`, label: 'Study Time', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            { iconName: 'ai-questions-creativity', value: `${streak?.xp_points || 0}`, label: 'XP Points', bg: 'bg-blue-100 dark:bg-blue-900/40' },
                         ].map((metric, i) => (
                             <Card key={i} className="shadow-sm">
                                 <CardContent className="p-5">
                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${metric.bg}`}>
-                                        <metric.icon className={`w-5 h-5 ${metric.accent}`} />
+                                        <CustomIcon name={metric.iconName} label={metric.label} className="w-5 h-5" variant="active" />
                                     </div>
                                     <p className="text-2xl font-bold text-foreground leading-none">{metric.value}</p>
                                     <p className="text-xs text-muted-foreground mt-2">{metric.label}</p>
@@ -476,7 +443,7 @@ export default function DashboardPage() {
                             <Card className="shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-sky-600 dark:text-sky-300" />
+                                        <CustomIcon name="ai-questions-creativity" label="Quick Actions" className="w-4 h-4" variant="active" />
                                         Quick Actions
                                     </CardTitle>
                                 </CardHeader>
@@ -486,7 +453,7 @@ export default function DashboardPage() {
                                             <div className="rounded-xl border border-border p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${action.bg}`}>
-                                                        <action.icon className={`w-5 h-5 ${action.color}`} />
+                                                        <CustomIcon name={action.iconName} label={action.label} className="w-5 h-5" variant="active" />
                                                     </div>
                                                     <p className="text-sm font-medium text-foreground">{action.label}</p>
                                                 </div>
@@ -531,7 +498,7 @@ export default function DashboardPage() {
                             <Card className="shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                        <TrendingUp className="w-4 h-4 text-cyan-600 dark:text-cyan-300" />
+                                        <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
                                         Question Bank
                                     </CardTitle>
                                 </CardHeader>
@@ -565,7 +532,7 @@ export default function DashboardPage() {
                             <Card className="shadow-sm border-border">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
-                                        <Stethoscope className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                        <CustomIcon name="medical-stethoscope" label="Community" className="w-4 h-4" variant="active" />
                                         Community
                                     </CardTitle>
                                     <CardDescription>

@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import BackendWarmup from "@/components/BackendWarmup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
+import TrafficAnalytics from "@/components/TrafficAnalytics";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
 const siteTitle = "CrackCMS | UPSC CMS Preparation Platform";
@@ -92,6 +93,7 @@ export default function RootLayout({
           <TooltipProvider>
             <AuthProvider>
               <DatadogInit />
+              <TrafficAnalytics />
               <BackendWarmup />
               {children}
             </AuthProvider>

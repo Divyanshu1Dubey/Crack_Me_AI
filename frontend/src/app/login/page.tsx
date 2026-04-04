@@ -23,8 +23,9 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
         try {
-            await login(username, password);
-            router.push('/dashboard');
+            const signedInUser = await login(username, password);
+            const hasAdminAccess = signedInUser.role === 'admin' || signedInUser.is_admin;
+            router.push(hasAdminAccess ? '/admin' : '/dashboard');
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string; detail?: string } } };
             setError(error.response?.data?.error || error.response?.data?.detail || 'Invalid username or password');
@@ -100,13 +101,6 @@ export default function LoginPage() {
                 Don&apos;t have an account?{' '}
                 <Link href="/register" className="font-semibold text-primary hover:underline">
                     Create one <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
-                </Link>
-            </p>
-
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-                Admin?{' '}
-                <Link href="/admin/login" className="font-semibold text-primary hover:underline">
-                    Sign in to admin panel
                 </Link>
             </p>
         </AuthShell>

@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret-scan
+        entry: python scripts/scan_secrets.py
+        language: system
+        types: [text]
+        pass_filenames: true

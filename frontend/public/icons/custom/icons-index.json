@@ -1,0 +1,173 @@
+[
+  {
+    "name": "dashboard-layout",
+    "file": "public/icons/custom/dashboard-layout.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Primary dashboard icon",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=sUJRwjfnGwbJ&format=png&size=96"
+  },
+  {
+    "name": "question-bank-book",
+    "file": "public/icons/custom/question-bank-book.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Question bank and practice",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=USDB4kOBYpjy&format=png&size=96"
+  },
+  {
+    "name": "tests-check",
+    "file": "public/icons/custom/tests-check.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Tests and mock exams",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=LJ10Qr4TD9Y8&format=png&size=96"
+  },
+  {
+    "name": "ai-tutor-brain",
+    "file": "public/icons/custom/ai-tutor-brain.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "AI Tutor",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=48ZviuvM0OBW&format=png&size=96"
+  },
+  {
+    "name": "analytics-growth",
+    "file": "public/icons/custom/analytics-growth.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Analytics and performance",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=Vs8FQuITsdID&format=png&size=96"
+  },
+  {
+    "name": "simulator-target",
+    "file": "public/icons/custom/simulator-target.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "CMS simulator",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=AYFSAzltJPA5&format=png&size=96"
+  },
+  {
+    "name": "flashcards-cards",
+    "file": "public/icons/custom/flashcards-cards.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Flashcards",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=kqIrCRMjYhJI&format=png&size=96"
+  },
+  {
+    "name": "study-roadmap-map",
+    "file": "public/icons/custom/study-roadmap-map.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Roadmap and plans",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=46SSz0tLEkrY&format=png&size=96"
+  },
+  {
+    "name": "resources-folder",
+    "file": "public/icons/custom/resources-folder.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Resources hub",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=FVQqbNWLzhcc&format=png&size=96"
+  },
+  {
+    "name": "textbooks-open-book",
+    "file": "public/icons/custom/textbooks-open-book.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Textbook library",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=V8Llcp5r9iZW&format=png&size=96"
+  },
+  {
+    "name": "trends-graph",
+    "file": "public/icons/custom/trends-graph.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Exam trends",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=rjMOGEY1NKlC&format=png&size=96"
+  },
+  {
+    "name": "upload-train",
+    "file": "public/icons/custom/upload-train.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Upload and train",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=tWt9XCfjK1WM&format=png&size=96"
+  },
+  {
+    "name": "leaderboard-trophy",
+    "file": "public/icons/custom/leaderboard-trophy.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Leaderboard",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=6YtrB5VnlPqY&format=png&size=96"
+  },
+  {
+    "name": "bookmarks-ribbon",
+    "file": "public/icons/custom/bookmarks-ribbon.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Bookmarks",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=RvKp6z6EcIsB&format=png&size=96"
+  },
+  {
+    "name": "feedback-chat",
+    "file": "public/icons/custom/feedback-chat.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Feedback and discussion",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=d7iUgF8ZrDaO&format=png&size=96"
+  },
+  {
+    "name": "admin-shield",
+    "file": "public/icons/custom/admin-shield.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Admin panel",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=vy6OvJYHSJ8I&format=png&size=96"
+  },
+  {
+    "name": "logout-exit",
+    "file": "public/icons/custom/logout-exit.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Sign out",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=Q1xkcFuVON39&format=png&size=96"
+  },
+  {
+    "name": "ai-questions-creativity",
+    "file": "public/icons/custom/ai-questions-creativity.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "AI question generation",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=SXMFKPRknUmu&format=png&size=96"
+  },
+  {
+    "name": "medical-stethoscope",
+    "file": "public/icons/custom/medical-stethoscope.png",
+    "source": "icons8",
+    "style": "line",
+    "notes": "Medical branding accent",
+    "contentType": "image/png",
+    "url": "https://img.icons8.com/?id=Fesz0ul6rbTy&format=png&size=96"
+  }
+]

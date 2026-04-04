@@ -1,9 +1,135 @@
 [
   {
-    "name": "dashboard-analytics",
-    "url": "https://example.com/icon.svg",
+    "name": "dashboard-layout",
+    "url": "https://img.icons8.com/?id=sUJRwjfnGwbJ&format=png&size=96",
     "style": "line",
     "source": "icons8",
-    "notes": "Replace with your real Iconscout/Icons8 URL"
+    "notes": "Primary dashboard icon"
+  },
+  {
+    "name": "question-bank-book",
+    "url": "https://img.icons8.com/?id=USDB4kOBYpjy&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Question bank and practice"
+  },
+  {
+    "name": "tests-check",
+    "url": "https://img.icons8.com/?id=LJ10Qr4TD9Y8&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Tests and mock exams"
+  },
+  {
+    "name": "ai-tutor-brain",
+    "url": "https://img.icons8.com/?id=48ZviuvM0OBW&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "AI Tutor"
+  },
+  {
+    "name": "analytics-growth",
+    "url": "https://img.icons8.com/?id=Vs8FQuITsdID&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Analytics and performance"
+  },
+  {
+    "name": "simulator-target",
+    "url": "https://img.icons8.com/?id=AYFSAzltJPA5&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "CMS simulator"
+  },
+  {
+    "name": "flashcards-cards",
+    "url": "https://img.icons8.com/?id=kqIrCRMjYhJI&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Flashcards"
+  },
+  {
+    "name": "study-roadmap-map",
+    "url": "https://img.icons8.com/?id=46SSz0tLEkrY&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Roadmap and plans"
+  },
+  {
+    "name": "resources-folder",
+    "url": "https://img.icons8.com/?id=FVQqbNWLzhcc&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Resources hub"
+  },
+  {
+    "name": "textbooks-open-book",
+    "url": "https://img.icons8.com/?id=V8Llcp5r9iZW&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Textbook library"
+  },
+  {
+    "name": "trends-graph",
+    "url": "https://img.icons8.com/?id=rjMOGEY1NKlC&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Exam trends"
+  },
+  {
+    "name": "upload-train",
+    "url": "https://img.icons8.com/?id=tWt9XCfjK1WM&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Upload and train"
+  },
+  {
+    "name": "leaderboard-trophy",
+    "url": "https://img.icons8.com/?id=6YtrB5VnlPqY&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Leaderboard"
+  },
+  {
+    "name": "bookmarks-ribbon",
+    "url": "https://img.icons8.com/?id=RvKp6z6EcIsB&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Bookmarks"
+  },
+  {
+    "name": "feedback-chat",
+    "url": "https://img.icons8.com/?id=d7iUgF8ZrDaO&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Feedback and discussion"
+  },
+  {
+    "name": "admin-shield",
+    "url": "https://img.icons8.com/?id=vy6OvJYHSJ8I&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Admin panel"
+  },
+  {
+    "name": "logout-exit",
+    "url": "https://img.icons8.com/?id=Q1xkcFuVON39&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Sign out"
+  },
+  {
+    "name": "ai-questions-creativity",
+    "url": "https://img.icons8.com/?id=SXMFKPRknUmu&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "AI question generation"
+  },
+  {
+    "name": "medical-stethoscope",
+    "url": "https://img.icons8.com/?id=Fesz0ul6rbTy&format=png&size=96",
+    "style": "line",
+    "source": "icons8",
+    "notes": "Medical branding accent"
   }
 ]

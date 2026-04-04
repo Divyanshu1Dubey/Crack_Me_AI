@@ -144,9 +144,6 @@ export default function LandingPage() {
                 <Button variant="ghost" asChild className="hidden sm:inline-flex">
                   <Link href="/login">Log in</Link>
                 </Button>
-                <Button variant="ghost" asChild className="hidden lg:inline-flex text-muted-foreground">
-                  <Link href="/admin/login">Admin</Link>
-                </Button>
                 <Button asChild className="rounded-xl">
                   <Link href="/register">Start Free <ChevronRight className="w-4 h-4" /></Link>
                 </Button>
@@ -162,7 +159,7 @@ export default function LandingPage() {
           <div className="lg:col-span-7">
             <Badge variant="secondary" className="mb-5 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.11em]">
               <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Secure account recovery. Smart study system.
+                Doctor-first prep. Smart study system.
             </Badge>
 
             <h1 className="text-4xl font-bold leading-[1.02] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
@@ -211,7 +208,7 @@ export default function LandingPage() {
                 <div className="space-y-3">
                   {[
                     { label: 'Today Target', value: '30 question sprint' },
-                    { label: 'Recovery Flow', value: 'SMTP-backed password reset' },
+                    { label: 'Adaptive Drills', value: 'Topic-weighted practice loops' },
                     { label: 'AI Routing', value: '10 configured providers with fallback order' },
                   ].map((item) => (
                     <div key={item.label} className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-sm">
@@ -226,7 +223,7 @@ export default function LandingPage() {
                     Clinical Exam Cockpit
                   </div>
                   <p className="mt-2 text-sm text-white/88">
-                    One place for question practice, mocks, AI explanations, analytics, and account recovery that does not look bolted on.
+                    One place for question practice, mocks, AI explanations, and analytics with a workflow that stays exam-focused.
                   </p>
                 </div>
               </CardContent>
