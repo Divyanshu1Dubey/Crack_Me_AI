@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -12,6 +13,10 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
 const siteTitle = "CrackCMS | UPSC CMS Preparation Platform";
 const siteDescription =
   "Doctor-first UPSC CMS preparation platform with PYQs, AI tutoring, analytics, and adaptive test workflows for serious medical aspirants.";
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-SW77S58LX0";
+const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
+const shouldInjectGoogleTag =
+  Boolean(gaMeasurementId) && (process.env.NODE_ENV === "production" || analyticsInDev);
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -88,6 +93,26 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {shouldInjectGoogleTag && (
+          <>
+            <Script
+              id="google-tag-src"
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="beforeInteractive"
+            />
+            <Script id="google-tag-inline" strategy="beforeInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                window.gtag = window.gtag || gtag;
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}', { send_page_view: false });
+              `}
+            </Script>
+          </>
+        )}
+      </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem>
           <TooltipProvider>
