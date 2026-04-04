@@ -1,3 +1,9 @@
+import logging
+from pathlib import Path
+from threading import Lock
+
+from django.conf import settings
+from django.core.management import call_command
 from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -10,6 +16,30 @@ from .serializers import (
     QuestionFeedbackSerializer, DiscussionSerializer,
     NoteSerializer, FlashcardSerializer
 )
+
+
+logger = logging.getLogger(__name__)
+_QUESTION_BOOTSTRAP_LOCK = Lock()
+
+
+def _ensure_question_bank_loaded():
+    """Load fixture once if question bank is empty in a fresh deployment."""
+    if Question.objects.filter(is_active=True).exists():
+        return
+
+    fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
+    if not fixture_path.exists():
+        return
+
+    with _QUESTION_BOOTSTRAP_LOCK:
+        if Question.objects.filter(is_active=True).exists():
+            return
+        logger.warning('Question bank empty. Bootstrapping from fixture: %s', fixture_path)
+        try:
+            call_command('loaddata', str(fixture_path), verbosity=0)
+            logger.info('Question bank bootstrap complete. Active questions=%s', Question.objects.filter(is_active=True).count())
+        except Exception:
+            logger.exception('Question bank bootstrap failed')
 
 
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
@@ -33,6 +63,10 @@ class QuestionViewSet(viewsets.ModelViewSet):
     filterset_fields = ['year', 'subject', 'topic', 'difficulty', 'exam_source']
     search_fields = ['question_text', 'explanation', 'concept_tags']
     ordering_fields = ['year', 'difficulty', 'created_at']
+
+    def list(self, request, *args, **kwargs):
+        _ensure_question_bank_loaded()
+        return super().list(request, *args, **kwargs)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -82,12 +116,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='years')
     def available_years(self, request):
         """Return list of available PYQ years."""
+        _ensure_question_bank_loaded()
         years = Question.objects.values_list('year', flat=True).distinct().order_by('-year')
         return Response(list(years))
 
     @action(detail=False, methods=['get'], url_path='stats')
     def question_stats(self, request):
         """Return question count statistics by subject, year, difficulty."""
+        _ensure_question_bank_loaded()
         from django.db.models import Count
         stats = {
             'total': Question.objects.filter(is_active=True).count(),
