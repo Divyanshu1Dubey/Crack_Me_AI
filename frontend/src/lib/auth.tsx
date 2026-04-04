@@ -24,11 +24,13 @@ interface User {
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (username: string, password: string) => Promise<User>;
+    login: (identifier: string, password: string) => Promise<User>;
+    loginWithGoogle: () => Promise<void>;
     register: (data: Record<string, string>) => Promise<void>;
     logout: () => void;
     refreshProfile: () => Promise<void>;
     isAuthenticated: boolean;
+    isSupabaseAuth: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,10 +39,14 @@ const AuthContext = createContext<AuthContextType>({
     login: async () => {
         throw new Error('AuthProvider is not mounted');
     },
+    loginWithGoogle: async () => {
+        throw new Error('AuthProvider is not mounted');
+    },
     register: async () => { },
     logout: () => { },
     refreshProfile: async () => { },
     isAuthenticated: false,
+    isSupabaseAuth: false,
 });
 
 const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
@@ -110,20 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    const login = async (username: string, password: string) => {
+    const login = async (identifier: string, password: string) => {
         if (SUPABASE_AUTH_ENABLED) {
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
                 throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
             }
 
-            const identifier = username.trim();
-            if (!identifier.includes('@')) {
-                throw new Error('Use your email to sign in while Supabase auth is enabled.');
+            const email = identifier.trim();
+            if (!email.includes('@')) {
+                throw new Error('Enter your email address to sign in.');
             }
 
             const { data, error } = await supabase.auth.signInWithPassword({
-                email: identifier,
+                email,
                 password,
             });
 
@@ -137,11 +143,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return mapped;
         }
 
-        const { data } = await authAPI.login({ username, password });
+        const { data } = await authAPI.login({ username: identifier, password });
         localStorage.setItem('access_token', data.tokens.access);
         localStorage.setItem('refresh_token', data.tokens.refresh);
         setUser(data.user);
         return data.user;
+    };
+
+    const loginWithGoogle = async () => {
+        if (!SUPABASE_AUTH_ENABLED) {
+            throw new Error('Google sign-in is available when Supabase auth is enabled.');
+        }
+
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+            throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        }
+
+        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined;
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo },
+        });
+        if (error) {
+            throw new Error(error.message || 'Google sign-in failed');
+        }
     };
 
     const register = async (formData: Record<string, string>) => {
@@ -213,10 +239,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user,
             loading,
             login,
+            loginWithGoogle,
             register,
             logout,
             refreshProfile,
             isAuthenticated: !!user,
+            isSupabaseAuth: SUPABASE_AUTH_ENABLED,
         }}>
             {children}
         </AuthContext.Provider>

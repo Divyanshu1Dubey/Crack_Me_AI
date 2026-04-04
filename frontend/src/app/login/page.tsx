@@ -11,12 +11,12 @@ import { useAuth } from '@/lib/auth';
 import { extractApiErrorMessage } from '@/lib/api';
 
 export default function LoginPage() {
-    const [username, setUsername] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, loginWithGoogle, isSupabaseAuth } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +24,7 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
         try {
-            const signedInUser = await login(username, password);
+            const signedInUser = await login(identifier, password);
             const hasAdminAccess = signedInUser.role === 'admin' || signedInUser.is_admin;
             router.push(hasAdminAccess ? '/admin' : '/dashboard');
         } catch (err: unknown) {
@@ -42,6 +42,22 @@ export default function LoginPage() {
                 return;
             }
             setError('Invalid username or password');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        setError('');
+        setLoading(true);
+        try {
+            await loginWithGoogle();
+        } catch (err: unknown) {
+            if (err instanceof Error && err.message) {
+                setError(err.message);
+            } else {
+                setError('Google sign-in failed. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -66,13 +82,15 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">Username</label>
+                    <label className="mb-2 block text-sm font-semibold text-foreground">
+                        {isSupabaseAuth ? 'Email' : 'Username'}
+                    </label>
                     <Input
-                        type="text"
-                        name="username"
-                        placeholder="Enter your username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        type={isSupabaseAuth ? 'email' : 'text'}
+                        name="identifier"
+                        placeholder={isSupabaseAuth ? 'Enter your email' : 'Enter your username'}
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
                         required
                     />
                 </div>
@@ -108,6 +126,12 @@ export default function LoginPage() {
                 <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
                     {loading ? 'Signing in...' : (<><LogIn className="w-5 h-5" /> Sign In</>)}
                 </Button>
+
+                {isSupabaseAuth && (
+                    <Button type="button" variant="outline" className="w-full rounded-2xl" size="lg" onClick={handleGoogleSignIn} disabled={loading}>
+                        Continue with Google
+                    </Button>
+                )}
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
