@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import Script from "next/script";
+import { Suspense } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -118,7 +119,9 @@ export default function RootLayout({
           <TooltipProvider>
             <AuthProvider>
               <DatadogInit />
-              <TrafficAnalytics />
+              <Suspense fallback={null}>
+                <TrafficAnalytics />
+              </Suspense>
               <BackendWarmup />
               {children}
             </AuthProvider>
