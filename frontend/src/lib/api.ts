@@ -13,6 +13,7 @@
  */
 import axios from 'axios';
 
+const USE_API_PROXY = (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'true') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
 const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
 const LEGACY_UNHEALTHY_API_HOSTS = ['crackcms-vsthc.ondigitalocean.app'];
@@ -26,6 +27,10 @@ const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
 
 const resolveApiBaseUrl = () => {
+  if (USE_API_PROXY) {
+    return '/api/proxy';
+  }
+
   const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
   if (configured) {
     const normalized = normalizeApiBaseUrl(configured);
@@ -43,9 +48,9 @@ const resolveApiBaseUrl = () => {
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
-const FALLBACK_API_BASE_URL = normalizeApiBaseUrl(
-  (process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim()
-);
+const FALLBACK_API_BASE_URL = USE_API_PROXY
+  ? API_BASE_URL
+  : normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -79,6 +84,7 @@ api.interceptors.response.use(
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
 
     const shouldFailover =
+      !USE_API_PROXY &&
       !originalRequest._apiBaseFailover &&
       currentBaseUrl !== FALLBACK_API_BASE_URL &&
       (status === 502 || status === 503 || status === 504);

@@ -41,6 +41,10 @@ export default function RegisterPage() {
                 return;
             }
             if (err instanceof Error && err.message) {
+                if (err.message.toLowerCase().includes('network error')) {
+                    setError('Unable to reach authentication server. Please try again in 30-60 seconds.');
+                    return;
+                }
                 setError(err.message);
                 return;
             }
