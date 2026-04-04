@@ -35,12 +35,16 @@ export default function RegisterPage() {
             await register(form);
             router.push('/dashboard');
         } catch (err: unknown) {
+            const error = err as { response?: { data?: unknown } };
+            if (error.response?.data) {
+                setError(extractApiErrorMessage(error.response.data, 'Registration failed'));
+                return;
+            }
             if (err instanceof Error && err.message) {
                 setError(err.message);
                 return;
             }
-            const error = err as { response?: { data?: unknown } };
-            setError(extractApiErrorMessage(error.response?.data, 'Registration failed'));
+            setError('Registration failed');
         } finally {
             setLoading(false);
         }
@@ -95,6 +99,7 @@ export default function RegisterPage() {
                         placeholder="Choose a username"
                         value={form.username}
                         onChange={handleChange}
+                        minLength={3}
                         required
                     />
                 </div>
