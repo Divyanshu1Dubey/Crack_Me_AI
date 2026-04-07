@@ -3,6 +3,7 @@
 
 [bandit]
 # Python security linter - SAST scanning
+
 # Install: pip install bandit
 # Run: bandit -r backend/ -c .bandit.yml
 skips = B101,B601
