@@ -1,6 +1,7 @@
 # Security Scanning Configuration
 # Run these tools to check for vulnerabilities
 
+
 [bandit]
 # Python security linter - SAST scanning
 
