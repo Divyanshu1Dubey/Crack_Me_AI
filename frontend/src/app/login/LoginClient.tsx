@@ -19,7 +19,7 @@ export default function LoginClient() {
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | ''>('');
     const [magicLoading, setMagicLoading] = useState(false);
-    const { login, isSupabaseAuth, magicLinkLogin, oauthLogin } = useAuth();
+    const { login, magicLinkLogin, oauthLogin } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const authErrorFromCallback = (searchParams.get('authError') || '').trim();
@@ -84,12 +84,12 @@ export default function LoginClient() {
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-foreground">
-                        {isSupabaseAuth ? 'Email' : 'Username'}
+                        Email
                     </label>
                     <Input
-                        type={isSupabaseAuth ? 'email' : 'text'}
+                        type="email"
                         name="identifier"
-                        placeholder={isSupabaseAuth ? 'Enter your email' : 'Enter your username'}
+                        placeholder="Enter your email"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         required
@@ -128,80 +128,76 @@ export default function LoginClient() {
                     {loading ? 'Signing in...' : (<><LogIn className="w-5 h-5" /> Sign In</>)}
                 </Button>
 
-                {isSupabaseAuth && (
-                    <>
-                        <div className="relative py-1">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t border-border" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-card px-2 text-muted-foreground">or continue with</span>
-                            </div>
-                        </div>
+                <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">or continue with</span>
+                    </div>
+                </div>
 
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full rounded-2xl"
-                            disabled={magicLoading}
-                            onClick={async () => {
-                                setError('');
-                                setMagicLinkSent(false);
-                                setMagicLoading(true);
-                                try {
-                                    await magicLinkLogin(identifier);
-                                    setMagicLinkSent(true);
-                                } catch (err: unknown) {
-                                    setError(err instanceof Error ? err.message : 'Unable to send magic link.');
-                                } finally {
-                                    setMagicLoading(false);
-                                }
-                            }}
-                        >
-                            {magicLoading ? 'Sending magic link...' : (<><Mail className="w-4 h-4" /> Send Magic Link</>)}
-                        </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full rounded-2xl"
+                    disabled={magicLoading}
+                    onClick={async () => {
+                        setError('');
+                        setMagicLinkSent(false);
+                        setMagicLoading(true);
+                        try {
+                            await magicLinkLogin(identifier);
+                            setMagicLinkSent(true);
+                        } catch (err: unknown) {
+                            setError(err instanceof Error ? err.message : 'Unable to send magic link.');
+                        } finally {
+                            setMagicLoading(false);
+                        }
+                    }}
+                >
+                    {magicLoading ? 'Sending magic link...' : (<><Mail className="w-4 h-4" /> Send Magic Link</>)}
+                </Button>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="rounded-2xl"
-                                disabled={oauthLoading !== ''}
-                                onClick={async () => {
-                                    setError('');
-                                    setOauthLoading('google');
-                                    try {
-                                        await oauthLogin('google');
-                                    } catch (err: unknown) {
-                                        setError(err instanceof Error ? err.message : 'Google sign-in failed.');
-                                        setOauthLoading('');
-                                    }
-                                }}
-                            >
-                                {oauthLoading === 'google' ? 'Redirecting...' : 'Google'}
-                            </Button>
+                <div className="grid grid-cols-2 gap-3">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl"
+                        disabled={oauthLoading !== ''}
+                        onClick={async () => {
+                            setError('');
+                            setOauthLoading('google');
+                            try {
+                                await oauthLogin('google');
+                            } catch (err: unknown) {
+                                setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+                                setOauthLoading('');
+                            }
+                        }}
+                    >
+                        {oauthLoading === 'google' ? 'Redirecting...' : 'Google'}
+                    </Button>
 
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="rounded-2xl"
-                                disabled={oauthLoading !== ''}
-                                onClick={async () => {
-                                    setError('');
-                                    setOauthLoading('github');
-                                    try {
-                                        await oauthLogin('github');
-                                    } catch (err: unknown) {
-                                        setError(err instanceof Error ? err.message : 'GitHub sign-in failed.');
-                                        setOauthLoading('');
-                                    }
-                                }}
-                            >
-                                {oauthLoading === 'github' ? 'Redirecting...' : (<><Github className="w-4 h-4" /> GitHub</>)}
-                            </Button>
-                        </div>
-                    </>
-                )}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl"
+                        disabled={oauthLoading !== ''}
+                        onClick={async () => {
+                            setError('');
+                            setOauthLoading('github');
+                            try {
+                                await oauthLogin('github');
+                            } catch (err: unknown) {
+                                setError(err instanceof Error ? err.message : 'GitHub sign-in failed.');
+                                setOauthLoading('');
+                            }
+                        }}
+                    >
+                        {oauthLoading === 'github' ? 'Redirecting...' : (<><Github className="w-4 h-4" /> GitHub</>)}
+                    </Button>
+                </div>
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">

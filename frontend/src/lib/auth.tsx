@@ -1,7 +1,7 @@
 /**
  * auth.tsx — Authentication context provider for CrackCMS.
  * Provides useAuth() hook with: user, login, register, logout, loading state.
- * Stores JWT tokens in localStorage; auto-refreshes on mount.
+ * Uses Supabase sessions as the single auth source when Supabase is configured.
  * Wraps the entire app via AuthProvider in layout.tsx.
  */
 'use client';
@@ -84,9 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (SUPABASE_AUTH_ENABLED) {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
                 queueMicrotask(() => setLoading(false));
@@ -140,109 +137,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             };
         }
 
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            authAPI.getProfile()
-                .then(res => setUser(res.data))
-                .catch(() => {
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-                })
-                .finally(() => setLoading(false));
-        } else {
-            queueMicrotask(() => setLoading(false));
-        }
+        queueMicrotask(() => setLoading(false));
     }, []);
 
     const login = async (identifier: string, password: string) => {
-        if (SUPABASE_AUTH_ENABLED) {
-            const supabase = getSupabaseBrowserClient();
-            if (!supabase) {
-                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-            }
-
-            const email = identifier.trim();
-            if (!email.includes('@')) {
-                throw new Error('Enter your email address to sign in.');
-            }
-
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-
-            if (error) throw new Error(error.message || 'Login failed');
-
-            const signedInUser = data.user || data.session?.user;
-            if (!signedInUser) throw new Error('Login failed. Please try again.');
-
-            try {
-                const profileRes = await authAPI.getProfile();
-                setUser(profileRes.data);
-                return profileRes.data;
-            } catch {
-                const mapped = mapSupabaseUser(signedInUser);
-                setUser(mapped);
-                return mapped;
-            }
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+            throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
         }
 
-        const { data } = await authAPI.login({ username: identifier, password });
-        const accessToken = data.tokens?.access ?? data.access;
-        const refreshToken = data.tokens?.refresh ?? data.refresh;
-        if (!accessToken || !refreshToken) {
-            throw new Error('Login response did not include tokens.');
+        const email = identifier.trim();
+        if (!email.includes('@')) {
+            throw new Error('Enter your email address to sign in.');
         }
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', refreshToken);
-        setUser(data.user);
-        return data.user;
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) throw new Error(error.message || 'Login failed');
+
+        const signedInUser = data.user || data.session?.user;
+        if (!signedInUser) throw new Error('Login failed. Please try again.');
+
+        try {
+            const profileRes = await authAPI.getProfile();
+            setUser(profileRes.data);
+            return profileRes.data;
+        } catch {
+            const mapped = mapSupabaseUser(signedInUser);
+            setUser(mapped);
+            return mapped;
+        }
     };
 
     const register = async (formData: Record<string, string>) => {
-        if (SUPABASE_AUTH_ENABLED) {
-            const supabase = getSupabaseBrowserClient();
-            if (!supabase) {
-                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-            }
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+            throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        }
 
-            const email = (formData.email || '').trim();
-            const password = formData.password || '';
-            const username = (formData.username || '').trim();
+        const email = (formData.email || '').trim();
+        const password = formData.password || '';
+        const username = (formData.username || '').trim();
 
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        username,
-                        first_name: (formData.first_name || '').trim(),
-                        last_name: (formData.last_name || '').trim(),
-                    },
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    username,
+                    first_name: (formData.first_name || '').trim(),
+                    last_name: (formData.last_name || '').trim(),
                 },
-            });
+            },
+        });
 
-            if (error) throw new Error(error.message || 'Registration failed');
-            if (data.session?.user) {
-                try {
-                    const profileRes = await authAPI.getProfile();
-                    setUser(profileRes.data);
-                } catch {
-                    setUser(mapSupabaseUser(data.session.user));
-                }
+        if (error) throw new Error(error.message || 'Registration failed');
+        if (data.session?.user) {
+            try {
+                const profileRes = await authAPI.getProfile();
+                setUser(profileRes.data);
+            } catch {
+                setUser(mapSupabaseUser(data.session.user));
             }
-            return;
         }
-
-        const { data } = await authAPI.register(formData);
-        const accessToken = data.tokens?.access ?? data.access;
-        const refreshToken = data.tokens?.refresh ?? data.refresh;
-        if (!accessToken || !refreshToken) {
-            throw new Error('Registration response did not include tokens.');
-        }
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', refreshToken);
-        setUser(data.user);
     };
 
     const magicLinkLogin = async (email: string) => {
@@ -289,31 +249,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = () => {
-        if (SUPABASE_AUTH_ENABLED) {
-            const supabase = getSupabaseBrowserClient();
-            supabase?.auth.signOut();
-            setUser(null);
-            return;
-        }
-
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        const supabase = getSupabaseBrowserClient();
+        supabase?.auth.signOut();
         setUser(null);
     };
 
     const refreshProfile = async () => {
-        if (SUPABASE_AUTH_ENABLED) {
-            const supabase = getSupabaseBrowserClient();
-            if (!supabase) return;
-            const { data } = await supabase.auth.getUser();
-            setUser(data.user ? mapSupabaseUser(data.user) : null);
-            return;
-        }
-
-        try {
-            const res = await authAPI.getProfile();
-            setUser(res.data);
-        } catch { /* ignore */ }
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) return;
+        const { data } = await supabase.auth.getUser();
+        setUser(data.user ? mapSupabaseUser(data.user) : null);
     };
 
     return (

@@ -6,28 +6,23 @@ Admin users bypass token limits.
 """
 
 import logging
-from threading import Lock
 
 from django.conf import settings as django_settings
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
-from django.core.management import call_command
-from django.db import DatabaseError
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import TokenBalance, TokenConfig, TokenTransaction
 from .serializers import (
     AdminTokenGrantSerializer,
     AdminTokenTransferSerializer,
     AdminUserTokenSerializer,
-    LoginSerializer,
     RegisterSerializer,
     TokenBalanceSerializer,
     TokenPurchaseSerializer,
@@ -37,94 +32,6 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-_SCHEMA_REPAIR_LOCK = Lock()
-
-
-def _is_schema_db_error(exc):
-    """Detect table/column migration drift errors from SQLite/PostgreSQL."""
-    message = str(exc).lower()
-    hints = (
-        "no such table",
-        "no such column",
-        "relation",
-        "does not exist",
-        "undefined table",
-        "undefined column",
-        "has no column named",
-    )
-    return any(hint in message for hint in hints)
-
-
-def _repair_schema_if_needed(exc):
-    """Run migrations once when auth endpoints hit schema-missing errors."""
-    if not _is_schema_db_error(exc):
-        return False
-
-    if not getattr(django_settings, "ENABLE_RUNTIME_SCHEMA_REPAIR", False):
-        logger.warning(
-            "Schema error detected but runtime repair is disabled. "
-            "Run `python manage.py migrate` on the backend host."
-        )
-        return False
-
-    with _SCHEMA_REPAIR_LOCK:
-        try:
-            logger.warning("Schema error detected in auth flow. Running migrate once.")
-            call_command("migrate", interactive=False, verbosity=0)
-            return True
-        except Exception:
-            logger.exception("Runtime schema repair failed")
-            return False
-
-
-def _fallback_authenticate(identifier, password):
-    """Try case-insensitive username/email auth for valid credentials."""
-    ident = (identifier or "").strip()
-    if not ident or not password:
-        return None
-
-    user = User.objects.filter(username__iexact=ident).first()
-    if user is None and "@" in ident:
-        user = User.objects.filter(email__iexact=ident).first()
-
-    if user and user.is_active and user.check_password(password):
-        return user
-    return None
-
-
-def build_auth_response(user):
-    """Return a backwards-compatible auth payload for frontend and tests."""
-    refresh = RefreshToken.for_user(user)
-    access_token = str(refresh.access_token)
-    refresh_token = str(refresh)
-
-    # Keep login/register response lightweight and independent from token tables.
-    # UserSerializer includes token_info, which can trigger extra DB calls and cause
-    # slow/hanging auth responses on constrained hosted environments.
-    user_payload = {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "phone": getattr(user, "phone", ""),
-        "role": "admin" if user.is_admin else "student",
-        "target_exam": getattr(user, "target_exam", ""),
-        "target_year": getattr(user, "target_year", None),
-        "avatar_url": getattr(user, "avatar_url", ""),
-        "created_at": user.created_at,
-        "is_admin": user.is_admin,
-    }
-
-    return {
-        "user": user_payload,
-        "tokens": {
-            "refresh": refresh_token,
-            "access": access_token,
-        },
-        "refresh": refresh_token,
-        "access": access_token,
-    }
 
 
 def send_password_reset_email(user, reset_link):
@@ -182,78 +89,32 @@ def send_password_reset_email(user, reset_link):
 
 
 class RegisterView(generics.CreateAPIView):
-    """Register a new user account and auto-create token balance."""
+    """Legacy local registration endpoint disabled in favor of Supabase Auth."""
 
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
-        for attempt in range(2):
-            try:
-                serializer = self.get_serializer(data=request.data)
-                serializer.is_valid(raise_exception=True)
-                user = serializer.save()
-                return Response(build_auth_response(user), status=status.HTTP_201_CREATED)
-            except DatabaseError as exc:
-                logger.exception("Register DB error (attempt=%s)", attempt + 1)
-                if attempt == 0 and _repair_schema_if_needed(exc):
-                    continue
-                return Response(
-                    {"error": "Server database is not ready. Please try again in a minute."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
+        return Response(
+            {
+                "error": "Local username/password registration is disabled. Use Supabase Auth to sign up.",
+            },
+            status=status.HTTP_410_GONE,
+        )
 
 
 class LoginView(APIView):
-    """Login with username and password and return JWT tokens."""
+    """Legacy local login endpoint disabled in favor of Supabase Auth."""
 
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        for attempt in range(2):
-            try:
-                serializer = LoginSerializer(data=request.data)
-                serializer.is_valid(raise_exception=True)
-                username_or_email = serializer.validated_data["username"]
-                password = serializer.validated_data["password"]
-
-                # Prefer direct user/password verification to keep login latency predictable
-                # when optional auth backends are slow/unavailable in hosted environments.
-                user = _fallback_authenticate(username_or_email, password)
-
-                if not user:
-                    try:
-                        user = authenticate(
-                            request,
-                            username=username_or_email,
-                            password=password,
-                        )
-                    except Exception:
-                        logger.exception("authenticate() failed unexpectedly during login")
-                        user = None
-
-                if not user:
-                    return Response(
-                        {"error": "Invalid credentials"},
-                        status=status.HTTP_401_UNAUTHORIZED,
-                    )
-
-                try:
-                    TokenBalance.objects.get_or_create(user=user)
-                except DatabaseError as exc:
-                    logger.exception("Token tables unavailable during login for user=%s", user.id)
-                    if attempt == 0 and _repair_schema_if_needed(exc):
-                        continue
-
-                return Response(build_auth_response(user))
-            except DatabaseError as exc:
-                logger.exception("Login DB error (attempt=%s)", attempt + 1)
-                if attempt == 0 and _repair_schema_if_needed(exc):
-                    continue
-                return Response(
-                    {"error": "Server database is not ready. Please try again in a minute."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
+        return Response(
+            {
+                "error": "Local username/password login is disabled. Use Supabase Auth to sign in with email.",
+            },
+            status=status.HTTP_410_GONE,
+        )
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -513,7 +374,7 @@ class PasswordResetRequestView(APIView):
             except Exception as exc:
                 logger.warning("Password reset email failed for user_id=%s: %s", user.pk, exc)
         except User.DoesNotExist:
-            pass
+            logger.info("Password reset requested for unknown email=%s", email)
 
         return Response({"message": "If an account with that email exists, a reset link has been sent."})
 

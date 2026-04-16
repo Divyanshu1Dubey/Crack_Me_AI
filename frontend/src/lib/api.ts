@@ -9,7 +9,7 @@
  *   - textbooksAPI: Textbook index and chapters
  *   - authAPI: Token balance, purchase, transaction history
  * Base URL: NEXT_PUBLIC_API_URL or http://127.0.0.1:8000/api
- * Auth: JWT tokens auto-attached via interceptor from localStorage.
+ * Auth: Supabase access tokens are attached automatically when Supabase is configured.
  */
 import axios from 'axios';
 import { getSupabaseBrowserClient, isSupabaseAuthEnabled } from './supabase';
@@ -94,11 +94,6 @@ api.interceptors.request.use(async (config) => {
           config.headers.Authorization = `Bearer ${supabaseToken}`;
         }
       }
-    } else {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
     }
   }
   return config;
@@ -129,29 +124,6 @@ api.interceptors.response.use(
       return api(originalRequest);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const refreshBaseUrl = originalRequest.baseURL || API_BASE_URL;
-          const { data } = await axios.post(`${refreshBaseUrl}/auth/token/refresh/`, {
-            refresh: refreshToken,
-          });
-          localStorage.setItem('access_token', data.access);
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${data.access}`;
-          }
-          return api(originalRequest);
-        }
-      } catch {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-      }
-    }
     return Promise.reject(error);
   }
 );

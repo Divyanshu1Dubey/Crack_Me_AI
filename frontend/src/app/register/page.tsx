@@ -17,7 +17,7 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | ''>('');
-    const { register, isSupabaseAuth, oauthLogin } = useAuth();
+    const { register, oauthLogin } = useAuth();
     const router = useRouter();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,58 +161,54 @@ export default function RegisterPage() {
                     {loading ? 'Creating account...' : (<><UserPlus className="w-5 h-5" /> Create Account</>)}
                 </Button>
 
-                {isSupabaseAuth && (
-                    <>
-                        <div className="relative py-1">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t border-border" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-card px-2 text-muted-foreground">or continue with</span>
-                            </div>
-                        </div>
+                <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">or continue with</span>
+                    </div>
+                </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="rounded-2xl"
-                                disabled={oauthLoading !== ''}
-                                onClick={async () => {
-                                    setError('');
-                                    setOauthLoading('google');
-                                    try {
-                                        await oauthLogin('google');
-                                    } catch (err: unknown) {
-                                        setError(err instanceof Error ? err.message : 'Google sign-up failed.');
-                                        setOauthLoading('');
-                                    }
-                                }}
-                            >
-                                {oauthLoading === 'google' ? 'Redirecting...' : 'Google'}
-                            </Button>
+                <div className="grid grid-cols-2 gap-3">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl"
+                        disabled={oauthLoading !== ''}
+                        onClick={async () => {
+                            setError('');
+                            setOauthLoading('google');
+                            try {
+                                await oauthLogin('google');
+                            } catch (err: unknown) {
+                                setError(err instanceof Error ? err.message : 'Google sign-up failed.');
+                                setOauthLoading('');
+                            }
+                        }}
+                    >
+                        {oauthLoading === 'google' ? 'Redirecting...' : 'Google'}
+                    </Button>
 
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="rounded-2xl"
-                                disabled={oauthLoading !== ''}
-                                onClick={async () => {
-                                    setError('');
-                                    setOauthLoading('github');
-                                    try {
-                                        await oauthLogin('github');
-                                    } catch (err: unknown) {
-                                        setError(err instanceof Error ? err.message : 'GitHub sign-up failed.');
-                                        setOauthLoading('');
-                                    }
-                                }}
-                            >
-                                {oauthLoading === 'github' ? 'Redirecting...' : (<><Github className="w-4 h-4" /> GitHub</>)}
-                            </Button>
-                        </div>
-                    </>
-                )}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl"
+                        disabled={oauthLoading !== ''}
+                        onClick={async () => {
+                            setError('');
+                            setOauthLoading('github');
+                            try {
+                                await oauthLogin('github');
+                            } catch (err: unknown) {
+                                setError(err instanceof Error ? err.message : 'GitHub sign-up failed.');
+                                setOauthLoading('');
+                            }
+                        }}
+                    >
+                        {oauthLoading === 'github' ? 'Redirecting...' : (<><Github className="w-4 h-4" /> GitHub</>)}
+                    </Button>
+                </div>
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">

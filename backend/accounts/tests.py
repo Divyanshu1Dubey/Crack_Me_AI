@@ -8,7 +8,7 @@ User = get_user_model()
 
 
 class AuthApiTests(TestCase):
-    def test_login_response_keeps_tokens_and_compat_fields(self):
+    def test_login_endpoint_is_disabled_for_legacy_jwt_auth(self):
         username = "compat_user"
         password = "StrongPass123!"
         user = User.objects.create_user(
@@ -23,12 +23,10 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         payload = response.json()
-        self.assertEqual(payload["user"]["id"], user.id)
-        self.assertIn("tokens", payload)
-        self.assertEqual(payload["access"], payload["tokens"]["access"])
-        self.assertEqual(payload["refresh"], payload["tokens"]["refresh"])
+        self.assertIn("error", payload)
+        self.assertIn("Supabase Auth", payload["error"])
 
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
@@ -83,7 +81,7 @@ class AuthApiTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password("NewPass123!"))
 
-    def test_login_accepts_case_insensitive_username(self):
+    def test_login_rejects_case_insensitive_username_for_legacy_flow(self):
         user = User.objects.create_user(
             username="CaseUser",
             email="case@example.com",
@@ -96,11 +94,11 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         payload = response.json()
-        self.assertEqual(payload["user"]["id"], user.id)
+        self.assertIn("error", payload)
 
-    def test_superuser_login_reports_admin_role(self):
+    def test_superuser_login_is_also_disabled(self):
         admin = User.objects.create_superuser(
             username="admincase",
             email="admincase@example.com",
@@ -113,7 +111,6 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         payload = response.json()
-        self.assertEqual(payload["user"]["role"], "admin")
-        self.assertTrue(payload["user"]["is_admin"])
+        self.assertIn("error", payload)
