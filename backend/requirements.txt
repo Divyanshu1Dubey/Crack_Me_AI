@@ -6,6 +6,7 @@ django-filter>=24.0
 Pillow>=10.0
 python-dotenv>=1.0
 dj-database-url>=2.2
+psycopg[binary]>=3.2
 google-generativeai>=0.8
 google-genai>=1.0
 groq>=0.11
