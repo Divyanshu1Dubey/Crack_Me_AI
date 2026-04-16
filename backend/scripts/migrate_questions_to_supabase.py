@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 MANAGE_PY = BACKEND_DIR / "manage.py"
@@ -32,8 +33,18 @@ def validate_supabase_url(database_url: str) -> None:
     lowered = database_url.lower()
     if "[your-password]" in lowered:
         raise ValueError("DATABASE_URL still contains [YOUR-PASSWORD]. Replace it with your real Supabase DB password.")
-    if "db.ryuvcdthjnxyetdyjbph.supabase.co" not in lowered:
-        raise ValueError("Expected Supabase host db.ryuvcdthjnxyetdyjbph.supabase.co in DATABASE_URL.")
+
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise ValueError("DATABASE_URL must use postgres:// or postgresql://")
+
+    host = (parsed.hostname or "").lower()
+    is_supabase_cloud = host.endswith(".supabase.co")
+    is_supabase_local = host in {"127.0.0.1", "localhost"}
+    if not (is_supabase_cloud or is_supabase_local):
+        raise ValueError(
+            "Expected a Supabase host (*.supabase.co) or local Supabase host (127.0.0.1/localhost)."
+        )
 
 
 def main() -> int:
