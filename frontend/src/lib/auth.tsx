@@ -79,9 +79,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             supabase.auth
                 .getSession()
-                .then(({ data }) => {
+                .then(async ({ data }) => {
                     if (!mounted) return;
-                    setUser(data.session?.user ? mapSupabaseUser(data.session.user) : null);
+                    if (!data.session?.user) {
+                        setUser(null);
+                        return;
+                    }
+
+                    try {
+                        const profileRes = await authAPI.getProfile();
+                        if (!mounted) return;
+                        setUser(profileRes.data);
+                    } catch {
+                        setUser(mapSupabaseUser(data.session.user));
+                    }
                 })
                 .finally(() => {
                     if (mounted) setLoading(false);
@@ -89,7 +100,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
                 if (!mounted) return;
-                setUser(session?.user ? mapSupabaseUser(session.user) : null);
+                if (!session?.user) {
+                    setUser(null);
+                    return;
+                }
+
+                authAPI
+                    .getProfile()
+                    .then((profileRes) => {
+                        if (!mounted) return;
+                        setUser(profileRes.data);
+                    })
+                    .catch(() => {
+                        setUser(mapSupabaseUser(session.user));
+                    });
             });
 
             return () => {
@@ -134,9 +158,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const signedInUser = data.user || data.session?.user;
             if (!signedInUser) throw new Error('Login failed. Please try again.');
 
-            const mapped = mapSupabaseUser(signedInUser);
-            setUser(mapped);
-            return mapped;
+            try {
+                const profileRes = await authAPI.getProfile();
+                setUser(profileRes.data);
+                return profileRes.data;
+            } catch {
+                const mapped = mapSupabaseUser(signedInUser);
+                setUser(mapped);
+                return mapped;
+            }
         }
 
         const { data } = await authAPI.login({ username: identifier, password });
@@ -176,7 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (error) throw new Error(error.message || 'Registration failed');
             if (data.session?.user) {
-                setUser(mapSupabaseUser(data.session.user));
+                try {
+                    const profileRes = await authAPI.getProfile();
+                    setUser(profileRes.data);
+                } catch {
+                    setUser(mapSupabaseUser(data.session.user));
+                }
             }
             return;
         }

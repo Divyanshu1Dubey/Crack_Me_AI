@@ -12,6 +12,7 @@
  * Auth: JWT tokens auto-attached via interceptor from localStorage.
  */
 import axios from 'axios';
+import { getSupabaseBrowserClient, isSupabaseAuthEnabled } from './supabase';
 
 const isAppRunningLocally = () => {
   if (typeof window === 'undefined') {
@@ -82,11 +83,20 @@ const api = axios.create({
 });
 
 // Add auth token to requests
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (isSupabaseAuthEnabled()) {
+      const supabase = getSupabaseBrowserClient();
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        const supabaseToken = data.session?.access_token;
+        if (supabaseToken) {
+          config.headers.Authorization = `Bearer ${supabaseToken}`;
+        }
+      }
     }
   }
   return config;

@@ -236,6 +236,7 @@ AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'accounts.supabase_rest_auth.SupabaseJWTAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
