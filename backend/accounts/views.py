@@ -197,14 +197,21 @@ class LoginView(APIView):
                 serializer.is_valid(raise_exception=True)
                 username_or_email = serializer.validated_data["username"]
                 password = serializer.validated_data["password"]
-                user = authenticate(
-                    request,
-                    username=username_or_email,
-                    password=password,
-                )
+
+                # Prefer direct user/password verification to keep login latency predictable
+                # when optional auth backends are slow/unavailable in hosted environments.
+                user = _fallback_authenticate(username_or_email, password)
 
                 if not user:
-                    user = _fallback_authenticate(username_or_email, password)
+                    try:
+                        user = authenticate(
+                            request,
+                            username=username_or_email,
+                            password=password,
+                        )
+                    except Exception:
+                        logger.exception("authenticate() failed unexpectedly during login")
+                        user = None
 
                 if not user:
                     return Response(
