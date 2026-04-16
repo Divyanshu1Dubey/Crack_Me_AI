@@ -5,7 +5,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 Create `frontend/.env.local` with Supabase values before running the app:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://ryuvcdthjnxyetdyjbph.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 ```
 
