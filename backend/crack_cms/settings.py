@@ -8,7 +8,7 @@ from datetime import timedelta
 import dj_database_url
 from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file (does not override existing system/Render env vars)
+load_dotenv()  # Load .env file (does not override existing system env vars)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -242,7 +242,7 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USE
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
-# Logging — ensures API hits and AI errors show up in Render logs
+# Logging — ensures API hits and AI errors show up in production logs
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

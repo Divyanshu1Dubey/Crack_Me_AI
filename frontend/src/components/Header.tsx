@@ -14,7 +14,7 @@ import BrandMark from '@/components/BrandMark';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
-  loading: () => <div className="p-2 w-8.5 h-8.5" />,
+  loading: () => <div className="p-2 w-[34px] h-[34px]" />,
 });
 
 interface TokenInfo {

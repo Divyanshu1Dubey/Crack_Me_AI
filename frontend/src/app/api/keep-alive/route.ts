@@ -1,6 +1,21 @@
 import { NextResponse } from 'next/server';
 
-const BACKEND_URL = 'https://crackcms-vsthc.ondigitalocean.app';
+const DEFAULT_BACKEND_BASE_URL = 'https://crackcms-vsthc.ondigitalocean.app';
+
+const resolveBackendBaseUrl = () => {
+    const configured = (
+        process.env.BACKEND_BASE_URL
+        || process.env.BACKEND_API_URL
+        || process.env.NEXT_PUBLIC_API_URL
+        || ''
+    ).trim();
+
+    if (!configured) return DEFAULT_BACKEND_BASE_URL;
+    const normalized = configured.replace(/\/+$/, '');
+    return normalized.endsWith('/api') ? normalized.slice(0, -4) : normalized;
+};
+
+const BACKEND_URL = resolveBackendBaseUrl();
 
 /**
  * GET /api/keep-alive — Pings the backend to prevent it from sleeping.

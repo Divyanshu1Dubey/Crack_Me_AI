@@ -21,7 +21,7 @@
  */
 
 // ═══════════ CONFIGURATION — UPDATE THESE ═══════════
-var BACKEND_URL = 'https://crackcms-backend.onrender.com';
+var BACKEND_URL = 'https://crackcms-vsthc.ondigitalocean.app';
 var ADMIN_CREDENTIALS = {
   username: 'admin',         // ← your Django superuser username
   password: 'Kali2712@'  // ← your Django superuser password

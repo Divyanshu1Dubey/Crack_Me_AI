@@ -52,6 +52,7 @@ const CAMPUS_MOMENTUM = [
 export default function DashboardPage() {
     const { user, loading: authLoading, isAuthenticated } = useAuth();
     const router = useRouter();
+    const isRedirecting = !authLoading && !isAuthenticated;
 
     // Heatmap tooltip state (single tooltip instead of 112+ components)
     const [hoveredDay, setHoveredDay] = useState<{ date: string; questions: number; tests: number; minutes: number } | null>(null);
@@ -209,7 +210,25 @@ export default function DashboardPage() {
         .sort((a, b) => a.accuracy - b.accuracy)
         .slice(0, 3);
 
-    if (authLoading || loading) {
+    if (authLoading || isRedirecting) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Sidebar />
+                <div className="main-content">
+                    <Header />
+                    <div className="page-container space-y-5">
+                        <Skeleton className="h-40 rounded-2xl" />
+                        <div className="grid md:grid-cols-12 gap-4">
+                            <Skeleton className="h-[520px] md:col-span-8 rounded-2xl" />
+                            <Skeleton className="h-[520px] md:col-span-4 rounded-2xl" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (loading) {
         return (
             <div className="min-h-screen bg-background">
                 <Sidebar />

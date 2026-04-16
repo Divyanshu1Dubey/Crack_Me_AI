@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 const DEFAULT_LOCAL_BACKEND_BASE = 'http://localhost:8000';
 const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackcms-vsthc.ondigitalocean.app';
 const LEGACY_UNHEALTHY_API_HOSTS = [
-    'crackcms-vsthc.ondigitalocean.app',
     'crackcms-backend.onrender.com',
     '.onrender.com',
 ];

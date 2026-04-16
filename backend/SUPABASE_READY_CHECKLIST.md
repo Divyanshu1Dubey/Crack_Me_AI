@@ -2,7 +2,7 @@
 
 ## 1) Set backend database to Supabase
 
-Set this environment variable on your backend host (Render):
+Set this environment variable on your backend host (DigitalOcean):
 
 DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.ryuvcdthjnxyetdyjbph.supabase.co:5432/postgres
 
