@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (SUPABASE_AUTH_ENABLED) {
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
-                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY).');
             }
 
             const email = identifier.trim();
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (SUPABASE_AUTH_ENABLED) {
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
-                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+                throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY).');
             }
 
             const email = (formData.email || '').trim();
