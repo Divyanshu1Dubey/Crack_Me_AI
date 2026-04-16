@@ -26,6 +26,11 @@ frontend/node_modules/
 
 # IDE
 .vscode/
+!.vscode/
+.vscode/*
+!.vscode/mcp.json
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo

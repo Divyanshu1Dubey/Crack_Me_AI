@@ -1,0 +1,34 @@
+{
+	"servers": {
+		"filesystem": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@modelcontextprotocol/server-filesystem", "."]
+		},
+		"github": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@modelcontextprotocol/server-github"]
+		},
+		"playwright": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@modelcontextprotocol/server-playwright"]
+		},
+		"fetch": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@modelcontextprotocol/server-fetch"]
+		},
+		"icons8mcp": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["mcp-remote", "https://mcp.icons8.com/mcp/"]
+		},
+		"supabase": {
+			"type": "http",
+			"url": "https://mcp.supabase.com/mcp?project_ref=ryuvcdthjnxyetdyjbph&read_only=true"
+		}
+	},
+	"inputs": []
+}

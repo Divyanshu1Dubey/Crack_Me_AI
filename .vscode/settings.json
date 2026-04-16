@@ -1,0 +1,20 @@
+{
+    "chat.mcp.serverSampling": {
+        "crack_cms/.vscode/mcp.json: com.glean/mcp": {
+            "allowedModels": [
+                "copilot/auto",
+                "claude-code/claude-haiku-4.5",
+                "copilotcli/claude-sonnet-4.6"
+            ]
+        }
+    },
+    "mcpServers": {
+        "icons8mcp": {
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://mcp.icons8.com/mcp/"
+            ]
+        }
+    }
+}
