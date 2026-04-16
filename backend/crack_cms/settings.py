@@ -4,8 +4,10 @@ AI-Powered UPSC CMS Preparation Platform
 """
 import os
 import sys
+import socket
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
@@ -130,6 +132,23 @@ IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
 IS_PRODUCTION_RUNTIME = not DEBUG and not IS_CI
 IS_COLLECTSTATIC = any(arg == 'collectstatic' for arg in sys.argv)
 
+
+def _resolve_ipv4_address(hostname: str) -> str:
+    """Resolve a hostname to the first IPv4 address, or empty string if unavailable."""
+    if not hostname:
+        return ''
+
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+    except socket.gaierror:
+        return ''
+
+    for info in infos:
+        addr = info[4][0]
+        if addr:
+            return addr
+    return ''
+
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.parse(
@@ -176,6 +195,17 @@ if DATABASES['default'].get('ENGINE', '').endswith('sqlite3'):
 if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
     db_options = DATABASES['default'].setdefault('OPTIONS', {})
     db_options.setdefault('connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '5')))
+    if IS_PRODUCTION_RUNTIME:
+        db_options.setdefault('sslmode', 'require')
+
+    force_ipv4_default = 'true' if IS_PRODUCTION_RUNTIME else 'false'
+    force_ipv4 = os.getenv('DB_FORCE_IPV4', force_ipv4_default).lower() == 'true'
+    if force_ipv4:
+        db_host = (DATABASES['default'].get('HOST') or urlparse(DATABASE_URL).hostname or '').strip()
+        db_hostaddr = _resolve_ipv4_address(db_host)
+        if db_hostaddr:
+            # Keep HOST for TLS/SNI while forcing TCP connect via IPv4 address.
+            db_options.setdefault('hostaddr', db_hostaddr)
 
 # Runtime migration repair can cause long request hangs on hosted environments; keep disabled in production.
 ENABLE_RUNTIME_SCHEMA_REPAIR = os.getenv(
