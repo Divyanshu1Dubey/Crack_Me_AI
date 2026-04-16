@@ -3,6 +3,7 @@ Django settings for crack_cms project.
 AI-Powered UPSC CMS Preparation Platform
 """
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 import dj_database_url
@@ -127,6 +128,7 @@ DATABASE_URL = (
 # Use in-memory SQLite for GitHub CI to avoid LFS pointer file issues
 IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
 IS_PRODUCTION_RUNTIME = not DEBUG and not IS_CI
+IS_COLLECTSTATIC = any(arg == 'collectstatic' for arg in sys.argv)
 
 if DATABASE_URL:
     DATABASES = {
@@ -144,7 +146,8 @@ elif IS_CI:
         }
     }
 else:
-    if IS_PRODUCTION_RUNTIME:
+    # Build step `collectstatic` should not require a live database URL.
+    if IS_PRODUCTION_RUNTIME and not IS_COLLECTSTATIC:
         raise ImproperlyConfigured(
             'Production database URL is missing. '
             'Set DATABASE_URL (or SUPABASE_DATABASE_URL) to your Supabase Postgres connection string.'
@@ -159,7 +162,7 @@ else:
 
 if DATABASES['default'].get('ENGINE', '').endswith('sqlite3'):
     sqlite_name = str(DATABASES['default'].get('NAME', ''))
-    if sqlite_name and sqlite_name != ':memory:' and os.path.exists(sqlite_name):
+    if sqlite_name and sqlite_name != ':memory:' and os.path.exists(sqlite_name) and not IS_COLLECTSTATIC:
         # Detect accidental Git LFS pointer checked in as db.sqlite3.
         with open(sqlite_name, 'rb') as sqlite_file:
             header = sqlite_file.read(64)
