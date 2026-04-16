@@ -7,6 +7,8 @@ Create `frontend/.env.local` with Supabase values before running the app:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+# Backward compatible fallback:
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 First, run the development server:
