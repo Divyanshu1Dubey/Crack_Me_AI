@@ -36,6 +36,11 @@ export default function AuthCallbackClient() {
       }
 
       try {
+        const callbackError = searchParams.get('error_description') || searchParams.get('error');
+        if (callbackError) {
+          throw new Error(callbackError);
+        }
+
         const code = searchParams.get('code');
         const tokenHash = searchParams.get('token_hash');
         const type = searchParams.get('type') as EmailOtpType | null;
@@ -61,6 +66,16 @@ export default function AuthCallbackClient() {
             refresh_token,
           });
           if (error) throw error;
+        }
+
+        // Ensure callback verification produced a persisted session before redirecting.
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!sessionData.session) {
+          const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshedSession.session) {
+            throw new Error('Magic link could not create a valid session. Check Supabase redirect URL settings.');
+          }
         }
 
         setStatusText('Loading your profile...');

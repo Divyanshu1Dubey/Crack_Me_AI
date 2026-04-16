@@ -224,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: normalizedEmail,
             options: {
                 emailRedirectTo: getAuthRedirectTo(),
+                shouldCreateUser: false,
             },
         });
         if (error) throw new Error(error.message || 'Unable to send magic link.');
