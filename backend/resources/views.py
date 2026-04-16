@@ -1,5 +1,6 @@
 """Views for serving UPSC CMS resources and documents."""
 import os
+from pathlib import Path
 from django.conf import settings
 from django.http import FileResponse, Http404
 from rest_framework.views import APIView
@@ -8,6 +9,40 @@ from rest_framework import permissions
 
 
 MEDURA_DIR = os.path.join(settings.BASE_DIR, 'Medura_Train')
+
+
+def _candidate_filenames(filename: str):
+    """Yield likely filename variants present across environments."""
+    normalized = filename.strip()
+    if not normalized:
+        return
+
+    yield normalized
+
+    if normalized.startswith('Copy of '):
+        yield normalized[len('Copy of '):]
+    else:
+        yield f'Copy of {normalized}'
+
+
+def _resolve_resource_path(filename: str):
+    """Resolve a resource file path with fallback variants for deployment drift."""
+    for candidate in _candidate_filenames(filename):
+        filepath = os.path.join(MEDURA_DIR, candidate)
+        if os.path.exists(filepath):
+            return filepath
+
+    # Last-resort fallback: match by UUID suffix when prefixes differ.
+    stem = Path(filename).stem
+    uuid_suffix = stem.split('_')[-1] if '_' in stem else ''
+    if uuid_suffix:
+        for entry in os.listdir(MEDURA_DIR):
+            if entry.lower().endswith('.pdf') and uuid_suffix in Path(entry).stem:
+                filepath = os.path.join(MEDURA_DIR, entry)
+                if os.path.exists(filepath):
+                    return filepath
+
+    return None
 
 # Map of resource categories to their files
 RESOURCE_CATALOG = {
@@ -68,15 +103,15 @@ class ResourceDownloadView(APIView):
         for category in RESOURCE_CATALOG.values():
             for item in category['items']:
                 if item['id'] == resource_id:
-                    filepath = os.path.join(MEDURA_DIR, item['filename'])
-                    if os.path.exists(filepath):
+                    filepath = _resolve_resource_path(item['filename'])
+                    if filepath:
                         return FileResponse(
                             open(filepath, 'rb'),
                             content_type='application/pdf',
                             as_attachment=False,
                             filename=f"{item['name']}.pdf"
                         )
-                    raise Http404('File not found on server')
+                    raise Http404(f"File not found on server for resource '{resource_id}'")
         raise Http404('Resource not found')
 
 
