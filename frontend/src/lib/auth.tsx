@@ -84,6 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (SUPABASE_AUTH_ENABLED) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
                 queueMicrotask(() => setLoading(false));

@@ -85,10 +85,7 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    } else if (isSupabaseAuthEnabled()) {
+    if (isSupabaseAuthEnabled()) {
       const supabase = getSupabaseBrowserClient();
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -96,6 +93,11 @@ api.interceptors.request.use(async (config) => {
         if (supabaseToken) {
           config.headers.Authorization = `Bearer ${supabaseToken}`;
         }
+      }
+    } else {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
     }
   }
