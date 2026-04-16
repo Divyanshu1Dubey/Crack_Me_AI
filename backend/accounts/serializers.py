@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import DatabaseError
 from .models import TokenBalance, TokenConfig, TokenTransaction
+from .supabase_auth import sync_user_to_supabase_auth
 
 User = get_user_model()
 
@@ -24,7 +25,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2')
+        raw_password = validated_data.get('password', '')
         user = User.objects.create_user(**validated_data)
+
+        # Optional: mirror user into Supabase Auth so it appears in Supabase Auth > Users.
+        # Requires SUPABASE_AUTH_MIRROR_ENABLED=true and service-role credentials.
+        try:
+            sync_user_to_supabase_auth(
+                email=user.email,
+                password=raw_password,
+                username=user.username,
+            )
+        except Exception:
+            # Registration should remain successful even if Supabase mirror fails.
+            pass
+
         # Auto-create token balance for new users
         try:
             TokenBalance.objects.get_or_create(user=user)
