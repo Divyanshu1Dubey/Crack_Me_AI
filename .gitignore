@@ -52,3 +52,11 @@ desktop.ini
 # Logs
 *.log
 backend/test_out/
+
+# Generated test artifacts
+frontend/playwright-report/
+frontend/test-results/
+
+# Backend ad-hoc output artifacts
+backend/test_out.txt
+backend/test_api_keys_output.txt
