@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env file (does not override existing system env vars)
@@ -118,9 +119,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'crack_cms.wsgi.application'
 
 # Database
-DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+DATABASE_URL = (
+    os.getenv('DATABASE_URL')
+    or os.getenv('SUPABASE_DATABASE_URL')
+    or ''
+).strip()
 # Use in-memory SQLite for GitHub CI to avoid LFS pointer file issues
 IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
+IS_PRODUCTION_RUNTIME = not DEBUG and not IS_CI
 
 if DATABASE_URL:
     DATABASES = {
@@ -138,12 +144,30 @@ elif IS_CI:
         }
     }
 else:
+    if IS_PRODUCTION_RUNTIME:
+        raise ImproperlyConfigured(
+            'Production database URL is missing. '
+            'Set DATABASE_URL (or SUPABASE_DATABASE_URL) to your Supabase Postgres connection string.'
+        )
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+if DATABASES['default'].get('ENGINE', '').endswith('sqlite3'):
+    sqlite_name = str(DATABASES['default'].get('NAME', ''))
+    if sqlite_name and sqlite_name != ':memory:' and os.path.exists(sqlite_name):
+        # Detect accidental Git LFS pointer checked in as db.sqlite3.
+        with open(sqlite_name, 'rb') as sqlite_file:
+            header = sqlite_file.read(64)
+        if header.startswith(b'version https://git-lfs.github.com/spec/v1'):
+            raise ImproperlyConfigured(
+                f'SQLite database at {sqlite_name} is a Git LFS pointer, not a real DB file. '
+                'Use Postgres/Supabase in production or recreate a valid local sqlite database.'
+            )
 
 # Keep database failures fast in production so API returns explicit 5xx instead of platform 504 timeouts.
 if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
