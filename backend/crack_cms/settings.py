@@ -145,6 +145,17 @@ else:
         }
     }
 
+# Keep database failures fast in production so API returns explicit 5xx instead of platform 504 timeouts.
+if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
+    db_options = DATABASES['default'].setdefault('OPTIONS', {})
+    db_options.setdefault('connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '5')))
+
+# Runtime migration repair can cause long request hangs on hosted environments; keep disabled in production.
+ENABLE_RUNTIME_SCHEMA_REPAIR = os.getenv(
+    'ENABLE_RUNTIME_SCHEMA_REPAIR',
+    'true' if DEBUG else 'false',
+).lower() == 'true'
+
 # Auth
 AUTH_USER_MODEL = 'accounts.CustomUser'
 

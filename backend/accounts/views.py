@@ -60,6 +60,13 @@ def _repair_schema_if_needed(exc):
     if not _is_schema_db_error(exc):
         return False
 
+    if not getattr(django_settings, "ENABLE_RUNTIME_SCHEMA_REPAIR", False):
+        logger.warning(
+            "Schema error detected but runtime repair is disabled. "
+            "Run `python manage.py migrate` on the backend host."
+        )
+        return False
+
     with _SCHEMA_REPAIR_LOCK:
         try:
             logger.warning("Schema error detected in auth flow. Running migrate once.")
