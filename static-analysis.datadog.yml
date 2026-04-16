@@ -8,3 +8,10 @@ rulesets:
   - typescript-express
   - typescript-inclusive
   - typescript-node-security
+  - python-best-practices
+  - python-code-style
+  - python-django
+  - python-flask
+  - python-inclusive
+  - python-pandas
+  - python-security
