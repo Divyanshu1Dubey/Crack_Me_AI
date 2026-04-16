@@ -97,8 +97,27 @@ def build_auth_response(user):
     refresh = RefreshToken.for_user(user)
     access_token = str(refresh.access_token)
     refresh_token = str(refresh)
+
+    # Keep login/register response lightweight and independent from token tables.
+    # UserSerializer includes token_info, which can trigger extra DB calls and cause
+    # slow/hanging auth responses on constrained hosted environments.
+    user_payload = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": getattr(user, "phone", ""),
+        "role": "admin" if user.is_admin else "student",
+        "target_exam": getattr(user, "target_exam", ""),
+        "target_year": getattr(user, "target_year", None),
+        "avatar_url": getattr(user, "avatar_url", ""),
+        "created_at": user.created_at,
+        "is_admin": user.is_admin,
+    }
+
     return {
-        "user": UserSerializer(user).data,
+        "user": user_payload,
         "tokens": {
             "refresh": refresh_token,
             "access": access_token,
