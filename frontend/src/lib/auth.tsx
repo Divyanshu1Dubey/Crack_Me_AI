@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (SUPABASE_AUTH_ENABLED) {
             const supabase = getSupabaseBrowserClient();
             if (!supabase) {
-                setLoading(false);
+                queueMicrotask(() => setLoading(false));
                 return;
             }
 
@@ -140,8 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const { data } = await authAPI.login({ username: identifier, password });
-        localStorage.setItem('access_token', data.tokens.access);
-        localStorage.setItem('refresh_token', data.tokens.refresh);
+        const accessToken = data.tokens?.access ?? data.access;
+        const refreshToken = data.tokens?.refresh ?? data.refresh;
+        if (!accessToken || !refreshToken) {
+            throw new Error('Login response did not include tokens.');
+        }
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
         setUser(data.user);
         return data.user;
     };
@@ -177,8 +182,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const { data } = await authAPI.register(formData);
-        localStorage.setItem('access_token', data.tokens.access);
-        localStorage.setItem('refresh_token', data.tokens.refresh);
+        const accessToken = data.tokens?.access ?? data.access;
+        const refreshToken = data.tokens?.refresh ?? data.refresh;
+        if (!accessToken || !refreshToken) {
+            throw new Error('Registration response did not include tokens.');
+        }
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
         setUser(data.user);
     };
 

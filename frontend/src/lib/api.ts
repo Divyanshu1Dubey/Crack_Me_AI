@@ -24,11 +24,9 @@ const isAppRunningLocally = () => {
 
 const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
-const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
+const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-backend.onrender.com/api';
 const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-vsthc.ondigitalocean.app',
-  'crackcms-backend.onrender.com',
-  '.onrender.com',
 ];
 
 const normalizeApiBaseUrl = (url: string) => {
@@ -53,10 +51,6 @@ const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
 
 const resolveApiBaseUrl = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return DEFAULT_PRODUCTION_API_URL;
-  }
-
   if (USE_API_PROXY) {
     return '/api/proxy';
   }
@@ -64,16 +58,13 @@ const resolveApiBaseUrl = () => {
   const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
   if (configured) {
     const normalized = normalizeApiBaseUrl(configured);
-    if (shouldIgnoreConfiguredApiUrl(normalized)) {
-      return DEFAULT_PRODUCTION_API_URL;
-    }
-    if (isKnownUnhealthyApiHost(normalized)) {
+    if (shouldIgnoreConfiguredApiUrl(normalized) || isKnownUnhealthyApiHost(normalized)) {
       return DEFAULT_PRODUCTION_API_URL;
     }
     return normalized;
   }
 
-  return DEFAULT_LOCAL_API_URL;
+  return process.env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_API_URL : DEFAULT_LOCAL_API_URL;
 };
 
 const API_BASE_URL = resolveApiBaseUrl();

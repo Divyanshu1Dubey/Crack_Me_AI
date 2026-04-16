@@ -1,20 +1,21 @@
 """
 Enhanced AI Service Layer for UPSC CMS Platform.
-Orchestrates 10 AI providers with round-robin load balancing
+Orchestrates 11 AI providers with round-robin load balancing
 and RAG-backed textbook grounding. Distributes calls across providers
 to minimize quota exhaustion on any single API.
 
 Providers (all free-tier capable unless noted):
-  1. Groq       — Llama 3.3 70B   (30 RPM, 14,400 RPD)
-  2. Cerebras   — Llama 3.1 8B    (30 RPM, ~1M tokens/day)
-  3. Gemini     — Flash 2.0       (15 RPM, 1,500 RPD per model)
-  4. Cohere     — Command-A       (20 RPM, 1,000 req/month)
-  5. OpenRouter — free models     (20 RPM on free tier)
-  6. OpenRouter2— free models     (20 RPM, second key)
-  7. GitHub     — Models API      (150 RPM, 15K RPD free with PAT)
-  8. HuggingFace— Llama 3.3 70B   (~10 RPM free)
-  9. Mistral    — mistral-small   (~30 RPM free)
- 10. DeepSeek   — pay-as-you-go   (LAST — paid, needs balance)
+  1. Groq              — Llama 3.3 70B   (30 RPM, 14,400 RPD)
+  2. Cerebras          — Llama 3.1 8B    (30 RPM, ~1M tokens/day)
+  3. Gemini            — Flash 2.0       (15 RPM, 1,500 RPD per model)
+  4. Cohere            — Command-A       (20 RPM, 1,000 req/month)
+  5. OpenRouter        — free models     (20 RPM on free tier)
+  6. OpenRouter2       — free models     (20 RPM, second key)
+  7. GitHub            — Models API      (150 RPM, 15K RPD free with PAT)
+  8. HuggingFace       — Llama 3.3 70B   (~10 RPM free)
+  9. Mistral           — mistral-small   (~30 RPM free)
+ 10. NVIDIA Mistral    — Mistral 7B      (via NVIDIA API platform)
+ 11. DeepSeek          — pay-as-you-go   (LAST — paid, needs balance)
 """
 import json
 import logging
@@ -124,6 +125,7 @@ class AIService:
         self.github_models = None
         self.huggingface = None
         self.mistral = None
+        self.nvidia_mistral = None
         self._rag = None
         self._init_clients()
 
@@ -241,12 +243,25 @@ class AIService:
             except Exception as e:
                 logger.warning(f"Mistral init failed: {e}")
 
+        # NVIDIA Mistral (via NVIDIA API integration platform)
+        nvidia_mistral_key = getattr(settings, 'NVIDIA_MISTRAL_API_KEY', '') or os.getenv('NVIDIA_MISTRAL_API_KEY', '')
+        if nvidia_mistral_key:
+            try:
+                from openai import OpenAI
+                self.nvidia_mistral = OpenAI(
+                    base_url="https://integrate.api.nvidia.com/v1",
+                    api_key=nvidia_mistral_key
+                )
+                logger.info("✅ NVIDIA Mistral AI initialized")
+            except Exception as e:
+                logger.warning(f"NVIDIA Mistral init failed: {e}")
+
         providers_ok = [name for name, client in [
             ('Gemini', self.gemini_client), ('Groq', self.groq),
             ('Cerebras', self.cerebras), ('Cohere', self.cohere),
             ('OpenRouter', self.openrouter), ('OpenRouter2', self.openrouter2),
             ('GitHub', self.github_models), ('HuggingFace', self.huggingface),
-            ('Mistral', self.mistral), ('DeepSeek', self.deepseek),
+            ('Mistral', self.mistral), ('NVIDIA Mistral', self.nvidia_mistral), ('DeepSeek', self.deepseek),
         ] if client]
         if not providers_ok:
             logger.error("❌ No AI providers initialized! Check API keys in .env")
@@ -586,6 +601,40 @@ class AIService:
                 logger.info("Mistral rate limit hit")
             else:
                 logger.warning(f"Mistral error: {e}")
+        return None
+
+    def _call_nvidia_mistral(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call NVIDIA-hosted Mistral 7B Intent (via NVIDIA API integration platform).
+        Uses OpenAI-compatible interface with NVIDIA's base_url.
+        Model: mistralai/mistral-7b-instruct-v0.2"""
+        if not self.nvidia_mistral:
+            return None
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            response = self.nvidia_mistral.chat.completions.create(
+                model="mistralai/mistral-7b-instruct-v0.2",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=1,
+                timeout=15.0,
+            )
+            text = response.choices[0].message.content
+            if text:
+                logger.info("NVIDIA Mistral OK")
+                return text
+        except Exception as e:
+            err = str(e)
+            if '401' in err or '403' in err:
+                logger.warning("NVIDIA Mistral API key invalid — skipping")
+                self.nvidia_mistral = None
+            elif '429' in err:
+                logger.info("NVIDIA Mistral rate limit hit")
+            else:
+                logger.warning(f"NVIDIA Mistral error: {e}")
         return None
 
     def _call_openrouter2(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:

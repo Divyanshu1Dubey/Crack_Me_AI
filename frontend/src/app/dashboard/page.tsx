@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
@@ -87,10 +87,11 @@ export default function DashboardPage() {
 
     const loading = loadingDash;
 
-    // Redirect if not authenticated
-    if (!authLoading && !isAuthenticated) {
-        router.push('/login');
-    }
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            router.replace('/login');
+        }
+    }, [authLoading, isAuthenticated, router]);
 
     const heatmapByDate = useMemo<Map<string, HeatmapDay>>(() => {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));

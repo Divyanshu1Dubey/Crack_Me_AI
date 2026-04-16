@@ -8,7 +8,7 @@ import { Moon, Sun } from 'lucide-react';
 
 export default function ThemeToggle() {
     const { setTheme, resolvedTheme } = useTheme();
-    if (!resolvedTheme) return <div className="p-2 w-8.5 h-8.5" />; // Placeholder to avoid hydration mismatch
+    if (!resolvedTheme) return <div className="p-2 w-8.5 h-8.5" />;
 
     const isDark = resolvedTheme === 'dark';
 

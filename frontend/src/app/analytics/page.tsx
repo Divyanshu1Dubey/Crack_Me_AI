@@ -8,7 +8,7 @@ import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
 import { BarChart3, Target, TrendingDown, TrendingUp, Lightbulb, Activity, Brain, Calendar } from 'lucide-react';
 import {
-    LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+    Line, Bar, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart,
     ComposedChart
 } from 'recharts';

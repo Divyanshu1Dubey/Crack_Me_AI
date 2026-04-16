@@ -54,6 +54,7 @@ GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
 HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')
 AIML_API_KEY = os.getenv('AIML_API_KEY', '')
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
+NVIDIA_MISTRAL_API_KEY = os.getenv('NVIDIA_MISTRAL_API_KEY', '')
 
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]

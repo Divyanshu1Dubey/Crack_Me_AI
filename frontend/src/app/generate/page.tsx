@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
 import { aiAPI, questionsAPI } from '@/lib/api';
 import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target } from 'lucide-react';
 

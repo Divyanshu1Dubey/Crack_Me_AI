@@ -12,7 +12,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { testsAPI, aiAPI, questionsAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare } from 'lucide-react';
+import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag } from 'lucide-react';
 
 /**
  * Renders medical question text with proper formatting.

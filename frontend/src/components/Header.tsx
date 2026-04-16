@@ -8,9 +8,14 @@ import useSWR from 'swr';
 import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
-import ThemeToggle from '@/components/ThemeToggle';
+import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
+
+const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
+  ssr: false,
+  loading: () => <div className="p-2 w-8.5 h-8.5" />,
+});
 
 interface TokenInfo {
   available: number;

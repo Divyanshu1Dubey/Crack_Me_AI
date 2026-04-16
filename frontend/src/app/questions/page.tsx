@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen, Search, Filter, Bookmark, Eye, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
+import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import { Card, CardContent } from '@/components/ui/card';
@@ -234,7 +234,6 @@ function QuestionsContent() {
         if (qId && !loading && isAuthenticated) {
             openQuestion(Number(qId));
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, loading, isAuthenticated]);
 
     const fetchQuestions = (params: Record<string, string | number>) => {
