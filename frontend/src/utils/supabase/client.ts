@@ -1,15 +1,11 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { assertSupabaseConfig } from './config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-const supabaseKey = (
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-  || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  || ''
-).trim();
+export const createClient = () => {
+  const { supabaseUrl, supabaseKey } = assertSupabaseConfig('browser client');
 
-export const createClient = () =>
-  createBrowserClient(
-    supabaseUrl!,
+  return createBrowserClient(
+    supabaseUrl,
     supabaseKey,
     {
       auth: {
@@ -19,3 +15,4 @@ export const createClient = () =>
       },
     },
   );
+};
