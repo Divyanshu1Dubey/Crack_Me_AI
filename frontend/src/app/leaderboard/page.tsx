@@ -41,27 +41,28 @@ export default function LeaderboardPage() {
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState<string>('all');
 
-    const fetchLeaderboard = useCallback((p?: string) => {
+    const fetchLeaderboard = useCallback((selectedPeriod: string) => {
         setLoading(true);
-        analyticsAPI.getLeaderboard(p || period)
+        analyticsAPI.getLeaderboard(selectedPeriod)
             .then(res => {
                 setEntries(Array.isArray(res.data) ? res.data : res.data?.results || []);
             })
             .catch(() => setEntries([]))
             .finally(() => setLoading(false));
-    }, [period]);
+    }, []);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
-            const timer = setTimeout(() => fetchLeaderboard(), 0);
+            const timer = setTimeout(() => fetchLeaderboard(period), 0);
             return () => clearTimeout(timer);
         }
-    }, [isAuthenticated, authLoading, router, fetchLeaderboard]);
+    }, [isAuthenticated, authLoading, router, fetchLeaderboard, period]);
 
     const handlePeriod = (p: string) => {
-        setPeriod(p);
-        fetchLeaderboard(p);
+        if (p !== period) {
+            setPeriod(p);
+        }
     };
 
     if (authLoading) return null;
@@ -74,29 +75,29 @@ export default function LeaderboardPage() {
         <div className="min-h-screen bg-background flex">
             <Sidebar />
             <div className="flex-1 flex flex-col">
-                <Header />
-                <main className="flex-1 p-6 page-container space-y-6">
-                    {/* Title */}
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                        <div className="flex items-center gap-3">
-                            <Trophy className="w-7 h-7 text-yellow-500" />
-                            <div>
-                                <h1 className="text-2xl font-bold">Leaderboard</h1>
-                                <p className="text-sm text-muted-foreground">Top performers by XP</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-1 bg-muted rounded-lg p-1">
-                            {['all', 'weekly', 'monthly'].map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => handlePeriod(p)}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${period === p ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
-                                </button>
-                            ))}
+                {/* Sticky, always-visible header for leaderboard */}
+                <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/60 px-4 md:px-8 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 shadow-sm">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Trophy className="w-7 h-7 text-yellow-500 shrink-0" />
+                        <div className="min-w-0">
+                            <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">Leaderboard</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground truncate">Top performers by XP</p>
                         </div>
                     </div>
+                    <div className="flex gap-1 bg-muted rounded-lg p-1 self-start md:self-auto">
+                        {['all', 'weekly', 'monthly'].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => handlePeriod(p)}
+                                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${period === p ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <Header />
+                <main className="flex-1 p-4 md:p-6 page-container space-y-6">
 
                     {/* My Rank Card */}
                     {myRank && (
@@ -124,9 +125,23 @@ export default function LeaderboardPage() {
                         <div className="text-center py-12 text-muted-foreground animate-pulse">Loading rankings...</div>
                     ) : entries.length === 0 ? (
                         <Card>
-                            <CardContent className="p-12 text-center">
-                                <Trophy className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
-                                <p className="text-muted-foreground">No rankings yet. Start studying to appear on the leaderboard!</p>
+                            <CardContent className="relative p-12 text-center flex flex-col items-center justify-center min-h-[320px]">
+                                <Trophy className="w-14 h-14 mx-auto text-yellow-400/40 mb-3" />
+                                <p className="text-lg font-bold text-foreground mb-2">No rankings yet</p>
+                                <p className="text-muted-foreground mb-4">Start studying and practicing to appear on the leaderboard and earn XP!</p>
+                                <button
+                                    className="mt-2 px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition-colors"
+                                    onClick={() => window.location.href = '/questions'}
+                                >
+                                    Practice Questions
+                                </button>
+                                {/* Subtle background illustration */}
+                                <div className="absolute inset-0 pointer-events-none flex items-end justify-center z-0">
+                                    <svg width="180" height="80" viewBox="0 0 180 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-10 mb-2">
+                                        <ellipse cx="90" cy="40" rx="80" ry="22" fill="#0ea5e9" />
+                                    </svg>
+                                </div>
+                                <div className="mt-8 text-xs text-muted-foreground z-10">Compete with your peers and climb the leaderboard!</div>
                             </CardContent>
                         </Card>
                     ) : (

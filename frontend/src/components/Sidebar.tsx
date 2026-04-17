@@ -8,7 +8,7 @@ import { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
@@ -77,6 +77,22 @@ export default function Sidebar() {
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, []);
+    const [desktopOpen, setDesktopOpen] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        const saved = window.localStorage.getItem('crackcms_sidebar_desktop_open');
+        return saved !== null ? saved === 'true' : true;
+    }); // desktop
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('crackcms_sidebar_desktop_open', String(desktopOpen));
+        // Add/remove body class for CSS targeting
+        if (desktopOpen) {
+            document.body.classList.remove('sidebar-hidden');
+        } else {
+            document.body.classList.add('sidebar-hidden');
+        }
+    }, [desktopOpen]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -106,8 +122,25 @@ export default function Sidebar() {
 
     const isAdmin = user?.role === 'admin' || user?.is_admin;
 
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        document.body.style.overflow = open ? 'hidden' : '';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [open]);
+
     return (
         <>
+            {/* Desktop sidebar toggle button (top left, only on desktop) */}
+            <button
+                className="desktop-sidebar-toggle-btn"
+                aria-label={desktopOpen ? 'Hide sidebar' : 'Show sidebar'}
+                onClick={() => setDesktopOpen(v => !v)}
+            >
+                {desktopOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+            </button>
+
             {/* Mobile menu button */}
             <button className="mobile-menu-btn" onClick={() => setOpen(!open)} aria-label="Toggle menu">
                 {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -115,7 +148,7 @@ export default function Sidebar() {
             {/* Mobile overlay */}
             <div className={`sidebar-overlay ${open ? 'active' : ''}`} onClick={() => setOpen(false)} />
 
-            <div className={`sidebar ${open ? 'open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className={`sidebar ${open ? 'open' : ''} ${desktopOpen ? '' : 'desktop-hidden'}`} style={{ display: 'flex', flexDirection: 'column' }} aria-label="Primary sidebar navigation">
                 {/* Logo */}
                 <div className="px-4 pt-2 pb-3">
                     <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
@@ -141,7 +174,7 @@ export default function Sidebar() {
                                         .map((item) => {
                                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                                         return (
-                                            <Link key={item.href} href={item.href} onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${isActive ? 'active' : ''}`}>
+                                            <Link key={item.href} href={item.href} onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${isActive ? 'active' : ''}`} aria-current={isActive ? 'page' : undefined}>
                                                 <CustomIcon
                                                     name={item.iconName}
                                                     label={item.label}
@@ -161,7 +194,7 @@ export default function Sidebar() {
                             <div>
                                 <div className="section-title sidebar-section-title mb-2">Admin</div>
                                 <div className="space-y-0.5">
-                                    <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
+                                    <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname?.startsWith('/admin') ? 'active' : ''}`} aria-current={pathname?.startsWith('/admin') ? 'page' : undefined}>
                                         <CustomIcon name="admin-shield" label="Admin Panel" className="w-[18px] h-[18px] shrink-0" variant={pathname?.startsWith('/admin') ? 'active' : 'default'} />
                                         <span className="sidebar-label text-sm">Admin Panel</span>
                                     </Link>

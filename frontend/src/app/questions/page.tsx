@@ -136,6 +136,7 @@ function QuestionsContent() {
     const [flagComment, setFlagComment] = useState('');
     const [flagSubmitting, setFlagSubmitting] = useState(false);
     const [flagSuccess, setFlagSuccess] = useState(false);
+    const [flagError, setFlagError] = useState<string | null>(null);
 
     // Rotating loading messages for AI analysis
     const loadingMessages = useRef([
@@ -363,14 +364,22 @@ function QuestionsContent() {
     const handleFlagSubmit = () => {
         if (!detail || !flagComment.trim()) return;
         setFlagSubmitting(true);
+        setFlagError(null);
         questionsAPI.submitFeedback({
             question: detail.id,
             category: flagCategory,
             comment: flagComment.trim(),
         }).then(() => {
             setFlagSuccess(true);
-            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); }, 2000);
-        }).catch(() => {})
+            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); setFlagError(null); }, 2000);
+        }).catch((err: unknown) => {
+            const apiError = err as { response?: { data?: unknown } };
+            if (apiError.response?.data) {
+                setFlagError(extractApiErrorMessage(apiError.response.data, 'Unable to submit feedback right now. Please try again.'));
+                return;
+            }
+            setFlagError('Unable to submit feedback right now. Please try again.');
+        })
         .finally(() => setFlagSubmitting(false));
     };
 
@@ -387,13 +396,13 @@ function QuestionsContent() {
             <Sidebar />
             <div className="main-content">
                 <Header />
-                <div className="page-container">
-                <p className="text-sm mb-6 text-muted-foreground">
+                <div className="page-container space-y-6 pb-8">
+                <p className="text-sm text-muted-foreground">
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
 
                 {/* Filters */}
-                <Card className="mb-6">
+                <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm">
                     <CardContent className="p-4">
                     <div className="flex flex-wrap gap-3 items-center">
                         <div className="relative flex-1 min-w-[200px]">
@@ -424,10 +433,10 @@ function QuestionsContent() {
                 </Card>
 
                 {/* Content */}
-                <div className="grid lg:grid-cols-5 gap-6" style={{ height: 'calc(100vh - 220px)' }}>
+                <div className="grid gap-6 lg:h-[calc(100dvh-220px)] lg:grid-cols-5">
                     {/* Question List */}
-                    <div className="lg:col-span-2 overflow-y-auto overscroll-contain pr-1" style={{ scrollbarWidth: 'thin' }}>
-                        <div className="space-y-3">
+                    <div className="lg:col-span-2 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
+                        <div className="space-y-3 px-1 py-0.5">
                         {loading ? (
                             <div className="space-y-3">
                                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -443,7 +452,7 @@ function QuestionsContent() {
                         ) : (
                             <>
                                 {questions.map(q => (
-                                    <Card key={q.id} className={`p-4 cursor-pointer transition-all hover:shadow-md ${selectedQuestion === q.id ? 'ring-2 ring-primary border-primary' : ''}`}
+                                    <Card key={q.id} className={`cursor-pointer border-border/80 bg-card/90 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selectedQuestion === q.id ? 'border-primary/70 ring-2 ring-inset ring-primary/60 shadow-md' : ''}`}
                                         onClick={() => openQuestion(q.id)}>
                                         <div className="flex justify-between items-start mb-2">
                                             <Badge variant="secondary" className="text-xs">
@@ -451,15 +460,20 @@ function QuestionsContent() {
                                             </Badge>
                                             <div className="flex items-center gap-2">
                                                 {diffBadge(q.difficulty)}
-                                                <button onClick={(e) => handleBookmark(q.id, e)} className="hover:scale-110 transition-transform">
+                                                <button
+                                                    onClick={(e) => handleBookmark(q.id, e)}
+                                                    className="hover:scale-110 transition-transform"
+                                                    aria-label={q.is_bookmarked ? `Remove bookmark for question ${q.id}` : `Add bookmark for question ${q.id}`}
+                                                    aria-pressed={q.is_bookmarked}
+                                                >
                                                     <Bookmark className={`w-4 h-4 ${q.is_bookmarked ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground'}`} />
                                                 </button>
                                             </div>
                                         </div>
                                         <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(q.question_text).slice(0, 150)}{q.question_text.length > 150 ? '...' : ''}</p>
                                         <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {q.topic_name && <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-900 border-border">{q.topic_name}</Badge>}
-                                            {q.year && <Badge variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-900 border-border">PYQ {q.year}</Badge>}
+                                            <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name || 'Topic unavailable'}</Badge>
+                                            {q.year && <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>}
                                             {q.concept_tags?.includes('high_yield') && (
                                                 <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
                                             )}
@@ -486,11 +500,11 @@ function QuestionsContent() {
                     </div>
 
                     {/* Question Detail */}
-                    <div className="lg:col-span-3 overflow-y-auto overscroll-contain" style={{ scrollbarWidth: 'thin' }}>
+                    <div className="lg:col-span-3 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
                         {selectedQuestion && detail ? (
-                            <div className="space-y-3 animate-fadeInUp">
+                            <div className="animate-fadeInUp space-y-4 px-1 py-0.5">
                                 {/* Question Card */}
-                                <div className="glass-card overflow-hidden">
+                                <div className="glass-card rounded-2xl border border-primary/40 shadow-[0_18px_40px_rgba(14,116,144,0.16)]">
                                     <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-900/50">
                                         <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
                                         <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
@@ -516,7 +530,7 @@ function QuestionsContent() {
 
                                                 return (
                                                     <div key={opt}
-                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${showAnswer ? (isCorrect ? 'border-emerald-500 bg-emerald-500/5' : isWrong ? 'border-red-500/50 opacity-70' : 'border-border/40 opacity-50') : (isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted')}`}
+                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${showAnswer ? (isCorrect ? 'border-emerald-500 bg-emerald-500/5' : isWrong ? 'border-red-500/50 opacity-80' : 'border-border/70 bg-muted/35 opacity-100') : (isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted')}`}
                                                         onClick={() => handleSelectOption(opt)}>
                                                         <div className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${showAnswer ? (isCorrect ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground') : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}`}>{opt}</div>
                                                         <div className="flex-1 text-sm font-medium">{cleanOptionText(String(optionText))}</div>
@@ -546,7 +560,7 @@ function QuestionsContent() {
 
                                         {/* 🚩 Flag Wrong Answer */}
                                         <div className="flex justify-end">
-                                            <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); }}
+                                            <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}
                                                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                                                 <Flag className="w-3.5 h-3.5" /> Flag Issue
                                             </button>
@@ -560,6 +574,7 @@ function QuestionsContent() {
                                                     <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted. You&apos;ll earn 2 tokens if accepted.</p>
                                                 ) : (
                                                     <>
+                                                        {flagError && <p className="text-sm text-destructive">{flagError}</p>}
                                                         <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                                                             value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
                                                             <option value="wrong_answer">Wrong Answer</option>
@@ -576,11 +591,23 @@ function QuestionsContent() {
                                                             <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
                                                                 {flagSubmitting ? 'Submitting...' : 'Submit'}
                                                             </Button>
-                                                            <Button size="sm" variant="ghost" onClick={() => setFlagOpen(false)}>Cancel</Button>
+                                                            <Button size="sm" variant="ghost" onClick={() => { setFlagOpen(false); setFlagError(null); }}>Cancel</Button>
                                                         </div>
                                                     </>
                                                 )}
                                             </div>
+                                        )}
+
+                                        {/* Generate AI Analysis button — shown directly below flag section */}
+                                        {!aiExplanation && !aiLoading && !tokenError && (
+                                            <button onClick={() => fetchAiExplanation()}
+                                                className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-1">
+                                                <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                                                <div className="text-left">
+                                                    <span className="text-sm font-bold block text-blue-700 dark:text-blue-300">Generate AI Analysis</span>
+                                                    <span className="text-xs text-muted-foreground">Click to get mnemonics, explanations, exam tips & more</span>
+                                                </div>
+                                            </button>
                                         )}
 
                                         {/* DB Mnemonic */}
@@ -634,18 +661,6 @@ function QuestionsContent() {
                                                     <span className="text-xs block mt-1" style={{ color: 'var(--text-secondary)' }}>Generating mnemonics, topic knowledge, exam tips & more</span>
                                                 </div>
                                             </div>
-                                        )}
-
-                                        {/* Generate AI Analysis button — only shown after answer, before AI loads */}
-                                        {showAnswer && !aiExplanation && !aiLoading && !tokenError && (
-                                            <button onClick={() => fetchAiExplanation()}
-                                                className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-3">
-                                                <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                                                <div className="text-left">
-                                                    <span className="text-sm font-bold block text-blue-700 dark:text-blue-300">Generate AI Analysis</span>
-                                                    <span className="text-xs text-muted-foreground">Click to get mnemonics, explanations, exam tips & more</span>
-                                                </div>
-                                            </button>
                                         )}
 
                                         {/* Token depleted error */}

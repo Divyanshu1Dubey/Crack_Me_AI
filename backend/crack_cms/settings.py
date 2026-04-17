@@ -251,18 +251,41 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
+def _parse_origin_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _append_unique(items: list[str], value: str) -> list[str]:
+    normalized = value.strip()
+    if normalized and normalized not in items:
+        items.append(normalized)
+    return items
+
+
+frontend_url = os.getenv('FRONTEND_URL', '').strip()
+
 # CORS
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',') if o.strip()]
+cors_allowed_origins = _parse_origin_list(
+    os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000',
+    )
+)
+if frontend_url:
+    _append_unique(cors_allowed_origins, frontend_url)
+CORS_ALLOWED_ORIGINS = cors_allowed_origins
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF trusted origins (needed for production)
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',') if o.strip()]
+csrf_trusted_origins = _parse_origin_list(
+    os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000',
+    )
+)
+if frontend_url:
+    _append_unique(csrf_trusted_origins, frontend_url)
+CSRF_TRUSTED_ORIGINS = csrf_trusted_origins
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

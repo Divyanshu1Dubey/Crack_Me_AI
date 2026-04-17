@@ -193,6 +193,10 @@ export default function Header() {
     return date.toLocaleDateString();
   };
 
+  const settingsLabel = user?.first_name || user?.username
+    ? `User settings for ${user.first_name || user.username}`
+    : 'User settings';
+
   return (
       <header className="sticky top-0 z-30 mb-4 flex h-16 items-center justify-between rounded-2xl border border-border/80 bg-card/80 px-4 shadow-sm backdrop-blur-xl md:px-6">
       {/* Left: Page title */}
@@ -238,7 +242,8 @@ export default function Header() {
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button onClick={() => setNotifOpen(!notifOpen)}
-            className="relative rounded-xl border border-border/80 bg-muted/70 p-2 transition-colors hover:bg-accent">
+            className="relative rounded-xl border border-border/80 bg-muted/70 p-2 transition-colors hover:bg-accent"
+            aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}>
             <Bell className="w-4.5 h-4.5 text-muted-foreground" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center animate-pulse">
@@ -299,6 +304,7 @@ export default function Header() {
                                   onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}
                                   className="flex-shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                   title="Dismiss"
+                                  aria-label="Dismiss notification"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -334,7 +340,7 @@ export default function Header() {
         <ThemeToggle />
 
         {/* User avatar */}
-        <Link href="/settings">
+        <Link href="/settings" aria-label={settingsLabel}>
           <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border transition-all hover:ring-primary">
             <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
               {user?.first_name?.[0] || user?.username?.[0] || 'U'}

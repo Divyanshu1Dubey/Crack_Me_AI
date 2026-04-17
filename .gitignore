@@ -56,6 +56,7 @@ backend/test_out/
 # Generated test artifacts
 frontend/playwright-report/
 frontend/test-results/
+.playwright-mcp/
 
 # Backend ad-hoc output artifacts
 backend/test_out.txt

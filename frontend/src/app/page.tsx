@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth';
 import {
   Activity,
@@ -22,6 +23,11 @@ import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
+const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
+  ssr: false,
+  loading: () => <div className="h-9 w-9 rounded-xl border border-border/70 bg-muted/60" aria-hidden="true" />,
+});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cracklabs.app';
 
@@ -135,6 +141,7 @@ export default function LandingPage() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <BrandMark href="/" compact showTagline={false} />
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {isAuthenticated ? (
               <Button asChild className="rounded-xl">
                 <Link href="/dashboard">Open Dashboard <ChevronRight className="w-4 h-4" /></Link>

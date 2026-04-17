@@ -105,7 +105,13 @@ body {
   font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
   background-image: var(--hero-orb);
-  background-attachment: fixed;
+  background-attachment: scroll;
+}
+
+@media (min-width: 769px) {
+  body {
+    background-attachment: fixed;
+  }
 }
 
 h1,
@@ -367,6 +373,38 @@ h4 {
   min-height: 100vh;
 }
 
+.desktop-sidebar-toggle-btn {
+  display: none;
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 60;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s;
+  cursor: pointer;
+}
+
+@media (min-width: 1025px) {
+  .desktop-sidebar-toggle-btn {
+    display: flex;
+  }
+}
+
+.sidebar.desktop-hidden {
+  display: none !important;
+}
+
+body.sidebar-hidden .main-content {
+  margin-left: 0 !important;
+}
+
 /* Option card for MCQs */
 .option-card {
   background: var(--color-background);
@@ -518,19 +556,6 @@ h4 {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
-}
-
-/* Token balance widget */
-.token-balance-widget {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  transition: all 0.2s ease;
-}
-
-.token-balance-widget:hover {
-  border-color: var(--color-primary);
 }
 
 /* Subject colors */

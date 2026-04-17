@@ -4,7 +4,7 @@ test.describe('Login Flow', () => {
     test('should show login page', async ({ page }) => {
         await page.goto('/login');
         await expect(page.locator('h2')).toContainText(/sign in|login|welcome|resume/i);
-        await expect(page.locator('input[name="username"], input[type="text"]')).toBeVisible();
+        await expect(page.locator('input[name="identifier"], input[type="email"]')).toBeVisible();
         await expect(page.locator('input[type="password"]')).toBeVisible();
         await expect(page.locator('button[type="submit"]')).toBeVisible();
     });
@@ -23,11 +23,12 @@ test.describe('Login Flow', () => {
 
     test('should show error on invalid login', async ({ page }) => {
         await page.goto('/login');
-        await page.fill('input[name="username"], input[type="text"]', 'invalid_user');
+        await page.fill('input[name="identifier"], input[type="email"]', 'invalid_user@example.com');
         await page.fill('input[type="password"]', 'wrong_password');
         await page.click('button[type="submit"]');
-        // Should show error message (without actual backend, this tests the UI flow)
-        await page.waitForTimeout(2000);
+        await expect(
+            page.locator('.text-destructive').filter({ hasText: /invalid|incorrect|credential|failed|error|unable to reach/i }).first()
+        ).toBeVisible({ timeout: 15000 });
     });
 });
 
