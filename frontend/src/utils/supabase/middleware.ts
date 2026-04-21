@@ -26,10 +26,44 @@ const PROTECTED_ROUTE_PREFIXES = [
 const isProtectedRoute = (pathname: string) =>
   PROTECTED_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
-const isAdminUser = (user: { app_metadata?: Record<string, unknown> } | null | undefined) => {
+const parseAdminEmailAllowlist = () => {
+  const candidates = [
+    process.env.CONTROL_TOWER_ADMIN_EMAILS,
+    process.env.BOOTSTRAP_ADMIN_EMAIL,
+    process.env.NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS,
+    process.env.NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL,
+  ];
+
+  return new Set(
+    candidates
+      .filter(Boolean)
+      .flatMap((raw) => String(raw).split(','))
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+};
+
+const ADMIN_EMAIL_ALLOWLIST = parseAdminEmailAllowlist();
+
+const isAdminUser = (
+  user: {
+    email?: string;
+    app_metadata?: Record<string, unknown>;
+    user_metadata?: Record<string, unknown>;
+  } | null | undefined,
+) => {
   if (!user) return false;
   const appMetadata = user.app_metadata || {};
-  return String(appMetadata.is_admin || '').toLowerCase() === 'true' || String(appMetadata.role || '').toLowerCase() === 'admin';
+  const userMetadata = user.user_metadata || {};
+  const email = String(user.email || '').trim().toLowerCase();
+
+  const metadataAdmin =
+    String(appMetadata.is_admin || '').toLowerCase() === 'true'
+    || String(appMetadata.role || '').toLowerCase() === 'admin'
+    || String(userMetadata.is_admin || '').toLowerCase() === 'true'
+    || String(userMetadata.role || '').toLowerCase() === 'admin';
+
+  return metadataAdmin || (email ? ADMIN_EMAIL_ALLOWLIST.has(email) : false);
 };
 
 export const updateSession = async (request: NextRequest) => {
@@ -81,7 +115,8 @@ export const updateSession = async (request: NextRequest) => {
   }
 
   if (authData.user && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    const redirectPath = isAdminUser(authData.user) ? '/admin' : '/dashboard';
+    return NextResponse.redirect(new URL(redirectPath, request.url));
   }
 
   return response;

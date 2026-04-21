@@ -99,7 +99,9 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
     const isAdmin =
         String(appMetadata.is_admin || '').toLowerCase() === 'true' ||
-        String(appMetadata.role || '').toLowerCase() === 'admin';
+        String(appMetadata.role || '').toLowerCase() === 'admin' ||
+        String(metadata.is_admin || '').toLowerCase() === 'true' ||
+        String(metadata.role || '').toLowerCase() === 'admin';
     const role = isAdmin ? 'admin' : String(metadata.role || 'student');
 
     return {
