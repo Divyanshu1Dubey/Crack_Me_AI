@@ -80,21 +80,19 @@ export default function AuthCallbackClient() {
         }
 
         setStatusText('Loading your profile...');
-        let isAdmin = false;
         try {
-          const profileRes = await authAPI.getProfile();
-          isAdmin = Boolean(profileRes.data?.is_admin || profileRes.data?.role === 'admin');
+          await authAPI.getProfile();
         } catch {
-          isAdmin = false;
+          // Profile fetch failed, but continue with redirect
         }
 
         const safeNextPath = nextPath.startsWith('/') ? nextPath : '';
-        if (safeNextPath && (safeNextPath !== '/admin' || isAdmin)) {
+        if (safeNextPath) {
           router.replace(safeNextPath);
           return;
         }
 
-        router.replace(isAdmin ? '/admin' : '/dashboard');
+        router.replace('/admin');
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Authentication callback failed.';
         router.replace(`/login?authError=${encodeURIComponent(message)}`);

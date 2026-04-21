@@ -29,9 +29,8 @@ export default function LoginClient() {
         setError('');
         setLoading(true);
         try {
-            const signedInUser = await login(identifier, password);
-            const hasAdminAccess = signedInUser.role === 'admin' || signedInUser.is_admin;
-            router.push(hasAdminAccess ? '/admin' : '/dashboard');
+            await login(identifier, password);
+            router.push('/admin');
         } catch (err: unknown) {
             const error = err as { response?: { data?: unknown } };
             if (error.response?.data) {
