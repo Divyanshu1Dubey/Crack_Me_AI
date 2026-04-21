@@ -43,6 +43,10 @@ export default function LoginClient() {
                     setError('Unable to reach authentication server. Please try again in 30-60 seconds.');
                     return;
                 }
+                if (err.message.toLowerCase().includes('invalid login credentials')) {
+                    setError('Invalid Supabase email/password. Note: Django superuser credentials do not sign in on this page. Use or reset the account in Supabase Auth.');
+                    return;
+                }
                 setError(err.message);
                 return;
             }

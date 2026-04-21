@@ -77,7 +77,11 @@ export default function CustomIcon({
 
   if (IconComponent) {
     return (
-      <span className={cn('inline-flex shrink-0 items-center justify-center', variantClasses[variant], className)} style={{ width: size, height: size }}>
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', variantClasses[variant], className)}
+        style={{ width: size, height: size }}
+        {...(label ? { role: 'img' as const, 'aria-label': label } : { 'aria-hidden': true as const })}
+      >
         <IconComponent className="h-full w-full" aria-hidden="true" />
       </span>
     );

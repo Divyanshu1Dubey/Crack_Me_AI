@@ -44,6 +44,7 @@ export default function AuthCallbackClient() {
         const code = searchParams.get('code');
         const tokenHash = searchParams.get('token_hash');
         const type = searchParams.get('type') as EmailOtpType | null;
+        const nextPath = searchParams.get('next') || '';
         const fragment = decodeUrlFragment();
 
         if (code) {
@@ -85,6 +86,12 @@ export default function AuthCallbackClient() {
           isAdmin = Boolean(profileRes.data?.is_admin || profileRes.data?.role === 'admin');
         } catch {
           isAdmin = false;
+        }
+
+        const safeNextPath = nextPath.startsWith('/') ? nextPath : '';
+        if (safeNextPath && (safeNextPath !== '/admin' || isAdmin)) {
+          router.replace(safeNextPath);
+          return;
         }
 
         router.replace(isAdmin ? '/admin' : '/dashboard');

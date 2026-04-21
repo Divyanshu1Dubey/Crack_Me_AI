@@ -6,9 +6,13 @@
  */
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authAPI } from './api';
 import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
-import { getSupabaseBrowserClient, isSupabaseAuthEnabled } from './supabase';
+import {
+    clearSupabaseLocalSession,
+    getSupabaseBrowserClient,
+    isInvalidRefreshTokenError,
+    isSupabaseAuthEnabled,
+} from './supabase';
 
 interface User {
     id: number | string;
@@ -28,7 +32,7 @@ interface AuthContextType {
     magicLinkLogin: (email: string) => Promise<void>;
     oauthLogin: (provider: Provider) => Promise<void>;
     register: (data: Record<string, string>) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     isAuthenticated: boolean;
     isSupabaseAuth: boolean;
@@ -43,13 +47,40 @@ const AuthContext = createContext<AuthContextType>({
     magicLinkLogin: async () => undefined,
     oauthLogin: async () => undefined,
     register: async () => undefined,
-    logout: () => undefined,
+    logout: async () => undefined,
     refreshProfile: async () => undefined,
     isAuthenticated: false,
     isSupabaseAuth: false,
 });
 
 const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
+
+const getBackendProfileUrl = () => {
+    const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    if (configuredApiUrl) {
+        return `${configuredApiUrl.replace(/\/+$/, '')}/auth/profile/`;
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        return 'https://crackcms-vsthc.ondigitalocean.app/api/auth/profile/';
+    }
+
+    return 'http://localhost:8000/api/auth/profile/';
+};
+
+const fetchBackendProfile = async (accessToken: string) => {
+    const response = await fetch(getBackendProfileUrl(), {
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Profile request failed with ${response.status}`);
+    }
+
+    return response.json();
+};
 
 const getAuthRedirectTo = () => {
     if (typeof window !== 'undefined' && window.location?.origin) {
@@ -64,7 +95,12 @@ const getAuthRedirectTo = () => {
 
 const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const metadata = supabaseUser.user_metadata || {};
+    const appMetadata = supabaseUser.app_metadata || {};
     const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
+    const isAdmin =
+        String(appMetadata.is_admin || '').toLowerCase() === 'true' ||
+        String(appMetadata.role || '').toLowerCase() === 'admin';
+    const role = isAdmin ? 'admin' : String(metadata.role || 'student');
 
     return {
         id: supabaseUser.id,
@@ -72,9 +108,9 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
         email: supabaseUser.email || '',
         first_name: String(metadata.first_name || ''),
         last_name: String(metadata.last_name || ''),
-        role: 'student',
-        is_admin: false,
-        target_exam: 'UPSC CMS',
+        role,
+        is_admin: isAdmin,
+        target_exam: String(metadata.target_exam || 'UPSC CMS'),
     };
 };
 
@@ -83,76 +119,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (SUPABASE_AUTH_ENABLED) {
-            const supabase = getSupabaseBrowserClient();
-            if (!supabase) {
-                queueMicrotask(() => setLoading(false));
-                return;
-            }
+        if (!SUPABASE_AUTH_ENABLED) {
+            setLoading(false);
+            return;
+        }
 
-            let mounted = true;
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
 
-            supabase.auth
-                .getSession()
-                .then(async ({ data }) => {
-                    if (!mounted) return;
-                    if (!data.session?.user) {
-                        setUser(null);
-                        return;
-                    }
+        let mounted = true;
 
-                    try {
-                        const profileRes = await authAPI.getProfile();
-                        if (!mounted) return;
-                        setUser(profileRes.data);
-                    } catch {
-                        setUser(mapSupabaseUser(data.session.user));
-                    }
-                })
-                .finally(() => {
-                    if (mounted) setLoading(false);
-                });
-
-            const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        // Initialize with current session
+        supabase.auth
+            .getSession()
+            .then(async ({ data }) => {
                 if (!mounted) return;
-                if (!session?.user) {
+                if (!data.session?.user) {
                     setUser(null);
+                    setLoading(false);
                     return;
                 }
 
-                authAPI
-                    .getProfile()
-                    .then((profileRes) => {
-                        if (!mounted) return;
-                        setUser(profileRes.data);
-                    })
-                    .catch(() => {
-                        setUser(mapSupabaseUser(session.user));
-                    });
+                // Try to sync profile from backend (which has updated role from Supabase metadata)
+                try {
+                    const profileRes = await fetchBackendProfile(data.session.access_token);
+                    if (!mounted) return;
+                    setUser(profileRes);
+                } catch {
+                    // Fallback to mapped Supabase user
+                    if (mounted) {
+                        setUser(mapSupabaseUser(data.session.user));
+                    }
+                } finally {
+                    if (mounted) setLoading(false);
+                }
+            })
+            .catch(async (error: unknown) => {
+                if (isInvalidRefreshTokenError(error)) {
+                    await clearSupabaseLocalSession();
+                }
+                if (mounted) {
+                    setUser(null);
+                    setLoading(false);
+                }
             });
 
-            return () => {
-                mounted = false;
-                listener.subscription.unsubscribe();
-            };
-        }
+        // Subscribe to auth state changes
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!mounted) return;
+            if (!session?.user) {
+                setUser(null);
+                return;
+            }
 
-        queueMicrotask(() => setLoading(false));
+            // Sync profile after auth state change
+            fetchBackendProfile(session.access_token)
+                .then((profileRes) => {
+                    if (!mounted) return;
+                    setUser(profileRes);
+                })
+                .catch(() => {
+                    if (mounted) {
+                        setUser(mapSupabaseUser(session.user));
+                    }
+                });
+        });
+
+        return () => {
+            mounted = false;
+            listener?.subscription.unsubscribe();
+        };
     }, []);
 
     const login = async (identifier: string, password: string) => {
+        if (!SUPABASE_AUTH_ENABLED) {
+            throw new Error('Authentication is not configured.');
+        }
+
         const supabase = getSupabaseBrowserClient();
         if (!supabase) {
             throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
         }
 
-        const email = identifier.trim();
-        if (!email.includes('@')) {
+        const normalizedIdentifier = (identifier || '').trim();
+        if (!normalizedIdentifier.includes('@')) {
             throw new Error('Enter your email address to sign in.');
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({
-            email,
+            email: normalizedIdentifier,
             password,
         });
 
@@ -161,11 +219,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const signedInUser = data.user || data.session?.user;
         if (!signedInUser) throw new Error('Login failed. Please try again.');
 
+        // Sync profile from backend using the fresh Supabase access token.
         try {
-            const profileRes = await authAPI.getProfile();
-            setUser(profileRes.data);
-            return profileRes.data;
+            const accessToken = data.session?.access_token;
+            if (!accessToken) {
+                throw new Error('Missing Supabase access token');
+            }
+
+            const profileRes = await fetchBackendProfile(accessToken);
+            setUser(profileRes);
+            return profileRes;
         } catch {
+            // Fallback to mapped Supabase user if profile sync fails
             const mapped = mapSupabaseUser(signedInUser);
             setUser(mapped);
             return mapped;
@@ -173,6 +238,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const register = async (formData: Record<string, string>) => {
+        if (!SUPABASE_AUTH_ENABLED) {
+            throw new Error('Authentication is not configured.');
+        }
+
         const supabase = getSupabaseBrowserClient();
         if (!supabase) {
             throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
@@ -197,8 +266,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message || 'Registration failed');
         if (data.session?.user) {
             try {
-                const profileRes = await authAPI.getProfile();
-                setUser(profileRes.data);
+                const profileRes = await fetchBackendProfile(data.session.access_token);
+                setUser(profileRes);
             } catch {
                 setUser(mapSupabaseUser(data.session.user));
             }
@@ -249,17 +318,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message || `Unable to sign in with ${provider}.`);
     };
 
-    const logout = () => {
+    const logout = async () => {
         const supabase = getSupabaseBrowserClient();
-        supabase?.auth.signOut();
-        setUser(null);
+        try {
+            await supabase?.auth.signOut();
+        } catch (error) {
+            console.error('Supabase sign out failed:', error);
+        } finally {
+            setUser(null);
+        }
     };
 
     const refreshProfile = async () => {
+        if (!SUPABASE_AUTH_ENABLED) return;
+
         const supabase = getSupabaseBrowserClient();
         if (!supabase) return;
-        const { data } = await supabase.auth.getUser();
-        setUser(data.user ? mapSupabaseUser(data.user) : null);
+
+        try {
+            const { data } = await supabase.auth.getSession();
+            const accessToken = data.session?.access_token;
+            if (!accessToken) {
+                throw new Error('Missing Supabase access token');
+            }
+
+            const profileRes = await fetchBackendProfile(accessToken);
+            setUser(profileRes);
+        } catch (error: unknown) {
+            if (isInvalidRefreshTokenError(error)) {
+                await clearSupabaseLocalSession();
+            }
+            // Fallback: try to get Supabase user
+            try {
+                const { data } = await supabase.auth.getUser();
+                if (data.user) {
+                    setUser(mapSupabaseUser(data.user));
+                    return;
+                }
+            } catch {
+                // Ignore fallback getUser errors and clear stale user state.
+            }
+            {
+                setUser(null);
+            }
+        }
     };
 
     return (

@@ -12,7 +12,12 @@
  * Auth: Supabase access tokens are attached automatically when Supabase is configured.
  */
 import axios from 'axios';
-import { getSupabaseBrowserClient, isSupabaseAuthEnabled } from './supabase';
+import {
+  clearSupabaseLocalSession,
+  getSupabaseBrowserClient,
+  isInvalidRefreshTokenError,
+  isSupabaseAuthEnabled,
+} from './supabase';
 
 const isAppRunningLocally = () => {
   if (typeof window === 'undefined') {
@@ -84,14 +89,18 @@ const api = axios.create({
 
 // Add auth token to requests
 api.interceptors.request.use(async (config) => {
-  if (typeof window !== 'undefined') {
-    if (isSupabaseAuthEnabled()) {
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
+  if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) {
+      try {
         const { data } = await supabase.auth.getSession();
         const supabaseToken = data.session?.access_token;
         if (supabaseToken) {
           config.headers.Authorization = `Bearer ${supabaseToken}`;
+        }
+      } catch (error: unknown) {
+        if (isInvalidRefreshTokenError(error)) {
+          await clearSupabaseLocalSession();
         }
       }
     }
@@ -133,7 +142,7 @@ export const authAPI = {
   register: (data: Record<string, string>) => api.post('/auth/register/', data),
   login: (data: { username: string; password: string }) => api.post('/auth/login/', data),
   getProfile: () => api.get('/auth/profile/'),
-  updateProfile: (data: Record<string, string>) => api.put('/auth/profile/', data),
+  updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
   confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
@@ -146,6 +155,14 @@ export const authAPI = {
   adminGetAllUsers: () => api.get('/auth/tokens/admin/users/'),
   adminGrantTokens: (data: { user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/grant/', data),
   adminTransferTokens: (data: { from_user_id?: number; to_user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/transfer/', data),
+  adminAuditLogs: (params?: Record<string, string | number>) => api.get('/auth/tokens/admin/audit-logs/', { params }),
+  adminListUsers: (params?: Record<string, string | number>) => api.get('/auth/admin/users/', { params }),
+  adminToggleUserBlock: (userId: number, blocked: boolean) => api.patch(`/auth/admin/users/${userId}/block/`, { blocked }),
+  adminUpdateUserRole: (userId: number, role: 'admin' | 'student') => api.patch(`/auth/admin/users/${userId}/role/`, { role }),
+  adminResetUserProgress: (userId: number) => api.post(`/auth/admin/users/${userId}/reset-progress/`),
+  adminResetAttempts: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/reset-attempts/', data),
+  adminClearAnalytics: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/clear-analytics/', data),
+  adminRerunEvaluation: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/rerun-evaluation/', data),
 };
 
 export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {
@@ -196,10 +213,46 @@ export const questionsAPI = {
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
+  create: (data: Record<string, unknown>) => api.post('/questions/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/`, data),
+  remove: (id: number) => api.delete(`/questions/${id}/`),
   submitFeedback: (data: { question: number; category: string; comment: string }) =>
     api.post('/questions/feedback/', data),
   getFeedback: (params?: Record<string, string>) => api.get('/questions/feedback/', { params }),
   resolveFeedback: (id: number) => api.patch(`/questions/feedback/${id}/resolve/`),
+  getAdminIssueQueue: (params?: Record<string, string | number>) => api.get('/questions/feedback/admin-queue/', { params }),
+  updateFeedbackStatus: (id: number, data: Record<string, unknown>) => api.patch(`/questions/feedback/${id}/status/`, data),
+  verify: (id: number, verified_note?: string) => api.patch(`/questions/${id}/verify/`, { verified_note }),
+  unverify: (id: number) => api.patch(`/questions/${id}/unverify/`),
+  duplicate: (id: number) => api.post(`/questions/${id}/duplicate/`),
+  archive: (id: number) => api.patch(`/questions/${id}/archive/`),
+  unarchive: (id: number) => api.patch(`/questions/${id}/unarchive/`),
+  importPreview: (data: Record<string, unknown>) => api.post('/questions/import-preview/', data),
+  bulkMetadataUpdate: (data: Record<string, unknown>) => api.patch('/questions/bulk-metadata/', data),
+  bulkDelete: (data: Record<string, unknown>) => api.post('/questions/bulk-delete/', data),
+  extractionUpload: (data: FormData) => api.post('/questions/extraction/upload/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  extractionJobs: (params?: Record<string, string | number>) => api.get('/questions/extraction/jobs/', { params }),
+  extractionRetry: (jobId: number) => api.post(`/questions/extraction/jobs/${jobId}/retry/`),
+  extractionItems: (jobId: number) => api.get(`/questions/extraction/jobs/${jobId}/items/`),
+  extractionItemUpdate: (itemId: number, data: Record<string, unknown>) => api.patch(`/questions/extraction/items/${itemId}/`, data),
+  extractionItemAutotag: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/autotag/`),
+  extractionItemApprove: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/approve/`),
+  extractionItemReject: (itemId: number, data?: Record<string, unknown>) => api.post(`/questions/extraction/items/${itemId}/reject/`, data || {}),
+  extractionItemPublish: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/publish/`),
+  aiOverride: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-override/`, data),
+  aiLock: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-lock/`, data),
+  forceRegenerate: (id: number) => api.post(`/questions/${id}/force-regenerate/`),
+  aiPromptVersions: () => api.get('/questions/ai-prompt-versions/'),
+  createAiPromptVersion: (data: { name: string; prompt_text: string; activate?: boolean }) => api.post('/questions/ai-prompt-versions/', data),
+  activateAiPromptVersion: (versionId: number) => api.post(`/questions/ai-prompt-versions/${versionId}/activate/`),
+  aiTimeline: (id: number) => api.get(`/questions/${id}/ai-timeline/`),
+  getRevisions: (id: number) => api.get(`/questions/${id}/revisions/`),
+  getRevisionDiff: (id: number, revisionId?: number) => api.get(`/questions/${id}/revisions-diff/`, { params: revisionId ? { revision_id: revisionId } : {} }),
+  undoRevision: (id: number, revisionId?: number) => api.post(`/questions/${id}/undo-last-revision/`, revisionId ? { revision_id: revisionId } : {}),
+  linkRelatedPyqs: (id: number, relatedIds: number[]) => api.patch(`/questions/${id}/related-pyqs/`, { related_ids: relatedIds }),
+  setConceptId: (id: number, conceptId: string) => api.patch(`/questions/${id}/concept-id/`, { concept_id: conceptId }),
+  updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
+  formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
 };
 
 // Tests API
@@ -207,6 +260,12 @@ export const testsAPI = {
   list: (params?: Record<string, string>) => api.get('/tests/', { params }),
   get: (id: number) => api.get(`/tests/${id}/`),
   generate: (data: Record<string, string | number>) => api.post('/tests/generate/', data),
+  createManual: (data: Record<string, unknown>) => api.post('/tests/create-manual/', data),
+  setQuestions: (id: number, questionIds: number[]) => api.patch(`/tests/${id}/set-questions/`, { question_ids: questionIds }),
+  publish: (id: number) => api.patch(`/tests/${id}/publish/`),
+  unpublish: (id: number) => api.patch(`/tests/${id}/unpublish/`),
+  duplicate: (id: number) => api.post(`/tests/${id}/duplicate/`),
+  safeUpdate: (id: number, data: Record<string, unknown>) => api.patch(`/tests/${id}/safe-update/`, data),
   start: (id: number) => api.post(`/tests/${id}/start/`),
   submit: (id: number, data: Record<string, unknown>) => api.post(`/tests/${id}/submit/`, data),
   review: (id: number, attemptId: number) => api.get(`/tests/${id}/review/`, { params: { attempt_id: attemptId } }),
@@ -247,6 +306,10 @@ export const analyticsAPI = {
   getLeaderboard: (period?: string) => api.get('/analytics/leaderboard/', { params: { period } }),
   // Admin
   getAdminDashboard: () => api.get('/analytics/admin-dashboard/'),
+  getWeakAreaControl: (params?: Record<string, string | number>) => api.get('/analytics/admin/weak-area-control/', { params }),
+  listCampaigns: (params?: Record<string, string | number>) => api.get('/analytics/admin/campaigns/', { params }),
+  createCampaign: (data: Record<string, unknown>) => api.post('/analytics/admin/campaigns/', data),
+  sendCampaignNow: (id: number) => api.post(`/analytics/admin/campaigns/${id}/send-now/`),
 };
 
 
@@ -300,8 +363,19 @@ export const textbooksAPI = {
   list: (params?: Record<string, string | number>) => api.get('/textbooks/books/', { params }),
   get: (id: number) => api.get(`/textbooks/books/${id}/`),
   getChapters: (bookId: number) => api.get(`/textbooks/books/${bookId}/`, { params: { expand: 'chapters' } }),
+  create: (data: Record<string, unknown>) => api.post('/textbooks/books/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/textbooks/books/${id}/`, data),
+  remove: (id: number) => api.delete(`/textbooks/books/${id}/`),
   upload: (data: FormData) => api.post('/textbooks/uploads/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getUploads: () => api.get('/textbooks/uploads/'),
+  getChunks: (params?: Record<string, string | number>) => api.get('/textbooks/books/chunks/', { params }),
+  getChunkDiagnostics: () => api.get('/textbooks/books/chunks/diagnostics/'),
+  deleteChunk: (chunkId: number) => api.post('/textbooks/books/chunks/delete/', { chunk_id: chunkId }),
+  markChunk: (chunkId: number, status: 'approved' | 'rejected' | 'pending') => api.post('/textbooks/books/chunks/mark/', { chunk_id: chunkId, status }),
+  mergeChunks: (chunkIds: number[]) => api.post('/textbooks/books/chunks/merge/', { chunk_ids: chunkIds }),
+  rechunk: (chunkIds: number[], chunkSize = 500, overlap = 50) => api.post('/textbooks/books/chunks/rechunk/', { chunk_ids: chunkIds, chunk_size: chunkSize, overlap }),
+  mapQuestionReference: (data: FormData) => api.post('/textbooks/books/question-reference-map/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getReferenceOverrides: (params?: Record<string, string | number>) => api.get('/textbooks/books/question-reference-overrides/', { params }),
 };
 
 // Resources API

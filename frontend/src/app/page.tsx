@@ -23,6 +23,7 @@ import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { siteName } from '@/lib/seo';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
@@ -106,6 +107,48 @@ export default function LandingPage() {
     'General Medicine', 'Surgery', 'Pediatrics', 'Obstetrics & Gynecology', 'Preventive & Social Medicine'
   ];
 
+  const faqSchema = {
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: 'Is CrackCMS useful for UPSC CMS preparation?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Yes. CrackCMS focuses on UPSC CMS pattern practice with PYQs, timed mocks, and clinical reasoning workflows for medical graduates.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Can NEET PG aspirants use CrackCMS for revision?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Yes. The platform includes subject-wise high-yield question practice, AI explanations, and analytics that are valuable for NEET PG revision too.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Does CrackCMS include mock tests for CMS exam?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Yes. Full exam-style simulators with timing and analysis are included for CMS exam readiness.',
+        },
+      },
+    ],
+  };
+
+  const courseSchema = {
+    '@type': 'Course',
+    name: 'UPSC CMS and NEET PG Integrated Preparation Workflow',
+    description:
+      'A structured online preparation workflow with PYQs, mocks, AI tutoring, and weak-area analytics for UPSC CMS and NEET PG aspirants.',
+    provider: {
+      '@type': 'Organization',
+      name: siteName,
+      sameAs: siteUrl,
+    },
+  };
+
   return (
     <div className="min-h-screen bg-transparent">
       <script
@@ -116,14 +159,14 @@ export default function LandingPage() {
             '@graph': [
               {
                 '@type': 'Organization',
-                name: 'CrackCMS',
+                name: siteName,
                 url: siteUrl,
                 logo: `${siteUrl}/crack-cms-logo.jpg`,
-                description: 'Doctor-first UPSC CMS preparation platform for medical aspirants.',
+                description: 'Doctor-first UPSC CMS and NEET PG preparation platform for medical aspirants.',
               },
               {
                 '@type': 'WebSite',
-                name: 'CrackCMS',
+                name: siteName,
                 url: siteUrl,
                 potentialAction: {
                   '@type': 'SearchAction',
@@ -131,6 +174,8 @@ export default function LandingPage() {
                   'query-input': 'required name=search_term_string',
                 },
               },
+              faqSchema,
+              courseSchema,
             ],
           }),
         }}
@@ -249,6 +294,15 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-border/80 bg-card/80 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <span className="rounded-full border border-border bg-muted px-3 py-1">UPSC CMS Pattern Aligned</span>
+            <span className="rounded-full border border-border bg-muted px-3 py-1">NEET PG Revision Friendly</span>
+            <span className="rounded-full border border-border bg-muted px-3 py-1">No Credit Card Required</span>
+            <span className="rounded-full border border-border bg-muted px-3 py-1">Free Plan Available</span>
+          </div>
         </div>
 
         <div className="mt-8 rounded-3xl border border-border bg-card/70 p-5 shadow-sm">
@@ -379,8 +433,15 @@ export default function LandingPage() {
       <footer className="border-t border-border/70 px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
           <BrandMark href="/" compact showTagline={false} />
-          <p className="text-sm text-muted-foreground">© 2026 CrackCMS | AI-powered UPSC CMS preparation platform</p>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground sm:justify-end">
+            <span className="rounded-full border border-border bg-muted px-3 py-1">UPSC CMS</span>
+            <span className="rounded-full border border-border bg-muted px-3 py-1">NEET PG</span>
+            <span className="rounded-full border border-border bg-muted px-3 py-1">CMS Mock Tests</span>
+          </div>
         </div>
+        <p className="mx-auto mt-3 max-w-6xl text-center text-sm text-muted-foreground sm:text-left">
+          © 2026 CrackCMS | AI-powered UPSC CMS preparation platform
+        </p>
       </footer>
     </div>
   );

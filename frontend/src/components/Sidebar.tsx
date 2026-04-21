@@ -71,17 +71,13 @@ export default function Sidebar() {
     const [open, setOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
     const SIDEBAR_SCROLL_KEY = 'crackcms_sidebar_scroll_top';
+    const [desktopOpen, setDesktopOpen] = useState(true);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
     }, []);
-    const [desktopOpen, setDesktopOpen] = useState(() => {
-        if (typeof window === 'undefined') return true;
-        const saved = window.localStorage.getItem('crackcms_sidebar_desktop_open');
-        return saved !== null ? saved === 'true' : true;
-    }); // desktop
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -92,6 +88,9 @@ export default function Sidebar() {
         } else {
             document.body.classList.add('sidebar-hidden');
         }
+        return () => {
+            document.body.classList.remove('sidebar-hidden');
+        };
     }, [desktopOpen]);
 
     useEffect(() => {
@@ -151,7 +150,7 @@ export default function Sidebar() {
             <div className={`sidebar ${open ? 'open' : ''} ${desktopOpen ? '' : 'desktop-hidden'}`} style={{ display: 'flex', flexDirection: 'column' }} aria-label="Primary sidebar navigation">
                 {/* Logo */}
                 <div className="px-4 pt-2 pb-3">
-                    <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
+                    <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
                         <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
                             <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
@@ -178,7 +177,7 @@ export default function Sidebar() {
                                                 <CustomIcon
                                                     name={item.iconName}
                                                     label={item.label}
-                                                    className="w-[18px] h-[18px] shrink-0"
+                                                    className="w-4.5 h-4.5 shrink-0"
                                                     variant={isActive ? 'active' : 'default'}
                                                 />
                                                 <span className="sidebar-label text-sm">{item.label}</span>
@@ -195,7 +194,7 @@ export default function Sidebar() {
                                 <div className="section-title sidebar-section-title mb-2">Admin</div>
                                 <div className="space-y-0.5">
                                     <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname?.startsWith('/admin') ? 'active' : ''}`} aria-current={pathname?.startsWith('/admin') ? 'page' : undefined}>
-                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-[18px] h-[18px] shrink-0" variant={pathname?.startsWith('/admin') ? 'active' : 'default'} />
+                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-4.5 h-4.5 shrink-0" variant={pathname?.startsWith('/admin') ? 'active' : 'default'} />
                                         <span className="sidebar-label text-sm">Admin Panel</span>
                                     </Link>
                                 </div>
@@ -212,7 +211,7 @@ export default function Sidebar() {
                         <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Take one timed test daily and review your top 3 weak tags.</p>
                     </div>
                     <button onClick={handleLogout} className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <CustomIcon name="logout-exit" label="Sign Out" className="w-[18px] h-[18px]" variant="active" />
+                        <CustomIcon name="logout-exit" label="Sign Out" className="w-4.5 h-4.5" variant="active" />
                         <span className="sidebar-label text-sm">Sign Out</span>
                     </button>
                 </div>

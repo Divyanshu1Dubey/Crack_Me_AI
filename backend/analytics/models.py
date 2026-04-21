@@ -32,7 +32,8 @@ class UserTopicPerformance(models.Model):
         return round(self.total_time_seconds / self.total_attempts, 1)
 
     def __str__(self):
-        return f"{self.user.username} | {self.topic.name}: {self.accuracy}%"
+        topic_name = self.topic.name if self.topic else 'All Topics'
+        return f"{self.user.username} | {topic_name}: {self.accuracy}%"
 
 
 class DailyActivity(models.Model):
@@ -91,10 +92,25 @@ class Announcement(models.Model):
         ('urgent', 'Urgent'),
     ]
 
+    DELIVERY_STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ]
+
     title = models.CharField(max_length=200)
     message = models.TextField()
+    image_url = models.URLField(blank=True)
+    deep_link = models.CharField(max_length=500, blank=True)
+    audience_filter = models.JSONField(default=dict, blank=True)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='normal')
     is_active = models.BooleanField(default=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='draft')
+    delivery_count = models.IntegerField(default=0)
+    failure_report = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='announcements'
     )

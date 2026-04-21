@@ -7,6 +7,7 @@ import Header from '@/components/Header';
 import { questionsAPI } from '@/lib/api';
 import { Bookmark, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import EngagingLoader from '@/components/EngagingLoader';
 
 interface BookmarkItem {
     id: number;
@@ -28,13 +29,19 @@ export default function BookmarksPage() {
     const router = useRouter();
     const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
             questionsAPI.getBookmarks()
-                .then(res => setBookmarks(res.data.results || res.data || []))
-                .catch(() => { })
+                .then(res => {
+                    setBookmarks(res.data.results || res.data || []);
+                    setError(null);
+                })
+                .catch((err) => {
+                    setError(err?.message || 'Unable to load bookmarks right now. Please try again.');
+                })
                 .finally(() => setLoading(false));
         }
     }, [authLoading, isAuthenticated, router]);
@@ -61,11 +68,20 @@ export default function BookmarksPage() {
                     Bookmarks
                 </h1>
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                    Your saved questions for quick revision ({bookmarks.length} saved)
+                    Your saved questions for quick revision {loading ? '(loading...)' : `(${bookmarks.length} saved)`}
                 </p>
 
                 {loading ? (
-                    <div className="glass-card p-8 text-center"><div className="animate-pulse gradient-text">Loading bookmarks...</div></div>
+                    <EngagingLoader
+                        title="Rebuilding your revision shelf..."
+                        subtitle="Organizing your saved high-yield questions for quick review."
+                        fullScreen={false}
+                    />
+                ) : error ? (
+                    <div className="glass-card p-12 text-center" style={{ color: 'var(--text-secondary)' }}>
+                        <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Could not load bookmarks</h3>
+                        <p className="text-sm">{error}</p>
+                    </div>
                 ) : bookmarks.length === 0 ? (
                     <div className="glass-card p-12 text-center" style={{ color: 'var(--text-secondary)' }}>
                         <Bookmark className="w-12 h-12 mx-auto mb-4 opacity-30" />

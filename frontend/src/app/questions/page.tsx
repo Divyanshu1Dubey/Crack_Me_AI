@@ -19,6 +19,7 @@ import ReactMarkdown from 'react-markdown';
 import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
+import EngagingLoader from '@/components/EngagingLoader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,7 +102,25 @@ interface Subject {
 
 export default function QuestionsPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-background"><Sidebar /><div className="main-content"><Header /><div className="page-container"><Skeleton className="h-8 w-48 mb-4" /><Skeleton className="h-16 w-full mb-6" /><div className="grid lg:grid-cols-5 gap-6"><div className="lg:col-span-2 space-y-3">{[...Array(5)].map((_,i)=><Skeleton key={i} className="h-24" />)}</div><Skeleton className="lg:col-span-3 h-96" /></div></div></div></div>}>
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-background">
+                    <Sidebar />
+                    <div className="main-content">
+                        <Header />
+                        <EngagingLoader
+                            title="Preparing Your Question Bank"
+                            subtitle="Loading PYQs, filters, and topic mapping for a smoother attempt flow"
+                            tips={[
+                                'Use subject + year filters to simulate exam-weighted practice blocks.',
+                                'Attempt first, then open AI analysis to strengthen retention and reasoning.',
+                                'Bookmark difficult concepts and revise them in spaced cycles.',
+                            ]}
+                        />
+                    </div>
+                </div>
+            }
+        >
             <QuestionsContent />
         </Suspense>
     );
@@ -405,7 +424,7 @@ function QuestionsContent() {
                 <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm">
                     <CardContent className="p-4">
                     <div className="flex flex-wrap gap-3 items-center">
-                        <div className="relative flex-1 min-w-[200px]">
+                        <div className="relative flex-1 min-w-50">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input className="pl-10" placeholder="Search questions..."
                                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -510,6 +529,11 @@ function QuestionsContent() {
                                         <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
                                         {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
                                         {detail.difficulty && <Badge variant="outline" className="pointer-events-none capitalize">{detail.difficulty}</Badge>}
+                                        {detail.is_verified_by_admin && (
+                                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 pointer-events-none">
+                                                ✔ Verified by Admin
+                                            </Badge>
+                                        )}
                                     </div>
 
                                     {/* Question Text — rendered with markdown */}
@@ -584,7 +608,7 @@ function QuestionsContent() {
                                                             <option value="explanation_needed">Better Explanation Needed</option>
                                                             <option value="other">Other</option>
                                                         </select>
-                                                        <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                                                        <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
                                                             placeholder="Describe the issue (e.g., correct answer should be B because...)"
                                                             value={flagComment} onChange={e => setFlagComment(e.target.value)} />
                                                         <div className="flex gap-2">
@@ -880,7 +904,7 @@ function QuestionsContent() {
                                 </div>
                             </div>
                         ) : (
-                            <Card className="p-16 text-center h-[500px] flex flex-col items-center justify-center">
+                            <Card className="p-16 text-center h-125 flex flex-col items-center justify-center">
                                 <BookOpen className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
                                 <p className="text-lg font-medium mb-2 text-foreground">Select a Question</p>
                                 <p className="text-sm text-muted-foreground">Click any question from the bank to practice and review detailed AI-powered explanations.</p>

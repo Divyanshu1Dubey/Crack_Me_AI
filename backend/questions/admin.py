@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.html import format_html
-from .models import Subject, Topic, Question, QuestionBookmark, Discussion, Note, Flashcard
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot
 
 
 @admin.register(Subject)
@@ -12,7 +12,7 @@ class SubjectAdmin(admin.ModelAdmin):
     
     def question_count(self, obj):
         count = obj.questions.count()
-        return format_html('<span style="color: #{}; font-weight: bold;">{}</span>', 
+        return format_html('<span style="color: {}; font-weight: bold;">{}</span>',
                          '#28a745' if count > 100 else '#dc3545' if count < 50 else '#ffc107', count)
     question_count.short_description = 'Questions'
 
@@ -25,19 +25,19 @@ class TopicAdmin(admin.ModelAdmin):
     
     def question_count(self, obj):
         count = obj.questions.count()
-        return format_html('<span style="color: #{}; font-weight: bold;">{}</span>', 
+        return format_html('<span style="color: {}; font-weight: bold;">{}</span>',
                          '#28a745' if count > 10 else '#dc3545' if count < 5 else '#ffc107', count)
     question_count.short_description = 'Questions'
 
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'year', 'subject', 'topic_display', 'difficulty', 'has_explanation', 'has_topic', 'correct_answer']
+    list_display = ['id', 'year', 'subject', 'topic_display', 'difficulty', 'has_explanation', 'has_topic', 'is_verified_by_admin', 'correct_answer']
     list_filter = ['year', 'subject', 'difficulty', 'exam_source', 'is_active']
     search_fields = ['question_text', 'explanation']
     filter_horizontal = ['similar_questions']
     readonly_fields = ['created_at', 'updated_at']
-    actions = ['add_explanations', 'assign_topics', 'activate_questions', 'deactivate_questions']
+    actions = ['add_explanations', 'assign_topics', 'activate_questions', 'deactivate_questions', 'mark_verified', 'mark_unverified']
     
     def topic_display(self, obj):
         if obj.topic:
@@ -79,6 +79,16 @@ class QuestionAdmin(admin.ModelAdmin):
         updated = queryset.update(is_active=False)
         self.message_user(request, f'{updated} questions deactivated.')
     deactivate_questions.short_description = 'Deactivate selected questions'
+
+    def mark_verified(self, request, queryset):
+        updated = queryset.update(is_verified_by_admin=True)
+        self.message_user(request, f'{updated} questions marked as verified by admin.')
+    mark_verified.short_description = 'Mark selected as verified'
+
+    def mark_unverified(self, request, queryset):
+        updated = queryset.update(is_verified_by_admin=False)
+        self.message_user(request, f'{updated} questions marked as unverified.')
+    mark_unverified.short_description = 'Mark selected as unverified'
     
     fieldsets = (
         ('Question', {
@@ -119,6 +129,14 @@ class QuestionBookmarkAdmin(admin.ModelAdmin):
     question_preview.short_description = 'Question'
 
 
+@admin.register(QuestionFeedback)
+class QuestionFeedbackAdmin(admin.ModelAdmin):
+    list_display = ['id', 'question', 'user', 'category', 'status', 'is_resolved', 'notified_user', 'created_at']
+    list_filter = ['category', 'status', 'is_resolved', 'notified_user']
+    search_fields = ['question__question_text', 'user__username', 'comment', 'resolution_note']
+    readonly_fields = ['created_at', 'resolved_at']
+
+
 @admin.register(Discussion)
 class DiscussionAdmin(admin.ModelAdmin):
     list_display = ['user', 'question', 'text_preview', 'upvotes', 'is_pinned', 'created_at']
@@ -154,3 +172,41 @@ class FlashcardAdmin(admin.ModelAdmin):
     def front_preview(self, obj):
         return obj.front[:50]
     front_preview.short_description = 'Front'
+
+
+@admin.register(QuestionImportJob)
+class QuestionImportJobAdmin(admin.ModelAdmin):
+    list_display = ['id', 'job_type', 'status', 'source_filename', 'created_by', 'created_at']
+    list_filter = ['job_type', 'status', 'created_at']
+    search_fields = ['source_filename', 'created_by__username']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(QuestionExtractionItem)
+class QuestionExtractionItemAdmin(admin.ModelAdmin):
+    list_display = ['id', 'job', 'status', 'year', 'paper', 'subject', 'topic', 'published_question']
+    list_filter = ['status', 'year', 'paper', 'subject']
+    search_fields = ['question_text', 'raw_text', 'review_note']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(AdminAIPromptVersion)
+class AdminAIPromptVersionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'is_active', 'created_by', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'prompt_text']
+
+
+@admin.register(QuestionAIOperationLog)
+class QuestionAIOperationLogAdmin(admin.ModelAdmin):
+    list_display = ['id', 'question', 'operation_type', 'provider', 'tokens_used', 'created_at']
+    list_filter = ['operation_type', 'provider', 'created_at']
+    search_fields = ['question__question_text', 'response_excerpt']
+
+
+@admin.register(QuestionRevisionSnapshot)
+class QuestionRevisionSnapshotAdmin(admin.ModelAdmin):
+    list_display = ['id', 'question', 'changed_by', 'reason', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['question__question_text', 'changed_by__username', 'reason']
+    readonly_fields = ['created_at']

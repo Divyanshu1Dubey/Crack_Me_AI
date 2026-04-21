@@ -131,7 +131,7 @@ export default function LeaderboardPage() {
                                 <p className="text-muted-foreground mb-4">Start studying and practicing to appear on the leaderboard and earn XP!</p>
                                 <button
                                     className="mt-2 px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition-colors"
-                                    onClick={() => window.location.href = '/questions'}
+                                    onClick={() => router.push('/questions')}
                                 >
                                     Practice Questions
                                 </button>

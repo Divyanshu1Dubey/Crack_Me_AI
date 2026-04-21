@@ -54,6 +54,17 @@ GEMINI_MODELS = [
 _call_counter = 0
 _counter_lock = threading.Lock()
 
+# Provider error phrases occasionally returned as plain text payloads.
+# These should never be surfaced to end users as successful AI answers.
+_PROVIDER_ERROR_PHRASES = (
+    'no auto mode endpoints provided',
+    'no endpoints provided',
+    'model endpoint not found',
+    'service unavailable',
+    'upstream request failed',
+    'gateway timeout',
+)
+
 # CMS-specific system prompt
 CMS_SYSTEM_PROMPT = """You are an expert UPSC CMS (Combined Medical Services) exam tutor and medical educator.
 You have deep knowledge of the complete CMS exam pattern: 2 papers, 120 MCQs each, 250 marks per paper,
@@ -679,6 +690,13 @@ class AIService:
 
     # ─── LOAD-BALANCED DISPATCHER ──────────────────────────
 
+    @staticmethod
+    def _looks_like_provider_error_response(text: str) -> bool:
+        if not text:
+            return True
+        lowered = text.strip().lower()
+        return any(phrase in lowered for phrase in _PROVIDER_ERROR_PHRASES)
+
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
         """
@@ -719,6 +737,9 @@ class AIService:
             try:
                 result = call_fn(prompt, system, temperature, max_tokens)
                 if result:
+                    if self._looks_like_provider_error_response(result):
+                        logger.warning(f"{name} returned provider error payload, trying next provider")
+                        continue
                     return result
             except Exception as e:
                 logger.warning(f"{name} unexpected error: {e}")

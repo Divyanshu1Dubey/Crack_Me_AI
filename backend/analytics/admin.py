@@ -20,8 +20,8 @@ class FeedbackAdmin(admin.ModelAdmin):
 
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):
-    list_display = ['title', 'priority', 'is_active', 'created_by', 'expires_at', 'created_at']
-    list_filter = ['priority', 'is_active']
+    list_display = ['title', 'priority', 'delivery_status', 'delivery_count', 'is_active', 'created_by', 'scheduled_for', 'sent_at', 'expires_at', 'created_at']
+    list_filter = ['priority', 'is_active', 'delivery_status']
     search_fields = ['title', 'message']
 
 @admin.register(StudyStreak)

@@ -8,6 +8,7 @@ import socket
 from pathlib import Path
 from datetime import timedelta
 from urllib.parse import urlparse
+import re
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ load_dotenv()  # Load .env file (does not override existing system env vars)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Sentry Error Tracking ────────────────────────────────────────────
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 if SENTRY_DSN:
     import sentry_sdk
@@ -24,6 +27,9 @@ if SENTRY_DSN:
     from sentry_sdk.integrations.httpx import HttpxIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
     import logging
+
+    sentry_traces_rate = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '1.0' if DEBUG else '0.1'))
+    sentry_send_pii = os.getenv('SENTRY_SEND_DEFAULT_PII', 'true' if DEBUG else 'false').lower() == 'true'
 
     sentry_sdk.init(
         dsn=SENTRY_DSN,
@@ -35,17 +41,15 @@ if SENTRY_DSN:
                 event_level=logging.ERROR 
             ),
         ],
-        traces_sample_rate=1.0, 
-        send_default_pii=True,
+        traces_sample_rate=sentry_traces_rate,
+        send_default_pii=sentry_send_pii,
     )
 
-SECRET_KEY = (
-    os.getenv('DJANGO_SECRET_KEY')
-    or os.getenv('SECRET_KEY')
-    or 'django-insecure-change-me-in-production-upsc-cms-2024'
-)
+secret_key_from_env = (os.getenv('DJANGO_SECRET_KEY') or os.getenv('SECRET_KEY') or '').strip()
+if not secret_key_from_env and not DEBUG:
+    raise ImproperlyConfigured('SECRET_KEY is required when DEBUG is false.')
 
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+SECRET_KEY = secret_key_from_env or 'django-insecure-local-dev-only'
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
@@ -61,7 +65,8 @@ MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 NVIDIA_MISTRAL_API_KEY = os.getenv('NVIDIA_MISTRAL_API_KEY', '')
 
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',') if h.strip()]
+allowed_hosts_default = 'localhost,127.0.0.1'
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', allowed_hosts_default).split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -249,20 +254,59 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '120/min'),
+        'user': os.getenv('DRF_THROTTLE_USER', '600/min'),
+        'admin_control_tower': os.getenv('DRF_THROTTLE_ADMIN_CONTROL_TOWER', '180/min'),
+    },
 }
 
+def _normalize_origin(value: str) -> str:
+    """Return canonical origin (scheme://host[:port]) or empty string for invalid inputs."""
+    if not value:
+        return ''
+
+    cleaned = value.strip().strip('"\'[]()')
+    if not cleaned:
+        return ''
+
+    parsed = urlparse(cleaned)
+    if not parsed.scheme or not parsed.netloc:
+        return ''
+
+    # Origins must not include path/query/fragment. Normalize a trailing '/'.
+    if parsed.path not in ('', '/') or parsed.params or parsed.query or parsed.fragment:
+        return ''
+
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def _parse_origin_list(value: str) -> list[str]:
-    return [item.strip() for item in value.split(',') if item.strip()]
+    if not value:
+        return []
+
+    origins: list[str] = []
+    for item in re.split(r'[;,\n]+', value):
+        normalized = _normalize_origin(item)
+        if normalized and normalized not in origins:
+            origins.append(normalized)
+    return origins
 
 
 def _append_unique(items: list[str], value: str) -> list[str]:
-    normalized = value.strip()
+    normalized = _normalize_origin(value)
     if normalized and normalized not in items:
         items.append(normalized)
     return items
 
 
-frontend_url = os.getenv('FRONTEND_URL', '').strip()
+# Used only to keep CORS/CSRF checks aligned with the frontend origin; defaults to empty.
+cors_frontend_url = os.getenv('FRONTEND_URL', '').strip()
 
 # CORS
 cors_allowed_origins = _parse_origin_list(
@@ -271,8 +315,8 @@ cors_allowed_origins = _parse_origin_list(
         'http://localhost:3000,http://127.0.0.1:3000',
     )
 )
-if frontend_url:
-    _append_unique(cors_allowed_origins, frontend_url)
+if cors_frontend_url:
+    _append_unique(cors_allowed_origins, cors_frontend_url)
 CORS_ALLOWED_ORIGINS = cors_allowed_origins
 CORS_ALLOW_CREDENTIALS = True
 
@@ -283,8 +327,8 @@ csrf_trusted_origins = _parse_origin_list(
         'http://localhost:3000,http://127.0.0.1:3000',
     )
 )
-if frontend_url:
-    _append_unique(csrf_trusted_origins, frontend_url)
+if cors_frontend_url:
+    _append_unique(csrf_trusted_origins, cors_frontend_url)
 CSRF_TRUSTED_ORIGINS = csrf_trusted_origins
 
 # Internationalization

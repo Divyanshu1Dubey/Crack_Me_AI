@@ -24,5 +24,8 @@ urlpatterns = [
     path('leaderboard/', views.LeaderboardView.as_view(), name='leaderboard'),
     # Admin
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin-dashboard'),
+    path('admin/weak-area-control/', views.AdminWeakAreaControlView.as_view(), name='admin-weak-area-control'),
+    path('admin/campaigns/', views.AdminCampaignListCreateView.as_view(), name='admin-campaigns'),
+    path('admin/campaigns/<int:pk>/send-now/', views.AdminCampaignSendNowView.as_view(), name='admin-campaign-send-now'),
 ]
 

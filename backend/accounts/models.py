@@ -68,13 +68,15 @@ class TokenBalance(models.Model):
         """Reset daily/weekly counters if the period has elapsed."""
         today = timezone.now().date()
         changed = False
-        if self.last_daily_reset < today:
+        last_daily_reset = self.last_daily_reset.date() if hasattr(self.last_daily_reset, 'date') else self.last_daily_reset
+        last_weekly_reset = self.last_weekly_reset.date() if hasattr(self.last_weekly_reset, 'date') else self.last_weekly_reset
+        if last_daily_reset < today:
             self.daily_tokens_used = 0
             self.last_daily_reset = today
             changed = True
         # Reset weekly on Monday
         week_start = today - timedelta(days=today.weekday())
-        if self.last_weekly_reset < week_start:
+        if last_weekly_reset < week_start:
             self.weekly_tokens_used = 0
             self.last_weekly_reset = week_start
             changed = True
@@ -140,12 +142,11 @@ class TokenBalance(models.Model):
         if self.total_tokens_used > 0:
             self.total_tokens_used -= 1
         # Refund in reverse priority: daily/weekly first, then feedback, then purchased
-        config = TokenConfig.get_config()
         if self.daily_tokens_used > 0 and self.weekly_tokens_used > 0:
             self.daily_tokens_used -= 1
             self.weekly_tokens_used -= 1
             self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
-        elif self.feedback_credits >= 0:
+        elif self.feedback_credits > 0:
             self.feedback_credits += 1
             self.save(update_fields=['feedback_credits', 'total_tokens_used'])
         else:
@@ -218,3 +219,36 @@ class TokenTransaction(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.get_transaction_type_display()} +{self.amount} tokens"
+
+
+class AdminAuditLog(models.Model):
+    """Immutable audit trail for sensitive admin operations."""
+
+    ACTION_CHOICES = [
+        ('token_grant', 'Token Grant'),
+        ('token_revoke', 'Token Revoke'),
+        ('token_transfer', 'Token Transfer'),
+        ('token_view', 'Token View'),
+        ('user_view', 'User View'),
+        ('user_block', 'User Block/Unblock'),
+        ('user_role_update', 'User Role Update'),
+        ('user_progress_reset', 'User Progress Reset'),
+        ('system_attempt_reset', 'System Attempt Reset'),
+        ('system_analytics_clear', 'System Analytics Clear'),
+        ('system_rerun_evaluation', 'System Rerun Evaluation'),
+    ]
+
+    actor = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='admin_actions')
+    action = models.CharField(max_length=40, choices=ACTION_CHOICES)
+    resource_type = models.CharField(max_length=60)
+    resource_id = models.CharField(max_length=120, blank=True)
+    detail = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        actor_name = self.actor.username if self.actor else 'system'
+        return f"{actor_name}: {self.action} {self.resource_type}"

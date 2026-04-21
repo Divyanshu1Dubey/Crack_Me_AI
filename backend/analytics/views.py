@@ -1,17 +1,21 @@
 import csv
+import logging
 from io import StringIO
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
 from django.http import HttpResponse
-from django.db.models import Sum, Avg, Count, F, Q
+from django.db.models import Sum, Avg, Count, F, Q, Max
 from django.utils import timezone
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
                           AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
                           UserBadgeSerializer, LeaderboardEntrySerializer)
 from tests_engine.models import TestAttempt
-from questions.models import Subject
+from questions.models import Subject, Question, QuestionFeedback, Topic
+from accounts.permissions import IsControlTowerAdmin
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardView(APIView):
@@ -290,7 +294,7 @@ class FeedbackDetailView(APIView):
 
 class DataExportView(APIView):
     """Export all data as JSON for Google Sheets integration (admin only)."""
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
 
     def get(self, request):
         from accounts.models import CustomUser, TokenBalance, TokenTransaction
@@ -352,16 +356,16 @@ class DataExportView(APIView):
                         'created_at': str(f.created_at),
                     } for f in fbs
                 ]
-        except Exception as e:
-            import traceback
-            return Response({'error': str(e), 'trace': traceback.format_exc()}, status=500)
+        except Exception:
+            logger.exception('Data export failed for type=%s', export_type)
+            return Response({'error': 'Failed to export data'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(data)
 
 
 class DataExportCSVView(APIView):
     """Download data as CSV file (admin only). ?type=users|tokens|transactions|feedback"""
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
 
     def get(self, request):
         from accounts.models import CustomUser, TokenBalance, TokenTransaction
@@ -409,10 +413,37 @@ class AnnouncementListView(APIView):
     def get(self, request):
         now = timezone.now()
         announcements = Announcement.objects.filter(
-            is_active=True
+            is_active=True,
+            delivery_status='sent',
         ).filter(
             Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+        ).filter(
+            Q(scheduled_for__isnull=True) | Q(scheduled_for__lte=now)
         )
+
+        user = request.user
+        user_role = getattr(user, 'role', None)
+        user_target = getattr(user, 'target_year', None)
+
+        announcements = announcements.filter(
+            Q(audience_filter__role__isnull=True)
+            | Q(audience_filter__role='')
+            | Q(audience_filter__role=user_role)
+        )
+
+        target_year_filter = Q(audience_filter__target_year__isnull=True) | Q(audience_filter__target_year='')
+        if user_target is not None:
+            target_year_filter |= Q(audience_filter__target_year=user_target)
+            target_year_filter |= Q(audience_filter__target_year=str(user_target).strip())
+        announcements = announcements.filter(target_year_filter)
+
+        if not user.is_active:
+            announcements = announcements.filter(
+                Q(audience_filter__active_only__isnull=True)
+                | Q(audience_filter__active_only=False)
+            )
+
+        announcements = announcements.select_related('created_by').order_by('-created_at')[:200]
         return Response(AnnouncementSerializer(announcements, many=True).data)
 
     def post(self, request):
@@ -420,7 +451,20 @@ class AnnouncementListView(APIView):
             return Response({'error': 'Admin only'}, status=status.HTTP_403_FORBIDDEN)
         serializer = AnnouncementSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(created_by=request.user)
+        scheduled_for = serializer.validated_data.get('scheduled_for')
+        now = timezone.now()
+        if scheduled_for and scheduled_for > now:
+            delivery_status = 'scheduled'
+            sent_at = None
+        else:
+            delivery_status = 'sent'
+            sent_at = now
+
+        serializer.save(
+            created_by=request.user,
+            delivery_status=delivery_status,
+            sent_at=sent_at,
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -528,7 +572,8 @@ class LeaderboardView(APIView):
 
 class AdminDashboardView(APIView):
     """Admin overview: user stats, question quality, AI usage."""
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
 
     def get(self, request):
         from accounts.models import CustomUser, TokenBalance
@@ -556,4 +601,132 @@ class AdminDashboardView(APIView):
             'unresolved_feedback': unresolved_feedback,
             'recent_signups': recent_signups,
         })
+
+
+class AdminWeakAreaControlView(APIView):
+    """Phase 7: weak-area control tower data for interventions."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def get(self, request):
+        user_id = request.query_params.get('user_id')
+
+        most_wrong_questions = list(
+            Question.objects.filter(feedbacks__is_resolved=False)
+            .annotate(wrong_reports=Count('feedbacks', filter=Q(feedbacks__is_resolved=False)))
+            .order_by('-wrong_reports', '-year')
+            .values('id', 'question_text', 'year', 'subject__name', 'wrong_reports')[:10]
+        )
+
+        difficult_topics = list(
+            UserTopicPerformance.objects
+            .values('topic_id', 'topic__name', 'subject__name')
+            .annotate(avg_accuracy=Avg((F('correct_answers') * 100.0) / (F('total_attempts') + 0.0001)), attempts=Sum('total_attempts'))
+            .order_by('avg_accuracy', '-attempts')[:10]
+        )
+
+        cohort_weak_areas = list(
+            UserTopicPerformance.objects
+            .values('topic_id', 'topic__name', 'subject__name')
+            .annotate(total_attempts=Sum('total_attempts'), total_correct=Sum('correct_answers'))
+            .annotate(accuracy=(F('total_correct') * 100.0) / (F('total_attempts') + 0.0001))
+            .order_by('accuracy', '-total_attempts')[:15]
+        )
+
+        student_weak_areas = []
+        if user_id:
+            student_weak_areas = list(
+                UserTopicPerformance.objects.filter(user_id=user_id)
+                .values('topic_id', 'topic__name', 'subject__name', 'total_attempts', 'correct_answers')
+                .annotate(accuracy=(F('correct_answers') * 100.0) / (F('total_attempts') + 0.0001))
+                .order_by('accuracy', '-total_attempts')[:15]
+            )
+
+        impact_priorities = list(
+            Question.objects
+            .annotate(
+                reports=Count('feedbacks', filter=Q(feedbacks__is_resolved=False)),
+                attempts=Count('questionresponse', distinct=True),
+                correct=Count('questionresponse', filter=Q(questionresponse__is_correct=True), distinct=True),
+            )
+            .annotate(accuracy=(F('correct') * 100.0) / (F('attempts') + 0.0001))
+            .annotate(impact_score=F('reports') * 3 + F('attempts') * 0.2 + (100.0 - F('accuracy')))
+            .order_by('-impact_score')
+            .values('id', 'question_text', 'reports', 'attempts', 'accuracy', 'impact_score')[:20]
+        )
+
+        recommendations = []
+        for item in cohort_weak_areas[:5]:
+            recommendations.append(
+                f"Push revision set for {item.get('topic__name') or 'topic'} in {item.get('subject__name') or 'subject'}; cohort accuracy is {round(item.get('accuracy', 0), 1)}%."
+            )
+
+        return Response({
+            'most_wrong_questions': most_wrong_questions,
+            'most_difficult_topics': difficult_topics,
+            'student_weak_areas': student_weak_areas,
+            'cohort_weak_areas': cohort_weak_areas,
+            'impact_priorities': impact_priorities,
+            'revision_recommendations': recommendations,
+        })
+
+
+class AdminCampaignListCreateView(APIView):
+    """Phase 8: segmented campaign create/list with scheduling metadata."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def get(self, request):
+        status_filter = (request.query_params.get('status') or '').strip().lower()
+        rows = Announcement.objects.all().order_by('-created_at')
+        if status_filter:
+            rows = rows.filter(delivery_status=status_filter)
+        serializer = AnnouncementSerializer(rows[:200], many=True)
+        return Response({'count': len(serializer.data), 'results': serializer.data})
+
+    def post(self, request):
+        serializer = AnnouncementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        scheduled_for = serializer.validated_data.get('scheduled_for')
+        delivery_status = 'scheduled' if scheduled_for and scheduled_for > timezone.now() else 'draft'
+        campaign = serializer.save(created_by=request.user, delivery_status=delivery_status)
+        return Response(AnnouncementSerializer(campaign).data, status=status.HTTP_201_CREATED)
+
+
+class AdminCampaignSendNowView(APIView):
+    """Mark campaign as sent and compute target audience counts."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request, pk):
+        from accounts.models import CustomUser
+
+        try:
+            campaign = Announcement.objects.get(pk=pk)
+        except Announcement.DoesNotExist:
+            return Response({'error': 'Campaign not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        audience = campaign.audience_filter or {}
+        users = CustomUser.objects.all()
+        role = audience.get('role')
+        if role in ['admin', 'student']:
+            users = users.filter(role=role)
+        target_year = audience.get('target_year')
+        if target_year:
+            users = users.filter(target_year=target_year)
+        active_only = audience.get('active_only')
+        if active_only is True:
+            users = users.filter(is_active=True)
+
+        campaign.sent_at = timezone.now()
+        campaign.delivery_status = 'sent'
+        campaign.is_active = True
+        campaign.delivery_count = users.count()
+        campaign.failure_report = ''
+        campaign.save(update_fields=['sent_at', 'delivery_status', 'is_active', 'delivery_count', 'failure_report'])
+
+        return Response(AnnouncementSerializer(campaign).data)
 

@@ -14,7 +14,7 @@ import BrandMark from '@/components/BrandMark';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
-  loading: () => <div className="p-2 w-[34px] h-[34px]" />,
+  loading: () => <div className="p-2 w-8.5 h-8.5" />,
 });
 
 interface TokenInfo {
@@ -63,6 +63,7 @@ export default function Header() {
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const isFetchingNotifications = useRef(false);
 
   // Ctrl+K / Cmd+K to open search
   useEffect(() => {
@@ -78,6 +79,8 @@ export default function Header() {
 
   // Fetch data
   const fetchNotifications = useCallback(async () => {
+    if (isFetchingNotifications.current) return;
+    isFetchingNotifications.current = true;
     setLoading(true);
     try {
       const res = await analyticsAPI.getAnnouncements();
@@ -85,6 +88,7 @@ export default function Header() {
     } catch {
       // ignore
     } finally {
+      isFetchingNotifications.current = false;
       setLoading(false);
     }
   }, []);
@@ -95,12 +99,19 @@ export default function Header() {
     }
   }, [user, fetchNotifications]);
 
-  // Auto-refresh notifications every 5 minutes
+  // Auto-refresh notifications every 60 seconds
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    const interval = setInterval(fetchNotifications, 60 * 1000);
     return () => clearInterval(interval);
   }, [user, fetchNotifications]);
+
+  // Refresh when opening the dropdown so newly pushed notifications show instantly.
+  useEffect(() => {
+    if (user && notifOpen) {
+      fetchNotifications();
+    }
+  }, [user, notifOpen, fetchNotifications]);
 
   // Load read notification IDs from localStorage
   useEffect(() => {
@@ -204,7 +215,7 @@ export default function Header() {
         <div className="md:hidden">
           <BrandMark href="/dashboard" compact showTagline={false} />
         </div>
-        <div className="hidden h-9 w-1 rounded-full bg-gradient-to-b from-cyan-500 to-teal-500 md:block" />
+        <div className="hidden h-9 w-1 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 md:block" />
         <div className="hidden md:block">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Workspace</p>
           <h1 className="text-base font-bold text-foreground md:text-lg">{getTitle()}</h1>
@@ -243,7 +254,7 @@ export default function Header() {
         <div className="relative" ref={notifRef}>
           <button onClick={() => setNotifOpen(!notifOpen)}
             className="relative rounded-xl border border-border/80 bg-muted/70 p-2 transition-colors hover:bg-accent"
-            aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}>
+            aria-label={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'Notifications'}>
             <Bell className="w-4.5 h-4.5 text-muted-foreground" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center animate-pulse">
@@ -292,7 +303,7 @@ export default function Header() {
                           onClick={() => markAsRead(n.id)}
                         >
                           <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-0.5">
+                            <div className="shrink-0 mt-0.5">
                               {getPriorityIcon(n.priority)}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -302,7 +313,7 @@ export default function Header() {
                                 </p>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}
-                                  className="flex-shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                  className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                   title="Dismiss"
                                   aria-label="Dismiss notification"
                                 >

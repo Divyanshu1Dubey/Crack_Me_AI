@@ -45,3 +45,54 @@ class PDFUpload(models.Model):
 
     def __str__(self):
         return f"{self.title} (by {self.user.username})"
+
+
+class TextbookChunk(models.Model):
+    """Chunk-level governance record for RAG sources."""
+
+    textbook = models.ForeignKey(Textbook, null=True, blank=True, on_delete=models.CASCADE, related_name='chunks')
+    upload = models.ForeignKey(PDFUpload, null=True, blank=True, on_delete=models.CASCADE, related_name='chunks')
+    book_name = models.CharField(max_length=255, blank=True)
+    page_number = models.IntegerField(default=0)
+    chunk_text = models.TextField()
+    quality_score = models.FloatField(default=0.0)
+    is_approved = models.BooleanField(default=False)
+    is_rejected = models.BooleanField(default=False)
+    merged_from_ids = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['book_name', 'page_number', 'id']
+        indexes = [
+            models.Index(fields=['book_name', 'page_number']),
+            models.Index(fields=['is_approved', 'is_rejected']),
+        ]
+
+    def __str__(self):
+        source = self.book_name or (self.textbook.name if self.textbook else 'Unknown')
+        return f"Chunk#{self.id} {source} p{self.page_number}"
+
+
+class QuestionReferenceOverride(models.Model):
+    """Manual Question -> Book/Page/Screenshot mapping that overrides AI references."""
+
+    question = models.ForeignKey('questions.Question', on_delete=models.CASCADE, related_name='reference_overrides')
+    textbook = models.ForeignKey(Textbook, null=True, blank=True, on_delete=models.SET_NULL, related_name='question_overrides')
+    chapter = models.CharField(max_length=200, blank=True)
+    page_number = models.CharField(max_length=50, blank=True)
+    excerpt = models.TextField(blank=True)
+    screenshot = models.ImageField(upload_to='question_reference_overrides/', blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='question_reference_overrides')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['question', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"Q{self.question_id} -> {self.textbook.name if self.textbook else 'Manual'} p{self.page_number}"

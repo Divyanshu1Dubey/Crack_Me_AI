@@ -39,9 +39,16 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ['id', 'title', 'message', 'priority', 'is_active', 'is_expired',
-                  'created_by', 'created_by_name', 'expires_at', 'created_at']
-        read_only_fields = ['id', 'created_by', 'created_by_name', 'created_at']
+        fields = [
+            'id', 'title', 'message', 'image_url', 'deep_link', 'audience_filter',
+            'priority', 'is_active', 'is_expired', 'scheduled_for', 'sent_at',
+            'delivery_status', 'delivery_count', 'failure_report',
+            'created_by', 'created_by_name', 'expires_at', 'created_at'
+        ]
+        read_only_fields = [
+            'id', 'created_by', 'created_by_name', 'created_at',
+            'sent_at', 'delivery_status', 'delivery_count', 'failure_report',
+        ]
 
 
 class StudyStreakSerializer(serializers.ModelSerializer):

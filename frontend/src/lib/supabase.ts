@@ -9,6 +9,12 @@ const supabaseAnonKey = (
 
 let browserClient: SupabaseClient | null = null;
 
+const INVALID_REFRESH_TOKEN_MARKERS = [
+  'invalid refresh token',
+  'refresh token not found',
+  'refresh token is invalid',
+];
+
 export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseAnonKey);
 
 export const isSupabaseAuthEnabled = () =>
@@ -28,4 +34,25 @@ export const getSupabaseBrowserClient = () => {
   }
 
   return browserClient;
+};
+
+export const isInvalidRefreshTokenError = (error: unknown): boolean => {
+  const message = (
+    (error as { message?: string } | null)?.message
+    || (error as { error_description?: string } | null)?.error_description
+    || ''
+  ).toLowerCase();
+
+  return INVALID_REFRESH_TOKEN_MARKERS.some((marker) => message.includes(marker));
+};
+
+export const clearSupabaseLocalSession = async () => {
+  const client = getSupabaseBrowserClient();
+  if (!client) return;
+
+  try {
+    await client.auth.signOut({ scope: 'local' });
+  } catch {
+    // Best-effort cleanup only.
+  }
 };

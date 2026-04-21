@@ -17,9 +17,13 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db import transaction
+from django.db.models import Avg, Count, Max, Q, Subquery, Sum
 
 from .models import TokenBalance, TokenConfig, TokenTransaction
+from .permissions import IsControlTowerAdmin
 from .serializers import (
+    AdminAuditLogSerializer,
     AdminTokenGrantSerializer,
     AdminTokenTransferSerializer,
     AdminUserTokenSerializer,
@@ -32,6 +36,23 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def create_admin_audit_log(*, actor, action, resource_type, resource_id='', detail='', metadata=None):
+    """Best-effort audit logger for sensitive admin operations."""
+    try:
+        from .models import AdminAuditLog
+
+        AdminAuditLog.objects.create(
+            actor=actor if getattr(actor, 'is_authenticated', False) else None,
+            action=action,
+            resource_type=resource_type,
+            resource_id=str(resource_id or ''),
+            detail=detail,
+            metadata=metadata or {},
+        )
+    except Exception:
+        logger.exception('Failed to write admin audit log')
 
 
 def send_password_reset_email(user, reset_link):
@@ -104,14 +125,15 @@ class RegisterView(generics.CreateAPIView):
 
 
 class LoginView(APIView):
-    """Legacy local login endpoint disabled in favor of Supabase Auth."""
+    """Local username/email login is disabled. Use Supabase authentication instead."""
 
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         return Response(
             {
-                "error": "Local username/password login is disabled. Use Supabase Auth to sign in with email.",
+                'detail': 'Local login is disabled. Please use Supabase authentication at /auth/login.',
+                'error': 'endpoint_gone',
             },
             status=status.HTTP_410_GONE,
         )
@@ -188,9 +210,16 @@ class TokenTransactionHistoryView(APIView):
 class AdminTokenOverviewView(APIView):
     """Super-admin view with platform token totals and user balances."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
 
     def get(self, request):
+        create_admin_audit_log(
+            actor=request.user,
+            action='token_view',
+            resource_type='token_overview',
+            detail='Viewed platform token overview',
+        )
         balances = TokenBalance.objects.select_related("user").all()
         serializer = AdminUserTokenSerializer(balances, many=True)
         config = TokenConfig.get_config()
@@ -229,7 +258,8 @@ class AdminTokenOverviewView(APIView):
 class AdminTokenGrantView(APIView):
     """Grant or revoke tokens for a specific user."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
 
     def post(self, request):
         serializer = AdminTokenGrantSerializer(data=request.data)
@@ -254,6 +284,14 @@ class AdminTokenGrantView(APIView):
                 amount=amount,
                 note=note or f"Admin granted {amount} tokens",
             )
+            create_admin_audit_log(
+                actor=request.user,
+                action='token_grant',
+                resource_type='token_balance',
+                resource_id=target_user.id,
+                detail=f'Granted {amount} tokens to {target_user.username}',
+                metadata={'amount': amount, 'target_user_id': target_user.id},
+            )
             return Response(
                 {
                     "message": f"Granted {amount} tokens to {target_user.username}",
@@ -270,6 +308,14 @@ class AdminTokenGrantView(APIView):
             amount=-revoke_amount,
             note=note or f"Admin revoked {revoke_amount} tokens",
         )
+        create_admin_audit_log(
+            actor=request.user,
+            action='token_revoke',
+            resource_type='token_balance',
+            resource_id=target_user.id,
+            detail=f'Revoked {revoke_amount} tokens from {target_user.username}',
+            metadata={'amount': revoke_amount, 'target_user_id': target_user.id},
+        )
         return Response(
             {
                 "message": f"Revoked {revoke_amount} tokens from {target_user.username}",
@@ -281,7 +327,8 @@ class AdminTokenGrantView(APIView):
 class AdminTokenTransferView(APIView):
     """Transfer tokens between users or grant them from the system."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
 
     def post(self, request):
         serializer = AdminTokenTransferSerializer(data=request.data)
@@ -330,6 +377,19 @@ class AdminTokenTransferView(APIView):
                 note=note or f"Admin transferred {amount} tokens from {from_user.username}",
             )
 
+            create_admin_audit_log(
+                actor=request.user,
+                action='token_transfer',
+                resource_type='token_balance',
+                resource_id=to_user.id,
+                detail=f'Transferred {amount} tokens from {from_user.username} to {to_user.username}',
+                metadata={
+                    'amount': amount,
+                    'from_user_id': from_user.id,
+                    'to_user_id': to_user.id,
+                },
+            )
+
             return Response(
                 {
                     "message": f"Transferred {amount} tokens from {from_user.username} to {to_user.username}",
@@ -344,6 +404,14 @@ class AdminTokenTransferView(APIView):
             transaction_type="admin_grant",
             amount=amount,
             note=note or f"Admin granted {amount} tokens (system)",
+        )
+        create_admin_audit_log(
+            actor=request.user,
+            action='token_grant',
+            resource_type='token_balance',
+            resource_id=to_user.id,
+            detail=f'Granted {amount} tokens to {to_user.username} (system grant)',
+            metadata={'amount': amount, 'target_user_id': to_user.id},
         )
         return Response(
             {
@@ -377,6 +445,425 @@ class PasswordResetRequestView(APIView):
             logger.info("Password reset requested for unknown email=%s", email)
 
         return Response({"message": "If an account with that email exists, a reset link has been sent."})
+
+
+class AdminAuditLogListView(APIView):
+    """List recent admin audit logs for operational traceability."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def get(self, request):
+        from .models import AdminAuditLog
+
+        raw_limit = request.query_params.get('limit', 100)
+        try:
+            parsed_limit = int(raw_limit)
+        except (TypeError, ValueError):
+            return Response({'error': 'limit must be a positive integer'}, status=status.HTTP_400_BAD_REQUEST)
+        if parsed_limit <= 0:
+            return Response({'error': 'limit must be a positive integer'}, status=status.HTTP_400_BAD_REQUEST)
+        limit = min(parsed_limit, 500)
+        logs = AdminAuditLog.objects.select_related('actor').all()[:limit]
+        serializer = AdminAuditLogSerializer(logs, many=True)
+        return Response({'count': len(serializer.data), 'results': serializer.data})
+
+
+class AdminUserLifecycleListView(APIView):
+    """List users with search/filter for lifecycle controls."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def get(self, request):
+        q = (request.query_params.get('q') or '').strip()
+        role = (request.query_params.get('role') or '').strip().lower()
+        status_filter = (request.query_params.get('status') or '').strip().lower()
+        raw_limit = request.query_params.get('limit', 200)
+        try:
+            limit = min(max(int(raw_limit), 1), 1000)
+        except (TypeError, ValueError):
+            limit = 200
+
+        queryset = User.objects.all().order_by('-date_joined')
+        if q:
+            queryset = queryset.filter(
+                Q(username__icontains=q) |
+                Q(email__icontains=q) |
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q)
+            )
+        if role in ['admin', 'student']:
+            queryset = queryset.filter(role=role)
+        if status_filter == 'blocked':
+            queryset = queryset.filter(is_active=False)
+        elif status_filter == 'active':
+            queryset = queryset.filter(is_active=True)
+
+        users = list(queryset[:limit])
+        balances = {
+            b.user_id: b
+            for b in TokenBalance.objects.filter(user_id__in=[u.id for u in users])
+        }
+        from tests_engine.models import TestAttempt
+
+        attempt_map = {
+            row['user_id']: row['count']
+            for row in TestAttempt.objects
+            .filter(user_id__in=[u.id for u in users])
+            .values('user_id')
+            .annotate(count=Count('id'))
+        }
+
+        results = []
+        for u in users:
+            bal = balances.get(u.id)
+            available = bal.available_tokens if bal else 0
+            results.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'first_name': u.first_name,
+                'last_name': u.last_name,
+                'role': u.role,
+                'is_active': u.is_active,
+                'is_superuser': u.is_superuser,
+                'date_joined': u.date_joined,
+                'last_login': u.last_login,
+                'available_tokens': available,
+                'test_attempt_count': attempt_map.get(u.id, 0),
+            })
+
+        create_admin_audit_log(
+            actor=request.user,
+            action='user_view',
+            resource_type='user_lifecycle',
+            detail='Viewed user lifecycle list',
+            metadata={'query': q, 'role': role, 'status': status_filter, 'count': len(results)},
+        )
+        return Response({'count': len(results), 'results': results})
+
+
+class AdminUserBlockToggleView(APIView):
+    """Block or unblock user account by toggling is_active."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def patch(self, request, user_id):
+        try:
+            target = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'blocked' not in request.data:
+            return Response({'error': 'blocked is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        blocked_raw = request.data.get('blocked')
+        if isinstance(blocked_raw, bool):
+            blocked = blocked_raw
+        elif isinstance(blocked_raw, str):
+            normalized = blocked_raw.strip().lower()
+            if normalized in ['true', '1', 'yes']:
+                blocked = True
+            elif normalized in ['false', '0', 'no']:
+                blocked = False
+            else:
+                return Response({'error': 'blocked must be true or false'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'blocked must be true or false'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target.is_active = not blocked
+        target.save(update_fields=['is_active'])
+
+        create_admin_audit_log(
+            actor=request.user,
+            action='user_block',
+            resource_type='user',
+            resource_id=target.id,
+            detail=f"{'Blocked' if blocked else 'Unblocked'} user {target.username}",
+            metadata={'blocked': blocked, 'target_user_id': target.id},
+        )
+        return Response({
+            'id': target.id,
+            'username': target.username,
+            'is_active': target.is_active,
+            'blocked': blocked,
+        })
+
+
+class AdminUserRoleUpdateView(APIView):
+    """Assign admin/student role to a user."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def patch(self, request, user_id):
+        try:
+            target = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        role = (request.data.get('role') or '').strip().lower()
+        if role not in ['student', 'admin']:
+            return Response({'error': "role must be 'student' or 'admin'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_role = target.role
+        target.role = role
+        target.is_superuser = role == 'admin'
+        target.is_staff = role == 'admin'
+        target.save(update_fields=['role', 'is_superuser', 'is_staff'])
+
+        create_admin_audit_log(
+            actor=request.user,
+            action='user_role_update',
+            resource_type='user',
+            resource_id=target.id,
+            detail=f'Changed role for {target.username} from {old_role} to {role}',
+            metadata={'old_role': old_role, 'new_role': role, 'target_user_id': target.id},
+        )
+        return Response({'id': target.id, 'username': target.username, 'role': target.role})
+
+
+class AdminUserResetProgressView(APIView):
+    """Reset one user's learning progress while keeping account identity."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request, user_id):
+        try:
+            target = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from questions.models import Discussion, Flashcard, Note, QuestionBookmark
+        from tests_engine.models import QuestionResponse, TestAttempt
+        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance
+
+        with transaction.atomic():
+            attempt_subquery = TestAttempt.objects.filter(user=target).values('id')
+            responses_deleted, _ = QuestionResponse.objects.filter(attempt_id__in=Subquery(attempt_subquery)).delete()
+            attempts_deleted, _ = TestAttempt.objects.filter(user=target).delete()
+
+            bookmarks_deleted, _ = QuestionBookmark.objects.filter(user=target).delete()
+            notes_deleted, _ = Note.objects.filter(user=target).delete()
+            flashcards_deleted, _ = Flashcard.objects.filter(user=target).delete()
+            discussions_deleted, _ = Discussion.objects.filter(user=target).delete()
+            topic_rows_deleted, _ = UserTopicPerformance.objects.filter(user=target).delete()
+            daily_rows_deleted, _ = DailyActivity.objects.filter(user=target).delete()
+            badges_deleted, _ = UserBadge.objects.filter(user=target).delete()
+
+            StudyStreak.objects.filter(user=target).update(
+                current_streak=0,
+                longest_streak=0,
+                total_study_days=0,
+                last_activity_date=None,
+                xp_points=0,
+            )
+
+        payload = {
+            'responses_deleted': responses_deleted,
+            'attempts_deleted': attempts_deleted,
+            'bookmarks_deleted': bookmarks_deleted,
+            'notes_deleted': notes_deleted,
+            'flashcards_deleted': flashcards_deleted,
+            'discussions_deleted': discussions_deleted,
+            'topic_rows_deleted': topic_rows_deleted,
+            'daily_rows_deleted': daily_rows_deleted,
+            'badges_deleted': badges_deleted,
+        }
+        transaction.on_commit(
+            lambda: create_admin_audit_log(
+                actor=request.user,
+                action='user_progress_reset',
+                resource_type='user',
+                resource_id=target.id,
+                detail=f'Reset progress for {target.username}',
+                metadata=payload,
+            )
+        )
+        return Response({'message': 'User progress reset completed', 'user_id': target.id, 'results': payload})
+
+
+class AdminSystemResetAttemptsView(APIView):
+    """Reset test attempts either scoped to one user or globally."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request):
+        from tests_engine.models import QuestionResponse, TestAttempt
+
+        scope = (request.data.get('scope') or 'all').strip().lower()
+        user_id = request.data.get('user_id')
+        parsed_user_id = None
+
+        attempts_qs = TestAttempt.objects.all()
+        if scope == 'user':
+            if not user_id:
+                return Response({'error': 'user_id is required when scope=user'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                parsed_user_id = int(user_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'user_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
+            attempts_qs = attempts_qs.filter(user_id=parsed_user_id)
+
+        with transaction.atomic():
+            attempt_subquery = attempts_qs.values('id')
+            responses_deleted, _ = QuestionResponse.objects.filter(attempt_id__in=Subquery(attempt_subquery)).delete()
+            attempts_deleted, _ = attempts_qs.delete()
+
+        metadata = {
+            'scope': scope,
+            'user_id': parsed_user_id,
+            'attempts_deleted': attempts_deleted,
+            'responses_deleted': responses_deleted,
+        }
+        create_admin_audit_log(
+            actor=request.user,
+            action='system_attempt_reset',
+            resource_type='system',
+            detail='Reset test attempts',
+            metadata=metadata,
+        )
+        return Response({'message': 'Test attempts reset completed', 'results': metadata})
+
+
+class AdminSystemClearAnalyticsView(APIView):
+    """Clear analytics rows either scoped to one user or globally."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request):
+        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance
+
+        scope = (request.data.get('scope') or 'all').strip().lower()
+        user_id = request.data.get('user_id')
+        parsed_user_id = None
+
+        topic_qs = UserTopicPerformance.objects.all()
+        daily_qs = DailyActivity.objects.all()
+        badge_qs = UserBadge.objects.all()
+        streak_qs = StudyStreak.objects.all()
+
+        if scope == 'user':
+            if not user_id:
+                return Response({'error': 'user_id is required when scope=user'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                parsed_user_id = int(user_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'user_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
+            topic_qs = topic_qs.filter(user_id=parsed_user_id)
+            daily_qs = daily_qs.filter(user_id=parsed_user_id)
+            badge_qs = badge_qs.filter(user_id=parsed_user_id)
+            streak_qs = streak_qs.filter(user_id=parsed_user_id)
+
+        with transaction.atomic():
+            topic_rows_deleted, _ = topic_qs.delete()
+            daily_rows_deleted, _ = daily_qs.delete()
+            badge_rows_deleted, _ = badge_qs.delete()
+            streak_rows_reset = streak_qs.update(
+                current_streak=0,
+                longest_streak=0,
+                total_study_days=0,
+                last_activity_date=None,
+                xp_points=0,
+            )
+
+        metadata = {
+            'scope': scope,
+            'user_id': parsed_user_id,
+            'topic_rows_deleted': topic_rows_deleted,
+            'daily_rows_deleted': daily_rows_deleted,
+            'badge_rows_deleted': badge_rows_deleted,
+            'streak_rows_reset': streak_rows_reset,
+        }
+        transaction.on_commit(
+            lambda: create_admin_audit_log(
+                actor=request.user,
+                action='system_analytics_clear',
+                resource_type='system',
+                detail='Cleared analytics rows',
+                metadata=metadata,
+            )
+        )
+        return Response({'message': 'Analytics clear completed', 'results': metadata})
+
+
+class AdminSystemRerunEvaluationView(APIView):
+    """Recompute UserTopicPerformance from submitted question responses."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request):
+        from analytics.models import UserTopicPerformance
+        from tests_engine.models import QuestionResponse
+
+        scope = (request.data.get('scope') or 'all').strip().lower()
+        user_id = request.data.get('user_id')
+        parsed_user_id = None
+
+        responses = QuestionResponse.objects.select_related('attempt__user', 'question__subject', 'question__topic').all()
+        if scope == 'user':
+            if not user_id:
+                return Response({'error': 'user_id is required when scope=user'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                parsed_user_id = int(user_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'user_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
+            responses = responses.filter(attempt__user_id=parsed_user_id)
+
+        aggregated_rows = list(
+            responses
+            .values('attempt__user_id', 'question__subject_id', 'question__topic_id')
+            .annotate(
+                total_attempts=Count('id'),
+                correct_answers=Count('id', filter=Q(is_correct=True)),
+                incorrect_answers=Count('id', filter=Q(is_correct=False)),
+                total_time_seconds=Sum('time_taken_seconds'),
+                avg_confidence=Avg('confidence_level'),
+                last_attempted=Max('attempt__started_at'),
+            )
+        )
+
+        with transaction.atomic():
+            if scope == 'all':
+                UserTopicPerformance.objects.all().delete()
+            else:
+                UserTopicPerformance.objects.filter(user_id=parsed_user_id).delete()
+
+            UserTopicPerformance.objects.bulk_create([
+                UserTopicPerformance(
+                    user_id=row['attempt__user_id'],
+                    subject_id=row['question__subject_id'],
+                    topic_id=row['question__topic_id'],
+                    total_attempts=row['total_attempts'] or 0,
+                    correct_answers=row['correct_answers'] or 0,
+                    incorrect_answers=row['incorrect_answers'] or 0,
+                    total_time_seconds=row['total_time_seconds'] or 0,
+                    avg_confidence=float(row['avg_confidence'] or 0),
+                    last_attempted=row['last_attempted'],
+                )
+                for row in aggregated_rows
+            ])
+
+        metadata = {
+            'scope': scope,
+            'user_id': parsed_user_id,
+            'rows_created': len(aggregated_rows),
+            'processed_responses': sum(row['total_attempts'] for row in aggregated_rows),
+        }
+        create_admin_audit_log(
+            actor=request.user,
+            action='system_rerun_evaluation',
+            resource_type='system',
+            detail='Reran evaluation aggregation',
+            metadata=metadata,
+        )
+        return Response({'message': 'Evaluation rerun completed', 'results': metadata})
 
 
 class PasswordResetConfirmView(APIView):

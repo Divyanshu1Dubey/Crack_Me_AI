@@ -17,4 +17,13 @@ urlpatterns = [
     path('tokens/admin/users/', views.AdminTokenOverviewView.as_view(), name='admin_token_users'),
     path('tokens/admin/grant/', views.AdminTokenGrantView.as_view(), name='admin_token_grant'),
     path('tokens/admin/transfer/', views.AdminTokenTransferView.as_view(), name='admin_token_transfer'),
+    path('tokens/admin/audit-logs/', views.AdminAuditLogListView.as_view(), name='admin_audit_logs'),
+    # Admin lifecycle controls (Phase 6)
+    path('admin/users/', views.AdminUserLifecycleListView.as_view(), name='admin_users_lifecycle_list'),
+    path('admin/users/<int:user_id>/block/', views.AdminUserBlockToggleView.as_view(), name='admin_user_block_toggle'),
+    path('admin/users/<int:user_id>/role/', views.AdminUserRoleUpdateView.as_view(), name='admin_user_role_update'),
+    path('admin/users/<int:user_id>/reset-progress/', views.AdminUserResetProgressView.as_view(), name='admin_user_reset_progress'),
+    path('admin/system/reset-attempts/', views.AdminSystemResetAttemptsView.as_view(), name='admin_system_reset_attempts'),
+    path('admin/system/clear-analytics/', views.AdminSystemClearAnalyticsView.as_view(), name='admin_system_clear_analytics'),
+    path('admin/system/rerun-evaluation/', views.AdminSystemRerunEvaluationView.as_view(), name='admin_system_rerun_evaluation'),
 ]

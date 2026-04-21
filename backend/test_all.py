@@ -642,100 +642,103 @@ def test_auth_flow():
     test_pass = "TestPass123!@#"
     test_email = f"{test_user}@test.com"
 
-    # 7.1 Register
-    try:
-        r = client.post('/api/auth/register/', {
-            'username': test_user, 'email': test_email,
-            'password': test_pass, 'password2': test_pass
-        }, content_type='application/json')
-        if r.status_code in (200, 201):
-            ok("Register user", f"Created {test_user}")
-        elif r.status_code == 410:
-            skip("Register user", "Local username/password registration disabled (Supabase-first auth)")
-            return
-        else:
-            detail = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.content[:100]
-            fail("Register user", f"Status {r.status_code}: {detail}")
-            return
-    except Exception as e:
-        fail("Register user", str(e))
-        return
+    token = ''
 
-    # 7.2 Login
     try:
-        r = client.post('/api/auth/login/', {
-            'username': test_user, 'password': test_pass
-        }, content_type='application/json')
-        if r.status_code == 200:
-            data = r.json()
-            token = data.get('access', '') or data.get('tokens', {}).get('access', '')
-            if token:
-                ok("Login", "Got JWT access token")
-            else:
-                fail("Login", "No access token in response")
+        # 7.1 Register
+        try:
+            r = client.post('/api/auth/register/', {
+                'username': test_user, 'email': test_email,
+                'password': test_pass, 'password2': test_pass
+            }, content_type='application/json')
+            if r.status_code in (200, 201):
+                ok("Register user", f"Created {test_user}")
+            elif r.status_code == 410:
+                skip("Register user", "Local username/password registration disabled (Supabase-first auth)")
                 return
-        else:
-            fail("Login", f"Status {r.status_code}")
+            else:
+                detail = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.content[:100]
+                fail("Register user", f"Status {r.status_code}: {detail}")
+                return
+        except Exception as e:
+            fail("Register user", str(e))
             return
-    except Exception as e:
-        fail("Login", str(e))
-        return
 
-    # 7.3 Auth'd request
-    try:
-        r = client.get('/api/auth/profile/',
-                       HTTP_AUTHORIZATION=f'Bearer {token}')
-        if r.status_code == 200:
-            ok("Authed profile request", f"Username: {r.json().get('username', '?')}")
-        else:
-            fail("Authed profile request", f"Status {r.status_code}")
-    except Exception as e:
-        fail("Authed profile request", str(e))
+        # 7.2 Login
+        try:
+            r = client.post('/api/auth/login/', {
+                'username': test_user, 'password': test_pass
+            }, content_type='application/json')
+            if r.status_code == 200:
+                data = r.json()
+                token = data.get('access', '') or data.get('tokens', {}).get('access', '')
+                if token:
+                    ok("Login", "Got JWT access token")
+                else:
+                    fail("Login", "No access token in response")
+                    return
+            else:
+                fail("Login", f"Status {r.status_code}")
+                return
+        except Exception as e:
+            fail("Login", str(e))
+            return
 
-    # 7.4 Flashcard create (auth'd)
-    try:
-        r = client.post('/api/questions/flashcards/', {
-            'front': 'Test question - what is hypertension?',
-            'back': 'Sustained elevated blood pressure > 140/90 mmHg',
-            'difficulty': 'easy'
-        }, content_type='application/json',
-           HTTP_AUTHORIZATION=f'Bearer {token}')
-        if r.status_code in (200, 201):
-            card_id = r.json().get('id', '')
-            ok("Flashcard CREATE", f"Created card ID {card_id}")
-            # Cleanup
-            if card_id:
-                del_res = client.delete(
-                    f'/api/questions/flashcards/{card_id}/',
-                    HTTP_AUTHORIZATION=f'Bearer {token}'
-                )
-                if del_res.status_code not in (200, 204, 404):
-                    fail("Flashcard cleanup", f"Unexpected status {del_res.status_code}: {del_res.content[:100]}")
-        elif r.status_code == 401:
-            fail("Flashcard CREATE", "Auth failed — JWT not accepted")
-        else:
-            fail("Flashcard CREATE", f"Status {r.status_code}: {r.content[:100]}")
-    except Exception as e:
-        fail("Flashcard CREATE", str(e))
+        # 7.3 Auth'd request
+        try:
+            r = client.get('/api/auth/profile/',
+                           HTTP_AUTHORIZATION=f'Bearer {token}')
+            if r.status_code == 200:
+                ok("Authed profile request", f"Username: {r.json().get('username', '?')}")
+            else:
+                fail("Authed profile request", f"Status {r.status_code}")
+        except Exception as e:
+            fail("Authed profile request", str(e))
 
-    # 7.5 Token balance
-    try:
-        r = client.get('/api/auth/tokens/',
-                       HTTP_AUTHORIZATION=f'Bearer {token}')
-        if r.status_code == 200:
-            data = r.json()
-            ok("Token balance", f"Balance: {data.get('balance', data.get('total', '?'))}")
-        else:
-            fail("Token balance", f"Status {r.status_code}")
-    except Exception as e:
-        fail("Token balance", str(e))
+        # 7.4 Flashcard create (auth'd)
+        try:
+            r = client.post('/api/questions/flashcards/', {
+                'front': 'Test question - what is hypertension?',
+                'back': 'Sustained elevated blood pressure > 140/90 mmHg',
+                'difficulty': 'easy'
+            }, content_type='application/json',
+               HTTP_AUTHORIZATION=f'Bearer {token}')
+            if r.status_code in (200, 201):
+                card_id = r.json().get('id', '')
+                ok("Flashcard CREATE", f"Created card ID {card_id}")
+                # Cleanup
+                if card_id:
+                    del_res = client.delete(
+                        f'/api/questions/flashcards/{card_id}/',
+                        HTTP_AUTHORIZATION=f'Bearer {token}'
+                    )
+                    if del_res.status_code not in (200, 204, 404):
+                        fail("Flashcard cleanup", f"Unexpected status {del_res.status_code}: {del_res.content[:100]}")
+            elif r.status_code == 401:
+                fail("Flashcard CREATE", "Auth failed — JWT not accepted")
+            else:
+                fail("Flashcard CREATE", f"Status {r.status_code}: {r.content[:100]}")
+        except Exception as e:
+            fail("Flashcard CREATE", str(e))
 
-    # Cleanup test user
-    try:
-        from django.contrib.auth import get_user_model
-        get_user_model().objects.filter(username=test_user).delete()
-    except Exception as e:
-        skip("Cleanup test user", str(e))
+        # 7.5 Token balance
+        try:
+            r = client.get('/api/auth/tokens/',
+                           HTTP_AUTHORIZATION=f'Bearer {token}')
+            if r.status_code == 200:
+                data = r.json()
+                ok("Token balance", f"Balance: {data.get('balance', data.get('total', '?'))}")
+            else:
+                fail("Token balance", f"Status {r.status_code}")
+        except Exception as e:
+            fail("Token balance", str(e))
+    finally:
+        # Cleanup test user
+        try:
+            from django.contrib.auth import get_user_model
+            get_user_model().objects.filter(username=test_user).delete()
+        except Exception as e:
+            skip("Cleanup test user", str(e))
 
 
 # ══════════════════════════════════════════════════════════════

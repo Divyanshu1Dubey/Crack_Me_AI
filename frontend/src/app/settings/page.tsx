@@ -13,7 +13,7 @@ export default function SettingsPage() {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [form, setForm] = useState({ first_name: '', last_name: '', email: '', target_exam: '' });
+    const [form, setForm] = useState({ first_name: '', last_name: '', target_exam: '' });
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) router.push('/login');
@@ -24,7 +24,6 @@ export default function SettingsPage() {
             setForm({
                 first_name: user.first_name || '',
                 last_name: user.last_name || '',
-                email: user.email || '',
                 target_exam: user.target_exam || 'UPSC CMS',
             });
         }
@@ -98,7 +97,7 @@ export default function SettingsPage() {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Email</label>
-                                    <input className="input-field" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                                    <input className="input-field" value={user?.email || ''} readOnly />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Target Exam</label>

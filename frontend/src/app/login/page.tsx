@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import LoginClient from './LoginClient';
+import EngagingLoader from '@/components/EngagingLoader';
 
 export const metadata: Metadata = {
   title: 'Login',
@@ -16,7 +17,15 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen grid place-items-center bg-background text-muted-foreground">Loading...</div>}>
+    <Suspense
+      fallback={
+        <EngagingLoader
+          title="Opening secure sign-in..."
+          subtitle="One moment while we prepare your personalized UPSC CMS dashboard."
+          fullScreen
+        />
+      }
+    >
       <LoginClient />
     </Suspense>
   );

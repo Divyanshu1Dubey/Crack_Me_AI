@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import DatabaseError
-from .models import TokenBalance, TokenConfig, TokenTransaction
+from .models import AdminAuditLog, TokenBalance, TokenConfig, TokenTransaction
 from .supabase_auth import sync_user_to_supabase_auth
 
 User = get_user_model()
@@ -60,7 +60,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'phone', 'role', 'target_exam', 'target_year', 'avatar_url',
                   'created_at', 'is_admin', 'token_info']
-        read_only_fields = ['id', 'role', 'created_at', 'token_info']
+        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info']
 
     def get_role(self, obj):
         return 'admin' if obj.is_admin else 'student'
@@ -180,3 +180,21 @@ class AdminUserTokenSerializer(serializers.ModelSerializer):
         fields = ['user_id', 'username', 'email', 'is_admin', 'available', 'purchased_tokens',
                   'feedback_credits', 'daily_tokens_used', 'weekly_tokens_used',
                   'total_tokens_used']
+
+
+class AdminAuditLogSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+
+    class Meta:
+        model = AdminAuditLog
+        fields = [
+            'id',
+            'actor',
+            'actor_username',
+            'action',
+            'resource_type',
+            'resource_id',
+            'detail',
+            'metadata',
+            'created_at',
+        ]

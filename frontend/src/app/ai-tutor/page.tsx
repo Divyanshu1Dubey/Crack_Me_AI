@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { aiAPI } from '@/lib/api';
+import { aiAPI, extractApiErrorMessage } from '@/lib/api';
 import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -30,6 +30,17 @@ interface ChatSession {
     message_count: number;
     last_message_preview?: string;
 }
+
+const looksLikeProviderErrorResponse = (text: string) => {
+    const normalized = text.toLowerCase();
+    return (
+        normalized.includes('no auto mode endpoints provided') ||
+        normalized.includes('no endpoints provided') ||
+        normalized.includes('model endpoint not found') ||
+        normalized.includes('service unavailable') ||
+        normalized.includes('upstream request failed')
+    );
+};
 
 export default function AITutorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -148,19 +159,27 @@ export default function AITutorPage() {
                 const res = await aiAPI.analyzeQuestion({ question_text: userMsg });
                 response = res.data.analysis;
             }
+
+            if (!response || looksLikeProviderErrorResponse(response)) {
+                response = '⚠️ AI is temporarily unavailable right now. Please retry in a few seconds.';
+            }
+
             setMessages(prev => [...prev, { role: 'ai', content: response, type: mode, citations }]);
             // Scroll to show AI answer from top after it's added
             scrollToLatestAiMessage();
             // Refresh sessions to include the new one
             loadSessions();
         } catch (err: unknown) {
-            const statusCode = (err as { response?: { status?: number } })?.response?.status;
+            const statusCode = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
+            const errorPayload = (err as { response?: { data?: unknown } })?.response?.data;
             const is429 = statusCode === 429;
+            const message = is429
+                ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
+                : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
+
             setMessages(prev => [...prev, {
                 role: 'ai',
-                content: is429
-                    ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
-                    : '⚠️ Failed to get a response. Please check your API keys in backend/.env and try again.',
+                content: message,
                 type: mode
             }]);
             scrollToLatestAiMessage();

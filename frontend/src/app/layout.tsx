@@ -9,11 +9,9 @@ import BackendWarmup from "@/components/BackendWarmup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
 import TrafficAnalytics from "@/components/TrafficAnalytics";
+import StickyExamCta from "@/components/StickyExamCta";
+import { seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
-const siteTitle = "CrackCMS | UPSC CMS Preparation Platform";
-const siteDescription =
-  "Doctor-first UPSC CMS preparation platform with PYQs, AI tutoring, analytics, and adaptive test workflows for serious medical aspirants.";
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-SW77S58LX0";
 const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
 const shouldInjectGoogleTag =
@@ -33,27 +31,21 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
-    template: "%s | CrackCMS",
+    template: `%s | ${siteName}`,
   },
   description: siteDescription,
-  applicationName: "CrackCMS",
-  keywords: [
-    "UPSC CMS",
-    "medical exam preparation",
-    "UPSC CMS PYQ",
-    "UPSC CMS mock tests",
-    "AI tutor for medical students",
-    "CrackCMS",
-  ],
-  alternates: {
-    canonical: "/",
-  },
+  applicationName: siteName,
+  keywords: seoKeywords,
+  category: "education",
+  authors: [{ name: siteName }],
+  creator: siteName,
+  publisher: siteName,
   openGraph: {
     type: "website",
     url: siteUrl,
     title: siteTitle,
     description: siteDescription,
-    siteName: "CrackCMS",
+    siteName,
     images: [
       {
         url: "/crack-cms-logo.jpg",
@@ -95,6 +87,37 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <Script id="global-seo-structured-data" type="application/ld+json" strategy="beforeInteractive">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                name: siteName,
+                url: siteUrl,
+                logo: `${siteUrl}/crack-cms-logo.jpg`,
+                description: siteDescription,
+              },
+              {
+                "@type": "EducationalOrganization",
+                name: `${siteName} Medical Exam Prep`,
+                url: siteUrl,
+                description: "UPSC CMS and NEET PG focused online preparation platform for medical graduates.",
+              },
+              {
+                "@type": "WebSite",
+                name: siteName,
+                url: siteUrl,
+                inLanguage: "en-IN",
+                potentialAction: {
+                  "@type": "SearchAction",
+                  target: `${siteUrl}/questions?search={search_term_string}`,
+                  "query-input": "required name=search_term_string",
+                },
+              },
+            ],
+          })}
+        </Script>
         {shouldInjectGoogleTag && (
           <>
             <Script
@@ -115,6 +138,7 @@ export default function RootLayout({
         )}
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem>
           <TooltipProvider>
             <AuthProvider>
@@ -123,7 +147,8 @@ export default function RootLayout({
                 <TrafficAnalytics />
               </Suspense>
               <BackendWarmup />
-              {children}
+              <main id="main-content">{children}</main>
+              <StickyExamCta />
             </AuthProvider>
           </TooltipProvider>
         </ThemeProvider>

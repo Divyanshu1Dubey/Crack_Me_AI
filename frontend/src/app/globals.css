@@ -108,6 +108,31 @@ body {
   background-attachment: scroll;
 }
 
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 10px;
+  z-index: 120;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.18);
+  transform: translateY(-180%);
+  transition: transform 0.18s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, white);
+  outline-offset: 2px;
+}
+
 @media (min-width: 769px) {
   body {
     background-attachment: fixed;
@@ -249,6 +274,15 @@ h4 {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes loaderPulse {
+  0% {
+    transform: translateX(-115%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 @keyframes floatUp {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-6px); }
@@ -370,6 +404,7 @@ h4 {
 .main-content {
   margin-left: 260px;
   padding: 20px;
+  padding-bottom: 36px;
   min-height: 100vh;
 }
 
@@ -467,7 +502,7 @@ body.sidebar-hidden .main-content {
   .main-content {
     margin-left: 0;
     padding: 12px;
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 116px; /* Space for bottom nav + sticky CTA */
   }
   .page-container {
     padding-inline: 2px;

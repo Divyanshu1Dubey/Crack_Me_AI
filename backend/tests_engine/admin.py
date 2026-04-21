@@ -3,7 +3,7 @@ from .models import Test, TestAttempt, QuestionResponse
 
 @admin.register(Test)
 class TestAdmin(admin.ModelAdmin):
-    list_display = ['title', 'test_type', 'subject', 'num_questions', 'is_published']
+    list_display = ['title', 'test_type', 'subject', 'num_questions', 'is_published', 'version']
     list_filter = ['test_type', 'subject', 'is_published']
     filter_horizontal = ['questions']
 

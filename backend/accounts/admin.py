@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, TokenBalance, TokenConfig, TokenTransaction
+from .models import AdminAuditLog, CustomUser, TokenBalance, TokenConfig, TokenTransaction
 
 
 @admin.register(CustomUser)
@@ -46,3 +46,20 @@ class TokenTransactionAdmin(admin.ModelAdmin):
     list_filter = ['transaction_type', 'created_at']
     search_fields = ['user__username', 'payment_id']
     readonly_fields = ['user', 'transaction_type', 'amount', 'price_paid', 'payment_id', 'created_at']
+
+
+@admin.register(AdminAuditLog)
+class AdminAuditLogAdmin(admin.ModelAdmin):
+    list_display = ['created_at', 'actor', 'action', 'resource_type', 'resource_id']
+    list_filter = ['action', 'resource_type', 'created_at']
+    search_fields = ['actor__username', 'resource_type', 'resource_id', 'detail']
+    readonly_fields = ['actor', 'action', 'resource_type', 'resource_id', 'detail', 'metadata', 'created_at']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        return {}

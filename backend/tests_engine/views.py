@@ -2,7 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import F, Q
 import random
 
 from .models import Test, TestAttempt, QuestionResponse
@@ -12,6 +13,7 @@ from .serializers import (
     SubmitAnswerSerializer
 )
 from questions.models import Question, Subject, Topic
+from accounts.permissions import IsControlTowerAdmin
 
 
 class TestViewSet(viewsets.ModelViewSet):
@@ -19,15 +21,204 @@ class TestViewSet(viewsets.ModelViewSet):
     queryset = Test.objects.filter(is_published=True)
     filterset_fields = ['test_type', 'subject', 'topic']
 
+    def get_queryset(self):
+        queryset = Test.objects.all()
+        if self.action in ['list', 'retrieve']:
+            user = getattr(self.request, 'user', None)
+            if not user or not user.is_authenticated or (not getattr(user, 'is_admin', False) and not getattr(user, 'is_superuser', False)):
+                queryset = queryset.filter(is_published=True)
+        return queryset
+
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return TestDetailSerializer
         return TestSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAdminUser()]
+        if self.action in [
+            'create', 'update', 'partial_update', 'destroy',
+            'create_manual', 'set_questions', 'publish', 'unpublish', 'duplicate_test', 'safe_update'
+        ]:
+            return [IsControlTowerAdmin()]
         return [permissions.IsAuthenticated()]
+
+    @action(detail=False, methods=['post'], url_path='create-manual')
+    def create_manual(self, request):
+        """Create manual draft test with explicit question selection."""
+        def parse_int(value, default):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        def parse_float(value, default):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def parse_bool(value, default):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in ['true', '1', 'yes']:
+                    return True
+                if lowered in ['false', '0', 'no']:
+                    return False
+            return default
+
+        title = (request.data.get('title') or '').strip()
+        question_ids = request.data.get('question_ids', [])
+        if not title:
+            return Response({'error': 'title is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(question_ids, list):
+            return Response({'error': 'question_ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+
+        subject_id = request.data.get('subject_id') or None
+        topic_id = request.data.get('topic_id') or None
+        if subject_id and not Subject.objects.filter(id=subject_id).exists():
+            return Response({'error': 'subject_id is invalid'}, status=status.HTTP_400_BAD_REQUEST)
+        if topic_id and not Topic.objects.filter(id=topic_id).exists():
+            return Response({'error': 'topic_id is invalid'}, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_questions = Question.objects.filter(id__in=question_ids, is_active=True)
+
+        test = Test.objects.create(
+            title=title,
+            test_type=request.data.get('test_type', 'mixed'),
+            description=request.data.get('description', ''),
+            subject_id=subject_id,
+            topic_id=topic_id,
+            num_questions=max(validated_questions.count(), parse_int(request.data.get('num_questions', validated_questions.count() or 20), validated_questions.count() or 20)),
+            time_limit_minutes=parse_int(request.data.get('time_limit_minutes', 30), 30),
+            negative_marking=parse_bool(request.data.get('negative_marking', True), True),
+            negative_mark_value=parse_float(request.data.get('negative_mark_value', 0.33), 0.33),
+            is_published=False,
+            created_by=request.user,
+        )
+        if validated_questions.exists():
+            test.questions.set(validated_questions)
+            test.num_questions = test.questions.count()
+            test.save(update_fields=['num_questions'])
+
+        serializer = TestSerializer(test, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='set-questions')
+    def set_questions(self, request, pk=None):
+        """Replace test question set using search-filtered IDs from admin."""
+        test = self.get_object()
+        question_ids = request.data.get('question_ids', [])
+        if not isinstance(question_ids, list):
+            return Response({'error': 'question_ids must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            test.questions.set(Question.objects.filter(id__in=question_ids, is_active=True))
+            num_questions = test.questions.count()
+            Test.objects.filter(pk=test.pk).update(num_questions=num_questions, version=F('version') + 1, updated_at=timezone.now())
+            test.refresh_from_db(fields=['num_questions', 'version', 'updated_at'])
+        serializer = TestSerializer(test, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['patch'], url_path='publish')
+    def publish(self, request, pk=None):
+        test = self.get_object()
+        if test.questions.count() == 0:
+            return Response({'error': 'Cannot publish a test with no questions'}, status=status.HTTP_400_BAD_REQUEST)
+        Test.objects.filter(pk=test.pk).update(is_published=True, version=F('version') + 1, updated_at=timezone.now())
+        test.refresh_from_db(fields=['id', 'is_published', 'version'])
+        return Response({'message': 'Test published', 'id': test.id, 'is_published': True, 'version': test.version})
+
+    @action(detail=True, methods=['patch'], url_path='unpublish')
+    def unpublish(self, request, pk=None):
+        test = self.get_object()
+        Test.objects.filter(pk=test.pk).update(is_published=False, version=F('version') + 1, updated_at=timezone.now())
+        test.refresh_from_db(fields=['id', 'is_published', 'version'])
+        return Response({'message': 'Test unpublished', 'id': test.id, 'is_published': False, 'version': test.version})
+
+    @action(detail=True, methods=['post'], url_path='duplicate')
+    def duplicate_test(self, request, pk=None):
+        """Duplicate a test as draft for safe edits."""
+        source = self.get_object()
+        duplicate = Test.objects.create(
+            title=f"{source.title} (Copy)",
+            test_type=source.test_type,
+            description=source.description,
+            subject=source.subject,
+            topic=source.topic,
+            num_questions=source.num_questions,
+            time_limit_minutes=source.time_limit_minutes,
+            negative_marking=source.negative_marking,
+            negative_mark_value=source.negative_mark_value,
+            is_published=False,
+            created_by=request.user,
+        )
+        duplicate.questions.set(source.questions.all())
+        serializer = TestSerializer(duplicate, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='safe-update')
+    def safe_update(self, request, pk=None):
+        """Safeguarded update for live tests; requires force=true if attempts exist."""
+        test = self.get_object()
+        has_attempts = test.attempts.exists()
+        force_raw = request.data.get('force', False)
+        if isinstance(force_raw, bool):
+            force = force_raw
+        elif isinstance(force_raw, str):
+            normalized_force = force_raw.strip().lower()
+            if normalized_force not in ['true', '1', 'yes', 'false', '0', 'no']:
+                return Response({'error': 'force must be a boolean'}, status=status.HTTP_400_BAD_REQUEST)
+            force = normalized_force in ['true', '1', 'yes']
+        else:
+            return Response({'error': 'force must be a boolean'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if test.is_published and has_attempts and not force:
+            return Response(
+                {'error': 'Live test has attempts. Pass force=true to apply versioned update.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        editable = ['title', 'description', 'test_type', 'time_limit_minutes', 'negative_marking', 'negative_mark_value', 'subject', 'topic']
+        dirty = False
+        for field in editable:
+            if field in request.data:
+                value = request.data.get(field)
+                if field in ['subject', 'topic']:
+                    if value and ((field == 'subject' and not Subject.objects.filter(id=value).exists()) or (field == 'topic' and not Topic.objects.filter(id=value).exists())):
+                        return Response({'error': f'{field} is invalid'}, status=status.HTTP_400_BAD_REQUEST)
+                    setattr(test, f'{field}_id', value or None)
+                elif field == 'time_limit_minutes':
+                    try:
+                        setattr(test, field, int(value))
+                    except (TypeError, ValueError):
+                        return Response({'error': 'time_limit_minutes must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+                elif field == 'negative_mark_value':
+                    try:
+                        setattr(test, field, float(value))
+                    except (TypeError, ValueError):
+                        return Response({'error': 'negative_mark_value must be a number'}, status=status.HTTP_400_BAD_REQUEST)
+                elif field == 'negative_marking':
+                    if isinstance(value, bool):
+                        setattr(test, field, value)
+                    elif isinstance(value, str) and value.strip().lower() in ['true', '1', 'yes', 'false', '0', 'no']:
+                        setattr(test, field, value.strip().lower() in ['true', '1', 'yes'])
+                    else:
+                        return Response({'error': 'negative_marking must be a boolean'}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    setattr(test, field, value)
+                dirty = True
+
+        if dirty:
+            with transaction.atomic():
+                Test.objects.select_for_update().get(pk=test.pk)
+                test.save()
+                Test.objects.filter(pk=test.pk).update(version=F('version') + 1, updated_at=timezone.now())
+                test.refresh_from_db()
+
+        serializer = TestSerializer(test, context={'request': request})
+        return Response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='generate')
     def generate_test(self, request):
@@ -35,7 +226,14 @@ class TestViewSet(viewsets.ModelViewSet):
         test_type = request.data.get('test_type', 'mixed')
         subject_id = request.data.get('subject_id')
         topic_id = request.data.get('topic_id')
-        num_questions = int(request.data.get('num_questions', 20))
+        try:
+            num_questions = int(request.data.get('num_questions', 20))
+        except (TypeError, ValueError):
+            return Response({'error': 'num_questions must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+        if num_questions <= 0:
+            return Response({'error': 'num_questions must be greater than 0'}, status=status.HTTP_400_BAD_REQUEST)
+        if num_questions > 500:
+            return Response({'error': 'num_questions must be less than or equal to 500'}, status=status.HTTP_400_BAD_REQUEST)
         year = request.data.get('year')
 
         # Build query
@@ -44,11 +242,17 @@ class TestViewSet(viewsets.ModelViewSet):
 
         if test_type == 'subject' and subject_id:
             q_filter &= Q(subject_id=subject_id)
-            subject = Subject.objects.get(id=subject_id)
+            try:
+                subject = Subject.objects.get(id=subject_id)
+            except Subject.DoesNotExist:
+                return Response({'error': 'Invalid subject_id'}, status=status.HTTP_400_BAD_REQUEST)
             title_parts.append(subject.name)
         elif test_type == 'topic' and topic_id:
             q_filter &= Q(topic_id=topic_id)
-            topic = Topic.objects.get(id=topic_id)
+            try:
+                topic = Topic.objects.get(id=topic_id)
+            except Topic.DoesNotExist:
+                return Response({'error': 'Invalid topic_id'}, status=status.HTTP_400_BAD_REQUEST)
             title_parts.append(topic.name)
         elif test_type == 'pyq_year' and year:
             q_filter &= Q(year=year)
