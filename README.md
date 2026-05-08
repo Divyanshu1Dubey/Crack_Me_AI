@@ -6,7 +6,6 @@
 
 ---
 
-
 ## Table of Contents
 
 1. [Quick Start](#quick-start)
