@@ -21,7 +21,7 @@ django-axes>=7.0
 # Phase 7: Monitoring & structured logging
 sentry-sdk[django]>=2.0
 ddtrace>=2.9
-python-json-logger>=3.0
+python-json-logger>=4.1.0
 # Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
 django-redis>=5.4
 # Supabase admin operations
