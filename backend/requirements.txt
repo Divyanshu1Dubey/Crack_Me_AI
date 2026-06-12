@@ -25,4 +25,4 @@ python-json-logger>=3.0
 # Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
 django-redis>=5.4
 # Supabase admin operations
-supabase>=2.0
+supabase>=2.28.3
