@@ -250,6 +250,7 @@ curl -H "Authorization: Bearer <supabase_access_token>" \
 
 ---
 
+
 ## Test Scenario 8: Disabled Local Login Endpoint
 
 ### Test Steps

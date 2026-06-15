@@ -113,13 +113,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 configured.add(bootstrap_email)
             return configured
 
-        # Privileges come from Supabase metadata. Accept both app_metadata and
-        # user_metadata because some admin promotion flows store role flags in
-        # user_metadata. Also support an explicit environment allowlist for
-        # deterministic bootstrap behavior.
+        # Privileges come from Supabase metadata. ONLY use app_metadata (which is secure
+        # and admin-only) and the CONTROL_TOWER_ADMIN_EMAILS env allowlist. Ignore
+        # user_metadata to prevent client-side self-promotion vulnerabilities.
         is_admin_user = (
             _is_admin_from_metadata(app_metadata)
-            or _is_admin_from_metadata(metadata)
             or email in _admin_email_allowlist()
         )
 
@@ -141,9 +139,9 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             user.set_unusable_password()
             user.save(update_fields=["password"])
         else:
-            existing_admin = bool(getattr(user, "is_admin", False) or user.is_superuser or user.role == "admin")
-            if existing_admin:
-                is_admin_user = True
+            # Removed the existing_admin override to ensure role demotions in Supabase
+            # are successfully synced to the Django local database.
+            pass
 
             updates = []
             desired_role = "admin" if is_admin_user else "student"

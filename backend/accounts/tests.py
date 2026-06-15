@@ -116,8 +116,8 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(response.status_code, 410)
 
-    def test_supabase_sync_promotes_admin_from_user_metadata(self):
-        """Supabase sync should promote admin when admin flags are present in user_metadata."""
+    def test_supabase_sync_promotes_admin_from_app_metadata(self):
+        """Supabase sync should promote admin when admin flags are present in app_metadata."""
         user = User.objects.create_user(
             username="deeksha",
             email="meduraa.web@gmail.com",
@@ -134,6 +134,37 @@ class AuthApiTests(TestCase):
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",
+                },
+                "app_metadata": {
+                    "role": "admin",
+                    "is_admin": True,
+                },
+            }
+        )
+
+        user.refresh_from_db()
+        self.assertEqual(user.role, "admin")
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
+
+    def test_supabase_sync_ignores_user_metadata_for_promotion(self):
+        """Supabase sync must ignore admin flags in user_metadata to prevent self-promotion."""
+        user = User.objects.create_user(
+            username="attacker",
+            email="attacker@example.com",
+            password="StrongPass123!",
+            role="student",
+            is_superuser=False,
+            is_staff=False,
+        )
+
+        auth_backend = SupabaseJWTAuthentication()
+        auth_backend._upsert_local_user(
+            {
+                "email": "attacker@example.com",
+                "user_metadata": {
+                    "username": "attacker",
+                    "first_name": "Attacker",
                     "role": "admin",
                     "is_admin": True,
                 },
@@ -142,6 +173,37 @@ class AuthApiTests(TestCase):
         )
 
         user.refresh_from_db()
-        self.assertEqual(user.role, "admin")
-        self.assertTrue(user.is_superuser)
-        self.assertTrue(user.is_staff)
+        self.assertEqual(user.role, "student")
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
+
+    def test_supabase_sync_demotes_user(self):
+        """Supabase sync should demote an admin when admin flags are removed."""
+        user = User.objects.create_user(
+            username="deeksha",
+            email="meduraa.web@gmail.com",
+            password="StrongPass123!",
+            role="admin",
+            is_superuser=True,
+            is_staff=True,
+        )
+
+        auth_backend = SupabaseJWTAuthentication()
+        auth_backend._upsert_local_user(
+            {
+                "email": "meduraa.web@gmail.com",
+                "user_metadata": {
+                    "username": "deeksha",
+                    "first_name": "deeksha",
+                },
+                "app_metadata": {
+                    "role": "student",
+                    "is_admin": False,
+                },
+            }
+        )
+
+        user.refresh_from_db()
+        self.assertEqual(user.role, "student")
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
