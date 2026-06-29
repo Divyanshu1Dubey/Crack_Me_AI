@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-SW77S58LX0';
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-MM88RT1QQK';
 const SIMPLE_ANALYTICS_ENABLED = (process.env.NEXT_PUBLIC_SIMPLE_ANALYTICS_ENABLED ?? 'true') !== 'false';
 const ANALYTICS_IN_DEV = (process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV ?? 'false') === 'true';
 

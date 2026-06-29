@@ -12,7 +12,7 @@ import TrafficAnalytics from "@/components/TrafficAnalytics";
 import StickyExamCta from "@/components/StickyExamCta";
 import { seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
-const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-SW77S58LX0";
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
 const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
 const shouldInjectGoogleTag =
   Boolean(gaMeasurementId) && (process.env.NODE_ENV === "production" || analyticsInDev);

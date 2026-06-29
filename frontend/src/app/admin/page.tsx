@@ -1357,15 +1357,15 @@ export default function AdminDashboardPage() {
 
     if (authLoading || loading) {
         return (
-            <div className="min-h-screen bg-background flex">
+            <>
                 <Sidebar />
-                <div className="flex-1 flex flex-col">
+                <div className="main-content">
                     <Header />
-                    <main className="flex-1 p-6 flex items-center justify-center">
+                    <main className="p-6 flex items-center justify-center" style={{ minHeight: '60vh' }}>
                         <div className="animate-pulse text-muted-foreground">Loading admin dashboard...</div>
                     </main>
                 </div>
-            </div>
+            </>
         );
     }
 
@@ -1380,11 +1380,11 @@ export default function AdminDashboardPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-background flex">
+        <>
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="main-content">
                 <Header />
-                <main className="flex-1 p-6 page-container space-y-6">
+                <main className="p-6 page-container space-y-6">
                     {/* Title */}
                     <div className="flex items-center gap-3">
                         <Shield className="w-7 h-7 text-primary" />
@@ -3236,6 +3236,6 @@ export default function AdminDashboardPage() {
                     )}
                 </main>
             </div>
-        </div>
+        </>
     );
 }
