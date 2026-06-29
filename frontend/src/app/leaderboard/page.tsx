@@ -72,9 +72,9 @@ export default function LeaderboardPage() {
     const rest = entries.slice(3);
 
     return (
-        <div className="min-h-screen bg-background flex">
+        <>
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="main-content">
                 {/* Sticky, always-visible header for leaderboard */}
                 <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/60 px-4 md:px-8 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 shadow-sm">
                     <div className="flex items-center gap-3 min-w-0">
@@ -213,6 +213,6 @@ export default function LeaderboardPage() {
                     )}
                 </main>
             </div>
-        </div>
+        </>
     );
 }

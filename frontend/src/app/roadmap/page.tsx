@@ -304,27 +304,27 @@ export default function RoadmapPage() {
 
     if (authLoading) {
         return (
-            <div className="min-h-screen bg-background flex">
+            <>
                 <Sidebar />
-                <div className="flex-1 flex flex-col">
+                <div className="main-content">
                     <Header />
-                    <main className="flex-1 p-6 page-container space-y-6">
+                    <main className="p-6 page-container space-y-6">
                         <Skeleton className="h-8 w-64" />
                         <div className="grid gap-4">
                             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                         </div>
                     </main>
                 </div>
-            </div>
+            </>
         );
     }
 
     return (
-        <div className="min-h-screen bg-background flex">
+        <>
             <Sidebar />
-            <div className="flex-1 flex flex-col">
+            <div className="main-content">
                 <Header />
-                <main className="flex-1 p-6 page-container space-y-6">
+                <main className="p-6 page-container space-y-6">
                     {/* Page Header */}
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg">
@@ -641,6 +641,6 @@ export default function RoadmapPage() {
                     )}
                 </main>
             </div>
-        </div>
+        </>
     );
 }

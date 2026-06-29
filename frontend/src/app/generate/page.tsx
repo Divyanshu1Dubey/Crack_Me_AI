@@ -152,10 +152,11 @@ export default function GeneratePage() {
         : ['Medicine', 'Surgery', 'Pediatrics', 'Obstetrics & Gynaecology', 'Preventive & Social Medicine'];
 
     return (
-        <div className="min-h-screen flex bg-background">
+        <>
             <Sidebar />
-            <main className="flex-1 p-8 overflow-y-auto">
-                <div className="max-w-4xl mx-auto">
+            <div className="main-content">
+                <main className="page-container p-8">
+                    <div className="max-w-4xl mx-auto">
                     {/* Header */}
                     <div className="flex items-center gap-3 mb-2">
                         <Sparkles className="w-8 h-8" style={{ color: 'var(--accent-primary)' }} />
@@ -514,8 +515,8 @@ export default function GeneratePage() {
                             </p>
                         </div>
                     )}
-                </div>
-            </main>
-        </div>
+                </main>
+            </div>
+        </>
     );
 }
