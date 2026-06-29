@@ -515,6 +515,7 @@ export default function GeneratePage() {
                             </p>
                         </div>
                     )}
+                    </div>
                 </main>
             </div>
         </>
