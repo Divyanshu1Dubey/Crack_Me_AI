@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth';
@@ -256,14 +257,14 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
+      <section className="relative mx-auto max-w-5xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
         {/* Glow decorative effects */}
         <div className="absolute left-1/4 top-10 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />
         <div className="absolute right-1/4 bottom-10 -z-10 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl dark:bg-teal-500/5" />
 
-        <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-          {/* Left Column: Heading & Intro */}
-          <div className="lg:col-span-7 space-y-6">
+        <div className="flex flex-col gap-10">
+          {/* Header block with Logo and Title */}
+          <div className="space-y-6">
             <Badge 
               variant="secondary" 
               className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
@@ -272,29 +273,46 @@ export default function LandingPage() {
               Doctor-first prep. Smart study system.
             </Badge>
 
-            <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              A Modern UPSC CMS System for
-              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400"> Doctor-Led AI Preparation</span>
-            </h1>
+            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+              {/* CMS Circle Logo */}
+              <div className="relative h-28 w-28 md:h-32 md:w-32 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
+                <Image 
+                  src="/cms-circle-logo.png" 
+                  alt="CMS Circle Logo" 
+                  fill
+                  sizes="(max-width: 768px) 112px, 128px"
+                  className="object-cover rounded-full"
+                  priority
+                />
+              </div>
 
-            <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Build daily clinical consistency with an integrated medical prep operating system. 
-              Equipped with a smart question bank, RAG-grounded AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
-            </p>
+              {/* Title, Description & CTAs */}
+              <div className="space-y-4 flex-1">
+                <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
+                  A Modern UPSC CMS System for
+                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400"> Doctor-Led AI Preparation</span>
+                </h1>
+                
+                <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground text-left">
+                  Build daily clinical consistency with an integrated medical prep operating system. 
+                  Equipped with a smart question bank, RAG-grounded AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
+                </p>
 
-            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
-              <Button size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
-                <Link href={isAuthenticated ? '/dashboard' : '/register'}>
-                  Start Preparing
-                  <ChevronRight className="ml-1.5 w-5 h-5" />
-                </Link>
-              </Button>
-              <Button size="xl" variant="outline" asChild className="w-full rounded-2xl sm:w-auto font-semibold bg-background hover:bg-muted/50">
-                <Link href="#features">Explore Platform</Link>
-              </Button>
+                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
+                  <Button size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
+                    <Link href={isAuthenticated ? '/dashboard' : '/register'}>
+                      Start Preparing
+                      <ChevronRight className="ml-1.5 w-5 h-5" />
+                    </Link>
+                  </Button>
+                  <Button size="xl" variant="outline" asChild className="w-full rounded-2xl sm:w-auto font-semibold bg-background hover:bg-muted/50">
+                    <Link href="#features">Explore Platform</Link>
+                  </Button>
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2.5 pt-4">
+            <div className="flex flex-wrap gap-2.5 pt-2">
               <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
                 <Clock3 className="h-4 w-4 text-blue-500" />
                 Daily workflow optimized
@@ -310,8 +328,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right Column: Premium Mock Dashboard Overlay Widget */}
-          <div className="lg:col-span-5 relative group">
+          {/* "System Cockpit Live" Dashboard */}
+          <div className="relative group max-w-3xl mx-auto w-full pt-4">
             <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
             <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
               {/* Header bar of the widget */}
@@ -328,15 +346,34 @@ export default function LandingPage() {
               </div>
 
               <CardContent className="p-6 space-y-5">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                    <Stethoscope className="h-5 w-5 text-blue-500" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                      <Stethoscope className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">Dr. Sarah Jenkins</h3>
+                      <p className="text-[11px] text-muted-foreground">General Medicine Specialist Track</p>
+                    </div>
+                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">Aspirant</Badge>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Dr. Sarah Jenkins</h3>
-                    <p className="text-[11px] text-muted-foreground">General Medicine Specialist Track</p>
+
+                  <div className="flex gap-4">
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Flame className="h-4 w-4 text-orange-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
+                        <p className="text-xs font-extrabold">12 Days</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Award className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
+                        <p className="text-xs font-extrabold">68.5%</p>
+                      </div>
+                    </div>
                   </div>
-                  <Badge className="ml-auto bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">Aspirant</Badge>
                 </div>
 
                 {/* Progress bar */}
@@ -347,24 +384,6 @@ export default function LandingPage() {
                   </div>
                   <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
-                  </div>
-                </div>
-
-                {/* Stats grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-border/50 bg-muted/20 p-3 flex items-center gap-2.5">
-                    <Flame className="h-4 w-4 text-orange-500" />
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
-                      <p className="text-sm font-extrabold">12 Days</p>
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-border/50 bg-muted/20 p-3 flex items-center gap-2.5">
-                    <Award className="h-4 w-4 text-amber-500" />
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
-                      <p className="text-sm font-extrabold">68.5%</p>
-                    </div>
                   </div>
                 </div>
 
