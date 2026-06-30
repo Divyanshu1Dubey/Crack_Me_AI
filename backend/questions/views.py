@@ -995,6 +995,10 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         self._normalize_question_payload(serializer.validated_data)
+        if 'correct_answer' in serializer.validated_data:
+            serializer.validated_data['lock_answer'] = True
+        if 'explanation' in serializer.validated_data:
+            serializer.validated_data['lock_explanation'] = True
         serializer.save()
 
 

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI, authAPI, questionsAPI, testsAPI, textbooksAPI } from '@/lib/api';
+import { analyticsAPI, authAPI, questionsAPI, testsAPI, textbooksAPI, extractApiErrorMessage } from '@/lib/api';
 import {
     Users, BookOpen, FileText, AlertTriangle, TrendingUp,
     CheckCircle, Clock, Shield, Megaphone, Plus, Trash2,
@@ -1062,8 +1062,10 @@ export default function AdminDashboardPage() {
             await questionsAPI.linkRelatedPyqs(id, relatedIds);
             cancelInlineEdit();
             fetchQuestions();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            console.error('Failed to save question edit:', err);
+            const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
+            alert(`Error saving question: ${msg}`);
         }
         setSavingEdit(false);
     };
