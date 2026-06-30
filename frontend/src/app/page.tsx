@@ -432,18 +432,6 @@ export default function LandingPage() {
                     <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
                   </div>
                 </div>
-
-                {/* Live Console simulator */}
-                <div className="rounded-xl bg-slate-950 p-4 font-mono text-[11px] text-slate-300 leading-relaxed border border-slate-800 shadow-inner">
-                  <div className="flex items-center gap-1.5 border-b border-slate-800 pb-2 mb-2 text-slate-500">
-                    <span className="h-2 w-2 rounded-full bg-slate-700" />
-                    <span>AI Router Console</span>
-                  </div>
-                  <p className="text-blue-400"><span className="text-slate-500">[18:42:01]</span> Outgoing clinical query...</p>
-                  <p className="text-amber-400"><span className="text-slate-500">[18:42:01]</span> Routed to Groq (Llama 3.3 70B)</p>
-                  <p className="text-emerald-400"><span className="text-slate-500">[18:42:02]</span> RAG TF-IDF search completed in 42ms</p>
-                  <p className="text-slate-400"><span className="text-slate-500">[18:42:03]</span> Response parsed. Tokens balance updated.</p>
-                </div>
               </CardContent>
             </Card>
           </div>
