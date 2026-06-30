@@ -24,20 +24,20 @@ function BrandMarkContent({
     <div className={cn("flex items-center gap-3", className)}>
       <div
         className={cn(
-          "relative overflow-hidden rounded-[1.25rem] border shadow-sm",
-          compact ? "h-10 w-[4.75rem]" : "h-12 w-[5.75rem]",
+          "relative overflow-hidden rounded-full border shadow-sm",
+          compact ? "h-10 w-10" : "h-12 w-12",
           light
             ? "border-white/15 bg-white/10 shadow-black/10"
             : "border-border/70 bg-card/90 shadow-slate-900/5"
         )}
       >
         <Image
-          src="/crack-cms-logo.jpg"
+          src="/cms-circle-logo.png"
           alt="CrackCMS logo"
           fill
           priority={priority}
           className="object-cover"
-          sizes={compact ? "76px" : "92px"}
+          sizes={compact ? "40px" : "48px"}
         />
       </div>
       <div className="min-w-0">

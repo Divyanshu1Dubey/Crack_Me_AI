@@ -208,7 +208,7 @@ export default function LandingPage() {
                 '@type': 'Organization',
                 name: siteName,
                 url: siteUrl,
-                logo: `${siteUrl}/crack-cms-logo.jpg`,
+                logo: `${siteUrl}/cms-circle-logo.png`,
                 description: 'Doctor-first UPSC CMS and NEET PG preparation platform for medical aspirants.',
               },
               {

@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     siteName,
     images: [
       {
-        url: "/crack-cms-logo.jpg",
+        url: "/cms-circle-logo.png",
         width: 1200,
         height: 630,
         alt: "CrackCMS UPSC CMS Preparation Platform",
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteTitle,
     description: siteDescription,
-    images: ["/crack-cms-logo.jpg"],
+    images: ["/cms-circle-logo.png"],
   },
   robots: {
     index: true,
@@ -74,8 +74,8 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   icons: {
-    icon: [{ url: "/crack-cms-logo.jpg", type: "image/jpeg" }],
-    apple: [{ url: "/crack-cms-logo.jpg", type: "image/jpeg" }],
+    icon: [{ url: "/cms-circle-logo.png", type: "image/png" }],
+    apple: [{ url: "/cms-circle-logo.png", type: "image/png" }],
   },
 };
 
@@ -95,7 +95,7 @@ export default function RootLayout({
                 "@type": "Organization",
                 name: siteName,
                 url: siteUrl,
-                logo: `${siteUrl}/crack-cms-logo.jpg`,
+                logo: `${siteUrl}/cms-circle-logo.png`,
                 description: siteDescription,
               },
               {

@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     description: siteDescription,
     url: `${siteUrl}/resources`,
     siteName,
-    images: ['/crack-cms-logo.jpg'],
+    images: ['/cms-circle-logo.png'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'UPSC CMS Resources and Medical Exam Guide',
     description: siteDescription,
-    images: ['/crack-cms-logo.jpg'],
+    images: ['/cms-circle-logo.png'],
   },
   robots: {
     index: true,
