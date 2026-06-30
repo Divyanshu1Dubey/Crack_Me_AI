@@ -34,7 +34,11 @@ _QUESTION_BOOTSTRAP_LOCK = Lock()
 
 def _ensure_question_bank_loaded():
     """Load fixture once if question bank is empty in a fresh deployment."""
-    if Question.objects.filter(is_active=True).exists():
+    import sys
+    if 'test' in sys.argv or 'test_all' in sys.argv:
+        return
+
+    if Question.objects.filter(is_active=True).count() >= 1800:
         return
 
     fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
@@ -42,7 +46,7 @@ def _ensure_question_bank_loaded():
         return
 
     with _QUESTION_BOOTSTRAP_LOCK:
-        if Question.objects.filter(is_active=True).exists():
+        if Question.objects.filter(is_active=True).count() >= 1800:
             return
         
         # 1. Run migrations to ensure database schema exists
