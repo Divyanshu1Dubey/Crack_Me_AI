@@ -375,9 +375,19 @@ export default function LandingPage() {
           </div>
 
           {/* "System Cockpit Live" Dashboard */}
-          <div className="relative group max-w-3xl mx-auto w-full pt-4">
-            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
-            <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
+          <div className="space-y-6 pt-10">
+            <div className="text-center space-y-2">
+              <h2 className="font-display text-2xl font-extrabold text-foreground tracking-tight">
+                Personalized Study Cockpit
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+                Track high-yield progress, streak targets, and score estimations.
+              </p>
+            </div>
+
+            <div className="relative group max-w-3xl mx-auto w-full">
+              <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+              <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
               {/* Header bar of the widget */}
               <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
                 <div className="flex items-center gap-2">
@@ -436,6 +446,7 @@ export default function LandingPage() {
             </Card>
           </div>
         </div>
+      </div>
 
         {/* Stats Strip */}
         <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50 max-w-5xl mx-auto w-full">
