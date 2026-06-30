@@ -257,14 +257,14 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative mx-auto max-w-5xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
+      <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
         {/* Glow decorative effects */}
         <div className="absolute left-1/4 top-10 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />
         <div className="absolute right-1/4 bottom-10 -z-10 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl dark:bg-teal-500/5" />
 
         <div className="flex flex-col gap-10">
           {/* Header block with Logo and Title */}
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto w-full">
             <Badge 
               variant="secondary" 
               className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
@@ -329,7 +329,7 @@ export default function LandingPage() {
           </div>
 
           {/* "Campus Momentum" Dashboard */}
-          <div className="relative group max-w-4xl mx-auto w-full pt-4">
+          <div className="relative group w-full pt-4">
             <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
             <div className="rounded-[2.5rem] border border-border/80 bg-card p-6 md:p-10 shadow-xl space-y-6 relative overflow-hidden">
               <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
@@ -345,7 +345,7 @@ export default function LandingPage() {
               </div>
 
               {/* Scrolling ticker visual replacement */}
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                 {campuses.map((campus) => (
                   <div 
                     key={campus} 
@@ -356,7 +356,7 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 pt-2">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-2">
                 {communityProfiles.map((profile) => (
                   <div key={profile.name} className="rounded-2xl border border-border/50 bg-muted/15 p-4 space-y-1.5 relative hover:border-primary/35 transition-all text-left">
                     <span className="absolute top-4 right-4 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
@@ -376,7 +376,7 @@ export default function LandingPage() {
         </div>
 
         {/* Stats Strip */}
-        <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50">
+        <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50 max-w-5xl mx-auto w-full">
           {stats.map((stat, i) => (
             <div key={i} className="flex flex-col items-center text-center p-3 hover:translate-y-[-2px] transition-transform">
               <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center mb-3">
