@@ -1,0 +1,2 @@
+release: python manage.py migrate --no-input && python manage.py bootstrap_admin
+web: gunicorn crack_cms.wsgi --log-file -
