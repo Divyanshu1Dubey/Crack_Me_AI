@@ -817,7 +817,7 @@ export default function LandingPage() {
                     const isFlipped = flippedCard === c.id;
                     const isSelected = flippedCard === null ? c.id === 1 : flippedCard === c.id;
 
-                    if (!isSelected && flippedCard !== null) return null;
+                    if (!isSelected) return null;
                     // Default fallback if nothing is clicked
                     const activeFlippedState = flippedCard === null ? false : isFlipped;
 
