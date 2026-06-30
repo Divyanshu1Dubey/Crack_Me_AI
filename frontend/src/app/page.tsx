@@ -270,17 +270,17 @@ export default function LandingPage() {
               className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2 text-primary" />
-              Doctor-first prep. Smart study system.
+              Doctor-first prep. Smart study platform.
             </Badge>
 
             <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
               {/* CMS Circle Logo */}
-              <div className="relative h-28 w-28 md:h-32 md:w-32 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
+              <div className="relative h-32 w-32 md:h-48 md:w-48 lg:h-56 lg:w-56 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
                 <Image 
                   src="/cms-circle-logo.png" 
                   alt="CMS Circle Logo" 
                   fill
-                  sizes="(max-width: 768px) 112px, 128px"
+                  sizes="(max-width: 768px) 128px, (max-width: 1024px) 192px, 224px"
                   className="object-cover rounded-full"
                   priority
                 />
@@ -312,7 +312,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2.5 pt-2">
+            <div className="flex flex-wrap justify-center gap-2.5 pt-4 w-full">
               <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
                 <Clock3 className="h-4 w-4 text-blue-500" />
                 Daily workflow optimized
