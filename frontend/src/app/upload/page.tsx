@@ -89,6 +89,7 @@ export default function UploadPage() {
             <Sidebar />
             <div className="main-content">
                 <main className="page-container p-8">
+                    <div className="max-w-4xl mx-auto">
                     {/* Header */}
                     <div className="flex items-center gap-3 mb-2">
                         <Database className="w-8 h-8" style={{ color: 'var(--accent-primary)' }} />
