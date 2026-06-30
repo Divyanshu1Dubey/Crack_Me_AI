@@ -488,211 +488,217 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 1: Clinical PYQ Atlas (Interactive MCQ) */}
-          <div className="grid gap-12 lg:grid-cols-12 items-center">
-            <div className="lg:col-span-6 space-y-6">
-              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
-                FEATURE DEEP DIVE
-              </Badge>
-              <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
-                Clinical PYQ Atlas
-              </h3>
-              <p className="text-base text-muted-foreground leading-relaxed">
-                Unlock 2000+ active past questions from UPSC CMS (2018-2025). Every question is systematically indexed by subject, topic cluster, and difficulty grade, and enriched with voter-consensus answers and high-yield references.
-              </p>
-              
-              <ul className="space-y-3 font-semibold text-foreground text-sm">
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
-                  Double-verified medical consensus answer keys
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
-                  Direct cross-referencing to core medical textbooks
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
-                  Keyboard shortcuts for lightning-fast answer flow
-                </li>
-              </ul>
-            </div>
-
-            {/* Interactive MCQ Mock Widget */}
-            <div className="lg:col-span-6">
-              <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-xl relative">
-                <span className="absolute -top-3 left-6 rounded-full bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
-                  Interactive Demo
-                </span>
+          <div className="relative group/feat rounded-[2.5rem] border border-emerald-500/20 dark:border-emerald-500/10 bg-emerald-500/[0.02] dark:bg-emerald-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-emerald-500/35 transition-all duration-300 overflow-hidden">
+            <div className="absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl opacity-60" />
+            <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
+              <div className="lg:col-span-6 space-y-6">
+                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
+                  FEATURE DEEP DIVE
+                </Badge>
+                <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
+                  Clinical PYQ Atlas
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Unlock 2000+ active past questions from UPSC CMS (2018-2025). Every question is systematically indexed by subject, topic cluster, and difficulty grade, and enriched with voter-consensus answers and high-yield references.
+                </p>
                 
-                <div className="space-y-4 pt-2">
-                  <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
-                    <span>UPSC CMS 2024 Paper 1</span>
-                    <span className="text-emerald-600">Question #182</span>
-                  </div>
+                <ul className="space-y-3 font-semibold text-foreground text-sm">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
+                    Double-verified medical consensus answer keys
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
+                    Direct cross-referencing to core medical textbooks
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
+                    Keyboard shortcuts for lightning-fast answer flow
+                  </li>
+                </ul>
+              </div>
 
-                  <p className="text-sm font-bold text-foreground leading-relaxed">
-                    A 45-year-old male presents with acute severe chest pain radiating to the left arm. EKG shows ST-elevation in leads V1-V4. What is the immediate drug of choice for coronary reperfusion in a non-PCI capable center?
-                  </p>
-
-                  <div className="space-y-2">
-                    {[
-                      { key: 'A', text: 'Oral Beta Blockers' },
-                      { key: 'B', text: 'Thrombolytic Therapy (e.g. Tenecteplase)' },
-                      { key: 'C', text: 'Sublingual Nitroglycerin' },
-                      { key: 'D', text: 'Maintenance Clopidogrel' }
-                    ].map((opt) => {
-                      const isSelected = pyqAnswer === opt.key;
-                      const isCorrect = opt.key === 'B';
-                      let btnStyle = "border-border/60 hover:border-emerald-500/50 hover:bg-muted/10";
-                      
-                      if (pyqAnswer !== null) {
-                        if (isCorrect) {
-                          btnStyle = "border-emerald-500 bg-emerald-500/5 text-emerald-900 dark:text-emerald-300";
-                        } else if (isSelected) {
-                          btnStyle = "border-red-500 bg-red-50/5 text-red-900 dark:text-red-400";
-                        } else {
-                          btnStyle = "border-border/40 opacity-60";
-                        }
-                      }
-
-                      return (
-                        <button
-                          key={opt.key}
-                          onClick={() => {
-                            if (pyqAnswer === null) {
-                              setPyqAnswer(opt.key);
-                              setShowPyqExplanation(true);
-                            }
-                          }}
-                          className={`w-full text-left rounded-xl border p-3.5 text-xs font-semibold flex items-center gap-3 transition-all ${btnStyle}`}
-                        >
-                          <span className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 border text-xs font-extrabold
-                            ${isSelected && isCorrect ? 'bg-emerald-500 text-white border-emerald-500' : ''}
-                            ${isSelected && !isCorrect ? 'bg-red-500 text-white border-red-500' : ''}
-                            ${!isSelected && isCorrect && pyqAnswer !== null ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-muted/30 border-border'}
-                          `}>
-                            {opt.key}
-                          </span>
-                          <span>{opt.text}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {showPyqExplanation && (
-                    <div className="rounded-xl bg-muted/40 p-4 border border-emerald-500/10 space-y-2 animate-fadeIn">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600">
-                        <Sparkles className="h-4 w-4" />
-                        AI Explanation Consensus:
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        In an acute anterior wall STEMI (V1-V4 elevation) presenting to a non-PCI center, immediate thrombolytic therapy is indicated if primary PCI delay exceeds 120 minutes. Tenecteplase is preferred due to high fibrin specificity.
-                      </p>
-                      <div className="flex justify-between items-center pt-2 text-[10px] text-muted-foreground border-t border-border/50">
-                        <span>Textbook: <strong>Harrison's Cardiology, Ch. 273</strong></span>
-                        <button 
-                          onClick={() => {
-                            setPyqAnswer(null);
-                            setShowPyqExplanation(false);
-                          }}
-                          className="text-primary font-bold hover:underline"
-                        >
-                          Reset Demo
-                        </button>
-                      </div>
+              {/* Interactive MCQ Mock Widget */}
+              <div className="lg:col-span-6">
+                <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-xl relative">
+                  <span className="absolute -top-3 left-6 rounded-full bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
+                    Interactive Demo
+                  </span>
+                  
+                  <div className="space-y-4 pt-2">
+                    <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                      <span>UPSC CMS 2024 Paper 1</span>
+                      <span className="text-emerald-600">Question #182</span>
                     </div>
-                  )}
+
+                    <p className="text-sm font-bold text-foreground leading-relaxed">
+                      A 45-year-old male presents with acute severe chest pain radiating to the left arm. EKG shows ST-elevation in leads V1-V4. What is the immediate drug of choice for coronary reperfusion in a non-PCI capable center?
+                    </p>
+
+                    <div className="space-y-2">
+                      {[
+                        { key: 'A', text: 'Oral Beta Blockers' },
+                        { key: 'B', text: 'Thrombolytic Therapy (e.g. Tenecteplase)' },
+                        { key: 'C', text: 'Sublingual Nitroglycerin' },
+                        { key: 'D', text: 'Maintenance Clopidogrel' }
+                      ].map((opt) => {
+                        const isSelected = pyqAnswer === opt.key;
+                        const isCorrect = opt.key === 'B';
+                        let btnStyle = "border-border/60 hover:border-emerald-500/50 hover:bg-muted/10";
+                        
+                        if (pyqAnswer !== null) {
+                          if (isCorrect) {
+                            btnStyle = "border-emerald-500 bg-emerald-500/5 text-emerald-900 dark:text-emerald-300";
+                          } else if (isSelected) {
+                            btnStyle = "border-red-500 bg-red-50/5 text-red-900 dark:text-red-400";
+                          } else {
+                            btnStyle = "border-border/40 opacity-60";
+                          }
+                        }
+
+                        return (
+                          <button
+                            key={opt.key}
+                            onClick={() => {
+                              if (pyqAnswer === null) {
+                                setPyqAnswer(opt.key);
+                                setShowPyqExplanation(true);
+                              }
+                            }}
+                            className={`w-full text-left rounded-xl border p-3.5 text-xs font-semibold flex items-center gap-3 transition-all ${btnStyle}`}
+                          >
+                            <span className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 border text-xs font-extrabold
+                              ${isSelected && isCorrect ? 'bg-emerald-500 text-white border-emerald-500' : ''}
+                              ${isSelected && !isCorrect ? 'bg-red-500 text-white border-red-500' : ''}
+                              ${!isSelected && isCorrect && pyqAnswer !== null ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-muted/30 border-border'}
+                            `}>
+                              {opt.key}
+                            </span>
+                            <span>{opt.text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {showPyqExplanation && (
+                      <div className="rounded-xl bg-muted/40 p-4 border border-emerald-500/10 space-y-2 animate-fadeIn">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                          <Sparkles className="h-4 w-4" />
+                          AI Explanation Consensus:
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-muted-foreground">
+                          In an acute anterior wall STEMI (V1-V4 elevation) presenting to a non-PCI center, immediate thrombolytic therapy is indicated if primary PCI delay exceeds 120 minutes. Tenecteplase is preferred due to high fibrin specificity.
+                        </p>
+                        <div className="flex justify-between items-center pt-2 text-[10px] text-muted-foreground border-t border-border/50">
+                          <span>Textbook: <strong>Harrison's Cardiology, Ch. 273</strong></span>
+                          <button 
+                            onClick={() => {
+                              setPyqAnswer(null);
+                              setShowPyqExplanation(false);
+                            }}
+                            className="text-primary font-bold hover:underline"
+                          >
+                            Reset Demo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Feature 2: Doctor-Grade AI Tutor (Interactive Chat RAG) */}
-          <div className="grid gap-12 lg:grid-cols-12 items-center">
-            {/* Interactive Chat Mock Widget on the Left */}
-            <div className="lg:col-span-6 lg:order-last">
-              <div className="lg:pl-6 space-y-6">
-                <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
-                  RAG KNOWLEDGE RETRIEVAL
-                </Badge>
-                <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
-                  Doctor-Grade AI Tutor
-                </h3>
-                <p className="text-base text-muted-foreground leading-relaxed">
-                  Stuck on a tricky pathophysiology concept? Our AI Tutor retrieves context from 79 textbook chapters and medical resources to provide grounded explanations aligned with standard clinical practice.
-                </p>
+          <div className="relative group/feat rounded-[2.5rem] border border-blue-500/20 dark:border-blue-500/10 bg-blue-500/[0.02] dark:bg-blue-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-blue-500/35 transition-all duration-300 overflow-hidden">
+            <div className="absolute left-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl opacity-60" />
+            <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
+              {/* Interactive Chat Mock Widget on the Left */}
+              <div className="lg:col-span-6 lg:order-last">
+                <div className="lg:pl-6 space-y-6">
+                  <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
+                    RAG KNOWLEDGE RETRIEVAL
+                  </Badge>
+                  <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
+                    Doctor-Grade AI Tutor
+                  </h3>
+                  <p className="text-base text-muted-foreground leading-relaxed">
+                    Stuck on a tricky pathophysiology concept? Our AI Tutor retrieves context from 79 textbook chapters and medical resources to provide grounded explanations aligned with standard clinical practice.
+                  </p>
 
-                <ul className="space-y-3 font-semibold text-foreground text-sm">
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
-                    Interactive chat modes (Socratic, Viva, High-Yield)
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
-                    Multi-model round-robin routing (failsafe reliability)
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
-                    Instant mnemonic generation to simplify retention
-                  </li>
-                </ul>
+                  <ul className="space-y-3 font-semibold text-foreground text-sm">
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
+                      Interactive chat modes (Socratic, Viva, High-Yield)
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
+                      Multi-model round-robin routing (failsafe reliability)
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-blue-500 shrink-0" />
+                      Instant mnemonic generation to simplify retention
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
 
-            {/* Interactive AI Chat Mockup */}
-            <div className="lg:col-span-6">
-              <div className="rounded-3xl border border-border/80 bg-card p-5 shadow-xl relative">
-                <span className="absolute -top-3 left-6 rounded-full bg-blue-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
-                  Interactive Demo
-                </span>
+              {/* Interactive AI Chat Mockup */}
+              <div className="lg:col-span-6">
+                <div className="rounded-3xl border border-border/80 bg-card p-5 shadow-xl relative">
+                  <span className="absolute -top-3 left-6 rounded-full bg-blue-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
+                    Interactive Demo
+                  </span>
 
-                <div className="space-y-4 pt-2">
-                  <div className="flex gap-1.5 border-b border-border/50 pb-3">
-                    {[
-                      { id: 'ra', label: 'Rheumatoid Arthritis' },
-                      { id: 'se', label: 'Status Epilepticus' },
-                      { id: 'as', label: 'Aortic Stenosis' }
-                    ].map((btn) => (
-                      <button
-                        key={btn.id}
-                        onClick={() => setActiveTutorTopic(btn.id as 'ra' | 'se' | 'as')}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-                          activeTutorTopic === btn.id
-                            ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
-                            : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
-                    {/* User Prompt */}
-                    <div className="flex items-start gap-2.5 justify-end">
-                      <div className="rounded-2xl rounded-tr-sm bg-blue-500 text-white px-4 py-2.5 max-w-[85%] text-xs font-semibold shadow-sm">
-                        {tutorConversations[activeTutorTopic].question}
-                      </div>
-                      <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-xs font-extrabold text-blue-600">
-                        Dr
-                      </div>
+                  <div className="space-y-4 pt-2">
+                    <div className="flex gap-1.5 border-b border-border/50 pb-3">
+                      {[
+                        { id: 'ra', label: 'Rheumatoid Arthritis' },
+                        { id: 'se', label: 'Status Epilepticus' },
+                        { id: 'as', label: 'Aortic Stenosis' }
+                      ].map((btn) => (
+                        <button
+                          key={btn.id}
+                          onClick={() => setActiveTutorTopic(btn.id as 'ra' | 'se' | 'as')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                            activeTutorTopic === btn.id
+                              ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                              : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40'
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* AI Answer */}
-                    <div className="flex items-start gap-2.5">
-                      <div className="h-7 w-7 rounded-full bg-indigo-500 flex items-center justify-center shrink-0 text-[10px] font-extrabold text-white">
-                        AI
-                      </div>
-                      <div className="rounded-2xl rounded-tl-sm bg-muted/45 px-4 py-2.5 max-w-[85%] text-xs text-foreground leading-relaxed border border-border/30">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-500 mb-1.5">
-                          <Brain className="h-3.5 w-3.5" />
-                          RAG Grounded Response
+                    <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                      {/* User Prompt */}
+                      <div className="flex items-start gap-2.5 justify-end">
+                        <div className="rounded-2xl rounded-tr-sm bg-blue-500 text-white px-4 py-2.5 max-w-[85%] text-xs font-semibold shadow-sm">
+                          {tutorConversations[activeTutorTopic].question}
                         </div>
-                        <div 
-                          className="space-y-2 whitespace-pre-line"
-                          dangerouslySetInnerHTML={{
-                            __html: tutorConversations[activeTutorTopic].reply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                          }}
-                        />
+                        <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-xs font-extrabold text-blue-600">
+                          Dr
+                        </div>
+                      </div>
+
+                      {/* AI Answer */}
+                      <div className="flex items-start gap-2.5">
+                        <div className="h-7 w-7 rounded-full bg-indigo-500 flex items-center justify-center shrink-0 text-[10px] font-extrabold text-white">
+                          AI
+                        </div>
+                        <div className="rounded-2xl rounded-tl-sm bg-muted/45 px-4 py-2.5 max-w-[85%] text-xs text-foreground leading-relaxed border border-border/30">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-500 mb-1.5">
+                            <Brain className="h-3.5 w-3.5" />
+                            RAG Grounded Response
+                          </div>
+                          <div 
+                            className="space-y-2 whitespace-pre-line"
+                            dangerouslySetInnerHTML={{
+                              __html: tutorConversations[activeTutorTopic].reply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -702,98 +708,101 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 3: Smart Exam Engine (Interactive Exam HUD) */}
-          <div className="grid gap-12 lg:grid-cols-12 items-center">
-            <div className="lg:col-span-6 space-y-6">
-              <Badge className="bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
-                ADAPTIVE SYSTEM
-              </Badge>
-              <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
-                Smart Exam Engine
-              </h3>
-              <p className="text-base text-muted-foreground leading-relaxed">
-                Take control of your preparation with adaptive testing modes that mimic UPSC CMS exam conditions. Features automated timers, negative marking scoring, and immediate breakdown reviews.
-              </p>
+          <div className="relative group/feat rounded-[2.5rem] border border-teal-500/20 dark:border-teal-500/10 bg-teal-500/[0.02] dark:bg-teal-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-teal-500/35 transition-all duration-300 overflow-hidden">
+            <div className="absolute right-0 top-0 -z-10 h-72 w-72 rounded-full bg-teal-500/10 blur-3xl opacity-60" />
+            <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
+              <div className="lg:col-span-6 space-y-6">
+                <Badge className="bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
+                  ADAPTIVE SYSTEM
+                </Badge>
+                <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
+                  Smart Exam Engine
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Take control of your preparation with adaptive testing modes that mimic UPSC CMS exam conditions. Features automated timers, negative marking scoring, and immediate breakdown reviews.
+                </p>
 
-              <ul className="space-y-3 font-semibold text-foreground text-sm">
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
-                  Realistic exam interface mimicking actual test software
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
-                  Dynamic negative scoring (+1.0 / -0.33 marking)
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
-                  Customized topic weight drills based on prior weak performance
-                </li>
-              </ul>
-            </div>
+                <ul className="space-y-3 font-semibold text-foreground text-sm">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
+                    Realistic exam interface mimicking actual test software
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
+                    Dynamic negative scoring (+1.0 / -0.33 marking)
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-teal-500 shrink-0" />
+                    Customized topic weight drills based on prior weak performance
+                  </li>
+                </ul>
+              </div>
 
-            {/* Exam HUD widget mockup */}
-            <div className="lg:col-span-6">
-              <div className="rounded-3xl border border-border/80 bg-slate-950 text-slate-100 p-6 shadow-2xl relative font-sans">
-                <span className="absolute -top-3 left-6 rounded-full bg-teal-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
-                  Interactive Demo
-                </span>
+              {/* Exam HUD widget mockup */}
+              <div className="lg:col-span-6">
+                <div className="rounded-3xl border border-border/80 bg-slate-950 text-slate-100 p-6 shadow-2xl relative font-sans">
+                  <span className="absolute -top-3 left-6 rounded-full bg-teal-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
+                    Interactive Demo
+                  </span>
 
-                <div className="space-y-5 pt-2">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <Clock3 className="h-4 w-4 text-rose-500 animate-pulse" />
-                      <span className="font-mono text-sm font-bold text-rose-400">{formatTimer(examTimer)}</span>
+                  <div className="space-y-5 pt-2">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <Clock3 className="h-4 w-4 text-rose-500 animate-pulse" />
+                        <span className="font-mono text-sm font-bold text-rose-400">{formatTimer(examTimer)}</span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-400">
+                        Section: <span className="text-teal-400">Paper 1 (Obstetrics)</span>
+                      </div>
                     </div>
-                    <div className="text-xs font-bold text-slate-400">
-                      Section: <span className="text-teal-400">Paper 1 (Obstetrics)</span>
+
+                    {/* Question box */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Question 24 of 120</p>
+                      <p className="text-xs font-bold leading-relaxed text-slate-200">
+                        Which of the following is the definitive management of severe pre-eclampsia at 38 weeks of gestation?
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Question box */}
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Question 24 of 120</p>
-                    <p className="text-xs font-bold leading-relaxed text-slate-200">
-                      Which of the following is the definitive management of severe pre-eclampsia at 38 weeks of gestation?
-                    </p>
-                  </div>
-
-                  {/* MCQ choices */}
-                  <div className="space-y-2">
-                    {[
-                      { key: 'A', text: 'Intravenous Magnesium Sulfate infusion' },
-                      { key: 'B', text: 'Oral Antihypertensives and weekly monitoring' },
-                      { key: 'C', text: 'Immediate delivery of the fetus' },
-                      { key: 'D', text: 'Strict bed rest and corticosteroid administration' }
-                    ].map((ch) => {
-                      const isSel = examSelectedOption === ch.key;
-                      return (
-                        <button
-                          key={ch.key}
-                          onClick={() => setExamSelectedOption(ch.key)}
-                          className={`w-full text-left rounded-xl border p-3 text-[11px] font-semibold flex items-center gap-3 transition-all ${
-                            isSel
-                              ? 'border-teal-500 bg-teal-500/10 text-teal-300'
-                              : 'border-slate-800 bg-slate-900/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 border text-[10px] font-extrabold ${
-                            isSel ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-700 bg-slate-950'
-                          }`}>
-                            {ch.key}
-                          </span>
-                          <span>{ch.text}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Live scoring stats mockup */}
-                  <div className="border-t border-slate-800 pt-3.5 flex justify-between items-center text-[10px] text-slate-500">
-                    <div className="flex gap-3">
-                      <span>Correct: <strong className="text-emerald-500 font-bold">18 (+18.0)</strong></span>
-                      <span>Incorrect: <strong className="text-rose-500 font-bold">5 (-1.65)</strong></span>
+                    {/* MCQ choices */}
+                    <div className="space-y-2">
+                      {[
+                        { key: 'A', text: 'Intravenous Magnesium Sulfate infusion' },
+                        { key: 'B', text: 'Oral Antihypertensives and weekly monitoring' },
+                        { key: 'C', text: 'Immediate delivery of the fetus' },
+                        { key: 'D', text: 'Strict bed rest and corticosteroid administration' }
+                      ].map((ch) => {
+                        const isSel = examSelectedOption === ch.key;
+                        return (
+                          <button
+                            key={ch.key}
+                            onClick={() => setExamSelectedOption(ch.key)}
+                            className={`w-full text-left rounded-xl border p-3 text-[11px] font-semibold flex items-center gap-3 transition-all ${
+                              isSel
+                                ? 'border-teal-500 bg-teal-500/10 text-teal-300'
+                                : 'border-slate-800 bg-slate-900/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <span className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 border text-[10px] font-extrabold ${
+                              isSel ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-700 bg-slate-950'
+                            }`}>
+                              {ch.key}
+                            </span>
+                            <span>{ch.text}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <span>Score: <strong className="text-teal-400 font-bold">16.35</strong></span>
+
+                    {/* Live scoring stats mockup */}
+                    <div className="border-t border-slate-800 pt-3.5 flex justify-between items-center text-[10px] text-slate-500">
+                      <div className="flex gap-3">
+                        <span>Correct: <strong className="text-emerald-500 font-bold">18 (+18.0)</strong></span>
+                        <span>Incorrect: <strong className="text-rose-500 font-bold">5 (-1.65)</strong></span>
+                      </div>
+                      <div>
+                        <span>Score: <strong className="text-teal-400 font-bold">16.35</strong></span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -802,120 +811,123 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 4: Rapid Recall AI (Flipping Flashcard) */}
-          <div className="grid gap-12 lg:grid-cols-12 items-center">
-            {/* Interactive Flashcard Widget on the Left */}
-            <div className="lg:col-span-6 lg:order-last">
-              <div className="lg:pl-6 space-y-6">
-                <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
-                  SPACED REPETITION
-                </Badge>
-                <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
-                  Rapid Recall AI (SM-2)
-                </h3>
-                <p className="text-base text-muted-foreground leading-relaxed">
-                  Consolidate critical high-yield facts using our SM-2 algorithm-backed flashcard system. Generates personalized clinical mnemonics to boost memory recall on exam day.
-                </p>
+          <div className="relative group/feat rounded-[2.5rem] border border-amber-500/20 dark:border-amber-500/10 bg-amber-500/[0.02] dark:bg-amber-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-amber-500/35 transition-all duration-300 overflow-hidden">
+            <div className="absolute left-0 top-0 -z-10 h-72 w-72 rounded-full bg-amber-500/10 blur-3xl opacity-60" />
+            <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
+              {/* Interactive Flashcard Widget on the Left */}
+              <div className="lg:col-span-6 lg:order-last">
+                <div className="lg:pl-6 space-y-6">
+                  <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
+                    SPACED REPETITION
+                  </Badge>
+                  <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
+                    Rapid Recall AI (SM-2)
+                  </h3>
+                  <p className="text-base text-muted-foreground leading-relaxed">
+                    Consolidate critical high-yield facts using our SM-2 algorithm-backed flashcard system. Generates personalized clinical mnemonics to boost memory recall on exam day.
+                  </p>
 
-                <ul className="space-y-3 font-semibold text-foreground text-sm">
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
-                    Adaptive spaced repetition schedules custom to your recall speed
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
-                    Quick mnemonics cards with colored highlight structures
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
-                    Custom card builder and public deck library
-                  </li>
-                </ul>
+                  <ul className="space-y-3 font-semibold text-foreground text-sm">
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
+                      Adaptive spaced repetition schedules custom to your recall speed
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
+                      Quick mnemonics cards with colored highlight structures
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4.5 w-4.5 text-amber-500 shrink-0" />
+                      Custom card builder and public deck library
+                    </li>
+                  </ul>
+                </div>
               </div>
-            </div>
 
-            {/* Interactive Flipping Card Deck */}
-            <div className="lg:col-span-6">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-xs font-bold text-muted-foreground px-2">
-                  <span>Interactive Flashcards</span>
-                  <span className="text-amber-500">Tap Card to Flip</span>
-                </div>
+              {/* Interactive Flipping Card Deck */}
+              <div className="lg:col-span-6">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-xs font-bold text-muted-foreground px-2">
+                    <span>Interactive Flashcards</span>
+                    <span className="text-amber-500">Tap Card to Flip</span>
+                  </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {mnemonicCards.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setFlippedCard(flippedCard === c.id ? null : c.id)}
-                      className={`py-2 px-3 text-center rounded-xl text-[10px] font-bold border transition-all ${
-                        flippedCard === c.id
-                          ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'border-border/60 bg-card hover:bg-muted/30 text-muted-foreground'
-                      }`}
-                    >
-                      {c.title}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="perspective-1000 h-[260px] w-full relative">
-                  {mnemonicCards.map((c) => {
-                    const isFlipped = flippedCard === c.id;
-                    const isSelected = flippedCard === null ? c.id === 1 : flippedCard === c.id;
-
-                    if (!isSelected) return null;
-                    // Default fallback if nothing is clicked
-                    const activeFlippedState = flippedCard === null ? false : isFlipped;
-
-                    return (
-                      <div
+                  <div className="grid grid-cols-3 gap-2">
+                    {mnemonicCards.map((c) => (
+                      <button
                         key={c.id}
                         onClick={() => setFlippedCard(flippedCard === c.id ? null : c.id)}
-                        className={`w-full h-full duration-500 transform-style-3d relative cursor-pointer select-none rounded-3xl border border-border/80 bg-card shadow-lg ${
-                          activeFlippedState ? 'rotate-y-180' : ''
+                        className={`py-2 px-3 text-center rounded-xl text-[10px] font-bold border transition-all ${
+                          flippedCard === c.id
+                            ? 'bg-amber-500 border-amber-500 text-white'
+                            : 'border-border/60 bg-card hover:bg-muted/30 text-muted-foreground'
                         }`}
                       >
-                        {/* Front side */}
-                        <div className="absolute inset-0 backface-hidden w-full h-full flex flex-col justify-between p-6">
-                          <div>
-                            <div className="flex justify-between items-center text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                              <span>HIGH YIELD CARD</span>
-                              <Sparkles className="h-4 w-4" />
-                            </div>
-                            <h4 className="text-lg font-extrabold text-foreground mt-4">{c.title}</h4>
-                            <p className="text-xs text-muted-foreground mt-1">{c.subtitle}</p>
-                          </div>
-                          
-                          <div className="text-center text-[11px] text-muted-foreground/80 py-4 border-t border-border/40 flex items-center justify-center gap-1">
-                            <RotateCw className="h-3 w-3" />
-                            {c.front}
-                          </div>
-                        </div>
+                        {c.title}
+                      </button>
+                    ))}
+                  </div>
 
-                        {/* Back side */}
-                        <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full bg-amber-500/[0.03] flex flex-col justify-between p-6 overflow-y-auto">
-                          <div>
-                            <span className="text-[10px] font-bold text-amber-600 tracking-wider">CLINICAL MNEMONIC</span>
-                            <h4 className="text-base font-extrabold text-foreground mt-1 border-b border-border/60 pb-2">{c.title}</h4>
+                  <div className="perspective-1000 h-[260px] w-full relative">
+                    {mnemonicCards.map((c) => {
+                      const isFlipped = flippedCard === c.id;
+                      const isSelected = flippedCard === null ? c.id === 1 : flippedCard === c.id;
+
+                      if (!isSelected) return null;
+                      // Default fallback if nothing is clicked
+                      const activeFlippedState = flippedCard === null ? false : isFlipped;
+
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setFlippedCard(flippedCard === c.id ? null : c.id)}
+                          className={`w-full h-full duration-500 transform-style-3d relative cursor-pointer select-none rounded-3xl border border-border/80 bg-card shadow-lg ${
+                            activeFlippedState ? 'rotate-y-180' : ''
+                          }`}
+                        >
+                          {/* Front side */}
+                          <div className="absolute inset-0 backface-hidden w-full h-full flex flex-col justify-between p-6">
+                            <div>
+                              <div className="flex justify-between items-center text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                <span>HIGH YIELD CARD</span>
+                                <Sparkles className="h-4 w-4" />
+                              </div>
+                              <h4 className="text-lg font-extrabold text-foreground mt-4">{c.title}</h4>
+                              <p className="text-xs text-muted-foreground mt-1">{c.subtitle}</p>
+                            </div>
                             
-                            <div className="mt-3.5 space-y-2">
-                              {c.back.map((b, bi) => (
-                                <div key={bi} className="flex gap-2.5 text-xs text-foreground items-start">
-                                  <span className="h-5 w-5 rounded-md bg-amber-500 text-white font-extrabold flex items-center justify-center text-[10px] shrink-0">
-                                    {b.letter}
-                                  </span>
-                                  <span className="font-semibold">{b.text}</span>
-                                </div>
-                              ))}
+                            <div className="text-center text-[11px] text-muted-foreground/80 py-4 border-t border-border/40 flex items-center justify-center gap-1">
+                              <RotateCw className="h-3 w-3" />
+                              {c.front}
                             </div>
                           </div>
-                          
-                          <div className="text-center text-[10px] text-amber-600 font-bold border-t border-border/40 pt-3">
-                            Spaced Review interval: 3 days (SM-2)
+
+                          {/* Back side */}
+                          <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full bg-amber-500/[0.03] flex flex-col justify-between p-6 overflow-y-auto">
+                            <div>
+                              <span className="text-[10px] font-bold text-amber-600 tracking-wider">CLINICAL MNEMONIC</span>
+                              <h4 className="text-base font-extrabold text-foreground mt-1 border-b border-border/60 pb-2">{c.title}</h4>
+                              
+                              <div className="mt-3.5 space-y-2">
+                                {c.back.map((b, bi) => (
+                                  <div key={bi} className="flex gap-2.5 text-xs text-foreground items-start">
+                                    <span className="h-5 w-5 rounded-md bg-amber-500 text-white font-extrabold flex items-center justify-center text-[10px] shrink-0">
+                                      {b.letter}
+                                    </span>
+                                    <span className="font-semibold">{b.text}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div className="text-center text-[10px] text-amber-600 font-bold border-t border-border/40 pt-3">
+                              Spaced Review interval: 3 days (SM-2)
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
