@@ -4,7 +4,7 @@
   "description": "Doctor-first UPSC CMS preparation with PYQs, AI tutoring, analytics, and adaptive tests.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f7fb",
+  "background_color": "#e8f0fe",
   "theme_color": "#1d4ed8",
   "icons": [
     {

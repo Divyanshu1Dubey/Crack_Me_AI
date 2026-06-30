@@ -67,7 +67,7 @@ def send_password_reset_email(user, reset_link):
         "CrackCMS Team"
     )
     html_body = f"""
-    <div style="background:#f4f7fb;padding:32px 16px;font-family:Arial,sans-serif;color:#142334;">
+    <div style="background:#e8f0fe;padding:32px 16px;font-family:Arial,sans-serif;color:#142334;">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #d5e0eb;border-radius:24px;overflow:hidden;">
         <div style="padding:32px;background:linear-gradient(135deg,#0b728f 0%,#0f766e 55%,#f59e0b 100%);color:#ffffff;">
           <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.8;">CrackCMS Account Security</p>

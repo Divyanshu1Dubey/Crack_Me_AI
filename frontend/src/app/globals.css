@@ -8,7 +8,7 @@
 @theme {
   --font-sans: var(--font-manrope), sans-serif;
   --font-display: var(--font-space-grotesk), sans-serif;
-  --color-background: #f4f7fb;
+  --color-background: #e8f0fe;
   --color-foreground: #142334;
   --color-card: #ffffff;
   --color-card-foreground: #142334;
@@ -18,14 +18,14 @@
   --color-primary-foreground: #ffffff;
   --color-secondary: #f8fafc;
   --color-secondary-foreground: #0f172a;
-  --color-muted: #f1f5f9;
+  --color-muted: #dbeafe;
   --color-muted-foreground: #64748b;
   --color-accent: #eff6ff;
   --color-accent-foreground: #1e40af;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e2e8f0;
-  --color-input: #e2e8f0;
+  --color-border: #d0dcf0;
+  --color-input: #d0dcf0;
   --color-ring: #1d4ed8;
   --radius: 0.875rem;
 }
@@ -36,10 +36,10 @@
   --font-body: var(--font-manrope);
   --accent-warning: #f59e0b;
   /* Legacy variable bridge (used by inline styles in pages) */
-  --bg-primary: #f4f7fb;
+  --bg-primary: #e8f0fe;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-hover: #eef4f8;
+  --bg-card-hover: #dbeafe;
   --text-primary: #142334;
   --text-secondary: #5b6f85;
   --text-muted: #7f91a3;
