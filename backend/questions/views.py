@@ -44,6 +44,21 @@ def _ensure_question_bank_loaded():
     with _QUESTION_BOOTSTRAP_LOCK:
         if Question.objects.filter(is_active=True).exists():
             return
+        
+        # 1. Run migrations to ensure database schema exists
+        try:
+            logger.info("Auto-running migrations on startup...")
+            call_command('migrate', no_input=True, verbosity=0)
+        except Exception:
+            logger.exception("Auto-migration failed")
+            
+        # 2. Run seed_data to populate subjects and topics
+        try:
+            logger.info("Auto-running seed_data to populate subjects and topics...")
+            call_command('seed_data', verbosity=0)
+        except Exception:
+            logger.exception("Auto-seeding failed")
+
         logger.warning('Question bank empty. Bootstrapping from fixture: %s', fixture_path)
         try:
             call_command('loaddata', str(fixture_path), verbosity=0)
