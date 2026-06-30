@@ -328,78 +328,50 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* "System Cockpit Live" Dashboard */}
-          <div className="relative group max-w-3xl mx-auto w-full pt-4">
+          {/* "Campus Momentum" Dashboard */}
+          <div className="relative group max-w-4xl mx-auto w-full pt-4">
             <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
-            <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
-              {/* Header bar of the widget */}
-              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-red-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-amber-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
+            <div className="rounded-[2.5rem] border border-border/80 bg-card p-6 md:p-10 shadow-xl space-y-6 relative overflow-hidden">
+              <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
+              
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 pb-5">
+                <div className="space-y-1 text-left">
+                  <h3 className="font-display text-xl font-extrabold text-foreground">Campus Momentum</h3>
+                  <p className="text-xs text-muted-foreground">Students and residents from leading medical institutions prep here.</p>
                 </div>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-wider uppercase">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  SYSTEM COCKPIT LIVE
-                </div>
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 px-4 py-1.5 rounded-full font-bold shadow-sm shadow-emerald-600/10">
+                  2,900+ active this week
+                </Badge>
               </div>
 
-              <CardContent className="p-6 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                      <Stethoscope className="h-5 w-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground">Dr. Sarah Jenkins</h3>
-                      <p className="text-[11px] text-muted-foreground">General Medicine Specialist Track</p>
-                    </div>
-                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">Aspirant</Badge>
+              {/* Scrolling ticker visual replacement */}
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {campuses.map((campus) => (
+                  <div 
+                    key={campus} 
+                    className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs font-semibold text-center text-foreground hover:bg-muted/40 transition-colors"
+                  >
+                    {campus}
                   </div>
+                ))}
+              </div>
 
-                  <div className="flex gap-4">
-                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
-                      <Flame className="h-4 w-4 text-orange-500" />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
-                        <p className="text-xs font-extrabold">12 Days</p>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
-                      <Award className="h-4 w-4 text-amber-500" />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
-                        <p className="text-xs font-extrabold">68.5%</p>
-                      </div>
-                    </div>
+              <div className="grid gap-4 md:grid-cols-2 pt-2">
+                {communityProfiles.map((profile) => (
+                  <div key={profile.name} className="rounded-2xl border border-border/50 bg-muted/15 p-4 space-y-1.5 relative hover:border-primary/35 transition-all text-left">
+                    <span className="absolute top-4 right-4 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      {profile.badge}
+                    </span>
+                    <p className="text-sm font-extrabold text-foreground">{profile.name}</p>
+                    <p className="text-xs text-muted-foreground">{profile.college}</p>
+                    <p className="pt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {profile.progress}
+                    </p>
                   </div>
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5 bg-muted/30 p-4 rounded-2xl border border-border/50">
-                  <div className="flex justify-between text-xs font-bold text-foreground">
-                    <span>Clinical Prep Progress</span>
-                    <span className="text-blue-600 dark:text-blue-400">74% Target</span>
-                  </div>
-                  <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
-                  </div>
-                </div>
-
-                {/* Live Console simulator */}
-                <div className="rounded-xl bg-slate-950 p-4 font-mono text-[11px] text-slate-300 leading-relaxed border border-slate-800 shadow-inner">
-                  <div className="flex items-center gap-1.5 border-b border-slate-800 pb-2 mb-2 text-slate-500">
-                    <span className="h-2 w-2 rounded-full bg-slate-700" />
-                    <span>AI Router Console</span>
-                  </div>
-                  <p className="text-blue-400"><span className="text-slate-500">[18:42:01]</span> Outgoing clinical query...</p>
-                  <p className="text-amber-400"><span className="text-slate-500">[18:42:01]</span> Routed to Groq (Llama 3.3 70B)</p>
-                  <p className="text-emerald-400"><span className="text-slate-500">[18:42:02]</span> RAG TF-IDF search completed in 42ms</p>
-                  <p className="text-slate-400"><span className="text-slate-500">[18:42:03]</span> Response parsed. Tokens balance updated.</p>
-                </div>
-              </CardContent>
-            </Card>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -956,47 +928,89 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Community Section */}
+      {/* Personalized study dashboard */}
       <section className="px-4 py-24 sm:px-6 mx-auto max-w-5xl">
-        <div className="rounded-[2.5rem] border border-border/80 bg-card p-8 md:p-12 shadow-xl space-y-8 relative overflow-hidden">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
-          
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 pb-6">
-            <div className="space-y-1">
-              <h3 className="font-display text-xl font-extrabold text-foreground">Campus Momentum</h3>
-              <p className="text-xs text-muted-foreground">Students and residents from leading medical institutions prep here.</p>
-            </div>
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 px-4 py-1.5 rounded-full font-bold shadow-sm shadow-emerald-600/10">
-              2,900+ active this week
-            </Badge>
+        <div className="space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="font-display text-3xl font-extrabold text-foreground tracking-tight">
+              Personalized Study Cockpit
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+              Track high-yield progress, streak targets, score estimations, and real-time AI-routing decisions.
+            </p>
           </div>
 
-          {/* Scrolling ticker visual replacement */}
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            {campuses.map((campus) => (
-              <div 
-                key={campus} 
-                className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs font-semibold text-center text-foreground hover:bg-muted/40 transition-colors"
-              >
-                {campus}
+          <div className="relative group max-w-3xl mx-auto w-full pt-4">
+            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+            <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
+              {/* Header bar of the widget */}
+              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-red-400/80" />
+                  <div className="h-3 w-3 rounded-full bg-amber-400/80" />
+                  <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-wider uppercase">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  SYSTEM COCKPIT LIVE
+                </div>
               </div>
-            ))}
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2 pt-4">
-            {communityProfiles.map((profile) => (
-              <div key={profile.name} className="rounded-2xl border border-border/50 bg-muted/15 p-4 space-y-1.5 relative hover:border-primary/35 transition-all">
-                <span className="absolute top-4 right-4 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                  {profile.badge}
-                </span>
-                <p className="text-sm font-extrabold text-foreground">{profile.name}</p>
-                <p className="text-xs text-muted-foreground">{profile.college}</p>
-                <p className="pt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {profile.progress}
-                </p>
-              </div>
-            ))}
+              <CardContent className="p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                      <Stethoscope className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">Dr. Sarah Jenkins</h3>
+                      <p className="text-[11px] text-muted-foreground">General Medicine Specialist Track</p>
+                    </div>
+                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">Aspirant</Badge>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Flame className="h-4 w-4 text-orange-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
+                        <p className="text-xs font-extrabold">12 Days</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Award className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
+                        <p className="text-xs font-extrabold">68.5%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5 bg-muted/30 p-4 rounded-2xl border border-border/50">
+                  <div className="flex justify-between text-xs font-bold text-foreground">
+                    <span>Clinical Prep Progress</span>
+                    <span className="text-blue-600 dark:text-blue-400">74% Target</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
+                  </div>
+                </div>
+
+                {/* Live Console simulator */}
+                <div className="rounded-xl bg-slate-950 p-4 font-mono text-[11px] text-slate-300 leading-relaxed border border-slate-800 shadow-inner">
+                  <div className="flex items-center gap-1.5 border-b border-slate-800 pb-2 mb-2 text-slate-500">
+                    <span className="h-2 w-2 rounded-full bg-slate-700" />
+                    <span>AI Router Console</span>
+                  </div>
+                  <p className="text-blue-400"><span className="text-slate-500">[18:42:01]</span> Outgoing clinical query...</p>
+                  <p className="text-amber-400"><span className="text-slate-500">[18:42:01]</span> Routed to Groq (Llama 3.3 70B)</p>
+                  <p className="text-emerald-400"><span className="text-slate-500">[18:42:02]</span> RAG TF-IDF search completed in 42ms</p>
+                  <p className="text-slate-400"><span className="text-slate-500">[18:42:03]</span> Response parsed. Tokens balance updated.</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
