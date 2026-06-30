@@ -342,15 +342,17 @@ export default function DashboardPage() {
                                             { label: 'Tests Today', value: todayActivity.tests_completed, icon: FileText },
                                             { label: 'Study Minutes', value: todayActivity.time_spent_minutes, icon: Clock },
                                         ].map((item, i) => (
-                                            <div key={i} className="rounded-xl border border-border bg-slate-50/80 dark:bg-slate-900/70 p-4">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                                                    <item.icon className="w-4 h-4 text-sky-600 dark:text-sky-300" />
+                                            <div key={i} className="rounded-xl bg-blue-600 dark:bg-blue-700 text-white p-4 shadow-xs relative overflow-hidden">
+                                                <div className="absolute -right-4 -bottom-4 h-16 w-16 rounded-full bg-white/10 blur-xl" />
+                                                <div className="flex items-center justify-between mb-3 relative z-10">
+                                                    <p className="text-xs text-blue-100 font-semibold">{item.label}</p>
+                                                    <item.icon className="w-4.5 h-4.5 text-blue-200" />
                                                 </div>
-                                                <p className="text-2xl font-bold text-foreground">{item.value}</p>
+                                                <p className="text-2xl font-extrabold text-white relative z-10">{item.value}</p>
                                             </div>
                                         ))}
                                     </div>
+
                                     <div className="grid sm:grid-cols-2 gap-4">
                                         <div className="rounded-xl border border-border p-4">
                                             <div className="flex items-center justify-between mb-2">
