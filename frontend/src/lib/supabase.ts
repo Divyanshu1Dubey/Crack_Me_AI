@@ -1,12 +1,6 @@
-import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
-const supabaseAnonKey = (
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-  || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  || ''
-).trim();
+import { createClient as createSupabaseBrowserClient } from '@/utils/supabase/client';
+import { getSupabaseConfig } from '@/utils/supabase/config';
 
 let browserClient: SupabaseClient | null = null;
 
@@ -16,7 +10,7 @@ const INVALID_REFRESH_TOKEN_MARKERS = [
   'refresh token is invalid',
 ];
 
-export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = () => getSupabaseConfig().isConfigured;
 
 export const isSupabaseAuthEnabled = () =>
   isSupabaseConfigured();
@@ -25,13 +19,7 @@ export const getSupabaseBrowserClient = () => {
   if (!isSupabaseConfigured()) return null;
 
   if (!browserClient) {
-    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    });
+    browserClient = createSupabaseBrowserClient();
   }
 
   return browserClient;
