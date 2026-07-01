@@ -13392,7 +13392,7 @@
   "model": "questions.question",
   "pk": 43,
   "fields": {
-    "question_text": "Which one of the following drugs causes hypercalcemia?\n(a) \n(b) \n(c) \n(d)",
+    "question_text": "Which one of the following drugs causes hypercalcemia?\n(a)\n(b)\n(c)\n(d)",
     "option_a": "Phenytoin",
     "option_b": "Heparin",
     "option_c": "Lithium",
@@ -14914,7 +14914,7 @@
   "model": "questions.question",
   "pk": 70,
   "fields": {
-    "question_text": "Which one of the following diseases is NOT caused by protozoa?\n(a) \n(b) \n(c) \n(d)",
+    "question_text": "Which one of the following diseases is NOT caused by protozoa?\n(a)\n(b)\n(c)\n(d)",
     "option_a": "Trypanosomiasis",
     "option_b": "Leishmaniasis",
     "option_c": "Amoebiasis",
@@ -18049,7 +18049,7 @@
   "model": "questions.question",
   "pk": 123,
   "fields": {
-    "question_text": "“Time-out” strategy is used for management of children having:\n(a) \n(b) \n(c) \n(d)",
+    "question_text": "“Time-out” strategy is used for management of children having:\n(a)\n(b)\n(c)\n(d)",
     "option_a": "Tics",
     "option_b": "Temper tantrums",
     "option_c": "Stuttering",
@@ -19416,7 +19416,7 @@
   "model": "questions.question",
   "pk": 146,
   "fields": {
-    "question_text": "A cohort study was conducted among 200 men aged 20–30 years in Rampur village. Out of\n200, 120 men were tobacco users and rest 80 didn’t take any form of tobacco. At the end of\none year, 40 men among tobacco users and 10 men among non-tobacco users developed\ntuberculosis. The incidence of tuberculosis among tobacco users is:",
+    "question_text": "A cohort study was conducted among 200 men aged 20–30 years in Rampur village. Out of200, 120 men were tobacco users and rest 80 didn’t take any form of tobacco. At the end of\none year, 40 men among tobacco users and 10 men among non-tobacco users developed\ntuberculosis. The incidence of tuberculosis among tobacco users is:",
     "option_a": "12.5 per 100 men/ year",
     "option_b": "25.0 per 100 men / year",
     "option_c": "30.0 per 100 men/ year",
@@ -22782,7 +22782,7 @@
   "model": "questions.question",
   "pk": 208,
   "fields": {
-    "question_text": "Which of the statement regarding anemia in pregnancy is NOT true?\n(a) \n(b) \n(c) \n(d)",
+    "question_text": "Which of the statement regarding anemia in pregnancy is NOT true?\n(a)\n(b)\n(c)\n(d)",
     "option_a": "Iron deficiency anemia is most common in Tropics",
     "option_b": "Faulty dietary habit is one of the factors responsible for anemia",
     "option_c": "Mild anemia is most common",
@@ -23501,7 +23501,7 @@
   "model": "questions.question",
   "pk": 226,
   "fields": {
-    "question_text": "Which one of the following is NOT a surgical modality for management of femoral hernia?\na) \nb) \nc) d)\nd) The canal ring narrowing operation Lytle’s)",
+    "question_text": "Which one of the following is NOT a surgical modality for management of femoral hernia?\na)\nb)\nc) d)\nd) The canal ring narrowing operation Lytle’s)",
     "option_a": "Lotheissen's (Inguinal) operation",
     "option_b": "The high approach (Mc Evedy)",
     "option_c": "The low approach (Lockwood's) operation",
@@ -26349,7 +26349,7 @@
   "model": "questions.question",
   "pk": 276,
   "fields": {
-    "question_text": "Match the List I with List II and the\nlists:\nList I List II\n(disease) (signs)\nA. \nB. \nC. \nD.",
+    "question_text": "Match the List I with List II and the\nlists:\nList I List II\n(disease) (signs)\nA.\nB.\nC.\nD.",
     "option_a": "Conn syndrome 1. Anosmia",
     "option_b": "Turner syndrome 2. Tetany",
     "option_c": "Kallman syndrome 3. Lymphoedema",
@@ -36845,7 +36845,7 @@
   "model": "questions.question",
   "pk": 465,
   "fields": {
-    "question_text": "The specific goals for 2025 under the integrated Global Action Plan for the Prevention and\nControl of Pneumonia and Diarrhea (GAPPD) \n(a) \n(b) \n(c) \n(d) Reduce incidence of severe diarrhea by 75 % in children less than 5 years of age\ncompared to 2010 levels",
+    "question_text": "The specific goals for 2025 under the integrated Global Action Plan for the Prevention and\nControl of Pneumonia and Diarrhea (GAPPD)\n(a)\n(b)\n(c)\n(d) Reduce incidence of severe diarrhea by 75 % in children less than 5 years of age\ncompared to 2010 levels",
     "option_a": "Reduce mortality from pneumonia in children less than 5 years of age to fewer than 3 per\n1000 live births",
     "option_b": "Reduce mortality from diarrhea in children less than 5 years of age to fewer than 1 per\n1000 live births",
     "option_c": "Reduce the incidence of severe pneumonia by 90 % in children less than 5 years of age\ncompared to 2010 levels",
@@ -40381,7 +40381,7 @@
   "model": "questions.question",
   "pk": 525,
   "fields": {
-    "question_text": "A 13-year old boy presents with hematuria, oliguria, edema and hypertension. He has history\nof sore throat two weeks prior to presentation. Laboratory investigations are remarkable for\nlow C and increased titres of ASO and antiDNase. Which one of the following statements is\n3\nNOT correct about management for this condition?",
+    "question_text": "A 13-year old boy presents with hematuria, oliguria, edema and hypertension. He has history\nof sore throat two weeks prior to presentation. Laboratory investigations are remarkable for\nlow C and increased titres of ASO and antiDNase. Which one of the following statements is3\nNOT correct about management for this condition?",
     "option_a": "Renal biopsy is rarely required for making diagnosis",
     "option_b": "Antibiotic treatment is given for streptococcal infection",
     "option_c": "Treatment is largely supportive",
@@ -50928,7 +50928,7 @@
   "model": "questions.question",
   "pk": 713,
   "fields": {
-    "question_text": "For each component, the performance of individual countries is placed on a scale of\n0-100:",
+    "question_text": "For each component, the performance of individual countries is placed on a scale of0-100:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -50988,7 +50988,7 @@
   "model": "questions.question",
   "pk": 714,
   "fields": {
-    "question_text": "Disability-adjusted life years DALYs) include:\na) \nb) D)\nc) \nd) Neither YLL nor YLD",
+    "question_text": "Disability-adjusted life years DALYs) include:\na)\nb) D)\nc)\nd) Neither YLL nor YLD",
     "option_a": "Years of lost life (YLL)",
     "option_b": "Years lost to disability (YLD)",
     "option_c": "Both YLL and YLD",
@@ -80416,7 +80416,7 @@
   "model": "questions.question",
   "pk": 1251,
   "fields": {
-    "question_text": "A town in the hills had a mid-year population of 250000 in the year 2021. During the same year, the death registry of the town recorded 1500 deaths due to tuberculosis in 365 calendar days. What is the specific death rate for tuberculosis in the town? :",
+    "question_text": "A town in the hills had a mid-year population of 250000 in the year 2021. During the same year, the death registry of the town recorded 1500 deaths due to tuberculosis in 365 calendar days. What is the specific death rate for tuberculosis in the town?:",
     "option_a": "1",
     "option_b": "6",
     "option_c": "10",
@@ -86156,7 +86156,7 @@
   "model": "questions.question",
   "pk": 2043,
   "fields": {
-    "question_text": "A 35 year female presents with easy fatigability. Investigations show that Hb is 6 g%; Red cell morphology is normocytic normochromic; and reticulocyte production index is 5.5. Which one of the following conditions favours this abnormality?",
+    "question_text": "A 35 year female presents with easy fatigability. Investigations show that Hb is 6 g%; Red cell morphology is normocytic normochromic; and reticulocyte production index is\n5.\n5. Which one of the following conditions favours this abnormality?",
     "option_a": "Iron deficiency anemia",
     "option_b": "Sideroblastic anemia",
     "option_c": "Folate deficiency",
@@ -95828,7 +95828,7 @@
   "model": "questions.question",
   "pk": 2211,
   "fields": {
-    "question_text": "Data obtained from hospital records is not a representative sample of the population. What are the reasons for this?\nI. Mild cases and subclinical cases may be missed.\nII. Population served by a hospital usually cannot be defined.\nIII. Cost of hospital care is not recorded.\nIV. Admission policy for cases can vary from hospital to hospital.\nSelect the correct answer using the code given below:",
+    "question_text": "Data obtained from hospital records is not a representative sample of the population. What are the reasons for this?\nI. Mild cases and subclinical cases may be missed.\nII. Population served by a hospital usually cannot be defined.\nIII. Cost of hospital care is not recorded.\nIV. Admission policy for cases can vary from hospital to hospital.\n\nSelect the correct answer using the code given below:",
     "option_a": "I and II only",
     "option_b": "II and III only",
     "option_c": "I, II and IV",
@@ -96114,7 +96114,7 @@
   "model": "questions.question",
   "pk": 2216,
   "fields": {
-    "question_text": "What are the reasons for choosing coliform organisms as indicators of faecal pollution of water rather than the waterborne pathogens directly?\nI. They are present in great abundance in the human intestine and excreted in great numbers in faeces.\nII. They have lower resistance to forces of natural purification.\nIII. They survive lesser than the pathogens.\nIV. They are easily detected by culture methods.\nSelect the correct answer using the code given below:",
+    "question_text": "What are the reasons for choosing coliform organisms as indicators of faecal pollution of water rather than the waterborne pathogens directly?\nI. They are present in great abundance in the human intestine and excreted in great numbers in faeces.\nII. They have lower resistance to forces of natural purification.\nIII. They survive lesser than the pathogens.\nIV. They are easily detected by culture methods.\n\nSelect the correct answer using the code given below:",
     "option_a": "I and IV",
     "option_b": "II and III",
     "option_c": "I only",
@@ -98187,7 +98187,7 @@
   "model": "questions.question",
   "pk": 4413,
   "fields": {
-    "question_text": "Which of the following are components of \"Klippel-Trenaunay syndrome\"?\nCutaneous Naevus\n2. Subcutaneous Lipomas 3. Varicose veins 4. Soft tissue hypertrophy\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are components of \"Klippel-Trenaunay syndrome\"?\n1. Cutaneous Naevus\n2. Subcutaneous Lipomas\n3. Varicose veins\n4. Soft tissue hypertrophy\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -98647,7 +98647,7 @@
   "model": "questions.question",
   "pk": 4421,
   "fields": {
-    "question_text": "Zollinger Ellison syndrome is characterized by which of the following?\nFulminating gastric ulcers\n2. Recurrent ulceration despite treatment 3. Non-beta islet cell tumour of pancreas 4. Recurrent episodes of dysentery\n\nSelect the correct answer using the code given below:",
+    "question_text": "Zollinger Ellison syndrome is characterized by which of the following?\n1. Fulminating gastric ulcers\n2. Recurrent ulceration despite treatment\n3. Non-beta islet cell tumour of pancreas\n4. Recurrent episodes of dysentery\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -98818,7 +98818,7 @@
   "model": "questions.question",
   "pk": 4424,
   "fields": {
-    "question_text": "While managing oesophageal perforations, which of the following factors favour non-operative management?\nPerforation by a flexible endoscope\n2. Perforation into mediastinum 3. Perforation with a small septic load 4. Perforation of the abdominal oesophagus\n\nSelect the correct answer using the code given below:",
+    "question_text": "While managing oesophageal perforations, which of the following factors favour non-operative management?\n1. Perforation by a flexible endoscope\n2. Perforation into mediastinum\n3. Perforation with a small septic load\n4. Perforation of the abdominal oesophagus\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -98876,7 +98876,7 @@
   "model": "questions.question",
   "pk": 4425,
   "fields": {
-    "question_text": "Which of the following statements are correct with regard to Familial Adenomatous Polyposis?\nIt is associated with mutation of APC gene located on the short arm of chromosome 5.\n\nIt is inherited as an autosomal recessive condition.\n\nIt is associated with 100% lifetime risk for development of Colorectal carcinoma.\n\nCongenital hypertrophy of retinal pigment epithelium is present in half of the cases of familial adenomatous polyposis.\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following statements are correct with regard to Familial Adenomatous Polyposis?\nIt is associated with mutation of APC gene located on the short arm of chromosome 5. It is inherited as an autosomal recessive condition.\n\nIt is associated with 100% lifetime risk for development of Colorectal carcinoma.\n\nCongenital hypertrophy of retinal pigment epithelium is present in half of the cases of familial adenomatous polyposis.\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -99454,7 +99454,7 @@
   "model": "questions.question",
   "pk": 4435,
   "fields": {
-    "question_text": "Which of the following are seen in Normal pressure hydrocephalus?\nHearing loss\n2. Gait disturbance 3. Incontinence 4. Cognitive decline\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are seen in Normal pressure hydrocephalus?\n1. Hearing loss\n2. Gait disturbance\n3. Incontinence\n4. Cognitive decline\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -99512,7 +99512,7 @@
   "model": "questions.question",
   "pk": 4436,
   "fields": {
-    "question_text": "Which of the following are the functions of larynx?\nFixation of the chest\n2. Aids in swallowing of food 3. Phonation 4. Respiration\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are the functions of larynx?\n1. Fixation of the chest\n2. Aids in swallowing of food\n3. Phonation\n4. Respiration\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -99570,7 +99570,7 @@
   "model": "questions.question",
   "pk": 4437,
   "fields": {
-    "question_text": "Which of the following are included in the classical clinical presentation of pericardial tamponade?\nTachycardia\n2. Muffled heart sounds 3. Decreased arterial pressure 4. Collapsed neck veins\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are included in the classical clinical presentation of pericardial tamponade?\n1. Tachycardia\n2. Muffled heart sounds\n3. Decreased arterial pressure\n4. Collapsed neck veins\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -99686,7 +99686,7 @@
   "model": "questions.question",
   "pk": 4439,
   "fields": {
-    "question_text": "Consider the following clinical features:\nLow back pain\n2. Saddle anaesthesia 3. Motor weakness in the lower extremities 4. Variable rectal and urinary symptoms\n\nWhich of the above features may be present in a patient with Cauda Equina syndrome?",
+    "question_text": "Consider the following clinical features:\n1. Low back pain\n2. Saddle anaesthesia\n3. Motor weakness in the lower extremities\n4. Variable rectal and urinary symptoms\n\nWhich of the above features may be present in a patient with Cauda Equina syndrome?",
     "option_a": "3 and 4 only",
     "option_b": "1 and 2 only",
     "option_c": "1, 2 and 3 only",
@@ -99910,7 +99910,7 @@
   "model": "questions.question",
   "pk": 4443,
   "fields": {
-    "question_text": "Which of the following are the common complications associated with enteral nutrition in postoperative patients?\nTube malposition, displacement\n2. Diarrhoea, constipation 3. Predisposition to systemic sepsis 4. Electrolytic imbalance\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are the common complications associated with enteral nutrition in postoperative patients?\n1. Tube malposition, displacement\n2. Diarrhoea, constipation\n3. Predisposition to systemic sepsis\n4. Electrolytic imbalance\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -99968,7 +99968,7 @@
   "model": "questions.question",
   "pk": 4444,
   "fields": {
-    "question_text": "Which of the following are correct regarding Blood substitutes?\nThey are biomimetic.\n2. They are extensively used in war injuries. 3. They are made of perfluorocarbon emulsions. 4. They are haemoglobin-based.\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are correct regarding Blood substitutes?\n1. They are biomimetic.\n2. They are extensively used in war injuries.\n3. They are made of perfluorocarbon emulsions.\n4. They are haemoglobin-based.\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -100194,7 +100194,7 @@
   "model": "questions.question",
   "pk": 4448,
   "fields": {
-    "question_text": "A typical case of Iron Deficiency Anaemia (IDA) in pregnancy will show which of the following?\nHb less than 10 gm%\n2. PCV less than 30% 3. MCHC more than 30% 4. Microcytic hypochromic picture on peripheral blood smear (PBS)\n\nSelect the correct answer using the code given below:",
+    "question_text": "A typical case of Iron Deficiency Anaemia (IDA) in pregnancy will show which of the following?\n1. Hb less than 10 gm%\n2. PCV less than 30%\n3. MCHC more than 30%\n4. Microcytic hypochromic picture on peripheral blood smear (PBS)\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -100250,7 +100250,7 @@
   "model": "questions.question",
   "pk": 4449,
   "fields": {
-    "question_text": "Which of the following are the clinical features of molar pregnancy?\nHistory of amenorrhea and vaginal bleeding\n2. Patient has excessive vomiting 3. History of expulsion of grape-like vesicles\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are the clinical features of molar pregnancy?\n1. History of amenorrhea and vaginal bleeding\n2. Patient has excessive vomiting\n3. History of expulsion of grape-like vesicles\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -100307,7 +100307,7 @@
   "model": "questions.question",
   "pk": 4450,
   "fields": {
-    "question_text": "Which of the following vaccines can be given to a pregnant woman?\nCOVID vaccine\n2. Measles, Mumps, Rubella vaccine 3. Hepatitis B vaccine 4. Rabies vaccine\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following vaccines can be given to a pregnant woman?\n1. COVID vaccine\n2. Measles, Mumps, Rubella vaccine\n3. Hepatitis B vaccine\n4. Rabies vaccine\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -100595,7 +100595,7 @@
   "model": "questions.question",
   "pk": 4455,
   "fields": {
-    "question_text": "What are the causes of lactation failure after delivery?\nInfrequent suckling\n2. Depression or anxiety state in the puerperium 3. Prolactin inhibition\n\nSelect the correct answer using the code given below:",
+    "question_text": "What are the causes of lactation failure after delivery?\n1. Infrequent suckling\n2. Depression or anxiety state in the puerperium\n3. Prolactin inhibition\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -100653,7 +100653,7 @@
   "model": "questions.question",
   "pk": 4456,
   "fields": {
-    "question_text": "Secondary arrest of dilatation during the process of labour may be due to which of the following factors?\nPoor uterine contractions\n2. Cessation of cervical dilatation despite strong uterine contractions 3. Disproportion and malpresentation\n\nSelect the correct answer using the code given below:",
+    "question_text": "Secondary arrest of dilatation during the process of labour may be due to which of the following factors?\n1. Poor uterine contractions\n2. Cessation of cervical dilatation despite strong uterine contractions\n3. Disproportion and malpresentation\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -100769,7 +100769,7 @@
   "model": "questions.question",
   "pk": 4458,
   "fields": {
-    "question_text": "Vesicovaginal fistula is classified as complicated if it has which of the following features?\nSize – more than 3 cm\n2. Bladder involvement – Supratrigonal 3. Location – Midvaginal 4. Presence of prior radiation\n\nSelect the correct answer using the code given below:",
+    "question_text": "Vesicovaginal fistula is classified as complicated if it has which of the following features?\n1. Size – more than 3 cm\n2. Bladder involvement – Supratrigonal\n3. Location – Midvaginal\n4. Presence of prior radiation\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -100827,7 +100827,7 @@
   "model": "questions.question",
   "pk": 4459,
   "fields": {
-    "question_text": "Which of the following set of muscles collectively form the muscle 'Levator Ani' that forms the pelvic floor?\nIschiococcygeus\n2. Pubococcygeus 3. Sacrococcygeus 4. Iliococcygeus\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following set of muscles collectively form the muscle 'Levator Ani' that forms the pelvic floor?\n1. Ischiococcygeus\n2. Pubococcygeus\n3. Sacrococcygeus\n4. Iliococcygeus\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -100885,7 +100885,7 @@
   "model": "questions.question",
   "pk": 4460,
   "fields": {
-    "question_text": "Blood supply to the uterus comes from which of the following arteries?\nOvarian artery\n2. Vaginal artery 3. Uterine artery 4. Inferior vesical artery\n\nSelect the correct answer using the code given below:",
+    "question_text": "Blood supply to the uterus comes from which of the following arteries?\n1. Ovarian artery\n2. Vaginal artery\n3. Uterine artery\n4. Inferior vesical artery\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -101118,7 +101118,7 @@
   "model": "questions.question",
   "pk": 4464,
   "fields": {
-    "question_text": "NACO (National AIDS Control Organization) in India works towards which of the following causes?\nScreening high risk cases of HIV\n2. Facilitating adoption of orphans 3. Public education towards safe sex 4. Treating HIV cases free of cost\n\nSelect the correct answer using the code given below:",
+    "question_text": "NACO (National AIDS Control Organization) in India works towards which of the following causes?\n1. Screening high risk cases of HIV\n2. Facilitating adoption of orphans\n3. Public education towards safe sex\n4. Treating HIV cases free of cost\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -101176,7 +101176,7 @@
   "model": "questions.question",
   "pk": 4465,
   "fields": {
-    "question_text": "Prophylactic oophorectomy is recommended in high risk women with which of the following?\nCarrying BRCA1 or BRCA2 genes\n2. Family history of breast, colon, ovarian cancer 3. Patients having tubo-ovarian abscess\n\nSelect the correct answer using the code given below:",
+    "question_text": "Prophylactic oophorectomy is recommended in high risk women with which of the following?\n1. Carrying BRCA1 or BRCA2 genes\n2. Family history of breast, colon, ovarian cancer\n3. Patients having tubo-ovarian abscess\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -101524,7 +101524,7 @@
   "model": "questions.question",
   "pk": 4471,
   "fields": {
-    "question_text": "Which of the following can be a complication in the baby due to post maturity of pregnancy?\nMeconium aspiration\n2. Hypoglycemia 3. Intra ventricular haemorrhage 4. Polycythemia\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following can be a complication in the baby due to post maturity of pregnancy?\n1. Meconium aspiration\n2. Hypoglycemia\n3. Intra ventricular haemorrhage\n4. Polycythemia\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -101698,7 +101698,7 @@
   "model": "questions.question",
   "pk": 4474,
   "fields": {
-    "question_text": "Clinical features of an infant with Fetal growth retardation at birth include which of the following?\nPhysical features give 'an old man look'.\n2. Baby is alert, reflexes are normal. 3. There is presence of weight deficit. 4. Thick fat accumulates around shoulders of baby.\n\nSelect the correct answer using the code given below:",
+    "question_text": "Clinical features of an infant with Fetal growth retardation at birth include which of the following?\n1. Physical features give 'an old man look'.\n2. Baby is alert, reflexes are normal.\n3. There is presence of weight deficit.\n4. Thick fat accumulates around shoulders of baby.\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -101814,7 +101814,7 @@
   "model": "questions.question",
   "pk": 4476,
   "fields": {
-    "question_text": "Which of the following are examples of LARC (Long Acting Reversible Contraceptives)?\nCopper-T 380A\n2. Implants 3. LNG-IUS\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are examples of LARC (Long Acting Reversible Contraceptives)?\n1. Copper-T 380A\n2. Implants\n3. LNG-IUS\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "2 and 3 only",
     "option_c": "1 and 3 only",
@@ -102046,7 +102046,7 @@
   "model": "questions.question",
   "pk": 4480,
   "fields": {
-    "question_text": "Indication for removal of IUDs include which of the following?\nPerforation of uterus\n2. Pregnancy with device in situ 3. One year after menopause 4. Persistent migraine\n\nSelect the correct answer using the code given below:",
+    "question_text": "Indication for removal of IUDs include which of the following?\n1. Perforation of uterus\n2. Pregnancy with device in situ\n3. One year after menopause\n4. Persistent migraine\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -102104,7 +102104,7 @@
   "model": "questions.question",
   "pk": 4481,
   "fields": {
-    "question_text": "Which of the following are the absolute contraindications for the use of combined oral contraceptive pills?\nSevere hypertension\n2. Pregnancy 3. Diabetes with retinopathy 4. Gall bladder disease\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are the absolute contraindications for the use of combined oral contraceptive pills?\n1. Severe hypertension\n2. Pregnancy\n3. Diabetes with retinopathy\n4. Gall bladder disease\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -102452,7 +102452,7 @@
   "model": "questions.question",
   "pk": 4487,
   "fields": {
-    "question_text": "Which among the following is correct about yellow fever vaccination requirement for international travellers?\nTerm of validity of the certificate is changed from 10 years to the duration of the life of the vaccinated person, some years ago.\n\nLifetime validity of the certificate applies automatically to all existing and new certificates.\n\nValidity of the certificate begins 4 days after vaccination.\n\nIn India, booster dose of yellow fever vaccine is required for those whose certificate is prior to the year 2016.\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which among the following is correct about yellow fever vaccination requirement for international travellers?\nTerm of validity of the certificate is changed from 10 years to the duration of the life of the vaccinated person, some years ago.\n\nLifetime validity of the certificate applies automatically to all existing and new certificates.\n\nValidity of the certificate begins 4 days after vaccination.\n\nIn India, booster dose of yellow fever vaccine is required for those whose certificate is prior to the year 2016. Select the correct answer using the code given below:",
     "option_a": "1 and 2",
     "option_b": "1 and 3",
     "option_c": "2 and 3",
@@ -103090,7 +103090,7 @@
   "model": "questions.question",
   "pk": 4498,
   "fields": {
-    "question_text": "Consider the following disorders:\nDelayed motor milestones\n2. Extrapyramidal spasticity 3. Nyctalopia 4. Hearing defects\n\nWhich of the above disorders occur as part of the spectrum of iodine deficiency disorders?",
+    "question_text": "Consider the following disorders:\n1. Delayed motor milestones\n2. Extrapyramidal spasticity\n3. Nyctalopia\n4. Hearing defects\n\nWhich of the above disorders occur as part of the spectrum of iodine deficiency disorders?",
     "option_a": "1, 2 and 3",
     "option_b": "1, 3 and 4",
     "option_c": "2, 3 and 4",
@@ -103264,7 +103264,7 @@
   "model": "questions.question",
   "pk": 4501,
   "fields": {
-    "question_text": "Which of the following are domains (or types) of learning?\nAffective learning\n2. Cognitive learning 3. Physiological learning 4. Psychomotor learning\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are domains (or types) of learning?\n1. Affective learning\n2. Cognitive learning\n3. Physiological learning\n4. Psychomotor learning\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 3 and 4",
     "option_b": "2, 3 and 4",
     "option_c": "1, 2 and 3",
@@ -103322,7 +103322,7 @@
   "model": "questions.question",
   "pk": 4502,
   "fields": {
-    "question_text": "Which of the following are beneficiaries of services provided under the Integrated Child Development Scheme (ICDS)?\nAdolescent boys\n2. Adolescent girls 3. Pregnant women 4. Children less than 6 years of age\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are beneficiaries of services provided under the Integrated Child Development Scheme (ICDS)?\n1. Adolescent boys\n2. Adolescent girls\n3. Pregnant women\n4. Children less than 6 years of age\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -103380,7 +103380,7 @@
   "model": "questions.question",
   "pk": 4503,
   "fields": {
-    "question_text": "Which of the following correctly represent the three critical determinants of a healthy facility being declared as a First Referral Unit (FRU)?\nAvailability of emergency obstetric surgical interventions\n2. Availability of immunization services 3. Blood storage facility 4. Newborn care\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following correctly represent the three critical determinants of a healthy facility being declared as a First Referral Unit (FRU)?\n1. Availability of emergency obstetric surgical interventions\n2. Availability of immunization services\n3. Blood storage facility\n4. Newborn care\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 3 and 4",
     "option_c": "1, 2 and 4",
@@ -103438,7 +103438,7 @@
   "model": "questions.question",
   "pk": 4504,
   "fields": {
-    "question_text": "What is the correct increasing order of minimum age at which the following vaccines are administered to a child, as part of the National Immunization Schedule (NIS) after birth of child?\nBCG vaccine\n2. Japanese Encephalitis (JE) vaccine 3. Rotavirus vaccine 4. Tetanus and adult diphtheria (Td) vaccine\n\nSelect the correct answer using the code given below:",
+    "question_text": "What is the correct increasing order of minimum age at which the following vaccines are administered to a child, as part of the National Immunization Schedule (NIS) after birth of child?\n1. BCG vaccine\n2. Japanese Encephalitis (JE) vaccine\n3. Rotavirus vaccine\n4. Tetanus and adult diphtheria (Td) vaccine\n\nSelect the correct answer using the code given below:",
     "option_a": "1→2→3→4",
     "option_b": "1→3→2→4",
     "option_c": "2→3→4→1",
@@ -103671,7 +103671,7 @@
   "model": "questions.question",
   "pk": 4508,
   "fields": {
-    "question_text": "Which of the following are health education models?\nMedical model\n2. Motivation model 3. Persuasion model 4. Social intervention model\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following are health education models?\n1. Medical model\n2. Motivation model\n3. Persuasion model\n4. Social intervention model\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -104077,7 +104077,7 @@
   "model": "questions.question",
   "pk": 4515,
   "fields": {
-    "question_text": "Cross-over type of study designs are those in which each patient serves as his/her own control. In which of the following conditions is a cross-over study not suitable?\nIf the drug of interest cures the disease\n2. If the drug is effective during all stages of the disease 3. If the disease changes radically during the period of time required for the study\n\nSelect the correct answer using the code given below:",
+    "question_text": "Cross-over type of study designs are those in which each patient serves as his/her own control. In which of the following conditions is a cross-over study not suitable?\n1. If the drug of interest cures the disease\n2. If the drug is effective during all stages of the disease\n3. If the disease changes radically during the period of time required for the study\n\nSelect the correct answer using the code given below:",
     "option_a": "1 only",
     "option_b": "2 only",
     "option_c": "2 and 3",
@@ -104193,7 +104193,7 @@
   "model": "questions.question",
   "pk": 4517,
   "fields": {
-    "question_text": "Which of the following statements are correct regarding Chikungunya fever?\nIt is usually transmitted by Culex mosquito.\n2. A safe and effective vaccine is available for commercial use. 3. Incubation period is 4–7 days. 4. One of the prominent symptoms is arthropathy.\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following statements are correct regarding Chikungunya fever?\n1. It is usually transmitted by Culex mosquito.\n2. A safe and effective vaccine is available for commercial use.\n3. Incubation period is 4–7 days.\n4. One of the prominent symptoms is arthropathy.\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2 only",
     "option_b": "1 and 4 only",
     "option_c": "2 and 3 only",
@@ -104309,7 +104309,7 @@
   "model": "questions.question",
   "pk": 4519,
   "fields": {
-    "question_text": "Which of the following mosquito-borne diseases are transmitted chiefly by Aedes mosquito?\nDengue\n2. West Nile fever 3. Yellow fever 4. Zika fever\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which of the following mosquito-borne diseases are transmitted chiefly by Aedes mosquito?\n1. Dengue\n2. West Nile fever\n3. Yellow fever\n4. Zika fever\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 3 only",
     "option_b": "1, 2 and 3",
     "option_c": "1, 3 and 4",
@@ -104428,7 +104428,7 @@
   "model": "questions.question",
   "pk": 4521,
   "fields": {
-    "question_text": "Consider the following vaccines:\nBCG Vaccine\n2. Hepatitis B Vaccine 3. Inactivated Polio Vaccine (IPV) 4. Oral Polio Vaccine (OPV)\n\nWhat is the correct order of the above vaccines as per their sensitivity to heat (most sensitive to least sensitive) given in the National Immunization Schedule (NIS)?",
+    "question_text": "Consider the following vaccines:\n1. BCG Vaccine\n2. Hepatitis B Vaccine\n3. Inactivated Polio Vaccine (IPV)\n4. Oral Polio Vaccine (OPV)\n\nWhat is the correct order of the above vaccines as per their sensitivity to heat (most sensitive to least sensitive) given in the National Immunization Schedule (NIS)?",
     "option_a": "4→3→2→1",
     "option_b": "2→1→3→4",
     "option_c": "2→1→4→3",
@@ -104488,7 +104488,7 @@
   "model": "questions.question",
   "pk": 4522,
   "fields": {
-    "question_text": "Exposure to gases is a common hazard in industries. The gases can be classified as simple, asphyxiating and anaesthetic gases. Which among the following are asphyxiating gases?\nCarbon monoxide\n2. Chloroform 3. Cyanide gas 4. Hydrogen\n\nSelect the correct answer using the code given below:",
+    "question_text": "Exposure to gases is a common hazard in industries. The gases can be classified as simple, asphyxiating and anaesthetic gases. Which among the following are asphyxiating gases?\n1. Carbon monoxide\n2. Chloroform\n3. Cyanide gas\n4. Hydrogen\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 3",
     "option_b": "1 and 4",
     "option_c": "2 and 3",
@@ -104546,7 +104546,7 @@
   "model": "questions.question",
   "pk": 4523,
   "fields": {
-    "question_text": "The Employees State Insurance Act, 1948 of India provides for certain benefits to employees. Which among the following are benefits to insured persons or to other dependents under the Act?\nDisablement benefit\n2. Funeral expenses 3. Maternity benefit 4. Travel benefit\n\nSelect the correct answer using the code given below:",
+    "question_text": "The Employees State Insurance Act, 1948 of India provides for certain benefits to employees. Which among the following are benefits to insured persons or to other dependents under the Act?\n1. Disablement benefit\n2. Funeral expenses\n3. Maternity benefit\n4. Travel benefit\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 3 only",
     "option_b": "2 and 4 only",
     "option_c": "1, 2 and 3 only",
@@ -104604,7 +104604,7 @@
   "model": "questions.question",
   "pk": 4524,
   "fields": {
-    "question_text": "Which among the following vaccines best represent interventions that focus on cancer prevention too?\nHepatitis A vaccine\n2. Hepatitis B vaccine 3. Hemophilus influenzae B vaccine 4. Human papilloma virus vaccine\n\nSelect the correct answer using the code given below:",
+    "question_text": "Which among the following vaccines best represent interventions that focus on cancer prevention too?\n1. Hepatitis A vaccine\n2. Hepatitis B vaccine\n3. Hemophilus influenzae B vaccine\n4. Human papilloma virus vaccine\n\nSelect the correct answer using the code given below:",
     "option_a": "1 and 2",
     "option_b": "2 and 3",
     "option_c": "2 and 4",
@@ -109669,7 +109669,7 @@
   "model": "questions.question",
   "pk": 4612,
   "fields": {
-    "question_text": "Consider the following pairs:\n    Urinary sediments seen in AKIDiagnosis\n1. RBC castsMalignant hypertension2. WBC castsPyelonephritis3. Pigmented castsVasculitis4. Granular castsMyoglobinuria\n\n    How many of the pairs given above are correctly matched?",
+    "question_text": "Consider the following pairs:\n    Urinary sediments seen in AKIDiagnosis\n1. RBC casts — Malignant hypertension\n2. WBC casts — Pyelonephritis\n3. Pigmented casts — Vasculitis\n4. Granular casts — Myoglobinuria\n\nHow many of the pairs given above are correctly matched?",
     "option_a": "Only one pair",
     "option_b": "Only two pairs",
     "option_c": "Only three pairs",
@@ -116437,7 +116437,7 @@
   "model": "questions.question",
   "pk": 5210,
   "fields": {
-    "question_text": "Which of the following are selective serotonin re-uptake inhibitors?\n    Select the correct answer using the code given below:",
+    "question_text": "Which of the following are selective serotonin re-uptake inhibitors?\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -117993,7 +117993,7 @@
   "model": "questions.question",
   "pk": 5237,
   "fields": {
-    "question_text": "Consider the following pairs: Urine colour PDFPossible causative agent in a child with suspected poisoning PDF\n1. Pink Cephalosporin 2. Brown Chloroquine 3. Greenish blue Phenazopyridine 4. Red-orange Amitriptyline How many of the pairs given above are correctly matched?",
+    "question_text": "Consider the following pairs: Urine colour Possible causative agent in a child with suspected poisoning\n1. Pink Cephalosporin\n2. Brown Chloroquine\n3. Greenish blue Phenazopyridine\n4. Red-orange Amitriptyline\n\nHow many of the pairs given above are correctly matched?",
     "option_a": "Only one pair",
     "option_b": "Only two pairs",
     "option_c": "Only three pairs",
@@ -118167,7 +118167,7 @@
   "model": "questions.question",
   "pk": 5240,
   "fields": {
-    "question_text": "Consider the following conditions: Condition PDFResponse to tactile stimulation PDFHeart Rate PDFBlood Pressure PDFTone PDFA Yes Normal Normal Normal B Yes Falling Normal Decreasing C No Falling Falling Decreasing D No Rising Normal Normal Primary apnea in a neonate is characterized by which one of the above conditions?",
+    "question_text": "Consider the following conditions: Condition Response to tactile stimulation Heart Rate Blood Pressure Tone A Yes Normal Normal Normal B Yes Falling Normal Decreasing C No Falling Falling Decreasing D No Rising Normal Normal Primary apnea in a neonate is characterized by which one of the above conditions?",
     "option_a": "A",
     "option_b": "B",
     "option_c": "C",
@@ -118283,7 +118283,7 @@
   "model": "questions.question",
   "pk": 5242,
   "fields": {
-    "question_text": "Which of the following are signs of good attachment during breastfeeding? The baby's nose is at the level of the nipple. The baby's mouth is wide open. The baby's chin touches the breast. The baby's lower lip is everted.\n      Select the correct answer using the code given below:",
+    "question_text": "Which of the following are signs of good attachment during breastfeeding? The baby's nose is at the level of the nipple. The baby's mouth is wide open. The baby's chin touches the breast. The baby's lower lip is everted.\n\nSelect the correct answer using the code given below:",
     "option_a": "1, 2 and 3",
     "option_b": "2, 3 and 4",
     "option_c": "1, 3 and 4",
@@ -119442,7 +119442,7 @@
   "model": "questions.question",
   "pk": 5262,
   "fields": {
-    "question_text": "Which of the following are features of umbilical hernia in adults? Patients are commonly overweight with a thinned and attenuated midline raphe. Most patients complain of pain due to tissue tension. Men are affected more commonly than women. Hernia repair can be done by the technique described by Mayo.\n    Select the correct answer using the code given below.",
+    "question_text": "Which of the following are features of umbilical hernia in adults? Patients are commonly overweight with a thinned and attenuated midline raphe. Most patients complain of pain due to tissue tension. Men are affected more commonly than women. Hernia repair can be done by the technique described by Mayo.\n\nSelect the correct answer using the code given below.",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -119674,7 +119674,7 @@
   "model": "questions.question",
   "pk": 5266,
   "fields": {
-    "question_text": "Which of the following are features of autosomal dominant polycystic kidney disease? Cyst may also occur in liver, pancreas and arachnoid membrane. Most commonly manifests between 20-30 years of age. Clinical manifestations are renal and extrarenal. Men tend to progress to renal failure more rapidly than women.\n    Select the correct answer using the code given below",
+    "question_text": "Which of the following are features of autosomal dominant polycystic kidney disease? Cyst may also occur in liver, pancreas and arachnoid membrane. Most commonly manifests between 20-30 years of age. Clinical manifestations are renal and extrarenal. Men tend to progress to renal failure more rapidly than women.\n\nSelect the correct answer using the code given below",
     "option_a": "1, 2 and 3",
     "option_b": "1, 2 and 4",
     "option_c": "1, 3 and 4",
@@ -125484,7 +125484,7 @@
   "model": "questions.question",
   "pk": 5367,
   "fields": {
-    "question_text": "The table below shows the results of ELISA test for HIV infection:\nTrue infection status Infected Noninfected\n\nPositive 4900 950\n\nNegative 100 94050\n\nTotal 5000 95000\n\nConsider the following statements:\n\nThe sensitivity is 98%.\n\nThe specificity is 99%.\n\nWhich of the statements given above is/are correct?",
+    "question_text": "The table below shows the results of ELISA test for HIV infection:\n\n| Test Result | Infected | Non-infected |\n|---|---|---|\n| Positive | 4900 | 950 |\n| Negative | 100 | 94050 |\n| Total | 5000 | 95000 |\n\nConsider the following statements:\n\nThe sensitivity is 98%.\n\nThe specificity is 99%.\n\nWhich of the statements given above is/are correct?",
     "option_a": "1 only",
     "option_b": "2 only",
     "option_c": "Both 1 and 2",
