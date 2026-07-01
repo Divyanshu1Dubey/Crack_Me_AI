@@ -47,6 +47,12 @@ class Command(BaseCommand):
             help="Skip importing/deleting, just run enrichment on existing database records",
         )
         parser.add_argument(
+            "--year",
+            type=int,
+            default=0,
+            help="Year to process (0 for both 2023 and 2024)",
+        )
+        parser.add_argument(
             "--sleep-ms",
             type=int,
             default=300,
@@ -58,13 +64,17 @@ class Command(BaseCommand):
         enrich = options["enrich"]
         limit = options["limit"]
         no_import = options["no_import"]
+        selected_year = options["year"]
         sleep_ms = options["sleep_ms"]
 
         # Ensure subjects exist
         if not dry_run:
             self._ensure_subjects()
 
-        years = [2023, 2024]
+        if selected_year:
+            years = [selected_year]
+        else:
+            years = [2023, 2024]
         for year in years:
             db_questions = []
             
@@ -202,7 +212,19 @@ class Command(BaseCommand):
             if q_match:
                 num = int(q_match.group(1))
                 rest = q_match.group(2)
+                
+                is_new_q = False
                 if num == expected_number:
+                    is_new_q = True
+                    expected_number += 1
+                    if expected_number > 120:
+                        expected_number = 1
+                        current_paper = 3 - first_paper
+                elif current_question and num == current_question["number"]:
+                    is_new_q = True
+                    # Keep expected_number as is since it's a duplicate of the same number
+                
+                if is_new_q:
                     if current_question:
                         current_question["question_text"] = "\n".join(question_text_lines).strip()
                         questions.append(current_question)
@@ -242,10 +264,6 @@ class Command(BaseCommand):
                         "year": year
                     }
                     question_text_lines = [rest]
-                    expected_number += 1
-                    if expected_number > 120:
-                        expected_number = 1
-                        current_paper = 3 - first_paper
                     continue
 
             # Check for options
