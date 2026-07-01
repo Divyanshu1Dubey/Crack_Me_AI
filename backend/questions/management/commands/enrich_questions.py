@@ -298,7 +298,10 @@ Rules:
             match = re.search(r"\{.*\}", raw or "", re.DOTALL)
             if not match:
                 return RuleResult()
-            payload = json.loads(match.group(0))
+            clean_json = match.group(0)
+            # Remove trailing commas before closing braces/brackets
+            clean_json = re.sub(r',\s*([\]\}])', r'\1', clean_json)
+            payload = json.loads(clean_json)
         except Exception:
             return RuleResult()
 

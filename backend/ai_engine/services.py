@@ -160,7 +160,10 @@ class AIService:
         if groq_key:
             try:
                 from groq import Groq
-                self.groq = Groq(api_key=groq_key)
+                self.groq = Groq(
+                    api_key=groq_key,
+                    max_retries=0
+                )
                 logger.info("✅ Groq AI initialized")
             except Exception as e:
                 logger.warning(f"Groq init failed: {e}")
@@ -170,7 +173,8 @@ class AIService:
                 from openai import OpenAI
                 self.deepseek = OpenAI(
                     api_key=deepseek_key,
-                    base_url='https://api.deepseek.com'
+                    base_url='https://api.deepseek.com',
+                    max_retries=0
                 )
                 logger.info("✅ DeepSeek AI initialized")
             except Exception as e:
@@ -197,7 +201,8 @@ class AIService:
                 from openai import OpenAI
                 self.openrouter = OpenAI(
                     api_key=openrouter_key,
-                    base_url='https://openrouter.ai/api/v1'
+                    base_url='https://openrouter.ai/api/v1',
+                    max_retries=0
                 )
                 logger.info("✅ OpenRouter AI initialized")
             except Exception as e:
@@ -209,7 +214,8 @@ class AIService:
                 from openai import OpenAI
                 self.github_models = OpenAI(
                     api_key=github_token,
-                    base_url='https://models.inference.ai.azure.com'
+                    base_url='https://models.inference.ai.azure.com',
+                    max_retries=0
                 )
                 logger.info("✅ GitHub Models AI initialized")
             except Exception as e:
@@ -222,7 +228,8 @@ class AIService:
                 from openai import OpenAI
                 self.openrouter2 = OpenAI(
                     api_key=openrouter_key2,
-                    base_url='https://openrouter.ai/api/v1'
+                    base_url='https://openrouter.ai/api/v1',
+                    max_retries=0
                 )
                 logger.info("✅ OpenRouter2 AI initialized")
             except Exception as e:
@@ -235,7 +242,8 @@ class AIService:
                 from openai import OpenAI
                 self.huggingface = OpenAI(
                     api_key=hf_key,
-                    base_url='https://router.huggingface.co/novita/v3/openai'
+                    base_url='https://router.huggingface.co/novita/v3/openai',
+                    max_retries=0
                 )
                 logger.info("✅ HuggingFace AI initialized")
             except Exception as e:
@@ -248,7 +256,8 @@ class AIService:
                 from openai import OpenAI
                 self.mistral = OpenAI(
                     api_key=mistral_key,
-                    base_url='https://api.mistral.ai/v1'
+                    base_url='https://api.mistral.ai/v1',
+                    max_retries=0
                 )
                 logger.info("✅ Mistral AI initialized")
             except Exception as e:
@@ -261,7 +270,8 @@ class AIService:
                 from openai import OpenAI
                 self.nvidia_mistral = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
-                    api_key=nvidia_mistral_key
+                    api_key=nvidia_mistral_key,
+                    max_retries=0
                 )
                 logger.info("✅ NVIDIA Mistral AI initialized")
             except Exception as e:
@@ -331,6 +341,8 @@ class AIService:
                     continue
                 logger.warning(f"Gemini [{model_name}] error: {e}")
                 continue
+        logger.warning("Gemini exhausted all models — disabling for this session")
+        self.gemini_client = None
         return None
 
     def _call_groq(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
@@ -426,8 +438,8 @@ class AIService:
             logger.warning("Cerebras timed out (15s)")
         except Exception as e:
             err = str(e)
-            if '401' in err or 'invalid_api_key' in err:
-                logger.warning("Cerebras API key invalid — skipping")
+            if '401' in err or 'invalid_api_key' in err or '404' in err or 'model_not_found' in err:
+                logger.warning("Cerebras API key invalid or model unavailable — skipping")
                 self.cerebras = None
             elif '429' in err:
                 logger.info("Cerebras rate limit hit")
@@ -463,7 +475,8 @@ class AIService:
                 logger.info("Cohere OK")
                 return text
         except FuturesTimeout:
-            logger.warning("Cohere timed out (15s)")
+            logger.warning("Cohere timed out (15s) — skipping cohere for this session")
+            self.cohere = None
         except Exception as e:
             err = str(e)
             if '401' in err or 'invalid_api_key' in err:
@@ -516,6 +529,8 @@ class AIService:
                 else:
                     logger.warning(f"OpenRouter [{model_name}] error: {e}")
                     continue
+        logger.warning("OpenRouter exhausted all models — disabling for this session")
+        self.openrouter = None
         return None
 
     def _call_github_models(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
@@ -686,6 +701,8 @@ class AIService:
                 else:
                     logger.warning(f"OpenRouter2 [{model_name}] error: {e}")
                     continue
+        logger.warning("OpenRouter2 exhausted all models — disabling for this session")
+        self.openrouter2 = None
         return None
 
     # ─── LOAD-BALANCED DISPATCHER ──────────────────────────

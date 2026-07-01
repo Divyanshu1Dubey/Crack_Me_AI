@@ -65,7 +65,7 @@ MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 NVIDIA_MISTRAL_API_KEY = os.getenv('NVIDIA_MISTRAL_API_KEY', '')
 
 
-allowed_hosts_default = 'localhost,127.0.0.1'
+allowed_hosts_default = 'localhost,127.0.0.1,testserver'
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', allowed_hosts_default).split(',') if h.strip()]
 
 # Application definition

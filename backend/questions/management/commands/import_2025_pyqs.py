@@ -326,7 +326,10 @@ Return strict JSON only (no markdown codeblock format, no surrounding text, just
             match = re.search(r"\{.*\}", raw or "", re.DOTALL)
             if not match:
                 return False
-            payload = json.loads(match.group(0))
+            clean_json = match.group(0)
+            # Remove trailing commas before closing braces/brackets
+            clean_json = re.sub(r',\s*([\]\}])', r'\1', clean_json)
+            payload = json.loads(clean_json)
         except Exception as e:
             logger.warning(f"AI enrichment failed for Q{q.id}: {e}")
             return False
