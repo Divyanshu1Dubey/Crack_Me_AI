@@ -3129,6 +3129,28 @@
   }
 },
 {
+  "model": "questions.topic",
+  "pk": 280,
+  "fields": {
+    "subject": 1,
+    "name": "Fluid and Electrolyte Disorders",
+    "parent": null,
+    "importance": 5,
+    "description": "Fluid and Electrolyte Disorders under General Medicine"
+  }
+},
+{
+  "model": "questions.topic",
+  "pk": 281,
+  "fields": {
+    "subject": 2,
+    "name": "Gastrointestinal Bleeding",
+    "parent": null,
+    "importance": 5,
+    "description": "Gastrointestinal Bleeding under Pediatrics"
+  }
+},
+{
   "model": "questions.question",
   "pk": 1,
   "fields": {
@@ -122279,6 +122301,63 @@
     "is_active": true,
     "created_at": "2026-07-01T08:05:43.650Z",
     "updated_at": "2026-07-01T08:45:27.779Z",
+    "textbook_references": [],
+    "learning_technique": "",
+    "shortcut_tip": "",
+    "page_screenshot": "",
+    "concept_keywords": [],
+    "ai_explanation": "",
+    "ai_answer": "",
+    "ai_mnemonic": "",
+    "ai_references": [],
+    "admin_answer_override": "",
+    "admin_explanation_override": "",
+    "admin_mnemonic_override": "",
+    "admin_references_override": [],
+    "lock_answer": false,
+    "lock_explanation": false,
+    "is_verified_by_admin": false,
+    "verified_by": null,
+    "verified_at": null,
+    "verified_note": "",
+    "similar_questions": []
+  }
+},
+{
+  "model": "questions.question",
+  "pk": 2245,
+  "fields": {
+    "question_text": "Which of the following statements are correct regarding management of gastrointestinal bleeding in children?\nI. Somatostatin or octreotide infusion should be given for at least 7 days after stoppage of initial bleeding to prevent rebleeding\nII. Endoscopic Sclerotherapy (EST) involves endoscopic injection of N-butyl-2-cyanoacrylate or isobutyl-2-cyanoacrylate\nIII. EST has upto 90% efficacy in controlling acute bleeding\nIV. Following an episode of acute variceal bleeding, all patients should receive secondary prophylaxis to prevent rebleeding\nSelect the answer using the code given below:",
+    "option_a": "I and II",
+    "option_b": "I and III",
+    "option_c": "III and IV",
+    "option_d": "II and IV",
+    "correct_answer": "C",
+    "year": 2025,
+    "subject": 2,
+    "topic": 281,
+    "difficulty": "medium",
+    "concept_tags": [
+      "gastrointestinal bleeding",
+      "endoscopic sclerotherapy",
+      "variceal bleeding",
+      "secondary prophylaxis"
+    ],
+    "concept_id": "",
+    "explanation": "Statement III is correct as EST has a high efficacy (up to 90%) in controlling acute bleeding. Statement IV is correct because secondary prophylaxis is recommended after an episode of acute variceal bleeding to prevent rebleeding. Statements I and II are incorrect: Somatostatin or octreotide infusion is typically given for 2-5 days, not 7, and EST involves injection of sclerosing agents like ethanolamine oleate, not cyanoacrylates.",
+    "concept_explanation": "Gastrointestinal bleeding in children, particularly variceal bleeding, requires prompt management. Somatostatin or octreotide reduces portal pressure and bleeding. EST is a minimally invasive procedure where sclerosing agents are injected into bleeding varices to induce fibrosis and stop bleeding. Secondary prophylaxis, such as beta-blockers or band ligation, is essential to prevent rebleeding. Cyanoacrylates are used in glue therapy, not EST.",
+    "mnemonic": "EST stops bleeding fast (90% efficacy), and secondary prophylaxis is a must after variceal bleeding.",
+    "book_name": "",
+    "chapter": "",
+    "page_number": "",
+    "reference_text": "",
+    "paper": 1,
+    "source": "PYQ_2025_Paper1.txt",
+    "exam_source": "UPSC CMS",
+    "times_asked": 0,
+    "is_active": true,
+    "created_at": "2026-07-01T10:10:03.971Z",
+    "updated_at": "2026-07-01T10:10:59.755Z",
     "textbook_references": [],
     "learning_technique": "",
     "shortcut_tip": "",

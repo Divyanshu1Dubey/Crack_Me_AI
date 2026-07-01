@@ -116,12 +116,11 @@ class Command(BaseCommand):
                     defaults={"importance": 5, "description": f"General topic for {subject.name}"}
                 )
 
-                # Check for duplicate
-                text_prefix = q_data["question_text"][:60].strip()
+                # Check for duplicate using full text to avoid false positives on similar prefixes
                 existing_q = Question.objects.filter(
                     year=2025,
                     subject=subject,
-                    question_text__icontains=text_prefix
+                    question_text=q_data["question_text"]
                 ).first()
 
                 if existing_q:
