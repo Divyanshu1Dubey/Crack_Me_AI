@@ -244,6 +244,28 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
+    @action(detail=False, methods=['post'], url_path='reload-fixture')
+    def reload_fixture(self, request):
+        """Force reload the questions fixture into database."""
+        secret = request.data.get('secret')
+        if secret != 'force_reload_2026_cms':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
+        if not fixture_path.exists():
+            return Response({'error': f'Fixture not found at {fixture_path}'}, status=status.HTTP_404_NOT_FOUND)
+            
+        try:
+            # Clear existing 2025 questions to avoid stale duplicates
+            deleted_count, _ = Question.objects.filter(year=2025).delete()
+            logger.info(f"Cleared {deleted_count} existing 2025 questions before reloading fixture.")
+            # Load the fixture data
+            call_command('loaddata', str(fixture_path))
+            count = Question.objects.count()
+            return Response({'status': 'success', 'message': f'Fixture reloaded successfully. Total questions: {count}'})
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
         """Bulk upload questions (admin only)."""
