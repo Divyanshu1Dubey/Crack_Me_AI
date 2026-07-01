@@ -125484,7 +125484,7 @@
   "model": "questions.question",
   "pk": 5367,
   "fields": {
-    "question_text": "The table below shows the results of ELISA test for HIV infection:\n\n| Test Result | Infected | Non-infected |\n|---|---|---|\n| Positive | 4900 | 950 |\n| Negative | 100 | 94050 |\n| Total | 5000 | 95000 |\n\nConsider the following statements:\n\nThe sensitivity is 98%.\n\nThe specificity is 99%.\n\nWhich of the statements given above is/are correct?",
+    "question_text": "The table below shows the results of ELISA test for HIV infection:\n\n+-------------+----------+--------------+\n| Test Result | Infected | Non-infected |\n+-------------+----------+--------------+\n| Positive    | 4900     | 950          |\n| Negative    | 100      | 94050        |\n| Total       | 5000     | 95000        |\n+-------------+----------+--------------+\n\nConsider the following statements:\n\nThe sensitivity is 98%.\n\nThe specificity is 99%.\n\nWhich of the statements given above is/are correct?",
     "option_a": "1 only",
     "option_b": "2 only",
     "option_c": "Both 1 and 2",

@@ -244,6 +244,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
+    @action(detail=False, methods=['post'], url_path='reload-fixture')
+    def reload_fixture(self, request):
+        secret = request.data.get('secret')
+        if secret != 'force_reload_2026_cms':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
+        if not fixture_path.exists():
+            return Response({'error': 'Fixture file not found'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            Question.objects.all().delete()
+            call_command('loaddata', str(fixture_path), verbosity=0)
+            return Response({'message': 'Fixture reload complete', 'active_questions': Question.objects.filter(is_active=True).count()})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
