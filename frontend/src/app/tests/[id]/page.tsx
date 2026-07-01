@@ -27,7 +27,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')   // Codes section on new line
         .replace(/\*\s+\(/g, '\n* (');                // Option items on new lines
     return (
-        <div className={`formatted-text ${className}`}>
+        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
             <ReactMarkdown>{cleaned}</ReactMarkdown>
         </div>
     );

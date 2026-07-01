@@ -37,7 +37,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
         .replace(/\*\s+\(/g, '\n* (');
     return (
-        <div className={`formatted-text ${className}`}>
+        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
             <ReactMarkdown>{cleaned}</ReactMarkdown>
         </div>
     );
