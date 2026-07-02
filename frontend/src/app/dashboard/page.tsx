@@ -58,10 +58,10 @@ export default function DashboardPage() {
     const [hoveredDay, setHoveredDay] = useState<{ date: string; questions: number; tests: number; minutes: number } | null>(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-    // SWR hooks with deduplication and caching (5 min cache)
+    // SWR hooks with fast revalidation for live dashboard progress
     const swrConfig = {
-        revalidateOnFocus: false,
-        dedupingInterval: 300000, // 5 minutes
+        revalidateOnFocus: true,
+        dedupingInterval: 2000, // 2 seconds
         errorRetryCount: 2,
     };
 
@@ -538,36 +538,88 @@ export default function DashboardPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* Question Bank */}
+                            {/* Question Bank Progress */}
                             <Card className="shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
-                                        Question Bank
+                                        Question Bank Progress
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="rounded-xl bg-cyan-50 dark:bg-cyan-900/15 border border-cyan-200/70 dark:border-cyan-500/30 p-3">
-                                        <p className="text-xs text-cyan-700 dark:text-cyan-300">Total Questions Available</p>
-                                        <p className="text-2xl font-bold text-foreground mt-1">1,920+ PYQs</p>
+                                    <div className="rounded-xl bg-cyan-50 dark:bg-cyan-900/15 border border-cyan-200/70 dark:border-cyan-500/30 p-3 flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-300 tracking-wider">Overall QBank Solved</p>
+                                            <p className="text-2xl font-black text-foreground mt-1">
+                                                {stats?.total_solved || 0} <span className="text-sm font-semibold text-muted-foreground">/ {stats?.total || 1440}</span>
+                                            </p>
+                                        </div>
+                                        {stats?.total > 0 && (
+                                            <Badge className="bg-cyan-600 hover:bg-cyan-600 text-white font-bold text-xs py-1 px-2.5">
+                                                {Math.round((stats.total_solved / stats.total) * 100)}% Completed
+                                            </Badge>
+                                        )}
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-medium text-muted-foreground">By Subject</p>
-                                        {(stats?.by_subject || []).slice(0, 5).map((item: { name: string; count: number }, idx: number) => (
-                                            <div key={idx} className="flex items-center justify-between text-sm">
-                                                <span className="text-foreground">{item.name}</span>
-                                                <Badge variant="secondary">{item.count}</Badge>
-                                            </div>
-                                        ))}
+                                    {/* Progress by Year */}
+                                    <div className="space-y-2.5">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {(stats?.by_year || [])
+                                                .filter((item: { year: number }) => item.year >= 2020 && item.year <= 2025)
+                                                .map((item: { year: number; count: number; solved: number }, idx: number) => {
+                                                    const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                                    const isCompleted = item.solved === item.count && item.count > 0;
+                                                    return (
+                                                        <div key={idx} className="p-2 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between min-h-[64px]">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="text-xs font-extrabold text-foreground">{item.year}</span>
+                                                                <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
+                                                            </div>
+                                                            <Progress value={pct} className="h-1.5" />
+                                                            <div className="flex justify-between items-center mt-1">
+                                                                <span className="text-[9px] font-bold text-muted-foreground">{pct}% solved</span>
+                                                                {isCompleted && (
+                                                                    <span className="text-[9px] text-emerald-500 font-extrabold flex items-center gap-0.5 animate-bounce">
+                                                                        Done! 🎉
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-medium text-muted-foreground">Difficulty Levels</p>
+                                    {/* Progress by Subject */}
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
+                                        {(stats?.by_subject || []).slice(0, 5).map((item: { name: string; count: number; solved: number }, idx: number) => {
+                                            const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                            return (
+                                                <div key={idx} className="space-y-1">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-foreground font-medium">{item.name}</span>
+                                                        <span className="text-muted-foreground font-semibold">{item.solved} / {item.count} ({pct}%)</span>
+                                                    </div>
+                                                    <Progress value={pct} className="h-1.5" />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Difficulty Levels */}
+                                    <div className="space-y-2 pt-1">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Difficulty Levels</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number }, idx: number) => (
-                                                <Badge key={idx} variant="outline" className="capitalize">{d.difficulty}: {d.count}</Badge>
-                                            ))}
+                                            {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
+                                                const pct = d.count > 0 ? Math.round((d.solved / d.count) * 100) : 0;
+                                                return (
+                                                    <Badge key={idx} variant="outline" className="capitalize text-[10px] py-1 px-2">
+                                                        {d.difficulty}: {d.solved}/{d.count} ({pct}%)
+                                                    </Badge>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </CardContent>

@@ -26,9 +26,17 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
         .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')  // Ensure Roman numeral items start on new lines
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')   // Codes section on new line
         .replace(/\*\s+\(/g, '\n* (');                // Option items on new lines
+    const markdownWithLineBreaks = cleaned
+        .split('\n')
+        .map(line => {
+            if (!line.trim()) return line;
+            if (line.endsWith('  ') || line.endsWith('\\')) return line;
+            return line + '  ';
+        })
+        .join('\n');
     return (
         <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
-            <ReactMarkdown>{cleaned}</ReactMarkdown>
+            <ReactMarkdown>{markdownWithLineBreaks}</ReactMarkdown>
         </div>
     );
 }

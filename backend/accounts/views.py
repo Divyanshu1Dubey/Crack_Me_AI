@@ -397,9 +397,8 @@ class AdminTokenOverviewView(APIView):
                     "api_budget": {
                         "gemini_daily_limit": 6000,
                         "groq_daily_limit": 14400,
-                        "deepseek_daily_limit": "pay-as-you-go",
                         "combined_daily_capacity": 20400,
-                        "note": "Gemini: 4 models x 1500 RPD each. Groq: 14400 RPD. DeepSeek: unlimited (paid).",
+                        "note": "Gemini: 4 models x 1500 RPD each. Groq: 14400 RPD.",
                     },
                 },
                 "users": serializer.data,

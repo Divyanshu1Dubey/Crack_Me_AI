@@ -128,7 +128,6 @@ class AIService:
     def __init__(self):
         self.gemini_client = None
         self.groq = None
-        self.deepseek = None
         self.cerebras = None
         self.cohere = None
         self.openrouter = None
@@ -144,7 +143,6 @@ class AIService:
         """Initialize all available AI provider clients."""
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '')
         groq_key = getattr(settings, 'GROQ_API_KEY', '')
-        deepseek_key = getattr(settings, 'DEEPSEEK_API_KEY', '')
         cerebras_key = getattr(settings, 'CEREBRAS_API_KEY', '')
         cohere_key = getattr(settings, 'COHERE_API_KEY', '')
         openrouter_key = getattr(settings, 'OPENROUTER_API_KEY', '')
@@ -167,18 +165,6 @@ class AIService:
                 logger.info("✅ Groq AI initialized")
             except Exception as e:
                 logger.warning(f"Groq init failed: {e}")
-
-        if deepseek_key:
-            try:
-                from openai import OpenAI
-                self.deepseek = OpenAI(
-                    api_key=deepseek_key,
-                    base_url='https://api.deepseek.com',
-                    max_retries=0
-                )
-                logger.info("✅ DeepSeek AI initialized")
-            except Exception as e:
-                logger.warning(f"DeepSeek init failed: {e}")
 
         if cerebras_key:
             try:
@@ -282,7 +268,7 @@ class AIService:
             ('Cerebras', self.cerebras), ('Cohere', self.cohere),
             ('OpenRouter', self.openrouter), ('OpenRouter2', self.openrouter2),
             ('GitHub', self.github_models), ('HuggingFace', self.huggingface),
-            ('Mistral', self.mistral), ('NVIDIA Mistral', self.nvidia_mistral), ('DeepSeek', self.deepseek),
+            ('Mistral', self.mistral), ('NVIDIA Mistral', self.nvidia_mistral),
         ] if client]
         if not providers_ok:
             logger.error("❌ No AI providers initialized! Check API keys in .env")
@@ -308,32 +294,35 @@ class AIService:
     # ─── PROVIDER CALL METHODS ─────────────────────────────
 
     def _call_gemini(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Try Gemini models with 15s timeout per model."""
-        if not self.gemini_client:
+        """Try Gemini models with 15s timeout per model using direct REST API."""
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '')
+        if not gemini_key:
             return None
-        from google.genai import types
+        import requests
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         for model_name in GEMINI_MODELS:
             try:
-                config_kwargs = {"temperature": temperature, "max_output_tokens": max_tokens}
-
-                def _gemini_call(mn=model_name, ck=config_kwargs):
-                    return self.gemini_client.models.generate_content(
-                        model=mn,
-                        contents=full_prompt,
-                        config=types.GenerateContentConfig(**ck),
-                    )
-
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_gemini_call)
-                    response = future.result(timeout=15)
-
-                if response and response.text:
-                    logger.info(f"Gemini [{model_name}] OK")
-                    return response.text
-            except FuturesTimeout:
-                logger.warning(f"Gemini [{model_name}] timed out (15s), trying next...")
-                continue
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "contents": [{"parts": [{"text": full_prompt}]}],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens
+                    }
+                }
+                response = requests.post(url, headers=headers, json=payload, timeout=15)
+                if response.status_code == 200:
+                    data = response.json()
+                    try:
+                        text = data['candidates'][0]['content']['parts'][0]['text']
+                        if text:
+                            logger.info(f"Gemini [{model_name}] OK")
+                            return text
+                    except (KeyError, IndexError):
+                        logger.warning(f"Gemini [{model_name}] invalid response structure: {data}")
+                else:
+                    logger.warning(f"Gemini [{model_name}] HTTP {response.status_code}: {response.text}")
             except Exception as e:
                 err = str(e)
                 if '429' in err or 'RESOURCE_EXHAUSTED' in err:
@@ -341,8 +330,7 @@ class AIService:
                     continue
                 logger.warning(f"Gemini [{model_name}] error: {e}")
                 continue
-        logger.warning("Gemini exhausted all models — disabling for this session")
-        self.gemini_client = None
+        logger.warning("Gemini exhausted all models")
         return None
 
     def _call_groq(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
@@ -376,39 +364,10 @@ class AIService:
                 logger.warning(f"Groq error: {e}")
         return None
 
-    def _call_deepseek(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Call DeepSeek (OpenAI-compatible API)."""
-        if not self.deepseek:
-            return None
-        try:
-            messages = []
-            if system:
-                messages.append({"role": "system", "content": system})
-            messages.append({"role": "user", "content": prompt})
-            response = self.deepseek.chat.completions.create(
-                model="deepseek-chat",
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=15.0
-            )
-            text = response.choices[0].message.content
-            if text:
-                logger.info("DeepSeek OK")
-                return text
-        except Exception as e:
-            err = str(e)
-            if '402' in err or 'Insufficient' in err:
-                logger.warning("DeepSeek balance depleted — skipping")
-                self.deepseek = None  # Disable for this instance
-            elif '429' in err:
-                logger.info("DeepSeek rate limit hit")
-            else:
-                logger.warning(f"DeepSeek error: {e}")
-        return None
+
 
     def _call_cerebras(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Call Cerebras (ultra-fast inference, Llama 3.1 8B).
+        """Call Cerebras (ultra-fast inference, Gemma 4 31B).
         Free tier: 30 RPM, ~1M tokens/day."""
         if not self.cerebras:
             return None
@@ -420,7 +379,7 @@ class AIService:
 
             def _cerebras_call():
                 return self.cerebras.chat.completions.create(
-                    model="llama3.1-8b",
+                    model="gemma-4-31b",
                     messages=messages,
                     temperature=temperature,
                     max_completion_tokens=max_tokens,
@@ -668,7 +627,6 @@ class AIService:
         if not self.openrouter2:
             return None
         free_models = [
-            "deepseek/deepseek-r1-0528:free",
             "google/gemma-2-9b-it:free",
             "microsoft/phi-3-medium-128k-instruct:free",
         ]
@@ -719,7 +677,7 @@ class AIService:
         """
         Call AI with round-robin load balancing across 10 providers.
         Order: Groq → Cerebras → Gemini → Cohere → OpenRouter → GitHub →
-               HuggingFace → Mistral → OpenRouter2 → DeepSeek(paid/last).
+               HuggingFace → Mistral → OpenRouter2.
         Total capped at 120s.
         """
         import time
@@ -734,7 +692,6 @@ class AIService:
             ('huggingface', self._call_huggingface),
             ('mistral', self._call_mistral),
             ('openrouter2', self._call_openrouter2),
-            ('deepseek', self._call_deepseek),
         ]
 
         with _counter_lock:

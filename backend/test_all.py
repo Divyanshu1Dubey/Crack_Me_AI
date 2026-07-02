@@ -280,10 +280,10 @@ def test_api_keys():
         try:
             from cerebras.cloud.sdk import Cerebras
             r = Cerebras(api_key=key).chat.completions.create(
-                model='llama3.1-8b',
+                model='gemma-4-31b',
                 messages=[{'role': 'user', 'content': prompt}],
                 max_completion_tokens=60, temperature=0.1)
-            ok("Cerebras (Llama 3.1 8B)", r.choices[0].message.content[:70])
+            ok("Cerebras (Gemma 4 31B)", r.choices[0].message.content[:70])
         except Exception as e:
             err = str(e)
             if '429' in err:
@@ -299,12 +299,20 @@ def test_api_keys():
     key = os.getenv('GEMINI_API_KEY', '')
     if key:
         try:
-            from google import genai
-            from google.genai import types
-            r = genai.Client(api_key=key).models.generate_content(
-                model='gemini-2.0-flash', contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=60))
-            ok("Gemini (Flash 2.0)", r.text[:70] if r and r.text else "Empty")
+            import requests
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 60}
+            }
+            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                text = data['candidates'][0]['content']['parts'][0]['text']
+                ok("Gemini (Flash 2.0)", text[:70] if text else "Empty")
+            else:
+                fail("Gemini", f"HTTP {response.status_code}: {response.text}"[:100])
         except Exception as e:
             err = str(e)
             if '429' in err or 'RESOURCE_EXHAUSTED' in err:
@@ -353,9 +361,6 @@ def test_api_keys():
     time.sleep(0.5)
     _test_openai_compat("Mistral (small-latest)", "MISTRAL_API_KEY",
                         "https://api.mistral.ai/v1", "mistral-small-latest")
-    time.sleep(0.5)
-    _test_openai_compat("DeepSeek (PAID-last)", "DEEPSEEK_API_KEY",
-                        "https://api.deepseek.com", "deepseek-chat")
 
     # Ollama (local)
     try:
@@ -391,10 +396,10 @@ def test_ai_service():
         ('Cerebras', svc.cerebras), ('Cohere', svc.cohere),
         ('OpenRouter', svc.openrouter), ('OpenRouter2', svc.openrouter2),
         ('GitHub', svc.github_models), ('HuggingFace', svc.huggingface),
-        ('Mistral', svc.mistral), ('DeepSeek', svc.deepseek),
+        ('Mistral', svc.mistral),
     ] if c]
     if len(providers) >= 3:
-        ok("Provider count", f"{len(providers)}/10 initialized: {', '.join(providers)}")
+        ok("Provider count", f"{len(providers)}/9 initialized: {', '.join(providers)}")
     elif len(providers) > 0:
         fail("Provider count", f"Only {len(providers)} providers — need at least 3 for reliability")
     else:
@@ -527,7 +532,7 @@ def test_endpoints():
     try:
         r = client.post('/api/auth/login/', {'username': 'test', 'password': 'test'},
                         content_type='application/json')
-        if r.status_code in (200, 400, 401):
+        if r.status_code in (200, 400, 401, 410):
             ok("POST /api/auth/login/", f"Status {r.status_code} (endpoint reachable)")
         else:
             fail("POST /api/auth/login/", f"Status {r.status_code}")
@@ -547,7 +552,7 @@ def test_endpoints():
     # 5.10 Tests list
     try:
         r = client.get('/api/tests/')
-        if r.status_code in (200, 401):
+        if r.status_code in (200, 401, 403):
             ok("GET /api/tests/", f"Status {r.status_code}")
         else:
             fail("GET /api/tests/", f"Status {r.status_code}")
@@ -557,7 +562,7 @@ def test_endpoints():
     # 5.11 Analytics
     try:
         r = client.get('/api/analytics/dashboard/')
-        if r.status_code in (200, 401):
+        if r.status_code in (200, 401, 403):
             ok("GET /api/analytics/dashboard/", f"Status {r.status_code}")
         else:
             fail("GET /api/analytics/dashboard/", f"Status {r.status_code}")

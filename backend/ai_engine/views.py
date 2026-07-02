@@ -462,7 +462,6 @@ class AIStatusView(APIView):
             providers = {
                 'gemini': service.gemini_client is not None,
                 'groq': service.groq is not None,
-                'deepseek': service.deepseek is not None,
             }
         except Exception as e:
             logger.error(f"AIService init failed: {e}")
@@ -470,7 +469,6 @@ class AIStatusView(APIView):
         keys_present = {
             'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
             'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
-            'DEEPSEEK_API_KEY': bool(getattr(django_settings, 'DEEPSEEK_API_KEY', '')),
         }
         logger.info(f"AI Status check — providers: {providers}, keys_present: {keys_present}")
         return Response({

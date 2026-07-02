@@ -28,7 +28,8 @@ import {
   Award,
   BookMarked,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  Crown
 } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
@@ -933,6 +934,80 @@ export default function LandingPage() {
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* Premium early bird pricing section */}
+      <section className="relative px-6 py-20 md:py-24 overflow-hidden border-t border-border/45 bg-slate-950 text-white rounded-[2.5rem] mx-4 sm:mx-6 md:mx-12 my-16 shadow-2xl">
+        <div className="absolute right-0 top-0 h-[400px] w-[400px] rounded-full bg-gradient-to-br from-amber-500/10 to-yellow-500/15 blur-3xl opacity-60 pointer-events-none" />
+        <div className="absolute left-0 bottom-0 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-blue-500/15 blur-3xl opacity-60 pointer-events-none" />
+
+        <div className="mx-auto max-w-5xl relative z-10">
+          <div className="grid gap-12 lg:grid-cols-12 items-center">
+            <div className="lg:col-span-7 space-y-6 text-left">
+              <Badge className="bg-amber-500/15 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 font-bold uppercase tracking-wider text-[10px] py-1 px-3">
+                <Crown className="w-3.5 h-3.5 mr-1 inline" /> Early Bird Special Pass
+              </Badge>
+              <h2 className="font-display text-3xl font-black md:text-5xl text-white tracking-tight leading-tight">
+                One Place for Complete UPSC CMS & NEET PG
+              </h2>
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed">
+                Unlock our elite repository of curated materials, custom textbooks, and direct faculty support designed specifically for medical officers.
+              </p>
+
+              <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                {[
+                  { title: "Any Textbook On-Demand", desc: "Request any medical textbook, edition, or manual. We supply it immediately." },
+                  { title: "Top Curator Hand-notes", desc: "Access high-yield revision summaries, flowcharts, and mnemonics." },
+                  { title: "Renowned Faculty Doubts", desc: "Direct channel to clear clinical doubts with state and national experts." },
+                  { title: "Full QBank & Simulations", desc: "1,440+ verified year-wise PYQs (2020-2025) and custom mock exams." }
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-200">{item.title}</h4>
+                      <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-slate-900/60 p-8 text-center backdrop-blur-md relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Premium Pass</span>
+                
+                <div className="mt-4 flex items-baseline justify-center gap-2">
+                  <span className="text-6xl font-black text-white">₹199</span>
+                  <span className="text-lg line-through text-slate-500">₹10,000</span>
+                </div>
+                <p className="text-[10px] text-amber-400/90 font-bold mt-1 tracking-wide">98% Launch Offer — Price Rising to ₹10K+ Soon</p>
+
+                <ul className="mt-6 space-y-3.5 text-left text-xs text-slate-300 border-t border-slate-800 pt-6">
+                  <li className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> All-edition books on request
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Handwritten study materials
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Dedicated coordinator doubt portal
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Unlimited AI tutor explanations
+                  </li>
+                </ul>
+
+                <Button size="xl" asChild className="w-full mt-8 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold shadow-lg shadow-amber-500/20 py-4 transition-transform active:scale-95">
+                  <Link href="/subscription">
+                    Claim Premium Offer Now <ArrowRight className="w-4 h-4 ml-1" />
+                  </Link>
+                </Button>
+                <span className="block text-[9px] text-slate-500 mt-3">Secure payment via Razorpay. Cancel anytime.</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
