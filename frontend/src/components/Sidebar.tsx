@@ -61,6 +61,7 @@ const navSections: NavSection[] = [
             { href: '/bookmarks', iconName: 'bookmarks-ribbon', label: 'Bookmarks' },
             { href: '/subscription', iconName: 'subscription-gold', label: 'Subscription' },
             { href: '/feedback', iconName: 'feedback-chat', label: 'Feedback' },
+            { href: '/contact', iconName: 'contact-support', label: 'Contact Us' },
         ]
     },
 ];

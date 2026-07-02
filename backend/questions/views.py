@@ -198,9 +198,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
             )
             if user and getattr(user, 'is_authenticated', False):
+                from django.db.models import Subquery
+                from questions.models import QuestionAttempt
                 queryset = queryset.annotate(
                     is_bookmarked=Exists(
                         QuestionBookmark.objects.filter(question_id=OuterRef('pk'), user=user)
+                    ),
+                    user_selected_answer=Subquery(
+                        QuestionAttempt.objects.filter(question_id=OuterRef('pk'), user=user).values('selected_answer')[:1]
+                    ),
+                    user_is_correct=Subquery(
+                        QuestionAttempt.objects.filter(question_id=OuterRef('pk'), user=user).values('is_correct')[:1]
                     )
                 )
 
@@ -641,6 +649,75 @@ class QuestionViewSet(viewsets.ModelViewSet):
         serializer = QuestionImportJobSerializer(job)
         return Response({'message': 'Extraction job queued for retry', 'job': serializer.data})
 
+    @action(detail=True, methods=['post'], url_path='attempt')
+    def attempt(self, request, pk=None):
+        """Record an attempt on a QBank question and update statistics."""
+        question = self.get_object()
+        selected_answer = request.data.get('selected_answer')
+        if not selected_answer:
+            return Response({'error': 'selected_answer is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        is_correct = (selected_answer == question.correct_answer)
+        
+        from questions.models import QuestionAttempt
+        from analytics.models import UserTopicPerformance, DailyActivity
+        
+        attempt, created = QuestionAttempt.objects.update_or_create(
+            user=request.user,
+            question=question,
+            defaults={
+                'selected_answer': selected_answer,
+                'is_correct': is_correct
+            }
+        )
+        
+        if created:
+            # Update Subject/Topic performance
+            if question.topic:
+                perf, _ = UserTopicPerformance.objects.get_or_create(
+                    user=request.user,
+                    subject=question.subject,
+                    topic=question.topic
+                )
+                perf.total_attempts += 1
+                if is_correct:
+                    perf.correct_answers += 1
+                else:
+                    perf.incorrect_answers += 1
+                perf.last_attempted = timezone.now()
+                perf.save()
+            
+            # General subject row
+            perf_sub, _ = UserTopicPerformance.objects.get_or_create(
+                user=request.user,
+                subject=question.subject,
+                topic=None
+            )
+            perf_sub.total_attempts += 1
+            if is_correct:
+                perf_sub.correct_answers += 1
+            else:
+                perf_sub.incorrect_answers += 1
+            perf_sub.last_attempted = timezone.now()
+            perf_sub.save()
+            
+            # Update DailyActivity
+            today = timezone.localdate()
+            activity, _ = DailyActivity.objects.get_or_create(
+                user=request.user,
+                date=today
+            )
+            activity.questions_attempted += 1
+            if is_correct:
+                activity.correct_answers += 1
+            activity.save()
+            
+        return Response({
+            'is_correct': is_correct,
+            'correct_answer': question.correct_answer,
+            'is_subscribed': getattr(request.user, 'is_subscribed', False)
+        })
+
     @action(detail=True, methods=['post'], url_path='bookmark')
     def bookmark(self, request, pk=None):
         """Toggle bookmark on a question."""
@@ -669,28 +746,64 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='stats')
     def question_stats(self, request):
-        """Return question count statistics by subject, year, difficulty."""
+        """Return question count statistics by subject, year, difficulty with user progress."""
         _ensure_question_bank_loaded()
         from django.db.models import Count
+        
+        user = request.user
+        has_user = user and user.is_authenticated
+        
+        from questions.models import QuestionAttempt
+        
+        # Base count
+        total_qs = Question.objects.filter(is_active=True)
+        total_count = total_qs.count()
+        total_solved = QuestionAttempt.objects.filter(user=user).count() if has_user else 0
+        
+        # Progress by year
+        by_year_raw = total_qs.values('year').annotate(count=Count('id')).order_by('-year')
+        by_year = []
+        for item in by_year_raw:
+            year = item['year']
+            solved = QuestionAttempt.objects.filter(user=user, question__year=year).count() if has_user else 0
+            by_year.append({
+                'year': year,
+                'count': item['count'],
+                'solved': solved
+            })
+            
+        # Progress by subject
+        by_subject_raw = Subject.objects.annotate(count=Count('questions')).values('id', 'name', 'code', 'count')
+        by_subject = []
+        for item in by_subject_raw:
+            sub_id = item['id']
+            solved = QuestionAttempt.objects.filter(user=user, question__subject_id=sub_id).count() if has_user else 0
+            by_subject.append({
+                'id': sub_id,
+                'name': item['name'],
+                'code': item['code'],
+                'count': item['count'],
+                'solved': solved
+            })
+
+        # Progress by difficulty
+        by_difficulty_raw = total_qs.values('difficulty').annotate(count=Count('id'))
+        by_difficulty = []
+        for item in by_difficulty_raw:
+            diff = item['difficulty']
+            solved = QuestionAttempt.objects.filter(user=user, question__difficulty=diff).count() if has_user else 0
+            by_difficulty.append({
+                'difficulty': diff,
+                'count': item['count'],
+                'solved': solved
+            })
+
         stats = {
-            'total': Question.objects.filter(is_active=True).count(),
-            'by_subject': list(
-                Subject.objects.annotate(count=Count('questions')).values('name', 'code', 'count')
-            ),
-            'by_year': list(
-                Question.objects.filter(is_active=True)
-                .values('year').annotate(count=Count('id')).order_by('-year')
-            ),
-            'by_difficulty': list(
-                Question.objects.filter(is_active=True)
-                .values('difficulty').annotate(count=Count('id'))
-            ),
-            'trends': list(
-                Question.objects.filter(is_active=True)
-                .values('year', 'subject__name', 'subject__code')
-                .annotate(count=Count('id'))
-                .order_by('-year', 'subject__name')
-            ),
+            'total': total_count,
+            'total_solved': total_solved,
+            'by_subject': by_subject,
+            'by_year': by_year,
+            'by_difficulty': by_difficulty,
         }
         return Response(stats)
 

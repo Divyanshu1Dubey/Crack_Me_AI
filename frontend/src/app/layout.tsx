@@ -139,7 +139,7 @@ export default function RootLayout({
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
-        <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem>
+        <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
           <TooltipProvider>
             <AuthProvider>
               <DatadogInit />

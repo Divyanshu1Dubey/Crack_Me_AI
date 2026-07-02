@@ -144,6 +144,9 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
   subscribe: () => api.post('/auth/subscribe/'),
+  subscribeOrder: () => api.post('/auth/subscribe/order/'),
+  subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
+    api.post('/auth/subscribe/verify/', data),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
   confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
@@ -212,6 +215,7 @@ export const questionsAPI = {
   getYears: () => api.get('/questions/years/'),
   getStats: () => api.get('/questions/stats/'),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
+  attempt: (id: number, data: { selected_answer: string }) => api.post(`/questions/${id}/attempt/`, data),
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
   create: (data: Record<string, unknown>) => api.post('/questions/', data),
@@ -292,6 +296,8 @@ export const analyticsAPI = {
   replyFeedback: (id: number, data: { admin_reply: string }) =>
     api.patch(`/analytics/feedback/${id}/`, data),
   deleteFeedback: (id: number) => api.delete(`/analytics/feedback/${id}/`),
+  contactUs: (data: { name: string; email: string; subject: string; message: string }) =>
+    api.post('/analytics/contact/', data),
   exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
   exportCSV: (type: string) => api.get('/analytics/export/csv/', { params: { type }, responseType: 'blob' }),
   // Announcements

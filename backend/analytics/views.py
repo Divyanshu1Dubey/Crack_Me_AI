@@ -18,6 +18,25 @@ from accounts.permissions import IsControlTowerAdmin
 logger = logging.getLogger(__name__)
 
 
+from django.core.mail import send_mail
+from django.conf import settings
+
+def send_admin_notification_email(subject, message):
+    """Utility to email crackwith.ai notifications to the administrator."""
+    try:
+        admin_email = 'divyanshudubey2712@gmail.com'
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[admin_email],
+            fail_silently=False,
+        )
+        logger.info(f"Admin notification email sent successfully: {subject}")
+    except Exception as e:
+        logger.exception(f"Failed to send admin notification email: {str(e)}")
+
+
 class DashboardView(APIView):
     """Main analytics dashboard data."""
     permission_classes = [permissions.IsAuthenticated]
@@ -36,8 +55,17 @@ class DashboardView(APIView):
             total_time=Sum('time_taken_seconds'),
         )
 
-        total_q = (overall['total_correct'] or 0) + (overall['total_incorrect'] or 0)
-        overall_accuracy = round((overall['total_correct'] or 0) / total_q * 100, 1) if total_q > 0 else 0
+        # Include QBank attempts
+        from questions.models import QuestionAttempt
+        qbank_qs = QuestionAttempt.objects.filter(user=user)
+        qbank_total = qbank_qs.count()
+        qbank_correct = qbank_qs.filter(is_correct=True).count()
+        qbank_incorrect = qbank_total - qbank_correct
+
+        total_q = (overall['total_correct'] or 0) + (overall['total_incorrect'] or 0) + qbank_total
+        total_correct = (overall['total_correct'] or 0) + qbank_correct
+        total_incorrect = (overall['total_incorrect'] or 0) + qbank_incorrect
+        overall_accuracy = round(total_correct / total_q * 100, 1) if total_q > 0 else 0
 
         # Subject-wise performance
         subject_perf = []
@@ -65,8 +93,8 @@ class DashboardView(APIView):
                 'total_tests': overall['total_tests'] or 0,
                 'avg_score': round(overall['avg_score'] or 0, 1),
                 'total_questions': total_q,
-                'total_correct': overall['total_correct'] or 0,
-                'total_incorrect': overall['total_incorrect'] or 0,
+                'total_correct': total_correct,
+                'total_incorrect': total_incorrect,
                 'overall_accuracy': overall_accuracy,
                 'total_time_hours': round((overall['total_time'] or 0) / 3600, 1),
             },
@@ -118,19 +146,80 @@ class TopicPerformanceView(APIView):
         performances = UserTopicPerformance.objects.filter(
             user=request.user,
             topic__isnull=False  # Only topic-level, not subject-level
-        ).select_related('topic', 'subject').order_by('subject__name', 'topic__name')
+        ).select_related('topic', 'subject').order_by('-total_attempts')
         serializer = TopicPerformanceSerializer(performances, many=True)
         return Response(serializer.data)
 
 
-class ActivityHeatmapView(APIView):
-    """Daily activity data for heatmap visualization."""
+class DailyActivityView(APIView):
+    """Heatmap data over time."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        activities = DailyActivity.objects.filter(user=request.user)[:365]
+        # Return last 120 days of activity
+        days_ago = timezone.now().date() - timezone.timedelta(days=120)
+        activities = DailyActivity.objects.filter(
+            user=request.user,
+            date__gte=days_ago
+        ).order_by('date')
         serializer = DailyActivitySerializer(activities, many=True)
         return Response(serializer.data)
+
+
+class StudyStreakView(APIView):
+    """Study streaks and gamification milestones."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+        
+        # Award initial badges
+        from django.core.management import call_command
+        try:
+            # Safely check for standard badges
+            if Badge.objects.count() == 0:
+                call_command('seed_data')
+        except Exception:
+            pass
+
+        # Check badges earned
+        user_badges = UserBadge.objects.filter(user=request.user).select_related('badge')
+        badges_data = UserBadgeSerializer(user_badges, many=True).data
+
+        # Auto-award based on streak
+        earned = []
+        if streak.current_streak >= 7:
+            badge, _ = Badge.objects.get_or_create(
+                name="7-Day Warrior",
+                defaults={'code': 'streak_7', 'description': 'Maintained a 7-day study streak', 'xp_reward': 100}
+            )
+            ub, created = UserBadge.objects.get_or_create(user=request.user, badge=badge)
+            if created:
+                earned.append(BadgeSerializer(badge).data)
+                
+        if streak.current_streak >= 30:
+            badge, _ = Badge.objects.get_or_create(
+                name="30-Day Master",
+                defaults={'code': 'streak_30', 'description': 'Maintained a 30-day study streak', 'xp_reward': 500}
+            )
+            ub, created = UserBadge.objects.get_or_create(user=request.user, badge=badge)
+            if created:
+                earned.append(BadgeSerializer(badge).data)
+
+        # Get recent performance to show trend
+        recent_attempts = TestAttempt.objects.filter(user=request.user, is_completed=True).order_by('-completed_at')[:5]
+        trend_data = []
+        for attempt in recent_attempts:
+            trend_data.append({
+                'date': attempt.completed_at.strftime('%Y-%m-%d'),
+                'score': attempt.score,
+                'accuracy': attempt.accuracy,
+            })
+
+        return Response({
+            'trend': trend_data,
+            'total_tests': len(trend_data),
+        })
 
 
 class RecentAttemptsView(APIView):
@@ -260,8 +349,53 @@ class FeedbackListCreateView(APIView):
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(user=request.user)
+        fb = serializer.save(user=request.user)
+        
+        # Email notification to admin
+        try:
+            send_admin_notification_email(
+                subject=f"[FEEDBACK SUBMITTED] {fb.get_category_display()} by {request.user.username}",
+                message=(
+                    f"A student has submitted feedback on CrackCMS.\n\n"
+                    f"User: {request.user.username} ({request.user.email})\n"
+                    f"Category: {fb.get_category_display()}\n"
+                    f"Rating: {fb.rating}/5\n"
+                    f"Title: {fb.title}\n"
+                    f"Message:\n{fb.message}\n"
+                )
+            )
+        except Exception:
+            logger.exception("Failed to send admin feedback email")
+            
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ContactUsView(APIView):
+    """Allows anyone to submit the Contact Us support form."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        name = request.data.get('name', 'Anonymous')
+        email = request.data.get('email', 'Not provided')
+        subject = request.data.get('subject', 'Contact Form Submission')
+        message = request.data.get('message', '')
+
+        if not message:
+            return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Trigger notification email
+        send_admin_notification_email(
+            subject=f"[CONTACT FORM] {subject} - from {name}",
+            message=(
+                f"Contact Form Inquiry on CrackCMS:\n\n"
+                f"Name: {name}\n"
+                f"Email: {email}\n"
+                f"Subject: {subject}\n\n"
+                f"Message:\n{message}\n"
+            )
+        )
+
+        return Response({'message': 'Your message has been sent to our team. We will get back to you shortly!'})
 
 
 class FeedbackDetailView(APIView):

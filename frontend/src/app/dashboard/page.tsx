@@ -9,7 +9,7 @@ import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle2, Clock, FileText, Flame,
-    HeartPulse
+    HeartPulse, Crown
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -252,6 +252,28 @@ export default function DashboardPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container space-y-6 pb-8">
+                    {/* Premium Upgrade Banner */}
+                    {!user?.is_subscribed && (
+                        <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
+                            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-bold text-amber-500 flex items-center gap-1.5">
+                                        <Crown className="w-4 h-4" /> UPSC CMS Premium Pass — Early Bird Offer ₹199 (Ends Soon!)
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground">
+                                        Get full access to all requested books, rankers notes, top coordinator doubt support, and study tools.
+                                    </p>
+                                </div>
+                                <Link href="/subscription" className="shrink-0">
+                                    <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                                        Upgrade to Premium
+                                    </Button>
+                                </Link>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {/* Hero */}
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block relative">

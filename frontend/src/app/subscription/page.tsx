@@ -34,13 +34,71 @@ export default function SubscriptionPage() {
         setSubscribing(true);
         setSuccessMessage(null);
         setErrorMessage(null);
+
+        // Load Razorpay script
+        const scriptLoaded = await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+
+        if (!scriptLoaded) {
+            setErrorMessage("Failed to load Razorpay SDK. Please check your internet connection and try again.");
+            setSubscribing(false);
+            return;
+        }
+
         try {
-            await authAPI.subscribe();
-            await refreshProfile();
-            setSuccessMessage("Congratulations! Your Premium subscription has been activated.");
+            // 1. Create order on backend
+            const orderRes = await authAPI.subscribeOrder();
+            const { order_id, amount, key_id } = orderRes.data;
+
+            // 2. Open Razorpay checkout modal
+            const options = {
+                key: key_id,
+                amount: amount,
+                currency: 'INR',
+                name: 'CrackLabs Premium',
+                description: '₹199 Early Bird Premium Plan',
+                order_id: order_id,
+                handler: async function (response: any) {
+                    setSubscribing(true);
+                    try {
+                        // 3. Verify payment signature on backend
+                        await authAPI.subscribeVerify({
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
+                        await refreshProfile();
+                        setSuccessMessage("Congratulations! Your Premium subscription has been activated.");
+                    } catch (err: any) {
+                        setErrorMessage(err.response?.data?.error || "Payment verification failed. Please contact support.");
+                    } finally {
+                        setSubscribing(false);
+                    }
+                },
+                prefill: {
+                    name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username,
+                    email: user?.email || '',
+                    contact: user?.phone || '',
+                },
+                theme: {
+                    color: '#2563eb', // Indigo theme matching CrackLabs style
+                },
+                modal: {
+                    ondismiss: function() {
+                        setSubscribing(false);
+                    }
+                }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
         } catch (err: any) {
-            setErrorMessage(err.response?.data?.error || "Activation failed. Please try again later.");
-        } finally {
+            setErrorMessage(err.response?.data?.error || "Failed to initiate payment. Please try again later.");
             setSubscribing(false);
         }
     };

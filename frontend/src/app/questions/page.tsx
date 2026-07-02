@@ -23,6 +23,7 @@ import EngagingLoader from '@/components/EngagingLoader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -91,6 +92,8 @@ interface Question {
     difficulty: string;
     concept_tags: string[];
     is_bookmarked: boolean;
+    user_selected_answer?: string;
+    user_is_correct?: boolean;
 }
 
 interface Subject {
@@ -138,6 +141,7 @@ function QuestionsContent() {
     const [selectedDifficulty, setSelectedDifficulty] = useState('');
     const [selectedYear, setSelectedYear] = useState('');
     const [years, setYears] = useState<number[]>([]);
+    const [qbankStats, setQbankStats] = useState<any>(null);
     const [listError, setListError] = useState<string | null>(null);
     const [selectedQuestion, setSelectedQuestion] = useState<number | null>(null);
     const [questionDetail, setQuestionDetail] = useState<any>(null);
@@ -231,12 +235,14 @@ function QuestionsContent() {
                 questionsAPI.list({ page: 1, page_size: pageSize }),
                 questionsAPI.getSubjects(),
                 questionsAPI.getYears(),
-            ]).then(([qRes, sRes, yRes]) => {
+                questionsAPI.getStats(),
+            ]).then(([qRes, sRes, yRes, statsRes]) => {
                 const qData = qRes.data;
                 setQuestions(qData.results || qData || []);
                 setTotalCount(qData.count || (qData.results || qData || []).length);
                 setSubjects(sRes.data.results || sRes.data || []);
                 setYears(yRes.data.results || yRes.data || []);
+                setQbankStats(statsRes.data);
             }).catch((err: unknown) => {
                 const apiError = err as { response?: { data?: unknown } };
                 if (apiError.response?.data) {
@@ -310,16 +316,38 @@ function QuestionsContent() {
             const detailData = qRes.data;
             detailData.similar = sRes.data;
             setQuestionDetail(detailData);
+            if (detailData.user_selected_answer) {
+                setSelectedAnswer(detailData.user_selected_answer);
+                setShowAnswer(true);
+            }
         }).catch(() => {
-            questionsAPI.get(id).then(res => setQuestionDetail(res.data));
+            questionsAPI.get(id).then(res => {
+                setQuestionDetail(res.data);
+                if (res.data.user_selected_answer) {
+                    setSelectedAnswer(res.data.user_selected_answer);
+                    setShowAnswer(true);
+                }
+            });
         });
     };
 
     const handleSelectOption = (opt: string) => {
+        if (!detail) return;
         setSelectedAnswer(opt);
         setShowAnswer(true);
-        // NOTE: AI explanation is NOT auto-triggered anymore.
-        // Students must click "Generate AI Analysis" button to save API tokens.
+        
+        const qId = detail.id;
+        const isCorrect = opt === detail.correct_answer;
+        
+        // Log attempt via API
+        questionsAPI.attempt(qId, { selected_answer: opt }).then(() => {
+            // Update local questions list
+            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
+            // Reload stats to reflect in progress tracker
+            questionsAPI.getStats().then(res => setQbankStats(res.data));
+        }).catch(err => {
+            console.error('Failed to log QBank attempt:', err);
+        });
     };
 
     /**
@@ -420,6 +448,58 @@ function QuestionsContent() {
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
 
+                {/* Progress Tracker Card */}
+                {qbankStats && (
+                    <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+                        <CardContent className="p-4 space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                        🎯 Practice Progress
+                                    </h2>
+                                    <p className="text-xs text-muted-foreground">
+                                        Complete all years from 2020 to 2025 to achieve 100% exam readiness. Click a year below to filter.
+                                    </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <span className="text-2xl font-extrabold text-primary">
+                                        {qbankStats.total_solved}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {" "}/ {qbankStats.total} Solved ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
+                                    </span>
+                                </div>
+                            </div>
+                            <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2.5" />
+                            
+                            {/* Year breakdown cards */}
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
+                                {qbankStats.by_year?.map((item: any) => {
+                                    const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
+                                    const isSelected = selectedYear === String(item.year);
+                                    return (
+                                        <button
+                                            key={item.year}
+                                            onClick={() => {
+                                                const newYear = isSelected ? '' : String(item.year);
+                                                setSelectedYear(newYear);
+                                            }}
+                                            className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
+                                        >
+                                            <p className="text-xs font-bold text-foreground">{item.year}</p>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5">{item.solved}/{item.count}</p>
+                                            <div className="w-full bg-border/40 h-1 rounded-full overflow-hidden mt-1.5">
+                                                <div className="bg-primary h-full transition-all" style={{ width: `${solvedPct}%` }} />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Filters */}
                 <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm">
                     <CardContent className="p-4">
@@ -478,6 +558,11 @@ function QuestionsContent() {
                                                 {q.year} &bull; {q.subject_name}
                                             </Badge>
                                             <div className="flex items-center gap-2">
+                                                {q.user_selected_answer && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${q.user_is_correct ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
+                                                        {q.user_is_correct ? '✓ Solved' : '✗ Incorrect'}
+                                                    </span>
+                                                )}
                                                 {diffBadge(q.difficulty)}
                                                 <button
                                                     onClick={(e) => handleBookmark(q.id, e)}

@@ -489,3 +489,19 @@ class Flashcard(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.front[:50]}"
+
+
+class QuestionAttempt(models.Model):
+    """Tracks a user's practice attempt at a specific Question Bank question."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='question_attempts')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='qbank_attempts')
+    selected_answer = models.CharField(max_length=1)
+    is_correct = models.BooleanField()
+    attempted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'question']
+
+    def __str__(self):
+        return f"{self.user.username} | Q{self.question.id} | {'Correct' if self.is_correct else 'Incorrect'}"
+

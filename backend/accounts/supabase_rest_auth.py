@@ -113,13 +113,10 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 configured.add(bootstrap_email)
             return configured
 
-        # Privileges come from Supabase metadata. Accept both app_metadata and
-        # user_metadata because some admin promotion flows store role flags in
-        # user_metadata. Also support an explicit environment allowlist for
-        # deterministic bootstrap behavior.
+        # Privileges come from Supabase app_metadata or allowlist. Do not trust
+        # user_metadata as it can be modified by the end-user.
         is_admin_user = (
             _is_admin_from_metadata(app_metadata)
-            or _is_admin_from_metadata(metadata)
             or email in _admin_email_allowlist()
         )
 
@@ -141,9 +138,6 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             user.set_unusable_password()
             user.save(update_fields=["password"])
         else:
-            existing_admin = bool(getattr(user, "is_admin", False) or user.is_superuser or user.role == "admin")
-            if existing_admin:
-                is_admin_user = True
 
             updates = []
             desired_role = "admin" if is_admin_user else "student"

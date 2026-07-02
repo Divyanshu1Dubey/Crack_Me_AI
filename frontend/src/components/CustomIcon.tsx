@@ -21,6 +21,7 @@ import {
   Trophy,
   Upload,
   Crown,
+  PhoneCall,
 } from 'lucide-react';
 
 interface CustomIconProps {
@@ -64,6 +65,7 @@ const iconMap: Record<string, LucideIcon> = {
   'textbooks-open-book': BookOpen,
   'trends-graph': Gauge,
   'upload-train': Upload,
+  'contact-support': PhoneCall,
 };
 
 export default function CustomIcon({

@@ -38,6 +38,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
     last_revision_at = serializers.SerializerMethodField()
     related_question_ids = serializers.SerializerMethodField()
     accuracy = serializers.SerializerMethodField()
+    user_selected_answer = serializers.CharField(read_only=True, required=False)
+    user_is_correct = serializers.BooleanField(read_only=True, required=False)
 
     class Meta:
         model = Question
@@ -48,7 +50,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'textbook_references', 'is_bookmarked', 'is_verified_by_admin',
                   'verified_at', 'verified_by', 'verified_by_username',
                   'effective_answer', 'effective_explanation',
-                  'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy']
+                  'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
+                  'user_selected_answer', 'user_is_correct']
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
@@ -108,6 +111,8 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     effective_references = serializers.SerializerMethodField()
     revision_count = serializers.SerializerMethodField()
     last_revision_at = serializers.SerializerMethodField()
+    user_selected_answer = serializers.SerializerMethodField()
+    user_is_correct = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -122,7 +127,26 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
             'effective_mnemonic', 'effective_references', 'revision_count', 'last_revision_at',
+            'user_selected_answer', 'user_is_correct',
         ]
+
+    def get_user_selected_answer(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            from questions.models import QuestionAttempt
+            attempt = QuestionAttempt.objects.filter(user=request.user, question=obj).first()
+            if attempt:
+                return attempt.selected_answer
+        return None
+
+    def get_user_is_correct(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            from questions.models import QuestionAttempt
+            attempt = QuestionAttempt.objects.filter(user=request.user, question=obj).first()
+            if attempt:
+                return attempt.is_correct
+        return None
 
     def get_similar(self, obj):
         similar_qs = obj.similar_questions.all()[:5]

@@ -200,6 +200,106 @@ class SubscribeView(APIView):
         })
 
 
+class SubscribeOrderView(APIView):
+    """Create a Razorpay order for ₹199 Premium Plan."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import os
+        key_id = os.getenv('RAZORPAY_KEY_ID', '')
+        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '')
+        if not key_id or not key_secret:
+            return Response({'error': 'Razorpay is not configured on the server. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        import razorpay
+        client = razorpay.Client(auth=(key_id, key_secret))
+        
+        try:
+            order_data = {
+                'amount': 19900,  # 199 INR in paise
+                'currency': 'INR',
+                'payment_capture': '1'
+            }
+            order = client.order.create(data=order_data)
+            return Response({
+                'order_id': order['id'],
+                'amount': order['amount'],
+                'key_id': key_id
+            })
+        except Exception as e:
+            return Response({'error': f'Failed to create Razorpay order: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SubscribeVerifyView(APIView):
+    """Verify payment signature from Razorpay and activate subscription."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import os
+        payment_id = request.data.get('razorpay_payment_id')
+        order_id = request.data.get('razorpay_order_id')
+        signature = request.data.get('razorpay_signature')
+
+        if not all([payment_id, order_id, signature]):
+            return Response({'error': 'Missing payment verification details'}, status=status.HTTP_400_BAD_REQUEST)
+
+        key_id = os.getenv('RAZORPAY_KEY_ID', '')
+        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '')
+        if not key_id or not key_secret:
+            return Response({'error': 'Razorpay keys not configured on server'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        import razorpay
+        client = razorpay.Client(auth=(key_id, key_secret))
+
+        try:
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': order_id,
+                'razorpay_payment_id': payment_id,
+                'razorpay_signature': signature
+            })
+        except Exception as e:
+            return Response({'error': f'Payment signature verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Activate subscription
+        user = request.user
+        user.is_subscribed = True
+        user.save(update_fields=['is_subscribed'])
+
+        # Log transaction
+        TokenTransaction.objects.create(
+            user=user,
+            transaction_type="purchase",
+            amount=0,
+            price_paid=199.00,
+            note=f"Razorpay Premium: order={order_id}, payment={payment_id}"
+        )
+
+        # Send email notification to admin
+        try:
+            from analytics.views import send_admin_notification_email
+            send_admin_notification_email(
+                subject=f"[PREMIUM PURCHASE] {user.username} subscribed to CrackCMS",
+                message=(
+                    f"A user has successfully paid and upgraded to Premium early-bird plan.\n\n"
+                    f"User Details:\n"
+                    f"  Username: {user.username}\n"
+                    f"  Email: {user.email}\n"
+                    f"  Phone: {getattr(user, 'phone', 'Not provided')}\n"
+                    f"  College: {getattr(user, 'college', 'Not provided')}\n\n"
+                    f"Payment Details:\n"
+                    f"  Razorpay Order ID: {order_id}\n"
+                    f"  Razorpay Payment ID: {payment_id}\n"
+                )
+            )
+        except Exception:
+            logger.exception("Failed to send admin payment notification email")
+
+        return Response({
+            'message': 'Subscription verified and activated successfully!',
+            'is_subscribed': True
+        })
+
+
 class TokenBalanceView(APIView):
     """Return the current user's token balance and limits."""
 
