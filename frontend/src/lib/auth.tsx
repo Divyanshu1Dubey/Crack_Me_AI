@@ -101,7 +101,23 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const metadata = supabaseUser.user_metadata || {};
     const appMetadata = supabaseUser.app_metadata || {};
     const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
+    const email = String(supabaseUser.email || '').trim().toLowerCase();
+
+    // Client-side and build-time admin email allowlist matching
+    const envEmails = (
+        process.env.NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS ||
+        process.env.CONTROL_TOWER_ADMIN_EMAILS ||
+        ''
+    ).toLowerCase().split(',').map(e => e.trim()).filter(Boolean);
+
+    const adminEmails = new Set([
+        'meduraa.web@gmail.com',
+        'parulmaterial@gmail.com',
+        ...envEmails
+    ]);
+
     const isAdmin =
+        adminEmails.has(email) ||
         String(appMetadata.is_admin || '').toLowerCase() === 'true' ||
         String(appMetadata.role || '').toLowerCase() === 'admin' ||
         String(metadata.is_admin || '').toLowerCase() === 'true' ||

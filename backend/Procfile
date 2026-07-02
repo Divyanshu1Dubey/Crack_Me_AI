@@ -1,2 +1,2 @@
-release: python manage.py migrate --no-input && python manage.py bootstrap_admin && python manage.py seed_data && python manage.py shell -c "from questions.models import Question; exit(0 if Question.objects.count() > 1000 else 1)" || python manage.py loaddata questions_fixture.json
+release: python manage.py migrate --no-input && python manage.py bootstrap_admin && python manage.py seed_data && python manage.py loaddata questions_fixture.json
 web: gunicorn crack_cms.wsgi --log-file -
