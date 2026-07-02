@@ -108,6 +108,7 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 for item in raw.split(",")
                 if item and item.strip()
             }
+            configured.update(["meduraa.web@gmail.com", "parulmaterial@gmail.com"])
             bootstrap_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
             if bootstrap_email:
                 configured.add(bootstrap_email)
