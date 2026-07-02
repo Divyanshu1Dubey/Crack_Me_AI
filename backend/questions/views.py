@@ -15,6 +15,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, F, Max, Q, Value
+from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
 from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot
@@ -189,12 +190,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not is_admin:
             queryset = queryset.filter(is_active=True)
         if self.action == 'list':
+            queryset = queryset.select_related('subject', 'topic', 'verified_by')
             queryset = queryset.annotate(
                 attempt_count=Count('questionresponse', distinct=True),
                 correct_count=Count('questionresponse', filter=Q(questionresponse__is_correct=True), distinct=True),
             ).annotate(
                 accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
             )
+            if user and getattr(user, 'is_authenticated', False):
+                queryset = queryset.annotate(
+                    is_bookmarked=Exists(
+                        QuestionBookmark.objects.filter(question_id=OuterRef('pk'), user=user)
+                    )
+                )
 
         question_id = self.request.query_params.get('question_id')
         if question_id not in [None, '']:

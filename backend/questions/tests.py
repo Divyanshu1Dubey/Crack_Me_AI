@@ -304,3 +304,26 @@ class AdminControlTowerApiTests(TestCase):
         self.assertEqual(admin_response.status_code, 200)
         admin_rows = admin_response.json().get('results', admin_response.json())
         self.assertTrue(any(int(row['id']) == inactive_question.id for row in admin_rows))
+
+    def test_question_list_endpoint_stays_lightweight(self):
+        self.client.force_login(self.student)
+
+        for index in range(5):
+            Question.objects.create(
+                question_text=f'List performance question {index}',
+                option_a='A',
+                option_b='B',
+                option_c='C',
+                option_d='D',
+                correct_answer='A',
+                year=2024,
+                subject=self.subject,
+                topic=None,
+                difficulty='medium',
+                explanation='Performance check explanation',
+            )
+
+        with self.assertNumQueries(4):
+            response = self.client.get('/api/questions/?page=1&page_size=5')
+
+        self.assertEqual(response.status_code, 200)

@@ -51,10 +51,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy']
 
     def get_is_bookmarked(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.bookmarks.filter(user=request.user).exists()
-        return False
+        return bool(getattr(obj, 'is_bookmarked', False))
 
     def get_effective_answer(self, obj):
         if obj.lock_answer:
@@ -71,14 +68,16 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return obj.ai_explanation or obj.explanation
 
     def get_revision_count(self, obj):
-        return obj.revision_snapshots.count()
+        return getattr(obj, 'revision_count', 0) or 0
 
     def get_last_revision_at(self, obj):
-        latest = obj.revision_snapshots.order_by('-created_at').values_list('created_at', flat=True).first()
-        return latest
+        return getattr(obj, 'last_revision_at', None)
 
     def get_related_question_ids(self, obj):
-        return list(obj.similar_questions.values_list('id', flat=True)[:50])
+        related_ids = getattr(obj, 'related_question_ids', None)
+        if related_ids is None:
+            return []
+        return list(related_ids)
 
     def get_accuracy(self, obj):
         value = getattr(obj, 'accuracy', None)
