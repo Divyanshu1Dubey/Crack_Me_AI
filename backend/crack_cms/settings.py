@@ -18,7 +18,8 @@ load_dotenv()  # Load .env file (does not override existing system env vars)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Sentry Error Tracking ────────────────────────────────────────────
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+# Production-safe default. Local development can opt in through backend/.env.
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 if SENTRY_DSN:

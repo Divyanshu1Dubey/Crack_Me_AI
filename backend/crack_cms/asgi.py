@@ -20,3 +20,7 @@ def _enable_datadog_if_configured():
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
 _enable_datadog_if_configured()
 application = get_asgi_application()
+
+from crack_cms.startup import migrate_database_on_startup
+
+migrate_database_on_startup()
