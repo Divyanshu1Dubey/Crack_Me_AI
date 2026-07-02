@@ -98,6 +98,22 @@ class ResourceDownloadView(APIView):
     """Download a specific resource PDF by ID."""
     permission_classes = [permissions.AllowAny]
 
+    def head(self, request, resource_id):
+        # Find the resource in catalog
+        for category in RESOURCE_CATALOG.values():
+            for item in category['items']:
+                if item['id'] == resource_id:
+                    filepath = _resolve_resource_path(item['filename'])
+                    if filepath:
+                        response = Response()
+                        response['Content-Type'] = 'application/pdf'
+                        response['Content-Length'] = os.path.getsize(filepath)
+                        # Add headers indicating attachment filename
+                        response['Content-Disposition'] = f'attachment; filename="{item["name"]}.pdf"'
+                        return response
+                    raise Http404(f"File not found on server for resource '{resource_id}'")
+        raise Http404('Resource not found')
+
     def get(self, request, resource_id):
         # Find the resource in catalog
         for category in RESOURCE_CATALOG.values():
@@ -108,7 +124,7 @@ class ResourceDownloadView(APIView):
                         return FileResponse(
                             open(filepath, 'rb'),
                             content_type='application/pdf',
-                            as_attachment=False,
+                            as_attachment=True,
                             filename=f"{item['name']}.pdf"
                         )
                     raise Http404(f"File not found on server for resource '{resource_id}'")

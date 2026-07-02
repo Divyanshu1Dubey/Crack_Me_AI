@@ -23,6 +23,10 @@ interface User {
     role: string;
     is_admin?: boolean;
     target_exam: string;
+    phone?: string;
+    college?: string;
+    profile_bonus_rewarded?: boolean;
+    is_subscribed?: boolean;
 }
 
 interface AuthContextType {

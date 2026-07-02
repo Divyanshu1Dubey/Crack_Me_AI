@@ -48,7 +48,7 @@ export default function ResourcesPage() {
         const url = resourcesAPI.downloadUrl(id);
         try {
             const res = await fetch(url, { method: 'HEAD' });
-            if (!res.ok) {
+            if (res.status === 404) {
                 alert('This document is currently unavailable for download. Please check back later or contact support.');
                 return;
             }

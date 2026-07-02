@@ -207,3 +207,81 @@ class AuthApiTests(TestCase):
         self.assertEqual(user.role, "student")
         self.assertFalse(user.is_superuser)
         self.assertFalse(user.is_staff)
+
+
+class ProfileAndSubscriptionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="student_user",
+            email="student@example.com",
+            password="Password123!",
+            role="student"
+        )
+        # Auth token is usually verified via JWT, but since we are using django test client,
+        # we can force authenticate the user.
+        self.client.force_login(self.user)
+
+    def test_profile_update_rewards_tokens_once(self):
+        """Updating both phone and college should reward 10 tokens exactly once."""
+        from .models import TokenBalance, TokenTransaction
+
+        # Pre-check
+        balance, _ = TokenBalance.objects.get_or_create(user=self.user)
+        self.assertEqual(balance.feedback_credits, 0)
+        self.assertFalse(self.user.profile_bonus_rewarded)
+
+        # Update profile with phone and college
+        response = self.client.patch(
+            reverse("profile"),
+            {
+                "phone": "9876543210",
+                "college": "Maulana Azad Medical College"
+            },
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Post-check: user rewarded
+        self.user.refresh_from_db()
+        balance.refresh_from_db()
+        self.assertTrue(self.user.profile_bonus_rewarded)
+        self.assertEqual(balance.feedback_credits, 10)
+
+        # Verify transaction log
+        tx = TokenTransaction.objects.filter(user=self.user, transaction_type="feedback_reward").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.amount, 10)
+
+        # Update again, token balance should NOT increase further
+        response = self.client.patch(
+            reverse("profile"),
+            {
+                "first_name": "NewName"
+            },
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        balance.refresh_from_db()
+        self.assertEqual(balance.feedback_credits, 10)
+
+    def test_subscription_activation(self):
+        """POST to subscribe endpoint should activate premium subscription."""
+        from .models import TokenTransaction
+
+        self.assertFalse(self.user.is_subscribed)
+
+        response = self.client.post(reverse("subscribe"))
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_subscribed)
+
+        # Verify transaction
+        tx = TokenTransaction.objects.filter(user=self.user, transaction_type="purchase").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(float(tx.price_paid), 199.00)
+
+        # Subscribing again should return error
+        response = self.client.post(reverse("subscribe"))
+        self.assertEqual(response.status_code, 400)
+

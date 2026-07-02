@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Trophy,
   Upload,
+  Crown,
 } from 'lucide-react';
 
 interface CustomIconProps {
@@ -58,6 +59,7 @@ const iconMap: Record<string, LucideIcon> = {
   'resources-folder': FolderOpen,
   'simulator-target': Target,
   'study-roadmap-map': Activity,
+  'subscription-gold': Crown,
   'tests-check': ClipboardCheck,
   'textbooks-open-book': BookOpen,
   'trends-graph': Gauge,

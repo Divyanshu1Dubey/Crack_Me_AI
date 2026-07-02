@@ -143,6 +143,7 @@ export const authAPI = {
   login: (data: { username: string; password: string }) => api.post('/auth/login/', data),
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
+  subscribe: () => api.post('/auth/subscribe/'),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
   confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>

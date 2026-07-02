@@ -58,9 +58,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                  'phone', 'role', 'target_exam', 'target_year', 'avatar_url',
-                  'created_at', 'is_admin', 'token_info']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info']
+                  'phone', 'college', 'role', 'target_exam', 'target_year', 'avatar_url',
+                  'created_at', 'is_admin', 'token_info', 'profile_bonus_rewarded', 'is_subscribed']
+        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed']
 
     def get_role(self, obj):
         return 'admin' if obj.is_admin else 'student'

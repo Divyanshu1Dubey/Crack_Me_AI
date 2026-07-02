@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
-import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
+import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, isAuthenticated, loading: authLoading, logout, refreshProfile } = useAuth();
@@ -13,7 +13,7 @@ export default function SettingsPage() {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [form, setForm] = useState({ first_name: '', last_name: '', target_exam: '' });
+    const [form, setForm] = useState({ first_name: '', last_name: '', phone: '', college: '', target_exam: '' });
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) router.push('/login');
@@ -24,6 +24,8 @@ export default function SettingsPage() {
             setForm({
                 first_name: user.first_name || '',
                 last_name: user.last_name || '',
+                phone: user.phone || '',
+                college: user.college || '',
                 target_exam: user.target_exam || 'UPSC CMS',
             });
         }
@@ -66,6 +68,41 @@ export default function SettingsPage() {
                 )}
 
                 <div className="space-y-6 max-w-2xl">
+                    {/* Profile Bonus Banner */}
+                    {!user?.profile_bonus_rewarded && (
+                        <div className="glass-card p-4 flex items-center justify-between gap-4 border-dashed animate-fadeInUp" style={{
+                            borderColor: 'rgba(245,158,11,0.4)',
+                            background: 'linear-gradient(135deg, rgba(245,158,11,0.07) 0%, rgba(251,191,36,0.03) 100%)',
+                        }}>
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                                    <Gift className="w-5 h-5 animate-pulse" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-sm text-foreground">Get 10 Free Tokens! 🎁</h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Fill in both your Mobile Number and name of College in your profile to claim your bonus tokens.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setEditing(true)} className="btn-primary text-xs whitespace-nowrap bg-amber-500 hover:bg-amber-600 border-none text-black">
+                                Claim Bonus
+                            </button>
+                        </div>
+                    )}
+                    {user?.profile_bonus_rewarded && (
+                        <div className="glass-card p-4 flex items-center gap-3 border-dashed animate-fadeInUp" style={{
+                            borderColor: 'rgba(16,185,129,0.3)',
+                            background: 'rgba(16,185,129,0.04)',
+                        }}>
+                            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                                <CheckCircle className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-sm text-foreground">Profile Bonus Claimed</h4>
+                                <p className="text-xs text-muted-foreground mt-0.5">Thank you for completing your profile! 10 bonus tokens have been added to your balance.</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Profile */}
                     <div className="glass-card p-6">
                         <div className="flex items-center justify-between mb-4">
@@ -100,6 +137,14 @@ export default function SettingsPage() {
                                     <input className="input-field" value={user?.email || ''} readOnly />
                                 </div>
                                 <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Mobile Number</label>
+                                    <input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Enter 10-digit mobile number" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>College Name</label>
+                                    <input className="input-field" value={form.college} onChange={e => setForm({ ...form, college: e.target.value })} placeholder="Enter medical college name" />
+                                </div>
+                                <div>
                                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Target Exam</label>
                                     <select className="input-field" value={form.target_exam} onChange={e => setForm({ ...form, target_exam: e.target.value })}>
                                         <option value="UPSC CMS">UPSC CMS</option>
@@ -118,6 +163,12 @@ export default function SettingsPage() {
                                 </div>
                                 <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>Name</span><span>{user?.first_name} {user?.last_name}</span>
+                                </div>
+                                <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Mobile Number</span><span>{user?.phone || 'Not provided'}</span>
+                                </div>
+                                <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>College</span><span>{user?.college || 'Not provided'}</span>
                                 </div>
                                 <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>Target Exam</span><span>{user?.target_exam || 'UPSC CMS'}</span>

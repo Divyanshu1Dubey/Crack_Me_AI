@@ -147,6 +147,58 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def perform_update(self, serializer):
+        user = serializer.save()
+        # Reward 10 tokens once when BOTH phone and college are filled
+        if user.phone and user.college and not user.profile_bonus_rewarded:
+            user.profile_bonus_rewarded = True
+            user.save(update_fields=['profile_bonus_rewarded'])
+            
+            # Get or create token balance
+            balance, _ = TokenBalance.objects.get_or_create(user=user)
+            # Reward tokens as feedback_credits
+            balance.feedback_credits += 10
+            balance.save(update_fields=['feedback_credits'])
+            
+            # Create transaction audit record
+            TokenTransaction.objects.create(
+                user=user,
+                transaction_type="feedback_reward",
+                amount=10,
+                price_paid=0.00,
+                note="Bonus for completing profile with mobile number and college name"
+            )
+
+
+class SubscribeView(APIView):
+    """Activate ₹199 premium subscription for the user."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.is_subscribed:
+            return Response(
+                {"error": "You are already subscribed to the Premium plan."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user.is_subscribed = True
+        user.save(update_fields=['is_subscribed'])
+        
+        # Log a purchase transaction
+        TokenTransaction.objects.create(
+            user=user,
+            transaction_type="purchase",
+            amount=0,
+            price_paid=199.00,
+            note="Purchased ₹199 Early Bird Premium Subscription"
+        )
+        
+        return Response({
+            "message": "Premium Subscription activated successfully!",
+            "is_subscribed": True
+        })
+
 
 class TokenBalanceView(APIView):
     """Return the current user's token balance and limits."""

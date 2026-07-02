@@ -19,6 +19,9 @@ class CustomUser(AbstractUser):
     ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     phone = models.CharField(max_length=15, blank=True)
+    college = models.CharField(max_length=200, blank=True, default='')
+    profile_bonus_rewarded = models.BooleanField(default=False)
+    is_subscribed = models.BooleanField(default=False)
     target_exam = models.CharField(max_length=50, default='UPSC CMS')
     target_year = models.IntegerField(null=True, blank=True)
     avatar_url = models.URLField(blank=True)
