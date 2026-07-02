@@ -952,15 +952,15 @@ export default function LandingPage() {
                 One Place for Complete UPSC CMS & NEET PG
               </h2>
               <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-                Unlock our elite repository of curated materials, custom textbooks, and direct faculty support designed specifically for medical officers.
+                Unlock our elite repository of curated materials, unlimited AI tutor usage, and direct faculty support designed specifically for medical officers.
               </p>
 
               <div className="grid gap-4 sm:grid-cols-2 pt-2">
                 {[
-                  { title: "Any Textbook On-Demand", desc: "Request any medical textbook, edition, or manual. We supply it immediately." },
-                  { title: "Top Curator Hand-notes", desc: "Access high-yield revision summaries, flowcharts, and mnemonics." },
+                  { title: "Unlimited AI Tutor", desc: "Ask unlimited medical questions. Access full clinical analyses, mnemonics, and concepts instantly." },
+                  { title: "Top Curator Hand-notes", desc: "Access high-yield revision summaries, flowcharts, and cheat sheets." },
                   { title: "Renowned Faculty Doubts", desc: "Direct channel to clear clinical doubts with state and national experts." },
-                  { title: "Full QBank & Simulations", desc: "1,440+ verified year-wise PYQs (2020-2025) and custom mock exams." }
+                  { title: "Full QBank & Simulations", desc: "1,440+ verified year-wise PYQs (2018-2025) and custom mock exams." }
                 ].map((item, i) => (
                   <div key={i} className="flex gap-3">
                     <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
@@ -986,16 +986,16 @@ export default function LandingPage() {
 
                 <ul className="mt-6 space-y-3.5 text-left text-xs text-slate-300 border-t border-slate-800 pt-6">
                   <li className="flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" /> All-edition books on request
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Unlimited AI tutor usage (No tokens)
                   </li>
                   <li className="flex items-center gap-2">
                     <Zap className="w-3.5 h-3.5 text-amber-500" /> Handwritten study materials
                   </li>
                   <li className="flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Dedicated coordinator doubt portal
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Renowned faculty doubt support
                   </li>
                   <li className="flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" /> Unlimited AI tutor explanations
+                    <Zap className="w-3.5 h-3.5 text-amber-500" /> All reference books & guides
                   </li>
                 </ul>
 
