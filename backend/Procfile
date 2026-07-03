@@ -1,2 +1,2 @@
-release: python manage.py migrate --no-input && python manage.py bootstrap_admin && python manage.py seed_data && python manage.py loaddata questions_fixture.json
+release: python manage.py migrate --no-input && python manage.py bootstrap_admin && python manage.py seed_data && python manage.py reset_and_load_fixtures
 web: gunicorn crack_cms.wsgi --log-file -
