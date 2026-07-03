@@ -181,7 +181,7 @@ class AuthApiTests(TestCase):
         """Supabase sync should demote an admin when admin flags are removed."""
         user = User.objects.create_user(
             username="deeksha",
-            email="meduraa.web@gmail.com",
+            email="demoted.user@example.com",
             password="StrongPass123!",
             role="admin",
             is_superuser=True,
@@ -191,7 +191,7 @@ class AuthApiTests(TestCase):
         auth_backend = SupabaseJWTAuthentication()
         auth_backend._upsert_local_user(
             {
-                "email": "meduraa.web@gmail.com",
+                "email": "demoted.user@example.com",
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",

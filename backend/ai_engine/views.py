@@ -452,9 +452,11 @@ class PageScreenshotView(APIView):
 
 
 class AIStatusView(APIView):
-    """Check which AI providers are initialized (for debugging production issues)."""
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    """Check which AI providers are initialized (admin-only in production)."""
+    permission_classes = property(lambda self: _get_admin_permission())
+
+    def get_permissions(self):
+        return _get_admin_permission()
 
     def get(self, request):
         try:
@@ -479,9 +481,10 @@ class AIStatusView(APIView):
 
 
 class AITestView(APIView):
-    """Quick AI ping — tests if any provider can respond (AllowAny for debugging)."""
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    """Quick AI ping — tests if any provider can respond (admin-only in production)."""
+
+    def get_permissions(self):
+        return _get_admin_permission()
 
     def get(self, request):
         try:

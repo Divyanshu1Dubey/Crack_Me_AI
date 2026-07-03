@@ -176,6 +176,11 @@ function QuestionsContent() {
     const [simulationError, setSimulationError] = useState<string | null>(null);
     const [showStatsDetail, setShowStatsDetail] = useState(false);
 
+    // Textbook reference states
+    const [textbookRef, setTextbookRef] = useState<any>(null);
+    const [textbookLoading, setTextbookLoading] = useState(false);
+    const [textbookScreenshot, setTextbookScreenshot] = useState<string | null>(null);
+
     // Rotating loading messages for AI analysis
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -530,29 +535,29 @@ function QuestionsContent() {
                             </div>
                         )}
 
-                        {/* Filters Row */}
-                        <div className="flex flex-wrap gap-3 items-center pt-1">
-                            <div className="relative flex-1 min-w-50">
+                        {/* Filters Row — grid keeps everything inline */}
+                        <div className="grid grid-cols-2 md:grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center pt-1">
+                            <div className="relative col-span-2 md:col-span-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input className="pl-10" placeholder="Search questions..."
+                                <Input className="pl-10 h-9 text-xs" placeholder="Search questions..."
                                     value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                             </div>
-                            <select className="input-field w-auto text-xs" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+                            <select className="input-field h-9 text-xs px-2 min-w-[110px]" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
                                 <option value="">All Subjects</option>
                                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
                             </select>
-                            <select className="input-field w-auto text-xs" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
-                                <option value="">All Difficulty</option>
+                            <select className="input-field h-9 text-xs px-2 min-w-[100px]" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
+                                <option value="">Difficulty</option>
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
                             </select>
-                            <select className="input-field w-auto text-xs" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-                                <option value="">All Years</option>
+                            <select className="input-field h-9 text-xs px-2 min-w-[90px]" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
+                                <option value="">Year</option>
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
-                            <Button onClick={handleSearch} size="sm" className="h-9">
+                            <Button onClick={handleSearch} size="sm" className="h-9 px-3">
                                 <Filter className="w-3.5 h-3.5 mr-1" /> Filter
                             </Button>
                         </div>
@@ -1006,6 +1011,77 @@ function QuestionsContent() {
                                     </div>
                                 )}
 
+                                {/* 📖 Textbook Reference Lookup */}
+                                {showAnswer && detail && (
+                                    <div className="space-y-2">
+                                        {!textbookRef && !textbookLoading && (
+                                            <button
+                                                onClick={() => {
+                                                    setTextbookLoading(true);
+                                                    setTextbookRef(null);
+                                                    setTextbookScreenshot(null);
+                                                    aiAPI.textbookReference({ question_text: detail.question_text })
+                                                        .then(res => {
+                                                            setTextbookRef(res.data);
+                                                            // Try to get screenshot
+                                                            aiAPI.getScreenshot(detail.id)
+                                                                .then(sRes => {
+                                                                    if (sRes.data?.screenshot_url) setTextbookScreenshot(sRes.data.screenshot_url);
+                                                                })
+                                                                .catch(() => {});
+                                                        })
+                                                        .catch(() => {
+                                                            setTextbookRef({ error: true });
+                                                        })
+                                                        .finally(() => setTextbookLoading(false));
+                                                }}
+                                                className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                                            >
+                                                <BookMarked className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                                <div className="text-left">
+                                                    <span className="text-sm font-bold block text-indigo-700 dark:text-indigo-300">Find in Textbook</span>
+                                                    <span className="text-xs text-muted-foreground">See which book, chapter & page covers this topic</span>
+                                                </div>
+                                            </button>
+                                        )}
+                                        {textbookLoading && (
+                                            <div className="flex items-center justify-center gap-3 p-4 rounded-xl border border-indigo-200 bg-indigo-50/30 dark:bg-indigo-900/10">
+                                                <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                                                <span className="text-xs font-medium text-indigo-600">Looking up textbook references...</span>
+                                            </div>
+                                        )}
+                                        {textbookRef && !textbookRef.error && (
+                                            <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-950/10 dark:border-indigo-900/30">
+                                                <CardContent className="p-4 space-y-2">
+                                                    <h5 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                        <BookMarked className="w-3.5 h-3.5" /> 📖 Textbook Reference
+                                                    </h5>
+                                                    {textbookRef.book_name && <p className="text-sm font-semibold">{textbookRef.book_name}</p>}
+                                                    {textbookRef.chapter && <p className="text-xs text-muted-foreground">Chapter: {textbookRef.chapter}</p>}
+                                                    {textbookRef.page_range && <p className="text-xs text-muted-foreground">Pages: {textbookRef.page_range}</p>}
+                                                    {textbookRef.excerpt && <p className="text-xs leading-relaxed mt-1 italic text-muted-foreground">&quot;{textbookRef.excerpt}&quot;</p>}
+                                                    {textbookRef.reference && typeof textbookRef.reference === 'string' && (
+                                                        <p className="text-xs leading-relaxed text-muted-foreground">{textbookRef.reference}</p>
+                                                    )}
+                                                    {textbookScreenshot && (
+                                                        <div className="mt-2 rounded-lg overflow-hidden border border-border/40">
+                                                            <img src={textbookScreenshot} alt="Textbook page screenshot" className="w-full" />
+                                                            <p className="text-[10px] text-center text-muted-foreground py-1 bg-muted/30">Screenshot from textbook page</p>
+                                                        </div>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        )}
+                                        {textbookRef?.error && (
+                                            <Card className="border-border/60">
+                                                <CardContent className="p-3 text-center text-xs text-muted-foreground">
+                                                    No textbook mapping available for this question.
+                                                </CardContent>
+                                            </Card>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* 💬 Discussion Thread */}
                                 <DiscussionThread questionId={detail.id} />
 
@@ -1051,12 +1127,10 @@ function QuestionsContent() {
                             )}
 
                             <div className="grid gap-3">
-                                {/* Option 1: Practice Mode */}
+                                {/* Option 1: Practice Mode — opens fullscreen immersive page */}
                                 <button
                                     onClick={() => {
-                                        setSelectedYear(modalYear);
-                                        setYearModalOpen(false);
-                                        setModalYear(null);
+                                        router.push(`/questions/practice?year=${modalYear}`);
                                     }}
                                     className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer"
                                 >
@@ -1065,7 +1139,7 @@ function QuestionsContent() {
                                     </div>
                                     <div>
                                         <span className="font-bold text-sm text-foreground block group-hover:text-primary transition-colors">Study & Practice Mode</span>
-                                        <span className="text-[11px] text-muted-foreground mt-0.5 block">Attempt untimed questions at your own pace with answers, textbook references, and AI explanations.</span>
+                                        <span className="text-[11px] text-muted-foreground mt-0.5 block">Fullscreen, one-question-at-a-time practice with AI explanations and textbook references.</span>
                                     </div>
                                 </button>
 

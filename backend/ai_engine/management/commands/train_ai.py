@@ -44,14 +44,14 @@ class Command(BaseCommand):
             return
 
         if options["force"]:
-            self.stdout.write(self.style.WARNING("\n⚠️  Force re-index: clearing existing data..."))
+            self.stdout.write(self.style.WARNING("\n[!] Force re-index: clearing existing data..."))
             try:
                 rag._conn.execute("DELETE FROM chunks")
                 rag._conn.execute("DELETE FROM idf_cache")
                 rag._conn.commit()
-                self.stdout.write(self.style.SUCCESS("  ✓ Database cleared"))
+                self.stdout.write(self.style.SUCCESS("  [OK] Database cleared"))
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"  ✗ Clear failed: {e}"))
+                self.stdout.write(self.style.ERROR(f"  [ERROR] Clear failed: {e}"))
 
         start_time = time.time()
         total_chunks = 0
@@ -86,7 +86,7 @@ class Command(BaseCommand):
             if not os.path.exists(dir_path):
                 continue
 
-            self.stdout.write(self.style.HTTP_INFO(f"\n📂 Scanning: {category}/"))
+            self.stdout.write(self.style.HTTP_INFO(f"\n[Directory] Scanning: {category}/"))
 
             files_to_index = []
             if os.path.isdir(dir_path):
@@ -102,7 +102,7 @@ class Command(BaseCommand):
                 filename = Path(file_path).name
                 book_name = self._clean_name(filename, category)
 
-                self.stdout.write(f"  📄 Indexing: {filename} → '{book_name}'")
+                self.stdout.write(f"  [File] Indexing: {filename} -> '{book_name}'")
 
                 def progress_cb(current, total, name):
                     if total > 0:
@@ -119,10 +119,10 @@ class Command(BaseCommand):
                     )
                     results[book_name] = chunks
                     total_chunks += chunks
-                    status = "✓ new" if chunks > 0 else "⊘ already indexed"
+                    status = "[NEW] new" if chunks > 0 else "[SKIP] already indexed"
                     self.stdout.write(f"    {status}: {chunks} chunks")
                 except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"    ✗ Error: {e}"))
+                    self.stdout.write(self.style.ERROR(f"    [ERROR] Error: {e}"))
                     results[book_name] = -1
 
         elapsed = time.time() - start_time
@@ -131,23 +131,23 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("\n" + "=" * 60))
         self.stdout.write(self.style.SUCCESS("  TRAINING COMPLETE"))
         self.stdout.write(self.style.SUCCESS("=" * 60))
-        self.stdout.write(f"\n  ⏱  Time: {elapsed:.1f}s")
-        self.stdout.write(f"  📊 New chunks indexed: {total_chunks}")
+        self.stdout.write(f"\n  Time: {elapsed:.1f}s")
+        self.stdout.write(f"  New chunks indexed: {total_chunks}")
         self._show_stats(rag)
 
-        self.stdout.write(self.style.SUCCESS("\n  ✅ AI is now trained with all available data!"))
-        self.stdout.write(self.style.SUCCESS("  💡 Add new files to Medura_Train/ and re-run to update.\n"))
+        self.stdout.write(self.style.SUCCESS("\n  [SUCCESS] AI is now trained with all available data!"))
+        self.stdout.write(self.style.SUCCESS("  [INFO] Add new files to Medura_Train/ and re-run to update.\n"))
 
     def _show_stats(self, rag):
         stats = rag.get_stats()
-        self.stdout.write(f"\n  📊 Total chunks in store: {stats['total_chunks']}")
-        self.stdout.write(f"  📁 Collection: {stats['collection_name']}")
+        self.stdout.write(f"\n  Total chunks in store: {stats['total_chunks']}")
+        self.stdout.write(f"  Collection: {stats['collection_name']}")
 
         books = stats.get("books", {})
         if books:
-            self.stdout.write("\n  📚 Books indexed:")
+            self.stdout.write("\n  Books indexed:")
             for book, count in sorted(books.items(), key=lambda x: -x[1]):
-                self.stdout.write(f"      • {book}: {count} chunks")
+                self.stdout.write(f"      - {book}: {count} chunks")
 
     def _clean_name(self, filename, category):
         """Create a clean book name from filename."""

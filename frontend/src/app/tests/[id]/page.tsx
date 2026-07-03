@@ -95,6 +95,18 @@ export default function TakeTestPage() {
     const timeSpent = useRef<Record<number, number>>({});
     const doSubmitRef = useRef<() => void>(() => {});
 
+    // Pagination states to keep 120 question palette compact
+    const [palettePage, setPalettePage] = useState(0);
+    const [reviewPage, setReviewPage] = useState(0);
+
+    useEffect(() => {
+        setPalettePage(Math.floor(currentIdx / 30));
+    }, [currentIdx]);
+
+    useEffect(() => {
+        setReviewPage(Math.floor(reviewIdx / 30));
+    }, [reviewIdx]);
+
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated && testId) {
@@ -290,25 +302,46 @@ export default function TakeTestPage() {
                         <span className="hidden sm:inline text-xs px-2 py-1 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{test?.title} — {questions.length} Questions</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        {/* Mini question nav dots */}
-                        <div className="hidden md:flex items-center gap-1 flex-wrap max-w-[500px]">
-                            {questions.map((q, i) => {
-                                const qrd = reviewData?.find((r: any) => r.question_id === q.id);
-                                const isCorrect = qrd?.is_correct === true;
-                                const isWrong = qrd?.is_correct === false;
-                                return (
-                                    <button key={i} onClick={() => setReviewIdx(i)}
-                                        className="w-7 h-7 rounded-full text-xs font-bold transition-all flex items-center justify-center"
-                                        style={{
-                                            background: i === reviewIdx ? 'var(--accent-primary)' : isCorrect ? 'rgba(16,185,129,0.15)' : isWrong ? 'rgba(239,68,68,0.15)' : 'var(--bg-card)',
-                                            color: i === reviewIdx ? 'white' : isCorrect ? '#10b981' : isWrong ? '#ef4444' : 'var(--text-secondary)',
-                                            border: i === reviewIdx ? '2px solid var(--accent-primary)' : '1px solid transparent',
-                                            transform: i === reviewIdx ? 'scale(1.2)' : 'scale(1)',
-                                        }}>
-                                        {i + 1}
-                                    </button>
-                                );
-                            })}
+                        {/* Paginated question nav dots */}
+                        <div className="hidden md:flex items-center gap-2">
+                            {/* Page Tabs */}
+                            {questions.length > 30 && (
+                                <div className="flex gap-1 border-r pr-2 border-glass-border">
+                                    {Array.from({ length: Math.ceil(questions.length / 30) }).map((_, pIdx) => (
+                                        <button
+                                            key={pIdx}
+                                            onClick={() => setReviewPage(pIdx)}
+                                            className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
+                                                reviewPage === pIdx
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                            }`}
+                                        >
+                                            {pIdx * 30 + 1}-{Math.min((pIdx + 1) * 30, questions.length)}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1 max-w-[500px]">
+                                {questions.slice(reviewPage * 30, (reviewPage + 1) * 30).map((q, localIdx) => {
+                                    const i = reviewPage * 30 + localIdx;
+                                    const qrd = reviewData?.find((r: any) => r.question_id === q.id);
+                                    const isCorrect = qrd?.is_correct === true;
+                                    const isWrong = qrd?.is_correct === false;
+                                    return (
+                                        <button key={i} onClick={() => setReviewIdx(i)}
+                                            className="w-7 h-7 rounded-full text-xs font-bold transition-all flex items-center justify-center shrink-0"
+                                            style={{
+                                                background: i === reviewIdx ? 'var(--accent-primary)' : isCorrect ? 'rgba(16,185,129,0.15)' : isWrong ? 'rgba(239,68,68,0.15)' : 'var(--bg-card)',
+                                                color: i === reviewIdx ? 'white' : isCorrect ? '#10b981' : isWrong ? '#ef4444' : 'var(--text-secondary)',
+                                                border: i === reviewIdx ? '2px solid var(--accent-primary)' : '1px solid transparent',
+                                                transform: i === reviewIdx ? 'scale(1.15)' : 'scale(1)',
+                                            }}>
+                                            {i + 1}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                         <button onClick={() => setReviewMode(false)} className="btn-secondary text-sm ml-2">← Back to Results</button>
                     </div>
@@ -880,9 +913,30 @@ export default function TakeTestPage() {
                             <span>Question Palette</span>
                             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{questions.length} Qs</span>
                         </div>
+                        <div className="flex flex-col gap-2 shrink-0">
+                            {/* Page Tabs */}
+                            {questions.length > 30 && (
+                                <div className="flex flex-wrap gap-1 border-b pb-2 border-glass-border">
+                                    {Array.from({ length: Math.ceil(questions.length / 30) }).map((_, pIdx) => (
+                                        <button
+                                            key={pIdx}
+                                            onClick={() => setPalettePage(pIdx)}
+                                            className={`text-[9px] font-bold px-1.5 py-1 rounded transition-colors flex-1 text-center ${
+                                                palettePage === pIdx
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                            }`}
+                                        >
+                                            {pIdx * 30 + 1}-{Math.min((pIdx + 1) * 30, questions.length)}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         <div className="flex-1 overflow-y-auto pr-1">
-                            <div className="grid grid-cols-5 gap-2 pt-1 pb-1">
-                                {questions.map((q, i) => {
+                            <div className="grid grid-cols-6 gap-1.5 pt-1.5 pb-1">
+                                {questions.slice(palettePage * 30, (palettePage + 1) * 30).map((q, localIdx) => {
+                                    const i = palettePage * 30 + localIdx;
                                     const answered = !!answers[q.id];
                                     const isMarked = marked.has(i);
                                     const isCurrent = i === currentIdx;
@@ -892,8 +946,8 @@ export default function TakeTestPage() {
                                     else if (startTimes.current[i]) { bg = '#ef4444'; color = 'white'; border = '#dc2626'; }
                                     return (
                                         <button key={i} onClick={() => goTo(i)}
-                                            className="w-full aspect-square rounded flex items-center justify-center text-xs font-bold transition-all"
-                                            style={{ background: bg, color, border: `2px solid ${border}`, outline: isCurrent ? '2px solid var(--accent-primary)' : 'none', outlineOffset: '2px', transform: isCurrent ? 'scale(1.1)' : 'none' }}>
+                                            className="w-full aspect-square rounded flex items-center justify-center text-[11px] font-bold transition-all"
+                                            style={{ background: bg, color, border: `2px solid ${border}`, outline: isCurrent ? '2px solid var(--accent-primary)' : 'none', outlineOffset: '2.5px', transform: isCurrent ? 'scale(1.05)' : 'none' }}>
                                             {i + 1}
                                         </button>
                                     );
