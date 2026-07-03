@@ -1445,3 +1445,17 @@ class FlashcardAnalyticsView(generics.GenericAPIView):
                 '30_plus_days': cards.filter(interval_days__gt=30).count(),
             },
         })
+
+
+from rest_framework.views import APIView
+class ForceSyncFixturesView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            Question.objects.all().delete()
+            call_command("loaddata", "questions_fixture.json")
+            return Response({"status": "success", "message": "Database questions successfully reset and loaded!"})
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=500)
+
