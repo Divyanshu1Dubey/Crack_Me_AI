@@ -14,7 +14,7 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
-import { questionsAPI, aiAPI, extractApiErrorMessage } from '@/lib/api';
+import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
 import Header from '@/components/Header';
@@ -174,6 +174,7 @@ function QuestionsContent() {
     const [modalYear, setModalYear] = useState<string | null>(null);
     const [startingSimulation, setStartingSimulation] = useState(false);
     const [simulationError, setSimulationError] = useState<string | null>(null);
+    const [showStatsDetail, setShowStatsDetail] = useState(false);
 
     // Rotating loading messages for AI analysis
     const loadingMessages = useRef([
@@ -462,33 +463,45 @@ function QuestionsContent() {
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
 
-                {/* Progress Tracker Card */}
-                {qbankStats && (
-                    <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-                        <CardContent className="p-4 space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <div>
+                {/* Unified Dashboard & Filters Panel */}
+                <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-hidden">
+                    <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+                    <CardContent className="p-4 space-y-4">
+                        {/* Header & Main Stats Row */}
+                        {qbankStats && (
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-3">
+                                <div className="space-y-1">
                                     <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                        🎯 Practice Progress
+                                        🎯 Question Bank
                                     </h2>
                                     <p className="text-xs text-muted-foreground">
-                                        Complete all years from 2020 to 2025 to achieve 100% exam readiness. Click a year below to filter.
+                                        Master {qbankStats.total} high-yield clinical MCQs and PYQs.
                                     </p>
                                 </div>
-                                <div className="text-right shrink-0">
-                                    <span className="text-2xl font-extrabold text-primary">
-                                        {qbankStats.total_solved}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                        {" "}/ {qbankStats.total} Solved ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
-                                    </span>
+                                
+                                <div className="flex flex-1 max-w-md items-center gap-4">
+                                    <div className="flex-1 space-y-1">
+                                        <div className="flex justify-between text-xs font-semibold">
+                                            <span>Overall Progress</span>
+                                            <span className="text-primary font-bold">
+                                                {qbankStats.total_solved} / {qbankStats.total} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
+                                            </span>
+                                        </div>
+                                        <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2" />
+                                    </div>
+                                    <button 
+                                        onClick={() => setShowStatsDetail(!showStatsDetail)}
+                                        className="btn-secondary text-[11px] font-bold py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shrink-0 border border-border/80"
+                                    >
+                                        {showStatsDetail ? 'Hide Year Stats' : 'Show Year Stats'}
+                                    </button>
                                 </div>
                             </div>
-                            <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2.5" />
-                            
-                            {/* Year breakdown cards */}
-                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2">
+                        )}
+
+                        {/* Collapsible Year Breakdown Details */}
+                        {qbankStats && showStatsDetail && (
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 pb-3 border-b border-border/40 animate-fadeIn">
                                 {qbankStats.by_year?.map((item: any) => {
                                     const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
                                     const isSelected = selectedYear === String(item.year);
@@ -504,49 +517,45 @@ function QuestionsContent() {
                                                     setSimulationError(null);
                                                 }
                                             }}
-                                            className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
+                                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
                                         >
-                                            <p className="text-xs font-bold text-foreground">{item.year}</p>
-                                            <p className="text-[10px] text-muted-foreground mt-0.5">{item.solved}/{item.count}</p>
-                                            <div className="w-full bg-border/40 h-1 rounded-full overflow-hidden mt-1.5">
+                                            <p className="text-[11px] font-bold text-foreground">{item.year}</p>
+                                            <p className="text-[9px] text-muted-foreground mt-0.5">{item.solved}/{item.count}</p>
+                                            <div className="w-full bg-border/40 h-0.5 rounded-full overflow-hidden mt-1">
                                                 <div className="bg-primary h-full transition-all" style={{ width: `${solvedPct}%` }} />
                                             </div>
                                         </button>
                                     );
                                 })}
                             </div>
-                        </CardContent>
-                    </Card>
-                )}
+                        )}
 
-                {/* Filters */}
-                <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-sm">
-                    <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-3 items-center">
-                        <div className="relative flex-1 min-w-50">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input className="pl-10" placeholder="Search questions..."
-                                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                        {/* Filters Row */}
+                        <div className="flex flex-wrap gap-3 items-center pt-1">
+                            <div className="relative flex-1 min-w-50">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input className="pl-10" placeholder="Search questions..."
+                                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                            </div>
+                            <select className="input-field w-auto text-xs" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+                                <option value="">All Subjects</option>
+                                {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
+                            </select>
+                            <select className="input-field w-auto text-xs" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
+                                <option value="">All Difficulty</option>
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                            <select className="input-field w-auto text-xs" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
+                                <option value="">All Years</option>
+                                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                            <Button onClick={handleSearch} size="sm" className="h-9">
+                                <Filter className="w-3.5 h-3.5 mr-1" /> Filter
+                            </Button>
                         </div>
-                        <select className="input-field w-auto" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
-                            <option value="">All Subjects</option>
-                            {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
-                        </select>
-                        <select className="input-field w-auto" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
-                            <option value="">All Difficulty</option>
-                            <option value="easy">Easy</option>
-                            <option value="medium">Medium</option>
-                            <option value="hard">Hard</option>
-                        </select>
-                        <select className="input-field w-auto" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-                            <option value="">All Years</option>
-                            {years.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                        <Button onClick={handleSearch} size="sm">
-                            <Filter className="w-4 h-4" /> Filter
-                        </Button>
-                    </div>
                     </CardContent>
                 </Card>
 
