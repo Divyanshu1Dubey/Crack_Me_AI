@@ -23,8 +23,6 @@ urlpatterns = [
     path('discussions/<int:pk>/vote/', views.DiscussionVoteView.as_view(), name='discussion-vote'),
     path('discussions/<int:pk>/replies/', views.DiscussionRepliesView.as_view(), name='discussion-replies'),
     path('discussions/', views.DiscussionListCreateView.as_view(), name='discussion-list'),
-    # Force Sync Endpoint
-    path('force_sync_fixtures/', views.ForceSyncFixturesView.as_view(), name='force-sync-fixtures'),
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 ]
