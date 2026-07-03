@@ -206,10 +206,10 @@ class SubscribeOrderView(APIView):
 
     def post(self, request):
         import os
-        key_id = os.getenv('RAZORPAY_KEY_ID', '')
-        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '')
+        key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
+        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
         if not key_id or not key_secret:
-            return Response({'error': 'Razorpay is not configured on the server. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Razorpay is not configured on the server. Please add razorpayliveapi and razorpaylivekeysecret to .env'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         import razorpay
         client = razorpay.Client(auth=(key_id, key_secret))
@@ -243,8 +243,8 @@ class SubscribeVerifyView(APIView):
         if not all([payment_id, order_id, signature]):
             return Response({'error': 'Missing payment verification details'}, status=status.HTTP_400_BAD_REQUEST)
 
-        key_id = os.getenv('RAZORPAY_KEY_ID', '')
-        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '')
+        key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
+        key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
         if not key_id or not key_secret:
             return Response({'error': 'Razorpay keys not configured on server'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
