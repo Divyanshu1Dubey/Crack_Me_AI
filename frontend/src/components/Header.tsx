@@ -36,7 +36,7 @@ const pageTitles: Record<string, string> = {
   '/tests': 'Tests',
   '/ai-tutor': 'AI Tutor',
   '/simulator': 'CMS Simulator',
-  '/generate': 'AI Questions',
+  '/generate': 'Question Generator',
   '/roadmap': 'AI-Powered Study Plan',
   '/resources': 'CMS Study Hub',
   '/textbooks': 'Textbooks',

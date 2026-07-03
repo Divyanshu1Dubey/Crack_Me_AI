@@ -160,7 +160,7 @@ export default function GeneratePage() {
                     {/* Header */}
                     <div className="flex items-center gap-3 mb-2">
                         <Sparkles className="w-8 h-8" style={{ color: 'var(--accent-primary)' }} />
-                        <h1 className="text-2xl font-bold">AI Question Generator</h1>
+                        <h1 className="text-2xl font-bold">Question Generator</h1>
                     </div>
                     <p className="mb-8" style={{ color: 'var(--text-secondary)' }}>
                         Generate unlimited AI-powered practice MCQs on any CMS topic

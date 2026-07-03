@@ -169,6 +169,12 @@ function QuestionsContent() {
     const [flagSuccess, setFlagSuccess] = useState(false);
     const [flagError, setFlagError] = useState<string | null>(null);
 
+    // Year selection modal states
+    const [yearModalOpen, setYearModalOpen] = useState(false);
+    const [modalYear, setModalYear] = useState<string | null>(null);
+    const [startingSimulation, setStartingSimulation] = useState(false);
+    const [simulationError, setSimulationError] = useState<string | null>(null);
+
     // Rotating loading messages for AI analysis
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -490,8 +496,13 @@ function QuestionsContent() {
                                         <button
                                             key={item.year}
                                             onClick={() => {
-                                                const newYear = isSelected ? '' : String(item.year);
-                                                setSelectedYear(newYear);
+                                                if (isSelected) {
+                                                    setSelectedYear('');
+                                                } else {
+                                                    setModalYear(String(item.year));
+                                                    setYearModalOpen(true);
+                                                    setSimulationError(null);
+                                                }
                                             }}
                                             className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
                                         >
@@ -1007,6 +1018,96 @@ function QuestionsContent() {
                 </div>
             </div>
             </div>
+
+            {/* Year Modal Popup */}
+            {yearModalOpen && modalYear && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+                    <Card className="max-w-md w-full border-border/80 bg-card/95 shadow-xl relative overflow-hidden animate-fadeInUp">
+                        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+                        <CardContent className="p-6 space-y-6">
+                            <div className="text-center space-y-2">
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2 text-primary">
+                                    <Target className="w-6 h-6 animate-pulse" />
+                                </div>
+                                <h3 className="text-xl font-bold text-foreground">UPSC CMS {modalYear} PYQs</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Select how you would like to prepare with the {modalYear} question bank.
+                                </p>
+                            </div>
+
+                            {simulationError && (
+                                <div className="p-3 text-xs rounded-xl bg-destructive/10 text-destructive border border-destructive/20">
+                                    {simulationError}
+                                </div>
+                            )}
+
+                            <div className="grid gap-3">
+                                {/* Option 1: Practice Mode */}
+                                <button
+                                    onClick={() => {
+                                        setSelectedYear(modalYear);
+                                        setYearModalOpen(false);
+                                        setModalYear(null);
+                                    }}
+                                    className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0 group-hover:scale-105 transition-transform">
+                                        <BookOpen className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-sm text-foreground block group-hover:text-primary transition-colors">Study & Practice Mode</span>
+                                        <span className="text-[11px] text-muted-foreground mt-0.5 block">Attempt untimed questions at your own pace with answers, textbook references, and AI explanations.</span>
+                                    </div>
+                                </button>
+
+                                {/* Option 2: Timed Exam Mode */}
+                                <button
+                                    onClick={() => {
+                                        if (startingSimulation) return;
+                                        setStartingSimulation(true);
+                                        setSimulationError(null);
+                                        testsAPI.pyqSimulation({ year: Number(modalYear) })
+                                            .then(res => {
+                                                router.push(`/tests/${res.data.id}`);
+                                            })
+                                            .catch(err => {
+                                                setSimulationError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to generate simulation. Make sure there are enough questions in the database.'));
+                                                setStartingSimulation(false);
+                                            });
+                                    }}
+                                    disabled={startingSimulation}
+                                    className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer disabled:opacity-50"
+                                >
+                                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0 group-hover:scale-105 transition-transform">
+                                        {startingSimulation ? <Loader2 className="w-5 h-5 animate-spin" /> : <GraduationCap className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-sm text-foreground block group-hover:text-primary transition-colors">
+                                            {startingSimulation ? 'Generating Simulator...' : 'Timed Exam Simulation'}
+                                        </span>
+                                        <span className="text-[11px] text-muted-foreground mt-0.5 block">120 questions, 120-minute time limit, negative marking (-0.33). Experience the real UPSC CMS exam HUD.</span>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t border-border/50">
+                                <Button
+                                    variant="ghost"
+                                    className="w-full text-xs font-semibold"
+                                    onClick={() => {
+                                        setYearModalOpen(false);
+                                        setModalYear(null);
+                                        setSimulationError(null);
+                                    }}
+                                    disabled={startingSimulation}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }

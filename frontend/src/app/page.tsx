@@ -29,7 +29,8 @@ import {
   BookMarked,
   ArrowRight,
   HelpCircle,
-  Crown
+  Crown,
+  Loader2
 } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,65 @@ export default function LandingPage() {
       ]
     }
   ];
+
+  // 5. Question Generator Widget states and handlers
+  const [demoSubject, setDemoSubject] = useState('Medicine');
+  const [demoTopic, setDemoTopic] = useState('Cardiology');
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoGenerated, setDemoGenerated] = useState(false);
+  const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
+  const [demoQuestion, setDemoQuestion] = useState<any>(null);
+
+  const handleDemoGenerate = () => {
+    setDemoLoading(true);
+    setDemoGenerated(false);
+    setDemoAnswer(null);
+    
+    // Simulate AI Generation delay
+    setTimeout(() => {
+      setDemoLoading(false);
+      setDemoGenerated(true);
+      
+      if (demoSubject === 'Surgery') {
+        setDemoQuestion({
+          text: "A 22-year-old female presents with migration of pain from the periumbilical region to the right iliac fossa. What is the most specific clinical sign for acute appendicitis?",
+          options: [
+            { key: 'A', text: "Murphy's sign" },
+            { key: 'B', text: "McBurney's point tenderness" },
+            { key: 'C', text: "Rovsing's sign" },
+            { key: 'D', text: "Psoas sign" }
+          ],
+          correct: 'B',
+          explanation: "McBurney's point tenderness (located one-third the distance from the anterior superior iliac spine to the umbilicus) is the most classic and specific clinical sign for acute appendicitis."
+        });
+      } else if (demoSubject === 'Pediatrics') {
+        setDemoQuestion({
+          text: "A healthy 9-month-old infant is brought to the clinic for routine immunization. According to the National Immunization Schedule, which vaccine must be administered at this age?",
+          options: [
+            { key: 'A', text: "BCG and OPV zero dose" },
+            { key: 'B', text: "DPT booster dose" },
+            { key: 'C', text: "First dose of Measles (MR) vaccine and Vitamin A" },
+            { key: 'D', text: "Pentavalent vaccine third dose" }
+          ],
+          correct: 'C',
+          explanation: "Under the National Immunization Schedule, the first dose of Measles/Rubella (MR) vaccine along with the first dose of Vitamin A is administered at 9 completed months of age."
+        });
+      } else {
+        // Medicine
+        setDemoQuestion({
+          text: "A 55-year-old male presenting with chest pain is diagnosed with acute pericarditis. Which ECG finding is most characteristic of this condition?",
+          options: [
+            { key: 'A', text: "PR segment elevation in all leads" },
+            { key: 'B', text: "Diffuse ST-elevation with PR-depression (except in aVR)" },
+            { key: 'C', text: "Pathological Q waves in inferior leads" },
+            { key: 'D', text: "Prolonged QT interval with T-wave inversion" }
+          ],
+          correct: 'B',
+          explanation: "Acute pericarditis characteristically presents with diffuse ST-elevation and PR segment depression in almost all leads, with the exception of lead aVR where PR elevation and ST depression are seen."
+        });
+      }
+    }, 1500);
+  };
 
   const campuses = [
     'AIIMS Delhi',
@@ -928,6 +988,175 @@ export default function LandingPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 5: Question Generator (Interactive demo) */}
+          <div className="relative group/feat rounded-[2.5rem] border border-cyan-500/20 dark:border-cyan-500/10 bg-cyan-500/[0.02] dark:bg-cyan-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-cyan-500/35 transition-all duration-300 overflow-hidden">
+            <div className="absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl opacity-60" />
+            <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
+              <div className="lg:col-span-6 space-y-6">
+                <Badge className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
+                  UNLIMITED CLINICAL DRILLS
+                </Badge>
+                <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl leading-tight">
+                  Question Generator
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Generate bespoke mock questions tailored to any subject, sub-topic, and difficulty level. Strengthen active recall by generating targeted clinical drills on topics where you need the most reinforcement.
+                </p>
+
+                <ul className="space-y-3 font-semibold text-foreground text-sm">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-cyan-500 shrink-0" />
+                    Bespoke question generation matching UPSC CMS patterns
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-cyan-500 shrink-0" />
+                    Detailed explanation breakdowns automatically created
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-cyan-500 shrink-0" />
+                    Focus on custom sub-topics like Pediatrics, Vaccines, Cardiology
+                  </li>
+                </ul>
+              </div>
+
+              {/* Interactive Question Generator Demo */}
+              <div className="lg:col-span-6">
+                <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-xl relative">
+                  <span className="absolute -top-3 left-6 rounded-full bg-cyan-500 text-white text-[10px] font-bold px-3 py-1 uppercase tracking-wider">
+                    Interactive Demo
+                  </span>
+
+                  <div className="space-y-4 pt-2">
+                    <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                      <span>Generate Custom Questions</span>
+                      <span className="text-cyan-600">Question Generator</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block font-bold text-muted-foreground mb-1">Subject</label>
+                        <select
+                          value={demoSubject}
+                          onChange={(e) => {
+                            setDemoSubject(e.target.value);
+                            setDemoGenerated(false);
+                            setDemoAnswer(null);
+                          }}
+                          className="w-full px-2 py-1.5 rounded-lg border border-border/60 bg-muted/20 text-xs font-semibold text-foreground"
+                        >
+                          <option value="Medicine">General Medicine</option>
+                          <option value="Surgery">Surgery</option>
+                          <option value="Pediatrics">Pediatrics</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-muted-foreground mb-1">Topic (optional)</label>
+                        <input
+                          type="text"
+                          value={demoTopic}
+                          onChange={(e) => {
+                            setDemoTopic(e.target.value);
+                            setDemoGenerated(false);
+                            setDemoAnswer(null);
+                          }}
+                          placeholder="e.g. Cardiology, Vaccines"
+                          className="w-full px-2 py-1.5 rounded-lg border border-border/60 bg-muted/20 text-xs font-semibold text-foreground placeholder:text-muted-foreground/60"
+                        />
+                      </div>
+                    </div>
+
+                    {!demoGenerated && !demoLoading && (
+                      <button
+                        onClick={handleDemoGenerate}
+                        className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/10 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Generate Custom Drill
+                      </button>
+                    )}
+
+                    {demoLoading && (
+                      <div className="p-6 text-center space-y-3 bg-muted/20 rounded-xl border border-border/40 animate-pulse">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-cyan-500" />
+                        <p className="text-[11px] font-bold text-cyan-600">Generating bespoke {demoSubject} question on &quot;{demoTopic || 'General Info'}&quot;...</p>
+                      </div>
+                    )}
+
+                    {demoGenerated && demoQuestion && (
+                      <div className="space-y-4 pt-1 animate-fadeIn">
+                        <div className="p-3 bg-cyan-500/5 rounded-xl border border-cyan-500/10 text-xs font-bold leading-relaxed text-foreground">
+                          {demoQuestion.text}
+                        </div>
+
+                        <div className="space-y-2">
+                          {demoQuestion.options.map((opt: any) => {
+                            const isSelected = demoAnswer === opt.key;
+                            const isCorrect = opt.key === demoQuestion.correct;
+                            let btnStyle = "border-border/60 hover:border-cyan-500/50 hover:bg-muted/10";
+                            
+                            if (demoAnswer !== null) {
+                              if (isCorrect) {
+                                btnStyle = "border-emerald-500 bg-emerald-500/5 text-emerald-900 dark:text-emerald-300";
+                              } else if (isSelected) {
+                                btnStyle = "border-red-500 bg-red-50/5 text-red-900 dark:text-red-400";
+                              } else {
+                                btnStyle = "border-border/40 opacity-60";
+                              }
+                            }
+
+                            return (
+                              <button
+                                key={opt.key}
+                                onClick={() => {
+                                  if (demoAnswer === null) {
+                                    setDemoAnswer(opt.key);
+                                  }
+                                }}
+                                className={`w-full text-left rounded-xl border p-3 text-[11px] font-semibold flex items-center gap-3 transition-all ${btnStyle}`}
+                              >
+                                <span className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 border text-[10px] font-extrabold
+                                  ${isSelected && isCorrect ? 'bg-emerald-500 text-white border-emerald-500' : ''}
+                                  ${isSelected && !isCorrect ? 'bg-red-500 text-white border-red-500' : ''}
+                                  ${!isSelected && isCorrect && demoAnswer !== null ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-muted/30 border-border'}
+                                `}>
+                                  {opt.key}
+                                </span>
+                                <span>{opt.text}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {demoAnswer !== null && (
+                          <div className="rounded-xl bg-muted/40 p-4 border border-cyan-500/10 space-y-1.5 animate-fadeIn">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-600">
+                              <Sparkles className="h-4 w-4" />
+                              Explanation:
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-muted-foreground">
+                              {demoQuestion.explanation}
+                            </p>
+                            <div className="flex justify-end pt-1 border-t border-border/50">
+                              <button
+                                onClick={() => {
+                                  setDemoGenerated(false);
+                                  setDemoAnswer(null);
+                                }}
+                                className="text-[10px] text-cyan-500 font-bold hover:underline cursor-pointer bg-transparent border-0"
+                              >
+                                Try Another Subject
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

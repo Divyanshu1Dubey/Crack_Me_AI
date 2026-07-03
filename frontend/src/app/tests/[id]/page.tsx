@@ -10,7 +10,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { testsAPI, aiAPI, questionsAPI } from '@/lib/api';
+import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare } from 'lucide-react';
 
@@ -78,6 +78,7 @@ export default function TakeTestPage() {
     const [result, setResult] = useState<Record<string, any> | null>(null);
     const [reviewData, setReviewData] = useState<any[] | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
     const [reviewMode, setReviewMode] = useState(false);
     const [reviewIdx, setReviewIdx] = useState(0);
@@ -97,12 +98,15 @@ export default function TakeTestPage() {
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated && testId) {
+            setError(null);
             testsAPI.start(testId).then(res => {
                 setTest(res.data.test);
                 setQuestions(res.data.questions);
                 setAttemptId(res.data.attempt_id);
                 setTimeLeft(res.data.test.time_limit_minutes * 60);
                 startTimes.current[0] = Date.now();
+            }).catch(err => {
+                setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
             }).finally(() => setLoading(false));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,6 +195,56 @@ export default function TakeTestPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="animate-pulse text-xl gradient-text">Loading Test...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex flex-col bg-background">
+                <div className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between"
+                    style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
+                    <div className="font-bold text-lg gradient-text">UPSC CMS SIMULATOR</div>
+                </div>
+                <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="glass-card p-8 max-w-md w-full text-center border-border/80 bg-card/85 shadow-md">
+                        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+                        <h3 className="text-xl font-bold mb-2 text-foreground">Failed to Load Test</h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                            {error}
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => router.push('/tests')} className="btn-primary w-full justify-center">
+                                Back to Test Center
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!loading && questions.length === 0) {
+        return (
+            <div className="min-h-screen flex flex-col bg-background">
+                <div className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between"
+                    style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
+                    <div className="font-bold text-lg gradient-text">UPSC CMS SIMULATOR</div>
+                </div>
+                <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="glass-card p-8 max-w-md w-full text-center border-border/80 bg-card/85 shadow-md">
+                        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+                        <h3 className="text-xl font-bold mb-2 text-foreground">No Questions Found</h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                            This test has no questions assigned to it or failed to load. Please contact the administrator.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => router.push('/tests')} className="btn-primary w-full justify-center">
+                                Back to Test Center
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -699,7 +753,7 @@ export default function TakeTestPage() {
     const notAnsweredCount = questions.length - answeredCount;
 
     return (
-        <div className="min-h-screen flex flex-col bg-background">
+        <div className="min-h-screen flex flex-col bg-background lg:overflow-hidden lg:h-screen">
             {/* Confirm Dialog */}
             {showConfirm && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
@@ -740,11 +794,11 @@ export default function TakeTestPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 gap-4">
+            <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 gap-4 lg:h-[calc(100vh-70px)] lg:overflow-hidden">
 
                 {/* Left: Question */}
-                <div className="flex-1 glass-card flex flex-col overflow-hidden">
-                    <div className="px-6 py-3 flex justify-between items-center" style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
+                <div className="flex-1 glass-card flex flex-col lg:h-full lg:overflow-hidden">
+                    <div className="px-6 py-3 flex justify-between items-center shrink-0" style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
                         <span className="font-bold text-lg">Question {currentIdx + 1}</span>
                         <div className="flex gap-2 text-sm">
                             <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>{currentQ.subject_name}</span>
@@ -752,7 +806,7 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    <div className="p-8 flex-1 overflow-y-auto" style={{ minHeight: '400px' }}>
+                    <div className="p-8 flex-1 overflow-y-auto" style={{ minHeight: '300px' }}>
                         <div className="text-lg leading-relaxed font-medium mb-10 pb-6" style={{ borderBottom: '1px solid var(--glass-border)' }}>
                             <FormattedText text={currentQ.question_text} />
                         </div>
@@ -780,7 +834,7 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
+                    <div className="px-6 py-4 flex items-center justify-between shrink-0" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
                         <div className="flex gap-3">
                             <button onClick={handleClear} className="btn-secondary text-sm">Clear</button>
                             <button onClick={handleMarkAndNext} className="text-sm px-4 py-2 rounded-lg font-semibold transition-colors"
@@ -800,7 +854,7 @@ export default function TakeTestPage() {
                 </div>
 
                 {/* Right Sidebar */}
-                <div className="w-full lg:w-72 flex flex-col gap-4">
+                <div className="w-full lg:w-72 flex flex-col gap-4 lg:h-full lg:overflow-hidden shrink-0">
                     <div className="glass-card p-4 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg" style={{ background: 'var(--accent-primary)', color: 'white' }}>
                             {test?.title.charAt(0)}
@@ -821,13 +875,13 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    <div className="glass-card p-4 flex-1 flex flex-col min-h-[300px]">
-                        <div className="font-bold text-sm mb-3 flex justify-between items-center">
+                    <div className="glass-card p-4 flex-1 flex flex-col min-h-[220px] lg:overflow-hidden">
+                        <div className="font-bold text-sm mb-3 flex justify-between items-center shrink-0">
                             <span>Question Palette</span>
                             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{questions.length} Qs</span>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1">
-                            <div className="grid grid-cols-5 gap-2">
+                            <div className="grid grid-cols-5 gap-2 pt-1 pb-1">
                                 {questions.map((q, i) => {
                                     const answered = !!answers[q.id];
                                     const isMarked = marked.has(i);
@@ -846,9 +900,9 @@ export default function TakeTestPage() {
                                 })}
                             </div>
                         </div>
-                        <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--glass-border)' }}>
+                        <div className="mt-4 pt-4 shrink-0" style={{ borderTop: '1px solid var(--glass-border)' }}>
                             <button onClick={handleSubmit}
-                                className="w-full py-3 rounded-lg font-bold text-lg flex justify-center items-center gap-2 transition-colors"
+                                className="w-full py-3 rounded-lg font-bold text-lg flex justify-center items-center gap-2 transition-colors active:scale-98"
                                 style={{ background: '#10b981', color: 'white' }}>
                                 <Send className="w-5 h-5" /> Submit Test
                             </button>

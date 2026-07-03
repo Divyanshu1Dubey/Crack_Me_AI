@@ -40,7 +40,7 @@ const navSections: NavSection[] = [
         title: 'AI Tools',
         items: [
             { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor' },
-            { href: '/generate', iconName: 'ai-questions-creativity', label: 'AI Questions' },
+            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator' },
             { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan' },
         ]
     },
