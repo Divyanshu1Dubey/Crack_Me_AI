@@ -18,6 +18,7 @@ interface LeaderboardEntry {
     total_study_days: number;
     accuracy: number;
     tests_completed: number;
+    college?: string;
 }
 
 const rankStyle = (rank: number) => {
@@ -99,6 +100,63 @@ export default function LeaderboardPage() {
                 <Header />
                 <main className="flex-1 p-4 md:p-6 page-container space-y-6">
 
+                    {/* Campus Momentum Section */}
+                    <div className="glass-card p-6 border border-amber-500/20 relative overflow-hidden text-left" style={{
+                        background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%)',
+                    }}>
+                        <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-72 h-72 bg-cyan-500/5 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
+                        
+                        <div className="relative z-10 space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
+                                        <Flame className="w-5 h-5 text-amber-500 animate-pulse" />
+                                        Campus Momentum
+                                    </h2>
+                                    <p className="text-slate-300 text-xs md:text-sm mt-1">
+                                        Students and residents from leading medical institutions prep here.
+                                    </p>
+                                </div>
+                                <div className="shrink-0 bg-amber-500/10 border border-amber-500/25 px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold text-amber-500 flex items-center gap-1.5 self-start sm:self-auto">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                    2,900+ active this week
+                                </div>
+                            </div>
+
+                            {/* Institutions ticker/list */}
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-700/40">
+                                {['AIIMS Delhi', 'CMC Vellore', 'JIPMER Puducherry', 'KGMU Lucknow', 'Maulana Azad Medical College', 'Seth GS Medical College'].map((inst, i) => (
+                                    <span key={i} className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-900/60 border border-border text-slate-300">
+                                        🏫 {inst}
+                                    </span>
+                                ))}
+                            </div>
+
+                            {/* 4 Cards Grid of Achievements */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+                                {[
+                                    { title: 'Active Streak', name: 'Dr. Riya Sharma', inst: 'AIIMS Delhi', detail: '412 Clinical Qs this month', badge: '🔥 Hot' },
+                                    { title: 'Top Reviewer', name: 'Dr. Aarav Mehta', inst: 'CMC Vellore', detail: 'Daily streak active for 14 days', badge: '⚡ Streak' },
+                                    { title: 'Mock Champion', name: 'Dr. Nisha Krishnan', inst: 'JIPMER Puducherry', detail: 'Top 9% in mock simulation', badge: '🏆 Champ' },
+                                    { title: 'High Yield Master', name: 'Dr. Harsh Vardhan', inst: 'KGMU Lucknow', detail: '58 weak tags successfully resolved', badge: '🧠 Master' }
+                                ].map((ach, idx) => (
+                                    <div key={idx} className="p-3 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-amber-500/20 transition-all flex flex-col justify-between space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">{ach.title}</span>
+                                            <Badge variant="secondary" className="text-[8px] bg-slate-800 text-amber-500 hover:bg-slate-800 font-semibold px-1 py-0">{ach.badge}</Badge>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white">{ach.name}</p>
+                                            <p className="text-[9px] text-muted-foreground font-medium">{ach.inst}</p>
+                                        </div>
+                                        <p className="text-[9.5px] font-semibold text-emerald-400 border-t border-slate-850 pt-1 mt-1">{ach.detail}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* My Rank Card */}
                     {myRank && (
                         <Card className="border-primary/30 bg-primary/5">
@@ -157,7 +215,10 @@ export default function LeaderboardPage() {
                                                     {entry.username.charAt(0).toUpperCase()}
                                                 </div>
                                                 <p className="font-semibold mt-2">{entry.username}</p>
-                                                <div className="flex items-center justify-center gap-1 mt-1">
+                                                {entry.college && (
+                                                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">{entry.college}</p>
+                                                )}
+                                                <div className="flex items-center justify-center gap-1 mt-2">
                                                     <Zap className="w-4 h-4 text-yellow-500" />
                                                     <span className="text-lg font-bold">{entry.xp_points}</span>
                                                     <span className="text-xs text-muted-foreground">XP</span>
@@ -191,6 +252,9 @@ export default function LeaderboardPage() {
                                                             {entry.username}
                                                             {entry.user_id === user?.id && <Badge variant="outline" className="ml-2 text-[10px]">You</Badge>}
                                                         </p>
+                                                        {entry.college && (
+                                                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">{entry.college}</p>
+                                                        )}
                                                     </div>
                                                     <div className="flex items-center gap-4 text-sm shrink-0">
                                                         <span className="flex items-center gap-1 text-muted-foreground">

@@ -221,6 +221,46 @@ class SubscribeOrderView(APIView):
                 'payment_capture': '1'
             }
             order = client.order.create(data=order_data)
+            
+            # Record payment attempt
+            from accounts.models import PaymentAttempt
+            PaymentAttempt.objects.create(
+                user=request.user,
+                razorpay_order_id=order['id'],
+                amount=199.00,
+                status='initiated'
+            )
+            
+            # Send initiated checkout email
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings as django_settings
+                subject = "⚠️ Complete your CrackLabs Premium Membership Checkout"
+                message = (
+                    f"Dear Dr. {request.user.first_name or request.user.username},\n\n"
+                    f"We noticed that you initiated the checkout for our ₹199 Early Bird Premium Pass but haven't completed it yet.\n\n"
+                    f"Here is what you are missing out on:\n"
+                    f"- Unlimited AI Tutor usage (no token limits)\n"
+                    f"- Top-Teacher curated handwritten study sheets\n"
+                    f"- Direct doubt clearance portal with renowned CMS faculty\n"
+                    f"- Complete UPSC CMS PYQ bank (2018-2025)\n\n"
+                    f"This extremely low price of ₹199 (normally ₹10,000) is only active for the launch phase. "
+                    f"Please complete your subscription payment on your dashboard to claim your premium membership.\n\n"
+                    f"If you experienced any issues during payment, please reply directly to this email.\n\n"
+                    f"Best regards,\n"
+                    f"The CrackLabs Team\n"
+                    f"https://www.cracklabs.app"
+                )
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=django_settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[request.user.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
+
             return Response({
                 'order_id': order['id'],
                 'amount': order['amount'],
@@ -258,12 +298,37 @@ class SubscribeVerifyView(APIView):
                 'razorpay_signature': signature
             })
         except Exception as e:
+            # Mark attempt as failed
+            from accounts.models import PaymentAttempt
+            try:
+                attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
+                attempt.status = 'failed'
+                attempt.error_message = str(e)
+                attempt.save()
+            except PaymentAttempt.DoesNotExist:
+                pass
             return Response({'error': f'Payment signature verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Activate subscription
         user = request.user
         user.is_subscribed = True
         user.save(update_fields=['is_subscribed'])
+
+        # Mark attempt as successful
+        from accounts.models import PaymentAttempt
+        try:
+            attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
+            attempt.razorpay_payment_id = payment_id
+            attempt.status = 'successful'
+            attempt.save()
+        except PaymentAttempt.DoesNotExist:
+            PaymentAttempt.objects.create(
+                user=user,
+                razorpay_order_id=order_id,
+                razorpay_payment_id=payment_id,
+                amount=199.00,
+                status='successful'
+            )
 
         # Log transaction
         TokenTransaction.objects.create(
@@ -273,6 +338,35 @@ class SubscribeVerifyView(APIView):
             price_paid=199.00,
             note=f"Razorpay Premium: order={order_id}, payment={payment_id}"
         )
+
+        # Send customized successful payment / membership email
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings as django_settings
+            subject = "🎉 Welcome to CrackLabs Premium, Dr. {}! 🩺".format(user.first_name or user.username)
+            message = (
+                f"Dear Dr. {user.first_name or user.username},\n\n"
+                f"Congratulations! Your payment of ₹199 was successfully verified, and your Premium Membership is now fully active.\n\n"
+                f"Details of your Transaction:\n"
+                f"- Plan: Early Bird Premium Pass\n"
+                f"- Amount Paid: ₹199.00\n"
+                f"- Razorpay Order ID: {order_id}\n"
+                f"- Razorpay Payment ID: {payment_id}\n\n"
+                f"You now have unlimited, lifetime-access to all CrackLabs features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and unlimited AI Tutor interactions.\n\n"
+                f"Best of luck with your preparation!\n\n"
+                f"Best regards,\n"
+                f"The CrackLabs Team\n"
+                f"https://www.cracklabs.app"
+            )
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=django_settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
 
         # Send email notification to admin
         try:

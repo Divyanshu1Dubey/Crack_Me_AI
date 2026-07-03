@@ -61,3 +61,11 @@ frontend/test-results/
 # Backend ad-hoc output artifacts
 backend/test_out.txt
 backend/test_api_keys_output.txt
+
+# Temporary keys, images & scratch workspace
+backend/RECOVERED_KEYS.txt
+backend/*.jpeg
+backend/*.jpg
+backend/*.png
+backend/scratch/
+

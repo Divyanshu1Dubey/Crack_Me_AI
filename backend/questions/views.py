@@ -712,6 +712,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 activity.correct_answers += 1
             activity.save()
             
+            # Update StudyStreak and grant XP points
+            from analytics.models import StudyStreak
+            streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+            streak.record_activity()
+            xp_reward = 15 if is_correct else 5
+            streak.add_xp(xp_reward)
+            
         return Response({
             'is_correct': is_correct,
             'correct_answer': question.correct_answer,

@@ -27,6 +27,20 @@ interface DashboardData {
     total_tests_taken: number;
     unresolved_feedback: number;
     recent_signups: { id: number; username: string; date_joined: string }[];
+    total_revenue?: number;
+    total_payment_attempts?: number;
+    successful_payments?: number;
+    failed_payments?: number;
+    initiated_payments?: number;
+    recent_payments?: {
+        id: number;
+        username: string;
+        email: string;
+        order_id: string;
+        status: string;
+        amount: number;
+        created_at: string;
+    }[];
 }
 
 interface Announcement {
@@ -3183,12 +3197,103 @@ export default function AdminDashboardPage() {
                     )}
 
                     {activeTab === 'finance' && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Finance & Token Ledger</CardTitle>
-                                <CardDescription>Upcoming controls: token ledger timeline, anomalies, and adjustment workflow.</CardDescription>
-                            </CardHeader>
-                        </Card>
+                        <div className="space-y-6 text-left">
+                            {/* Revenue metrics cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <Card className="border-emerald-500/20 bg-emerald-950/5">
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Revenue</p>
+                                            <p className="text-2xl font-black text-white mt-1">₹{(data?.total_revenue || 0).toLocaleString()}</p>
+                                        </div>
+                                        <Wallet className="w-8 h-8 text-emerald-500" />
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-cyan-500/20 bg-cyan-950/5">
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Paid Memberships</p>
+                                            <p className="text-2xl font-black text-white mt-1">{data?.successful_payments || 0}</p>
+                                        </div>
+                                        <CheckCircle className="w-8 h-8 text-cyan-400" />
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-amber-500/20 bg-amber-950/5">
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Initiated checkouts</p>
+                                            <p className="text-2xl font-black text-white mt-1">{data?.initiated_payments || 0}</p>
+                                        </div>
+                                        <Clock className="w-8 h-8 text-amber-500" />
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-rose-500/20 bg-rose-950/5">
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Failed Transactions</p>
+                                            <p className="text-2xl font-black text-white mt-1">{data?.failed_payments || 0}</p>
+                                        </div>
+                                        <AlertTriangle className="w-8 h-8 text-rose-500" />
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Recent checkout activity */}
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <div>
+                                        <CardTitle>Razorpay Payment attempts</CardTitle>
+                                        <CardDescription>Live tracking of subscription transactions and checkout completions.</CardDescription>
+                                    </div>
+                                    <Badge className="bg-slate-800 text-slate-300 font-bold border border-slate-700">
+                                        Total attempts: {data?.total_payment_attempts || 0}
+                                    </Badge>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    {(!data?.recent_payments || data.recent_payments.length === 0) ? (
+                                        <div className="p-8 text-center text-muted-foreground text-sm">No payment records found in database.</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-muted/40 border-b font-semibold text-slate-300">
+                                                        <th className="p-3">User Email</th>
+                                                        <th className="p-3">Username</th>
+                                                        <th className="p-3">Razorpay Order ID</th>
+                                                        <th className="p-3">Amount</th>
+                                                        <th className="p-3">Status</th>
+                                                        <th className="p-3">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {data.recent_payments.map((p) => (
+                                                        <tr key={p.id} className="hover:bg-muted/20 transition-colors">
+                                                            <td className="p-3 font-semibold text-white">{p.email}</td>
+                                                            <td className="p-3 text-muted-foreground">{p.username}</td>
+                                                            <td className="p-3 font-mono text-[10px] text-slate-400">{p.order_id}</td>
+                                                            <td className="p-3 font-bold text-white">₹{p.amount}</td>
+                                                            <td className="p-3">
+                                                                <Badge className={
+                                                                    p.status === 'successful' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 border-0' :
+                                                                    p.status === 'failed' ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/15 border-0' :
+                                                                    'bg-amber-500/10 text-amber-500 hover:bg-amber-500/15 border-0'
+                                                                }>
+                                                                    {p.status.toUpperCase()}
+                                                                </Badge>
+                                                            </td>
+                                                            <td className="p-3 text-muted-foreground">{new Date(p.created_at).toLocaleString()}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
                     {activeTab === 'ai' && (

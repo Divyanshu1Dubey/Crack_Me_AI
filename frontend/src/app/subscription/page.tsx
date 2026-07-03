@@ -174,10 +174,10 @@ export default function SubscriptionPage() {
                                     <Sparkles className="w-3.5 h-3.5" /> Early Bird Launch Offer
                                 </div>
                                 <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl leading-tight">
-                                    Unlock the Ultimate CMS & NEET PG Platform
+                                    Unlock MBBS, UPSC CMS & State CMS Mastery
                                 </h2>
                                 <p className="text-slate-300 text-sm md:text-base leading-relaxed">
-                                    Get complete access to unlimited AI tutor usage, handwritten materials, top teachers' curated notes, doubt solving, and our entire verified question bank. One place for complete preparation.
+                                    Get complete coverage for **MBBS university papers, UPSC CMS, and State CMS exams** along with expert academic guidance. Unlock all required and requested materials, standard textbooks, premium notes, doubt portals, and our complete QBank. This extremely low price is available for a limited time only to help every medical aspirant succeed!
                                 </p>
 
                                 <div className="flex flex-wrap gap-4 text-xs text-slate-400 pt-2">

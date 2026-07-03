@@ -138,6 +138,35 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         if created:
             user.set_unusable_password()
             user.save(update_fields=["password"])
+            
+            # Send personalized welcome email
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings
+                subject = f"Welcome to CrackLabs, Dr. {user.first_name or user.username}! 🩺"
+                message = (
+                    f"Dear Dr. {user.first_name or user.username},\n\n"
+                    f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
+                    f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
+                    f"Here is what you get access to:\n"
+                    f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
+                    f"- Spaced Repetition flashcards based on SM-2\n"
+                    f"- Unlimited AI Tutor to break down complex medical guidelines\n"
+                    f"- Dynamic leaderboard to compete with medical peers across the country\n\n"
+                    f"Let's start your prep today! Head over to your dashboard and complete your first clinical drill.\n\n"
+                    f"Best regards,\n"
+                    f"The CrackLabs Team\n"
+                    f"https://www.cracklabs.app"
+                )
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
         else:
 
             updates = []

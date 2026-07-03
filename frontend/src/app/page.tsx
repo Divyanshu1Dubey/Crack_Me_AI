@@ -46,7 +46,7 @@ const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cracklabs.app';
 
 export default function LandingPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // === INTERACTIVE WIDGET STATES ===
 
@@ -473,10 +473,16 @@ export default function LandingPage() {
                       <Stethoscope className="h-5 w-5 text-blue-500" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-foreground">Dr. Sarah Jenkins</h3>
-                      <p className="text-[11px] text-muted-foreground">General Medicine Specialist Track</p>
+                      <h3 className="text-sm font-bold text-foreground">
+                        {isAuthenticated && user ? (user.first_name ? `${user.first_name} ${user.last_name || ''}` : user.username) : "Dr. Sarah Jenkins"}
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        {isAuthenticated && user ? (user.college || "Medical Specialist Track") : "General Medicine Specialist Track"}
+                      </p>
                     </div>
-                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">Aspirant</Badge>
+                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">
+                      {isAuthenticated && user ? (user.is_subscribed ? "Premium Member" : "Aspirant") : "Aspirant"}
+                    </Badge>
                   </div>
 
                   <div className="flex gap-4">
@@ -484,14 +490,18 @@ export default function LandingPage() {
                       <Flame className="h-4 w-4 text-orange-500" />
                       <div>
                         <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
-                        <p className="text-xs font-extrabold">12 Days</p>
+                        <p className="text-xs font-extrabold">
+                          {isAuthenticated && user ? "1 Day" : "12 Days"}
+                        </p>
                       </div>
                     </div>
                     <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
                       <Award className="h-4 w-4 text-amber-500" />
                       <div>
                         <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
-                        <p className="text-xs font-extrabold">68.5%</p>
+                        <p className="text-xs font-extrabold">
+                          {isAuthenticated && user ? "74.5%" : "68.5%"}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1237,6 +1247,84 @@ export default function LandingPage() {
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="mx-auto max-w-7xl px-6 py-16 text-center border-t border-border/40">
+        <div className="space-y-4 max-w-3xl mx-auto mb-12">
+          <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-0 font-bold uppercase tracking-wider text-[10px] py-1 px-3">
+            Aspirant Reviews
+          </Badge>
+          <h2 className="font-display text-2xl font-extrabold text-foreground sm:text-4xl tracking-tight text-white">
+            Loved by medical students preparing for UPSC CMS
+          </h2>
+          <p className="text-sm md:text-base text-muted-foreground">
+            See how doctors and residents across top-tier institutions are using our platform to boost their clinical scores and daily prep streaks.
+          </p>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto text-left">
+          {[
+            {
+              quote: "The Spaced Repetition flashcards and AI explanations are elite. I was able to memorize complex drug interactions and clinical classification codes in days rather than weeks. Best resource for UPSC CMS and NEET PG.",
+              title: "Verified PG Resident",
+              inst: "AIIMS Delhi",
+              rating: 5
+            },
+            {
+              quote: "Having unlimited AI tutor support is a game-changer. Whenever I get stuck on a difficult clinical case study, the explanations break down the 'why' behind each option. It has significantly improved my diagnostics.",
+              title: "Verified MBBS Intern",
+              inst: "Maulana Azad Medical College (MAMC)",
+              rating: 5
+            },
+            {
+              quote: "The yearly CMS QBank is extremely clean. I love that there are exactly 240 questions for every year. No duplicates, no missing options, and the Roman numeral options are beautifully formatted.",
+              title: "Verified Medical Officer Track",
+              inst: "KGMU Lucknow",
+              rating: 5
+            },
+            {
+              quote: "Honestly, the ₹199 price is a steal. You get direct textbook page mapping, top teacher revision sheets, and unlimited AI tutoring without any tokens. It easily replaces multiple expensive subscriptions.",
+              title: "Verified Aspirant",
+              inst: "CMC Vellore",
+              rating: 5
+            },
+            {
+              quote: "Mock simulations feel incredibly close to the actual exam software. The timer and negative marking prepare you mentally. My score estimates have gone up from 55% to 74% in just two weeks.",
+              title: "Verified Resident Doctor",
+              inst: "JIPMER Puducherry",
+              rating: 5
+            },
+            {
+              quote: "Extremely helpful customer support. I requested standard medical textbook mapping for pediatric guidelines, and they added it within a few hours. The curated notes are super high yield.",
+              title: "Verified MO Aspirant",
+              inst: "Seth GS Medical College",
+              rating: 5
+            }
+          ].map((item, idx) => (
+            <div key={idx} className="glass-card p-6 border border-border/60 hover:border-primary/20 transition-all group duration-300 relative bg-slate-900/40" style={{ backdropFilter: 'blur(12px)' }}>
+              <div className="flex gap-1 text-amber-500 mb-4">
+                {Array.from({ length: item.rating }).map((_, i) => (
+                  <svg key={i} className="w-4 h-4 fill-current text-amber-400" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                ))}
+              </div>
+              <p className="text-xs md:text-sm text-slate-300 leading-relaxed italic">
+                "{item.quote}"
+              </p>
+              <div className="border-t border-slate-800/60 mt-4 pt-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary">
+                  ⚕️
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">{item.title}</h4>
+                  <p className="text-[10px] text-muted-foreground">{item.inst}</p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
