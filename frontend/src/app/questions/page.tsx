@@ -141,6 +141,7 @@ function QuestionsContent() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
+    const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
     const [questions, setQuestions] = useState<Question[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
@@ -252,10 +253,10 @@ function QuestionsContent() {
         if (isAuthenticated) {
             setListError(null);
             Promise.all([
-                questionsAPI.list({ page: 1, page_size: pageSize }),
+                questionsAPI.list({ page: 1, page_size: pageSize, exam_source: selectedExam }),
                 questionsAPI.getSubjects(),
                 questionsAPI.getYears(),
-                questionsAPI.getStats(),
+                questionsAPI.getStats({ exam_source: selectedExam }),
             ]).then(([qRes, sRes, yRes, statsRes]) => {
                 const qData = qRes.data;
                 setQuestions(qData.results || qData || []);
@@ -272,7 +273,7 @@ function QuestionsContent() {
                 setListError('Unable to load questions right now. Please refresh and try again.');
             }).finally(() => setLoading(false));
         }
-    }, [authLoading, isAuthenticated, router]);
+    }, [authLoading, isAuthenticated, router, selectedExam]);
 
     // Handle bookmark click-through: /questions?q=123
     useEffect(() => {
@@ -306,10 +307,11 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
+        if (selectedExam) params.exam_source = selectedExam;
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSubject, selectedDifficulty, selectedYear]);
+    }, [selectedSubject, selectedDifficulty, selectedYear, selectedExam]);
 
     const handlePageChange = (newPage: number) => {
         setPage(newPage);
@@ -318,6 +320,7 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
+        if (selectedExam) params.exam_source = selectedExam;
         fetchQuestions(params);
     };
 
@@ -424,6 +427,7 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
+        if (selectedExam) params.exam_source = selectedExam;
         setPage(1);
         fetchQuestions(params);
     };
@@ -475,12 +479,38 @@ function QuestionsContent() {
                         {/* Header & Main Stats Row */}
                         {qbankStats && (
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-3">
-                                <div className="space-y-1">
-                                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                        🎯 Question Bank
-                                    </h2>
+                                <div className="space-y-2 text-left">
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="text-lg font-bold text-foreground">
+                                            🎯 Question Bank
+                                        </h2>
+                                        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-border">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedSubject('');
+                                                    setSelectedDifficulty('');
+                                                    setSelectedYear('');
+                                                    setSelectedExam('UPSC CMS');
+                                                }}
+                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${selectedExam === 'UPSC CMS' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                            >
+                                                UPSC CMS
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedSubject('');
+                                                    setSelectedDifficulty('');
+                                                    setSelectedYear('');
+                                                    setSelectedExam('NEET PG');
+                                                }}
+                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${selectedExam === 'NEET PG' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                            >
+                                                NEET PG
+                                            </button>
+                                        </div>
+                                    </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Master {qbankStats.total} high-yield clinical MCQs and PYQs.
+                                        Master {qbankStats.total} high-yield {selectedExam} clinical MCQs and PYQs.
                                     </p>
                                 </div>
                                 

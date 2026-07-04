@@ -759,38 +759,57 @@ class QuestionViewSet(viewsets.ModelViewSet):
         
         user = request.user
         has_user = user and user.is_authenticated
+        exam_source = request.query_params.get('exam_source')
         
         from questions.models import QuestionAttempt
         
         # Base count
         total_qs = Question.objects.filter(is_active=True)
+        if exam_source:
+            total_qs = total_qs.filter(exam_source=exam_source)
+            
         total_count = total_qs.count()
-        total_solved = QuestionAttempt.objects.filter(user=user).count() if has_user else 0
+        
+        solved_qs = QuestionAttempt.objects.filter(user=user) if has_user else QuestionAttempt.objects.none()
+        if exam_source:
+            solved_qs = solved_qs.filter(question__exam_source=exam_source)
+        total_solved = solved_qs.count()
         
         # Progress by year
         by_year_raw = total_qs.values('year').annotate(count=Count('id')).order_by('-year')
         by_year = []
         for item in by_year_raw:
             year = item['year']
-            solved = QuestionAttempt.objects.filter(user=user, question__year=year).count() if has_user else 0
+            solved = QuestionAttempt.objects.filter(user=user, question__year=year)
+            if exam_source:
+                solved = solved.filter(question__exam_source=exam_source)
+            solved_count = solved.count() if has_user else 0
             by_year.append({
                 'year': year,
                 'count': item['count'],
-                'solved': solved
+                'solved': solved_count
             })
             
         # Progress by subject
-        by_subject_raw = Subject.objects.annotate(count=Count('questions')).values('id', 'name', 'code', 'count')
         by_subject = []
-        for item in by_subject_raw:
-            sub_id = item['id']
-            solved = QuestionAttempt.objects.filter(user=user, question__subject_id=sub_id).count() if has_user else 0
+        for subject in Subject.objects.all():
+            q_qs = Question.objects.filter(subject=subject, is_active=True)
+            if exam_source:
+                q_qs = q_qs.filter(exam_source=exam_source)
+            count = q_qs.count()
+            if count == 0 and exam_source == 'NEET PG':
+                # Skip 0 question subjects for NEET PG
+                continue
+            solved = QuestionAttempt.objects.filter(user=user, question__subject=subject)
+            if exam_source:
+                solved = solved.filter(question__exam_source=exam_source)
+            solved_count = solved.count() if has_user else 0
             by_subject.append({
-                'id': sub_id,
-                'name': item['name'],
-                'code': item['code'],
-                'count': item['count'],
-                'solved': solved
+                'id': subject.id,
+                'name': subject.name,
+                'code': subject.code,
+                'count': count,
+                'solved': solved_count
             })
 
         # Progress by difficulty
@@ -798,11 +817,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
         by_difficulty = []
         for item in by_difficulty_raw:
             diff = item['difficulty']
-            solved = QuestionAttempt.objects.filter(user=user, question__difficulty=diff).count() if has_user else 0
+            solved = QuestionAttempt.objects.filter(user=user, question__difficulty=diff)
+            if exam_source:
+                solved = solved.filter(question__exam_source=exam_source)
+            solved_count = solved.count() if has_user else 0
             by_difficulty.append({
                 'difficulty': diff,
                 'count': item['count'],
-                'solved': solved
+                'solved': solved_count
             })
 
         stats = {

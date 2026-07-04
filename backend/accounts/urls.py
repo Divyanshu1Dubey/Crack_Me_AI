@@ -9,6 +9,7 @@ urlpatterns = [
     path('subscribe/', views.SubscribeView.as_view(), name='subscribe'),
     path('subscribe/order/', views.SubscribeOrderView.as_view(), name='subscribe_order'),
     path('subscribe/verify/', views.SubscribeVerifyView.as_view(), name='subscribe_verify'),
+    path('verify-scholarship/', views.VerifyScholarshipView.as_view(), name='verify_scholarship'),
     # Password reset
     path('password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),
     path('password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),

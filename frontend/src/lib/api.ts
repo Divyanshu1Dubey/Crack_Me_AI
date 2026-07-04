@@ -80,6 +80,17 @@ const FALLBACK_API_BASE_URL = USE_API_PROXY
   ? API_BASE_URL
   : (shouldIgnoreConfiguredApiUrl(configuredFallback) ? DEFAULT_PRODUCTION_API_URL : configuredFallback);
 
+// Helper for generating page-session tracking ID
+const getOrCreateSessionId = (): string => {
+  if (typeof window === 'undefined') return '';
+  let id = sessionStorage.getItem('crack_session_id');
+  if (!id) {
+    id = 'sess_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+    sessionStorage.setItem('crack_session_id', id);
+  }
+  return id;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -87,8 +98,13 @@ const api = axios.create({
   },
 });
 
-// Add auth token to requests
+// Add auth token and session tracking to requests
 api.interceptors.request.use(async (config) => {
+  const sessionId = getOrCreateSessionId();
+  if (sessionId) {
+    config.headers['X-Session-ID'] = sessionId;
+  }
+
   if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
@@ -108,7 +124,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle token refresh on 401
+// Handle token refresh on 401 and single session logout on session_invalid
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -120,6 +136,16 @@ api.interceptors.response.use(
     };
     const status = error.response?.status as number | undefined;
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
+
+    // Single session validation check
+    const errorCode = error.response?.data?.code;
+    if (errorCode === 'session_invalid') {
+      if (typeof window !== 'undefined') {
+        await clearSupabaseLocalSession();
+        window.location.href = '/login?authError=' + encodeURIComponent('ur logged in another device');
+        return new Promise(() => {}); // Stop request chain
+      }
+    }
 
     const shouldFailover =
       !USE_API_PROXY &&
@@ -144,9 +170,10 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
   subscribe: () => api.post('/auth/subscribe/'),
-  subscribeOrder: () => api.post('/auth/subscribe/order/'),
+  subscribeOrder: (plan?: string) => api.post('/auth/subscribe/order/', { plan }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
+  verifyScholarship: (answers: Record<string, string>) => api.post('/auth/verify-scholarship/', { answers }),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
   confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
@@ -213,7 +240,7 @@ export const questionsAPI = {
   getSubjects: () => api.get('/questions/subjects/'),
   getTopics: (params?: Record<string, string | number>) => api.get('/questions/topics/', { params }),
   getYears: () => api.get('/questions/years/'),
-  getStats: () => api.get('/questions/stats/'),
+  getStats: (params?: Record<string, string | number>) => api.get('/questions/stats/', { params }),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
   attempt: (id: number, data: { selected_answer: string }) => api.post(`/questions/${id}/attempt/`, data),
   getBookmarks: () => api.get('/questions/bookmarks/'),

@@ -38,6 +38,24 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             return None
 
         user = self._upsert_local_user(supabase_user)
+
+        # Single session enforcement
+        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
+        if incoming_session_id:
+            path = request_obj.path
+            is_sync_path = '/auth/profile/' in path or '/auth/login/' in path or '/auth/register/' in path
+            if is_sync_path:
+                if user.current_session_id != incoming_session_id:
+                    user.current_session_id = incoming_session_id
+                    user.save(update_fields=['current_session_id'])
+            else:
+                if user.current_session_id and user.current_session_id != incoming_session_id:
+                    from rest_framework import exceptions
+                    raise exceptions.AuthenticationFailed({
+                        "detail": "ur logged in another device",
+                        "code": "session_invalid"
+                    })
+
         return (user, None)
 
     def _fetch_supabase_user(self, token: str):

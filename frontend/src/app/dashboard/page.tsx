@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
@@ -9,7 +9,7 @@ import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle2, Clock, FileText, Flame,
-    HeartPulse, Crown
+    HeartPulse, Crown, Brain, Sparkles, AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -30,17 +30,8 @@ interface HeatmapDay {
 
 // SWR fetchers with caching
 const dashboardFetcher = () => analyticsAPI.getDashboard().then(r => r.data).catch(() => null);
-const statsFetcher = () => questionsAPI.getStats().then(r => r.data).catch(() => null);
 const heatmapFetcher = () => analyticsAPI.getHeatmap().then(r => r.data || []).catch(() => []);
 const streakFetcher = () => analyticsAPI.getStreak().then(r => r.data).catch(() => null);
-
-// Static data moved outside component to prevent re-renders
-const QUICK_ACTIONS = [
-    { label: 'Practice Questions', iconName: 'question-bank-book', href: '/questions', bg: 'bg-sky-100 dark:bg-sky-500/15' },
-    { label: 'Take Mock Test', iconName: 'tests-check', href: '/tests', bg: 'bg-cyan-100 dark:bg-cyan-500/15' },
-    { label: 'AI Study Assistant', iconName: 'ai-tutor-brain', href: '/ai-tutor', bg: 'bg-indigo-100 dark:bg-indigo-500/15' },
-    { label: 'CMS Simulator', iconName: 'simulator-target', href: '/simulator', bg: 'bg-violet-100 dark:bg-violet-500/15' },
-] as const;
 
 const CAMPUS_MOMENTUM = [
     { name: 'Riya S.', college: 'AIIMS Delhi', note: '412 Qs this month' },
@@ -54,14 +45,16 @@ export default function DashboardPage() {
     const router = useRouter();
     const isRedirecting = !authLoading && !isAuthenticated;
 
-    // Heatmap tooltip state (single tooltip instead of 112+ components)
+    const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
+
+    // Heatmap tooltip state
     const [hoveredDay, setHoveredDay] = useState<{ date: string; questions: number; tests: number; minutes: number } | null>(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-    // SWR hooks with fast revalidation for live dashboard progress
+    // SWR config
     const swrConfig = {
         revalidateOnFocus: true,
-        dedupingInterval: 2000, // 2 seconds
+        dedupingInterval: 2000,
         errorRetryCount: 2,
     };
 
@@ -70,16 +63,20 @@ export default function DashboardPage() {
         dashboardFetcher,
         swrConfig
     );
+
+    // Dynamic SWR keys based on selected exam source
     const { data: stats } = useSWR(
-        isAuthenticated ? 'question-stats' : null,
-        statsFetcher,
+        isAuthenticated ? ['question-stats', selectedExam] : null,
+        ([, exam]) => questionsAPI.getStats({ exam_source: exam }).then(r => r.data).catch(() => null),
         swrConfig
     );
+
     const { data: heatmap = [] } = useSWR(
         isAuthenticated ? 'heatmap' : null,
         heatmapFetcher,
         swrConfig
     );
+
     const { data: streak } = useSWR(
         isAuthenticated ? 'streak' : null,
         streakFetcher,
@@ -98,107 +95,40 @@ export default function DashboardPage() {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));
     }, [heatmap]);
 
-    const todayKey = useMemo(() => {
+    const todayDateStr = useMemo(() => {
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return today.toISOString().slice(0, 10);
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }, []);
 
     const todayActivity = useMemo<HeatmapDay>(() => {
-        const fall: HeatmapDay = {
-            date: todayKey,
+        const found = heatmapByDate.get(todayDateStr);
+        return found || {
+            date: todayDateStr,
             questions_attempted: 0,
             correct_answers: 0,
             time_spent_minutes: 0,
-            tests_completed: 0,
+            tests_completed: 0
         };
-        const active = heatmapByDate.get(todayKey);
-        return active ? active : fall;
-    }, [heatmapByDate, todayKey]);
+    }, [heatmapByDate, todayDateStr]);
 
     const dailyQuestionGoal = 30;
     const dailyQuestionGoalProgress = Math.min(100, Math.round((todayActivity.questions_attempted / dailyQuestionGoal) * 100));
-    const todayAccuracy = todayActivity.questions_attempted > 0
-        ? Math.round((todayActivity.correct_answers / todayActivity.questions_attempted) * 100)
-        : 0;
 
-    const contributionGrid = useMemo(() => {
-        const end = new Date();
-        end.setHours(0, 0, 0, 0);
+    const todayAccuracy = useMemo(() => {
+        if (todayActivity.questions_attempted === 0) return 0;
+        return Math.round((todayActivity.correct_answers / todayActivity.questions_attempted) * 100);
+    }, [todayActivity]);
 
-        const start = new Date(end);
-        start.setDate(end.getDate() - 111);
-
-        const gridStart = new Date(start);
-        gridStart.setDate(start.getDate() - start.getDay());
-
-        const days: Array<{
-            date: string;
-            isInRange: boolean;
-            questions: number;
-            tests: number;
-            minutes: number;
-            level: number;
-            month: string;
-            dayOfMonth: number;
-            isToday: boolean;
-        }> = [];
-
-        for (const d = new Date(gridStart); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateKey = d.toISOString().slice(0, 10);
-            const activity = heatmapByDate.get(dateKey);
-            const isInRange = d >= start;
-            const questions = activity?.questions_attempted || 0;
-            const tests = activity?.tests_completed || 0;
-            const minutes = activity?.time_spent_minutes || 0;
-            const isToday = dateKey === todayKey;
-
-            const weightedActivity = questions + (tests * 10);
-            let level = 0;
-            if (weightedActivity >= 50) level = 4;
-            else if (weightedActivity >= 25) level = 3;
-            else if (weightedActivity >= 10) level = 2;
-            else if (weightedActivity > 0) level = 1;
-
-            days.push({
-                date: dateKey,
-                isInRange,
-                questions,
-                tests,
-                minutes,
-                level,
-                month: d.toLocaleString('en-US', { month: 'short' }),
-                dayOfMonth: d.getDate(),
-                isToday,
-            });
-        }
-
-        const weeks: typeof days[] = [];
-        for (let i = 0; i < days.length; i += 7) {
-            weeks.push(days.slice(i, i + 7));
-        }
-
-        const monthMarkers = weeks
-            .map((week, weekIndex) => {
-                const labelDay = week.find((day) => day.isInRange && day.dayOfMonth <= 7);
-                if (!labelDay) return null;
-                return { weekIndex, month: labelDay.month };
-            })
-            .filter((marker, idx, arr) => {
-                if (!marker) return false;
-                const prev = arr[idx - 1];
-                return !prev || prev.month !== marker.month;
-            }) as Array<{ weekIndex: number; month: string }>;
-
-        return { weeks, monthMarkers };
-    }, [heatmapByDate, todayKey]);
-
+    // Heatmap levels setup
     const heatmapLevelClasses = [
-        'bg-muted/40',
-        'bg-sky-100 dark:bg-sky-900/30',
-        'bg-sky-300 dark:bg-sky-700/60',
-        'bg-sky-500 dark:bg-sky-500/80',
-        'bg-sky-700 dark:bg-sky-300',
+        'bg-slate-100 dark:bg-slate-800 border-slate-200/40 dark:border-slate-800/40',
+        'bg-sky-200 dark:bg-sky-950/40',
+        'bg-sky-300 dark:bg-sky-900/60',
+        'bg-sky-400 dark:bg-sky-500/80',
+        'bg-sky-600 dark:bg-sky-300',
     ];
 
     const overall = dashData?.overall || {
@@ -209,6 +139,63 @@ export default function DashboardPage() {
     const topWeakSubjects = [...(dashData?.subject_performance || [])]
         .sort((a, b) => a.accuracy - b.accuracy)
         .slice(0, 3);
+
+    // Grid details for the last 16 weeks contribution calendar
+    const contributionGrid = useMemo(() => {
+        const weeks: Array<Array<{ date: string; isInRange: boolean; questions: number; tests: number; minutes: number; level: number; isToday: boolean }>> = [];
+        const today = new Date();
+        const startDay = new Date(today);
+        startDay.setDate(today.getDate() - (16 * 7) + 1);
+
+        const current = new Date(startDay);
+        while (current.getDay() !== 0) {
+            current.setDate(current.getDate() - 1);
+        }
+
+        const monthMarkers: Array<{ month: string; weekIndex: number }> = [];
+        let lastMonth = '';
+
+        for (let w = 0; w < 16; w++) {
+            const weekDays: Array<{ date: string; isInRange: boolean; questions: number; tests: number; minutes: number; level: number; isToday: boolean }> = [];
+            for (let d = 0; d < 7; d++) {
+                const dateStr = current.toISOString().split('T')[0];
+                const dayActivityData = heatmapByDate.get(dateStr);
+                const qs = dayActivityData?.questions_attempted || 0;
+                const ts = dayActivityData?.tests_completed || 0;
+                const mins = dayActivityData?.time_spent_minutes || 0;
+
+                let level = 0;
+                if (qs > 0) {
+                    if (qs <= 10) level = 1;
+                    else if (qs <= 25) level = 2;
+                    else if (qs <= 50) level = 3;
+                    else level = 4;
+                }
+
+                weekDays.push({
+                    date: dateStr,
+                    isInRange: current >= startDay && current <= today,
+                    questions: qs,
+                    tests: ts,
+                    minutes: mins,
+                    level,
+                    isToday: dateStr === todayDateStr
+                });
+
+                if (d === 0 && w > 0) {
+                    const currentMonth = current.toLocaleString('default', { month: 'short' });
+                    if (currentMonth !== lastMonth) {
+                        monthMarkers.push({ month: currentMonth, weekIndex: w });
+                        lastMonth = currentMonth;
+                    }
+                }
+
+                current.setDate(current.getDate() + 1);
+            }
+            weeks.push(weekDays);
+        }
+        return { weeks, monthMarkers };
+    }, [heatmapByDate, todayDateStr]);
 
     if (authLoading || isRedirecting) {
         return (
@@ -259,24 +246,24 @@ export default function DashboardPage() {
                             <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                 <div className="space-y-1">
                                     <h4 className="text-sm font-bold text-amber-500 flex items-center gap-1.5">
-                                        <Crown className="w-4 h-4" /> UPSC CMS Premium Pass — Early Bird Offer ₹199 (Ends Soon!)
+                                        <Crown className="w-4 h-4" /> Claim Premium Pass — ₹129/mo (Unlock ₹79 rate via Scholarship!)
                                     </h4>
                                     <p className="text-xs text-muted-foreground">
-                                        Get full access to all requested books, rankers notes, top coordinator doubt support, and study tools.
+                                        Get complete access to NEET PG, UPSC CMS mock simulators, standard reference guides, and AI tutors.
                                     </p>
                                 </div>
                                 <Link href="/subscription" className="shrink-0">
                                     <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
-                                        Upgrade to Premium
+                                        View Subscription Offers
                                     </Button>
                                 </Link>
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* Hero */}
+                    {/* Hero Welcome Card */}
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
-                        <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block relative">
+                        <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
                             <Image src="/dashboard_hero.png" alt="Medical Hero" fill sizes="(min-width: 768px) 33vw, 0px" className="object-cover object-left" />
                             <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-transparent"></div>
                         </div>
@@ -285,13 +272,13 @@ export default function DashboardPage() {
                                 <div className="md:col-span-2 p-6 md:p-8">
                                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium mb-4 text-blue-200">
                                         <CustomIcon name="medical-stethoscope" label="Medical" className="w-3.5 h-3.5" variant="active" />
-                                        UPSC CMS Prep Dashboard
+                                        CrackLabs Medical Companion
                                     </div>
                                     <h1 className="text-2xl md:text-3xl font-bold mb-2">
                                         Welcome back, Dr. {user?.first_name || user?.username || 'Doctor'}
                                     </h1>
                                     <p className="text-sky-100 text-sm md:text-base mb-6 max-w-xl">
-                                        Your personal study companion. Track consistency, improve weak areas, and build exam confidence every day.
+                                        Your comprehensive preparation dashboard. Solve clinical case drills, review textbooks, and ask the AI Tutor for diagnostics guides.
                                     </p>
                                     <div className="flex flex-wrap gap-3">
                                         <Button asChild variant="secondary" className="bg-white text-slate-900 hover:bg-slate-100">
@@ -343,22 +330,77 @@ export default function DashboardPage() {
                         ))}
                     </div>
 
+                    {/* AI PREP TOOLKIT (Top section toolkit grid) */}
+                    <div className="space-y-4 text-left">
+                        <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-amber-500" />
+                            AI Prep Toolkit & Features
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {[
+                                {
+                                    title: 'AI Question Generator',
+                                    desc: 'Generate tailored clinical scenarios & practice questions on any topic.',
+                                    href: '/generate',
+                                    icon: Brain,
+                                    color: 'text-amber-500 bg-amber-500/10'
+                                },
+                                {
+                                    title: 'AI Study Assistant',
+                                    desc: 'Chat with medical AI trained on standard textbooks like Harrison & Ghai.',
+                                    href: '/ai-tutor',
+                                    icon: BookOpen,
+                                    color: 'text-cyan-500 bg-cyan-500/10'
+                                },
+                                {
+                                    title: 'Mock Simulator',
+                                    desc: 'Practice real exam environments with positive/negative marking rules.',
+                                    href: '/simulator',
+                                    icon: FileText,
+                                    color: 'text-emerald-500 bg-emerald-500/10'
+                                },
+                                {
+                                    title: 'Study Roadmap Planner',
+                                    desc: 'Get step-by-step checklists, timelines and textbook index lookups.',
+                                    href: '/roadmap',
+                                    icon: Award,
+                                    color: 'text-indigo-500 bg-indigo-500/10'
+                                }
+                            ].map((tool, i) => (
+                                <Link key={i} href={tool.href}>
+                                    <Card className="hover:scale-[1.02] transition-all duration-300 cursor-pointer h-full border border-border/80 bg-card">
+                                        <CardContent className="p-5 space-y-3">
+                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${tool.color}`}>
+                                                <tool.icon className="w-5 h-5" />
+                                            </div>
+                                            <div className="space-y-1 text-left">
+                                                <h3 className="font-bold text-sm text-foreground">{tool.title}</h3>
+                                                <p className="text-xs text-muted-foreground leading-relaxed">{tool.desc}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="grid lg:grid-cols-12 gap-6">
-                        {/* Left Main */}
+                        {/* Left Main Column (Occupies most width, balanced layout) */}
                         <div className="lg:col-span-8 space-y-6">
+                            
                             {/* Today Focus */}
                             <Card className="shadow-sm border-border">
-                                <CardHeader className="pb-4">
+                                <CardHeader className="pb-4 text-left">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <HeartPulse className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                        Today&apos;s Progress
+                                        Today&apos;s Focus
                                     </CardTitle>
                                     <CardDescription>
-                                        Your daily study progress at a glance.
+                                        Your daily consistency and activity metrics.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-5">
-                                    <div className="grid sm:grid-cols-3 gap-3">
+                                    <div className="grid sm:grid-cols-3 gap-3 text-left">
                                         {[
                                             { label: 'Questions Today', value: todayActivity.questions_attempted, icon: BookOpen },
                                             { label: 'Tests Today', value: todayActivity.tests_completed, icon: FileText },
@@ -375,14 +417,14 @@ export default function DashboardPage() {
                                         ))}
                                     </div>
 
-                                    <div className="grid sm:grid-cols-2 gap-4">
+                                    <div className="grid sm:grid-cols-2 gap-4 text-left">
                                         <div className="rounded-xl border border-border p-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-sm font-medium text-foreground">Daily Question Goal</p>
                                                 <p className="text-xs text-muted-foreground">{todayActivity.questions_attempted}/{dailyQuestionGoal}</p>
                                             </div>
                                             <Progress value={dailyQuestionGoalProgress} className="h-2.5" />
-                                            <p className="text-xs text-muted-foreground mt-2">
+                                            <p className="text-xs text-muted-foreground mt-2 font-semibold">
                                                 {dailyQuestionGoalProgress >= 100
                                                     ? 'Goal complete! Great work today.'
                                                     : `${dailyQuestionGoal - todayActivity.questions_attempted} more to reach your daily goal.`}
@@ -394,7 +436,7 @@ export default function DashboardPage() {
                                                 <p className="text-sm font-semibold text-sky-700 dark:text-sky-300">{todayAccuracy}%</p>
                                             </div>
                                             <Progress value={todayAccuracy} className="h-2.5" />
-                                            <p className="text-xs text-muted-foreground mt-2">
+                                            <p className="text-xs text-muted-foreground mt-2 font-semibold">
                                                 Correct: {todayActivity.correct_answers} / Attempted: {todayActivity.questions_attempted}
                                             </p>
                                         </div>
@@ -402,33 +444,32 @@ export default function DashboardPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* Heatmap */}
+                            {/* Heatmap Calendar */}
                             <Card className="shadow-sm border-border">
-                                <CardHeader className="pb-4">
+                                <CardHeader className="pb-4 text-left">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                         Study Activity Calendar
                                     </CardTitle>
                                     <CardDescription>
-                                        Your daily practice over the last 16 weeks.
+                                        Your daily practice consistency over the last 16 weeks.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 p-4 mb-4">
+                                    <div className="rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 p-4 mb-4 text-left">
                                         <div className="flex items-center justify-between gap-4 flex-wrap">
                                             <div>
-                                                <p className="text-xs uppercase tracking-wide text-blue-400 font-medium">Today&apos;s Activity</p>
-                                                <p className="text-xl font-bold text-foreground mt-1">{todayActivity.questions_attempted} questions, {todayActivity.tests_completed} tests</p>
+                                                <p className="text-xs uppercase tracking-wide text-blue-400 font-medium font-bold">Today&apos;s Activity</p>
+                                                <p className="text-xl font-black text-foreground mt-1">{todayActivity.questions_attempted} questions, {todayActivity.tests_completed} tests</p>
                                                 <p className="text-xs text-muted-foreground mt-1">{todayActivity.time_spent_minutes} minutes of study today</p>
                                             </div>
-                                            <Badge className="bg-blue-600 hover:bg-blue-600 text-white">
+                                            <Badge className="bg-blue-600 hover:bg-blue-600 text-white font-bold">
                                                 {streak?.current_streak || 0} day streak
                                             </Badge>
                                         </div>
                                     </div>
 
                                     <div className="overflow-x-auto pb-2 relative">
-                                        {/* Single positioned tooltip for performance */}
                                         {hoveredDay && (
                                             <div
                                                 className="fixed z-50 bg-popover text-popover-foreground border border-border px-3 py-2 rounded-lg shadow-lg text-xs pointer-events-none"
@@ -479,56 +520,161 @@ export default function DashboardPage() {
                                 </CardContent>
                             </Card>
 
-                        </div>
-
-                        {/* Right Rail */}
-                        <div className="lg:col-span-4 space-y-6">
-                            {/* Quick Actions */}
-                            <Card className="shadow-sm">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <CustomIcon name="ai-questions-creativity" label="Quick Actions" className="w-4 h-4" variant="active" />
-                                        Quick Actions
-                                    </CardTitle>
+                            {/* QUESTION BANK PROGRESS (Moved to left main column, horizontal layout to balance heights) */}
+                            <Card className="shadow-sm border-border text-left">
+                                <CardHeader className="pb-4">
+                                    <div className="flex justify-between items-center gap-3 flex-wrap">
+                                        <div className="space-y-1">
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
+                                                Question Bank Mastery Progress
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Track solved question rates and completion by subjects.
+                                            </CardDescription>
+                                        </div>
+                                        {/* Exam Stats Toggle */}
+                                        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-1 border border-border shrink-0">
+                                            <button
+                                                onClick={() => setSelectedExam('UPSC CMS')}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'UPSC CMS' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                            >
+                                                UPSC CMS
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedExam('NEET PG')}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'NEET PG' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                            >
+                                                NEET PG
+                                            </button>
+                                        </div>
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {QUICK_ACTIONS.map((action, i) => (
-                                        <Link key={i} href={action.href}>
-                                            <div className="rounded-xl border border-border p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${action.bg}`}>
-                                                        <CustomIcon name={action.iconName} label={action.label} className="w-5 h-5" variant="active" />
-                                                    </div>
-                                                    <p className="text-sm font-medium text-foreground">{action.label}</p>
-                                                </div>
-                                                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                                <CardContent className="space-y-6">
+                                    {/* Overall strip + Difficulty strip */}
+                                    <div className="grid md:grid-cols-3 gap-4">
+                                        <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-200/50 dark:border-cyan-800/30 flex flex-col justify-between">
+                                            <div>
+                                                <span className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-400 tracking-wider">Overall Solved</span>
+                                                <p className="text-2xl font-black text-foreground mt-2">
+                                                    {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || 1440}</span>
+                                                </p>
                                             </div>
-                                        </Link>
-                                    ))}
+                                            {stats?.total > 0 && (
+                                                <div className="mt-3">
+                                                    <Progress value={Math.round((stats.total_solved / stats.total) * 100)} className="h-1.5 bg-cyan-200/40" />
+                                                    <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 mt-1.5 block">
+                                                        {Math.round((stats.total_solved / stats.total) * 100)}% Completed
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="md:col-span-2 p-4 rounded-2xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between">
+                                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">Difficulty Levels Breakdown</span>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
+                                                    const pct = d.count > 0 ? Math.round((d.solved / d.count) * 100) : 0;
+                                                    const colorMap: Record<string, string> = {
+                                                        easy: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15',
+                                                        medium: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/15',
+                                                        hard: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/15'
+                                                    };
+                                                    const colorClass = colorMap[d.difficulty] || 'bg-muted';
+                                                    return (
+                                                        <div key={idx} className={`p-2.5 rounded-xl border flex flex-col justify-between ${colorClass}`}>
+                                                            <div>
+                                                                <span className="text-[10px] font-bold capitalize block">{d.difficulty}</span>
+                                                                <span className="text-base font-extrabold block mt-1">{d.solved}/{d.count}</span>
+                                                            </div>
+                                                            <span className="text-[9px] font-bold mt-1 opacity-80">{pct}% solved</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Progress by Year + Subjects */}
+                                    <div className="grid md:grid-cols-12 gap-6 pt-2">
+                                        {/* Progress by Year */}
+                                        <div className="md:col-span-5 space-y-3">
+                                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {(stats?.by_year || [])
+                                                    .slice(0, 4) // Show top 4 years
+                                                    .map((item: { year: number; count: number; solved: number }, idx: number) => {
+                                                        const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                                        const isCompleted = item.solved === item.count && item.count > 0;
+                                                        return (
+                                                            <div key={idx} className="p-2.5 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between min-h-[64px]">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-xs font-extrabold text-foreground">{item.year}</span>
+                                                                    <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
+                                                                </div>
+                                                                <Progress value={pct} className="h-1.5" />
+                                                                <div className="flex justify-between items-center mt-1">
+                                                                    <span className="text-[9px] font-bold text-muted-foreground">{pct}% solved</span>
+                                                                    {isCompleted && (
+                                                                        <span className="text-[9px] text-emerald-500 font-extrabold flex items-center gap-0.5 animate-bounce">
+                                                                            Done! 🎉
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+
+                                        {/* Progress by Subject */}
+                                        <div className="md:col-span-7 space-y-3">
+                                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
+                                            <div className="grid sm:grid-cols-2 gap-3.5">
+                                                {(stats?.by_subject || []).slice(0, 4).map((item: { name: string; count: number; solved: number }, idx: number) => {
+                                                    const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                                    return (
+                                                        <div key={idx} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2 rounded-xl border border-border/40">
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="text-foreground font-semibold truncate max-w-[120px]">{item.name}</span>
+                                                                <span className="text-muted-foreground text-[10px] shrink-0 font-bold">{item.solved} / {item.count} ({pct}%)</span>
+                                                            </div>
+                                                            <Progress value={pct} className="h-1.5 bg-slate-200/50" />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </CardContent>
                             </Card>
 
+                        </div>
+
+                        {/* Right Rail Column (Shorter widgets, perfectly balanced) */}
+                        <div className="lg:col-span-4 space-y-6">
+                            
                             {/* Weak Subjects */}
-                            <Card className="shadow-sm">
+                            <Card className="shadow-sm text-left">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <Award className="w-4 h-4 text-sky-600 dark:text-sky-300" />
                                         Subjects to Focus On
                                     </CardTitle>
                                     <CardDescription>
-                                        These need more practice based on your scores.
+                                        These need more practice based on your recent scores.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     {topWeakSubjects.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">Complete a few tests to see which subjects need work.</p>
+                                        <p className="text-sm text-muted-foreground">Complete a few mock tests to calculate weak subjects details.</p>
                                     ) : (
                                         <div className="space-y-4">
                                             {topWeakSubjects.map((subject, i) => (
                                                 <div key={i}>
                                                     <div className="flex items-center justify-between mb-1.5">
-                                                        <p className="text-sm font-medium text-foreground">{subject.subject}</p>
-                                                        <p className="text-xs text-muted-foreground">{subject.accuracy}%</p>
+                                                        <p className="text-sm font-semibold text-foreground">{subject.subject}</p>
+                                                        <p className="text-xs font-bold text-muted-foreground">{subject.accuracy}%</p>
                                                     </div>
                                                     <Progress value={subject.accuracy} className="h-2" />
                                                 </div>
@@ -538,105 +684,19 @@ export default function DashboardPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* Question Bank Progress */}
-                            <Card className="shadow-sm">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
-                                        Question Bank Progress
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="rounded-xl bg-cyan-50 dark:bg-cyan-900/15 border border-cyan-200/70 dark:border-cyan-500/30 p-3 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-300 tracking-wider">Overall QBank Solved</p>
-                                            <p className="text-2xl font-black text-foreground mt-1">
-                                                {stats?.total_solved || 0} <span className="text-sm font-semibold text-muted-foreground">/ {stats?.total || 1440}</span>
-                                            </p>
-                                        </div>
-                                        {stats?.total > 0 && (
-                                            <Badge className="bg-cyan-600 hover:bg-cyan-600 text-white font-bold text-xs py-1 px-2.5">
-                                                {Math.round((stats.total_solved / stats.total) * 100)}% Completed
-                                            </Badge>
-                                        )}
-                                    </div>
-
-                                    {/* Progress by Year */}
-                                    <div className="space-y-2.5">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {(stats?.by_year || [])
-                                                .filter((item: { year: number }) => item.year >= 2020 && item.year <= 2025)
-                                                .map((item: { year: number; count: number; solved: number }, idx: number) => {
-                                                    const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
-                                                    const isCompleted = item.solved === item.count && item.count > 0;
-                                                    return (
-                                                        <div key={idx} className="p-2 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between min-h-[64px]">
-                                                            <div className="flex justify-between items-center mb-1">
-                                                                <span className="text-xs font-extrabold text-foreground">{item.year}</span>
-                                                                <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
-                                                            </div>
-                                                            <Progress value={pct} className="h-1.5" />
-                                                            <div className="flex justify-between items-center mt-1">
-                                                                <span className="text-[9px] font-bold text-muted-foreground">{pct}% solved</span>
-                                                                {isCompleted && (
-                                                                    <span className="text-[9px] text-emerald-500 font-extrabold flex items-center gap-0.5 animate-bounce">
-                                                                        Done! 🎉
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                        </div>
-                                    </div>
-
-                                    {/* Progress by Subject */}
-                                    <div className="space-y-3">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
-                                        {(stats?.by_subject || []).slice(0, 5).map((item: { name: string; count: number; solved: number }, idx: number) => {
-                                            const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
-                                            return (
-                                                <div key={idx} className="space-y-1">
-                                                    <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-foreground font-medium">{item.name}</span>
-                                                        <span className="text-muted-foreground font-semibold">{item.solved} / {item.count} ({pct}%)</span>
-                                                    </div>
-                                                    <Progress value={pct} className="h-1.5" />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Difficulty Levels */}
-                                    <div className="space-y-2 pt-1">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Difficulty Levels</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
-                                                const pct = d.count > 0 ? Math.round((d.solved / d.count) * 100) : 0;
-                                                return (
-                                                    <Badge key={idx} variant="outline" className="capitalize text-[10px] py-1 px-2">
-                                                        {d.difficulty}: {d.solved}/{d.count} ({pct}%)
-                                                    </Badge>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="shadow-sm border-border">
+                            {/* Campus Momentum (Peer Leaderboard details) */}
+                            <Card className="shadow-sm border-border text-left">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <CustomIcon name="medical-stethoscope" label="Community" className="w-4 h-4" variant="active" />
-                                        Community
+                                        National Campus Momentum
                                     </CardTitle>
                                     <CardDescription>
-                                        Join thousands preparing with CrackCMS.
+                                        Live streaks and questions solved by peers.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <Badge className="bg-sky-600 text-white hover:bg-sky-600">2,900+ active this week</Badge>
+                                    <Badge className="bg-sky-600 text-white hover:bg-sky-600 py-1 px-2.5 font-bold">2,900+ active aspirants this week</Badge>
                                     {CAMPUS_MOMENTUM.map((student) => (
                                         <div key={student.name} className="rounded-xl border border-border p-3">
                                             <p className="text-sm font-semibold text-foreground">{student.name}</p>
@@ -650,20 +710,20 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Streak Footer */}
-                    <Card className="shadow-sm border-border">
+                    <Card className="shadow-sm border-border text-left">
                         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                                <Flame className="w-5 h-5 text-amber-500" />
+                                <Flame className="w-5 h-5 text-amber-500 animate-bounce" />
                                 <div>
-                                    <p className="text-sm font-semibold text-foreground">Your Streak Stats</p>
+                                    <p className="text-sm font-semibold text-foreground">Your Active Streak Stats</p>
                                     <p className="text-xs text-muted-foreground">
-                                        Best: {streak?.longest_streak || 0} days • Total study days: {streak?.total_study_days || 0}
+                                        Longest: {streak?.longest_streak || 0} days • Total study days: {streak?.total_study_days || 0}
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 text-xs">
-                                <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                <span className="text-muted-foreground">Practice daily to keep your streak alive</span>
+                            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                <span>Practice at least 1 question daily to protect your study streak</span>
                             </div>
                         </CardContent>
                     </Card>

@@ -200,8 +200,44 @@ class SubscribeView(APIView):
         })
 
 
+class VerifyScholarshipView(APIView):
+    """Verify scholarship test answers and mark user profile as eligible for promo pricing."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        answers = request.data.get('answers', {})
+        if not answers or len(answers) < 5:
+            return Response({"error": "Invalid test submission. Must submit 5 answers."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        correct_count = 0
+        from questions.models import Question
+        for q_id, selected_opt in answers.items():
+            try:
+                question = Question.objects.get(id=int(q_id))
+                if question.correct_answer.upper() == str(selected_opt).upper():
+                    correct_count += 1
+            except (Question.DoesNotExist, ValueError):
+                pass
+
+        if correct_count == 5:
+            user = request.user
+            user.scholarship_test_passed = True
+            user.save(update_fields=['scholarship_test_passed'])
+            return Response({
+                "status": "passed",
+                "score": 5,
+                "message": "Congratulations! You scored 100% and unlocked the ₹79 special offer!"
+            })
+        else:
+            return Response({
+                "status": "failed",
+                "score": correct_count,
+                "message": f"You scored {correct_count}/5. You need 5/5 to unlock the ₹79 rate. Try again!"
+            })
+
+
 class SubscribeOrderView(APIView):
-    """Create a Razorpay order for ₹199 Premium Plan."""
+    """Create a Razorpay order for dynamic pricing plans."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -211,12 +247,40 @@ class SubscribeOrderView(APIView):
         if not key_id or not key_secret:
             return Response({'error': 'Razorpay is not configured on the server. Please add razorpayliveapi and razorpaylivekeysecret to .env'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        plan = request.data.get('plan', 'legacy')
+        user = request.user
+
+        # Plan routing & amount lookup
+        if plan == '1_year':
+            amount_paise = 199900
+            amount_rs = 1999.00
+            description = 'CrackLabs Premium 1 Year Plan'
+        elif plan == '3_months':
+            amount_paise = 44900
+            amount_rs = 449.00
+            description = 'CrackLabs Premium 3 Months Plan'
+        elif plan == '1_month':
+            amount_paise = 12900
+            amount_rs = 129.00
+            description = 'CrackLabs Premium 1 Month Plan'
+        elif plan == 'scholarship_1_month':
+            if not user.scholarship_test_passed:
+                return Response({'error': 'You are not eligible for the scholarship rate. Please complete the scholarship test first.'}, status=status.HTTP_403_FORBIDDEN)
+            amount_paise = 7900
+            amount_rs = 79.00
+            description = 'CrackLabs Premium 1 Month (Scholarship Special) Plan'
+        else:
+            # Fallback legacy early bird pass
+            amount_paise = 19900
+            amount_rs = 199.00
+            description = 'CrackLabs Premium Early Bird Plan'
+
         import razorpay
         client = razorpay.Client(auth=(key_id, key_secret))
         
         try:
             order_data = {
-                'amount': 19900,  # 199 INR in paise
+                'amount': amount_paise,
                 'currency': 'INR',
                 'payment_capture': '1'
             }
@@ -225,9 +289,9 @@ class SubscribeOrderView(APIView):
             # Record payment attempt
             from accounts.models import PaymentAttempt
             PaymentAttempt.objects.create(
-                user=request.user,
+                user=user,
                 razorpay_order_id=order['id'],
-                amount=199.00,
+                amount=amount_rs,
                 status='initiated'
             )
             
@@ -235,16 +299,15 @@ class SubscribeOrderView(APIView):
             try:
                 from django.core.mail import send_mail
                 from django.conf import settings as django_settings
-                subject = "⚠️ Complete your CrackLabs Premium Membership Checkout"
+                subject = f"⚠️ Complete your {description} Checkout"
                 message = (
-                    f"Dear Dr. {request.user.first_name or request.user.username},\n\n"
-                    f"We noticed that you initiated the checkout for our ₹199 Early Bird Premium Pass but haven't completed it yet.\n\n"
+                    f"Dear Dr. {user.first_name or user.username},\n\n"
+                    f"We noticed that you initiated the checkout for our {description} (₹{amount_rs}) but haven't completed it yet.\n\n"
                     f"Here is what you are missing out on:\n"
                     f"- Unlimited AI Tutor usage (no token limits)\n"
                     f"- Top-Teacher curated handwritten study sheets\n"
                     f"- Direct doubt clearance portal with renowned CMS faculty\n"
-                    f"- Complete UPSC CMS PYQ bank (2018-2025)\n\n"
-                    f"This extremely low price of ₹199 (normally ₹10,000) is only active for the launch phase. "
+                    f"- Complete UPSC CMS & NEET PG PYQ bank (2018-2025)\n\n"
                     f"Please complete your subscription payment on your dashboard to claim your premium membership.\n\n"
                     f"If you experienced any issues during payment, please reply directly to this email.\n\n"
                     f"Best regards,\n"
@@ -255,7 +318,7 @@ class SubscribeOrderView(APIView):
                     subject=subject,
                     message=message,
                     from_email=django_settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[request.user.email],
+                    recipient_list=[user.email],
                     fail_silently=True,
                 )
             except Exception:
@@ -316,11 +379,13 @@ class SubscribeVerifyView(APIView):
 
         # Mark attempt as successful
         from accounts.models import PaymentAttempt
+        price_paid = 199.00
         try:
             attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
             attempt.razorpay_payment_id = payment_id
             attempt.status = 'successful'
             attempt.save()
+            price_paid = float(attempt.amount)
         except PaymentAttempt.DoesNotExist:
             PaymentAttempt.objects.create(
                 user=user,
@@ -335,8 +400,8 @@ class SubscribeVerifyView(APIView):
             user=user,
             transaction_type="purchase",
             amount=0,
-            price_paid=199.00,
-            note=f"Razorpay Premium: order={order_id}, payment={payment_id}"
+            price_paid=price_paid,
+            note=f"Razorpay Premium (₹{price_paid}): order={order_id}, payment={payment_id}"
         )
 
         # Send customized successful payment / membership email

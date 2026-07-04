@@ -29,11 +29,13 @@ class Command(BaseCommand):
         parser.add_argument('--file', type=str, required=True, help='Path to a text file containing the questions')
         parser.add_argument('--year', type=int, default=2024, help='Year of the exam')
         parser.add_argument('--paper', type=int, default=1, help='Paper number (1 or 2)')
+        parser.add_argument('--exam-source', type=str, default='UPSC CMS', help='Exam source (e.g. UPSC CMS, NEET PG)')
 
     def handle(self, *args, **options):
         file_path = options['file']
         year = options['year']
         paper = options['paper']
+        exam_source = options['exam_source']
 
         if not os.path.exists(file_path):
             self.stderr.write(self.style.ERROR(f'File not found: {file_path}'))
@@ -46,9 +48,9 @@ class Command(BaseCommand):
         questions = self.detect_questions(text)
         
         self.stdout.write(self.style.SUCCESS(f'Detected {len(questions)} questions. Saving to database...'))
-        saved = self.save_questions(questions, year, paper, os.path.basename(file_path))
+        saved = self.save_questions(questions, year, paper, os.path.basename(file_path), exam_source)
         self.stdout.write(self.style.SUCCESS(f'Successfully imported {saved} questions!'))
-            
+             
     def detect_questions(self, text):
         questions = []
         for pattern in QUESTION_PATTERNS:
@@ -83,7 +85,7 @@ class Command(BaseCommand):
                 break
         return options
         
-    def save_questions(self, questions, year, paper, source_file):
+    def save_questions(self, questions, year, paper, source_file, exam_source):
         saved = 0
         subject = Subject.objects.first()
         for q in questions:
@@ -105,6 +107,7 @@ class Command(BaseCommand):
                         year=year,
                         paper=paper,
                         difficulty="medium",
+                        exam_source=exam_source,
                         source=f"TEXT_IMPORT_{source_file}"
                     )
                     saved += 1
