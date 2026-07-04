@@ -308,7 +308,8 @@ export default function SubscriptionPage() {
             ],
             badge: 'Popular',
             cta: 'Unlock 3 Months Access',
-            action: () => handleSubscribe('3_months')
+            action: () => handleSubscribe('3_months'),
+            scholarshipPromo: false
         },
         {
             id: '1_year',
@@ -327,7 +328,8 @@ export default function SubscriptionPage() {
             ],
             badge: 'Best Value',
             cta: 'Claim Full VIP Pass',
-            action: () => handleSubscribe('1_year')
+            action: () => handleSubscribe('1_year'),
+            scholarshipPromo: false
         }
     ];
 
