@@ -541,7 +541,7 @@ export default function DashboardPage() {
                                         <p className="text-sm text-muted-foreground">Complete a few mock tests to calculate weak subjects details.</p>
                                     ) : (
                                         <div className="space-y-4">
-                                            {topWeakSubjects.map((subject, i) => (
+                                            {topWeakSubjects.map((subject: any, i: number) => (
                                                 <div key={i}>
                                                     <div className="flex items-center justify-between mb-1.5">
                                                         <p className="text-sm font-semibold text-foreground">{subject.subject}</p>
@@ -618,14 +618,14 @@ export default function DashboardPage() {
                                     <p className="text-2xl font-black text-foreground mt-2">
                                         {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || 1440}</span>
                                     </p>
-                                    {stats?.total > 0 && (
+                                    {stats?.total && stats?.total > 0 ? (
                                         <div className="mt-3">
-                                            <Progress value={Math.round((stats.total_solved / stats.total) * 100)} className="h-1.5 bg-cyan-200/40" />
+                                            <Progress value={Math.round(((stats?.total_solved || 0) / (stats?.total || 1)) * 100)} className="h-1.5 bg-cyan-200/40" />
                                             <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 mt-1.5 block">
-                                                {Math.round((stats.total_solved / stats.total) * 100)}% Completed
+                                                {Math.round(((stats?.total_solved || 0) / (stats?.total || 1)) * 100)}% Completed
                                             </span>
                                         </div>
-                                    )}
+                                    ) : null}
                                 </div>
 
                                 {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
