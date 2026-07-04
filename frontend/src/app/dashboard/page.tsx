@@ -520,138 +520,9 @@ export default function DashboardPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* QUESTION BANK PROGRESS (Moved to left main column, horizontal layout to balance heights) */}
-                            <Card className="shadow-sm border-border text-left">
-                                <CardHeader className="pb-4">
-                                    <div className="flex justify-between items-center gap-3 flex-wrap">
-                                        <div className="space-y-1">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                                <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
-                                                Question Bank Mastery Progress
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Track solved question rates and completion by subjects.
-                                            </CardDescription>
-                                        </div>
-                                        {/* Exam Stats Toggle */}
-                                        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-1 border border-border shrink-0">
-                                            <button
-                                                onClick={() => setSelectedExam('UPSC CMS')}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'UPSC CMS' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                                            >
-                                                UPSC CMS
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedExam('NEET PG')}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'NEET PG' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                                            >
-                                                NEET PG
-                                            </button>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    {/* Overall strip + Difficulty strip */}
-                                    <div className="grid md:grid-cols-3 gap-4">
-                                        <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-200/50 dark:border-cyan-800/30 flex flex-col justify-between">
-                                            <div>
-                                                <span className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-400 tracking-wider">Overall Solved</span>
-                                                <p className="text-2xl font-black text-foreground mt-2">
-                                                    {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || 1440}</span>
-                                                </p>
-                                            </div>
-                                            {stats?.total > 0 && (
-                                                <div className="mt-3">
-                                                    <Progress value={Math.round((stats.total_solved / stats.total) * 100)} className="h-1.5 bg-cyan-200/40" />
-                                                    <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 mt-1.5 block">
-                                                        {Math.round((stats.total_solved / stats.total) * 100)}% Completed
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="md:col-span-2 p-4 rounded-2xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between">
-                                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">Difficulty Levels Breakdown</span>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
-                                                    const pct = d.count > 0 ? Math.round((d.solved / d.count) * 100) : 0;
-                                                    const colorMap: Record<string, string> = {
-                                                        easy: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15',
-                                                        medium: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/15',
-                                                        hard: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/15'
-                                                    };
-                                                    const colorClass = colorMap[d.difficulty] || 'bg-muted';
-                                                    return (
-                                                        <div key={idx} className={`p-2.5 rounded-xl border flex flex-col justify-between ${colorClass}`}>
-                                                            <div>
-                                                                <span className="text-[10px] font-bold capitalize block">{d.difficulty}</span>
-                                                                <span className="text-base font-extrabold block mt-1">{d.solved}/{d.count}</span>
-                                                            </div>
-                                                            <span className="text-[9px] font-bold mt-1 opacity-80">{pct}% solved</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Progress by Year + Subjects */}
-                                    <div className="grid md:grid-cols-12 gap-6 pt-2">
-                                        {/* Progress by Year */}
-                                        <div className="md:col-span-5 space-y-3">
-                                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {(stats?.by_year || [])
-                                                    .slice(0, 4) // Show top 4 years
-                                                    .map((item: { year: number; count: number; solved: number }, idx: number) => {
-                                                        const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
-                                                        const isCompleted = item.solved === item.count && item.count > 0;
-                                                        return (
-                                                            <div key={idx} className="p-2.5 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 flex flex-col justify-between min-h-[64px]">
-                                                                <div className="flex justify-between items-center mb-1">
-                                                                    <span className="text-xs font-extrabold text-foreground">{item.year}</span>
-                                                                    <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
-                                                                </div>
-                                                                <Progress value={pct} className="h-1.5" />
-                                                                <div className="flex justify-between items-center mt-1">
-                                                                    <span className="text-[9px] font-bold text-muted-foreground">{pct}% solved</span>
-                                                                    {isCompleted && (
-                                                                        <span className="text-[9px] text-emerald-500 font-extrabold flex items-center gap-0.5 animate-bounce">
-                                                                            Done! 🎉
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                            </div>
-                                        </div>
-
-                                        {/* Progress by Subject */}
-                                        <div className="md:col-span-7 space-y-3">
-                                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
-                                            <div className="grid sm:grid-cols-2 gap-3.5">
-                                                {(stats?.by_subject || []).slice(0, 4).map((item: { name: string; count: number; solved: number }, idx: number) => {
-                                                    const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
-                                                    return (
-                                                        <div key={idx} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2 rounded-xl border border-border/40">
-                                                            <div className="flex items-center justify-between text-xs">
-                                                                <span className="text-foreground font-semibold truncate max-w-[120px]">{item.name}</span>
-                                                                <span className="text-muted-foreground text-[10px] shrink-0 font-bold">{item.solved} / {item.count} ({pct}%)</span>
-                                                            </div>
-                                                            <Progress value={pct} className="h-1.5 bg-slate-200/50" />
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
                         </div>
 
-                        {/* Right Rail Column (Shorter widgets, perfectly balanced) */}
+                        {/* Right Rail Column */}
                         <div className="lg:col-span-4 space-y-6">
                             
                             {/* Weak Subjects */}
@@ -708,6 +579,124 @@ export default function DashboardPage() {
                             </Card>
                         </div>
                     </div>
+
+                    {/* QUESTION BANK PROGRESS — Full-width section for balanced layout */}
+                    <Card className="shadow-sm border-border text-left">
+                        <CardHeader className="pb-4">
+                            <div className="flex justify-between items-center gap-3 flex-wrap">
+                                <div className="space-y-1">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <CustomIcon name="trends-graph" label="Question Bank" className="w-4 h-4" variant="active" />
+                                        Question Bank Mastery Progress
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Track solved question rates and completion by subjects.
+                                    </CardDescription>
+                                </div>
+                                {/* Exam Stats Toggle */}
+                                <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-1 border border-border shrink-0">
+                                    <button
+                                        onClick={() => setSelectedExam('UPSC CMS')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'UPSC CMS' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        UPSC CMS
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedExam('NEET PG')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedExam === 'NEET PG' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        NEET PG
+                                    </button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                            {/* Overall + Difficulty — horizontal strip */}
+                            <div className="grid md:grid-cols-4 gap-4">
+                                <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-200/50 dark:border-cyan-800/30">
+                                    <span className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-400 tracking-wider">Overall Solved</span>
+                                    <p className="text-2xl font-black text-foreground mt-2">
+                                        {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || 1440}</span>
+                                    </p>
+                                    {stats?.total > 0 && (
+                                        <div className="mt-3">
+                                            <Progress value={Math.round((stats.total_solved / stats.total) * 100)} className="h-1.5 bg-cyan-200/40" />
+                                            <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 mt-1.5 block">
+                                                {Math.round((stats.total_solved / stats.total) * 100)}% Completed
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {(stats?.by_difficulty || []).map((d: { difficulty: string; count: number; solved: number }, idx: number) => {
+                                    const pct = d.count > 0 ? Math.round((d.solved / d.count) * 100) : 0;
+                                    const colorMap: Record<string, string> = {
+                                        easy: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15',
+                                        medium: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/15',
+                                        hard: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/15'
+                                    };
+                                    const colorClass = colorMap[d.difficulty] || 'bg-muted';
+                                    return (
+                                        <div key={idx} className={`p-4 rounded-2xl border ${colorClass}`}>
+                                            <span className="text-[10px] font-bold capitalize block">{d.difficulty}</span>
+                                            <span className="text-xl font-extrabold block mt-1">{d.solved}/{d.count}</span>
+                                            <span className="text-[9px] font-bold mt-1 opacity-80 block">{pct}% solved</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Progress by Year + Subjects — horizontal */}
+                            <div className="grid md:grid-cols-2 gap-6">
+                                {/* Progress by Year */}
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        {(stats?.by_year || [])
+                                            .slice(0, 4)
+                                            .map((item: { year: number; count: number; solved: number }, idx: number) => {
+                                                const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                                const isCompleted = item.solved === item.count && item.count > 0;
+                                                return (
+                                                    <div key={idx} className="p-2.5 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-xs font-extrabold text-foreground">{item.year}</span>
+                                                            <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
+                                                        </div>
+                                                        <Progress value={pct} className="h-1.5" />
+                                                        <div className="flex justify-between items-center mt-1">
+                                                            <span className="text-[9px] font-bold text-muted-foreground">{pct}%</span>
+                                                            {isCompleted && (
+                                                                <span className="text-[9px] text-emerald-500 font-extrabold">Done! 🎉</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
+
+                                {/* Progress by Subject */}
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        {(stats?.by_subject || []).slice(0, 4).map((item: { name: string; count: number; solved: number }, idx: number) => {
+                                            const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                            return (
+                                                <div key={idx} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2.5 rounded-xl border border-border/40">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-foreground font-semibold truncate max-w-[140px]">{item.name}</span>
+                                                        <span className="text-muted-foreground text-[10px] shrink-0 font-bold">{item.solved}/{item.count} ({pct}%)</span>
+                                                    </div>
+                                                    <Progress value={pct} className="h-1.5 bg-slate-200/50" />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Streak Footer */}
                     <Card className="shadow-sm border-border text-left">
