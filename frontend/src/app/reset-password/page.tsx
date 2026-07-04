@@ -35,7 +35,7 @@ function ResetPasswordForm() {
         try {
             // Supabase implicitly creates a session when the user clicks the reset link.
             // We just need to update the user's password.
-            const { getSupabaseBrowserClient } = await import('@/lib/auth');
+            const { getSupabaseBrowserClient } = await import('@/lib/supabase');
             const supabase = getSupabaseBrowserClient();
             if (!supabase) throw new Error('Supabase client not initialized');
 
