@@ -13,7 +13,7 @@ import { questionsAPI, aiAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
-  CheckCircle, Lightbulb, Target, X, BookMarked, ArrowLeft, Bookmark, Flag
+  CheckCircle, X, BookMarked, ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

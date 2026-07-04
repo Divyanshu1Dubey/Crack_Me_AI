@@ -6,8 +6,8 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI, questionsAPI } from '@/lib/api';
 import {
-    Crown, BookOpen, FileText, CheckCircle2, Clock, 
-    Sparkles, Users, MessageSquare, Zap, ShieldCheck,
+    Crown, BookOpen, FileText, Clock, 
+    Sparkles, MessageSquare, ShieldCheck,
     X, Check, AlertTriangle, Brain, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';

@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, Target, BookMarked, Lightbulb, CheckCircle, Zap, GraduationCap, ArrowRight, Flag } from 'lucide-react';
+import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import EngagingLoader from '@/components/EngagingLoader';

@@ -8,8 +8,8 @@ import Header from '@/components/Header';
 import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
-    Calendar, CheckCircle2, Clock, FileText, Flame,
-    HeartPulse, Crown, Brain, Sparkles, AlertTriangle
+    Calendar, CheckCircle, Clock, FileText, Flame,
+    HeartPulse, Crown, Brain, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -67,7 +67,7 @@ export default function DashboardPage() {
     // Dynamic SWR keys based on selected exam source
     const { data: stats } = useSWR(
         isAuthenticated ? ['question-stats', selectedExam] : null,
-        ([, exam]) => questionsAPI.getStats({ exam_source: exam }).then(r => r.data).catch(() => null),
+        () => questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null),
         swrConfig
     );
 
@@ -722,7 +722,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 <span>Practice at least 1 question daily to protect your study streak</span>
                             </div>
                         </CardContent>
