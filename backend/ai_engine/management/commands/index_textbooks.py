@@ -96,8 +96,8 @@ class Command(BaseCommand):
             try:
                 if test_mode:
                     # Only index first 10 pages
-                    from ai_engine.pdf_processor import PDFProcessor
-                    processor = PDFProcessor()
+                    from ai_engine.document_processor import DocumentProcessor
+                    processor = DocumentProcessor()
                     pages = processor.extract_text(pdf_path, end_page=10)
                     if pages:
                         self.stdout.write(f"  [TEST MODE] First {len(pages)} pages extracted")

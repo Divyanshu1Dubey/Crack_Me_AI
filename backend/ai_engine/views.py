@@ -442,7 +442,7 @@ class PageScreenshotView(APIView):
                             page_num = int(question.page_number) - 1
                             screenshot_dir = str(getattr(__import__('django.conf', fromlist=['settings']).settings, 'TEXTBOOK_SCREENSHOT_DIR', '/tmp'))
                             os.makedirs(screenshot_dir, exist_ok=True)
-                            output = PDFProcessor.extract_page_image(pdf_path, page_num, screenshot_dir)
+                            output = DocumentProcessor.extract_page_image(pdf_path, page_num, screenshot_dir)
                             if output:
                                 return Response({'screenshot_path': output})
                         except (ValueError, Exception) as e:
