@@ -321,6 +321,11 @@ if cors_frontend_url:
 CORS_ALLOWED_ORIGINS = cors_allowed_origins
 CORS_ALLOW_CREDENTIALS = True
 
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-session-id",
+]
+
 # CSRF trusted origins (needed for production)
 csrf_trusted_origins = _parse_origin_list(
     os.getenv(
