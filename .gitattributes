@@ -1,2 +1,5 @@
-*.pdf filter=lfs diff=lfs merge=lfs -text
+# Only use LFS for the massive textbooks (above 100MB) and sqlite database
+**/textbooks/*.pdf filter=lfs diff=lfs merge=lfs -text
+**/Ghai*Pediatrics*.pdf filter=lfs diff=lfs merge=lfs -text
+**/Nelson*Pediatrics*.pdf filter=lfs diff=lfs merge=lfs -text
 *.sqlite3 filter=lfs diff=lfs merge=lfs -text
