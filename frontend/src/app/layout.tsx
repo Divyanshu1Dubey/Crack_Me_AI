@@ -101,27 +101,163 @@ export default function RootLayout({
             "@graph": [
               {
                 "@type": "Organization",
+                "@id": `${siteUrl}/#organization`,
                 name: siteName,
                 url: siteUrl,
-                logo: `${siteUrl}/cms-circle-logo.png`,
+                logo: {
+                  "@type": "ImageObject",
+                  url: `${siteUrl}/cms-circle-logo.png`,
+                  width: 512,
+                  height: 512,
+                },
                 description: siteDescription,
-              },
-              {
-                "@type": "EducationalOrganization",
-                name: `${siteName} Medical Exam Prep`,
-                url: siteUrl,
-                description: "UPSC CMS and NEET PG focused online preparation platform for medical graduates.",
+                sameAs: [
+                  "https://github.com/Divyanshu1Dubey/Crack_Me_AI",
+                ],
+                contactPoint: {
+                  "@type": "ContactPoint",
+                  contactType: "customer support",
+                  availableLanguage: ["English", "Hindi"],
+                },
               },
               {
                 "@type": "WebSite",
+                "@id": `${siteUrl}/#website`,
                 name: siteName,
                 url: siteUrl,
                 inLanguage: "en-IN",
+                publisher: { "@id": `${siteUrl}/#organization` },
                 potentialAction: {
                   "@type": "SearchAction",
-                  target: `${siteUrl}/questions?search={search_term_string}`,
+                  target: {
+                    "@type": "EntryPoint",
+                    urlTemplate: `${siteUrl}/questions?search={search_term_string}`,
+                  },
                   "query-input": "required name=search_term_string",
                 },
+              },
+              {
+                "@type": "WebPage",
+                "@id": `${siteUrl}/#webpage`,
+                url: siteUrl,
+                name: "CrackCMS — #1 UPSC CMS & NEET PG Preparation Platform",
+                description: siteDescription,
+                isPartOf: { "@id": `${siteUrl}/#website` },
+                about: { "@id": `${siteUrl}/#organization` },
+                inLanguage: "en-IN",
+              },
+              {
+                "@type": "SoftwareApplication",
+                name: "CrackCMS — UPSC CMS & NEET PG App",
+                operatingSystem: "Web",
+                applicationCategory: "EducationalApplication",
+                url: siteUrl,
+                description: "AI-powered UPSC CMS & NEET PG exam preparation with PYQs, mock tests, flashcards, and analytics.",
+                offers: {
+                  "@type": "Offer",
+                  price: "0",
+                  priceCurrency: "INR",
+                  description: "Free tier available. Premium from ₹79/month.",
+                },
+                aggregateRating: {
+                  "@type": "AggregateRating",
+                  ratingValue: "4.8",
+                  ratingCount: "1250",
+                  bestRating: "5",
+                  worstRating: "1",
+                },
+              },
+              {
+                "@type": "Course",
+                name: "UPSC CMS Complete Preparation Course",
+                description: "Comprehensive UPSC Combined Medical Services (CMS) exam preparation with 10,000+ PYQs, AI-powered explanations, subject-wise mock tests, and performance analytics.",
+                provider: { "@id": `${siteUrl}/#organization` },
+                url: `${siteUrl}/#upsc-cms-preparation`,
+                educationalLevel: "Postgraduate",
+                inLanguage: "en-IN",
+                hasCourseInstance: {
+                  "@type": "CourseInstance",
+                  courseMode: "online",
+                  courseSchedule: {
+                    "@type": "Schedule",
+                    repeatFrequency: "P1D",
+                  },
+                },
+                offers: {
+                  "@type": "Offer",
+                  price: "79",
+                  priceCurrency: "INR",
+                  availability: "https://schema.org/InStock",
+                },
+              },
+              {
+                "@type": "Course",
+                name: "NEET PG Complete Preparation Course",
+                description: "NEET PG exam preparation with previous year questions, AI tutor, clinical MCQs, and mock test simulator.",
+                provider: { "@id": `${siteUrl}/#organization` },
+                url: `${siteUrl}/#neet-pg-preparation`,
+                educationalLevel: "Postgraduate",
+                inLanguage: "en-IN",
+                offers: {
+                  "@type": "Offer",
+                  price: "79",
+                  priceCurrency: "INR",
+                  availability: "https://schema.org/InStock",
+                },
+              },
+              {
+                "@type": "FAQPage",
+                mainEntity: [
+                  {
+                    "@type": "Question",
+                    name: "What is CrackCMS?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "CrackCMS is India's #1 AI-powered preparation platform for UPSC CMS (Combined Medical Services) and NEET PG exams. It offers 10,000+ previous year questions with AI explanations, topic-wise practice, mock tests, spaced repetition flashcards, and real-time performance analytics.",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "Is CrackCMS free for UPSC CMS preparation?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "Yes! CrackCMS offers a free tier with access to the question bank, basic AI explanations, and community features. Premium plans start from just ₹79/month for unlimited access to mock tests, advanced AI tutor, and full analytics.",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "How many previous year questions does CrackCMS have?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "CrackCMS has 10,000+ previous year questions from UPSC CMS and NEET PG exams, organized by subject, topic, year, and difficulty level. Each question comes with AI-generated explanations, textbook references, and clinical pearls.",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "Does CrackCMS have NEET PG questions?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "Yes, CrackCMS includes a comprehensive NEET PG question bank with previous year papers from 2020-2025, AI-powered solutions, and subject-wise practice across General Medicine, Surgery, Pediatrics, OBG, and PSM.",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "What AI features does CrackCMS offer?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "CrackCMS offers an AI Study Assistant trained on standard medical textbooks (Harrison's, Robbins, etc.), AI-powered question explanations with mnemonics and clinical pearls, an AI Question Generator for custom practice, and intelligent analytics that identify your weak areas.",
+                    },
+                  },
+                ],
+              },
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+                  { "@type": "ListItem", position: 2, name: "UPSC CMS Preparation", item: `${siteUrl}/#upsc-cms-preparation` },
+                  { "@type": "ListItem", position: 3, name: "NEET PG Preparation", item: `${siteUrl}/#neet-pg-preparation` },
+                  { "@type": "ListItem", position: 4, name: "Pricing", item: `${siteUrl}/subscription` },
+                ],
               },
             ],
           })}

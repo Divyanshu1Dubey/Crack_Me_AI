@@ -1,21 +1,28 @@
 {
-  "name": "CrackCMS",
+  "name": "CrackCMS — UPSC CMS & NEET PG Preparation",
   "short_name": "CrackCMS",
-  "description": "Doctor-first UPSC CMS preparation with PYQs, AI tutoring, analytics, and adaptive tests.",
+  "description": "India's #1 AI-powered UPSC CMS & NEET PG preparation platform. 10,000+ PYQs, mock tests, AI tutor, flashcards & analytics.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#e8f0fe",
+  "background_color": "#0f172a",
   "theme_color": "#1d4ed8",
+  "orientation": "portrait-primary",
+  "lang": "en-IN",
+  "categories": ["education", "medical", "productivity"],
   "icons": [
     {
       "src": "/cms-circle-logo.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/cms-circle-logo.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }
