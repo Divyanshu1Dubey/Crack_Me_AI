@@ -798,7 +798,7 @@ function QuestionsContent() {
                                         {/* DB Textbook Reference */}
                                         {detail.book_name && !aiExplanation?.textbook_reference?.book && (
                                             <div className="glass-card p-4 flex items-start gap-3">
-                                                <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
+                                                <Bookmark className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
                                                 <div>
                                                     <h5 className="text-xs font-bold mb-0.5" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h5>
                                                     <p className="text-sm font-semibold">{String(detail.book_name)} {detail.chapter ? `— Ch: ${String(detail.chapter)}` : ''} {detail.page_number ? `(pg ${String(detail.page_number)})` : ''}</p>
