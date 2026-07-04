@@ -6,4 +6,7 @@ pip install --no-cache-dir -r requirements.txt
 python manage.py collectstatic --no-input
 python manage.py migrate --no-input
 
+# Import dataset for NEET PG
+python manage.py import_neet_pg
+
 # build.sh is complete

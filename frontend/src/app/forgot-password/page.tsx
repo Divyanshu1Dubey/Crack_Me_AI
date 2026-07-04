@@ -6,9 +6,10 @@ import { ArrowLeft, Mail, MailCheck } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 export default function ForgotPasswordPage() {
+    const { resetPassword } = useAuth();
     const [email, setEmail] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -20,10 +21,10 @@ export default function ForgotPasswordPage() {
         setLoading(true);
         setError('');
         try {
-            await authAPI.requestPasswordReset({ email: email.trim() });
+            await resetPassword(email.trim());
             setSubmitted(true);
-        } catch {
-            setError('Something went wrong. Please try again.');
+        } catch (err: any) {
+            setError(err.message || 'Something went wrong. Please try again.');
         }
         setLoading(false);
     };

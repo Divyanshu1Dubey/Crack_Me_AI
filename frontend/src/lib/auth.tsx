@@ -39,6 +39,7 @@ interface AuthContextType {
     register: (data: Record<string, string>) => Promise<void>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    resetPassword: (email: string) => Promise<void>;
     isAuthenticated: boolean;
     isSupabaseAuth: boolean;
 }
@@ -319,7 +320,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 shouldCreateUser: false,
             },
         });
-        if (error) throw new Error(error.message || 'Unable to send magic link.');
+
+        if (error) throw new Error(error.message || 'Magic link failed');
+    };
+
+    const resetPassword = async (email: string) => {
+        if (!SUPABASE_AUTH_ENABLED) {
+            throw new Error('Password reset is available only when Supabase auth is enabled.');
+        }
+
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) {
+            throw new Error('Supabase auth is not configured.');
+        }
+
+        const normalizedEmail = email.trim();
+        if (!normalizedEmail.includes('@')) {
+            throw new Error('Enter a valid email address.');
+        }
+
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+            redirectTo: getAuthRedirectTo(),
+        });
+
+        if (error) throw new Error(error.message || 'Failed to send password reset email.');
     };
 
     const oauthLogin = async (provider: Provider) => {
@@ -397,6 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             register,
             logout,
             refreshProfile,
+            resetPassword,
             isAuthenticated: !!user,
             isSupabaseAuth: SUPABASE_AUTH_ENABLED,
         }}>

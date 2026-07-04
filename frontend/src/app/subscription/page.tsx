@@ -478,13 +478,20 @@ export default function SubscriptionPage() {
                                             <Crown className="w-4 h-4" /> Active Member
                                         </div>
                                     ) : (
-                                        <button
-                                            onClick={hasScholarshipDiscount ? () => handleSubscribe('scholarship_1_month') : plan.action}
-                                            disabled={subscribing}
-                                            className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
-                                        >
-                                            {subscribing ? 'Processing...' : (hasScholarshipDiscount ? 'Claim Scholarship Rate' : plan.cta)}
-                                        </button>
+                                        <div className="flex flex-col gap-1.5">
+                                            <button
+                                                onClick={hasScholarshipDiscount ? () => handleSubscribe('scholarship_1_month') : plan.action}
+                                                disabled={subscribing}
+                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
+                                            >
+                                                {subscribing ? 'Processing...' : (hasScholarshipDiscount ? 'Claim Scholarship Rate' : plan.cta)}
+                                            </button>
+                                            {plan.id === '1_month' && !hasScholarshipDiscount && (
+                                                <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">
+                                                    ✨ Get this at just ₹79 today!
+                                                </p>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );
