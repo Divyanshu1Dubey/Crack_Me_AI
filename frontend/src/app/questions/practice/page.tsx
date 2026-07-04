@@ -13,7 +13,7 @@ import { questionsAPI, aiAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
-  CheckCircle, X, BookMarked, ArrowLeft
+  CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -376,7 +376,7 @@ function PracticeContent() {
                                         )}
                                         {aiExplanation.textbook_reference && (
                                             <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/10"><CardContent className="p-4">
-                                                <h5 className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-2"><BookMarked className="w-3.5 h-3.5" /> Textbook Reference</h5>
+                                                <h5 className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-2"><Bookmark className="w-3.5 h-3.5" /> Textbook Reference</h5>
                                                 <div className="text-sm leading-relaxed"><ReactMarkdown>{String(aiExplanation.textbook_reference)}</ReactMarkdown></div>
                                             </CardContent></Card>
                                         )}

@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag } from 'lucide-react';
+import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag, Target, Zap, GraduationCap, Lightbulb } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import EngagingLoader from '@/components/EngagingLoader';
@@ -972,7 +972,7 @@ function QuestionsContent() {
                                                 <div className="grid grid-cols-1 gap-3">
                                                     {aiExplanation.textbook_reference?.book && (
                                                         <div className="glass-card p-4 flex items-start gap-2.5">
-                                                            <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
+                                                            <Bookmark className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
                                                             <div>
                                                                 <h6 className="text-xs font-bold mb-0.5" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
                                                                 <p className="text-xs font-semibold">{aiExplanation.textbook_reference.book}</p>
@@ -1067,7 +1067,7 @@ function QuestionsContent() {
                                                 }}
                                                 className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                                             >
-                                                <BookMarked className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                                <Bookmark className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                                                 <div className="text-left">
                                                     <span className="text-sm font-bold block text-indigo-700 dark:text-indigo-300">Find in Textbook</span>
                                                     <span className="text-xs text-muted-foreground">See which book, chapter & page covers this topic</span>
@@ -1084,7 +1084,7 @@ function QuestionsContent() {
                                             <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-950/10 dark:border-indigo-900/30">
                                                 <CardContent className="p-4 space-y-2">
                                                     <h5 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
-                                                        <BookMarked className="w-3.5 h-3.5" /> 📖 Textbook Reference
+                                                        <Bookmark className="w-3.5 h-3.5" /> 📖 Textbook Reference
                                                     </h5>
                                                     {textbookRef.book_name && <p className="text-sm font-semibold">{textbookRef.book_name}</p>}
                                                     {textbookRef.chapter && <p className="text-xs text-muted-foreground">Chapter: {textbookRef.chapter}</p>}
