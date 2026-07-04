@@ -13,8 +13,6 @@ import { authAPI } from '@/lib/api';
 function ResetPasswordForm() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const uid = searchParams.get('uid') || '';
-    const token = searchParams.get('token') || '';
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -32,32 +30,30 @@ function ResetPasswordForm() {
             setError('Passwords do not match.');
             return;
         }
-        if (!uid || !token) {
-            setError('Invalid reset link. Please request a new one.');
-            return;
-        }
+        
         setLoading(true);
         try {
-            await authAPI.confirmPasswordReset({ uid, token, new_password: password });
+            // Supabase implicitly creates a session when the user clicks the reset link.
+            // We just need to update the user's password.
+            const { getSupabaseBrowserClient } = await import('@/lib/auth');
+            const supabase = getSupabaseBrowserClient();
+            if (!supabase) throw new Error('Supabase client not initialized');
+
+            const { error: updateError } = await supabase.auth.updateUser({ password });
+            
+            if (updateError) {
+                throw new Error(updateError.message);
+            }
+            
             setSuccess(true);
             setTimeout(() => router.push('/login'), 3000);
-        } catch (err: unknown) {
-            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-            setError(msg || 'Reset link is invalid or expired. Please request a new one.');
+        } catch (err: any) {
+            setError(err.message || 'Reset link is invalid or expired. Please request a new one.');
         }
         setLoading(false);
     };
 
-    if (!uid || !token) {
-        return (
-            <div className="space-y-4 text-center">
-                <p className="text-sm text-destructive">Invalid reset link.</p>
-                <Button asChild variant="outline" className="rounded-2xl">
-                    <Link href="/forgot-password">Request New Reset Link</Link>
-                </Button>
-            </div>
-        );
-    }
+
 
     if (success) {
         return (
