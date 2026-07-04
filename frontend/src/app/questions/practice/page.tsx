@@ -377,7 +377,18 @@ function PracticeContent() {
                                         {aiExplanation.textbook_reference && (
                                             <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/10"><CardContent className="p-4">
                                                 <h5 className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-2"><Bookmark className="w-3.5 h-3.5" /> Textbook Reference</h5>
-                                                <div className="text-sm leading-relaxed"><ReactMarkdown>{String(aiExplanation.textbook_reference)}</ReactMarkdown></div>
+                                                <div className="text-sm leading-relaxed">
+                                                    {typeof aiExplanation.textbook_reference === 'string'
+                                                        ? <ReactMarkdown>{aiExplanation.textbook_reference}</ReactMarkdown>
+                                                        : (
+                                                            <div className="space-y-0.5">
+                                                                {aiExplanation.textbook_reference.book && <p className="font-semibold">{aiExplanation.textbook_reference.book}</p>}
+                                                                {aiExplanation.textbook_reference.chapter && <p className="text-muted-foreground">Ch: {aiExplanation.textbook_reference.chapter}</p>}
+                                                                {aiExplanation.textbook_reference.page && <p className="text-muted-foreground">Pg: {aiExplanation.textbook_reference.page}</p>}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
                                             </CardContent></Card>
                                         )}
                                         {aiExplanation.exam_tip && (

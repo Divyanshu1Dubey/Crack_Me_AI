@@ -52,15 +52,10 @@ class Command(BaseCommand):
         txt_path = os.path.join(base_dir, "pyq", "Neet-PG", "2025")
         pdf_path = os.path.join(base_dir, "pyq", "Neet-PG", "neet_pg_2020_question_paper_with_answer_key_pdfs_january_5questions.pdf")
 
-        # 1. Clean existing NEET PG questions to prevent duplicate pollution
-        self.stdout.write("Cleaning existing NEET PG questions...")
-        deleted_count, _ = Question.objects.filter(exam_source="NEET PG").delete()
-        self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_count} old NEET PG questions."))
-
         # Initialize subjects
         self._ensure_subjects()
 
-        # 2. Parse & Import 2025 Text questions (28 MCQs)
+        # 1. Parse 2025 Text questions (28 MCQs)
         self.stdout.write("\nParsing NEET PG 2025 text file...")
         parsed_2025 = []
         if os.path.exists(txt_path):
@@ -71,19 +66,36 @@ class Command(BaseCommand):
         else:
             self.stderr.write(f"NEET PG 2025 text file not found at: {txt_path}")
 
-        # 3. Parse & Import 2020 PDF questions (299 MCQs)
+        # 2. Parse 2020 PDF questions (299 MCQs)
         self.stdout.write("\nParsing NEET PG 2020 PDF file...")
         parsed_2020 = []
         if os.path.exists(pdf_path):
-            doc = fitz.open(pdf_path)
-            full_pdf_text = ""
-            for page in doc:
-                full_pdf_text += page.get_text() + "\n"
-            doc.close()
-            parsed_2020 = self._parse_2020_pdf(full_pdf_text)
-            self.stdout.write(self.style.SUCCESS(f"Parsed {len(parsed_2020)} questions from NEET PG 2020 PDF file."))
+            try:
+                doc = fitz.open(pdf_path)
+                full_pdf_text = ""
+                for page in doc:
+                    full_pdf_text += page.get_text() + "\n"
+                doc.close()
+                parsed_2020 = self._parse_2020_pdf(full_pdf_text)
+                self.stdout.write(self.style.SUCCESS(f"Parsed {len(parsed_2020)} questions from NEET PG 2020 PDF file."))
+            except Exception as e:
+                self.stderr.write(f"Error parsing PDF: {e}")
         else:
             self.stderr.write(f"NEET PG 2020 PDF file not found at: {pdf_path}")
+
+        total_parsed = len(parsed_2025) + len(parsed_2020)
+        if total_parsed == 0:
+            self.stdout.write(self.style.WARNING(
+                "No questions parsed from any source files. Skipping delete to preserve existing data."
+            ))
+            existing = Question.objects.filter(exam_source="NEET PG").count()
+            self.stdout.write(f"  • Existing NEET PG questions preserved: {existing}")
+            return
+
+        # 3. Only clean existing questions if we have new data to replace them
+        self.stdout.write("Cleaning existing NEET PG questions...")
+        deleted_count, _ = Question.objects.filter(exam_source="NEET PG").delete()
+        self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_count} old NEET PG questions."))
 
         # 4. Save to Database
         ai_service = AIService() if enrich else None

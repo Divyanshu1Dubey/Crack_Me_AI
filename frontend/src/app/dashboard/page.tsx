@@ -311,7 +311,7 @@ export default function DashboardPage() {
                     </Card>
 
                     {/* KPI Strip */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                         {[
                             { iconName: 'tests-check', value: overall.total_tests, label: 'Tests Completed', bg: 'bg-blue-100 dark:bg-blue-900/40' },
                             { iconName: 'question-bank-book', value: `${overall.total_questions}`, label: 'Questions Solved', bg: 'bg-blue-100 dark:bg-blue-900/40' },
@@ -319,12 +319,12 @@ export default function DashboardPage() {
                             { iconName: 'ai-questions-creativity', value: `${streak?.xp_points || 0}`, label: 'XP Points', bg: 'bg-blue-100 dark:bg-blue-900/40' },
                         ].map((metric, i) => (
                             <Card key={i} className="shadow-sm">
-                                <CardContent className="p-5">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${metric.bg}`}>
-                                        <CustomIcon name={metric.iconName} label={metric.label} className="w-5 h-5" variant="active" />
+                                <CardContent className="p-3 sm:p-5">
+                                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center mb-2 sm:mb-3 ${metric.bg}`}>
+                                        <CustomIcon name={metric.iconName} label={metric.label} className="w-4 h-4 sm:w-5 sm:h-5" variant="active" />
                                     </div>
-                                    <p className="text-2xl font-bold text-foreground leading-none">{metric.value}</p>
-                                    <p className="text-xs text-muted-foreground mt-2">{metric.label}</p>
+                                    <p className="text-lg sm:text-2xl font-bold text-foreground leading-none">{metric.value}</p>
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 sm:mt-2">{metric.label}</p>
                                 </CardContent>
                             </Card>
                         ))}
@@ -400,19 +400,19 @@ export default function DashboardPage() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-5">
-                                    <div className="grid sm:grid-cols-3 gap-3 text-left">
+                                    <div className="grid grid-cols-3 gap-2 sm:gap-3 text-left">
                                         {[
                                             { label: 'Questions Today', value: todayActivity.questions_attempted, icon: BookOpen },
                                             { label: 'Tests Today', value: todayActivity.tests_completed, icon: FileText },
                                             { label: 'Study Minutes', value: todayActivity.time_spent_minutes, icon: Clock },
                                         ].map((item, i) => (
-                                            <div key={i} className="rounded-xl bg-blue-600 dark:bg-blue-700 text-white p-4 shadow-xs relative overflow-hidden">
+                                            <div key={i} className="rounded-xl bg-blue-600 dark:bg-blue-700 text-white p-3 sm:p-4 shadow-xs relative overflow-hidden">
                                                 <div className="absolute -right-4 -bottom-4 h-16 w-16 rounded-full bg-white/10 blur-xl" />
-                                                <div className="flex items-center justify-between mb-3 relative z-10">
-                                                    <p className="text-xs text-blue-100 font-semibold">{item.label}</p>
-                                                    <item.icon className="w-4.5 h-4.5 text-blue-200" />
+                                                <div className="flex items-center justify-between mb-2 sm:mb-3 relative z-10">
+                                                    <p className="text-[10px] sm:text-xs text-blue-100 font-semibold">{item.label}</p>
+                                                    <item.icon className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 text-blue-200 hidden sm:block" />
                                                 </div>
-                                                <p className="text-2xl font-extrabold text-white relative z-10">{item.value}</p>
+                                                <p className="text-lg sm:text-2xl font-extrabold text-white relative z-10">{item.value}</p>
                                             </div>
                                         ))}
                                     </div>

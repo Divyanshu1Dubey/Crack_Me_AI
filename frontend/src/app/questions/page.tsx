@@ -566,24 +566,24 @@ function QuestionsContent() {
                         )}
 
                         {/* Filters Row */}
-                        <div className="grid grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto] gap-2 lg:gap-3 items-center pt-1">
+                        <div className="grid grid-cols-2 lg:grid-cols-[1fr_180px_130px_100px_100px] gap-2 lg:gap-3 items-center pt-1">
                             <div className="relative col-span-2 lg:col-span-1 min-w-0">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input className="pl-10 h-9 text-xs w-full" placeholder="Search questions..."
                                     value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                             </div>
-                            <select className="input-field h-9 text-xs px-2 w-full min-w-0 text-ellipsis" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+                            <select className="input-field h-9 text-xs px-2 w-full overflow-hidden" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
                                 <option value="">All Subjects</option>
                                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
                             </select>
-                            <select className="input-field h-9 text-xs px-2 w-full min-w-0 text-ellipsis" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
+                            <select className="input-field h-9 text-xs px-2 w-full" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
                                 <option value="">Difficulty</option>
                                 <option value="easy">Easy</option>
                                 <option value="medium">Medium</option>
                                 <option value="hard">Hard</option>
                             </select>
-                            <select className="input-field h-9 text-xs px-2 w-full min-w-0 text-ellipsis" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
+                            <select className="input-field h-9 text-xs px-2 w-full" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
                                 <option value="">Year</option>
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
