@@ -96,7 +96,11 @@ class QuestionAdminListSerializer(QuestionListSerializer):
     """Admin list serializer that exposes lock controls."""
 
     class Meta(QuestionListSerializer.Meta):
-        fields = QuestionListSerializer.Meta.fields + ['lock_answer', 'lock_explanation']
+        fields = QuestionListSerializer.Meta.fields + [
+            'correct_answer', 'explanation', 'paper', 
+            'lock_answer', 'lock_explanation', 
+            'admin_answer_override', 'admin_explanation_override'
+        ]
 
 
 class QuestionDetailSerializer(serializers.ModelSerializer):

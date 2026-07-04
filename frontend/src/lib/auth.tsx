@@ -55,6 +55,7 @@ const AuthContext = createContext<AuthContextType>({
     register: async () => undefined,
     logout: async () => undefined,
     refreshProfile: async () => undefined,
+    resetPassword: async () => undefined,
     isAuthenticated: false,
     isSupabaseAuth: false,
 });
