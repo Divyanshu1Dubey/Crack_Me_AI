@@ -294,7 +294,6 @@ export default function LandingPage() {
         }}
       />
       {/* Exam Countdown Banner */}
-      {/* Exam Countdown Banner */}
       <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
         <div className="text-xs font-extrabold uppercase tracking-widest text-yellow-300">
           Last Month Revision & Practice Platform
@@ -302,15 +301,11 @@ export default function LandingPage() {
         <div className="text-xs font-semibold flex flex-wrap justify-center items-center gap-x-6 gap-y-1">
           <div className="flex items-center gap-2">
             <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
-            <span>NEET PG: {Math.max(0, Math.ceil((new Date('2026-06-01').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
+            <span>NEET PG: {Math.max(0, Math.ceil((new Date('2026-08-30').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
           </div>
           <div className="flex items-center gap-2">
             <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
-            <span>UPSC CMS: {Math.max(0, Math.ceil((new Date('2026-07-19').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
-            <span>FMGE: {Math.max(0, Math.ceil((new Date('2026-07-06').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
+            <span>UPSC CMS: {Math.max(0, Math.ceil((new Date('2026-08-02').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
           </div>
         </div>
       </div>
