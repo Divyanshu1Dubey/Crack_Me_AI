@@ -70,7 +70,7 @@ def consume_ai_token(request):
         return True, None
 
     balance, _ = TokenBalance.objects.get_or_create(user=user)
-    if balance.consume_token():
+    if balance.consume_token(amount=10):
         return True, None
 
     return False, Response({
@@ -81,14 +81,14 @@ def consume_ai_token(request):
 
 
 def refund_ai_token(request):
-    """Refund 1 AI token if the AI call fails after token was consumed."""
+    """Refund AI tokens if the AI call fails after token was consumed."""
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated or user.is_admin:
         return
     try:
         balance = TokenBalance.objects.get(user=user)
-        balance.refund_token()
-        logger.info(f"Refunded 1 AI token for user {user.username}")
+        balance.refund_token(amount=10)
+        logger.info(f"Refunded 10 AI tokens for user {user.username}")
     except TokenBalance.DoesNotExist:
         pass
 

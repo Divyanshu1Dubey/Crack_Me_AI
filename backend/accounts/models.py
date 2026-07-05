@@ -52,7 +52,7 @@ class TokenBalance(models.Model):
     - Feedback reward: +2 tokens for correct feedback reports.
     """
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='token_balance')
-    purchased_tokens = models.IntegerField(default=0, help_text='Tokens bought by user (never expire)')
+    purchased_tokens = models.IntegerField(default=50, help_text='Tokens bought by user (never expire)')
     daily_tokens_used = models.IntegerField(default=0, help_text='Free tokens used today')
     weekly_tokens_used = models.IntegerField(default=0, help_text='Free tokens used this week')
     total_tokens_used = models.IntegerField(default=0, help_text='Lifetime tokens consumed')
@@ -104,59 +104,61 @@ class TokenBalance(models.Model):
         free_tokens = min(free_daily_remaining, free_weekly_remaining)
         return free_tokens + self.purchased_tokens + self.feedback_credits
 
-    def consume_token(self):
+    def consume_token(self, amount=1):
         """
-        Use 1 AI token. Returns True if successful, False if insufficient.
+        Use `amount` AI tokens. Returns True if successful, False if insufficient.
         Priority: free daily/weekly first, then feedback credits, then purchased.
         """
         self._reset_if_needed()
+        if self.available_tokens < amount:
+            return False
+
         config = TokenConfig.get_config()
+        tokens_to_deduct = amount
 
-        # Check free daily/weekly limits
-        if (self.daily_tokens_used < config.free_daily_tokens and
-                self.weekly_tokens_used < config.free_weekly_tokens):
-            self.daily_tokens_used += 1
-            self.weekly_tokens_used += 1
-            self.total_tokens_used += 1
-            self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
-            return True
+        # 1. Deduct from free daily/weekly
+        free_daily_remaining = max(0, config.free_daily_tokens - self.daily_tokens_used)
+        free_weekly_remaining = max(0, config.free_weekly_tokens - self.weekly_tokens_used)
+        free_available = min(free_daily_remaining, free_weekly_remaining)
+        
+        deduct_from_free = min(free_available, tokens_to_deduct)
+        if deduct_from_free > 0:
+            self.daily_tokens_used += deduct_from_free
+            self.weekly_tokens_used += deduct_from_free
+            tokens_to_deduct -= deduct_from_free
 
-        # Use feedback credits next
-        if self.feedback_credits > 0:
-            self.feedback_credits -= 1
-            self.total_tokens_used += 1
-            self.save(update_fields=['feedback_credits', 'total_tokens_used'])
-            return True
+        # 2. Deduct from feedback credits
+        if tokens_to_deduct > 0 and self.feedback_credits > 0:
+            deduct_from_feedback = min(self.feedback_credits, tokens_to_deduct)
+            self.feedback_credits -= deduct_from_feedback
+            tokens_to_deduct -= deduct_from_feedback
 
-        # Use purchased tokens last
-        if self.purchased_tokens > 0:
-            self.purchased_tokens -= 1
-            self.total_tokens_used += 1
-            self.save(update_fields=['purchased_tokens', 'total_tokens_used'])
-            return True
+        # 3. Deduct from purchased
+        if tokens_to_deduct > 0 and self.purchased_tokens > 0:
+            deduct_from_purchased = min(self.purchased_tokens, tokens_to_deduct)
+            self.purchased_tokens -= deduct_from_purchased
+            tokens_to_deduct -= deduct_from_purchased
 
-        return False  # No tokens available
+        self.total_tokens_used += amount
+        self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'feedback_credits', 'purchased_tokens', 'total_tokens_used'])
+        return True
 
     def add_purchased_tokens(self, amount):
         """Add purchased tokens to the user's balance."""
         self.purchased_tokens += amount
         self.save(update_fields=['purchased_tokens'])
 
-    def refund_token(self):
-        """Refund 1 token (used when AI call fails after token was consumed)."""
-        if self.total_tokens_used > 0:
-            self.total_tokens_used -= 1
-        # Refund in reverse priority: daily/weekly first, then feedback, then purchased
-        if self.daily_tokens_used > 0 and self.weekly_tokens_used > 0:
-            self.daily_tokens_used -= 1
-            self.weekly_tokens_used -= 1
-            self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
-        elif self.feedback_credits > 0:
-            self.feedback_credits += 1
-            self.save(update_fields=['feedback_credits', 'total_tokens_used'])
+    def refund_token(self, amount=1):
+        """Refund tokens (used when AI call fails after token was consumed)."""
+        if self.total_tokens_used >= amount:
+            self.total_tokens_used -= amount
         else:
-            self.purchased_tokens += 1
-            self.save(update_fields=['purchased_tokens', 'total_tokens_used'])
+            self.total_tokens_used = 0
+            
+        # Simplistic refund: just refund as daily/weekly if possible
+        self.daily_tokens_used = max(0, self.daily_tokens_used - amount)
+        self.weekly_tokens_used = max(0, self.weekly_tokens_used - amount)
+        self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
 
     def add_feedback_credit(self, amount=2):
         """Reward user for accepted feedback (default: +2 tokens)."""

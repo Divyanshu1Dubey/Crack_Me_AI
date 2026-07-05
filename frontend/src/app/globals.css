@@ -101,6 +101,10 @@
   border-color: var(--color-border);
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
@@ -108,6 +112,7 @@ body {
   min-height: 100vh;
   background-image: var(--hero-orb);
   background-attachment: scroll;
+  overflow-x: hidden;
 }
 
 .skip-link {

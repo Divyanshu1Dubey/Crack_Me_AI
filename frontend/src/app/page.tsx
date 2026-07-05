@@ -30,7 +30,8 @@ import {
   ArrowRight,
   HelpCircle,
   Crown,
-  Loader2
+  Loader2,
+  Star
 } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
@@ -292,6 +293,27 @@ export default function LandingPage() {
           }),
         }}
       />
+      {/* Exam Countdown Banner */}
+      {/* Exam Countdown Banner */}
+      <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
+        <div className="text-xs font-extrabold uppercase tracking-widest text-yellow-300">
+          Last Month Revision & Practice Platform
+        </div>
+        <div className="text-xs font-semibold flex flex-wrap justify-center items-center gap-x-6 gap-y-1">
+          <div className="flex items-center gap-2">
+            <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+            <span>NEET PG: {Math.max(0, Math.ceil((new Date('2026-06-01').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+            <span>UPSC CMS: {Math.max(0, Math.ceil((new Date('2026-07-19').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Star className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+            <span>FMGE: {Math.max(0, Math.ceil((new Date('2026-07-06').getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days Left</span>
+          </div>
+        </div>
+      </div>
 
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-all">
@@ -354,13 +376,12 @@ export default function LandingPage() {
               {/* Title, Description & CTAs */}
               <div className="space-y-4 flex-1">
                 <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
-                  A Modern UPSC CMS System for
-                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400"> Doctor-Led AI Preparation</span>
+                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400">AI Powered</span> UPSC CMS Platform
                 </h1>
                 
                 <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground text-left">
                   Build daily clinical consistency with an integrated medical prep operating system. 
-                  Equipped with a smart question bank, RAG-grounded AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
+                  Equipped with a smart question bank, AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
                 </p>
 
                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
@@ -392,160 +413,6 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-
-          {/* "Campus Momentum" Dashboard */}
-          <div className="relative group w-full pt-4">
-            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
-            <div className="rounded-[2.5rem] border border-border/80 bg-card p-6 md:p-10 shadow-xl space-y-6 relative overflow-hidden">
-              <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
-              
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 pb-5">
-                <div className="space-y-1 text-left">
-                  <h3 className="font-display text-xl font-extrabold text-foreground">Campus Momentum</h3>
-                  <p className="text-xs text-muted-foreground">Students and residents from leading medical institutions prep here.</p>
-                </div>
-                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 px-4 py-1.5 rounded-full font-bold shadow-sm shadow-emerald-600/10">
-                  2,900+ active this week
-                </Badge>
-              </div>
-
-              {/* Scrolling ticker visual replacement */}
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-                {campuses.map((campus) => (
-                  <div 
-                    key={campus} 
-                    className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs font-semibold text-center text-foreground hover:bg-muted/40 transition-colors"
-                  >
-                    {campus}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-2">
-                {communityProfiles.map((profile) => (
-                  <div key={profile.name} className="rounded-2xl border border-border/50 bg-muted/15 p-4 space-y-1.5 relative hover:border-primary/35 transition-all text-left">
-                    <span className="absolute top-4 right-4 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                      {profile.badge}
-                    </span>
-                    <p className="text-sm font-extrabold text-foreground">{profile.name}</p>
-                    <p className="text-xs text-muted-foreground">{profile.college}</p>
-                    <p className="pt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {profile.progress}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* "System Cockpit Live" Dashboard */}
-          <div className="space-y-6 pt-10">
-            <div className="text-center space-y-2">
-              <h2 className="font-display text-2xl font-extrabold text-foreground tracking-tight">
-                Personalized Study Cockpit
-              </h2>
-              <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-                Track high-yield progress, streak targets, and score estimations.
-              </p>
-            </div>
-
-            <div className="relative group max-w-3xl mx-auto w-full">
-              <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
-              <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
-              {/* Header bar of the widget */}
-              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-red-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-amber-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
-                </div>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-wider uppercase">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  SYSTEM COCKPIT LIVE
-                </div>
-              </div>
-
-              <CardContent className="p-6 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                      <Stethoscope className="h-5 w-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground">
-                        {isAuthenticated && user ? (user.first_name ? `${user.first_name} ${user.last_name || ''}` : user.username) : "Dr. Sarah Jenkins"}
-                      </h3>
-                      <p className="text-[11px] text-muted-foreground">
-                        {isAuthenticated && user ? (user.college || "Medical Specialist Track") : "General Medicine Specialist Track"}
-                      </p>
-                    </div>
-                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">
-                      {isAuthenticated && user ? (user.is_subscribed ? "Premium Member" : "Aspirant") : "Aspirant"}
-                    </Badge>
-                  </div>
-
-                  <div className="flex gap-4">
-                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
-                      <Flame className="h-4 w-4 text-orange-500" />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
-                        <p className="text-xs font-extrabold">
-                          {isAuthenticated && user ? "1 Day" : "12 Days"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
-                      <Award className="h-4 w-4 text-amber-500" />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
-                        <p className="text-xs font-extrabold">
-                          {isAuthenticated && user ? "74.5%" : "68.5%"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5 bg-muted/30 p-4 rounded-2xl border border-border/50">
-                  <div className="flex justify-between text-xs font-bold text-foreground">
-                    <span>Clinical Prep Progress</span>
-                    <span className="text-blue-600 dark:text-blue-400">74% Target</span>
-                  </div>
-                  <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-        {/* Stats Strip */}
-        <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50 max-w-5xl mx-auto w-full">
-          {stats.map((stat, i) => (
-            <div key={i} className="flex flex-col items-center text-center p-3 hover:translate-y-[-2px] transition-transform">
-              <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center mb-3">
-                <stat.icon className="h-5 w-5 text-primary" />
-              </div>
-              <span className="text-3xl font-extrabold text-foreground tracking-tight">{stat.value}</span>
-              <span className="text-sm font-bold text-foreground mt-1">{stat.label}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{stat.desc}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Target Market Pills */}
-        <div className="mt-8 flex flex-wrap justify-center items-center gap-2 p-3 bg-muted/20 border border-border/40 rounded-2xl max-w-4xl mx-auto">
-          <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider mr-2">Core System Alignment:</span>
-          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">UPSC CMS Pattern Aligned</span>
-          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">NEET PG Revision Friendly</span>
-          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">No Credit Card Required</span>
-          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">Free Daily Tokens</span>
-        </div>
-      </section>
 
       {/* Downward Page Motion Feature Showcase (Decluttering + Side-by-side Storytelling) */}
       <section id="features" className="border-t border-border/60 bg-muted/20 py-24 px-4 sm:px-6">
@@ -1399,6 +1266,160 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+          {/* "Campus Momentum" Dashboard */}
+          <div className="relative group w-full pt-4">
+            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+            <div className="rounded-[2.5rem] border border-border/80 bg-card p-6 md:p-10 shadow-xl space-y-6 relative overflow-hidden">
+              <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
+              
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 pb-5">
+                <div className="space-y-1 text-left">
+                  <h3 className="font-display text-xl font-extrabold text-foreground">Campus Momentum</h3>
+                  <p className="text-xs text-muted-foreground">Students and residents from leading medical institutions prep here.</p>
+                </div>
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 px-4 py-1.5 rounded-full font-bold shadow-sm shadow-emerald-600/10">
+                  2,900+ active this week
+                </Badge>
+              </div>
+
+              {/* Scrolling ticker visual replacement */}
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                {campuses.map((campus) => (
+                  <div 
+                    key={campus} 
+                    className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs font-semibold text-center text-foreground hover:bg-muted/40 transition-colors"
+                  >
+                    {campus}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-2">
+                {communityProfiles.map((profile) => (
+                  <div key={profile.name} className="rounded-2xl border border-border/50 bg-muted/15 p-4 space-y-1.5 relative hover:border-primary/35 transition-all text-left">
+                    <span className="absolute top-4 right-4 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      {profile.badge}
+                    </span>
+                    <p className="text-sm font-extrabold text-foreground">{profile.name}</p>
+                    <p className="text-xs text-muted-foreground">{profile.college}</p>
+                    <p className="pt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {profile.progress}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* "System Cockpit Live" Dashboard */}
+          <div className="space-y-6 pt-10">
+            <div className="text-center space-y-2">
+              <h2 className="font-display text-2xl font-extrabold text-foreground tracking-tight">
+                Personalized Study Cockpit
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+                Track high-yield progress, streak targets, and score estimations.
+              </p>
+            </div>
+
+            <div className="relative group max-w-3xl mx-auto w-full">
+              <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+              <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
+              {/* Header bar of the widget */}
+              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-red-400/80" />
+                  <div className="h-3 w-3 rounded-full bg-amber-400/80" />
+                  <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-wider uppercase">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  SYSTEM COCKPIT LIVE
+                </div>
+              </div>
+
+              <CardContent className="p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                      <Stethoscope className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">
+                        {isAuthenticated && user ? (user.first_name ? `${user.first_name} ${user.last_name || ''}` : user.username) : "Dr. Sarah Jenkins"}
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        {isAuthenticated && user ? (user.college || "Medical Specialist Track") : "General Medicine Specialist Track"}
+                      </p>
+                    </div>
+                    <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 border-0">
+                      {isAuthenticated && user ? (user.is_subscribed ? "Premium Member" : "Aspirant") : "Aspirant"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Flame className="h-4 w-4 text-orange-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Daily Streak</p>
+                        <p className="text-xs font-extrabold">
+                          {isAuthenticated && user ? "1 Day" : "12 Days"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-2 flex items-center gap-2.5">
+                      <Award className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Est. Score</p>
+                        <p className="text-xs font-extrabold">
+                          {isAuthenticated && user ? "74.5%" : "68.5%"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5 bg-muted/30 p-4 rounded-2xl border border-border/50">
+                  <div className="flex justify-between text-xs font-bold text-foreground">
+                    <span>Clinical Prep Progress</span>
+                    <span className="text-blue-600 dark:text-blue-400">74% Target</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+        {/* Stats Strip */}
+        <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50 max-w-5xl mx-auto w-full">
+          {stats.map((stat, i) => (
+            <div key={i} className="flex flex-col items-center text-center p-3 hover:translate-y-[-2px] transition-transform">
+              <div className="h-10 w-10 rounded-xl bg-primary/5 flex items-center justify-center mb-3">
+                <stat.icon className="h-5 w-5 text-primary" />
+              </div>
+              <span className="text-3xl font-extrabold text-foreground tracking-tight">{stat.value}</span>
+              <span className="text-sm font-bold text-foreground mt-1">{stat.label}</span>
+              <span className="text-xs text-muted-foreground mt-0.5">{stat.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Target Market Pills */}
+        <div className="mt-8 flex flex-wrap justify-center items-center gap-2 p-3 bg-muted/20 border border-border/40 rounded-2xl max-w-4xl mx-auto">
+          <span className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider mr-2">Core System Alignment:</span>
+          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">UPSC CMS Pattern Aligned</span>
+          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">NEET PG Revision Friendly</span>
+          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">No Credit Card Required</span>
+          <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">Free Daily Tokens</span>
         </div>
       </section>
 
