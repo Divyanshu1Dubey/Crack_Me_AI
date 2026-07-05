@@ -181,18 +181,20 @@ export default function SubscriptionPage() {
                 analysisText += `> **IMPROVEMENT FOCUS REQUIRED**: You did not achieve a perfect score. To unlock the ₹79 special discount, you must correct all 5 scenarios. Let's study the clinical concepts below.\n\n`;
             }
 
-            analysisText += `#### 🔍 Subject-Wise Knowledge Map\n`;
-            analysisText += `1. **Cranial Nerve Pathologies** (CN V mastication motor innervation): ${answers[String(scholarshipQuestions[0]?.id)] === 'A' ? '✅ Correct' : '❌ Missed'}\n`;
-            analysisText += `2. **Pediatric Emergencies** (Steeple sign in Croup): ${answers[String(scholarshipQuestions[1]?.id)] === 'B' ? '✅ Correct' : '❌ Missed'}\n`;
-            analysisText += `3. **Lysosomal Storage Disorders** (Glucocerebrosidase in Gaucher): ${answers[String(scholarshipQuestions[2]?.id)] === 'B' ? '✅ Correct' : '❌ Missed'}\n`;
-            analysisText += `4. **Neuroanatomy** (Auditory cortex in Temporal lobe): ${answers[String(scholarshipQuestions[3]?.id)] === 'C' ? '✅ Correct' : '❌ Missed'}\n`;
-            analysisText += `5. **Renal Pharmacology** (Furosemide loop diuretic): ${answers[String(scholarshipQuestions[4]?.id)] === 'B' ? '✅ Correct' : '❌ Missed'}\n\n`;
+            analysisText += `#### 🔍 Performance Summary\n`;
+            analysisText += `Based on your test attempt, you answered **${correctCount} out of 5** questions correctly.\n`;
+            
+            if (correctCount < 5) {
+                analysisText += `We noticed some gaps in your recall of these high-yield topics. Clinical exams require strong pattern recognition for both straightforward presentations and differential diagnoses.\n\n`;
+            } else {
+                analysisText += `Exceptional! You demonstrated a strong grasp of high-yield clinical presentations and avoided common distractors.\n\n`;
+            }
 
             analysisText += `#### 💡 Clinical Recommendation\n`;
             if (correctCount < 5) {
-                analysisText += `- **Revise Lysosomal Enzymes**: Remember Gaucher = Glucocerebrosidase, Niemann-Pick = Sphingomyelinase, Tay-Sachs = Hexosaminidase A.\n`;
-                analysisText += `- **Pediatric Radiology**: Steeple sign indicates subglottic narrowing in laryngotracheobronchitis (Croup). Thumb sign indicates epiglottitis.\n`;
-                analysisText += `*Keep practicing in our active Question Bank to perfect these recall topics!*`;
+                analysisText += `- **Review Weaknesses**: Check out our AI Tutor in the Question Bank to get step-by-step breakdowns for the topics you missed.\n`;
+                analysisText += `- **Spaced Repetition**: Use our integrated Flashcards to convert these mistakes into permanent long-term memory.\n`;
+                analysisText += `*Keep practicing in our active Question Bank to perfect your recall!*`;
             } else {
                 analysisText += `You are ready to claim premium access. Head over to checkout to lock in your discounted monthly subscription!`;
             }
