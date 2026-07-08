@@ -52,6 +52,8 @@ interface Question {
     topic_name: string;
     correct_answer?: string;
     explanation?: string;
+    video_url?: string;
+    video_status?: string;
 }
 
 interface TestData {
