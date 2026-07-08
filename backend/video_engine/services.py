@@ -105,7 +105,6 @@ class VideoGeneratorService:
             
             # Text (Simplified for now)
             txt_clip = TextClip(
-                font='Arial',
                 text="CrackLabs AI Educational Video\n" + question.question_text[:50] + "...", 
                 font_size=50, color='white', size=(1000, 600), method='caption'
             ).with_position('center').with_duration(duration)
