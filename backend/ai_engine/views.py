@@ -206,7 +206,31 @@ class ExplainAfterAnswerView(APIView):
         return _get_permission()
 
     def post(self, request):
+        question_id = request.data.get('question_id')
         question_text = request.data.get('question_text', '')
+        
+        from questions.models import Question
+        from django.utils import timezone
+        import json
+        
+        db_question = None
+        if question_id:
+            db_question = Question.objects.filter(id=question_id).first()
+        elif question_text:
+            db_question = Question.objects.filter(question_text=question_text).first()
+            
+        if db_question and db_question.ai_generated_at:
+            is_correct = request.data.get('selected_answer') == request.data.get('correct_answer')
+            try:
+                cached_json = json.loads(db_question.ai_explanation)
+                cached_json['is_correct'] = is_correct
+                return Response(cached_json)
+            except Exception:
+                pass # Fallback to regenerate if parsing fails
+        
+        if not question_text and db_question:
+            question_text = db_question.question_text
+
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
 
@@ -225,6 +249,19 @@ class ExplainAfterAnswerView(APIView):
             result = service.explain_after_answer(
                 question_text, options, correct_answer, selected_answer, subject, topic
             )
+            
+            if db_question:
+                db_question.ai_explanation = json.dumps(result)
+                db_question.ai_mnemonic = result.get('mnemonic', '')
+                db_question.ai_clinical_pearl = result.get('clinical_pearl', '')
+                db_question.learning_technique = result.get('exam_tip', '')
+                db_question.ai_references = [result.get('textbook_reference', {})]
+                db_question.concept_keywords = result.get('around_concepts', [])
+                db_question.ai_generated_at = timezone.now()
+                db_question.ai_model = 'RoundRobin-11'
+                db_question.ai_version = 'v1'
+                db_question.save()
+                
             return Response(result)
         except Exception as e:
             logger.error(f"ExplainAfterAnswer failed: {e}")

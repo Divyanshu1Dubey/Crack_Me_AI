@@ -1,0 +1,9 @@
+{
+  "appId": "com.cracklabs.app",
+  "appName": "CrackCMS",
+  "webDir": "www",
+  "server": {
+    "url": "https://www.cracklabs.app",
+    "cleartext": true
+  }
+}

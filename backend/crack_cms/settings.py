@@ -89,6 +89,8 @@ INSTALLED_APPS = [
     'ai_engine',
     'textbooks',
     'resources',
+    'video_engine',
+    'django_q',
     # Security
     'axes',
 ]
@@ -464,3 +466,18 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'true').lower() == 'true'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# Django Q2 Configuration
+Q_CLUSTER = {
+    'name': 'crack_cms_q',
+    'workers': 4,
+    'recycle': 500,
+    'timeout': 3600,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Django Q',
+    'orm': 'default'
+}
+

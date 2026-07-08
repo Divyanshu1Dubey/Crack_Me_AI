@@ -29,3 +29,7 @@ django-redis>=5.4
 # Supabase admin operations
 supabase>=2.0
 razorpay>=1.3.0
+# Phase 3: Video generation & Background tasks
+edge-tts>=6.1
+moviepy>=1.0
+django-q2>=1.6

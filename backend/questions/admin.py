@@ -32,19 +32,29 @@ class TopicAdmin(admin.ModelAdmin):
 
 
 
+@admin.action(description='Generate AI Cache for selected questions')
+def generate_ai_cache(modeladmin, request, queryset):
+    from django_q.tasks import async_task
+    for q in queryset:
+        async_task('questions.tasks.generate_ai_task', q.id)
+    modeladmin.message_user(request, f"Queued AI generation for {queryset.count()} questions.")
+
+@admin.action(description='Generate Video for selected questions')
+def generate_video(modeladmin, request, queryset):
+    from django_q.tasks import async_task
+    for q in queryset:
+        async_task('video_engine.tasks.generate_video_task', q.id)
+    modeladmin.message_user(request, f"Queued video generation for {queryset.count()} questions.")
+
+
 @admin.register(Question)
-
 class QuestionAdmin(admin.ModelAdmin):
-
-    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'correct_answer']
-
-    list_filter = ['year', 'subject', 'difficulty', 'exam_source']
-
+    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'video_status', 'ai_generated_at']
+    list_filter = ['year', 'subject', 'video_status', 'difficulty']
     search_fields = ['question_text', 'explanation']
-
     filter_horizontal = ['similar_questions']
-
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'ai_generated_at', 'video_generated_at']
+    actions = [generate_ai_cache, generate_video]
 
     fieldsets = (
 

@@ -109,6 +109,24 @@ class Question(models.Model):
     ai_answer = models.TextField(blank=True, help_text='AI-generated answer rationale')
     ai_mnemonic = models.TextField(blank=True, help_text='AI-generated mnemonic')
     ai_references = models.JSONField(default=list, blank=True, help_text='AI-generated references')
+    ai_clinical_pearl = models.TextField(blank=True, help_text='AI-generated clinical pearl')
+    ai_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_model = models.CharField(max_length=100, blank=True, help_text='Model used for generation')
+    ai_version = models.CharField(max_length=50, blank=True, help_text='Prompt/system version')
+
+    # Video generation fields
+    video_url = models.URLField(max_length=500, blank=True, help_text='Supabase storage URL for MP4')
+    video_thumbnail = models.URLField(max_length=500, blank=True, help_text='Thumbnail URL')
+    video_status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed')
+    ], default='pending', db_index=True)
+    video_duration = models.IntegerField(null=True, blank=True, help_text='Duration in seconds')
+    video_generated_at = models.DateTimeField(null=True, blank=True)
+    video_version = models.CharField(max_length=50, blank=True)
+    video_error = models.TextField(blank=True)
 
     # Admin override + lock controls
     admin_answer_override = models.TextField(blank=True)
