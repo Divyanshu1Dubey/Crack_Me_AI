@@ -157,7 +157,7 @@ def _resolve_ipv4_address(hostname: str) -> str:
             return addr
     return ''
 
-if DATABASE_URL:
+if DATABASE_URL and not IS_COLLECTSTATIC:
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
