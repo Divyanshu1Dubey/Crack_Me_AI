@@ -274,6 +274,7 @@ export const questionsAPI = {
   aiOverride: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-override/`, data),
   aiLock: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-lock/`, data),
   forceRegenerate: (id: number) => api.post(`/questions/${id}/force-regenerate/`),
+  generateVideo: (id: number) => api.post(`/questions/${id}/generate-video/`),
   aiPromptVersions: () => api.get('/questions/ai-prompt-versions/'),
   createAiPromptVersion: (data: { name: string; prompt_text: string; activate?: boolean }) => api.post('/questions/ai-prompt-versions/', data),
   activateAiPromptVersion: (versionId: number) => api.post(`/questions/ai-prompt-versions/${versionId}/activate/`),

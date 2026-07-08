@@ -1188,6 +1188,15 @@ export default function AdminDashboardPage() {
         }
     };
 
+    const handleGenerateVideo = async (id: number) => {
+        try {
+            await questionsAPI.generateVideo(id);
+            fetchQuestions();
+        } catch {
+            // Keep UI stable on API failure.
+        }
+    };
+
     const handleToggleAiLock = async (id: number, lockAnswer: boolean, lockExplanation: boolean) => {
         try {
             await questionsAPI.aiLock(id, { lock_answer: lockAnswer, lock_explanation: lockExplanation });
@@ -2485,6 +2494,15 @@ export default function AdminDashboardPage() {
                                                             ) : (
                                                                 <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Unverified</Badge>
                                                             )}
+                                                            {q.video_status && (
+                                                                <Badge className={
+                                                                    q.video_status === 'completed' ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" :
+                                                                    q.video_status === 'failed' ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" :
+                                                                    "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                                                                }>
+                                                                    Video: {q.video_status}
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                         {editingQuestionId === Number(q.id) ? (
                                                             <div className="space-y-2 mt-2">
@@ -2711,6 +2729,13 @@ export default function AdminDashboardPage() {
                                                             onClick={() => handleForceRegenerate(Number(q.id))}
                                                         >
                                                             Regenerate AI
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleGenerateVideo(Number(q.id))}
+                                                        >
+                                                            Generate Video
                                                         </Button>
                                                         <Button
                                                             size="sm"

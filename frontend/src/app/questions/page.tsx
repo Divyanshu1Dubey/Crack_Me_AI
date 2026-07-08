@@ -730,6 +730,23 @@ function QuestionsContent() {
                                             </CardContent>
                                         </Card>
 
+                                        {/* VIDEO PLAYER */}
+                                        {detail?.video_url && detail?.video_status === 'completed' && (
+                                            <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
+                                                <div className="p-1">
+                                                    <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
+                                                    <video 
+                                                        src={detail.video_url} 
+                                                        controls 
+                                                        className="w-full rounded-b-lg max-h-[500px] bg-black"
+                                                        preload="metadata"
+                                                    >
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* 🚩 Flag Wrong Answer */}
                                         <div className="flex justify-end">
                                             <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}

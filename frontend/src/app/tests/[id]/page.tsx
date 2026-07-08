@@ -463,6 +463,23 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
+                    {/* VIDEO PLAYER */}
+                    {rq?.video_url && rq?.video_status === 'completed' && (
+                        <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
+                            <div className="p-1">
+                                <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
+                                <video 
+                                    src={rq.video_url} 
+                                    controls 
+                                    className="w-full rounded-b-lg max-h-[500px] bg-black"
+                                    preload="metadata"
+                                >
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ═══ DB EXPLANATION (always show first if available) ═══ */}
                     {explanation && (
                         <div className="explanation-card explanation-card-green animate-fadeInUp">

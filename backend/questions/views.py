@@ -181,7 +181,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload',
             'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update',
             'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject',
-            'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'ai_prompt_versions',
+            'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions',
             'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision',
             'link_related', 'set_concept_id', 'update_reference', 'format_fix',
         }
@@ -254,7 +254,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return QuestionDetailSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix']:
             return [IsControlTowerAdmin()]
         if self.action in ['bookmark', 'my_bookmarks', 'attempt', 'submit_feedback']:
             return [permissions.IsAuthenticated()]
@@ -537,6 +537,16 @@ class QuestionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({'message': 'Extraction item updated', 'item': serializer.data})
+
+    @action(detail=True, methods=['post'], url_path='generate-video')
+    def generate_video(self, request, pk=None):
+        """Enqueue video generation task for the question."""
+        from django_q.tasks import async_task
+        question = self.get_object()
+        question.video_status = 'pending'
+        question.save(update_fields=['video_status'])
+        async_task('video_engine.tasks.generate_video_task', question.id, hook='video_engine.tasks.video_task_hook')
+        return Response({'message': 'Video generation queued', 'id': question.id, 'video_status': 'pending'})
 
     @action(detail=False, methods=['post'], url_path=r'extraction/items/(?P<item_id>[^/.]+)/autotag')
     def extraction_item_autotag(self, request, item_id=None):

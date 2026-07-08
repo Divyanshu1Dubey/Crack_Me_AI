@@ -51,7 +51,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'verified_at', 'verified_by', 'verified_by_username',
                   'effective_answer', 'effective_explanation',
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
-                  'user_selected_answer', 'user_is_correct']
+                  'user_selected_answer', 'user_is_correct', 'video_url', 'video_status']
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
@@ -99,7 +99,8 @@ class QuestionAdminListSerializer(QuestionListSerializer):
         fields = QuestionListSerializer.Meta.fields + [
             'correct_answer', 'explanation', 'paper', 
             'lock_answer', 'lock_explanation', 
-            'admin_answer_override', 'admin_explanation_override'
+            'admin_answer_override', 'admin_explanation_override',
+            'video_url', 'video_status'
         ]
 
 
@@ -131,7 +132,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
             'effective_mnemonic', 'effective_references', 'revision_count', 'last_revision_at',
-            'user_selected_answer', 'user_is_correct',
+            'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
         ]
 
     def get_user_selected_answer(self, obj):
