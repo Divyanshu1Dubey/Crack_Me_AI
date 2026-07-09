@@ -1,264 +1,633 @@
-"""
-CrackLabs AI - Multi-slide educational video generator.
+from __future__ import annotations
 
-Pipeline:
-  1. Build sections (title, question, options, answer, explanation, pearl, mnemonic, outro)
-  2. Render each section as a professional slide (Pillow)
-  3. Generate section narration audio (Edge TTS)
-  4. Assemble slides + audio into final MP4 (MoviePy)
-  5. Upload to Supabase Storage
-"""
+import asyncio
+import hashlib
+import json
+import logging
 import os
 import re
+import shutil
 import tempfile
-import logging
-import asyncio
+from pathlib import Path
+from typing import Any
+
+from django.conf import settings
 from django.utils import timezone
+
 from questions.models import Question
 
 logger = logging.getLogger(__name__)
 
-
-# ── Content helpers ──────────────────────────────────────────
-
-def _effective_explanation(q):
-    """Mirror serializer: lock → admin → AI → base."""
-    if q.lock_explanation:
-        return q.admin_explanation_override or q.explanation
-    return q.admin_explanation_override or q.ai_explanation or q.explanation
+ENGINE_VERSION = "video-v2-professor-2026-07"
+SCRIPT_SCHEMA_VERSION = "lesson-script-v2"
+DEFAULT_BUCKET = "educational_videos"
+MAX_SCENE_NARRATION_WORDS = 95
 
 
-def _effective_answer(q):
-    if q.lock_answer:
-        return q.admin_answer_override or q.get_correct_option_text()
-    return q.admin_answer_override or q.ai_answer or q.get_correct_option_text()
+# ---------------------------------------------------------------------------
+# Content helpers
+# ---------------------------------------------------------------------------
+
+def _as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
-def _effective_mnemonic(q):
-    return q.admin_mnemonic_override or q.ai_mnemonic or q.mnemonic
+def _strip_markdown(text: str) -> str:
+    t = _as_text(text)
+    t = re.sub(r"`[\s\S]*?```", " ", t)
+    t = re.sub(r"`([^`]+)`", r"\1", t)
+    t = re.sub(r"\*\*(.*?)\*\*", r"\1", t)
+    t = re.sub(r"__(.*?)__", r"\1", t)
+    t = re.sub(r"\*(.*?)\*", r"\1", t)
+    t = re.sub(r"#{1,6}\s+", "", t)
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\|", " ", t)
+    return " ".join(t.split()).strip()
 
 
-def _clean_for_tts(text):
-    """Remove markdown & special chars for natural-sounding narration."""
-    t = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
-    t = re.sub(r'\*(.*?)\*', r'\1', t)
-    t = re.sub(r'#{1,6}\s+', '', t)
-    t = re.sub(r'`(.*?)`', r'\1', t)
-    t = re.sub(r'\\u\d{4}', ' ', t)
-    t = re.sub(r'[{}\[\]"\'\\]', '', t)
-    t = ' '.join(t.split())
+def _clean_for_tts(text: str) -> str:
+    """Convert study text into narration-safe prose.
+
+    This avoids the old failure mode where markdown, option syntax, JSON braces,
+    arrows, and punctuation were spoken literally.
+    """
+    t = _strip_markdown(text)
+    replacements = {
+        "->": " leads to ",
+        "=>": " leads to ",
+        ">=": " greater than or equal to ",
+        "<=": " less than or equal to ",
+        "+/-": " plus or minus ",
+        "++": " strongly positive ",
+        "+": " plus ",
+        "&": " and ",
+        "%": " percent ",
+        "/": " per ",
+        "vs.": " versus ",
+        " vs ": " versus ",
+        "↑": " increased ",
+        "↓": " decreased ",
+        "→": " leads to ",
+        "←": " comes from ",
+        "≥": " greater than or equal to ",
+        "≤": " less than or equal to ",
+        "±": " plus or minus ",
+        "°": " degrees ",
+    }
+    for src, dst in replacements.items():
+        t = t.replace(src, dst)
+
+    pronunciation = {
+        r"\bHbA1c\b": "H B A one C",
+        r"\bECG\b": "E C G",
+        r"\bEEG\b": "E E G",
+        r"\bCSF\b": "C S F",
+        r"\bCNS\b": "C N S",
+        r"\bCKD\b": "C K D",
+        r"\bAKI\b": "A K I",
+        r"\bTB\b": "T B",
+        r"\bHIV\b": "H I V",
+        r"\bAIDS\b": "AIDS",
+        r"\bIgG\b": "I G G",
+        r"\bIgM\b": "I G M",
+        r"\bLDL\b": "L D L",
+        r"\bHDL\b": "H D L",
+        r"\bUPSC\b": "U P S C",
+        r"\bCMS\b": "C M S",
+        r"\bNEET\b": "N E E T",
+        r"\bMCQ\b": "M C Q",
+    }
+    for pattern, spoken in pronunciation.items():
+        t = re.sub(pattern, spoken, t)
+
+    # Remove option prefixes and structural characters that TTS often reads.
+    t = re.sub(r"\bOption\s+([A-D])\s*[:.)-]?", r"choice \1", t, flags=re.I)
+    t = re.sub(r"(^|\s)[A-D]\s*[:.)-]\s+", " ", t)
+    t = re.sub(r"[{}\[\]\"'\\_*#<>|~^=]", " ", t)
+    t = re.sub(r"\s*[-:;]\s*", ", ", t)
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"\s+([,.!?])", r"\1", t)
     return t.strip()
 
 
-def _split_text(text, max_chars=550):
-    """Split long text into chunks at sentence boundaries."""
+def _split_sentences(text: str, max_chars: int = 520) -> list[str]:
+    text = _strip_markdown(text)
+    if not text:
+        return []
     if len(text) <= max_chars:
         return [text]
 
-    # Normalize sentence endings
-    normalized = text.replace('. ', '.|').replace('? ', '?|').replace('! ', '!|')
-    sentences = [s.strip() for s in normalized.split('|') if s.strip()]
-
-    chunks, current = [], ''
-    for sent in sentences:
-        if len(current) + len(sent) + 1 > max_chars and current:
-            chunks.append(current.strip())
-            current = sent
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks: list[str] = []
+    current = ""
+    for sentence in sentences:
+        candidate = f"{current} {sentence}".strip()
+        if len(candidate) > max_chars and current:
+            chunks.append(current)
+            current = sentence
         else:
-            current = f'{current} {sent}'.strip()
-    if current.strip():
-        chunks.append(current.strip())
-
+            current = candidate
+    if current:
+        chunks.append(current)
     return chunks or [text[:max_chars]]
 
 
-# ── Main service ─────────────────────────────────────────────
+def _truncate_words(text: str, limit: int = MAX_SCENE_NARRATION_WORDS) -> str:
+    words = _clean_for_tts(text).split()
+    if len(words) <= limit:
+        return " ".join(words)
+    return " ".join(words[:limit]).rstrip(",.;") + "."
+
+
+def _safe_list(value: Any, limit: int = 6) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, tuple):
+        items = list(value)
+    else:
+        items = re.split(r"[\n;]+", _as_text(value))
+    cleaned = [_strip_markdown(_as_text(item)) for item in items]
+    return [item for item in cleaned if item][:limit]
+
+
+def _extract_json_object(raw: str) -> dict[str, Any] | None:
+    if not raw:
+        return None
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    if text.lower().startswith("json"):
+        text = text[4:].strip()
+
+    for candidate in (text, text[text.find("{"): text.rfind("}") + 1] if "{" in text and "}" in text else ""):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            continue
+    return None
+
+
+def _effective_explanation(q: Question) -> str:
+    if getattr(q, 'lock_explanation', False):
+        return getattr(q, 'admin_explanation_override', None) or getattr(q, 'explanation', None) or getattr(q, 'concept_explanation', None) or ""
+    return (
+        getattr(q, 'admin_explanation_override', None)
+        or getattr(q, 'concept_explanation', None)
+        or getattr(q, 'explanation', None)
+        or getattr(q, 'ai_explanation', None)
+        or ""
+    )
+
+
+def _effective_answer(q: Question) -> str:
+    if getattr(q, 'lock_answer', False):
+        return getattr(q, 'admin_answer_override', None) or q.get_correct_option_text()
+    return getattr(q, 'admin_answer_override', None) or getattr(q, 'ai_answer', None) or q.get_correct_option_text()
+
+
+def _effective_mnemonic(q: Question) -> str:
+    return getattr(q, 'admin_mnemonic_override', None) or getattr(q, 'ai_mnemonic', None) or getattr(q, 'mnemonic', None) or ""
+
+
+def _reference_text(q: Question, ai_payload: dict[str, Any]) -> str:
+    override = getattr(q, 'admin_references_override', None) or []
+    refs = override or getattr(q, 'ai_references', None) or getattr(q, 'textbook_references', None) or []
+    if isinstance(refs, list) and refs:
+        first = refs[0]
+        if isinstance(first, dict):
+            parts = [
+                first.get("book") or first.get("book_name"),
+                first.get("chapter"),
+                f"p. {first.get('page') or first.get('page_number')}" if first.get("page") or first.get("page_number") else "",
+                first.get("section"),
+            ]
+            return ", ".join([_strip_markdown(p) for p in parts if p])
+        return _strip_markdown(first)
+
+    ai_ref = ai_payload.get("textbook_reference")
+    if isinstance(ai_ref, dict):
+        parts = [
+            ai_ref.get("book"),
+            ai_ref.get("chapter"),
+            f"p. {ai_ref.get('page')}" if ai_ref.get("page") else "",
+            ai_ref.get("section"),
+        ]
+        return ", ".join([_strip_markdown(p) for p in parts if p])
+
+    parts = [
+        getattr(q, 'book_name', None),
+        getattr(q, 'chapter', None),
+        f"p. {getattr(q, 'page_number', None)}" if getattr(q, 'page_number', None) else "",
+    ]
+    return ", ".join([_strip_markdown(p) for p in parts if p])
+
+
+def _option_map(q: Question) -> dict[str, str]:
+    return {
+        "A": getattr(q, 'option_a', ""),
+        "B": getattr(q, 'option_b', ""),
+        "C": getattr(q, 'option_c', ""),
+        "D": getattr(q, 'option_d', ""),
+    }
+
+
+def _format_vtt_time(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int(round((seconds - int(seconds)) * 1000))
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
 
 class VideoGeneratorService:
     def __init__(self):
-        self.tmp_dir = tempfile.mkdtemp(prefix='cracklabs_video_')
+        self.tmp_dir = tempfile.mkdtemp(prefix="cracklabs_video_")
+        self.bucket = os.getenv("VIDEO_STORAGE_BUCKET", DEFAULT_BUCKET)
+        self._storage_client = None
 
-    def generate_for_question(self, question_id: int):
-        question = None
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def generate_for_question(self, question_id: int, force: bool = False) -> bool:
+        question: Question | None = None
         try:
-            question = Question.objects.select_related('subject').get(id=question_id)
-            question.video_status = 'processing'
-            question.video_error = ''
-            question.save(update_fields=['video_status', 'video_error'])
+            question = Question.objects.select_related("subject", "topic").get(id=question_id)
+            content_hash = self._content_hash(question)
+            expected_version = f"{ENGINE_VERSION}:{content_hash}"
 
-            explanation = _effective_explanation(question)
-            answer_text = _effective_answer(question)
+            if (
+                not force
+                and question.video_status == "completed"
+                and question.video_url
+                and question.video_version == expected_version
+            ):
+                logger.info("Q%s: V2 video already cached; skipping render", question_id)
+                return True
 
-            if not explanation and not answer_text:
-                question.video_status = 'failed'
-                question.video_error = 'No content to narrate. Generate AI or add admin override.'
-                question.save(update_fields=['video_status', 'video_error'])
-                return False
+            question.video_status = "processing"
+            question.video_error = ""
+            question.save(update_fields=["video_status", "video_error"])
 
-            # 1. Build section list
-            sections = self._build_sections(question, explanation, answer_text)
-            logger.info(f'Q{question_id}: Built {len(sections)} slides')
+            script = self._build_or_load_script(question, content_hash)
+            scenes = script.get("scenes", [])
+            if not self._script_passes_quality(script):
+                raise ValueError("Teaching script did not pass the internal quality checklist")
 
-            # 2. Render slides & generate audio
-            slide_data = []
-            for i, sec in enumerate(sections):
-                slide_path = os.path.join(self.tmp_dir, f'slide_{i:02d}.png')
-                audio_path = os.path.join(self.tmp_dir, f'audio_{i:02d}.mp3')
+            from .slide_renderer import SlideRenderer
 
-                sec['slide'].save(slide_path, 'PNG')
-                audio_ok = self._tts(sec['narration'], audio_path)
+            renderer = SlideRenderer()
+            metadata = script.get("metadata", {})
+            slide_data: list[dict[str, Any]] = []
+
+            for index, scene in enumerate(scenes, start=1):
+                slide_path = os.path.join(self.tmp_dir, f"slide_{index:02d}.png")
+                audio_path = os.path.join(self.tmp_dir, f"audio_{index:02d}.mp3")
+                image = renderer.render_scene(scene, metadata, index, len(scenes))
+                image.save(slide_path, "PNG")
+
+                narration = _clean_for_tts(scene.get("narration", ""))
+                audio_ok = self._tts(narration, audio_path)
+                if not audio_ok:
+                    raise RuntimeError(f"Narration audio failed for scene {index}: {scene.get('title', 'Untitled')}")
 
                 slide_data.append({
-                    'slide': slide_path,
-                    'audio': audio_path if audio_ok else None,
-                    'min_dur': sec.get('min_dur', 5),
+                    "slide": slide_path,
+                    "audio": audio_path,
+                    "title": scene.get("title", ""),
+                    "narration": narration,
+                    "scene_type": scene.get("type", "lesson"),
+                    "min_dur": float(scene.get("duration_hint") or 5.0),
                 })
 
-            # 3. Assemble video
-            video_path = os.path.join(self.tmp_dir, f'q_{question_id}.mp4')
-            self._assemble(slide_data, video_path)
-            logger.info(f'Q{question_id}: Video assembled')
+            video_name = f"q_{question_id}_{content_hash}_v2.mp4"
+            vtt_name = f"q_{question_id}_{content_hash}_v2.vtt"
+            thumbnail_name = f"q_{question_id}_{content_hash}_thumb.png"
+            video_path = os.path.join(self.tmp_dir, video_name)
+            vtt_path = os.path.join(self.tmp_dir, vtt_name)
+            thumbnail_path = os.path.join(self.tmp_dir, thumbnail_name)
 
-            # 4. Upload
-            video_url = self._upload(video_path, f'q_{question_id}_video.mp4')
+            duration = self._assemble(slide_data, video_path)
+            self._write_vtt(slide_data, vtt_path)
+            shutil.copyfile(slide_data[0]["slide"], thumbnail_path)
+
+            self._quality_gate(slide_data, video_path, vtt_path, duration)
+
+            video_url = self._upload(video_path, video_name, "video/mp4")
             if not video_url:
-                raise Exception('Supabase upload failed')
+                raise RuntimeError("Supabase upload failed for MP4")
+
+            thumb_url = self._upload(thumbnail_path, thumbnail_name, "image/png") or ""
+            vtt_url = self._upload(vtt_path, vtt_name, "text/vtt")
+            self._save_script_cache(script, content_hash)
 
             question.video_url = video_url
-            question.video_status = 'completed'
+            question.video_thumbnail = thumb_url
+            question.video_status = "completed"
+            question.video_duration = int(round(duration))
+            question.video_version = expected_version
             question.video_generated_at = timezone.now()
-            question.save(update_fields=['video_url', 'video_status', 'video_generated_at'])
-            logger.info(f'Q{question_id}: Video completed -> {video_url}')
-
-            self._cleanup()
+            question.video_error = ""
+            question.save(update_fields=[
+                "video_url",
+                "video_thumbnail",
+                "video_status",
+                "video_duration",
+                "video_version",
+                "video_generated_at",
+                "video_error",
+            ])
+            logger.info("Q%s: V2 video completed -> %s", question_id, video_url)
             return True
 
-        except Exception as e:
-            logger.error(f'Video gen failed Q{question_id}: {e}', exc_info=True)
+        except Exception as exc:
+            logger.error("Video generation failed for Q%s: %s", question_id, exc, exc_info=True)
             if question:
-                question.video_status = 'failed'
-                question.video_error = str(e)[:500]
-                question.save(update_fields=['video_status', 'video_error'])
-            self._cleanup()
+                question.video_status = "failed"
+                question.video_error = str(exc)[:500]
+                question.save(update_fields=["video_status", "video_error"])
             return False
+        finally:
+            self._cleanup()
 
-    # ── Section builder ──────────────────────────────────────
+    # ------------------------------------------------------------------
+    # Lesson script generation and caching
+    # ------------------------------------------------------------------
 
-    def _build_sections(self, q, explanation, answer_text):
-        from .slide_renderer import SlideRenderer
-        renderer = SlideRenderer()
+    def _content_hash(self, q: Question) -> str:
+        payload = {
+            "engine": ENGINE_VERSION,
+            "question": q.question_text,
+            "options": _option_map(q),
+            "correct": getattr(q, 'correct_answer', ''),
+            "answer": _effective_answer(q),
+            "explanation": _effective_explanation(q),
+            "mnemonic": _effective_mnemonic(q),
+            "pearl": getattr(q, 'ai_clinical_pearl', ''),
+            "learning": getattr(q, 'learning_technique', ''),
+            "shortcut": getattr(q, 'shortcut_tip', ''),
+            "references": getattr(q, 'admin_references_override', None) or getattr(q, 'ai_references', None) or getattr(q, 'textbook_references', None),
+            "subject": q.subject.name if getattr(q, 'subject', None) else "",
+            "topic": q.topic.name if getattr(q, 'topic', None) else "",
+            "year": getattr(q, 'year', ''),
+        }
+        raw = json.dumps(payload, sort_keys=True, default=str, ensure_ascii=True)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
-        options = {'A': q.option_a, 'B': q.option_b, 'C': q.option_c, 'D': q.option_d}
-        mnemonic = _effective_mnemonic(q)
-        pearl = q.ai_clinical_pearl or ''
-        subj = q.subject.name if q.subject else 'General'
-        exp_chunks = _split_text(explanation) if explanation else []
+    def _script_object_name(self, question_id: int, content_hash: str) -> str:
+        return f"scripts/q_{question_id}_{content_hash}_script.json"
 
-        # Calculate total slide count for progress bar
-        total = 4 + len(exp_chunks)  # title + question + options + answer + explanations
-        if pearl:
-            total += 1
-        if mnemonic:
-            total += 1
-        total += 1  # outro
+    def _local_script_path(self, question_id: int, content_hash: str) -> Path:
+        root = Path(getattr(settings, "MEDIA_ROOT", Path.cwd() / "media"))
+        return root / "video_engine" / "scripts" / f"q_{question_id}_{content_hash}_script.json"
 
-        sections = []
-        step = 1
+    def _build_or_load_script(self, q: Question, content_hash: str) -> dict[str, Any]:
+        cached = self._load_script_cache(q.id, content_hash)
+        if cached and cached.get("schema") == SCRIPT_SCHEMA_VERSION:
+            return cached
 
-        # ── 1. Title ──
-        sections.append({
-            'slide': renderer.render_title(subj, q.year, q.difficulty, q.id, step, total),
-            'narration': (
-                f'Welcome to CrackLabs AI. '
-                f"Today we'll study a {q.difficulty} {subj} question from UPSC CMS {q.year}. "
-                f"Let's break it down step by step."
-            ),
-            'min_dur': 5,
-        })
-        step += 1
+        script = self._generate_ai_script(q, content_hash)
+        if not self._script_passes_quality(script):
+            logger.warning("Q%s: AI script quality low; using deterministic professor fallback", q.id)
+            script = self._fallback_script(q, content_hash)
 
-        # ── 2. Question ──
-        sections.append({
-            'slide': renderer.render_question(q.question_text, step, total),
-            'narration': f'Here is the question. {_clean_for_tts(q.question_text)}',
-            'min_dur': 5,
-        })
-        step += 1
+        self._save_script_cache(script, content_hash)
+        return script
 
-        # ── 3. Options ──
-        opts_narration = "Let's look at the options. "
-        for lbl in ['A', 'B', 'C', 'D']:
-            opts_narration += f'Option {lbl}: {_clean_for_tts(options[lbl])}. '
-        opts_narration += 'Take a moment to think about your answer.'
-        sections.append({
-            'slide': renderer.render_options(options, step, total),
-            'narration': opts_narration,
-            'min_dur': 8,
-        })
-        step += 1
+    def _load_script_cache(self, question_id: int, content_hash: str) -> dict[str, Any] | None:
+        local_path = self._local_script_path(question_id, content_hash)
+        if local_path.exists():
+            try:
+                return json.loads(local_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.warning("Local script cache unreadable for Q%s: %s", question_id, exc)
 
-        # ── 4. Answer reveal ──
-        correct_text = options.get(q.correct_answer, '')
-        sections.append({
-            'slide': renderer.render_answer(options, q.correct_answer, step, total),
-            'narration': (
-                f'The correct answer is {q.correct_answer}: {_clean_for_tts(correct_text)}. '
-                f"Now let's understand why."
-            ),
-            'min_dur': 4,
-        })
-        step += 1
+        text = self._download_text(self._script_object_name(question_id, content_hash))
+        if text:
+            try:
+                script = json.loads(text)
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                local_path.write_text(json.dumps(script, ensure_ascii=True, indent=2), encoding="utf-8")
+                return script
+            except Exception as exc:
+                logger.warning("Remote script cache unreadable for Q%s: %s", question_id, exc)
+        return None
 
-        # ── 5. Explanation (may span multiple slides) ──
-        for i, chunk in enumerate(exp_chunks):
-            sections.append({
-                'slide': renderer.render_explanation(chunk, i + 1, len(exp_chunks), step, total),
-                'narration': _clean_for_tts(chunk),
-                'min_dur': 6,
-            })
-            step += 1
+    def _save_script_cache(self, script: dict[str, Any], content_hash: str) -> None:
+        question_id = int(script.get("question_id") or 0)
+        if not question_id:
+            return
+        text = json.dumps(script, ensure_ascii=True, indent=2)
+        local_path = self._local_script_path(question_id, content_hash)
+        try:
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.write_text(text, encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Could not write local script cache for Q%s: %s", question_id, exc)
 
-        # ── 6. Clinical pearl (optional) ──
-        if pearl:
-            sections.append({
-                'slide': renderer.render_clinical_pearl(pearl, step, total),
-                'narration': f'Here is an important clinical pearl. {_clean_for_tts(pearl)}',
-                'min_dur': 5,
-            })
-            step += 1
+        remote_path = os.path.join(self.tmp_dir, f"q_{question_id}_{content_hash}_script.json")
+        try:
+            Path(remote_path).write_text(text, encoding="utf-8")
+            self._upload(remote_path, self._script_object_name(question_id, content_hash), "application/json")
+        except Exception as exc:
+            logger.warning("Could not upload script cache for Q%s: %s", question_id, exc)
 
-        # ── 7. Mnemonic (optional) ──
-        if mnemonic:
-            sections.append({
-                'slide': renderer.render_mnemonic(mnemonic, step, total),
-                'narration': f'To help you remember, here is a mnemonic. {_clean_for_tts(mnemonic)}',
-                'min_dur': 5,
-            })
-            step += 1
+    def _learning_payload(self, q: Question) -> dict[str, Any]:
+        parsed = _extract_json_object(getattr(q, 'ai_explanation', ""))
+        if not parsed:
+            parsed = {}
+        explanation = _effective_explanation(q)
+        if not parsed.get("why_correct"):
+            parsed["why_correct"] = explanation
+        if not parsed.get("mnemonic"):
+            parsed["mnemonic"] = _effective_mnemonic(q)
+        if not parsed.get("clinical_pearl"):
+            parsed["clinical_pearl"] = getattr(q, 'ai_clinical_pearl', "") or ""
+        if not parsed.get("exam_tip"):
+            parsed["exam_tip"] = getattr(q, 'learning_technique', "") or getattr(q, 'shortcut_tip', "") or ""
+        
+        c_tags = getattr(q, 'concept_tags', [])
+        if not parsed.get("core_concept"):
+            parsed["core_concept"] = (
+                (c_tags[0] if isinstance(c_tags, list) and c_tags else "")
+                or (q.topic.name if getattr(q, 'topic', None) else "")
+                or (q.subject.name if getattr(q, 'subject', None) else "the tested medical concept")
+            )
+        return parsed
 
-        # ── 8. Outro ──
-        sections.append({
-            'slide': renderer.render_outro(step, total),
-            'narration': (
-                'Thank you for learning with CrackLabs AI. '
-                'Keep practicing, keep learning. '
-                'Visit cracklabs dot app for more questions and AI-powered study tools.'
-            ),
-            'min_dur': 5,
-        })
+    def _generate_ai_script(self, q: Question, content_hash: str) -> dict[str, Any]:
+        ai_payload = self._learning_payload(q)
+        options = _option_map(q)
+        subject_name = q.subject.name if getattr(q, 'subject', None) else ""
+        topic_name = q.topic.name if getattr(q, 'topic', None) else ""
+        correct_letter = getattr(q, 'correct_answer', 'A')
+        
+        prompt = f"""
+Create a premium UPSC CMS / MBBS teaching video script as valid JSON only.
 
-        return sections
+Rules:
+- Do not read the raw question verbatim in narration.
+- Narration must sound like an experienced Indian MBBS professor teaching a student.
+- Explain the concept before revealing the answer.
+- Include option elimination, clinical pearl, mnemonic, exam strategy, reference, and high-yield takeaway.
+- Avoid markdown, emojis, bullets inside narration, and special characters that TTS might read aloud.
+- Keep each narration under {MAX_SCENE_NARRATION_WORDS} words.
+- Return JSON with exactly this shape:
+{{
+  "title": "...",
+  "core_concept": "...",
+  "scenes": [
+    {{
+      "type": "intro|question_focus|concept|mechanism|option_elimination|answer_reveal|clinical_pearl|mnemonic|exam_strategy|reference|takeaway",
+      "title": "...",
+      "subtitle": "...",
+      "narration": "...",
+      "bullets": ["...", "..."],
+      "focus_terms": ["...", "..."],
+      "duration_hint": 5
+    }}
+  ]
+}}
 
-    # ── Audio (Edge TTS) ─────────────────────────────────────
+Question data:
+Subject: {subject_name}
+Topic: {topic_name}
+Year: {getattr(q, 'year', '')}
+Difficulty: {getattr(q, 'difficulty', 'medium')}
+Question stem for visual display only: {q.question_text}
+Options: {json.dumps(options, ensure_ascii=True)}
+Correct answer letter: {correct_letter}
+Correct answer text: {options.get(correct_letter, "")}
+Existing teaching data: {json.dumps(ai_payload, ensure_ascii=True, default=str)[:5000]}
+Reference: {_reference_text(q, ai_payload)}
+"""
+        try:
+            from ai_engine.services import AIService
+            raw = AIService()._call_ai(
+                prompt,
+                system=(
+                    "You are CrackLabs AI's senior medical video scriptwriter. "
+                    "You write accurate, memorable, professor-style narrations "
+                    "for MBBS students and UPSC CMS aspirants. You format your output as valid JSON."
+                )
+            )
+            parsed = _extract_json_object(raw)
+            if parsed and "scenes" in parsed:
+                parsed["schema"] = SCRIPT_SCHEMA_VERSION
+                parsed["question_id"] = q.id
+                parsed["metadata"] = {
+                    "subject": subject_name,
+                    "year": getattr(q, 'year', ''),
+                    "difficulty": getattr(q, 'difficulty', 'medium'),
+                    "question_text": q.question_text,
+                    "options": options,
+                    "correct_answer": correct_letter,
+                }
+                return parsed
+        except Exception as exc:
+            logger.warning("AI script generation failed for Q%s: %s", q.id, exc)
 
-    def _tts(self, text, output_path):
+        return {}
+
+    def _fallback_script(self, q: Question, content_hash: str) -> dict[str, Any]:
+        """Deterministic professor fallback if AI fails or returns low quality."""
+        options = _option_map(q)
+        correct_letter = getattr(q, 'correct_answer', 'A')
+        subject_name = q.subject.name if getattr(q, 'subject', None) else "General Medicine"
+        
+        scenes = [
+            {
+                "type": "intro",
+                "title": f"{subject_name} Review",
+                "subtitle": "UPSC CMS High-Yield Topic",
+                "narration": f"Welcome to CrackLabs AI. Today we'll review an important {subject_name} topic. Let's look at the question.",
+                "duration_hint": 5
+            },
+            {
+                "type": "question_focus",
+                "title": "Question Overview",
+                "narration": "Take a moment to read the clinical presentation and the options provided.",
+                "duration_hint": 8
+            },
+            {
+                "type": "answer_reveal",
+                "title": "Correct Answer",
+                "subtitle": f"Option {correct_letter}",
+                "narration": f"The correct answer is {correct_letter}. Let's understand the underlying concept.",
+                "duration_hint": 5
+            },
+            {
+                "type": "concept",
+                "title": "Explanation",
+                "narration": _clean_for_tts(_effective_explanation(q)),
+                "bullets": _split_sentences(_effective_explanation(q), 80),
+                "duration_hint": 12
+            },
+            {
+                "type": "takeaway",
+                "title": "Keep Learning",
+                "subtitle": "CrackLabs AI",
+                "narration": "Keep practicing and review your weak areas. You can do this.",
+                "duration_hint": 4
+            }
+        ]
+        
+        return {
+            "schema": SCRIPT_SCHEMA_VERSION,
+            "question_id": q.id,
+            "title": f"{subject_name} Question",
+            "scenes": scenes,
+            "metadata": {
+                "subject": subject_name,
+                "year": getattr(q, 'year', ''),
+                "difficulty": getattr(q, 'difficulty', 'medium'),
+                "question_text": q.question_text,
+                "options": options,
+                "correct_answer": correct_letter,
+            }
+        }
+
+    def _script_passes_quality(self, script: dict[str, Any]) -> bool:
+        if not script or script.get("schema") != SCRIPT_SCHEMA_VERSION:
+            return False
+        scenes = script.get("scenes", [])
+        if not scenes or len(scenes) < 3:
+            return False
+        
+        has_intro = False
+        has_answer = False
+        for scene in scenes:
+            if scene.get("type") == "intro":
+                has_intro = True
+            if scene.get("type") == "answer_reveal":
+                has_answer = True
+                
+        return has_intro and has_answer
+
+    # ------------------------------------------------------------------
+    # TTS, Video Assembly, Subtitles, Quality, Upload
+    # ------------------------------------------------------------------
+
+    def _tts(self, text: str, output_path: str) -> bool:
         import edge_tts
 
         clean = _clean_for_tts(text)
         if not clean:
             return False
 
-        voice = 'en-US-GuyNeural'
+        # Indian English Professor voice for CMS
+        voice = 'en-IN-PrabhatNeural'
 
         async def _run():
             comm = edge_tts.Communicate(clean, voice)
@@ -269,26 +638,41 @@ class VideoGeneratorService:
             return True
         except Exception as e:
             logger.error(f'TTS error: {e}', exc_info=True)
-            return False
+            # Try fallback voice
+            try:
+                voice = 'en-US-GuyNeural'
+                async def _run2():
+                    comm = edge_tts.Communicate(clean, voice)
+                    await comm.save(output_path)
+                asyncio.run(_run2())
+                return True
+            except Exception as e2:
+                logger.error(f'TTS fallback error: {e2}')
+                return False
 
-    # ── Video assembly (MoviePy) ─────────────────────────────
-
-    def _assemble(self, slide_data, output_path):
+    def _assemble(self, slide_data: list[dict[str, Any]], output_path: str) -> float:
         from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 
         clips = []
+        total_duration = 0.0
+        
         for sd in slide_data:
+            # Subtle zoom effect could be added here if needed, but keeping static for ultra-fast generation
             if sd['audio'] and os.path.exists(sd['audio']):
                 try:
                     audio = AudioFileClip(sd['audio'])
                     duration = max(audio.duration + 0.8, sd['min_dur'])
                     clip = ImageClip(sd['slide']).with_duration(duration)
                     clip = clip.with_audio(audio)
+                    total_duration += duration
                 except Exception as e:
                     logger.warning(f"Audio load failed: {e}, using min duration")
                     clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                    total_duration += sd['min_dur']
             else:
                 clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                total_duration += sd['min_dur']
+                
             clips.append(clip)
 
         final = concatenate_videoclips(clips, method='compose')
@@ -307,40 +691,98 @@ class VideoGeneratorService:
                 c.close()
             except Exception:
                 pass
+                
+        return total_duration
 
-    # ── Supabase upload ──────────────────────────────────────
+    def _write_vtt(self, slide_data: list[dict[str, Any]], output_path: str) -> None:
+        """Generate WebVTT subtitles based on scene timings."""
+        lines = ["WEBVTT", ""]
+        
+        current_time = 0.0
+        for i, sd in enumerate(slide_data):
+            audio_path = sd.get('audio')
+            duration = sd.get('min_dur', 5.0)
+            if audio_path and os.path.exists(audio_path):
+                from moviepy import AudioFileClip
+                try:
+                    audio = AudioFileClip(audio_path)
+                    duration = max(audio.duration + 0.8, duration)
+                    audio.close()
+                except Exception:
+                    pass
+            
+            start_str = _format_vtt_time(current_time)
+            end_str = _format_vtt_time(current_time + duration)
+            
+            # Simple subtitle - could be further chunked by sentences
+            narration = sd.get('narration', '')
+            if narration:
+                lines.append(f"{i+1}")
+                lines.append(f"{start_str} --> {end_str}")
+                lines.append(narration)
+                lines.append("")
+                
+            current_time += duration
+            
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("\n".join(lines))
 
-    def _upload(self, file_path, file_name):
+    def _quality_gate(self, slide_data: list, video_path: str, vtt_path: str, duration: float) -> None:
+        """Ensure the generated video meets standards before uploading."""
+        if not os.path.exists(video_path):
+            raise FileNotFoundError("Video file was not created.")
+        
+        size_mb = os.path.getsize(video_path) / (1024 * 1024)
+        if size_mb < 0.1:
+            raise ValueError(f"Video file is too small ({size_mb:.2f} MB). Assembly likely failed.")
+            
+        if duration < 5.0:
+            raise ValueError(f"Video duration too short ({duration:.1f}s).")
+            
+        if not os.path.exists(vtt_path):
+            logger.warning("VTT subtitles file was not created. Continuing anyway.")
+
+    def _upload(self, file_path: str, file_name: str, content_type: str = "video/mp4") -> str | None:
         from supabase import create_client
 
         url = os.environ.get('SUPABASE_URL')
         key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
 
         if not url or not key:
-            logger.warning('Supabase creds missing. Dev URL returned.')
-            return f'https://dev.local/videos/{file_name}'
+            logger.warning('Supabase creds missing. Returning mock dev URL.')
+            return f'https://dev.local/{self.bucket}/{file_name}'
 
         try:
             client = create_client(url, key)
-            bucket = 'educational_videos'
-
             with open(file_path, 'rb') as f:
-                client.storage.from_(bucket).upload(
+                client.storage.from_(self.bucket).upload(
                     path=file_name, file=f,
-                    file_options={'content-type': 'video/mp4', 'upsert': 'true'}
+                    file_options={'content-type': content_type, 'upsert': 'true'}
                 )
 
-            public_url = client.storage.from_(bucket).get_public_url(file_name)
+            public_url = client.storage.from_(self.bucket).get_public_url(file_name)
             logger.info(f'Uploaded: {public_url}')
             return public_url
         except Exception as e:
             logger.error(f'Upload error: {e}', exc_info=True)
             return None
+            
+    def _download_text(self, file_name: str) -> str | None:
+        from supabase import create_client
 
-    # ── Cleanup ──────────────────────────────────────────────
+        url = os.environ.get('SUPABASE_URL')
+        key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+        if not url or not key:
+            return None
+            
+        try:
+            client = create_client(url, key)
+            response = client.storage.from_(self.bucket).download(file_name)
+            return response.decode('utf-8')
+        except Exception:
+            return None
 
     def _cleanup(self):
-        import shutil
         try:
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
         except Exception:

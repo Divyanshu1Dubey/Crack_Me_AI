@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play } from 'lucide-react';
+import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 
 /**
  * Renders medical question text with proper formatting.
@@ -470,14 +471,10 @@ export default function TakeTestPage() {
                         <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
                             <div className="p-1">
                                 <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
-                                <video 
+                                <PremiumVideoPlayer 
                                     src={rq.video_url} 
-                                    controls 
-                                    className="w-full rounded-b-lg max-h-[500px] bg-black"
-                                    preload="metadata"
-                                >
-                                    Your browser does not support the video tag.
-                                </video>
+                                    className="w-full max-h-[500px]"
+                                />
                             </div>
                         </div>
                     )}

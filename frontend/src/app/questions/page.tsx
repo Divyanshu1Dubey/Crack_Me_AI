@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 
 /**
  * Renders medical question text with proper formatting.
@@ -735,14 +736,10 @@ function QuestionsContent() {
                                             <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
                                                 <div className="p-1">
                                                     <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
-                                                    <video 
+                                                    <PremiumVideoPlayer 
                                                         src={detail.video_url} 
-                                                        controls 
-                                                        className="w-full rounded-b-lg max-h-[500px] bg-black"
-                                                        preload="metadata"
-                                                    >
-                                                        Your browser does not support the video tag.
-                                                    </video>
+                                                        className="w-full max-h-[500px]"
+                                                    />
                                                 </div>
                                             </div>
                                         )}

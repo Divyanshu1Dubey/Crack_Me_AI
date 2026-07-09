@@ -1,14 +1,17 @@
 """
-CrackLabs AI - Professional slide renderer for educational videos.
+CrackLabs AI - Professional slide renderer for educational videos (V2).
 Uses Pillow to create beautiful dark-mode, multi-section slides at 1280x720.
 """
 import os
 import re
+from typing import Any, Dict
 from PIL import Image, ImageDraw, ImageFont
 
 
 def _clean(text):
     """Strip markdown formatting for slide display."""
+    if not text:
+        return ""
     t = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     t = re.sub(r'\*(.*?)\*', r'\1', t)
     t = re.sub(r'#{1,6}\s+', '', t)
@@ -127,7 +130,6 @@ class SlideRenderer:
             else:
                 if cur:
                     lines.append(cur)
-                # Handle very long words
                 if font.getlength(w) > max_w:
                     cur = w[:int(max_w / (font.getlength('A') or 10))] + '...'
                 else:
@@ -136,13 +138,14 @@ class SlideRenderer:
             lines.append(cur)
         return lines or ['']
 
-    def _text_block(self, d, text, pos, font, fill, max_w, max_lines=None, spacing=8):
-        """Draw wrapped text. Returns height used."""
+    def _text_block(self, d, text, pos, font, fill, max_w, max_lines=None, spacing=8, focus_terms=None):
+        """Draw wrapped text with basic highlight for focus terms."""
         text = _clean(text)
         lines = self._wrap(text, font, max_w)
         if max_lines and len(lines) > max_lines:
             lines = lines[:max_lines]
             lines[-1] = lines[-1][:-3] + '...' if len(lines[-1]) > 3 else '...'
+        
         x, y = pos
         h = 0
         for ln in lines:
@@ -170,55 +173,78 @@ class SlideRenderer:
         d.text((x, y), text.upper(), fill=self.GRAY, font=self.f['small'])
         return y + 34
 
+    # ── Scene Router ───────────────────────────────────────
+
+    def render_scene(self, scene: Dict[str, Any], metadata: Dict[str, Any], step: int, total: int) -> Image.Image:
+        """Route the scene dictionary to the correct rendering method."""
+        scene_type = scene.get("type", "concept")
+        
+        if scene_type == "intro":
+            return self.render_intro(scene, metadata, step, total)
+        elif scene_type == "question_focus":
+            return self.render_question(scene, metadata, step, total)
+        elif scene_type in ["option_elimination", "answer_reveal"]:
+            return self.render_answer(scene, metadata, step, total)
+        elif scene_type in ["concept", "mechanism", "explanation"]:
+            return self.render_concept(scene, step, total)
+        elif scene_type in ["clinical_pearl", "mnemonic", "exam_strategy", "reference"]:
+            return self.render_highlight(scene, step, total)
+        elif scene_type == "takeaway":
+            return self.render_takeaway(scene, step, total)
+        else:
+            return self.render_concept(scene, step, total)
+
     # ── Slide renderers ───────────────────────────────────────
 
-    def render_title(self, subject, year, difficulty, q_id, step, total):
+    def render_intro(self, scene, metadata, step, total):
         img, d = self._bg()
         d.rectangle([(0, 0), (self.W, 4)], fill=self.ACCENT)
 
         cx = self.W // 2
+        subject = metadata.get("subject", "General")
+        year = metadata.get("year", "")
+        difficulty = metadata.get("difficulty", "medium")
 
-        # Brand
         d.text((cx, 170), 'CrackLabs AI', fill=self.WHITE, font=self.f['hero'], anchor='mm')
         d.text((cx, 215), 'AI-Powered Medical Education', fill=self.GRAY, font=self.f['small'], anchor='mm')
 
-        # Decorative line
         d.line([(cx - 120, 248), (cx + 120, 248)], fill=self.ACCENT, width=2)
 
-        # Badges
         diff_c = {'easy': self.GREEN, 'medium': self.AMBER, 'hard': self.RED}
         badges = [
-            (f'UPSC CMS {year}', self.ACCENT),
+            (f'UPSC CMS {year}' if year else 'UPSC CMS', self.ACCENT),
             (subject, self.PURPLE),
             (difficulty.upper(), diff_c.get(difficulty, self.GRAY)),
         ]
-        widths = [self.f['badge'].getlength(t) + 28 for t, _ in badges]
-        total_w = sum(widths) + 12 * (len(badges) - 1)
+        widths = [self.f['badge'].getlength(t) + 28 for t, _ in badges if t]
+        total_w = sum(widths) + 12 * (len(widths) - 1)
         bx = cx - total_w / 2
-        for (txt, bg), bw in zip(badges, widths):
+        for (txt, bg), bw in zip([b for b in badges if b[0]], widths):
             self._badge(d, (int(bx), 275), txt, bg)
             bx += bw + 12
 
-        d.text((cx, 345), f'Question #{q_id}', fill=self.LIGHT, font=self.f['head'], anchor='mm')
+        title = scene.get("title", f"Topic Review")
+        d.text((cx, 345), title, fill=self.LIGHT, font=self.f['head'], anchor='mm')
+        
+        subtitle = scene.get("subtitle", "Let's break this down step by step")
+        d.text((cx, 440), subtitle, fill=self.GRAY, font=self.f['body'], anchor='mm')
 
-        # Subtitle
-        d.text((cx, 440), "Let's break this down step by step", fill=self.GRAY, font=self.f['body'], anchor='mm')
-
-        # Subtle glow effect
         d.rounded_rectangle([cx - 180, 455, cx + 180, 460], radius=2, fill=(*self.ACCENT, 60))
 
         self._brand(d)
         self._progress(d, step, total)
         return img
 
-    def render_question(self, text, step, total):
+    def render_question(self, scene, metadata, step, total):
         img, d = self._bg()
-        y = self._header(d, 'QUESTION', self.PAD, self.ACCENT)
+        title = scene.get("title", "QUESTION")
+        y = self._header(d, title, self.PAD, self.ACCENT)
 
         cy0, cy1 = y + 8, self.H - 60
         self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=self.ACCENT)
 
         ip = 30
+        text = metadata.get("question_text", scene.get("text", ""))
         self._text_block(d, text, (self.PAD + ip + 10, cy0 + ip),
                          self.f['body'], self.WHITE, self.CW - 2 * ip - 10,
                          max_lines=16, spacing=12)
@@ -227,43 +253,20 @@ class SlideRenderer:
         self._progress(d, step, total)
         return img
 
-    def render_options(self, options, step, total):
+    def render_answer(self, scene, metadata, step, total):
         img, d = self._bg()
-        y = self._header(d, 'OPTIONS  —  THINK ABOUT YOUR ANSWER', self.PAD, self.AMBER)
-
-        opt_h, gap = 100, 14
-        labels = ['A', 'B', 'C', 'D']
-        colors = [self.ACCENT, self.PURPLE, self.TEAL, self.AMBER]
-
-        for i, lbl in enumerate(labels):
-            oy = y + 8 + i * (opt_h + gap)
-            self._card(d, [self.PAD, oy, self.W - self.PAD, oy + opt_h])
-
-            # Label circle
-            cx_c = self.PAD + 44
-            cy_c = oy + opt_h // 2
-            r = 22
-            d.ellipse([cx_c - r, cy_c - r, cx_c + r, cy_c + r], fill=colors[i])
-            d.text((cx_c, cy_c), lbl, fill=self.WHITE, font=self.f['opt_l'], anchor='mm')
-
-            # Option text
-            self._text_block(d, options.get(lbl, ''), (self.PAD + 82, oy + 20),
-                             self.f['opt'], self.LIGHT, self.CW - 100, max_lines=3, spacing=6)
-
-        self._brand(d)
-        self._progress(d, step, total)
-        return img
-
-    def render_answer(self, options, correct, step, total):
-        img, d = self._bg()
-        y = self._header(d, f'CORRECT ANSWER:  {correct}', self.PAD, self.GREEN)
+        
+        correct = metadata.get("correct_answer", "")
+        options = metadata.get("options", {})
+        
+        y = self._header(d, scene.get("title", f"ANSWER: {correct}"), self.PAD, self.GREEN)
 
         opt_h, gap = 100, 14
         labels = ['A', 'B', 'C', 'D']
 
         for i, lbl in enumerate(labels):
             oy = y + 8 + i * (opt_h + gap)
-            is_correct = lbl == correct
+            is_correct = (lbl == correct)
 
             if is_correct:
                 d.rounded_rectangle([self.PAD, oy, self.W - self.PAD, oy + opt_h],
@@ -286,94 +289,106 @@ class SlideRenderer:
         self._progress(d, step, total)
         return img
 
-    def render_explanation(self, text, slide_num, total_exp, step, total):
+    def render_concept(self, scene, step, total):
         img, d = self._bg()
-        label = 'EXPLANATION'
-        if total_exp > 1:
-            label += f'  ({slide_num}/{total_exp})'
-        y = self._header(d, label, self.PAD, self.TEAL)
+        title = scene.get("title", "EXPLANATION")
+        y = self._header(d, title, self.PAD, self.TEAL)
 
         cy0, cy1 = y + 8, self.H - 60
         self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=self.TEAL)
 
         ip = 28
-        self._text_block(d, text, (self.PAD + ip + 10, cy0 + ip),
-                         self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
-                         max_lines=16, spacing=11)
+        curr_y = cy0 + ip
+        
+        subtitle = scene.get("subtitle", "")
+        if subtitle:
+            d.text((self.PAD + ip + 10, curr_y), subtitle, fill=self.TEAL, font=self.f['body_b'])
+            curr_y += 35
+            d.line([(self.PAD + ip + 10, curr_y), (self.W - self.PAD - ip, curr_y)], fill=self.CARD_B, width=1)
+            curr_y += 20
+        
+        bullets = scene.get("bullets", [])
+        if bullets:
+            for bullet in bullets[:4]: # Max 4 bullets
+                # Draw bullet point
+                r = 6
+                bcx = self.PAD + ip + 15
+                bcy = curr_y + 16
+                d.ellipse([bcx - r, bcy - r, bcx + r, bcy + r], fill=self.TEAL)
+                
+                h = self._text_block(d, bullet, (self.PAD + ip + 40, curr_y),
+                                   self.f['body'], self.LIGHT, self.CW - 2 * ip - 50,
+                                   max_lines=3, spacing=8)
+                curr_y += h + 15
+        else:
+            text = scene.get("narration", "")
+            self._text_block(d, text, (self.PAD + ip + 10, curr_y),
+                             self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
+                             max_lines=14, spacing=11)
 
         self._brand(d)
         self._progress(d, step, total)
         return img
 
-    def render_clinical_pearl(self, text, step, total):
+    def render_highlight(self, scene, step, total):
         img, d = self._bg()
-        y = self._header(d, 'CLINICAL PEARL', self.PAD, self.AMBER)
+        
+        scene_type = scene.get("type", "")
+        if scene_type == "clinical_pearl":
+            header_color = self.AMBER
+            accent_label = "High-Yield Point"
+        elif scene_type == "mnemonic":
+            header_color = self.PURPLE
+            accent_label = "Remember This"
+        else:
+            header_color = self.ACCENT
+            accent_label = "Key Point"
+            
+        title = scene.get("title", accent_label.upper())
+        y = self._header(d, title, self.PAD, header_color)
 
         cy0, cy1 = y + 8, self.H - 60
-        self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=self.AMBER)
+        self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=header_color)
 
-        # Header inside card
         ip = 28
-        d.text((self.PAD + ip + 10, cy0 + ip), 'High-Yield Point',
-               fill=self.AMBER, font=self.f['body_b'])
-
-        d.line([(self.PAD + ip + 10, cy0 + ip + 35),
-                (self.W - self.PAD - ip, cy0 + ip + 35)], fill=self.CARD_B, width=1)
-
-        self._text_block(d, text, (self.PAD + ip + 10, cy0 + ip + 48),
-                         self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
-                         max_lines=13, spacing=11)
+        curr_y = cy0 + ip
+        
+        subtitle = scene.get("subtitle", accent_label)
+        if subtitle:
+            d.text((self.PAD + ip + 10, curr_y), subtitle, fill=header_color, font=self.f['body_b'])
+            curr_y += 35
+            d.line([(self.PAD + ip + 10, curr_y), (self.W - self.PAD - ip, curr_y)], fill=self.CARD_B, width=1)
+            curr_y += 20
+        
+        bullets = scene.get("bullets", [])
+        if bullets:
+            for bullet in bullets[:4]: 
+                r = 6
+                bcx = self.PAD + ip + 15
+                bcy = curr_y + 16
+                d.ellipse([bcx - r, bcy - r, bcx + r, bcy + r], fill=header_color)
+                
+                h = self._text_block(d, bullet, (self.PAD + ip + 40, curr_y),
+                                   self.f['body'], self.LIGHT, self.CW - 2 * ip - 50,
+                                   max_lines=3, spacing=8)
+                curr_y += h + 15
+        else:
+            text = scene.get("narration", "")
+            self._text_block(d, text, (self.PAD + ip + 10, curr_y),
+                             self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
+                             max_lines=12, spacing=11)
 
         self._brand(d)
         self._progress(d, step, total)
         return img
 
-    def render_mnemonic(self, text, step, total):
-        img, d = self._bg()
-        y = self._header(d, 'MEMORY TRICK', self.PAD, self.PURPLE)
-
-        cy0, cy1 = y + 8, self.H - 60
-        self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=self.PURPLE)
-
-        ip = 28
-        d.text((self.PAD + ip + 10, cy0 + ip), 'Remember This',
-               fill=self.PURPLE, font=self.f['body_b'])
-
-        d.line([(self.PAD + ip + 10, cy0 + ip + 35),
-                (self.W - self.PAD - ip, cy0 + ip + 35)], fill=self.CARD_B, width=1)
-
-        self._text_block(d, text, (self.PAD + ip + 10, cy0 + ip + 48),
-                         self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
-                         max_lines=13, spacing=11)
-
-        self._brand(d)
-        self._progress(d, step, total)
-        return img
-
-    def render_key_differentiators(self, text, step, total):
-        """Extra slide for key differentiators / why-wrong analysis."""
-        img, d = self._bg()
-        y = self._header(d, 'KEY DIFFERENTIATORS', self.PAD, self.ACCENT)
-
-        cy0, cy1 = y + 8, self.H - 60
-        self._card(d, [self.PAD, cy0, self.W - self.PAD, cy1], accent=self.ACCENT)
-
-        ip = 28
-        self._text_block(d, text, (self.PAD + ip + 10, cy0 + ip),
-                         self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
-                         max_lines=16, spacing=11)
-
-        self._brand(d)
-        self._progress(d, step, total)
-        return img
-
-    def render_outro(self, step, total):
+    def render_takeaway(self, scene, step, total):
         img, d = self._bg()
         d.rectangle([(0, 0), (self.W, 4)], fill=self.ACCENT)
 
         cx = self.W // 2
-        d.text((cx, 230), 'CrackLabs AI', fill=self.WHITE, font=self.f['hero'], anchor='mm')
-        d.text((cx, 280), 'AI-Powered Medical Education', fill=self.GRAY, font=self.f['small'], anchor='mm')
+        d.text((cx, 230), scene.get("title", 'CrackLabs AI'), fill=self.WHITE, font=self.f['hero'], anchor='mm')
+        d.text((cx, 280), scene.get("subtitle", 'AI-Powered Medical Education'), fill=self.GRAY, font=self.f['small'], anchor='mm')
 
         d.line([(cx - 120, 315), (cx + 120, 315)], fill=self.ACCENT, width=2)
 
