@@ -31,10 +31,14 @@ const isAppRunningLocally = () => {
 const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
 const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
+const API_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || 20000);
+const MAX_API_RETRIES = Math.max(0, Number(process.env.NEXT_PUBLIC_API_RETRY_COUNT || 1));
 const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-backend.onrender.com',
   '.onrender.com',
 ];
+const RETRYABLE_METHODS = new Set(['get', 'head', 'options']);
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 const normalizeApiBaseUrl = (url: string) => {
   const normalized = url.replace(/\/+$/, '');
@@ -91,8 +95,18 @@ const getOrCreateSessionId = (): string => {
   return id;
 };
 
+const getOrCreateRequestId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
+const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: API_REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -100,10 +114,13 @@ const api = axios.create({
 
 // Add auth token and session tracking to requests
 api.interceptors.request.use(async (config) => {
+  const headers = axios.AxiosHeaders.from(config.headers);
   const sessionId = getOrCreateSessionId();
   if (sessionId) {
-    config.headers['X-Session-ID'] = sessionId;
+    headers.set('X-Session-ID', sessionId);
   }
+  headers.set('X-Request-ID', getOrCreateRequestId());
+  config.headers = headers;
 
   if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
     const supabase = getSupabaseBrowserClient();
@@ -130,21 +147,38 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = (error.config || {}) as {
       _retry?: boolean;
+      _retryCount?: number;
       _apiBaseFailover?: boolean;
       baseURL?: string;
+      method?: string;
       headers?: Record<string, string>;
     };
     const status = error.response?.status as number | undefined;
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
+    const normalizedMethod = (originalRequest.method || 'get').toLowerCase();
+    const isRetryableMethod = RETRYABLE_METHODS.has(normalizedMethod);
+    const isNetworkFailure = !status || error.code === 'ECONNABORTED';
+    const isRetryableStatus = status ? RETRYABLE_STATUS_CODES.has(status) : false;
+    const retryCount = originalRequest._retryCount || 0;
+    const shouldRetryTransient =
+      isRetryableMethod &&
+      retryCount < MAX_API_RETRIES &&
+      (isNetworkFailure || isRetryableStatus);
 
     // Single session validation check
     const errorCode = error.response?.data?.code;
     if (errorCode === 'session_invalid') {
       if (typeof window !== 'undefined') {
         await clearSupabaseLocalSession();
-        window.location.href = '/login?authError=' + encodeURIComponent('ur logged in another device');
+        window.location.href = '/login?authError=' + encodeURIComponent('You are logged in on another device');
         return new Promise(() => {}); // Stop request chain
       }
+    }
+
+    if (shouldRetryTransient) {
+      originalRequest._retryCount = retryCount + 1;
+      await waitFor(250 * (retryCount + 1));
+      return api(originalRequest);
     }
 
     const shouldFailover =
