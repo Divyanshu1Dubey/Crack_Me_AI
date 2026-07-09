@@ -13,10 +13,17 @@ import re
 import tempfile
 import logging
 import asyncio
+import json
+import hashlib
+import shutil
+from pathlib import Path
+from typing import Any
+from django.conf import settings
 from django.utils import timezone
 from questions.models import Question
 
 logger = logging.getLogger(__name__)
+ENGINE_VERSION = 'video-engine-v2'
 
 
 # ── Content helpers ──────────────────────────────────────────
@@ -77,6 +84,7 @@ def _split_text(text, max_chars=550):
 class VideoGeneratorService:
     def __init__(self):
         self.tmp_dir = tempfile.mkdtemp(prefix='cracklabs_video_')
+        self.bucket = 'educational_videos'
 
     def generate_for_question(self, question_id: int):
         question = None
@@ -88,6 +96,7 @@ class VideoGeneratorService:
 
             explanation = _effective_explanation(question)
             answer_text = _effective_answer(question)
+            expected_version = ENGINE_VERSION
 
             if not explanation and not answer_text:
                 question.video_status = 'failed'
@@ -97,6 +106,20 @@ class VideoGeneratorService:
 
             # 1. Build section list
             sections = self._build_sections(question, explanation, answer_text)
+            content_hash = self._content_hash(question)
+            script = {
+                'question_id': question.id,
+                'content_hash': content_hash,
+                'engine_version': expected_version,
+                'scenes': [
+                    {
+                        'title': sec.get('title', ''),
+                        'narration': sec.get('narration', ''),
+                        'duration_hint': sec.get('min_dur', 5),
+                    }
+                    for sec in sections
+                ],
+            }
             logger.info(f'Q{question_id}: Built {len(sections)} slides')
 
             # 2. Render slides & generate audio
@@ -112,25 +135,48 @@ class VideoGeneratorService:
                     'slide': slide_path,
                     'audio': audio_path if audio_ok else None,
                     'min_dur': sec.get('min_dur', 5),
+                    'title': sec.get('title', ''),
+                    'narration': sec.get('narration', ''),
                 })
 
             # 3. Assemble video
             video_path = os.path.join(self.tmp_dir, f'q_{question_id}.mp4')
-            self._assemble(slide_data, video_path)
+            duration = self._assemble(slide_data, video_path)
+            vtt_path = os.path.join(self.tmp_dir, f'q_{question_id}.vtt')
+            self._write_vtt(slide_data, vtt_path)
             logger.info(f'Q{question_id}: Video assembled')
 
             # 4. Upload
-            video_url = self._upload(video_path, f'q_{question_id}_video.mp4')
+            video_name = f'q_{question_id}_{content_hash}_video.mp4'
+            thumbnail_name = f'q_{question_id}_{content_hash}_thumb.png'
+            vtt_name = f'q_{question_id}_{content_hash}.vtt'
+
+            video_url = self._upload(video_path, video_name, 'video/mp4')
             if not video_url:
                 raise Exception('Supabase upload failed')
 
-            question.video_url = video_url
-            question.video_status = 'completed'
-            question.video_generated_at = timezone.now()
-            question.save(update_fields=['video_url', 'video_status', 'video_generated_at'])
-            logger.info(f'Q{question_id}: Video completed -> {video_url}')
+            thumbnail_path = slide_data[0]['slide'] if slide_data else ''
+            thumb_url = self._upload(thumbnail_path, thumbnail_name, 'image/png') or ''
+            self._upload(vtt_path, vtt_name, 'text/vtt')
+            self._save_script_cache(script, content_hash)
 
-            self._cleanup()
+            question.video_url = video_url
+            question.video_thumbnail = thumb_url
+            question.video_status = 'completed'
+            question.video_duration = int(round(duration))
+            question.video_version = expected_version
+            question.video_generated_at = timezone.now()
+            question.video_error = ''
+            question.save(update_fields=[
+                'video_url',
+                'video_thumbnail',
+                'video_status',
+                'video_duration',
+                'video_version',
+                'video_generated_at',
+                'video_error',
+            ])
+            logger.info(f'Q{question_id}: Video completed -> {video_url}')
             return True
 
         except Exception as e:
@@ -139,8 +185,52 @@ class VideoGeneratorService:
                 question.video_status = 'failed'
                 question.video_error = str(e)[:500]
                 question.save(update_fields=['video_status', 'video_error'])
-            self._cleanup()
             return False
+        finally:
+            self._cleanup()
+
+    def _content_hash(self, q: Question) -> str:
+        payload = {
+            'engine': ENGINE_VERSION,
+            'question': q.question_text,
+            'options': {'A': q.option_a, 'B': q.option_b, 'C': q.option_c, 'D': q.option_d},
+            'correct': q.correct_answer,
+            'answer': _effective_answer(q),
+            'explanation': _effective_explanation(q),
+            'mnemonic': _effective_mnemonic(q),
+            'subject': q.subject.name if q.subject else '',
+            'topic': q.topic.name if q.topic else '',
+            'year': q.year,
+        }
+        raw = json.dumps(payload, sort_keys=True, default=str, ensure_ascii=True)
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]
+
+    def _script_object_name(self, question_id: int, content_hash: str) -> str:
+        return f'scripts/q_{question_id}_{content_hash}_script.json'
+
+    def _local_script_path(self, question_id: int, content_hash: str) -> Path:
+        root = Path(getattr(settings, 'MEDIA_ROOT', Path.cwd() / 'media'))
+        return root / 'video_engine' / 'scripts' / f'q_{question_id}_{content_hash}_script.json'
+
+    def _save_script_cache(self, script: dict[str, Any], content_hash: str) -> None:
+        question_id = int(script.get('question_id') or 0)
+        if not question_id:
+            return
+
+        text = json.dumps(script, ensure_ascii=True, indent=2)
+        local_path = self._local_script_path(question_id, content_hash)
+        try:
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.write_text(text, encoding='utf-8')
+        except Exception as exc:
+            logger.warning('Could not write local script cache for Q%s: %s', question_id, exc)
+
+        remote_path = os.path.join(self.tmp_dir, f'q_{question_id}_{content_hash}_script.json')
+        try:
+            Path(remote_path).write_text(text, encoding='utf-8')
+            self._upload(remote_path, self._script_object_name(question_id, content_hash), 'application/json')
+        except Exception as exc:
+            logger.warning('Could not upload script cache for Q%s: %s', question_id, exc)
 
     # ── Section builder ──────────────────────────────────────
 
@@ -277,6 +367,7 @@ class VideoGeneratorService:
         from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 
         clips = []
+        total_duration = 0.0
         for sd in slide_data:
             if sd['audio'] and os.path.exists(sd['audio']):
                 try:
@@ -286,9 +377,13 @@ class VideoGeneratorService:
                     clip = clip.with_audio(audio)
                 except Exception as e:
                     logger.warning(f"Audio load failed: {e}, using min duration")
-                    clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                    duration = float(sd['min_dur'])
+                    clip = ImageClip(sd['slide']).with_duration(duration)
             else:
-                clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                duration = float(sd['min_dur'])
+                clip = ImageClip(sd['slide']).with_duration(duration)
+            sd['duration'] = float(duration)
+            total_duration += float(duration)
             clips.append(clip)
 
         final = concatenate_videoclips(clips, method='compose')
@@ -308,9 +403,40 @@ class VideoGeneratorService:
             except Exception:
                 pass
 
+        return total_duration
+
+    def _write_vtt(self, slide_data: list[dict[str, Any]], output_path: str) -> None:
+        lines = ['WEBVTT', '', 'NOTE Generated by CrackLabs AI Video Engine', '']
+        cursor = 0.0
+        cue_id = 1
+        for sd in slide_data:
+            duration = float(sd.get('duration') or sd.get('min_dur') or 5)
+            narration = _clean_for_tts(sd.get('narration') or '')
+            if not narration:
+                narration = sd.get('title') or 'Lesson scene'
+            start = cursor
+            end = cursor + duration
+            lines.extend([
+                str(cue_id),
+                f'{self._format_vtt_time(start)} --> {self._format_vtt_time(end)}',
+                narration[:180],
+                '',
+            ])
+            cue_id += 1
+            cursor = end
+
+        Path(output_path).write_text('\n'.join(lines), encoding='utf-8')
+
+    def _format_vtt_time(self, total_seconds: float) -> str:
+        total_ms = int(round(max(total_seconds, 0) * 1000))
+        hours, rem = divmod(total_ms, 3_600_000)
+        minutes, rem = divmod(rem, 60_000)
+        seconds, ms = divmod(rem, 1000)
+        return f'{hours:02d}:{minutes:02d}:{seconds:02d}.{ms:03d}'
+
     # ── Supabase upload ──────────────────────────────────────
 
-    def _upload(self, file_path, file_name):
+    def _upload(self, file_path, file_name, content_type='application/octet-stream'):
         from supabase import create_client
 
         url = os.environ.get('SUPABASE_URL')
@@ -322,15 +448,13 @@ class VideoGeneratorService:
 
         try:
             client = create_client(url, key)
-            bucket = 'educational_videos'
-
             with open(file_path, 'rb') as f:
-                client.storage.from_(bucket).upload(
+                client.storage.from_(self.bucket).upload(
                     path=file_name, file=f,
-                    file_options={'content-type': 'video/mp4', 'upsert': 'true'}
+                    file_options={'content-type': content_type, 'upsert': 'true'}
                 )
 
-            public_url = client.storage.from_(bucket).get_public_url(file_name)
+            public_url = client.storage.from_(self.bucket).get_public_url(file_name)
             logger.info(f'Uploaded: {public_url}')
             return public_url
         except Exception as e:
@@ -340,7 +464,6 @@ class VideoGeneratorService:
     # ── Cleanup ──────────────────────────────────────────────
 
     def _cleanup(self):
-        import shutil
         try:
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
         except Exception:
