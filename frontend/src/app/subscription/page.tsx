@@ -11,7 +11,7 @@ import {
     X, Check, AlertTriangle, Brain, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -44,7 +44,12 @@ export default function SubscriptionPage() {
         score: number;
         message: string;
     } | null>(null);
-    const [aiAnalysis, setAiAnalysis] = useState<string>('');
+    const [aiAnalysis, setAiAnalysis] = useState<{
+        correctCount: number;
+        percentage: number;
+        points: number;
+        testResultMsg: string;
+    } | null>(null);
     const [generatingAnalysis, setGeneratingAnalysis] = useState(false);
 
     useEffect(() => {
@@ -57,7 +62,7 @@ export default function SubscriptionPage() {
         setLoadingQuestions(true);
         setShowTestModal(true);
         setTestResult(null);
-        setAiAnalysis('');
+        setAiAnalysis(null);
         setSelectedAnswers({});
         setCurrentQuestionIdx(0);
 
@@ -206,37 +211,12 @@ export default function SubscriptionPage() {
             const points = (correctCount * 2.08) - (incorrectCount * 0.69);
             const percentage = Math.round((correctCount / 5) * 100);
 
-            let analysisText = `### 🧠 AI Clinical Skill Diagnosis Report\n\n`;
-            analysisText += `* **Test Score**: ${correctCount} / 5 correct answers (${percentage}%)\n`;
-            analysisText += `* **Scholarship Marking**: **${points.toFixed(2)} pts** (Calculated as +2.08 for correct and -0.69 for incorrect)\n\n`;
-            
-            if (correctCount === 5) {
-                analysisText += `> [!NOTE]\n`;
-                analysisText += `> **EXCELLENT PERFORMANCE!** You have demonstrated 100% precision in diagnosing high-yield clinical conditions. ${testResultMsg}\n\n`;
-            } else {
-                analysisText += `> [!WARNING]\n`;
-                analysisText += `> **IMPROVEMENT FOCUS REQUIRED**: You did not achieve a perfect score. ${testResultMsg} Let's study the clinical concepts below.\n\n`;
-            }
-
-            analysisText += `#### 🔍 Performance Summary\n`;
-            analysisText += `Based on your test attempt, you answered **${correctCount} out of 5** questions correctly.\n`;
-            
-            if (correctCount < 5) {
-                analysisText += `We noticed some gaps in your recall of these high-yield topics. Clinical exams require strong pattern recognition for both straightforward presentations and differential diagnoses.\n\n`;
-            } else {
-                analysisText += `Exceptional! You demonstrated a strong grasp of high-yield clinical presentations and avoided common distractors.\n\n`;
-            }
-
-            analysisText += `#### 💡 Clinical Recommendation\n`;
-            if (correctCount < 5) {
-                analysisText += `- **Review Weaknesses**: Check out our AI Tutor in the Question Bank to get step-by-step breakdowns for the topics you missed.\n`;
-                analysisText += `- **Spaced Repetition**: Use our integrated Flashcards to convert these mistakes into permanent long-term memory.\n`;
-                analysisText += `*Keep practicing in our active Question Bank to perfect your recall!*`;
-            } else {
-                analysisText += `You are ready to claim premium access. Head over to checkout to lock in your discounted monthly subscription!`;
-            }
-
-            setAiAnalysis(analysisText);
+            setAiAnalysis({
+                correctCount,
+                percentage,
+                points,
+                testResultMsg
+            });
             setGeneratingAnalysis(false);
         }, 1500);
     };
@@ -636,13 +616,78 @@ export default function SubscriptionPage() {
                                                     <RefreshCw className="w-6 h-6 text-primary animate-spin" />
                                                     <p className="text-xs text-muted-foreground">AI is generating your detailed skill diagnostics...</p>
                                                 </div>
-                                            ) : (
-                                                <div className="p-5 rounded-2xl border border-border bg-slate-50 dark:bg-slate-900/40 text-sm leading-relaxed whitespace-pre-line text-foreground overflow-y-auto max-h-[300px]" style={{ scrollbarWidth: 'thin' }}>
-                                                    <ReactMarkdown className="markdown-body">
-                                                        {aiAnalysis}
-                                                    </ReactMarkdown>
+                                            ) : aiAnalysis ? (
+                                                <div className="p-6 rounded-3xl border border-border bg-card shadow-sm space-y-6 text-sm leading-relaxed text-foreground overflow-y-auto max-h-[400px] custom-scrollbar">
+                                                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                                                        <Brain className="w-6 h-6 text-purple-500" />
+                                                        <h3 className="text-lg font-bold text-foreground">AI Clinical Skill Diagnosis Report</h3>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        <div className="p-4 rounded-2xl bg-muted/50 border border-border/50">
+                                                            <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Test Score</div>
+                                                            <div className="text-2xl font-black text-foreground">{aiAnalysis.correctCount} <span className="text-base font-medium text-muted-foreground">/ 5 correct</span></div>
+                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">{aiAnalysis.percentage}% accuracy</div>
+                                                        </div>
+                                                        <div className="p-4 rounded-2xl bg-muted/50 border border-border/50">
+                                                            <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Scholarship Marking</div>
+                                                            <div className={`text-2xl font-black ${aiAnalysis.points > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{aiAnalysis.points > 0 ? '+' : ''}{aiAnalysis.points.toFixed(2)} <span className="text-base font-medium text-muted-foreground">pts</span></div>
+                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">+2.08 for correct, -0.69 for incorrect</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {aiAnalysis.correctCount === 5 ? (
+                                                        <div className="p-4 rounded-2xl border bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex gap-3">
+                                                            <Check className="w-5 h-5 shrink-0 mt-0.5" />
+                                                            <div>
+                                                                <strong className="block mb-1 font-bold">EXCELLENT PERFORMANCE!</strong>
+                                                                <p className="text-sm font-medium leading-relaxed">You have demonstrated 100% precision in diagnosing high-yield clinical conditions. {aiAnalysis.testResultMsg}</p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-4 rounded-2xl border bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400 flex gap-3">
+                                                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                                                            <div>
+                                                                <strong className="block mb-1 font-bold">IMPROVEMENT FOCUS REQUIRED</strong>
+                                                                <p className="text-sm font-medium leading-relaxed">You did not achieve a perfect score. {aiAnalysis.testResultMsg} Let's study the clinical concepts below.</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-base font-bold flex items-center gap-2">
+                                                            <span className="text-xl">🔍</span> Performance Summary
+                                                        </h4>
+                                                        <p className="text-muted-foreground">Based on your test attempt, you answered <strong className="text-foreground">{aiAnalysis.correctCount} out of 5</strong> questions correctly.</p>
+                                                        {aiAnalysis.correctCount < 5 ? (
+                                                            <p className="text-muted-foreground">We noticed some gaps in your recall of these high-yield topics. Clinical exams require strong pattern recognition for both straightforward presentations and differential diagnoses.</p>
+                                                        ) : (
+                                                            <p className="text-muted-foreground">Exceptional! You demonstrated a strong grasp of high-yield clinical presentations and avoided common distractors.</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-4 pt-4 border-t border-border">
+                                                        <h4 className="text-base font-bold flex items-center gap-2">
+                                                            <span className="text-xl">💡</span> Clinical Recommendation
+                                                        </h4>
+                                                        {aiAnalysis.correctCount < 5 ? (
+                                                            <ul className="space-y-3">
+                                                                <li className="flex items-start gap-2">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0"></div>
+                                                                    <p className="text-muted-foreground"><strong className="text-foreground">Review Weaknesses:</strong> Check out our AI Tutor in the Question Bank to get step-by-step breakdowns for the topics you missed.</p>
+                                                                </li>
+                                                                <li className="flex items-start gap-2">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0"></div>
+                                                                    <p className="text-muted-foreground"><strong className="text-foreground">Spaced Repetition:</strong> Use our integrated Flashcards to convert these mistakes into permanent long-term memory.</p>
+                                                                </li>
+                                                                <li className="mt-4 pt-2 font-medium italic text-primary/80">Keep practicing in our active Question Bank to perfect your recall!</li>
+                                                            </ul>
+                                                        ) : (
+                                                            <p className="text-muted-foreground font-medium">You are ready to claim premium access. Head over to checkout to lock in your discounted monthly subscription!</p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            )}
+                                            ) : null}
 
                                             <div className="flex gap-3 justify-end">
                                                 {testResult.status === 'passed' ? (

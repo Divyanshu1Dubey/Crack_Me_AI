@@ -28,6 +28,8 @@ interface User {
     profile_bonus_rewarded?: boolean;
     is_subscribed?: boolean;
     scholarship_test_passed?: boolean;
+    scholarship_test_attempts?: number;
+    scholarship_granted_price?: number;
 }
 
 interface AuthContextType {
