@@ -111,14 +111,7 @@ class VideoGeneratorService:
                 'question_id': question.id,
                 'content_hash': content_hash,
                 'engine_version': expected_version,
-                'scenes': [
-                    {
-                        'title': sec.get('title', ''),
-                        'narration': sec.get('narration', ''),
-                        'duration_hint': sec.get('min_dur', 5),
-                    }
-                    for sec in sections
-                ],
+                'scene_count': len(sections),
             }
             logger.info(f'Q{question_id}: Built {len(sections)} slides')
 
