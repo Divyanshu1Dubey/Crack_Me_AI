@@ -545,7 +545,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         question = self.get_object()
         question.video_status = 'pending'
         question.save(update_fields=['video_status'])
-        async_task('video_engine.tasks.generate_video_task', question.id, hook='video_engine.tasks.video_task_hook')
+        async_task('video_engine.tasks.generate_video_task', question.id)
         return Response({'message': 'Video generation queued', 'id': question.id, 'video_status': 'pending'})
 
     @action(detail=False, methods=['post'], url_path=r'extraction/items/(?P<item_id>[^/.]+)/autotag')

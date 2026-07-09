@@ -18,7 +18,7 @@ class VideoGeneratorService:
             question.save()
             
             # Step 1: Ensure AI content exists
-            if not question.ai_generated_at:
+            if not question.ai_answer:
                 logger.warning(f"Q{question_id} missing AI fields. Cannot generate video.")
                 question.video_status = 'failed'
                 question.video_error = 'AI content not found. Generate AI first.'
