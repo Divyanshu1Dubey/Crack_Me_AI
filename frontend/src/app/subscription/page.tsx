@@ -11,6 +11,7 @@ import {
     X, Check, AlertTriangle, Brain, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -61,56 +62,92 @@ export default function SubscriptionPage() {
         setCurrentQuestionIdx(0);
 
         try {
-            // Fetch 5 questions from QBank
-            const res = await questionsAPI.list({ page: 1, page_size: 5 });
-            const list = res.data.results || res.data || [];
-            // Safe fallback standard questions if API list is empty
-            if (list.length < 5) {
-                setScholarshipQuestions([
-                    {
-                        id: 9901,
-                        question_text: "Which cranial nerve is responsible for the motor innervation of the muscles of mastication?",
-                        option_a: "Trigeminal nerve (CN V)",
-                        option_b: "Facial nerve (CN VII)",
-                        option_c: "Glossopharyngeal nerve (CN IX)",
-                        option_d: "Hypoglossal nerve (CN XII)",
-                    },
-                    {
-                        id: 9902,
-                        question_text: "A 4-year-old child presents with high fever, barking cough, and inspiratory stridor. X-ray of the neck shows subglottic narrowing (steeple sign). What is the diagnosis?",
-                        option_a: "Acute epiglottitis",
-                        option_b: "Croup (Laryngotrachobronchitis)",
-                        option_c: "Foreign body aspiration",
-                        option_d: "Retropharyngeal abscess",
-                    },
-                    {
-                        id: 9903,
-                        question_text: "Which enzyme is deficient in Gaucher's disease?",
-                        option_a: "Hexosaminidase A",
-                        option_b: "Glucocerebrosidase",
-                        option_c: "Alpha-galactosidase A",
-                        option_d: "Sphingomyelinase",
-                    },
-                    {
-                        id: 9904,
-                        question_text: "The primary auditory cortex is located in which lobe of the brain?",
-                        option_a: "Frontal lobe",
-                        option_b: "Parietal lobe",
-                        option_c: "Temporal lobe",
-                        option_d: "Occipital lobe",
-                    },
-                    {
-                        id: 9905,
-                        question_text: "Which of the following is a loop diuretic?",
-                        option_a: "Spironolactone",
-                        option_b: "Furosemide",
-                        option_c: "Hydrochlorothiazide",
-                        option_d: "Acetazolamide",
-                    }
-                ]);
-            } else {
-                setScholarshipQuestions(list.slice(0, 5));
-            }
+            const allQuestions = [
+                {
+                    id: 9901,
+                    question_text: "Which cranial nerve is responsible for the motor innervation of the muscles of mastication?",
+                    option_a: "Trigeminal nerve (CN V)",
+                    option_b: "Facial nerve (CN VII)",
+                    option_c: "Glossopharyngeal nerve (CN IX)",
+                    option_d: "Hypoglossal nerve (CN XII)",
+                },
+                {
+                    id: 9902,
+                    question_text: "A 4-year-old child presents with high fever, barking cough, and inspiratory stridor. X-ray of the neck shows subglottic narrowing (steeple sign). What is the diagnosis?",
+                    option_a: "Acute epiglottitis",
+                    option_b: "Croup (Laryngotrachobronchitis)",
+                    option_c: "Foreign body aspiration",
+                    option_d: "Retropharyngeal abscess",
+                },
+                {
+                    id: 9903,
+                    question_text: "Which enzyme is deficient in Gaucher's disease?",
+                    option_a: "Hexosaminidase A",
+                    option_b: "Glucocerebrosidase",
+                    option_c: "Alpha-galactosidase A",
+                    option_d: "Sphingomyelinase",
+                },
+                {
+                    id: 9904,
+                    question_text: "The primary auditory cortex is located in which lobe of the brain?",
+                    option_a: "Frontal lobe",
+                    option_b: "Parietal lobe",
+                    option_c: "Temporal lobe",
+                    option_d: "Occipital lobe",
+                },
+                {
+                    id: 9905,
+                    question_text: "Which of the following is a loop diuretic?",
+                    option_a: "Spironolactone",
+                    option_b: "Furosemide",
+                    option_c: "Hydrochlorothiazide",
+                    option_d: "Acetazolamide",
+                },
+                {
+                    id: 9906,
+                    question_text: "Which vitamin deficiency classically causes scurvy?",
+                    option_a: "Vitamin A",
+                    option_b: "Vitamin B12",
+                    option_c: "Vitamin C",
+                    option_d: "Vitamin D",
+                },
+                {
+                    id: 9907,
+                    question_text: "What is the most common cause of community-acquired pneumonia?",
+                    option_a: "Haemophilus influenzae",
+                    option_b: "Streptococcus pneumoniae",
+                    option_c: "Mycoplasma pneumoniae",
+                    option_d: "Staphylococcus aureus",
+                },
+                {
+                    id: 9908,
+                    question_text: "Which of the following is a classic symptom of diabetes mellitus?",
+                    option_a: "Polyuria",
+                    option_b: "Bradycardia",
+                    option_c: "Anorexia",
+                    option_d: "Hypothermia",
+                },
+                {
+                    id: 9909,
+                    question_text: "What is the primary function of red blood cells?",
+                    option_a: "Immune defense",
+                    option_b: "Oxygen transport",
+                    option_c: "Blood clotting",
+                    option_d: "Digestion",
+                },
+                {
+                    id: 9910,
+                    question_text: "Which organ primarily produces insulin?",
+                    option_a: "Liver",
+                    option_b: "Gallbladder",
+                    option_c: "Pancreas",
+                    option_d: "Spleen",
+                }
+            ];
+            
+            // Shuffle and pick 5
+            const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+            setScholarshipQuestions(shuffled.slice(0, 5));
         } catch (err) {
             console.error('Failed to load scholarship questions:', err);
         } finally {
@@ -150,7 +187,7 @@ export default function SubscriptionPage() {
             await refreshProfile();
 
             // Generate AI analysis
-            generateAiTestAnalysis(data.score, submissionAnswers);
+            generateAiTestAnalysis(data.score, submissionAnswers, data.message);
 
         } catch (err: any) {
             setErrorMessage(err.response?.data?.error || "Failed to submit scholarship test. Please try again.");
@@ -159,7 +196,7 @@ export default function SubscriptionPage() {
         }
     };
 
-    const generateAiTestAnalysis = (score: number, answers: Record<string, string>) => {
+    const generateAiTestAnalysis = (score: number, answers: Record<string, string>, testResultMsg: string) => {
         setGeneratingAnalysis(true);
         
         // Simulate writing rich AI analysis report
@@ -175,10 +212,10 @@ export default function SubscriptionPage() {
             
             if (correctCount === 5) {
                 analysisText += `> [!NOTE]\n`;
-                analysisText += `> **EXCELLENT PERFORMANCE!** You have demonstrated 100% precision in diagnosing high-yield clinical conditions. Your promotional rate of **₹79** is successfully unlocked.\n\n`;
+                analysisText += `> **EXCELLENT PERFORMANCE!** You have demonstrated 100% precision in diagnosing high-yield clinical conditions. ${testResultMsg}\n\n`;
             } else {
                 analysisText += `> [!WARNING]\n`;
-                analysisText += `> **IMPROVEMENT FOCUS REQUIRED**: You did not achieve a perfect score. To unlock the ₹79 special discount, you must correct all 5 scenarios. Let's study the clinical concepts below.\n\n`;
+                analysisText += `> **IMPROVEMENT FOCUS REQUIRED**: You did not achieve a perfect score. ${testResultMsg} Let's study the clinical concepts below.\n\n`;
             }
 
             analysisText += `#### 🔍 Performance Summary\n`;
@@ -419,6 +456,10 @@ export default function SubscriptionPage() {
                                 <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm py-2 px-4 rounded-xl shrink-0">
                                     ✓ Rate Unlocked
                                 </Badge>
+                            ) : (user?.scholarship_test_attempts || 0) >= 2 ? (
+                                <Badge className="bg-red-500 hover:bg-red-600 text-white font-bold text-sm py-2 px-4 rounded-xl shrink-0">
+                                    Challenge Locked
+                                </Badge>
                             ) : (
                                 <button
                                     onClick={startScholarshipTest}
@@ -454,7 +495,7 @@ export default function SubscriptionPage() {
                                     <div className="flex items-baseline gap-2 mb-6 text-left">
                                         {hasScholarshipDiscount ? (
                                             <>
-                                                <span className="text-4xl font-black text-emerald-500">₹79</span>
+                                                <span className="text-4xl font-black text-emerald-500">₹{user?.scholarship_granted_price || 79}</span>
                                                 <span className="text-sm line-through text-muted-foreground">₹{plan.price}</span>
                                             </>
                                         ) : (
@@ -486,11 +527,11 @@ export default function SubscriptionPage() {
                                                 disabled={subscribing}
                                                 className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
                                             >
-                                                {subscribing ? 'Processing...' : (hasScholarshipDiscount ? 'Claim Scholarship Rate' : plan.cta)}
+                                                {subscribing ? 'Processing...' : (hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta)}
                                             </button>
-                                            {plan.id === '1_month' && !hasScholarshipDiscount && (
+                                            {plan.id === '1_month' && !hasScholarshipDiscount && ((user?.scholarship_test_attempts || 0) < 2) && (
                                                 <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">
-                                                    ✨ Get this at just ₹79 today!
+                                                    ✨ Get this at just ₹{(user?.scholarship_test_attempts || 0) === 0 ? 79 : 99} today!
                                                 </p>
                                             )}
                                         </div>
@@ -597,7 +638,9 @@ export default function SubscriptionPage() {
                                                 </div>
                                             ) : (
                                                 <div className="p-5 rounded-2xl border border-border bg-slate-50 dark:bg-slate-900/40 text-sm leading-relaxed whitespace-pre-line text-foreground overflow-y-auto max-h-[300px]" style={{ scrollbarWidth: 'thin' }}>
-                                                    {aiAnalysis}
+                                                    <ReactMarkdown className="markdown-body">
+                                                        {aiAnalysis}
+                                                    </ReactMarkdown>
                                                 </div>
                                             )}
 

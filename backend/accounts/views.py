@@ -206,6 +206,11 @@ class VerifyScholarshipView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        user = request.user
+        
+        if user.scholarship_test_attempts >= 2 and not user.scholarship_test_passed:
+            return Response({"error": "Max attempts reached. Scholarship challenge is locked."}, status=status.HTTP_403_FORBIDDEN)
+
         answers = request.data.get('answers', {})
         if not answers or len(answers) < 5:
             return Response({"error": "Invalid test submission. Must submit 5 answers."}, status=status.HTTP_400_BAD_REQUEST)
@@ -216,7 +221,12 @@ class VerifyScholarshipView(APIView):
             9902: 'B',
             9903: 'B',
             9904: 'C',
-            9905: 'B'
+            9905: 'B',
+            9906: 'C',
+            9907: 'B',
+            9908: 'A',
+            9909: 'B',
+            9910: 'C'
         }
         for q_id, selected_opt in answers.items():
             try:
@@ -232,21 +242,35 @@ class VerifyScholarshipView(APIView):
             except (Question.DoesNotExist, ValueError):
                 pass
 
+        user.scholarship_test_attempts += 1
+
         if correct_count == 5:
-            user = request.user
             user.scholarship_test_passed = True
-            user.save(update_fields=['scholarship_test_passed'])
+            if user.scholarship_test_attempts == 1:
+                user.scholarship_granted_price = 79
+            else:
+                user.scholarship_granted_price = 99
+                
+            user.save(update_fields=['scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price'])
             return Response({
                 "status": "passed",
                 "score": 5,
-                "message": "Congratulations! You scored 100% and unlocked the ₹79 special offer!"
+                "message": f"Congratulations! You scored 100% and unlocked the ₹{user.scholarship_granted_price} special offer!"
             })
         else:
-            return Response({
-                "status": "failed",
-                "score": correct_count,
-                "message": f"You scored {correct_count}/5. You need 5/5 to unlock the ₹79 rate. Try again!"
-            })
+            user.save(update_fields=['scholarship_test_attempts'])
+            if user.scholarship_test_attempts == 1:
+                return Response({
+                    "status": "failed",
+                    "score": correct_count,
+                    "message": f"You scored {correct_count}/5. You need 5/5. You have 1 attempt remaining for the ₹99 offer."
+                })
+            else:
+                return Response({
+                    "status": "failed",
+                    "score": correct_count,
+                    "message": f"You scored {correct_count}/5. Challenge Failed. No attempts remaining."
+                })
 
 
 class SubscribeOrderView(APIView):
@@ -279,8 +303,8 @@ class SubscribeOrderView(APIView):
         elif plan == 'scholarship_1_month':
             if not user.scholarship_test_passed:
                 return Response({'error': 'You are not eligible for the scholarship rate. Please complete the scholarship test first.'}, status=status.HTTP_403_FORBIDDEN)
-            amount_paise = 7900
-            amount_rs = 79.00
+            amount_rs = float(user.scholarship_granted_price or 79.00)
+            amount_paise = int(amount_rs * 100)
             description = 'CrackLabs Premium 1 Month (Scholarship Special) Plan'
         else:
             # Fallback legacy early bird pass
