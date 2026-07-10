@@ -133,7 +133,13 @@ export default function LandingPage() {
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoGenerated, setDemoGenerated] = useState(false);
   const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
-  const [demoQuestion, setDemoQuestion] = useState<unknown>(null);
+  interface DemoQuestion {
+    text: string;
+    options: { key: string; text: string }[];
+    correct: string;
+    explanation: string;
+  }
+  const [demoQuestion, setDemoQuestion] = useState<DemoQuestion | null>(null);
   const [demoAiLoading, setDemoAiLoading] = useState(false);
   const [demoAiDone, setDemoAiDone] = useState(false);
 
