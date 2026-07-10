@@ -543,10 +543,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
         """Enqueue video generation task for the question."""
         from django_q.tasks import async_task
         question = self.get_object()
+        force = bool(request.data.get('force', False))
         question.video_status = 'pending'
-        question.save(update_fields=['video_status'])
-        async_task('video_engine.tasks.generate_video_task', question.id)
-        return Response({'message': 'Video generation queued', 'id': question.id, 'video_status': 'pending'})
+        question.video_error = ''
+        question.save(update_fields=['video_status', 'video_error'])
+        try:
+            async_task('video_engine.tasks.generate_video_task', question.id, force)
+        except Exception as exc:
+            question.video_status = 'failed'
+            question.video_error = str(exc)[:500]
+            question.save(update_fields=['video_status', 'video_error'])
+            return Response(
+                {'error': 'Video generation could not be queued', 'detail': str(exc)[:500]},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'message': 'Video generation queued', 'id': question.id, 'video_status': 'pending', 'force': force})
 
     @action(detail=False, methods=['post'], url_path=r'extraction/items/(?P<item_id>[^/.]+)/autotag')
     def extraction_item_autotag(self, request, item_id=None):

@@ -1,5 +1,18 @@
+from urllib.parse import urlsplit, urlunsplit
+
 from rest_framework import serializers
 from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot
+
+
+def _derive_subtitles_url(video_url: str) -> str:
+    if not video_url:
+        return ''
+    parsed = urlsplit(video_url)
+    path = parsed.path or ''
+    if not path.endswith('.mp4'):
+        return ''
+    subtitles_path = f"{path[:-4]}.vtt"
+    return urlunsplit((parsed.scheme, parsed.netloc, subtitles_path, parsed.query, parsed.fragment))
 
 
 class SubjectSerializer(serializers.ModelSerializer):
@@ -40,6 +53,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
     accuracy = serializers.SerializerMethodField()
     user_selected_answer = serializers.CharField(read_only=True, required=False)
     user_is_correct = serializers.BooleanField(read_only=True, required=False)
+    video_subtitles_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -51,7 +65,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'verified_at', 'verified_by', 'verified_by_username',
                   'effective_answer', 'effective_explanation',
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
-                  'user_selected_answer', 'user_is_correct', 'video_url', 'video_status']
+                  'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
+                  'video_thumbnail', 'video_duration', 'video_subtitles_url']
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
@@ -86,10 +101,9 @@ class QuestionListSerializer(serializers.ModelSerializer):
         value = getattr(obj, 'accuracy', None)
         if value is None:
             return None
-        try:
-            return round(float(value), 2)
-        except (TypeError, ValueError):
-            return None
+
+    def get_video_subtitles_url(self, obj):
+        return _derive_subtitles_url(getattr(obj, 'video_url', '') or '')
 
 
 class QuestionAdminListSerializer(QuestionListSerializer):
@@ -118,6 +132,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     last_revision_at = serializers.SerializerMethodField()
     user_selected_answer = serializers.SerializerMethodField()
     user_is_correct = serializers.SerializerMethodField()
+    video_subtitles_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -133,6 +148,8 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
             'effective_mnemonic', 'effective_references', 'revision_count', 'last_revision_at',
             'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
+            'video_thumbnail', 'video_duration', 'video_version', 'video_error',
+            'video_generated_at', 'video_subtitles_url',
         ]
 
     def get_user_selected_answer(self, obj):
@@ -152,6 +169,9 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             if attempt:
                 return attempt.is_correct
         return None
+
+    def get_video_subtitles_url(self, obj):
+        return _derive_subtitles_url(getattr(obj, 'video_url', '') or '')
 
     def get_similar(self, obj):
         similar_qs = obj.similar_questions.all()[:5]

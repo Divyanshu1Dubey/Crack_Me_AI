@@ -53,6 +53,6 @@ class Command(BaseCommand):
         for i, question in enumerate(queryset, 1):
             self.stdout.write(f"[{i}/{total}] Queueing Q{question.id}")
             # Enqueue the background task
-            async_task('video_engine.tasks.generate_video_task', question.id)
+            async_task('video_engine.tasks.generate_video_task', question.id, force)
 
         self.stdout.write(self.style.SUCCESS(f"Successfully queued {total} background tasks!"))

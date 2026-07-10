@@ -185,7 +185,9 @@ class SlideRenderer:
             return self.render_question(scene, metadata, step, total)
         elif scene_type in ["option_elimination", "answer_reveal"]:
             return self.render_answer(scene, metadata, step, total)
-        elif scene_type in ["concept", "mechanism", "explanation"]:
+        elif scene_type == "mechanism":
+            return self.render_mechanism(scene, step, total)
+        elif scene_type in ["concept", "explanation"]:
             return self.render_concept(scene, step, total)
         elif scene_type in ["clinical_pearl", "mnemonic", "exam_strategy", "reference"]:
             return self.render_highlight(scene, step, total)
@@ -326,6 +328,41 @@ class SlideRenderer:
                              self.f['body'], self.LIGHT, self.CW - 2 * ip - 10,
                              max_lines=14, spacing=11)
 
+        self._brand(d)
+        self._progress(d, step, total)
+        return img
+
+    def render_mechanism(self, scene, step, total):
+        img, d = self._bg()
+        y = self._header(d, scene.get("title", "MECHANISM MAP"), self.PAD, self.TEAL)
+
+        subtitle = scene.get("subtitle", "Clinical clue to concept to answer")
+        d.text((self.PAD, y + 4), subtitle, fill=self.LIGHT, font=self.f['head'])
+
+        bullets = scene.get("bullets", [])[:3] or [
+            "Clinical clue",
+            "Core mechanism",
+            "Best answer",
+        ]
+        box_w, box_h = 330, 150
+        start_x = 95
+        box_y = 330
+        colors = [self.ACCENT, self.TEAL, self.GREEN]
+
+        for i, bullet in enumerate(bullets):
+            x = start_x + i * 405
+            d.rounded_rectangle([x, box_y, x + box_w, box_y + box_h], radius=22, fill=self.CARD, outline=colors[i], width=2)
+            d.ellipse([x + 22, box_y + 22, x + 58, box_y + 58], fill=colors[i])
+            d.text((x + 40, box_y + 40), str(i + 1), fill=self.WHITE, font=self.f['badge'], anchor='mm')
+            self._text_block(d, bullet, (x + 24, box_y + 78), self.f['body_b'], self.WHITE, box_w - 48, max_lines=3, spacing=6)
+            if i < len(bullets) - 1:
+                ax = x + box_w + 22
+                ay = box_y + box_h // 2
+                d.line([(ax, ay), (ax + 52, ay)], fill=self.GRAY, width=4)
+                d.polygon([(ax + 52, ay), (ax + 38, ay - 10), (ax + 38, ay + 10)], fill=self.GRAY)
+
+        narration = scene.get("narration", "")
+        self._text_block(d, narration, (self.PAD, 555), self.f['small'], self.GRAY, self.CW, max_lines=3, spacing=6)
         self._brand(d)
         self._progress(d, step, total)
         return img

@@ -55,6 +55,9 @@ interface Question {
     explanation?: string;
     video_url?: string;
     video_status?: string;
+    video_thumbnail?: string;
+    video_subtitles_url?: string;
+    video_duration?: number;
 }
 
 interface TestData {
@@ -473,6 +476,8 @@ export default function TakeTestPage() {
                                 <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
                                 <PremiumVideoPlayer 
                                     src={rq.video_url} 
+                                    subtitlesSrc={rq.video_subtitles_url}
+                                    poster={rq.video_thumbnail}
                                     className="w-full max-h-[500px]"
                                 />
                             </div>

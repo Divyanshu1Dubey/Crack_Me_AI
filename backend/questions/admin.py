@@ -49,11 +49,11 @@ def generate_video(modeladmin, request, queryset):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'video_status', 'ai_generated_at']
+    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'video_status', 'video_duration', 'ai_generated_at']
     list_filter = ['year', 'subject', 'video_status', 'difficulty']
     search_fields = ['question_text', 'explanation']
     filter_horizontal = ['similar_questions']
-    readonly_fields = ['created_at', 'updated_at', 'ai_generated_at', 'video_generated_at']
+    readonly_fields = ['created_at', 'updated_at', 'ai_generated_at', 'video_generated_at', 'video_version', 'video_error']
     actions = [generate_ai_cache, generate_video]
 
     fieldsets = (
@@ -85,6 +85,11 @@ class QuestionAdmin(admin.ModelAdmin):
         ('Relations', {
 
             'fields': ('similar_questions',)
+
+        }),
+        ('AI Video', {
+
+            'fields': ('video_url', 'video_thumbnail', 'video_status', 'video_duration', 'video_generated_at', 'video_version', 'video_error')
 
         }),
 

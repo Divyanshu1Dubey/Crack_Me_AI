@@ -22,6 +22,18 @@ ENGINE_VERSION = "video-v2-professor-2026-07"
 SCRIPT_SCHEMA_VERSION = "lesson-script-v2"
 DEFAULT_BUCKET = "educational_videos"
 MAX_SCENE_NARRATION_WORDS = 95
+REQUIRED_SCENE_TYPES = {
+    "intro",
+    "question_focus",
+    "concept",
+    "option_elimination",
+    "answer_reveal",
+    "clinical_pearl",
+    "mnemonic",
+    "exam_strategy",
+    "reference",
+    "takeaway",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +90,16 @@ def _clean_for_tts(text: str) -> str:
         "±": " plus or minus ",
         "°": " degrees ",
     }
+    replacements.update({
+        "≥": " greater than or equal to ",
+        "≤": " less than or equal to ",
+        "→": " leads to ",
+        "←": " comes from ",
+        "↑": " increased ",
+        "↓": " decreased ",
+        "–": ", ",
+        "—": ", ",
+    })
     for src, dst in replacements.items():
         t = t.replace(src, dst)
 
@@ -134,6 +156,29 @@ def _split_sentences(text: str, max_chars: int = 520) -> list[str]:
     if current:
         chunks.append(current)
     return chunks or [text[:max_chars]]
+
+
+def _chunk_for_subtitles(text: str, max_chars: int = 90) -> list[str]:
+    clean = _clean_for_tts(text)
+    if not clean:
+        return []
+    sentences = _split_sentences(clean, max_chars=max_chars)
+    if sentences:
+        return sentences
+    words = clean.split()
+    if not words:
+        return []
+    chunks: list[str] = []
+    buffer: list[str] = []
+    for word in words:
+        buffer.append(word)
+        candidate = " ".join(buffer)
+        if len(candidate) >= max_chars:
+            chunks.append(candidate)
+            buffer = []
+    if buffer:
+        chunks.append(" ".join(buffer))
+    return chunks or [clean]
 
 
 def _truncate_words(text: str, limit: int = MAX_SCENE_NARRATION_WORDS) -> str:
@@ -481,6 +526,7 @@ Rules:
 - Narration must sound like an experienced Indian MBBS professor teaching a student.
 - Explain the concept before revealing the answer.
 - Include option elimination, clinical pearl, mnemonic, exam strategy, reference, and high-yield takeaway.
+- Include at least 10 scenes and cover these scene types: intro, question_focus, concept, mechanism, option_elimination, answer_reveal, clinical_pearl, mnemonic, exam_strategy, reference, takeaway.
 - Avoid markdown, emojis, bullets inside narration, and special characters that TTS might read aloud.
 - Keep each narration under {MAX_SCENE_NARRATION_WORDS} words.
 - Return JSON with exactly this shape:
@@ -544,42 +590,115 @@ Reference: {_reference_text(q, ai_payload)}
         """Deterministic professor fallback if AI fails or returns low quality."""
         options = _option_map(q)
         correct_letter = getattr(q, 'correct_answer', 'A')
+        correct_text = options.get(correct_letter, "")
         subject_name = q.subject.name if getattr(q, 'subject', None) else "General Medicine"
+        topic_name = q.topic.name if getattr(q, 'topic', None) else subject_name
+        explanation = _effective_explanation(q) or _effective_answer(q) or correct_text
+        explanation_chunks = _split_sentences(explanation, 150)[:4]
+        mnemonic = _effective_mnemonic(q) or f"Link the key clue in the stem to {correct_text}."
+        pearl = getattr(q, 'ai_clinical_pearl', "") or f"In CMS questions, identify the decisive clinical clue before looking at similar options."
+        strategy = getattr(q, 'learning_technique', "") or getattr(q, 'shortcut_tip', "") or "First name the concept, then eliminate options that contradict the central clue."
+        reference = _reference_text(q, self._learning_payload(q)) or "Standard MBBS textbooks and UPSC CMS high-yield concepts"
+        wrong_bullets = [
+            f"Option {label}: {text}" for label, text in options.items() if label != correct_letter and text
+        ][:3]
         
         scenes = [
             {
                 "type": "intro",
-                "title": f"{subject_name} Review",
+                "title": f"{topic_name} Review",
                 "subtitle": "UPSC CMS High-Yield Topic",
-                "narration": f"Welcome to CrackLabs AI. Today we'll review an important {subject_name} topic. Let's look at the question.",
-                "duration_hint": 5
+                "narration": f"Welcome to CrackLabs AI. In this short professor-style lesson, we will convert a {subject_name} question into a clear clinical concept.",
+                "bullets": ["Concept first", "Options second", "Exam takeaway last"],
+                "duration_hint": 4
             },
             {
                 "type": "question_focus",
                 "title": "Question Overview",
-                "narration": "Take a moment to read the clinical presentation and the options provided.",
+                "subtitle": "Read the stem visually. Do not memorize words.",
+                "narration": "First, read the stem silently and look for the single clue that changes management or diagnosis. We will not just read it aloud; we will decode it.",
+                "focus_terms": _safe_list(getattr(q, 'concept_tags', []), 4),
                 "duration_hint": 8
+            },
+            {
+                "type": "concept",
+                "title": "Core Concept Before Answer",
+                "subtitle": topic_name,
+                "narration": _truncate_words(f"The tested idea is {topic_name}. Before selecting an option, connect the clinical clue with the underlying mechanism. {explanation}", 80),
+                "bullets": explanation_chunks or [f"Core idea: {topic_name}", f"Correct direction: {correct_text}"],
+                "focus_terms": _safe_list(getattr(q, 'concept_keywords', []), 5),
+                "duration_hint": 10
+            },
+            {
+                "type": "mechanism",
+                "title": "Mechanism Map",
+                "subtitle": "Clue to concept to answer",
+                "narration": _truncate_words(f"Think in a chain. The clinical clue points to {topic_name}. That mechanism supports {correct_text}. This is why the answer is not a random fact.", 70),
+                "bullets": [f"Clinical clue: identify the trigger", f"Mechanism: {topic_name}", f"Answer direction: {correct_text}"],
+                "duration_hint": 8
+            },
+            {
+                "type": "option_elimination",
+                "title": "Eliminate Wrong Options",
+                "subtitle": "Remove distractors one by one",
+                "narration": "Now eliminate distractors. In UPSC CMS, wrong options are usually close, but each one fails at one decisive clinical or conceptual step.",
+                "bullets": wrong_bullets or ["Remove options that do not match the key clue.", "Keep the option that best explains the full stem."],
+                "duration_hint": 10
             },
             {
                 "type": "answer_reveal",
                 "title": "Correct Answer",
-                "subtitle": f"Option {correct_letter}",
-                "narration": f"The correct answer is {correct_letter}. Let's understand the underlying concept.",
-                "duration_hint": 5
+                "subtitle": correct_text,
+                "narration": _truncate_words(f"The correct answer is {correct_text}. The reason is not the option label; the reason is that it best matches the concept and clinical clue in the stem.", 55),
+                "bullets": [f"Correct option: {correct_letter}", correct_text],
+                "duration_hint": 6
             },
             {
                 "type": "concept",
-                "title": "Explanation",
-                "narration": _clean_for_tts(_effective_explanation(q)),
-                "bullets": _split_sentences(_effective_explanation(q), 80),
+                "title": "Why It Is Correct",
+                "narration": _truncate_words(explanation, 90),
+                "bullets": explanation_chunks or [explanation],
                 "duration_hint": 12
             },
             {
+                "type": "clinical_pearl",
+                "title": "Clinical Pearl",
+                "subtitle": "What to remember on exam day",
+                "narration": _truncate_words(pearl, 70),
+                "bullets": _split_sentences(pearl, 120)[:3],
+                "duration_hint": 7
+            },
+            {
+                "type": "mnemonic",
+                "title": "Memory Trick",
+                "subtitle": "Make it stick",
+                "narration": _truncate_words(mnemonic, 70),
+                "bullets": _split_sentences(mnemonic, 120)[:3],
+                "duration_hint": 7
+            },
+            {
+                "type": "exam_strategy",
+                "title": "Exam Strategy",
+                "subtitle": "How to solve faster",
+                "narration": _truncate_words(strategy, 75),
+                "bullets": _split_sentences(strategy, 120)[:3],
+                "duration_hint": 7
+            },
+            {
+                "type": "reference",
+                "title": "Reference Anchor",
+                "subtitle": "Standard textbook linkage",
+                "narration": _truncate_words(f"Anchor this explanation to {reference}. Use the reference to revise the concept, not to memorize the option label.", 65),
+                "bullets": [reference],
+                "duration_hint": 6
+            },
+            {
                 "type": "takeaway",
-                "title": "Keep Learning",
-                "subtitle": "CrackLabs AI",
-                "narration": "Keep practicing and review your weak areas. You can do this.",
-                "duration_hint": 4
+                "title": "UPSC CMS High Yield Takeaway",
+                "subtitle": correct_text,
+                "narration": _truncate_words(f"Final takeaway: recognize {topic_name}, eliminate distractors, and choose {correct_text} when the stem points to this mechanism.", 55),
+                "bullets": [f"Concept: {topic_name}", f"Answer: {correct_text}", "Revise the clue, not only the fact"],
+                "duration_hint": 5
             }
         ]
         
@@ -602,18 +721,23 @@ Reference: {_reference_text(q, ai_payload)}
         if not script or script.get("schema") != SCRIPT_SCHEMA_VERSION:
             return False
         scenes = script.get("scenes", [])
-        if not scenes or len(scenes) < 3:
+        if not isinstance(scenes, list) or len(scenes) < 10:
             return False
-        
-        has_intro = False
-        has_answer = False
+        scene_types = {scene.get("type") for scene in scenes if isinstance(scene, dict)}
+        if not REQUIRED_SCENE_TYPES.issubset(scene_types):
+            return False
+
+        narration_words = 0
         for scene in scenes:
-            if scene.get("type") == "intro":
-                has_intro = True
-            if scene.get("type") == "answer_reveal":
-                has_answer = True
-                
-        return has_intro and has_answer
+            if not isinstance(scene, dict):
+                return False
+            narration = _clean_for_tts(scene.get("narration", ""))
+            if not narration:
+                return False
+            if len(narration.split()) > MAX_SCENE_NARRATION_WORDS + 20:
+                return False
+            narration_words += len(narration.split())
+        return narration_words >= 120
 
     # ------------------------------------------------------------------
     # TTS, Video Assembly, Subtitles, Quality, Upload
@@ -651,7 +775,10 @@ Reference: {_reference_text(q, ai_payload)}
                 return False
 
     def _assemble(self, slide_data: list[dict[str, Any]], output_path: str) -> float:
-        from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
+        try:
+            from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
+        except ImportError:
+            from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
         clips = []
         total_duration = 0.0
@@ -663,14 +790,15 @@ Reference: {_reference_text(q, ai_payload)}
                     audio = AudioFileClip(sd['audio'])
                     duration = max(audio.duration + 0.8, sd['min_dur'])
                     clip = ImageClip(sd['slide']).with_duration(duration)
+                    clip = self._apply_motion(clip, sd.get("scene_type", "lesson"))
                     clip = clip.with_audio(audio)
                     total_duration += duration
                 except Exception as e:
                     logger.warning(f"Audio load failed: {e}, using min duration")
-                    clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                    clip = self._apply_motion(ImageClip(sd['slide']).with_duration(sd['min_dur']), sd.get("scene_type", "lesson"))
                     total_duration += sd['min_dur']
             else:
-                clip = ImageClip(sd['slide']).with_duration(sd['min_dur'])
+                clip = self._apply_motion(ImageClip(sd['slide']).with_duration(sd['min_dur']), sd.get("scene_type", "lesson"))
                 total_duration += sd['min_dur']
                 
             clips.append(clip)
@@ -694,6 +822,25 @@ Reference: {_reference_text(q, ai_payload)}
                 
         return total_duration
 
+    def _apply_motion(self, clip: Any, scene_type: str) -> Any:
+        """Apply subtle motion design without making rendering fragile."""
+        try:
+            if hasattr(clip, "resized"):
+                clip = clip.resized(lambda t: 1.0 + min(t, 8) * 0.003)
+            elif hasattr(clip, "resize"):
+                clip = clip.resize(lambda t: 1.0 + min(t, 8) * 0.003)
+        except Exception:
+            pass
+
+        for method_name, args in (("with_fps", (24,)), ("fadein", (0.25,)), ("fadeout", (0.25,))):
+            try:
+                method = getattr(clip, method_name, None)
+                if method:
+                    clip = method(*args)
+            except Exception:
+                pass
+        return clip
+
     def _write_vtt(self, slide_data: list[dict[str, Any]], output_path: str) -> None:
         """Generate WebVTT subtitles based on scene timings."""
         lines = ["WEBVTT", ""]
@@ -703,7 +850,10 @@ Reference: {_reference_text(q, ai_payload)}
             audio_path = sd.get('audio')
             duration = sd.get('min_dur', 5.0)
             if audio_path and os.path.exists(audio_path):
-                from moviepy import AudioFileClip
+                try:
+                    from moviepy import AudioFileClip
+                except ImportError:
+                    from moviepy.editor import AudioFileClip
                 try:
                     audio = AudioFileClip(audio_path)
                     duration = max(audio.duration + 0.8, duration)
@@ -714,13 +864,17 @@ Reference: {_reference_text(q, ai_payload)}
             start_str = _format_vtt_time(current_time)
             end_str = _format_vtt_time(current_time + duration)
             
-            # Simple subtitle - could be further chunked by sentences
             narration = sd.get('narration', '')
             if narration:
-                lines.append(f"{i+1}")
-                lines.append(f"{start_str} --> {end_str}")
-                lines.append(narration)
-                lines.append("")
+                parts = _chunk_for_subtitles(narration, max_chars=95)
+                cue_count = max(1, len(parts))
+                for part_index, part in enumerate(parts, start=1):
+                    part_start = current_time + ((part_index - 1) * duration / cue_count)
+                    part_end = current_time + (part_index * duration / cue_count)
+                    lines.append(f"{i+1}.{part_index}")
+                    lines.append(f"{_format_vtt_time(part_start)} --> {_format_vtt_time(part_end)}")
+                    lines.append(part)
+                    lines.append("")
                 
             current_time += duration
             
@@ -729,6 +883,14 @@ Reference: {_reference_text(q, ai_payload)}
 
     def _quality_gate(self, slide_data: list, video_path: str, vtt_path: str, duration: float) -> None:
         """Ensure the generated video meets standards before uploading."""
+        if len(slide_data) < 8:
+            raise ValueError("Video has too few teaching scenes for V2 quality.")
+        if any(not sd.get("narration") for sd in slide_data):
+            raise ValueError("One or more scenes are missing narration.")
+        if any(not os.path.exists(sd.get("slide", "")) for sd in slide_data):
+            raise ValueError("One or more rendered slides are missing.")
+        if any(not os.path.exists(sd.get("audio", "")) for sd in slide_data):
+            raise ValueError("One or more narration audio files are missing.")
         if not os.path.exists(video_path):
             raise FileNotFoundError("Video file was not created.")
         
@@ -736,11 +898,13 @@ Reference: {_reference_text(q, ai_payload)}
         if size_mb < 0.1:
             raise ValueError(f"Video file is too small ({size_mb:.2f} MB). Assembly likely failed.")
             
-        if duration < 5.0:
+        if duration < 45.0:
             raise ValueError(f"Video duration too short ({duration:.1f}s).")
             
         if not os.path.exists(vtt_path):
-            logger.warning("VTT subtitles file was not created. Continuing anyway.")
+            raise FileNotFoundError("VTT subtitles file was not created.")
+        if os.path.getsize(vtt_path) < 32:
+            raise ValueError("VTT subtitles file is unexpectedly small.")
 
     def _upload(self, file_path: str, file_name: str, content_type: str = "video/mp4") -> str | None:
         from supabase import create_client

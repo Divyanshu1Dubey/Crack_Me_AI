@@ -3,16 +3,20 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
-  Settings, Captions, RotateCcw, FastForward, Loader2 
+  Settings, Captions, RotateCcw, Loader2, PictureInPicture2 
 } from 'lucide-react';
 
 interface PremiumVideoPlayerProps {
   src: string;
+  subtitlesSrc?: string;
+  poster?: string;
   className?: string;
   autoPlay?: boolean;
 }
 
-export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: PremiumVideoPlayerProps) {
+const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+export function PremiumVideoPlayer({ src, subtitlesSrc, poster, className = '', autoPlay = false }: PremiumVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
@@ -25,36 +29,61 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
   const [isMuted, setIsMuted] = useState(false);
   
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
+  const [supportsPictureInPicture, setSupportsPictureInPicture] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isHovering, setIsHovering] = useState(false);
+  const [canHover, setCanHover] = useState(true);
   
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   
   const [isBuffering, setIsBuffering] = useState(true);
+  const storageKey = `cracklabs-video-position:${src}`;
+
+  useEffect(() => {
+    setSupportsPictureInPicture(Boolean(document.pictureInPictureEnabled));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const updateCapability = () => setCanHover(mediaQuery.matches);
+    updateCapability();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateCapability);
+      return () => mediaQuery.removeEventListener('change', updateCapability);
+    }
+
+    mediaQuery.addListener(updateCapability);
+    return () => mediaQuery.removeListener(updateCapability);
+  }, []);
 
   // Auto-hide controls when playing and not hovering
   useEffect(() => {
     let timeout: NodeJS.Timeout;
-    if (isPlaying && !isHovering && !showSettings) {
+    if (canHover && isPlaying && !isHovering && !showSettings) {
       timeout = setTimeout(() => setShowControls(false), 2000);
     } else {
       setShowControls(true);
     }
     return () => clearTimeout(timeout);
-  }, [isPlaying, isHovering, showSettings]);
+  }, [canHover, isPlaying, isHovering, showSettings]);
 
   const togglePlay = useCallback(() => {
     if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
+      if (videoRef.current.paused) {
         videoRef.current.play();
+      } else {
+        videoRef.current.pause();
       }
-      setIsPlaying(!isPlaying);
     }
-  }, [isPlaying]);
+  }, []);
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
@@ -64,17 +93,49 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
   };
 
   const handleLoadedMetadata = () => {
+  useEffect(() => {
+    const tracks = videoRef.current?.textTracks;
+    if (tracks && tracks.length > 0) {
+      tracks[0].mode = subtitlesEnabled ? 'showing' : 'hidden';
+    }
+  }, [subtitlesEnabled, vttSrc]);
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       setIsBuffering(false);
-      
-      // Setup text tracks (subtitles)
-      const tracks = videoRef.current.textTracks;
-      if (tracks && tracks.length > 0) {
-        tracks[0].mode = subtitlesEnabled ? 'showing' : 'hidden';
+      setPlaybackRate(videoRef.current.playbackRate || 1);
+      setIsMuted(videoRef.current.muted);
+      setVolume(videoRef.current.muted ? 0 : videoRef.current.volume || 1);
+      const savedTime = Number(window.localStorage.getItem(storageKey) || 0);
+      if (savedTime > 5 && savedTime < videoRef.current.duration - 5) {
+        videoRef.current.currentTime = savedTime;
       }
     }
   };
+
+  useEffect(() => {
+    const tracks = videoRef.current?.textTracks;
+    if (tracks && tracks.length > 0) {
+      tracks[0].mode = subtitlesEnabled ? 'showing' : 'hidden';
+    }
+  }, [subtitlesEnabled, vttSrc]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const savePosition = () => {
+      if (video.currentTime > 0 && Number.isFinite(video.currentTime)) {
+        window.localStorage.setItem(storageKey, String(Math.floor(video.currentTime)));
+      }
+    };
+    const clearPosition = () => window.localStorage.removeItem(storageKey);
+    video.addEventListener('timeupdate', savePosition);
+    video.addEventListener('ended', clearPosition);
+    return () => {
+      savePosition();
+      video.removeEventListener('timeupdate', savePosition);
+      video.removeEventListener('ended', clearPosition);
+    };
+  }, [storageKey]);
 
   const toggleMute = () => {
     if (videoRef.current) {
@@ -96,10 +157,24 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen();
-      setIsFullscreen(true);
     } else {
       document.exitFullscreen();
-      setIsFullscreen(false);
+    }
+  };
+
+  const togglePictureInPicture = async () => {
+    const video = videoRef.current;
+    if (!video || !document.pictureInPictureEnabled) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPictureInPicture(false);
+      } else {
+        await video.requestPictureInPicture();
+        setIsPictureInPicture(true);
+      }
+    } catch {
+      setIsPictureInPicture(false);
     }
   };
 
@@ -164,23 +239,45 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
         case 'f':
           toggleFullscreen();
           break;
+        case 'p':
+          if (supportsPictureInPicture) {
+            togglePictureInPicture();
+          }
+          break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay]);
+  }, [supportsPictureInPicture, togglePictureInPicture, togglePlay]);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const syncPiP = () => setIsPictureInPicture(Boolean(document.pictureInPictureElement));
+
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('enterpictureinpicture', syncPiP as EventListener);
+    document.addEventListener('leavepictureinpicture', syncPiP as EventListener);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('enterpictureinpicture', syncPiP as EventListener);
+      document.removeEventListener('leavepictureinpicture', syncPiP as EventListener);
+    };
+  }, []);
   
   // Compute VTT URL
-  const vttSrc = src.replace('.mp4', '.vtt');
+  const vttSrc = subtitlesSrc || (src.endsWith('.mp4') ? `${src.slice(0, -4)}.vtt` : '');
 
   return (
     <div 
       ref={containerRef}
-      className={`relative group bg-black rounded-xl overflow-hidden shadow-2xl aspect-video ${className}`}
+      className={`relative group bg-black rounded-xl overflow-hidden shadow-2xl aspect-video touch-manipulation ${className}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onMouseMove={() => {
-        setIsHovering(true);
+        if (canHover) {
+          setIsHovering(true);
+        }
         // Reset the auto-hide timer
       }}
     >
@@ -197,14 +294,18 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
         onEnded={() => setIsPlaying(false)}
         crossOrigin="anonymous"
         autoPlay={autoPlay}
+        poster={poster}
+        playsInline
       >
-        <track 
-          kind="subtitles" 
-          srcLang="en" 
-          src={vttSrc} 
-          default={subtitlesEnabled}
-          label="English"
-        />
+        {vttSrc && (
+          <track
+            kind="subtitles"
+            srcLang="en"
+            src={vttSrc}
+            default={subtitlesEnabled}
+            label="English"
+          />
+        )}
         Your browser does not support the video tag.
       </video>
       
@@ -246,8 +347,8 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-white">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-white">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
             <button onClick={togglePlay} className="hover:text-indigo-400 transition-colors">
               {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
@@ -267,19 +368,26 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
                 step="0.05"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 accent-indigo-500 h-1 cursor-pointer"
+                className={`overflow-hidden accent-indigo-500 h-1 cursor-pointer transition-all duration-300 ${
+                  canHover ? 'w-0 group-hover/volume:w-20' : 'w-20'
+                }`}
               />
             </div>
 
-            <span className="text-sm font-medium tracking-wide">
+            <span className="whitespace-nowrap text-xs font-medium tracking-wide sm:text-sm">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
 
-          <div className="flex items-center gap-4 relative">
+          <div className="relative flex items-center gap-3 sm:gap-4">
             <button onClick={toggleSubtitles} className={`transition-colors ${subtitlesEnabled ? 'text-indigo-400' : 'text-white/70 hover:text-white'}`} title="Subtitles (CC)">
               <Captions className="w-5 h-5" />
             </button>
+            {supportsPictureInPicture && (
+              <button onClick={togglePictureInPicture} className={`transition-colors ${isPictureInPicture ? 'text-indigo-400' : 'text-white/70 hover:text-white'}`} title="Picture in Picture">
+                <PictureInPicture2 className="w-5 h-5" />
+              </button>
+            )}
             
             <div className="relative">
               <button 
@@ -296,7 +404,7 @@ export function PremiumVideoPlayer({ src, className = '', autoPlay = false }: Pr
                   <div className="px-3 py-2 text-xs font-semibold text-white/50 border-b border-white/10 uppercase tracking-wider">
                     Playback Speed
                   </div>
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                  {PLAYBACK_RATES.map((rate) => (
                     <button
                       key={rate}
                       onClick={() => changePlaybackRate(rate)}

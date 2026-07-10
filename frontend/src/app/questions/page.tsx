@@ -103,6 +103,11 @@ interface Question {
     is_bookmarked: boolean;
     user_selected_answer?: string;
     user_is_correct?: boolean;
+    video_url?: string;
+    video_status?: string;
+    video_thumbnail?: string;
+    video_subtitles_url?: string;
+    video_duration?: number;
 }
 
 interface Subject {
@@ -738,6 +743,8 @@ function QuestionsContent() {
                                                     <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
                                                     <PremiumVideoPlayer 
                                                         src={detail.video_url} 
+                                                        subtitlesSrc={detail.video_subtitles_url}
+                                                        poster={detail.video_thumbnail}
                                                         className="w-full max-h-[500px]"
                                                     />
                                                 </div>
