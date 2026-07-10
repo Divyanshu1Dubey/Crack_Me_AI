@@ -10,7 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
 import TrafficAnalytics from "@/components/TrafficAnalytics";
 import StickyExamCta from "@/components/StickyExamCta";
-import { seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
+import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
 const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
@@ -34,6 +34,12 @@ export const metadata: Metadata = {
     template: `%s | ${siteName}`,
   },
   description: siteDescription,
+  alternates: {
+    canonical: "/",
+    languages: {
+      "en-IN": "/",
+    },
+  },
   applicationName: siteName,
   keywords: seoKeywords,
   category: "education",
@@ -48,7 +54,7 @@ export const metadata: Metadata = {
     siteName,
     images: [
       {
-        url: "/cms-circle-logo.png",
+        url: defaultOgImage,
         width: 1200,
         height: 630,
         alt: "CrackCMS UPSC CMS Preparation Platform",
@@ -59,7 +65,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteTitle,
     description: siteDescription,
-    images: ["/cms-circle-logo.png"],
+    images: [defaultOgImage],
   },
   robots: {
     index: true,
@@ -103,6 +109,7 @@ export default function RootLayout({
                 "@type": "Organization",
                 "@id": `${siteUrl}/#organization`,
                 name: siteName,
+                legalName: brandName,
                 url: siteUrl,
                 logo: {
                   "@type": "ImageObject",
@@ -140,7 +147,7 @@ export default function RootLayout({
                 "@type": "WebPage",
                 "@id": `${siteUrl}/#webpage`,
                 url: siteUrl,
-                name: "CrackCMS — #1 UPSC CMS & NEET PG Preparation Platform",
+                name: siteTitle,
                 description: siteDescription,
                 isPartOf: { "@id": `${siteUrl}/#website` },
                 about: { "@id": `${siteUrl}/#organization` },
@@ -148,16 +155,16 @@ export default function RootLayout({
               },
               {
                 "@type": "SoftwareApplication",
-                name: "CrackCMS — UPSC CMS & NEET PG App",
+                name: "CrackCMS UPSC CMS Preparation App",
                 operatingSystem: "Web",
                 applicationCategory: "EducationalApplication",
                 url: siteUrl,
-                description: "AI-powered UPSC CMS & NEET PG exam preparation with PYQs, mock tests, flashcards, and analytics.",
+                description: "AI-powered UPSC CMS and medical exam preparation with PYQs, mock tests, flashcards, textbooks and analytics.",
                 offers: {
                   "@type": "Offer",
                   price: "0",
                   priceCurrency: "INR",
-                  description: "Free tier available. Premium from ₹79/month.",
+                  description: "Free tier available with premium medical exam preparation plans.",
                 },
                 aggregateRating: {
                   "@type": "AggregateRating",
@@ -170,7 +177,7 @@ export default function RootLayout({
               {
                 "@type": "Course",
                 name: "UPSC CMS Complete Preparation Course",
-                description: "Comprehensive UPSC Combined Medical Services (CMS) exam preparation with 10,000+ PYQs, AI-powered explanations, subject-wise mock tests, and performance analytics.",
+                description: "Comprehensive UPSC Combined Medical Services exam preparation with PYQs, AI-powered explanations, subject-wise mock tests and performance analytics.",
                 provider: { "@id": `${siteUrl}/#organization` },
                 url: `${siteUrl}/#upsc-cms-preparation`,
                 educationalLevel: "Postgraduate",
@@ -185,7 +192,7 @@ export default function RootLayout({
                 },
                 offers: {
                   "@type": "Offer",
-                  price: "79",
+                  price: "199",
                   priceCurrency: "INR",
                   availability: "https://schema.org/InStock",
                 },
@@ -193,14 +200,14 @@ export default function RootLayout({
               {
                 "@type": "Course",
                 name: "NEET PG Complete Preparation Course",
-                description: "NEET PG exam preparation with previous year questions, AI tutor, clinical MCQs, and mock test simulator.",
+                description: "Medical PG revision with previous year questions, AI tutor, clinical MCQs and mock test simulator.",
                 provider: { "@id": `${siteUrl}/#organization` },
                 url: `${siteUrl}/#neet-pg-preparation`,
                 educationalLevel: "Postgraduate",
                 inLanguage: "en-IN",
                 offers: {
                   "@type": "Offer",
-                  price: "79",
+                  price: "199",
                   priceCurrency: "INR",
                   availability: "https://schema.org/InStock",
                 },
@@ -213,7 +220,7 @@ export default function RootLayout({
                     name: "What is CrackCMS?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "CrackCMS is India's #1 AI-powered preparation platform for UPSC CMS (Combined Medical Services) and NEET PG exams. It offers 10,000+ previous year questions with AI explanations, topic-wise practice, mock tests, spaced repetition flashcards, and real-time performance analytics.",
+                      text: "CrackCMS is an AI-powered preparation platform for UPSC CMS and medical entrance exams. It offers previous year questions, AI explanations, topic-wise practice, mock tests, flashcards and performance analytics.",
                     },
                   },
                   {
@@ -221,7 +228,7 @@ export default function RootLayout({
                     name: "Is CrackCMS free for UPSC CMS preparation?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "Yes! CrackCMS offers a free tier with access to the question bank, basic AI explanations, and community features. Premium plans start from just ₹79/month for unlimited access to mock tests, advanced AI tutor, and full analytics.",
+                      text: "Yes. CrackCMS offers a free tier for question practice and revision. Premium plans unlock broader AI tutor access, mock tests, analytics and study tools.",
                     },
                   },
                   {
@@ -229,7 +236,7 @@ export default function RootLayout({
                     name: "How many previous year questions does CrackCMS have?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "CrackCMS has 10,000+ previous year questions from UPSC CMS and NEET PG exams, organized by subject, topic, year, and difficulty level. Each question comes with AI-generated explanations, textbook references, and clinical pearls.",
+                      text: "CrackCMS organizes medical exam questions by subject, topic, year and difficulty. Questions include AI-generated explanations, references and clinical pearls where available.",
                     },
                   },
                   {

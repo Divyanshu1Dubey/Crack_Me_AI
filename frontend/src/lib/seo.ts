@@ -1,92 +1,84 @@
 export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
 
 export const siteName = "CrackCMS";
-export const siteTitle = "CrackCMS — #1 UPSC CMS & NEET PG Preparation Platform | PYQs, AI Tutor, Mock Tests";
+export const brandName = "CrackLabs AI";
+export const siteTitle =
+  "CrackCMS - UPSC CMS Preparation App with AI Tutor, PYQs and Mock Tests";
 export const siteDescription =
-  "India's top-rated UPSC CMS & NEET PG preparation platform. 10,000+ Previous Year Questions (PYQs), AI-powered explanations, expert-curated mock tests, topic-wise practice, spaced repetition flashcards, and real-time analytics. Trusted by 5,000+ medical graduates. Start free today.";
+  "Prepare for UPSC CMS and medical PG exams with CrackCMS by CrackLabs AI. Practice PYQs, topic-wise MCQs, mock tests, AI explanations, flashcards, textbooks, analytics and exam strategy in one medical preparation platform.";
+
+export const defaultOgImage = "/cms-circle-logo.png";
 
 export const seoKeywords = [
-  // Core exam keywords — high search volume
-  "UPSC CMS",
   "UPSC CMS preparation",
-  "UPSC CMS 2025",
-  "UPSC CMS 2026",
-  "Combined Medical Services exam",
-  "CMS exam preparation",
-  "UPSC CMS syllabus",
-  "UPSC CMS previous year papers",
+  "UPSC CMS online coaching",
+  "UPSC CMS app",
+  "UPSC CMS question bank",
+  "UPSC CMS previous year questions",
   "UPSC CMS PYQ",
   "UPSC CMS mock test",
-  "UPSC CMS online test series",
-  "UPSC CMS question bank",
+  "UPSC CMS test series",
+  "UPSC CMS syllabus",
   "UPSC CMS study material",
-  "UPSC CMS free mock test",
-  "UPSC CMS preparation online",
-  // NEET PG keywords
-  "NEET PG",
-  "NEET PG preparation",
-  "NEET PG 2025",
-  "NEET PG 2026",
-  "NEET PG question bank",
-  "NEET PG previous year questions",
-  "NEET PG PYQ",
-  "NEET PG mock test",
-  "NEET PG online test series",
-  "NEET PG study material",
-  // Feature keywords
-  "AI medical exam tutor",
-  "AI-powered medical question solving",
-  "medical entrance exam preparation",
-  "doctor exam preparation platform",
-  "medical PG entrance exam",
-  "FMGE preparation",
+  "UPSC CMS medicine questions",
+  "UPSC CMS surgery questions",
+  "UPSC CMS pediatrics questions",
+  "UPSC CMS OBG questions",
+  "UPSC CMS PSM questions",
+  "Combined Medical Services exam",
+  "CMS exam preparation",
+  "medical officer exam preparation",
   "medical MCQ practice",
   "clinical MCQ practice",
-  "spaced repetition medical",
+  "AI medical tutor",
+  "AI medical exam preparation",
+  "AI explanations for medical MCQs",
   "medical flashcards",
-  "topic wise medical practice",
-  "subject wise question bank medical",
-  // Brand
+  "spaced repetition medical",
+  "NEET PG question bank",
+  "NEET PG mock test",
+  "NEET PG PYQ",
+  "medical PG entrance exam",
   "CrackCMS",
-  "CrackLabs",
-  "cracklabs.app",
+  "CrackLabs AI",
+  "cracklabs app",
 ];
 
-// SEO-optimized page metadata for each route
 export const pageMetadata: Record<string, { title: string; description: string }> = {
   "/": {
-    title: "CrackCMS — #1 UPSC CMS & NEET PG Preparation Platform",
-    description: "India's most trusted UPSC CMS & NEET PG preparation platform. 10,000+ PYQs with AI explanations, mock tests, topic-wise practice, flashcards & analytics. Start free.",
+    title: siteTitle,
+    description: siteDescription,
   },
   "/login": {
     title: "Login to CrackCMS",
-    description: "Sign in to your CrackCMS account and continue your UPSC CMS & NEET PG preparation journey.",
+    description: "Sign in to continue UPSC CMS PYQs, mock tests, AI tutor sessions and medical revision on CrackCMS.",
   },
   "/register": {
-    title: "Create Free Account — CrackCMS",
-    description: "Join 5,000+ medical graduates on CrackCMS. Free access to UPSC CMS & NEET PG PYQs, AI tutor, and mock tests. Sign up in 30 seconds.",
+    title: "Create Free CrackCMS Account",
+    description: "Start UPSC CMS preparation with PYQs, AI explanations, mock tests, flashcards and performance analytics.",
   },
   "/subscription": {
-    title: "Premium Plans — CrackCMS",
-    description: "Unlock unlimited UPSC CMS & NEET PG preparation with CrackCMS Premium. AI explanations, full mock tests, analytics dashboard. Plans from ₹79/month.",
+    title: "CrackCMS Premium Plans for UPSC CMS Preparation",
+    description: "Unlock premium UPSC CMS preparation with unlimited AI tutor support, exam-style mock tests, analytics and high-yield study tools.",
   },
   "/resources": {
-    title: "Free UPSC CMS & NEET PG Study Resources",
-    description: "Free study resources for UPSC CMS & NEET PG — syllabus guides, subject-wise strategies, high-yield topics, recommended textbooks, and preparation roadmaps.",
+    title: "UPSC CMS Resources, Syllabus, Booklist and Exam Guide",
+    description: "Explore UPSC CMS syllabus guidance, book recommendations, FAQs, preparation strategy and high-yield resources for medical graduates.",
+  },
+  "/contact": {
+    title: "Contact CrackCMS Support",
+    description: "Contact CrackCMS for UPSC CMS preparation support, subscription help, feedback and platform assistance.",
   },
 };
 
-// Routes that Google should index — these generate sitemap entries
 export const publicIndexableRoutes = [
   "/",
-  "/login",
   "/register",
   "/subscription",
   "/resources",
-  "/forgot-password",
+  "/contact",
 ] as const;
 
-// Routes that are behind auth — excluded from sitemap, marked noindex in robots
 export const privateNoIndexPrefixes = [
   "/admin",
   "/dashboard",
@@ -106,4 +98,7 @@ export const privateNoIndexPrefixes = [
   "/textbooks",
   "/upload",
   "/trends",
+  "/auth",
+  "/reset-password",
+  "/forgot-password",
 ];
