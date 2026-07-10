@@ -161,10 +161,12 @@ if DATABASE_URL and not IS_COLLECTSTATIC:
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=int(os.getenv('CONN_MAX_AGE', 0)),
             ssl_require=not DEBUG,
         )
     }
+    if os.getenv('DISABLE_SERVER_SIDE_CURSORS', 'false').lower() == 'true':
+        DATABASES['default']['OPTIONS'] = {'disable_server_side_cursors': True}
 elif IS_CI:
     DATABASES = {
         'default': {
