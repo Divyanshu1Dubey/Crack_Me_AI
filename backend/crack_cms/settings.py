@@ -166,7 +166,9 @@ if DATABASE_URL and not IS_COLLECTSTATIC:
         )
     }
     if os.getenv('DISABLE_SERVER_SIDE_CURSORS', 'false').lower() == 'true':
-        DATABASES['default']['OPTIONS'] = {'disable_server_side_cursors': True}
+        if 'OPTIONS' not in DATABASES['default']:
+            DATABASES['default']['OPTIONS'] = {}
+        DATABASES['default']['OPTIONS']['server_side_cursors'] = False
 elif IS_CI:
     DATABASES = {
         'default': {
