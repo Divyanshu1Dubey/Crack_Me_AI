@@ -352,7 +352,7 @@ export default function LandingPage() {
               {/* Title, Description & CTAs */}
               <div className="space-y-4 flex-1">
                 <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
-                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400">AI Powered</span> UPSC CMS Platform
+                  <span className="bg-linear-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400">AI Powered</span> UPSC CMS Platform
                 </h1>
                 
                 <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground text-left">
@@ -406,7 +406,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 1: Clinical PYQ Atlas (Interactive MCQ) */}
-          <div className="relative group/feat rounded-[2.5rem] border border-emerald-500/20 dark:border-emerald-500/10 bg-emerald-500/[0.02] dark:bg-emerald-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-emerald-500/35 transition-all duration-300 overflow-hidden">
+          <div className="relative group/feat rounded-[2.5rem] border border-emerald-500/20 dark:border-emerald-500/10 bg-emerald-500/2 dark:bg-emerald-950/4 p-6 sm:p-8 md:p-12 shadow-sm hover:border-emerald-500/35 transition-all duration-300 overflow-hidden">
             <div className="absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl opacity-60" />
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               <div className="lg:col-span-6 space-y-6">
@@ -565,7 +565,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 2: Doctor-Grade AI Tutor (Interactive Chat RAG) */}
-          <div className="relative group/feat rounded-[2.5rem] border border-blue-500/20 dark:border-blue-500/10 bg-blue-500/[0.02] dark:bg-blue-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-blue-500/35 transition-all duration-300 overflow-hidden">
+          <div className="relative group/feat rounded-[2.5rem] border border-blue-500/20 dark:border-blue-500/10 bg-blue-500/2 dark:bg-blue-950/4 p-6 sm:p-8 md:p-12 shadow-sm hover:border-blue-500/35 transition-all duration-300 overflow-hidden">
             <div className="absolute left-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl opacity-60" />
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               {/* Interactive Chat Mock Widget on the Left */}
@@ -663,7 +663,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 3: Smart Exam Engine (Interactive Exam HUD) */}
-          <div className="relative group/feat rounded-[2.5rem] border border-teal-500/20 dark:border-teal-500/10 bg-teal-500/[0.02] dark:bg-teal-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-teal-500/35 transition-all duration-300 overflow-hidden">
+          <div className="relative group/feat rounded-[2.5rem] border border-teal-500/20 dark:border-teal-500/10 bg-teal-500/2 dark:bg-teal-950/4 p-6 sm:p-8 md:p-12 shadow-sm hover:border-teal-500/35 transition-all duration-300 overflow-hidden">
             <div className="absolute right-0 top-0 -z-10 h-72 w-72 rounded-full bg-teal-500/10 blur-3xl opacity-60" />
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               <div className="lg:col-span-6 space-y-6">
@@ -766,7 +766,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 4: Rapid Recall AI (Flipping Flashcard) */}
-          <div className="relative group/feat rounded-[2.5rem] border border-amber-500/20 dark:border-amber-500/10 bg-amber-500/[0.02] dark:bg-amber-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-amber-500/35 transition-all duration-300 overflow-hidden">
+          <div className="relative group/feat rounded-[2.5rem] border border-amber-500/20 dark:border-amber-500/10 bg-amber-500/2 dark:bg-amber-950/4 p-6 sm:p-8 md:p-12 shadow-sm hover:border-amber-500/35 transition-all duration-300 overflow-hidden">
             <div className="absolute left-0 top-0 -z-10 h-72 w-72 rounded-full bg-amber-500/10 blur-3xl opacity-60" />
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               {/* Interactive Flashcard Widget on the Left */}
@@ -858,7 +858,7 @@ export default function LandingPage() {
                           </div>
 
                           {/* Back side */}
-                          <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full bg-amber-500/[0.03] flex flex-col justify-between p-6 overflow-y-auto">
+                          <div className="absolute inset-0 backface-hidden rotate-y-180 w-full h-full bg-amber-500/3 flex flex-col justify-between p-6 overflow-y-auto">
                             <div>
                               <span className="text-[10px] font-bold text-amber-600 tracking-wider">CLINICAL MNEMONIC</span>
                               <h4 className="text-base font-extrabold text-foreground mt-1 border-b border-border/60 pb-2">{c.title}</h4>
@@ -889,7 +889,7 @@ export default function LandingPage() {
           </div>
 
           {/* Feature 5: Question Generator (Interactive demo) */}
-          <div className="relative group/feat rounded-[2.5rem] border border-cyan-500/20 dark:border-cyan-500/10 bg-cyan-500/[0.02] dark:bg-cyan-950/[0.04] p-6 sm:p-8 md:p-12 shadow-sm hover:border-cyan-500/35 transition-all duration-300 overflow-hidden">
+          <div className="relative group/feat rounded-[2.5rem] border border-cyan-500/20 dark:border-cyan-500/10 bg-cyan-500/2 dark:bg-cyan-950/4 p-6 sm:p-8 md:p-12 shadow-sm hover:border-cyan-500/35 transition-all duration-300 overflow-hidden">
             <div className="absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl opacity-60" />
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               <div className="lg:col-span-6 space-y-6">
@@ -1173,8 +1173,8 @@ export default function LandingPage() {
 
       {/* Premium early bird pricing section */}
       <section className="relative px-6 py-20 md:py-24 overflow-hidden border-t border-border/45 bg-slate-950 text-white rounded-[2.5rem] mx-4 sm:mx-6 md:mx-12 my-16 shadow-2xl">
-        <div className="absolute right-0 top-0 h-[400px] w-[400px] rounded-full bg-gradient-to-br from-amber-500/10 to-yellow-500/15 blur-3xl opacity-60 pointer-events-none" />
-        <div className="absolute left-0 bottom-0 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-blue-500/15 blur-3xl opacity-60 pointer-events-none" />
+        <div className="absolute right-0 top-0 h-[400px] w-[400px] rounded-full bg-linear-to-br from-amber-500/10 to-yellow-500/15 blur-3xl opacity-60 pointer-events-none" />
+        <div className="absolute left-0 bottom-0 h-[400px] w-[400px] rounded-full bg-linear-to-tr from-cyan-500/10 to-blue-500/15 blur-3xl opacity-60 pointer-events-none" />
 
         <div className="mx-auto max-w-5xl relative z-10">
           <div className="grid gap-12 lg:grid-cols-12 items-center">
@@ -1233,7 +1233,7 @@ export default function LandingPage() {
                   </li>
                 </ul>
 
-                <Button size="xl" asChild className="w-full mt-8 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold shadow-lg shadow-amber-500/20 py-4 transition-transform active:scale-95">
+                <Button size="xl" asChild className="w-full mt-8 rounded-2xl bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold shadow-lg shadow-amber-500/20 py-4 transition-transform active:scale-95">
                   <Link href="/subscription">
                     Claim Premium Offer Now <ArrowRight className="w-4 h-4 ml-1" />
                   </Link>
@@ -1247,7 +1247,7 @@ export default function LandingPage() {
 
           {/* "Campus Momentum" Dashboard */}
           <div className="relative group w-full pt-4">
-            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+            <div className="absolute -inset-1 rounded-[2.5rem] bg-linear-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
             <div className="rounded-[2.5rem] border border-border/80 bg-card p-6 md:p-10 shadow-xl space-y-6 relative overflow-hidden">
               <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl" />
               
@@ -1303,8 +1303,8 @@ export default function LandingPage() {
             </div>
 
             <div className="relative group max-w-3xl mx-auto w-full">
-              <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
-              <Card className="relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
+              <div className="absolute -inset-1 rounded-[2.5rem] bg-linear-to-tr from-emerald-500 via-blue-500 to-indigo-500 opacity-20 blur-xl transition-all group-hover:opacity-30" />
+              <Card className="relative overflow-hidden rounded-4xl border border-border/80 bg-card/90 text-foreground shadow-2xl backdrop-blur-md">
               {/* Header bar of the widget */}
               <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
                 <div className="flex items-center gap-2">
@@ -1366,7 +1366,7 @@ export default function LandingPage() {
                     <span className="text-blue-600 dark:text-blue-400">74% Target</span>
                   </div>
                   <div className="h-2.5 w-full bg-border/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
+                    <div className="h-full bg-linear-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '74%' }} />
                   </div>
                 </div>
               </CardContent>
@@ -1485,8 +1485,8 @@ export default function LandingPage() {
         
         <Card className="mx-auto max-w-4xl border-0 bg-slate-950 text-white rounded-[2.5rem] relative overflow-hidden shadow-2xl">
           {/* Neon gradient background mesh */}
-          <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-500/20 to-teal-500/20 blur-3xl opacity-60" />
-          <div className="absolute left-0 bottom-0 h-96 w-96 rounded-full bg-gradient-to-tr from-blue-500/20 to-rose-500/20 blur-3xl opacity-60" />
+          <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-linear-to-br from-indigo-500/20 to-teal-500/20 blur-3xl opacity-60" />
+          <div className="absolute left-0 bottom-0 h-96 w-96 rounded-full bg-linear-to-tr from-blue-500/20 to-rose-500/20 blur-3xl opacity-60" />
           
           <CardContent className="p-10 md:p-16 text-center space-y-6 relative z-10">
             <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center mx-auto border border-white/10 shadow-lg">
