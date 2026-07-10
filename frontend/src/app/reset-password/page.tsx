@@ -47,8 +47,9 @@ function ResetPasswordForm() {
             
             setSuccess(true);
             setTimeout(() => router.push('/login'), 3000);
-        } catch (err: any) {
-            setError(err.message || 'Reset link is invalid or expired. Please request a new one.');
+        } catch (err: unknown) {
+            const error = err as { message?: string };
+            setError(error.message || 'Reset link is invalid or expired. Please request a new one.');
         }
         setLoading(false);
     };

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
@@ -241,7 +241,7 @@ export default function DashboardPage() {
                 <div className="page-container space-y-6 pb-8">
                     {/* Premium Upgrade Banner */}
                     {!user?.is_subscribed && (
-                        <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent shadow-sm relative overflow-hidden">
+                        <Card className="border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent shadow-sm relative overflow-hidden">
                             <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
                             <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                 <div className="space-y-1">
@@ -265,7 +265,7 @@ export default function DashboardPage() {
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
                             <Image src="/dashboard_hero.png" alt="Medical Hero" fill sizes="(min-width: 768px) 33vw, 0px" className="object-cover object-left" />
-                            <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-transparent"></div>
+                            <div className="absolute inset-0 bg-linear-to-r from-slate-900 to-transparent"></div>
                         </div>
                         <CardContent className="p-0 relative z-10">
                             <div className="grid md:grid-cols-3">
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                                     <div className="rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30 p-4 mb-4 text-left">
                                         <div className="flex items-center justify-between gap-4 flex-wrap">
                                             <div>
-                                                <p className="text-xs uppercase tracking-wide text-blue-400 font-medium font-bold">Today&apos;s Activity</p>
+                                                <p className="text-xs uppercase tracking-wide text-blue-400 font-bold">Today&apos;s Activity</p>
                                                 <p className="text-xl font-black text-foreground mt-1">{todayActivity.questions_attempted} questions, {todayActivity.tests_completed} tests</p>
                                                 <p className="text-xs text-muted-foreground mt-1">{todayActivity.time_spent_minutes} minutes of study today</p>
                                             </div>
@@ -541,7 +541,7 @@ export default function DashboardPage() {
                                         <p className="text-sm text-muted-foreground">Complete a few mock tests to calculate weak subjects details.</p>
                                     ) : (
                                         <div className="space-y-4">
-                                            {topWeakSubjects.map((subject: any, i: number) => (
+                                            {topWeakSubjects.map((subject: { subject: string; accuracy: number }, i: number) => (
                                                 <div key={i}>
                                                     <div className="flex items-center justify-between mb-1.5">
                                                         <p className="text-sm font-semibold text-foreground">{subject.subject}</p>

@@ -194,8 +194,9 @@ export default function SubscriptionPage() {
             // Generate AI analysis
             generateAiTestAnalysis(data.score, submissionAnswers, data.message);
 
-        } catch (err: any) {
-            setErrorMessage(err.response?.data?.error || "Failed to submit scholarship test. Please try again.");
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setErrorMessage(error.response?.data?.error || "Failed to submit scholarship test. Please try again.");
         } finally {
             setTestSubmitting(false);
         }
@@ -252,7 +253,7 @@ export default function SubscriptionPage() {
                 name: 'CrackLabs Premium',
                 description: `Upgrade to ${plan.replace('_', ' ')} Plan`,
                 order_id: order_id,
-                handler: async function (response: any) {
+                handler: async function (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) {
                     setSubscribing(true);
                     try {
                         await authAPI.subscribeVerify({
@@ -262,8 +263,9 @@ export default function SubscriptionPage() {
                         });
                         await refreshProfile();
                         setSuccessMessage("Congratulations! Your Premium subscription has been successfully activated.");
-                    } catch (err: any) {
-                        setErrorMessage(err.response?.data?.error || "Payment verification failed. Please contact support.");
+                    } catch (err: unknown) {
+                        const error = err as { response?: { data?: { error?: string } } };
+                        setErrorMessage(error.response?.data?.error || "Payment verification failed. Please contact support.");
                     } finally {
                         setSubscribing(false);
                     }
@@ -283,10 +285,11 @@ export default function SubscriptionPage() {
                 }
             };
 
-            const rzp = new (window as any).Razorpay(options);
+            const rzp = new (window as unknown as { Razorpay: new (options: unknown) => { open: () => void } }).Razorpay(options);
             rzp.open();
-        } catch (err: any) {
-            setErrorMessage(err.response?.data?.error || "Failed to initiate payment. Please try again later.");
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setErrorMessage(error.response?.data?.error || "Failed to initiate payment. Please try again later.");
             setSubscribing(false);
         }
     };
@@ -649,7 +652,7 @@ export default function SubscriptionPage() {
                                                             <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
                                                             <div>
                                                                 <strong className="block mb-1 font-bold">IMPROVEMENT FOCUS REQUIRED</strong>
-                                                                <p className="text-sm font-medium leading-relaxed">You did not achieve a perfect score. {aiAnalysis.testResultMsg} Let's study the clinical concepts below.</p>
+                                                                <p className="text-sm font-medium leading-relaxed">You did not achieve a perfect score. {aiAnalysis.testResultMsg} Let&apos;s study the clinical concepts below.</p>
                                                             </div>
                                                         </div>
                                                     )}

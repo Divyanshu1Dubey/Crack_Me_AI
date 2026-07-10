@@ -8,6 +8,7 @@ export default function ExamCountdown() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(new Date().getTime());
     setMounted(true);
     const interval = setInterval(() => {

@@ -93,12 +93,6 @@ export function PremiumVideoPlayer({ src, subtitlesSrc, poster, className = '', 
   };
 
   const handleLoadedMetadata = () => {
-  useEffect(() => {
-    const tracks = videoRef.current?.textTracks;
-    if (tracks && tracks.length > 0) {
-      tracks[0].mode = subtitlesEnabled ? 'showing' : 'hidden';
-    }
-  }, [subtitlesEnabled, vttSrc]);
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       setIsBuffering(false);
@@ -115,9 +109,10 @@ export function PremiumVideoPlayer({ src, subtitlesSrc, poster, className = '', 
   useEffect(() => {
     const tracks = videoRef.current?.textTracks;
     if (tracks && tracks.length > 0) {
+      // eslint-disable-next-line react-hooks/immutability
       tracks[0].mode = subtitlesEnabled ? 'showing' : 'hidden';
     }
-  }, [subtitlesEnabled, vttSrc]);
+  }, [subtitlesEnabled, subtitlesSrc]);
 
   useEffect(() => {
     const video = videoRef.current;

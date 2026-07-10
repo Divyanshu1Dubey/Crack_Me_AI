@@ -23,8 +23,9 @@ export default function ForgotPasswordPage() {
         try {
             await resetPassword(email.trim());
             setSubmitted(true);
-        } catch (err: any) {
-            setError(err.message || 'Something went wrong. Please try again.');
+        } catch (err: unknown) {
+            const error = err as { message?: string };
+            setError(error.message || 'Something went wrong. Please try again.');
         }
         setLoading(false);
     };

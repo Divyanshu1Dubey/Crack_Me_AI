@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth';
 import {
   Activity,
-  BarChart3,
-  BookOpen,
   Brain,
   CheckCircle2,
   ChevronRight,
@@ -21,17 +19,13 @@ import {
   Target,
   TrendingUp,
   Users,
-  MessageSquare,
   Zap,
   RotateCw,
   Flame,
   Award,
-  BookMarked,
   ArrowRight,
-  HelpCircle,
   Crown,
-  Loader2,
-  Star
+  Loader2
 } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
@@ -139,7 +133,7 @@ export default function LandingPage() {
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoGenerated, setDemoGenerated] = useState(false);
   const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
-  const [demoQuestion, setDemoQuestion] = useState<any>(null);
+  const [demoQuestion, setDemoQuestion] = useState<unknown>(null);
   const [demoAiLoading, setDemoAiLoading] = useState(false);
   const [demoAiDone, setDemoAiDone] = useState(false);
 
@@ -543,7 +537,7 @@ export default function LandingPage() {
                             </div>
                             <div className="rounded-xl bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-900/30 p-3">
                               <div className="text-[10px] font-bold text-blue-600 mb-1">📖 Textbook</div>
-                              <p className="text-[11px] text-muted-foreground">Harrison's Principles of Internal Medicine, Ch. 273, Page 1453–1460</p>
+                              <p className="text-[11px] text-muted-foreground">Harrison&apos;s Principles of Internal Medicine, Ch. 273, Page 1453–1460</p>
                             </div>
                           </div>
                         )}
@@ -995,7 +989,7 @@ export default function LandingPage() {
                         </div>
 
                         <div className="space-y-2">
-                          {demoQuestion.options.map((opt: any) => {
+                          {demoQuestion.options.map((opt: { key: string; text: string }) => {
                             const isSelected = demoAnswer === opt.key;
                             const isCorrect = opt.key === demoQuestion.correct;
                             let btnStyle = "border-border/60 hover:border-cyan-500/50 hover:bg-muted/10";
@@ -1161,7 +1155,7 @@ export default function LandingPage() {
                 ))}
               </div>
               <p className="text-xs md:text-sm text-slate-300 leading-relaxed italic">
-                "{item.quote}"
+                &quot;{item.quote}&quot;
               </p>
               <div className="border-t border-slate-800/60 mt-4 pt-3 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary">
