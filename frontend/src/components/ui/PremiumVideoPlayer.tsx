@@ -157,21 +157,7 @@ export function PremiumVideoPlayer({ src, subtitlesSrc, poster, className = '', 
     }
   };
 
-  const togglePictureInPicture = async () => {
-    const video = videoRef.current;
-    if (!video || !document.pictureInPictureEnabled) return;
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsPictureInPicture(false);
-      } else {
-        await video.requestPictureInPicture();
-        setIsPictureInPicture(true);
-      }
-    } catch {
-      setIsPictureInPicture(false);
-    }
-  };
+  const togglePictureInPicture = useCallback(async () => {}, []);
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (videoRef.current && duration > 0) {
