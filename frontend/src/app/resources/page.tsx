@@ -246,7 +246,7 @@ export default function ResourcesPage() {
                                         <div className="space-y-2">
                                             {guide.recruiting_for.map((post: string, i: number) => (
                                                 <div key={i} className="flex items-start gap-2 text-sm p-2 rounded" style={{ background: 'rgba(139, 92, 246, 0.06)' }}>
-                                                    <Award className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#8b5cf6' }} />
+                                                    <Award className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#8b5cf6' }} />
                                                     <span>{post}</span>
                                                 </div>
                                             ))}
@@ -273,7 +273,7 @@ export default function ResourcesPage() {
                                                     <button key={item.id} onClick={() => downloadResource(item.id)}
                                                         className="flex items-center gap-3 p-4 rounded-xl text-left group transition-all hover:scale-[1.02]"
                                                         style={{ background: `${color}06`, border: `1px solid ${color}15` }}>
-                                                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                                                             style={{ background: `${color}15`, color }}>
                                                             <Download className="w-5 h-5" />
                                                         </div>
@@ -309,15 +309,15 @@ export default function ResourcesPage() {
                                     <div key={i} className="glass-card overflow-hidden">
                                         <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
                                             className="w-full flex items-start gap-3 p-5 text-left">
-                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
                                                 style={{ background: 'rgba(6, 182, 212, 0.1)', color: 'var(--accent-primary)' }}>
                                                 Q{i + 1}
                                             </div>
                                             <div className="flex-1">
                                                 <div className="text-sm font-medium">{faq.q}</div>
                                             </div>
-                                            {openFaq === i ? <ChevronUp className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} /> :
-                                                <ChevronDown className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--text-secondary)' }} />}
+                                            {openFaq === i ? <ChevronUp className="w-5 h-5 shrink-0" style={{ color: 'var(--accent-primary)' }} /> :
+                                                <ChevronDown className="w-5 h-5 shrink-0" style={{ color: 'var(--text-secondary)' }} />}
                                         </button>
                                         {openFaq === i && (
                                             <div className="px-5 pb-5 ml-11">
@@ -358,7 +358,7 @@ export default function ResourcesPage() {
                                             <div className="space-y-2 ml-13">
                                                 {entry.books.map((book: string, j: number) => (
                                                     <div key={j} className="flex items-center gap-2 text-sm p-2 rounded-lg" style={{ background: `${c}06` }}>
-                                                        <BookOpen className="w-4 h-4 flex-shrink-0" style={{ color: c }} />
+                                                        <BookOpen className="w-4 h-4 shrink-0" style={{ color: c }} />
                                                         <span>{book}</span>
                                                     </div>
                                                 ))}

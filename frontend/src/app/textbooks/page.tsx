@@ -143,7 +143,7 @@ export default function TextbooksPage() {
                                     <div key={book.id} className="glass-card p-5 cursor-pointer transition-all hover:scale-[1.01]"
                                         onClick={() => setExpandedBook(expandedBook === book.id ? null : book.id)}>
                                         <div className="flex items-start gap-3 mb-3">
-                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                                            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
                                                 style={{ background: 'rgba(6,182,212,0.1)' }}>
                                                 <BookOpen className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
                                             </div>
@@ -181,7 +181,7 @@ export default function TextbooksPage() {
                                     {recommendedBooks.map((book, i) => (
                                         <div key={i} className="glass-card p-5">
                                             <div className="flex items-start gap-3">
-                                                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                                                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
                                                     style={{ background: `${book.color}15`, color: book.color }}>
                                                     <BookOpen className="w-6 h-6" />
                                                 </div>

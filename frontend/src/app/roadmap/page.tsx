@@ -327,7 +327,7 @@ export default function RoadmapPage() {
                 <main className="p-6 page-container space-y-6">
                     {/* Page Header */}
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg">
+                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg">
                             <Map className="w-6 h-6 text-white" />
                         </div>
                         <div>

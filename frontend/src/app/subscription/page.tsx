@@ -423,7 +423,7 @@ export default function SubscriptionPage() {
 
                     {/* Scholarship Challenge Banner */}
                     {!isSubscribed && (
-                        <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                        <div className="rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                             <div className="text-left space-y-2">
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
                                     <Sparkles className="w-3.5 h-3.5" /> 100% Scholarship Discount Offer
@@ -508,7 +508,7 @@ export default function SubscriptionPage() {
                                             <button
                                                 onClick={hasScholarshipDiscount ? () => handleSubscribe('scholarship_1_month') : plan.action}
                                                 disabled={subscribing}
-                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
+                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
                                             >
                                                 {subscribing ? 'Processing...' : (hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta)}
                                             </button>
@@ -555,7 +555,7 @@ export default function SubscriptionPage() {
 
                     {/* Action footer for subscribed members */}
                     {isSubscribed && (
-                        <div className="mt-12 p-6 rounded-[2rem] border border-emerald-500/20 bg-emerald-950/5 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="mt-12 p-6 rounded-4xl border border-emerald-500/20 bg-emerald-950/5 flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="text-left space-y-1">
                                 <h4 className="text-base font-bold text-foreground">Your Premium account is active!</h4>
                                 <p className="text-xs text-muted-foreground">Start using your unlimited features and materials right now.</p>

@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
                                     {suggestions.map((s, i) => (
                                         <div key={i} className="flex items-start gap-2 p-3 rounded-lg text-sm"
                                             style={{ background: 'rgba(245, 158, 11, 0.05)' }}>
-                                            <Target className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+                                            <Target className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
                                             <span>{s}</span>
                                         </div>
                                     ))}

@@ -325,7 +325,7 @@ export function PremiumVideoPlayer({ src, subtitlesSrc, poster, className = '', 
 
       {/* Controls Overlay */}
       <div 
-        className={`absolute bottom-0 left-0 right-0 p-4 pt-16 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-20 ${
+        className={`absolute bottom-0 left-0 right-0 p-4 pt-16 bg-linear-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-20 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >

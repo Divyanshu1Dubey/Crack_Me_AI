@@ -296,7 +296,7 @@ export default function GeneratePage() {
                                 <div key={idx} className="glass-card p-6">
                                     {/* Question Number & Header */}
                                     <div className="flex items-start gap-3 mb-4">
-                                        <span className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                                        <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
                                             style={{ background: 'var(--accent-primary)', color: 'white' }}>
                                             {idx + 1}
                                         </span>
@@ -331,7 +331,7 @@ export default function GeneratePage() {
                                                     className={`p-3 rounded-lg transition-all flex items-center gap-3 ${getOptionClass(idx, opt)}`}
                                                     style={{ background: selectedAnswers[idx] ? undefined : 'var(--bg-secondary)' }}
                                                 >
-                                                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                                                         style={{
                                                             border: '2px solid var(--border-color)',
                                                             color: 'var(--text-secondary)'
@@ -340,10 +340,10 @@ export default function GeneratePage() {
                                                     </span>
                                                     <span className="text-sm">{optValue}</span>
                                                     {selectedAnswers[idx] && opt === q.correct_answer && (
-                                                        <CheckCircle className="w-5 h-5 text-green-400 ml-auto flex-shrink-0" />
+                                                        <CheckCircle className="w-5 h-5 text-green-400 ml-auto shrink-0" />
                                                     )}
                                                     {selectedAnswers[idx] === opt && opt !== q.correct_answer && (
-                                                        <XCircle className="w-5 h-5 text-red-400 ml-auto flex-shrink-0" />
+                                                        <XCircle className="w-5 h-5 text-red-400 ml-auto shrink-0" />
                                                     )}
                                                 </div>
                                             );
@@ -425,7 +425,7 @@ export default function GeneratePage() {
 
                                             {aiExplanations[idx].textbook_reference?.book && (
                                                 <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                    <BookMarked className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#8b5cf6' }} />
+                                                    <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
                                                     <div>
                                                         <h6 className="text-xs font-bold" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
                                                         <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].textbook_reference.book}</p>
@@ -438,7 +438,7 @@ export default function GeneratePage() {
 
                                             {aiExplanations[idx].mnemonic && (
                                                 <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
-                                                    <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                                                    <Sparkles className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
                                                     <div>
                                                         <h6 className="text-xs font-bold" style={{ color: '#f59e0b' }}>💡 Mnemonic</h6>
                                                         <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].mnemonic}</p>
@@ -487,13 +487,13 @@ export default function GeneratePage() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                 {aiExplanations[idx].pyq_frequency && (
                                                     <div className="p-2.5 rounded-lg flex items-center gap-2" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
-                                                        <Target className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#ec4899' }} />
+                                                        <Target className="w-3.5 h-3.5 shrink-0" style={{ color: '#ec4899' }} />
                                                         <span className="text-xs font-medium" style={{ color: '#ec4899' }}>PYQ: {aiExplanations[idx].pyq_frequency}</span>
                                                     </div>
                                                 )}
                                                 {aiExplanations[idx].similar_pyq && (
                                                     <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
-                                                        <Target className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: '#6366f1' }} />
+                                                        <Target className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#6366f1' }} />
                                                         <span className="text-xs font-medium" style={{ color: '#6366f1' }}>📋 {aiExplanations[idx].similar_pyq}</span>
                                                     </div>
                                                 )}

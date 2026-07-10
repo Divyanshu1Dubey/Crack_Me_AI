@@ -810,7 +810,7 @@ export default function TakeTestPage() {
         <div className="min-h-screen flex flex-col bg-background lg:overflow-hidden lg:h-screen">
             {/* Confirm Dialog */}
             {showConfirm && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
+                <div className="fixed inset-0 z-100 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
                     <div className="glass-card p-8 max-w-sm w-full mx-4 text-center animate-fadeInUp">
                         <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: '#f59e0b' }} />
                         <h3 className="text-xl font-bold mb-2">Submit Test?</h3>

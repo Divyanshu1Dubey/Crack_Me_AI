@@ -31,7 +31,7 @@ export default function ExamCountdown() {
 
   if (!mounted) {
     return (
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
+      <div className="bg-linear-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
         <div className="text-xs font-extrabold uppercase tracking-widest text-yellow-300">
           Last Month Revision & Practice Platform
         </div>
@@ -42,7 +42,7 @@ export default function ExamCountdown() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
+    <div className="bg-linear-to-r from-blue-700 via-indigo-600 to-teal-600 text-white py-2 px-4 shadow-md flex flex-col items-center justify-center space-y-1">
       <div className="text-xs font-extrabold uppercase tracking-widest text-yellow-300">
         Last Month Revision & Practice Platform
       </div>

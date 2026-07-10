@@ -302,13 +302,13 @@ export default function TrendsPage() {
                                                         )}
                                                     </div>
                                                     <div className="flex items-center gap-1 mt-1">
-                                                        <BookOpen className="w-3 h-3 flex-shrink-0" style={{ color: section.color }} />
+                                                        <BookOpen className="w-3 h-3 shrink-0" style={{ color: section.color }} />
                                                         <span className="text-xs" style={{ color: section.color }}>{topic.ref}</span>
                                                     </div>
                                                     <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{topic.note}</p>
                                                 </div>
                                                 {topic.stars === 3 && (
-                                                    <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap flex-shrink-0"
+                                                    <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0"
                                                         style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
                                                         <Flame className="w-3 h-3" /> Must Do
                                                     </span>
@@ -324,7 +324,7 @@ export default function TrendsPage() {
 
                 {/* Pattern Change Alert */}
                 <div className="p-5 rounded-2xl border border-dashed border-cyan-500/30 bg-cyan-500/5 flex flex-col md:flex-row items-center gap-4">
-                    <div className="p-3 rounded-xl text-white flex-shrink-0" style={{ background: '#06b6d4' }}>
+                    <div className="p-3 rounded-xl text-white shrink-0" style={{ background: '#06b6d4' }}>
                         <AlertCircle className="w-6 h-6" />
                     </div>
                     <div className="flex-1 text-center md:text-left">

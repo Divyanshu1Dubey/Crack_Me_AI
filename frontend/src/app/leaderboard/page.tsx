@@ -22,9 +22,9 @@ interface LeaderboardEntry {
 }
 
 const rankStyle = (rank: number) => {
-    if (rank === 1) return 'bg-gradient-to-r from-yellow-500/20 to-amber-500/10 border-yellow-500/30';
-    if (rank === 2) return 'bg-gradient-to-r from-slate-300/20 to-slate-400/10 border-slate-400/30';
-    if (rank === 3) return 'bg-gradient-to-r from-orange-500/20 to-amber-600/10 border-orange-600/30';
+    if (rank === 1) return 'bg-linear-to-r from-yellow-500/20 to-amber-500/10 border-yellow-500/30';
+    if (rank === 2) return 'bg-linear-to-r from-slate-300/20 to-slate-400/10 border-slate-400/30';
+    if (rank === 3) return 'bg-linear-to-r from-orange-500/20 to-amber-600/10 border-orange-600/30';
     return '';
 };
 

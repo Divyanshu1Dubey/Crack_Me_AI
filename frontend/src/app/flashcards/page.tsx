@@ -215,7 +215,7 @@ export default function FlashcardsPage() {
 
                     {/* Study Tools Panel */}
                     {showStudyTools && mode !== 'review' && (
-                        <Card className="border-purple-500/20 bg-gradient-to-r from-purple-500/5 to-pink-500/5">
+                        <Card className="border-purple-500/20 bg-linear-to-r from-purple-500/5 to-pink-500/5">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <Wand2 className="w-5 h-5 text-purple-500" />
@@ -225,7 +225,7 @@ export default function FlashcardsPage() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="p-4 rounded-lg bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+                                    <div className="p-4 rounded-lg bg-linear-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
                                         <Sparkles className="w-6 h-6 text-amber-500 mb-2" />
                                         <h4 className="font-semibold text-sm mb-1">Generate Mnemonics</h4>
                                         <p className="text-xs text-muted-foreground mb-3">Create memory tricks for any topic using AI</p>
@@ -233,13 +233,13 @@ export default function FlashcardsPage() {
                                             Try It
                                         </Button>
                                     </div>
-                                    <div className="p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                                    <div className="p-4 rounded-lg bg-linear-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
                                         <StickyNote className="w-6 h-6 text-blue-500 mb-2" />
                                         <h4 className="font-semibold text-sm mb-1">Personal Notes</h4>
                                         <p className="text-xs text-muted-foreground mb-3">Add your own notes to any flashcard for better recall</p>
                                         <Badge variant="outline" className="text-xs">Click card → Add Note</Badge>
                                     </div>
-                                    <div className="p-4 rounded-lg bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
+                                    <div className="p-4 rounded-lg bg-linear-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
                                         <BookOpen className="w-6 h-6 text-emerald-500 mb-2" />
                                         <h4 className="font-semibold text-sm mb-1">Smart Review</h4>
                                         <p className="text-xs text-muted-foreground mb-3">SM-2 algorithm optimizes your review schedule</p>

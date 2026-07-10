@@ -327,7 +327,7 @@ export default function AITutorPage() {
                                                 background: isActive ? 'rgba(14, 116, 144, 0.12)' : 'rgba(139, 149, 168, 0.05)',
                                                 border: `1px solid ${isActive ? 'rgba(14, 116, 144, 0.28)' : 'transparent'}`,
                                             }}>
-                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                                                 style={{ background: isActive ? 'var(--gradient-primary)' : 'rgba(139, 149, 168, 0.1)' }}>
                                                 <ModeIcon className="w-4 h-4" style={{ color: isActive ? 'white' : 'var(--text-secondary)' }} />
                                             </div>
@@ -410,7 +410,7 @@ export default function AITutorPage() {
                                 className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''} animate-fadeInUp`}
                             >
                                 {msg.role === 'ai' && (
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                                         style={{ background: 'var(--gradient-primary)' }}>
                                         <Bot className="w-4 h-4 text-white" />
                                     </div>
@@ -455,7 +455,7 @@ export default function AITutorPage() {
                                                         ol: ({ children }) => <ol className="my-2 space-y-1.5 ml-1 list-decimal list-inside">{children}</ol>,
                                                         li: ({ children }) => (
                                                             <li className="flex items-start gap-2 text-sm leading-relaxed">
-                                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'var(--accent-primary)' }} />
+                                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--accent-primary)' }} />
                                                                 <span>{children}</span>
                                                             </li>
                                                         ),
@@ -503,7 +503,7 @@ export default function AITutorPage() {
                                     )}
                                 </div>
                                 {msg.role === 'user' && (
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                                         style={{ background: 'rgba(139, 92, 246, 0.2)' }}>
                                         <User className="w-4 h-4" style={{ color: '#8b5cf6' }} />
                                     </div>

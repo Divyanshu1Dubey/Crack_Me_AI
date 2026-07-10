@@ -2636,7 +2636,7 @@ export default function AdminDashboardPage() {
                                                                     const shouldClamp = compactQuestionPreview && !isExpanded;
                                                                     return (
                                                                         <>
-                                                                            <p className={`text-sm whitespace-pre-wrap break-words leading-relaxed ${shouldClamp ? 'line-clamp-3' : ''}`}>
+                                                                            <p className={`text-sm whitespace-pre-wrap wrap-break-word leading-relaxed ${shouldClamp ? 'line-clamp-3' : ''}`}>
                                                                                 {q.question_text}
                                                                             </p>
                                                                             <div className="flex items-center gap-2">
@@ -2667,7 +2667,7 @@ export default function AdminDashboardPage() {
                                                                 </p>
                                                                 {q.book_name && <p className="text-xs text-muted-foreground">Ref: {q.book_name} {q.chapter ? `• ${q.chapter}` : ''} {q.page_number ? `• p.${q.page_number}` : ''}</p>}
                                                                 {q.effective_answer && <p className="text-xs text-muted-foreground">AI/Admin Answer: {q.effective_answer}</p>}
-                                                                {q.effective_explanation && <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">AI/Admin Explanation: {q.effective_explanation}</p>}
+                                                                {q.effective_explanation && <p className="text-xs text-muted-foreground whitespace-pre-wrap wrap-break-word">AI/Admin Explanation: {q.effective_explanation}</p>}
                                                             </div>
                                                         )}
                                                     </div>

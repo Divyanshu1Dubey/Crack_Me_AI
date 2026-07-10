@@ -94,7 +94,7 @@ export default function SimulatorPage() {
                         borderColor: 'rgba(239,68,68,0.3)',
                         background: 'rgba(239,68,68,0.08)',
                     }}>
-                        <AlertTriangle className="w-5 h-5 flex-shrink-0" style={{ color: '#ef4444' }} />
+                        <AlertTriangle className="w-5 h-5 shrink-0" style={{ color: '#ef4444' }} />
                         <span className="text-sm" style={{ color: '#ef4444' }}>{error}</span>
                         <button onClick={() => setError(null)} className="ml-auto text-xs px-2 py-1 rounded" style={{ color: '#ef4444' }}>&times;</button>
                     </div>
