@@ -1,0 +1,315 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.agent
+.agent\skills
+.agent\skills\dev
+.agent\skills\dev\roll.md
+.agent\skills\dev\SKILL.md
+.agent\skills\playwright-cli
+.agent\skills\playwright-cli\references
+.agent\skills\playwright-cli\SKILL.md
+.agents
+.agents\skills
+.agents\skills\dev
+.agents\skills\dev\roll.md
+.agents\skills\dev\SKILL.md
+.agents\skills\playwright-cli
+.agents\skills\playwright-cli\references
+.agents\skills\playwright-cli\SKILL.md
+.bandit.yml
+.cora
+.cora\analytics
+.cora\analytics\files
+.cora\analytics\index.json
+.cursor
+.cursor\skills
+.cursor\skills\dev
+.cursor\skills\dev\roll.md
+.cursor\skills\dev\SKILL.md
+.cursor\skills\playwright-cli
+.cursor\skills\playwright-cli\references
+.cursor\skills\playwright-cli\SKILL.md
+.devcontainer
+.devcontainer\devcontainer.json
+.gitattributes
+.github
+.github\agents
+.github\agents\aem-frontend-specialist.agent.md
+.github\copilot-instructions.md
+.github\dependabot.yml
+.github\skills
+.github\skills\acquire-codebase-knowledge
+.github\skills\acquire-codebase-knowledge\assets
+.github\skills\acquire-codebase-knowledge\references
+.github\skills\acquire-codebase-knowledge\scripts
+.github\skills\acquire-codebase-knowledge\SKILL.md
+.github\skills\add-educational-comments
+.github\skills\add-educational-comments\SKILL.md
+.github\skills\copilot-sdk
+.github\skills\copilot-sdk\SKILL.md
+.github\skills\copilot-spaces
+.github\skills\copilot-spaces\SKILL.md
+.github\skills\web-coder
+.github\skills\web-coder\references
+.github\skills\web-coder\SKILL.md
+.github\workflows
+.github\workflows\ci.yml
+.gitignore
+.idea
+.idea\.gitignore
+.idea\copilot.data.migration.agent.xml
+.idea\copilot.data.migration.ask.xml
+.idea\copilot.data.migration.ask2agent.xml
+.idea\copilot.data.migration.edit.xml
+.idea\crack_cms.iml
+.idea\inspectionProfiles
+.idea\inspectionProfiles\profiles_settings.xml
+.idea\inspectionProfiles\Project_Default.xml
+.idea\misc.xml
+.idea\modules.xml
+.idea\vcs.xml
+.idea\workspace.xml
+.junie
+.junie\skills
+.junie\skills\dev
+.junie\skills\dev\roll.md
+.junie\skills\dev\SKILL.md
+.junie\skills\playwright-cli
+.junie\skills\playwright-cli\references
+.junie\skills\playwright-cli\SKILL.md
+.playwright-mcp
+.playwright-mcp\console-2026-03-23T15-28-00-371Z.log
+.playwright-mcp\console-2026-03-23T15-33-13-801Z.log
+.playwright-mcp\console-2026-04-16T21-13-13-639Z.log
+.playwright-mcp\console-2026-04-16T21-13-50-735Z.log
+.playwright-mcp\console-2026-04-16T21-15-05-146Z.log
+.playwright-mcp\console-2026-04-17T18-09-46-691Z.log
+.playwright-mcp\console-2026-04-17T18-20-21-020Z.log
+.playwright-mcp\console-2026-04-17T18-38-26-824Z.log
+.playwright-mcp\console-2026-04-20T17-41-59-008Z.log
+.playwright-mcp\page-2026-03-23T15-25-58-911Z.png
+.playwright-mcp\page-2026-03-23T15-26-07-707Z.png
+.playwright-mcp\page-2026-03-23T15-27-48-637Z.png
+.playwright-mcp\page-2026-03-23T15-30-06-705Z.png
+.playwright-mcp\page-2026-03-23T15-32-18-836Z.png
+.playwright-mcp\page-2026-03-23T15-33-46-835Z.png
+.playwright-mcp\page-2026-03-23T15-38-36-226Z.png
+.playwright-mcp\page-2026-03-23T15-44-38-555Z.png
+.playwright-mcp\page-2026-03-23T15-45-17-805Z.png
+.playwright-mcp\page-2026-03-23T15-46-29-489Z.png
+.playwright-mcp\page-2026-04-17T18-20-24-408Z.yml
+.playwright-mcp\page-2026-04-17T18-38-29-047Z.yml
+.pre-commit-config.yaml
+.vscode
+.vscode\extensions.json
+.vscode\mcp.json
+.vscode\settings.json
+.windsurf
+.windsurf\skills
+.windsurf\skills\dev
+.windsurf\skills\dev\roll.md
+.windsurf\skills\dev\SKILL.md
+.windsurf\skills\playwright-cli
+.windsurf\skills\playwright-cli\references
+.windsurf\skills\playwright-cli\SKILL.md
+backend
+backend\.env
+backend\.env.example
+backend\.env.supabase.local.example
+backend\accounts
+backend\accounts\__init__.py
+backend\accounts\admin.py
+backend\accounts\apps.py
+backend\accounts\management
+backend\accounts\management\__init__.py
+backend\accounts\management\commands
+backend\accounts\migrations
+backend\accounts\migrations\0001_initial.py
+backend\accounts\migrations\0002_tokenconfig_tokenbalance_tokentransaction.py
+backend\accounts\migrations\0003_alter_tokentransaction_transaction_type.py
+backend\accounts\migrations\0004_adminauditlog.py
+backend\accounts\migrations\0005_alter_adminauditlog_action.py
+backend\accounts\migrations\0006_customuser_college_customuser_is_subscribed_and_more.py
+backend\accounts\migrations\0007_paymentattempt.py
+backend\accounts\migrations\0008_customuser_current_session_id_and_more.py
+backend\accounts\migrations\0009_alter_tokenbalance_purchased_tokens.py
+backend\accounts\migrations\0010_customuser_scholarship_granted_price_and_more.py
+backend\accounts\migrations\__init__.py
+backend\accounts\models.py
+backend\accounts\permissions.py
+backend\accounts\serializers.py
+backend\accounts\supabase_auth.py
+backend\accounts\supabase_rest_auth.py
+backend\accounts\tests.py
+backend\accounts\urls.py
+backend\accounts\views.py
+backend\ai_engine
+backend\ai_engine\__init__.py
+backend\ai_engine\apps.py
+backend\ai_engine\auto_ingest.py
+backend\ai_engine\document_processor.py
+backend\ai_engine\management
+backend\ai_engine\management\__init__.py
+backend\ai_engine\management\commands
+backend\ai_engine\migrations
+backend\ai_engine\migrations\0001_initial.py
+backend\ai_engine\migrations\0002_rename_ai_engine_c_session_a6c7f8_idx_ai_engine_c_session_b8fb58_idx_and_more.py
+backend\ai_engine\migrations\__init__.py
+backend\ai_engine\models.py
+backend\ai_engine\pyq_extractor.py
+backend\ai_engine\rag_pipeline.py
+backend\ai_engine\serializers.py
+backend\ai_engine\services.py
+backend\ai_engine\similar_questions.py
+backend\ai_engine\sqlite_rag.py
+backend\ai_engine\test_upsc_cms_knowledge.py
+backend\ai_engine\upsc_cms_knowledge.py
+backend\ai_engine\urls.py
+backend\ai_engine\views.py
+backend\analytics
+backend\analytics\__init__.py
+backend\analytics\admin.py
+backend\analytics\apps.py
+backend\analytics\migrations
+backend\analytics\migrations\0001_initial.py
+backend\analytics\migrations\0002_rename_questions_correct_dailyactivity_correct_answers_and_more.py
+backend\analytics\migrations\0003_feedback.py
+backend\analytics\migrations\0004_badge_announcement_studystreak_userbadge.py
+backend\analytics\migrations\0005_announcement_audience_filter_announcement_deep_link_and_more.py
+backend\analytics\migrations\__init__.py
+backend\analytics\models.py
+backend\analytics\serializers.py
+backend\analytics\urls.py
+backend\analytics\views.py
+backend\build.sh
+backend\check_db.py
+backend\chroma_db
+backend\chroma_db\.index_log
+backend\chroma_db\chroma.sqlite3
+backend\chroma_db\rag_store.sqlite3
+backend\crack_cms
+backend\crack_cms\__init__.py
+backend\crack_cms\asgi.py
+backend\crack_cms\cache_middleware.py
+backend\crack_cms\settings.py
+backend\crack_cms\startup.py
+backend\crack_cms\urls.py
+backend\crack_cms\wsgi.py
+backend\data_versions
+backend\data_versions\.gitkeep
+backend\db.sqlite3
+backend\manage.py
+backend\Medura_Train
+
+=== STACK DETECTION (manifest files) ===
+No recognized manifest files found in project root.
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+No linting or formatting config files found in project root.
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:28: TODO_LIMIT = 60
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:320: return todos[:TODO_LIMIT]
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:617: # TODOs
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.github\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+
+=== GIT RECENT COMMITS (last 20) ===
+d6a7a97 Improve video teaching pipeline and player
+5934931 Improve frontend SEO metadata
+7bbbc7b Upgrade Video Engine to V2 and add Premium Video Player
+4df02b3 fix(ui): upgrade scholarship analysis ui to custom react components, fix typescript errors
+f429310 Enhance scholarship test logic, UI, and fix markdown rendering
+1ef1195 chore: save local analytics and json files
+64893c6 fix: remove destructive reset_and_load_fixtures from release command to prevent data loss
+7e512c7 feat: rewrite video pipeline with professional multi-slide rendering and edge-tts narration
+9e03abc Fix video generation: use effective content fallback chain instead of requiring ai_answer
+fdf252d Fix video generator AI check and remove undefined hook
+5d0e628 Fix collectstatic build crash when DO variables are unpopulated
+502f237 Fix Q_CLUSTER retry config
+535b3ec Fix TypeScript interface for video_url in tests page
+8985da8 Fix missing Play icon imports
+730c559 Phase 5: React Frontend Admin and Student View Video integration
+93e587a Fix font issue for Linux worker
+765ab50 Phase 2 and 3 implementation
+7d93e6c Add live backward countdown timer for exams
+16a47a0 Update exam dates for NEET PG and UPSC CMS, remove FMGE
+970f8da Update homepage UI and token usage logic
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+  26 backend/questions/views.py
+  21 frontend/src/app/page.tsx
+  20 frontend/src/app/questions/page.tsx
+  19 backend/crack_cms/settings.py
+  15 frontend/src/lib/auth.tsx
+  15 backend/accounts/views.py
+  14 backend/db.sqlite3
+  14 backend/questions_fixture.json
+  11 frontend/src/app/tests/[id]/page.tsx
+  11 frontend/src/app/subscription/page.tsx
+  10 frontend/src/lib/api.ts
+  10 frontend/src/app/dashboard/page.tsx
+   8 backend/accounts/supabase_rest_auth.py
+   7 backend/video_engine/services.py
+   7 frontend/src/app/layout.tsx
+   6 backend/questions/serializers.py
+   6 backend/accounts/models.py
+   6 backend/Procfile
+   6 frontend/src/app/globals.css
+   5 frontend/src/app/admin/page.tsx
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 720
+Total lines of code: 61069
+
+Files by language:
+  Other: 370
+  Python: 233
+  TypeScript/React: 95
+  TypeScript: 21
+  JavaScript: 1
+
+Top 10 largest files:
+backend\Medura_Train\textbooks\Copy of Harrison_s Principles of Internal Medicine-17ed_2010.pdf: 449860.1KB
+backend\Medura_Train\Nelson Textbook of Pediatrics.pdf: 293395.7KB
+backend\Medura_Train\textbooks\Copy of Nelson Textbook of Pediatrics.pdf: 293395.7KB
+backend\Medura_Train\textbooks\Copy of Park Textbook of Preventive and Social Medicine(1).pdf: 265564.3KB
+backend\Medura_Train\textbooks\Copy of Park Textbook of Preventive and Social Medicine.pdf: 265564.3KB
+backend\Medura_Train\Ghai Essential Pediatrics, 9e.pdf: 214988.3KB
+backend\Medura_Train\textbooks\Copy of Ghai Essential Pediatrics, 9e.pdf: 214988.3KB
+backend\chroma_db\rag_store.sqlite3: 48180.0KB
+backend\Medura_Train\PYQ\2025 PAPER 1_82f8e9e0-8480-424a-8708-6f49ee345438.pdf: 20673.2KB
+backend\Medura_Train\PYQ\2022 Paper 1_9be9d078-67b1-4f09-b544-dbd1c4f99c1d.pdf: 20599.3KB
+
+=== CI/CD PIPELINES ===
+CI/CD: GitHub Actions
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===
