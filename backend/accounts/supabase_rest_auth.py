@@ -40,7 +40,8 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         user = self._upsert_local_user(supabase_user)
 
         # Single session enforcement
-        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
+        # Temporarily disabled to prevent user lockouts due to concurrency
+        incoming_session_id = None
         if incoming_session_id:
             path = request_obj.path
             is_sync_path = '/auth/profile/' in path or '/auth/login/' in path or '/auth/register/' in path
