@@ -6,8 +6,16 @@ from django.conf import settings
 
 class Subject(models.Model):
     """Medical subjects like Medicine, Surgery, PSM, OBG, Pediatrics."""
+    EXAM_CHOICES = [
+        ('cms', 'UPSC CMS'),
+        ('neet_pg', 'NEET PG'),
+        ('usmle', 'USMLE'),
+        ('fmge', 'FMGE'),
+    ]
+
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=10, unique=True)
+    exam_type = models.CharField(max_length=20, choices=EXAM_CHOICES, default='cms', help_text='Target exam for this subject')
     paper = models.IntegerField(
         choices=[(1, 'Paper 1'), (2, 'Paper 2')],
         default=1,
@@ -50,8 +58,15 @@ class Question(models.Model):
         ('medium', 'Medium'),
         ('hard', 'Hard'),
     ]
+    EXAM_CHOICES = [
+        ('cms', 'UPSC CMS'),
+        ('neet_pg', 'NEET PG'),
+        ('usmle', 'USMLE'),
+        ('fmge', 'FMGE'),
+    ]
 
     # Core fields
+    exam_type = models.CharField(max_length=20, choices=EXAM_CHOICES, default='cms')
     question_text = models.TextField()
     option_a = models.TextField()
     option_b = models.TextField()

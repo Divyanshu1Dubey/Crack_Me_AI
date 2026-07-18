@@ -15,8 +15,15 @@ class Test(models.Model):
         ('weak', 'Weak Topic Test'),
         ('adaptive', 'AI Adaptive Test'),
     ]
+    EXAM_CHOICES = [
+        ('cms', 'UPSC CMS'),
+        ('neet_pg', 'NEET PG'),
+        ('usmle', 'USMLE'),
+        ('fmge', 'FMGE'),
+    ]
 
     title = models.CharField(max_length=300)
+    exam_type = models.CharField(max_length=20, choices=EXAM_CHOICES, default='cms')
     test_type = models.CharField(max_length=20, choices=TEST_TYPES)
     description = models.TextField(blank=True)
     subject = models.ForeignKey(

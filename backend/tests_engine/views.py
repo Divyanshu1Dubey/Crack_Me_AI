@@ -19,7 +19,7 @@ from accounts.permissions import IsControlTowerAdmin
 class TestViewSet(viewsets.ModelViewSet):
     """Test CRUD with start, submit, and result actions."""
     queryset = Test.objects.filter(is_published=True)
-    filterset_fields = ['test_type', 'subject', 'topic']
+    filterset_fields = ['test_type', 'subject', 'topic', 'exam_type']
 
     def get_queryset(self):
         queryset = Test.objects.all()

@@ -147,7 +147,7 @@ function QuestionsContent() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
+    const [selectedExam, setSelectedExam] = useState<string>('cms');
     const [questions, setQuestions] = useState<Question[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
@@ -313,7 +313,7 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_source = selectedExam;
+        if (selectedExam) params.exam_type = selectedExam;
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,7 +326,7 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_source = selectedExam;
+        if (selectedExam) params.exam_type = selectedExam;
         fetchQuestions(params);
     };
 
@@ -373,7 +373,7 @@ function QuestionsContent() {
             // Update local questions list
             setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
             // Reload stats to reflect in progress tracker
-            questionsAPI.getStats().then(res => setQbankStats(res.data));
+            questionsAPI.getStats({ exam_type: selectedExam }).then(res => setQbankStats(res.data));
         }).catch(err => {
             console.error('Failed to log QBank attempt:', err);
         });
@@ -433,7 +433,7 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_source = selectedExam;
+        if (selectedExam) params.exam_type = selectedExam;
         setPage(1);
         fetchQuestions(params);
     };
@@ -490,29 +490,6 @@ function QuestionsContent() {
                                         <h2 className="text-lg font-bold text-foreground">
                                             🎯 Question Bank
                                         </h2>
-                                        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-border">
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedSubject('');
-                                                    setSelectedDifficulty('');
-                                                    setSelectedYear('');
-                                                    setSelectedExam('UPSC CMS');
-                                                }}
-                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${selectedExam === 'UPSC CMS' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                                            >
-                                                UPSC CMS
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedSubject('');
-                                                    setSelectedDifficulty('');
-                                                    setSelectedYear('');
-                                                    setSelectedExam('NEET PG');
-                                                }}
-                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${selectedExam === 'NEET PG' ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-                                            >
-                                                NEET PG
-                                            </button>
                                         </div>
                                     </div>
                                     <p className="text-xs text-muted-foreground">

@@ -77,6 +77,7 @@ class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
     permission_classes = [permissions.AllowAny]
+    filterset_fields = ['exam_type']
 
 
 class TopicViewSet(viewsets.ReadOnlyModelViewSet):
@@ -90,7 +91,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     """Full CRUD for questions with filtering, search, and bookmark support."""
     queryset = Question.objects.select_related('subject', 'topic').all()
-    filterset_fields = ['year', 'subject', 'topic', 'difficulty', 'exam_source', 'is_verified_by_admin']
+    filterset_fields = ['year', 'subject', 'topic', 'difficulty', 'exam_type', 'is_verified_by_admin']
     search_fields = ['question_text', 'explanation', 'concept_tags']
     ordering_fields = ['year', 'difficulty', 'created_at']
 

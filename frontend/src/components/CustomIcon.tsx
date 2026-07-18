@@ -22,6 +22,7 @@ import {
   Upload,
   Crown,
   PhoneCall,
+  Briefcase,
 } from 'lucide-react';
 
 interface CustomIconProps {
@@ -50,6 +51,7 @@ const iconMap: Record<string, LucideIcon> = {
   'ai-tutor-brain': Brain,
   'analytics-growth': TrendingUp,
   'bookmarks-ribbon': BookMarked,
+  'briefcase': Briefcase,
   'dashboard-layout': LayoutDashboard,
   'feedback-chat': MessageCircle,
   'flashcards-cards': GraduationCap,

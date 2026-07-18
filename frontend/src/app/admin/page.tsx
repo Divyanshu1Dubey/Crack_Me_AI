@@ -10,7 +10,7 @@ import {
     Users, BookOpen, FileText, AlertTriangle, TrendingUp,
     CheckCircle, Clock, Shield, Megaphone, Plus, Trash2,
     Zap, MessageSquare, Gift, FileSearch, ShieldCheck,
-    Database, BarChart3, Sparkles, Wallet
+    Database, BarChart3, Sparkles, Wallet, Briefcase
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,7 +74,8 @@ type AdminTabKey =
     | 'security'
     | 'audit'
     | 'finance'
-    | 'ai';
+    | 'ai'
+    | 'jobs';
 
 export default function AdminDashboardPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -777,7 +778,8 @@ export default function AdminDashboardPage() {
         { key: 'security', label: 'Security', icon: Shield },
         { key: 'audit', label: 'Audit Logs', icon: FileSearch },
         { key: 'finance', label: 'Finance', icon: Wallet },
-        { key: 'ai', label: 'AI Ops', icon: Sparkles },
+        { key: 'ai', label: 'AI Monitoring', icon: Sparkles },
+        { key: 'jobs', label: 'Jobs', icon: Briefcase },
     ];
 
     const handleGrantTokens = async () => {
@@ -3453,6 +3455,25 @@ export default function AdminDashboardPage() {
                                 )}
                             </CardContent>
                         </Card>
+                    )}
+
+                    {activeTab === 'jobs' && (
+                        <div className="space-y-4">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Jobs Management</CardTitle>
+                                    <CardDescription>
+                                        View, edit, or remove medical job postings on the platform. (Coming soon)
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                                        <Briefcase className="mb-4 h-12 w-12 opacity-50" />
+                                        <p>Full Job Management UI is in development.</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
                 </main>
             </div>

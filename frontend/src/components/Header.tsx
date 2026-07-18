@@ -11,6 +11,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
+import ExamSwitcher from '@/components/ExamSwitcher';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
@@ -345,6 +346,11 @@ export default function Header() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Exam Switcher */}
+        <div className="hidden sm:block">
+          <ExamSwitcher />
         </div>
 
         {/* Theme */}

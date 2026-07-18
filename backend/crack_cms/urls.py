@@ -44,6 +44,8 @@ urlpatterns = [
     path("api/ai/", include("ai_engine.urls")),
     path("api/textbooks/", include("textbooks.urls")),
     path("api/resources/", include("resources.urls")),
+    path("api/video/", include("video_engine.urls")),
+    path("api/jobs/", include("jobs.urls")),
 ]
 
 if settings.DEBUG:

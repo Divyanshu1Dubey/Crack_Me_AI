@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     'resources',
     'video_engine',
     'django_q',
+    'jobs',
     # Security
     'axes',
 ]

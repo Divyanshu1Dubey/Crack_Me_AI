@@ -35,18 +35,30 @@ export default function TestsPage() {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
 
+    const [examType, setExamType] = useState('cms');
+
+    useEffect(() => {
+        const syncExam = () => {
+            const saved = localStorage.getItem('crack_target_exam');
+            if (saved && saved !== examType) setExamType(saved);
+        };
+        syncExam();
+        window.addEventListener('exam_changed', syncExam);
+        return () => window.removeEventListener('exam_changed', syncExam);
+    }, [examType]);
+
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
             Promise.all([
-                testsAPI.list(),
-                questionsAPI.getSubjects(),
+                testsAPI.list({ exam_type: examType }),
+                questionsAPI.getSubjects({ exam_type: examType }),
             ]).then(([tRes, sRes]) => {
                 setTests(tRes.data.results || tRes.data || []);
                 setSubjects(sRes.data.results || sRes.data || []);
             }).catch(() => { }).finally(() => setLoading(false));
         }
-    }, [authLoading, isAuthenticated, router]);
+    }, [authLoading, isAuthenticated, router, examType]);
 
     const generateTest = async (type: string, subjectId?: number) => {
         setGenerating(true);

@@ -49,6 +49,7 @@ const navSections: NavSection[] = [
         items: [
             { href: '/resources', iconName: 'resources-folder', label: 'Resources' },
             { href: '/textbooks', iconName: 'textbooks-open-book', label: 'Textbooks' },
+            { href: '/jobs', iconName: 'briefcase', label: 'Jobs Portal' },
             { href: '/trends', iconName: 'trends-graph', label: 'Exam Trends' },
             { href: '/upload', iconName: 'upload-train', label: 'Upload & Train', adminOnly: true },
         ]

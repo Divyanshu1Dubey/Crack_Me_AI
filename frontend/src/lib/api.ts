@@ -246,6 +246,18 @@ export const extractApiErrorMessage = (payload: unknown, fallback = 'Request fai
   return fallback;
 };
 
+// Jobs API
+export const jobsAPI = {
+  list: (params?: Record<string, string | number>) => api.get('/jobs/', { params }),
+  get: (id: number) => api.get(`/jobs/${id}/`),
+  getCategories: () => api.get('/jobs/categories/'),
+  bookmark: (id: number) => api.post(`/jobs/${id}/bookmark/`),
+  // Admin only
+  create: (data: Record<string, unknown>) => api.post('/jobs/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/jobs/${id}/`, data),
+  remove: (id: number) => api.delete(`/jobs/${id}/`),
+};
+
 // Questions API
 export const questionsAPI = {
   list: (params?: Record<string, string | number>) => api.get('/questions/', { params }),
