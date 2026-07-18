@@ -1105,7 +1105,7 @@ export default function LandingPage() {
           <Badge className="bg-primary/10 text-primary hover:bg-primary/15 border-0 font-bold uppercase tracking-wider text-[10px] py-1 px-3">
             Aspirant Reviews
           </Badge>
-          <h2 className="font-display text-2xl font-extrabold text-foreground sm:text-4xl tracking-tight text-white">
+          <h2 className="font-display text-2xl font-extrabold text-foreground sm:text-4xl tracking-tight">
             Loved by medical students preparing for UPSC CMS
           </h2>
           <p className="text-sm md:text-base text-muted-foreground">

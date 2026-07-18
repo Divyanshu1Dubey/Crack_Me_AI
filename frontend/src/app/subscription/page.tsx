@@ -488,7 +488,7 @@ export default function SubscriptionPage() {
 
                     {/* ── Active Subscription Status Card ── */}
                     {isSubscribed && subscriptionInfo && (
-                        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent p-6 md:p-8 shadow-sm">
+                        <div className="rounded-3xl border border-emerald-500/30 bg-linear-to-r from-emerald-500/5 via-teal-500/5 to-transparent p-6 md:p-8 shadow-sm">
                             <div className="flex items-center gap-2 mb-4">
                                 <div className="p-2.5 rounded-2xl bg-emerald-500/10">
                                     <ShieldCheck className="w-6 h-6 text-emerald-500" />
@@ -572,7 +572,7 @@ export default function SubscriptionPage() {
                             return (
                                 <div
                                     key={plan.id}
-                                    className={`rounded-3xl border p-6 flex flex-col relative transition-all duration-300 hover:scale-[1.01] ${isRecommended ? 'border-amber-500 bg-slate-900 border-border text-white shadow-xl shadow-amber-500/5' : 'border-border bg-card text-foreground shadow-sm'}`}
+                                    className={`rounded-3xl border p-6 flex flex-col relative transition-all duration-300 hover:scale-[1.01] ${isRecommended ? 'border-amber-500 bg-slate-900 text-white shadow-xl shadow-amber-500/5' : 'border-border bg-card text-foreground shadow-sm'}`}
                                 >
                                     {plan.badge && (
                                         <Badge className={`absolute top-4 right-4 ${isRecommended ? 'bg-amber-500 text-black font-bold' : 'bg-primary text-primary-foreground font-semibold'}`}>
