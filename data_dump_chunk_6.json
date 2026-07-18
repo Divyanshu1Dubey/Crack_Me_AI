@@ -1,0 +1,3476 @@
+[
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 687,
+    "fields": {
+      "user": [
+        "pawankumawat1999"
+      ],
+      "topic": null,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-15T15:18:13.119Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 688,
+    "fields": {
+      "user": [
+        "sayani"
+      ],
+      "topic": 1899,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T04:37:25.040Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 689,
+    "fields": {
+      "user": [
+        "sayani"
+      ],
+      "topic": 1912,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T04:39:31.892Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 690,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": 1913,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T05:45:50.455Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 691,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": null,
+      "subject": 5,
+      "total_attempts": 3,
+      "correct_answers": 1,
+      "incorrect_answers": 2,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T05:47:34.719Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 692,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": 1918,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T05:46:54.127Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 693,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": 1910,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T05:47:34.683Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 694,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": 209,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T09:54:14.071Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 695,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "topic": null,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T09:54:14.160Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 696,
+    "fields": {
+      "user": [
+        "drveer830"
+      ],
+      "topic": 209,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T10:57:38.042Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 697,
+    "fields": {
+      "user": [
+        "drveer830"
+      ],
+      "topic": null,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-16T10:57:38.125Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 698,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "topic": 105,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T02:34:01.833Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 699,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "topic": 6,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T02:34:01.833Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 700,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "topic": 257,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T02:34:01.833Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 701,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "topic": 117,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T02:34:01.833Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 702,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 953,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:34:07.040Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 703,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": null,
+      "subject": 3,
+      "total_attempts": 5,
+      "correct_answers": 1,
+      "incorrect_answers": 4,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 704,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 1852,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:34:49.281Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 705,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 63,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:35:10.376Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 706,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": null,
+      "subject": 5,
+      "total_attempts": 4,
+      "correct_answers": 3,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 707,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": null,
+      "subject": 1,
+      "total_attempts": 8,
+      "correct_answers": 4,
+      "incorrect_answers": 4,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 708,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": null,
+      "subject": 2,
+      "total_attempts": 3,
+      "correct_answers": 1,
+      "incorrect_answers": 2,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 709,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": null,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 710,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 654,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 711,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 738,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 712,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 922,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 713,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 156,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 714,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 265,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 715,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 530,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 716,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 306,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 717,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 1400,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 718,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 517,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 719,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 184,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 720,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 913,
+      "subject": 2,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 721,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 66,
+      "subject": 1,
+      "total_attempts": 2,
+      "correct_answers": 1,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 722,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 113,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 723,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 1832,
+      "subject": 2,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 724,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 1217,
+      "subject": 2,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 725,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 144,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 726,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "topic": 230,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T07:43:18.962Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 727,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": null,
+      "subject": 4,
+      "total_attempts": 20,
+      "correct_answers": 5,
+      "incorrect_answers": 15,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 728,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1714,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 729,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1121,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 730,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1558,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 731,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 647,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 732,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1734,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 733,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1870,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 734,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1100,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 735,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 235,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 736,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 245,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 737,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 346,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 738,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1118,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 739,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1099,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 740,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 219,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 741,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 237,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 742,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 718,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 743,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1357,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 744,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1864,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 745,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1486,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 746,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1419,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 747,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "topic": 1472,
+      "subject": 4,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T08:47:58.724Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 748,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1819,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T09:14:44.951Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 749,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": null,
+      "subject": 1,
+      "total_attempts": 12,
+      "correct_answers": 7,
+      "incorrect_answers": 5,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-18T04:06:32.025Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 750,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1834,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T09:23:40.330Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 751,
+    "fields": {
+      "user": [
+        "harshkumar9544"
+      ],
+      "topic": 1913,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T09:26:46.554Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 752,
+    "fields": {
+      "user": [
+        "harshkumar9544"
+      ],
+      "topic": null,
+      "subject": 5,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T09:26:46.634Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 753,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1817,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T10:29:08.762Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 754,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1815,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T10:39:30.259Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 755,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1816,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T10:40:14.525Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 756,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1814,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T11:31:45.785Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 757,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 1813,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T11:33:48.263Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 758,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "topic": 80,
+      "subject": 1,
+      "total_attempts": 5,
+      "correct_answers": 4,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-18T04:06:31.988Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 759,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "topic": 1072,
+      "subject": 1,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T11:59:20.966Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 760,
+    "fields": {
+      "user": [
+        "kanakadrivijay"
+      ],
+      "topic": 206,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 1,
+      "incorrect_answers": 0,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T12:00:07.508Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 761,
+    "fields": {
+      "user": [
+        "kanakadrivijay"
+      ],
+      "topic": null,
+      "subject": 3,
+      "total_attempts": 2,
+      "correct_answers": 1,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T12:01:19.358Z"
+    }
+  },
+  {
+    "model": "analytics.usertopicperformance",
+    "pk": 762,
+    "fields": {
+      "user": [
+        "kanakadrivijay"
+      ],
+      "topic": 208,
+      "subject": 3,
+      "total_attempts": 1,
+      "correct_answers": 0,
+      "incorrect_answers": 1,
+      "total_time_seconds": 0,
+      "avg_confidence": 0.0,
+      "last_attempted": "2026-07-17T12:01:19.325Z"
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 1,
+    "fields": {
+      "user": [
+        "auth"
+      ],
+      "date": "2026-04-17",
+      "questions_attempted": 3,
+      "correct_answers": 2,
+      "time_spent_minutes": 1,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 2,
+    "fields": {
+      "user": [
+        "jacob1"
+      ],
+      "date": "2026-05-05",
+      "questions_attempted": 3,
+      "correct_answers": 1,
+      "time_spent_minutes": 1,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 3,
+    "fields": {
+      "user": [
+        "Kabir"
+      ],
+      "date": "2026-05-07",
+      "questions_attempted": 5,
+      "correct_answers": 1,
+      "time_spent_minutes": 5,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 4,
+    "fields": {
+      "user": [
+        "HarshYadav"
+      ],
+      "date": "2026-06-05",
+      "questions_attempted": 15,
+      "correct_answers": 10,
+      "time_spent_minutes": 5,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 5,
+    "fields": {
+      "user": [
+        "HarshYadav"
+      ],
+      "date": "2026-06-15",
+      "questions_attempted": 1,
+      "correct_answers": 0,
+      "time_spent_minutes": 1,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 6,
+    "fields": {
+      "user": [
+        "Vaisakh007"
+      ],
+      "date": "2026-06-19",
+      "questions_attempted": 17,
+      "correct_answers": 9,
+      "time_spent_minutes": 16,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 7,
+    "fields": {
+      "user": [
+        "meduraa.web"
+      ],
+      "date": "2026-07-09",
+      "questions_attempted": 2,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 8,
+    "fields": {
+      "user": [
+        "d11"
+      ],
+      "date": "2026-07-09",
+      "questions_attempted": 2,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 9,
+    "fields": {
+      "user": [
+        "d11"
+      ],
+      "date": "2026-07-10",
+      "questions_attempted": 6,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 10,
+    "fields": {
+      "user": [
+        "mr.kittu.box"
+      ],
+      "date": "2026-07-10",
+      "questions_attempted": 2,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 11,
+    "fields": {
+      "user": [
+        "nikjilgowda31"
+      ],
+      "date": "2026-07-11",
+      "questions_attempted": 39,
+      "correct_answers": 20,
+      "time_spent_minutes": 6,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 12,
+    "fields": {
+      "user": [
+        "nikjilgowda31"
+      ],
+      "date": "2026-07-12",
+      "questions_attempted": 222,
+      "correct_answers": 82,
+      "time_spent_minutes": 1,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 13,
+    "fields": {
+      "user": [
+        "Indu"
+      ],
+      "date": "2026-07-12",
+      "questions_attempted": 20,
+      "correct_answers": 13,
+      "time_spent_minutes": 6,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 14,
+    "fields": {
+      "user": [
+        "nikjilgowda31"
+      ],
+      "date": "2026-07-13",
+      "questions_attempted": 274,
+      "correct_answers": 153,
+      "time_spent_minutes": 7,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 15,
+    "fields": {
+      "user": [
+        "abhishekmk9934@gmail.com"
+      ],
+      "date": "2026-07-13",
+      "questions_attempted": 3,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 16,
+    "fields": {
+      "user": [
+        "abhineet9934"
+      ],
+      "date": "2026-07-13",
+      "questions_attempted": 10,
+      "correct_answers": 3,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 17,
+    "fields": {
+      "user": [
+        "ferozmedicon"
+      ],
+      "date": "2026-07-14",
+      "questions_attempted": 3,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 18,
+    "fields": {
+      "user": [
+        "singhasamrat16703"
+      ],
+      "date": "2026-07-14",
+      "questions_attempted": 1,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 19,
+    "fields": {
+      "user": [
+        "nikjilgowda31"
+      ],
+      "date": "2026-07-14",
+      "questions_attempted": 110,
+      "correct_answers": 43,
+      "time_spent_minutes": 7,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 20,
+    "fields": {
+      "user": [
+        "sayani"
+      ],
+      "date": "2026-07-15",
+      "questions_attempted": 18,
+      "correct_answers": 7,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 21,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "date": "2026-07-15",
+      "questions_attempted": 41,
+      "correct_answers": 16,
+      "time_spent_minutes": 8,
+      "tests_completed": 2
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 22,
+    "fields": {
+      "user": [
+        "d11"
+      ],
+      "date": "2026-07-15",
+      "questions_attempted": 2,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 23,
+    "fields": {
+      "user": [
+        "shripolshetwar1234"
+      ],
+      "date": "2026-07-15",
+      "questions_attempted": 40,
+      "correct_answers": 25,
+      "time_spent_minutes": 14,
+      "tests_completed": 2
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 24,
+    "fields": {
+      "user": [
+        "pawankumawat1999"
+      ],
+      "date": "2026-07-15",
+      "questions_attempted": 1,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 25,
+    "fields": {
+      "user": [
+        "sayani"
+      ],
+      "date": "2026-07-16",
+      "questions_attempted": 2,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 26,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "date": "2026-07-16",
+      "questions_attempted": 4,
+      "correct_answers": 2,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 27,
+    "fields": {
+      "user": [
+        "drveer830"
+      ],
+      "date": "2026-07-16",
+      "questions_attempted": 1,
+      "correct_answers": 0,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 28,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 5,
+      "correct_answers": 4,
+      "time_spent_minutes": 3,
+      "tests_completed": 2
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 29,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 21,
+      "correct_answers": 9,
+      "time_spent_minutes": 7,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 30,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 20,
+      "correct_answers": 5,
+      "time_spent_minutes": 13,
+      "tests_completed": 1
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 31,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 11,
+      "correct_answers": 6,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 32,
+    "fields": {
+      "user": [
+        "harshkumar9544"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 1,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 33,
+    "fields": {
+      "user": [
+        "kanakadrivijay"
+      ],
+      "date": "2026-07-17",
+      "questions_attempted": 2,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.dailyactivity",
+    "pk": 34,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "date": "2026-07-18",
+      "questions_attempted": 1,
+      "correct_answers": 1,
+      "time_spent_minutes": 0,
+      "tests_completed": 0
+    }
+  },
+  {
+    "model": "analytics.feedback",
+    "pk": 1,
+    "fields": {
+      "user": [
+        "atharvgehlot00"
+      ],
+      "category": "general",
+      "rating": 5,
+      "title": "I loved it",
+      "message": "Amazing",
+      "is_read": false,
+      "admin_reply": "",
+      "created_at": "2026-07-17T07:47:21.929Z"
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 1,
+    "fields": {
+      "user": [
+        "d11"
+      ],
+      "current_streak": 1,
+      "longest_streak": 2,
+      "total_study_days": 3,
+      "last_activity_date": "2026-07-15",
+      "xp_points": 70
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 2,
+    "fields": {
+      "user": [
+        "auth"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-04-17",
+      "xp_points": 25
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 4,
+    "fields": {
+      "user": [
+        "tested"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 5,
+    "fields": {
+      "user": [
+        "auth_2"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 6,
+    "fields": {
+      "user": [
+        "Athupahelwan"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 7,
+    "fields": {
+      "user": [
+        "meduraa.web"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-09",
+      "xp_points": 10
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 8,
+    "fields": {
+      "user": [
+        "jacob1"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-05-05",
+      "xp_points": 15
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 9,
+    "fields": {
+      "user": [
+        "Kabir"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-05-07",
+      "xp_points": 15
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 10,
+    "fields": {
+      "user": [
+        "HarshYadav"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 2,
+      "last_activity_date": "2026-06-15",
+      "xp_points": 110
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 11,
+    "fields": {
+      "user": [
+        "Akkun02"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 12,
+    "fields": {
+      "user": [
+        "Navs5022"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 13,
+    "fields": {
+      "user": [
+        "Sachin8197"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 14,
+    "fields": {
+      "user": [
+        "Achu"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 15,
+    "fields": {
+      "user": [
+        "Mohammed_Feroz_Kamal"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 16,
+    "fields": {
+      "user": [
+        "Atishgautam"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 17,
+    "fields": {
+      "user": [
+        "Vaisakh007"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-06-19",
+      "xp_points": 95
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 18,
+    "fields": {
+      "user": [
+        "Dr Peads"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 19,
+    "fields": {
+      "user": [
+        "Deepak"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 20,
+    "fields": {
+      "user": [
+        "drvidit2001"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 21,
+    "fields": {
+      "user": [
+        "ferozmedicon"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-13",
+      "xp_points": 15
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 22,
+    "fields": {
+      "user": [
+        "mr.kittu.box"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-10",
+      "xp_points": 20
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 23,
+    "fields": {
+      "user": [
+        "nikjilgowda31"
+      ],
+      "current_streak": 4,
+      "longest_streak": 4,
+      "total_study_days": 4,
+      "last_activity_date": "2026-07-14",
+      "xp_points": 5835
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 24,
+    "fields": {
+      "user": [
+        "nikhilbrock2002"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 25,
+    "fields": {
+      "user": [
+        "Indu"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-12",
+      "xp_points": 135
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 26,
+    "fields": {
+      "user": [
+        "abhishekmk9934@gmail.com"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-13",
+      "xp_points": 25
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 27,
+    "fields": {
+      "user": [
+        "abhineet9934"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-13",
+      "xp_points": 80
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 28,
+    "fields": {
+      "user": [
+        "drkvishal89"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 29,
+    "fields": {
+      "user": [
+        "lalanshul548"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 30,
+    "fields": {
+      "user": [
+        "nanakambledoctor"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 31,
+    "fields": {
+      "user": [
+        "singhasamrat16703"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-14",
+      "xp_points": 15
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 32,
+    "fields": {
+      "user": [
+        "testuserdivyanshudubey"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 33,
+    "fields": {
+      "user": [
+        "tipedhukai618"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-17",
+      "xp_points": 55
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 34,
+    "fields": {
+      "user": [
+        "fashihanaaz"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 35,
+    "fields": {
+      "user": [
+        "sayani"
+      ],
+      "current_streak": 2,
+      "longest_streak": 2,
+      "total_study_days": 2,
+      "last_activity_date": "2026-07-16",
+      "xp_points": 170
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 36,
+    "fields": {
+      "user": [
+        "Zarqa"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 2,
+      "last_activity_date": "2026-07-17",
+      "xp_points": 225
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 37,
+    "fields": {
+      "user": [
+        "shripolshetwar1234"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-15",
+      "xp_points": 260
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 38,
+    "fields": {
+      "user": [
+        "Hariharan"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 39,
+    "fields": {
+      "user": [
+        "pawankumawat1999"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-15",
+      "xp_points": 5
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 40,
+    "fields": {
+      "user": [
+        "poojadwivedi5392"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 41,
+    "fields": {
+      "user": [
+        "Prateek"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 42,
+    "fields": {
+      "user": [
+        "pawankumawat15041999"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-16",
+      "xp_points": 40
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 43,
+    "fields": {
+      "user": [
+        "drveer830"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-16",
+      "xp_points": 5
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 44,
+    "fields": {
+      "user": [
+        "3sci6mat9"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 45,
+    "fields": {
+      "user": [
+        "Service"
+      ],
+      "current_streak": 2,
+      "longest_streak": 2,
+      "total_study_days": 2,
+      "last_activity_date": "2026-07-18",
+      "xp_points": 130
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 46,
+    "fields": {
+      "user": [
+        "orchid.kreatives"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 47,
+    "fields": {
+      "user": [
+        "Joo2003"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-17",
+      "xp_points": 110
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 48,
+    "fields": {
+      "user": [
+        "atharvgehlot00"
+      ],
+      "current_streak": 0,
+      "longest_streak": 0,
+      "total_study_days": 0,
+      "last_activity_date": null,
+      "xp_points": 0
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 49,
+    "fields": {
+      "user": [
+        "harshkumar9544"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-17",
+      "xp_points": 15
+    }
+  },
+  {
+    "model": "analytics.studystreak",
+    "pk": 50,
+    "fields": {
+      "user": [
+        "kanakadrivijay"
+      ],
+      "current_streak": 1,
+      "longest_streak": 1,
+      "total_study_days": 1,
+      "last_activity_date": "2026-07-17",
+      "xp_points": 20
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "08fb7707b44e439e9d83078bda02e91f",
+    "fields": {
+      "name": "march-coffee-montana-cup",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvAiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:20:50.010Z",
+      "stopped": "2026-07-10T07:20:50.230Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "0b2788f908c2442f82be42d82e90319d",
+    "fields": {
+      "name": "high-october-oranges-batman",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNswiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:56.718Z",
+      "stopped": "2026-07-10T18:19:47.164Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "0ee73524ce4341d780cde5ede917e9df",
+    "fields": {
+      "name": "wisconsin-bulldog-finch-six",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T12:19:28.421Z",
+      "stopped": "2026-07-09T12:22:06.981Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "1209ce6d90c544c68f9c380edd0bd331",
+    "fields": {
+      "name": "red-sweet-charlie-don",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:20:47.144Z",
+      "stopped": "2026-07-10T07:20:47.335Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "1c9fa9ec121e452eb8cbdcd921a57d68",
+    "fields": {
+      "name": "single-island-lamp-monkey",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwAiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:15:21.799Z",
+      "stopped": "2026-07-10T07:21:11.453Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "1e689f5544564dc6ac39570187f7d817",
+    "fields": {
+      "name": "romeo-network-seventeen-salami",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwwiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:24.893Z",
+      "stopped": "2026-07-10T07:15:00.741Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "28a7162ebe2f4b099366ac37157d0148",
+    "fields": {
+      "name": "quiet-stairway-jupiter-carolina",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvgiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:16:41.465Z",
+      "stopped": "2026-07-10T07:16:41.940Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "2a335627de414a76ab295c872c8263f6",
+    "fields": {
+      "name": "item-oklahoma-happy-eight",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:12:32.854Z",
+      "stopped": "2026-07-10T07:12:33.252Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "2b8d7b6c27b843c990d37ba4babc8583",
+    "fields": {
+      "name": "pluto-beryllium-nineteen-ack",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvgiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:16:05.817Z",
+      "stopped": "2026-07-10T07:16:06.171Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "4291f343018d43ad8af8220573515fb7",
+    "fields": {
+      "name": "india-illinois-golf-skylark",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T14:34:49.099Z",
+      "stopped": "2026-07-10T14:34:49.334Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "47cbcfa70c21449f9665f299457178b9",
+    "fields": {
+      "name": "two-winner-neptune-william",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:52.852Z",
+      "stopped": "2026-07-10T07:07:53.240Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "487b0e84d8da42248ac49871177e9e29",
+    "fields": {
+      "name": "river-indigo-oregon-thirteen",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNugiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:56:13.741Z",
+      "stopped": "2026-07-10T17:10:07.449Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "4f9e75703dc44160b5db4693a3e8f5bb",
+    "fields": {
+      "name": "steak-table-robin-angel",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:08:10.265Z",
+      "stopped": "2026-07-10T07:08:10.422Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "5089b0b638074d45ae6a781c5075895c",
+    "fields": {
+      "name": "three-earth-nuts-virginia",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:18:04.155Z",
+      "stopped": "2026-07-10T16:24:09.733Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "51ecd55f9505437f839fe22f8d0c6060",
+    "fields": {
+      "name": "earth-paris-speaker-maine",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwwiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:32.107Z",
+      "stopped": "2026-07-10T07:14:02.170Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "5353638f80654336be7e9a5182e6dbbc",
+    "fields": {
+      "name": "vermont-mockingbird-asparagus-alaska",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNuAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:58:11.818Z",
+      "stopped": "2026-07-10T18:00:13.460Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "54d5c4e2915d4329b3ca418857ca4722",
+    "fields": {
+      "name": "oregon-oranges-pizza-wisconsin",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:15:12.382Z",
+      "stopped": "2026-07-10T07:15:12.581Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "55b8bc40a9ee40a1a7d5efd07df30829",
+    "fields": {
+      "name": "bakerloo-oranges-fourteen-pip",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": "video_engine.tasks.video_task_hook",
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T11:39:04.079Z",
+      "stopped": "2026-07-09T11:39:04.356Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "56b558ee7b58473ab9bf92c3d59931d7",
+    "fields": {
+      "name": "golf-hot-grey-oxygen",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:47.326Z",
+      "stopped": "2026-07-10T07:07:47.497Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "58297929c6824152b727d0a7d0fe8723",
+    "fields": {
+      "name": "carolina-grey-uniform-mike",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": "video_engine.tasks.video_task_hook",
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T08:37:13.906Z",
+      "stopped": "2026-07-09T08:37:14.339Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "5c1c3f532ad645c3a135026dbbb18ae6",
+    "fields": {
+      "name": "connecticut-lion-xray-iowa",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvwiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:15:59.343Z",
+      "stopped": "2026-07-10T07:28:05.784Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "5e2018670260424c8b4d5ac5be311eae",
+    "fields": {
+      "name": "alabama-juliet-happy-enemy",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNugiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:56:52.020Z",
+      "stopped": "2026-07-10T17:58:53.262Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "5fccb080c5d8410c93ba7a1f7bb1ebf1",
+    "fields": {
+      "name": "oklahoma-friend-four-spaghetti",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T13:14:14.413Z",
+      "stopped": "2026-07-10T13:14:14.770Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "61ecb600254b4497bd27df3964831ff1",
+    "fields": {
+      "name": "eight-rugby-london-arkansas",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T12:45:47.159Z",
+      "stopped": "2026-07-09T13:00:55.006Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "69804766babc43d2af8c1d3b861a690c",
+    "fields": {
+      "name": "six-nebraska-angel-wolfram",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:49:05.937Z",
+      "stopped": "2026-07-10T16:52:00.081Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "7a6ead7970f04b369638ff5cdf8b2730",
+    "fields": {
+      "name": "saturn-yellow-august-fifteen",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvgiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:16:15.235Z",
+      "stopped": "2026-07-10T07:16:15.554Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "7baa20675187497194b3b11e57fa42f1",
+    "fields": {
+      "name": "music-video-mexico-california",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNvgiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:20:43.054Z",
+      "stopped": "2026-07-10T07:20:43.366Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "7e00ce6c01b2428fa55248d01080607d",
+    "fields": {
+      "name": "tennis-low-kansas-mississippi",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNtAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:59.798Z",
+      "stopped": "2026-07-10T18:24:58.690Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "8040a189f2fd48138b3014a4a17324a9",
+    "fields": {
+      "name": "uranus-glucose-asparagus-hotel",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNuAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:47.462Z",
+      "stopped": "2026-07-10T17:25:23.677Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "82011b640ef54e4880a0097d58c879c8",
+    "fields": {
+      "name": "yankee-yellow-glucose-carolina",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwgiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:36.457Z",
+      "stopped": "2026-07-10T07:18:52.956Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "838d2fe90b5d426fa7a4a0ed16a9e883",
+    "fields": {
+      "name": "six-lithium-foxtrot-steak",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T14:34:13.233Z",
+      "stopped": "2026-07-10T14:34:13.536Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "8858f603c1034833aac034c87cf696f9",
+    "fields": {
+      "name": "charlie-river-music-uncle",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNuwiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:18:24.864Z",
+      "stopped": "2026-07-10T15:23:10.990Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "9396719b8c2f4694bb689b65d098eb94",
+    "fields": {
+      "name": "violet-kilo-crazy-earth",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T14:34:35.383Z",
+      "stopped": "2026-07-10T14:34:35.567Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "9663bedb07fc4410a66af8f72c90f936",
+    "fields": {
+      "name": "mockingbird-pip-seventeen-kitten",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T13:12:21.660Z",
+      "stopped": "2026-07-10T13:17:50.825Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "9a6fdbeb94a64a7e810dff64e82b8ac2",
+    "fields": {
+      "name": "sierra-apart-blossom-minnesota",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNtgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:58:05.404Z",
+      "stopped": "2026-07-10T18:25:05.982Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "9b471fe277e84164a11ea7434a3be110",
+    "fields": {
+      "name": "carolina-robert-hawaii-magnesium",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:18:18.992Z",
+      "stopped": "2026-07-10T15:18:19.238Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "a778fd626e9245b09020587e2e109781",
+    "fields": {
+      "name": "equal-arkansas-music-cola",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNphqFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T06:06:53.743Z",
+      "stopped": "2026-07-10T06:10:10.414Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "a865e648b35846429b14a14b8beffe5d",
+    "fields": {
+      "name": "india-violet-ink-sink",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:40.606Z",
+      "stopped": "2026-07-10T07:07:41.152Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "b2114c15821e4344967d24d32f144563",
+    "fields": {
+      "name": "wyoming-nine-burger-butter",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T13:13:41.213Z",
+      "stopped": "2026-07-10T13:13:41.510Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "b4d54cb2ea6640de920ef07de1363106",
+    "fields": {
+      "name": "november-batman-bakerloo-timing",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:14:00.441Z",
+      "stopped": "2026-07-10T07:14:00.747Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "b5aff89e9e774d8d99609cab4f8fab35",
+    "fields": {
+      "name": "london-cold-solar-hot",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNsQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:50.445Z",
+      "stopped": "2026-07-10T17:24:05.996Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "c5c684cb5a8a4438a0439a42f8cde5c0",
+    "fields": {
+      "name": "four-paris-eight-bacon",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:15:53.041Z",
+      "stopped": "2026-07-10T07:27:51.232Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "c788ab56e2404dd7b655b22dff3ee515",
+    "fields": {
+      "name": "potato-east-london-delaware",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": "video_engine.tasks.video_task_hook",
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T11:40:24.544Z",
+      "stopped": "2026-07-09T11:40:24.814Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "c8d6bba7a837474db0db2ece8445f64b",
+    "fields": {
+      "name": "alanine-muppet-minnesota-london",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T11:59:25.263Z",
+      "stopped": "2026-07-09T11:59:25.582Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "ce0526d627fd4fc7ae4ad2d2d41028d2",
+    "fields": {
+      "name": "eight-gee-two-emma",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvAiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:48:47.130Z",
+      "stopped": "2026-07-10T15:59:14.698Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "ce5909bac67041109ec8a99b271cfe1a",
+    "fields": {
+      "name": "ceiling-uniform-indigo-three",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNuQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:44.046Z",
+      "stopped": "2026-07-10T18:19:49.497Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "d6b822a01bbf4ad7b2001a97574e7ca3",
+    "fields": {
+      "name": "vermont-echo-enemy-single",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNtQiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:58:02.821Z",
+      "stopped": "2026-07-10T18:12:48.143Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "e2e60cf7d7744642a1eb26bd92134e16",
+    "fields": {
+      "name": "zulu-oregon-speaker-tango",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:15:26.445Z",
+      "stopped": "2026-07-10T07:15:26.579Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "e6f9e530fc974347947cd553c9c488bd",
+    "fields": {
+      "name": "skylark-kansas-jupiter-east",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNvgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T13:12:32.164Z",
+      "stopped": "2026-07-10T13:12:32.473Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "eb0149d333154f04832a669e6fcb9a2a",
+    "fields": {
+      "name": "kentucky-july-fruit-berlin",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNtwiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:58:08.597Z",
+      "stopped": "2026-07-10T18:13:31.474Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "f4076b4aab104928b183b3f2cd2bd33a",
+    "fields": {
+      "name": "spring-ten-kitten-avocado",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABN1AeFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T11:59:59.252Z",
+      "stopped": "2026-07-09T11:59:59.746Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "f5dcd17e73564c73a82cf1c758e9e07c",
+    "fields": {
+      "name": "massachusetts-bravo-potato-crazy",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNxQiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-09T15:46:22.078Z",
+      "stopped": "2026-07-09T16:11:36.439Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "faa23747e3554d98a58750f0acc04eac",
+    "fields": {
+      "name": "cola-india-mango-missouri",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwAiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:07:56.297Z",
+      "stopped": "2026-07-10T07:07:56.431Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "fba8622ad21f49839d8f5b86de33683f",
+    "fields": {
+      "name": "bulldog-april-south-robert",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBgAAAAAAAABNwAiFlC4=",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T07:14:53.240Z",
+      "stopped": "2026-07-10T07:14:53.406Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "django_q.task",
+    "pk": "ff7e06aa07c94467b387127355bfdfcb",
+    "fields": {
+      "name": "crazy-victor-golf-zebra",
+      "func": "video_engine.tasks.generate_video_task",
+      "hook": null,
+      "args": "gAWVBwAAAAAAAABNsgiJhpQu",
+      "kwargs": "gAV9lC4=",
+      "result": null,
+      "group": null,
+      "cluster": "crack_cms_q",
+      "started": "2026-07-10T15:57:53.417Z",
+      "stopped": "2026-07-10T18:11:07.139Z",
+      "success": true,
+      "attempt_count": 1
+    }
+  },
+  {
+    "model": "axes.accesslog",
+    "pk": 1,
+    "fields": {
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0",
+      "ip_address": "100.127.6.75",
+      "username": "admin",
+      "http_accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "path_info": "/admin/login/",
+      "attempt_time": "2026-04-20T17:18:35.825Z",
+      "logout_time": null,
+      "session_hash": "9e3fcf8b11495539ff85602d86e46e012909ff4354f7cd2bb6101372e4f80702"
+    }
+  }
+]

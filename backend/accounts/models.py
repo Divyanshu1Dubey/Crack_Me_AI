@@ -270,10 +270,18 @@ class PaymentAttempt(models.Model):
         ('successful', 'Successful'),
         ('failed', 'Failed'),
     ]
+    PLAN_CHOICES = [
+        ('1_month', '1 Month Pass'),
+        ('3_months', '3 Months Pass'),
+        ('1_year', '1 Year Unlimited'),
+        ('scholarship_1_month', 'Scholarship 1 Month'),
+        ('legacy', 'Legacy Early Bird'),
+    ]
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='payments')
     razorpay_order_id = models.CharField(max_length=100, unique=True)
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    plan = models.CharField(max_length=30, choices=PLAN_CHOICES, default='legacy')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
     error_message = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -284,4 +292,152 @@ class PaymentAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.razorpay_order_id} ({self.status})"
+
+
+class Subscription(models.Model):
+    """
+    Tracks a user's premium subscription with plan type, dates, and status.
+
+    Existing users who already had is_subscribed=True before this model was added
+    are grandfathered as 'lifetime' plans and never expire.
+    """
+    PLAN_CHOICES = [
+        ('1_month', '1 Month Pass'),
+        ('3_months', '3 Months Pass'),
+        ('1_year', '1 Year Unlimited'),
+        ('scholarship_1_month', 'Scholarship 1 Month'),
+        ('legacy', 'Legacy Early Bird (Lifetime)'),
+        ('admin_grant', 'Admin Granted'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+    PLAN_DURATIONS = {
+        '1_month': timedelta(days=30),
+        '3_months': timedelta(days=90),
+        '1_year': timedelta(days=365),
+        'scholarship_1_month': timedelta(days=30),
+        'legacy': None,  # lifetime
+        'admin_grant': None,  # lifetime
+    }
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='subscriptions')
+    plan = models.CharField(max_length=30, choices=PLAN_CHOICES)
+    plan_display_name = models.CharField(max_length=100, blank=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    razorpay_order_id = models.CharField(max_length=100, blank=True, default='')
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    starts_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(null=True, blank=True, help_text='NULL = lifetime/never expires')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username}: {self.get_plan_display()} ({self.status})"
+
+    @property
+    def is_active(self):
+        """Check if subscription is currently active (not expired)."""
+        if self.status != 'active':
+            return False
+        if self.expires_at is None:
+            return True  # lifetime
+        return timezone.now() < self.expires_at
+
+    @property
+    def days_remaining(self):
+        """Days remaining on this subscription. -1 = lifetime, 0 = expired."""
+        if self.expires_at is None:
+            return -1  # lifetime
+        delta = self.expires_at - timezone.now()
+        return max(0, delta.days)
+
+    @classmethod
+    def get_active_subscription(cls, user):
+        """Get the user's current active subscription, if any."""
+        # First check for unexpired subscriptions
+        active = cls.objects.filter(
+            user=user,
+            status='active',
+        ).order_by('-created_at').first()
+
+        if active and not active.is_active:
+            # Auto-expire if past expiry date
+            active.status = 'expired'
+            active.save(update_fields=['status'])
+            # Also update user flag
+            user.is_subscribed = False
+            user.save(update_fields=['is_subscribed'])
+            return None
+
+        return active
+
+    @classmethod
+    def activate_from_payment(cls, user, plan, amount_paid, razorpay_order_id='', razorpay_payment_id=''):
+        """Create or extend a subscription after successful payment."""
+        plan_display_names = {
+            '1_month': '1 Month Pass',
+            '3_months': '3 Months Pass',
+            '1_year': '1 Year Unlimited',
+            'scholarship_1_month': 'Scholarship 1 Month',
+            'legacy': 'Legacy Early Bird (Lifetime)',
+            'admin_grant': 'Admin Granted (Lifetime)',
+        }
+        duration = cls.PLAN_DURATIONS.get(plan)
+        now = timezone.now()
+
+        # Check if user already has an active subscription — extend it
+        existing = cls.get_active_subscription(user)
+        if existing and existing.is_active and duration:
+            # Extend from the existing expiry date (or now if lifetime)
+            base_date = existing.expires_at if existing.expires_at else now
+            if base_date < now:
+                base_date = now
+            expires_at = base_date + duration
+        elif duration:
+            expires_at = now + duration
+        else:
+            expires_at = None  # lifetime
+
+        sub = cls.objects.create(
+            user=user,
+            plan=plan,
+            plan_display_name=plan_display_names.get(plan, plan),
+            amount_paid=amount_paid,
+            razorpay_order_id=razorpay_order_id,
+            razorpay_payment_id=razorpay_payment_id,
+            status='active',
+            starts_at=now,
+            expires_at=expires_at,
+        )
+
+        # Keep the boolean flag in sync for backward compatibility
+        user.is_subscribed = True
+        user.save(update_fields=['is_subscribed'])
+
+        return sub
+
+
+class UserDevice(models.Model):
+    """Tracks devices a user has logged in from to enforce simultaneous device limits."""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='devices')
+    device_fingerprint = models.CharField(max_length=255)
+    device_name = models.CharField(max_length=255, blank=True)
+    browser = models.CharField(max_length=255, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    last_login = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-last_login']
+        unique_together = ('user', 'device_fingerprint')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name} ({self.ip_address})"
 

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Avg, Count, Max, Q, Subquery, Sum
 
-from .models import TokenBalance, TokenConfig, TokenTransaction
+from .models import TokenBalance, TokenConfig, TokenTransaction, Subscription
 from questions.models import Question
 from .permissions import IsControlTowerAdmin
 from .serializers import (
@@ -308,6 +308,7 @@ class SubscribeOrderView(APIView):
             description = 'CrackLabs Premium 1 Month (Scholarship Special) Plan'
         else:
             # Fallback legacy early bird pass
+            plan = 'legacy'
             amount_paise = 19900
             amount_rs = 199.00
             description = 'CrackLabs Premium Early Bird Plan'
@@ -323,12 +324,13 @@ class SubscribeOrderView(APIView):
             }
             order = client.order.create(data=order_data)
             
-            # Record payment attempt
+            # Record payment attempt with plan type
             from accounts.models import PaymentAttempt
             PaymentAttempt.objects.create(
                 user=user,
                 razorpay_order_id=order['id'],
                 amount=amount_rs,
+                plan=plan,
                 status='initiated'
             )
             
@@ -364,7 +366,8 @@ class SubscribeOrderView(APIView):
             return Response({
                 'order_id': order['id'],
                 'amount': order['amount'],
-                'key_id': key_id
+                'key_id': key_id,
+                'plan': plan,
             })
         except Exception as e:
             return Response({'error': f'Failed to create Razorpay order: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -383,6 +386,21 @@ class SubscribeVerifyView(APIView):
         if not all([payment_id, order_id, signature]):
             return Response({'error': 'Missing payment verification details'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ── Idempotency: if this order was already verified, return success ──
+        from accounts.models import PaymentAttempt
+        try:
+            existing_attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
+            if existing_attempt.status == 'successful':
+                # Already verified — return success without re-processing
+                sub = Subscription.get_active_subscription(request.user)
+                return Response({
+                    'message': 'Subscription is already active!',
+                    'is_subscribed': True,
+                    'subscription': _serialize_subscription(sub) if sub else None,
+                })
+        except PaymentAttempt.DoesNotExist:
+            existing_attempt = None
+
         key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
         key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
         if not key_id or not key_secret:
@@ -399,38 +417,42 @@ class SubscribeVerifyView(APIView):
             })
         except Exception as e:
             # Mark attempt as failed
-            from accounts.models import PaymentAttempt
-            try:
-                attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
-                attempt.status = 'failed'
-                attempt.error_message = str(e)
-                attempt.save()
-            except PaymentAttempt.DoesNotExist:
-                pass
+            if existing_attempt:
+                existing_attempt.status = 'failed'
+                existing_attempt.error_message = str(e)
+                existing_attempt.save(update_fields=['status', 'error_message'])
             return Response({'error': f'Payment signature verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Activate subscription
+        # ── Activate subscription ──
         user = request.user
-        user.is_subscribed = True
-        user.save(update_fields=['is_subscribed'])
-
-        # Mark attempt as successful
-        from accounts.models import PaymentAttempt
+        plan = 'legacy'
         price_paid = 199.00
-        try:
-            attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
-            attempt.razorpay_payment_id = payment_id
-            attempt.status = 'successful'
-            attempt.save()
-            price_paid = float(attempt.amount)
-        except PaymentAttempt.DoesNotExist:
+
+        # Mark attempt as successful and extract plan info
+        if existing_attempt:
+            existing_attempt.razorpay_payment_id = payment_id
+            existing_attempt.status = 'successful'
+            existing_attempt.save(update_fields=['razorpay_payment_id', 'status'])
+            price_paid = float(existing_attempt.amount)
+            plan = existing_attempt.plan or 'legacy'
+        else:
             PaymentAttempt.objects.create(
                 user=user,
                 razorpay_order_id=order_id,
                 razorpay_payment_id=payment_id,
                 amount=199.00,
+                plan='legacy',
                 status='successful'
             )
+
+        # Create proper Subscription record with plan + expiry
+        sub = Subscription.activate_from_payment(
+            user=user,
+            plan=plan,
+            amount_paid=price_paid,
+            razorpay_order_id=order_id,
+            razorpay_payment_id=payment_id,
+        )
 
         # Log transaction
         TokenTransaction.objects.create(
@@ -438,23 +460,25 @@ class SubscribeVerifyView(APIView):
             transaction_type="purchase",
             amount=0,
             price_paid=price_paid,
-            note=f"Razorpay Premium (₹{price_paid}): order={order_id}, payment={payment_id}"
+            note=f"Razorpay Premium {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}"
         )
 
         # Send customized successful payment / membership email
         try:
             from django.core.mail import send_mail
             from django.conf import settings as django_settings
+            expires_str = sub.expires_at.strftime('%d %b %Y') if sub.expires_at else 'Lifetime'
             subject = "🎉 Welcome to CrackLabs Premium, Dr. {}! 🩺".format(user.first_name or user.username)
             message = (
                 f"Dear Dr. {user.first_name or user.username},\n\n"
-                f"Congratulations! Your payment of ₹199 was successfully verified, and your Premium Membership is now fully active.\n\n"
+                f"Congratulations! Your payment of ₹{price_paid} was successfully verified, and your Premium Membership is now fully active.\n\n"
                 f"Details of your Transaction:\n"
-                f"- Plan: Early Bird Premium Pass\n"
-                f"- Amount Paid: ₹199.00\n"
+                f"- Plan: {sub.plan_display_name}\n"
+                f"- Amount Paid: ₹{price_paid}\n"
+                f"- Valid Until: {expires_str}\n"
                 f"- Razorpay Order ID: {order_id}\n"
                 f"- Razorpay Payment ID: {payment_id}\n\n"
-                f"You now have unlimited, lifetime-access to all CrackLabs features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and unlimited AI Tutor interactions.\n\n"
+                f"You now have full access to all CrackLabs Premium features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and unlimited AI Tutor interactions.\n\n"
                 f"Best of luck with your preparation!\n\n"
                 f"Best regards,\n"
                 f"The CrackLabs Team\n"
@@ -474,15 +498,17 @@ class SubscribeVerifyView(APIView):
         try:
             from analytics.views import send_admin_notification_email
             send_admin_notification_email(
-                subject=f"[PREMIUM PURCHASE] {user.username} subscribed to CrackCMS",
+                subject=f"[PREMIUM PURCHASE] {user.username} subscribed to {sub.plan_display_name}",
                 message=(
-                    f"A user has successfully paid and upgraded to Premium early-bird plan.\n\n"
+                    f"A user has successfully paid and upgraded to {sub.plan_display_name}.\n\n"
                     f"User Details:\n"
                     f"  Username: {user.username}\n"
                     f"  Email: {user.email}\n"
                     f"  Phone: {getattr(user, 'phone', 'Not provided')}\n"
                     f"  College: {getattr(user, 'college', 'Not provided')}\n\n"
                     f"Payment Details:\n"
+                    f"  Plan: {sub.plan_display_name}\n"
+                    f"  Amount: ₹{price_paid}\n"
                     f"  Razorpay Order ID: {order_id}\n"
                     f"  Razorpay Payment ID: {payment_id}\n"
                 )
@@ -492,8 +518,151 @@ class SubscribeVerifyView(APIView):
 
         return Response({
             'message': 'Subscription verified and activated successfully!',
-            'is_subscribed': True
+            'is_subscribed': True,
+            'subscription': _serialize_subscription(sub),
         })
+
+
+def _serialize_subscription(sub):
+    """Helper to serialize a Subscription object for API responses."""
+    if not sub:
+        return None
+    return {
+        'plan': sub.plan,
+        'plan_display_name': sub.plan_display_name,
+        'status': sub.status,
+        'is_active': sub.is_active,
+        'starts_at': sub.starts_at.isoformat() if sub.starts_at else None,
+        'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
+        'days_remaining': sub.days_remaining,
+        'amount_paid': float(sub.amount_paid),
+        'razorpay_order_id': sub.razorpay_order_id,
+        'created_at': sub.created_at.isoformat() if sub.created_at else None,
+    }
+
+
+class SubscriptionStatusView(APIView):
+    """Return the authenticated user's current subscription status."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        sub = Subscription.get_active_subscription(user)
+
+        # Backward compat: if user.is_subscribed but no Subscription record,
+        # they are a grandfathered lifetime user
+        if not sub and user.is_subscribed:
+            return Response({
+                'is_subscribed': True,
+                'subscription': {
+                    'plan': 'legacy',
+                    'plan_display_name': 'Legacy Early Bird (Lifetime)',
+                    'status': 'active',
+                    'is_active': True,
+                    'starts_at': user.created_at.isoformat() if user.created_at else None,
+                    'expires_at': None,
+                    'days_remaining': -1,
+                    'amount_paid': 0,
+                    'razorpay_order_id': '',
+                    'created_at': user.created_at.isoformat() if user.created_at else None,
+                },
+            })
+
+        return Response({
+            'is_subscribed': sub.is_active if sub else False,
+            'subscription': _serialize_subscription(sub) if sub else None,
+        })
+
+
+class RazorpayWebhookView(APIView):
+    """
+    Razorpay server-to-server webhook handler.
+
+    This catches the edge case where a student pays successfully but closes
+    the browser before the frontend can call /subscribe/verify/.
+    Razorpay will POST to this endpoint with payment.captured event.
+
+    Setup: In Razorpay Dashboard > Settings > Webhooks, add:
+      URL: https://crackcms-vsthc.ondigitalocean.app/api/auth/subscribe/webhook/
+      Events: payment.captured
+      Secret: (set RAZORPAY_WEBHOOK_SECRET in .env)
+    """
+    permission_classes = [permissions.AllowAny]  # Razorpay calls this, no auth header
+    authentication_classes = []  # Disable DRF auth for webhook
+
+    def post(self, request):
+        import os
+        import hmac
+        import hashlib
+
+        webhook_secret = os.getenv('RAZORPAY_WEBHOOK_SECRET', '')
+
+        # Verify webhook signature if secret is configured
+        if webhook_secret:
+            received_signature = request.META.get('HTTP_X_RAZORPAY_SIGNATURE', '')
+            expected_signature = hmac.new(
+                webhook_secret.encode('utf-8'),
+                request.body,
+                hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(received_signature, expected_signature):
+                logger.warning('Razorpay webhook signature mismatch')
+                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = request.data
+        event = payload.get('event', '')
+
+        if event != 'payment.captured':
+            # We only care about successful captures
+            return Response({'status': 'ignored'})
+
+        payment_entity = payload.get('payload', {}).get('payment', {}).get('entity', {})
+        payment_id = payment_entity.get('id', '')
+        order_id = payment_entity.get('order_id', '')
+
+        if not order_id:
+            return Response({'status': 'no_order_id'})
+
+        # Find the payment attempt
+        from accounts.models import PaymentAttempt
+        try:
+            attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
+        except PaymentAttempt.DoesNotExist:
+            logger.warning(f'Razorpay webhook: no PaymentAttempt for order {order_id}')
+            return Response({'status': 'order_not_found'})
+
+        # Idempotency: already processed
+        if attempt.status == 'successful':
+            return Response({'status': 'already_processed'})
+
+        # Activate subscription
+        attempt.razorpay_payment_id = payment_id
+        attempt.status = 'successful'
+        attempt.save(update_fields=['razorpay_payment_id', 'status'])
+
+        user = attempt.user
+        plan = attempt.plan or 'legacy'
+        price_paid = float(attempt.amount)
+
+        sub = Subscription.activate_from_payment(
+            user=user,
+            plan=plan,
+            amount_paid=price_paid,
+            razorpay_order_id=order_id,
+            razorpay_payment_id=payment_id,
+        )
+
+        # Log transaction
+        TokenTransaction.objects.create(
+            user=user,
+            transaction_type="purchase",
+            amount=0,
+            price_paid=price_paid,
+            note=f"Razorpay Webhook: {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}"
+        )
+
+        logger.info(f'Webhook activated subscription for {user.username}: {sub.plan_display_name}')
+        return Response({'status': 'activated'})
 
 
 class TokenBalanceView(APIView):
@@ -853,6 +1022,9 @@ class AdminUserLifecycleListView(APIView):
             for b in TokenBalance.objects.filter(user_id__in=[u.id for u in users])
         }
         from tests_engine.models import TestAttempt
+        from accounts.models import UserDevice
+        from django.utils import timezone
+        from datetime import timedelta
 
         attempt_map = {
             row['user_id']: row['count']
@@ -861,11 +1033,27 @@ class AdminUserLifecycleListView(APIView):
             .values('user_id')
             .annotate(count=Count('id'))
         }
+        
+        device_last_login_map = {
+            row['user']: row['max_login']
+            for row in UserDevice.objects
+            .filter(user__in=[u.id for u in users], is_active=True)
+            .values('user')
+            .annotate(max_login=Max('last_login'))
+        }
+        
+        now = timezone.now()
 
         results = []
         for u in users:
             bal = balances.get(u.id)
             available = bal.available_tokens if bal else 0
+            
+            last_seen = device_last_login_map.get(u.id) or u.last_login
+            is_online = False
+            if last_seen:
+                is_online = (now - last_seen) < timedelta(minutes=15)
+                
             results.append({
                 'id': u.id,
                 'username': u.username,
@@ -876,7 +1064,8 @@ class AdminUserLifecycleListView(APIView):
                 'is_active': u.is_active,
                 'is_superuser': u.is_superuser,
                 'date_joined': u.date_joined,
-                'last_login': u.last_login,
+                'last_login': last_seen,
+                'is_online': is_online,
                 'available_tokens': available,
                 'test_attempt_count': attempt_map.get(u.id, 0),
             })
@@ -1249,3 +1438,147 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
         return Response({"message": "Password has been reset successfully."})
+
+
+class UserDeviceListView(APIView):
+    """List all active devices for the authenticated user."""
+
+    def get(self, request):
+        from .models import UserDevice
+        from .serializers import UserDeviceSerializer
+        devices = UserDevice.objects.filter(user=request.user, is_active=True).order_by('-last_login')
+        serializer = UserDeviceSerializer(devices, many=True)
+        return Response(serializer.data)
+
+
+class UserDeviceLogoutView(APIView):
+    """Log out a specific device (by setting is_active=False)."""
+
+    def post(self, request):
+        from .models import UserDevice
+        device_id = request.data.get('device_id')
+        if not device_id:
+            return Response({'error': 'device_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            device = UserDevice.objects.get(id=device_id, user=request.user, is_active=True)
+            device.is_active = False
+            device.save(update_fields=['is_active'])
+            return Response({'message': 'Device logged out successfully.'})
+        except UserDevice.DoesNotExist:
+            return Response({'error': 'Device not found or already logged out.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+# ── ADMIN PHASE 3 ROUTES ──
+
+class AdminSubscriptionManageView(APIView):
+    """Admin endpoint to manage user subscriptions (grant/revoke/extend)."""
+    permission_classes = [IsControlTowerAdmin]
+    
+    def post(self, request, user_id):
+        from .models import Subscription
+        from django.utils import timezone
+        import datetime
+        
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        action = request.data.get('action') # 'grant', 'revoke'
+        plan = request.data.get('plan') # '1_month', '3_months', '1_year', 'legacy'
+        
+        if action == 'grant':
+            if not plan:
+                return Response({'error': 'Plan is required for granting'}, status=status.HTTP_400_BAD_REQUEST)
+            # Create a manual subscription payment log
+            Subscription.activate_from_payment(
+                user=user,
+                plan=plan,
+                amount_paid=0,
+                razorpay_order_id=f'admin_manual_{timezone.now().timestamp()}',
+                razorpay_payment_id='admin_granted'
+            )
+            create_admin_audit_log(
+                actor=request.user,
+                action='user_role_update',
+                resource_type='subscription',
+                resource_id=str(user.id),
+                detail=f'Granted {plan} subscription to {user.username}',
+            )
+            return Response({'message': f'Subscription {plan} granted to {user.username}'})
+            
+        elif action == 'revoke':
+            Subscription.objects.filter(user=user, is_active=True).update(is_active=False, status='cancelled')
+            user.is_subscribed = False
+            user.save(update_fields=['is_subscribed'])
+            
+            create_admin_audit_log(
+                actor=request.user,
+                action='user_role_update',
+                resource_type='subscription',
+                resource_id=str(user.id),
+                detail=f'Revoked subscription for {user.username}',
+            )
+            return Response({'message': f'Subscription revoked for {user.username}'})
+            
+        return Response({'error': 'Invalid action'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminDeviceManageView(APIView):
+    """Admin endpoint to view and force logout devices for a user."""
+    permission_classes = [IsControlTowerAdmin]
+    
+    def get(self, request, user_id):
+        from .models import UserDevice
+        from .serializers import UserDeviceSerializer
+        devices = UserDevice.objects.filter(user_id=user_id, is_active=True).order_by('-last_login')
+        serializer = UserDeviceSerializer(devices, many=True)
+        return Response(serializer.data)
+        
+    def post(self, request, user_id):
+        from .models import UserDevice
+        device_id = request.data.get('device_id')
+        if not device_id:
+            return Response({'error': 'device_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            device = UserDevice.objects.get(id=device_id, user_id=user_id)
+            device.is_active = False
+            device.save(update_fields=['is_active'])
+            create_admin_audit_log(
+                actor=request.user,
+                action='user_role_update', # Using existing valid choice
+                resource_type='device',
+                resource_id=str(user_id),
+                detail=f'Logged out device {device_id} for user {user_id}',
+            )
+            return Response({'message': 'Device force logged out.'})
+        except UserDevice.DoesNotExist:
+            return Response({'error': 'Device not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminPaymentHistoryView(APIView):
+    """Admin endpoint to view all payment attempts."""
+    permission_classes = [IsControlTowerAdmin]
+    
+    def get(self, request):
+        from .models import PaymentAttempt
+        # Return last 100 payments for simplicity
+        payments = PaymentAttempt.objects.select_related('user').order_by('-created_at')[:100]
+        data = []
+        for p in payments:
+            data.append({
+                'id': p.id,
+                'user_id': p.user.id,
+                'username': p.user.username,
+                'email': p.user.email,
+                'plan': p.plan,
+                'amount': float(p.amount) if p.amount else 0,
+                'status': p.status,
+                'razorpay_order_id': p.razorpay_order_id,
+                'created_at': p.created_at,
+            })
+        return Response(data)
+
+

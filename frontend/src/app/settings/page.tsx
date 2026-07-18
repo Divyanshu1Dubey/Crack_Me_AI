@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
-import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift } from 'lucide-react';
+import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2 } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, isAuthenticated, loading: authLoading, logout, refreshProfile } = useAuth();
@@ -14,6 +14,18 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [form, setForm] = useState({ first_name: '', last_name: '', phone: '', college: '', target_exam: '' });
+
+    interface Device {
+        id: number;
+        device_name: string;
+        browser: string;
+        ip_address: string;
+        last_login: string;
+        is_active: boolean;
+    }
+    const [devices, setDevices] = useState<Device[]>([]);
+    const [loadingDevices, setLoadingDevices] = useState(false);
+    const [deviceError, setDeviceError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) router.push('/login');
@@ -43,6 +55,36 @@ export default function SettingsPage() {
             setMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const fetchDevices = async () => {
+        setLoadingDevices(true);
+        setDeviceError(null);
+        try {
+            const res = await authAPI.getDevices();
+            setDevices(res.data);
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } } };
+            setDeviceError(error.response?.data?.detail || "Failed to fetch devices");
+        } finally {
+            setLoadingDevices(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            fetchDevices();
+        }
+    }, [isAuthenticated]);
+
+    const handleRemoveDevice = async (deviceId: number) => {
+        try {
+            await authAPI.logoutDevice(deviceId);
+            setDevices(devices.filter(d => d.id !== deviceId));
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            alert(error.response?.data?.error || "Failed to remove device");
         }
     };
 
@@ -202,6 +244,64 @@ export default function SettingsPage() {
                                 </div>
                                 <div className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>Enabled</div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Connected Devices */}
+                    <div className="glass-card p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <Laptop className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
+                                Connected Devices
+                            </h3>
+                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-800 text-slate-300">
+                                {devices.length} / {user?.is_subscribed ? '4' : '2'} Limits
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-4">
+                            Manage the devices where you are currently logged in. You can remove older devices to free up your limit.
+                        </p>
+                        
+                        {deviceError && (
+                            <div className="p-3 mb-4 rounded-lg bg-red-500/10 text-red-500 text-sm">
+                                {deviceError}
+                            </div>
+                        )}
+
+                        <div className="space-y-3">
+                            {loadingDevices ? (
+                                <div className="text-sm text-muted-foreground animate-pulse">Loading devices...</div>
+                            ) : devices.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">No active devices found.</div>
+                            ) : (
+                                devices.map((device, idx) => (
+                                    <div key={device.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/50 border border-slate-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-lg bg-slate-800/80">
+                                                <Laptop className="w-4 h-4 text-slate-400" />
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-medium flex items-center gap-2">
+                                                    {device.device_name || 'Unknown Device'}
+                                                    {idx === 0 && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">This Device</span>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                    IP: {device.ip_address || 'Unknown'} • Last Active: {new Date(device.last_login).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleRemoveDevice(device.id)}
+                                            className="p-2 rounded-lg hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
+                                            title="Logout Device"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 

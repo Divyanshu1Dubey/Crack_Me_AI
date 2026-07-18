@@ -8,7 +8,8 @@ import { authAPI, questionsAPI } from '@/lib/api';
 import {
     Crown, BookOpen, FileText, Clock, 
     Sparkles, MessageSquare, ShieldCheck,
-    X, Check, AlertTriangle, Brain, RefreshCw
+    X, Check, AlertTriangle, Brain, RefreshCw,
+    Calendar, Timer, CreditCard
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,8 +30,17 @@ export default function SubscriptionPage() {
     const { user, isAuthenticated, loading: authLoading, refreshProfile } = useAuth();
     const router = useRouter();
     const [subscribing, setSubscribing] = useState(false);
+    const [verifying, setVerifying] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [retryData, setRetryData] = useState<{
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+    } | null>(null);
+
+    // Subscription state
+    const subscriptionInfo = user?.subscription_info;
 
     // Scholarship state
     const [showTestModal, setShowTestModal] = useState(false);
@@ -224,8 +234,10 @@ export default function SubscriptionPage() {
 
     const handleSubscribe = async (plan: string) => {
         setSubscribing(true);
+        setVerifying(false);
         setSuccessMessage(null);
         setErrorMessage(null);
+        setRetryData(null);
 
         const scriptLoaded = await new Promise((resolve) => {
             const script = document.createElement('script');
@@ -254,20 +266,33 @@ export default function SubscriptionPage() {
                 description: `Upgrade to ${plan.replace('_', ' ')} Plan`,
                 order_id: order_id,
                 handler: async function (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) {
-                    setSubscribing(true);
+                    setSubscribing(false);
+                    setVerifying(true);
                     try {
-                        await authAPI.subscribeVerify({
+                        const verifyRes = await authAPI.subscribeVerify({
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_signature: response.razorpay_signature,
                         });
                         await refreshProfile();
-                        setSuccessMessage("Congratulations! Your Premium subscription has been successfully activated.");
+                        const sub = verifyRes.data?.subscription;
+                        const planName = sub?.plan_display_name || 'Premium';
+                        setSuccessMessage(`🎉 Congratulations! Your ${planName} subscription has been successfully activated.`);
+                        setRetryData(null);
                     } catch (err: unknown) {
                         const error = err as { response?: { data?: { error?: string } } };
-                        setErrorMessage(error.response?.data?.error || "Payment verification failed. Please contact support.");
+                        setErrorMessage(
+                            error.response?.data?.error ||
+                            "Payment verification failed. Your payment was received — click 'Retry Verification' or contact support."
+                        );
+                        // Save retry data so user can retry verification
+                        setRetryData({
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
                     } finally {
-                        setSubscribing(false);
+                        setVerifying(false);
                     }
                 },
                 prefill: {
@@ -281,6 +306,7 @@ export default function SubscriptionPage() {
                 modal: {
                     ondismiss: function() {
                         setSubscribing(false);
+                        setVerifying(false);
                     }
                 }
             };
@@ -291,6 +317,29 @@ export default function SubscriptionPage() {
             const error = err as { response?: { data?: { error?: string } } };
             setErrorMessage(error.response?.data?.error || "Failed to initiate payment. Please try again later.");
             setSubscribing(false);
+            setVerifying(false);
+        }
+    };
+
+    const handleRetryVerification = async () => {
+        if (!retryData) return;
+        setVerifying(true);
+        setErrorMessage(null);
+        try {
+            const verifyRes = await authAPI.subscribeVerify(retryData);
+            await refreshProfile();
+            const sub = verifyRes.data?.subscription;
+            const planName = sub?.plan_display_name || 'Premium';
+            setSuccessMessage(`🎉 Verification successful! Your ${planName} subscription is now active.`);
+            setRetryData(null);
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setErrorMessage(
+                error.response?.data?.error ||
+                "Verification still failing. Please contact support with your payment details."
+            );
+        } finally {
+            setVerifying(false);
         }
     };
 
@@ -416,8 +465,69 @@ export default function SubscriptionPage() {
                         </div>
                     )}
                     {errorMessage && (
-                        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm font-medium">
-                            {errorMessage}
+                        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm font-medium space-y-2">
+                            <p>{errorMessage}</p>
+                            {retryData && (
+                                <button
+                                    onClick={handleRetryVerification}
+                                    disabled={verifying}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-bold transition-all"
+                                >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
+                                    {verifying ? 'Retrying...' : 'Retry Verification'}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {verifying && (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-medium flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Verifying your payment... Please wait.
+                        </div>
+                    )}
+
+                    {/* ── Active Subscription Status Card ── */}
+                    {isSubscribed && subscriptionInfo && (
+                        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent p-6 md:p-8 shadow-sm">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="p-2.5 rounded-2xl bg-emerald-500/10">
+                                    <ShieldCheck className="w-6 h-6 text-emerald-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground">✅ Active Membership</h3>
+                                    <p className="text-xs text-muted-foreground">Your premium access is fully activated</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Crown className="w-3 h-3" /> Plan</p>
+                                    <p className="text-sm font-bold text-foreground">{subscriptionInfo.plan_display_name}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Purchase Date</p>
+                                    <p className="text-sm font-bold text-foreground">
+                                        {subscriptionInfo.starts_at ? new Date(subscriptionInfo.starts_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Expiry Date</p>
+                                    <p className="text-sm font-bold text-foreground">
+                                        {subscriptionInfo.expires_at ? new Date(subscriptionInfo.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Lifetime ∞'}
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Timer className="w-3 h-3" /> Days Remaining</p>
+                                    <p className="text-sm font-bold text-foreground">
+                                        {subscriptionInfo.days_remaining === -1 ? '∞ Lifetime' : `${subscriptionInfo.days_remaining} days`}
+                                    </p>
+                                </div>
+                            </div>
+                            {subscriptionInfo.amount_paid > 0 && (
+                                <div className="mt-4 pt-4 border-t border-border/50 flex items-center gap-2 text-xs text-muted-foreground">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                    Amount Paid: ₹{subscriptionInfo.amount_paid}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -507,10 +617,14 @@ export default function SubscriptionPage() {
                                         <div className="flex flex-col gap-1.5">
                                             <button
                                                 onClick={hasScholarshipDiscount ? () => handleSubscribe('scholarship_1_month') : plan.action}
-                                                disabled={subscribing}
+                                                disabled={subscribing || verifying}
                                                 className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
                                             >
-                                                {subscribing ? 'Processing...' : (hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta)}
+                                                {verifying ? (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Payment...
+                                                    </span>
+                                                ) : subscribing ? 'Opening Payment...' : (hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta)}
                                             </button>
                                             {plan.id === '1_month' && !hasScholarshipDiscount && ((user?.scholarship_test_attempts || 0) < 2) && (
                                                 <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">

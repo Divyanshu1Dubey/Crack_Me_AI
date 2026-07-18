@@ -102,6 +102,11 @@ export default function AdminDashboardPage() {
     const [userStatusFilter, setUserStatusFilter] = useState('all');
     const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
     const [userActionMessage, setUserActionMessage] = useState('');
+    const [deviceModalOpen, setDeviceModalOpen] = useState(false);
+    const [deviceModalUserId, setDeviceModalUserId] = useState<number | null>(null);
+    const [deviceModalList, setDeviceModalList] = useState<any[]>([]);
+    const [subModalOpen, setSubModalOpen] = useState(false);
+    const [subModalUserId, setSubModalUserId] = useState<number | null>(null);
     const [systemScope, setSystemScope] = useState<'all' | 'user'>('all');
     const [systemUserId, setSystemUserId] = useState('');
     const [systemActionLoading, setSystemActionLoading] = useState(false);
@@ -852,6 +857,54 @@ export default function AdminDashboardPage() {
             setUserActionMessage('Could not reset user progress.');
         }
         setUserActionLoadingId(null);
+    };
+
+    const handleManageSubscription = async (targetUserId: number) => {
+        setSubModalUserId(targetUserId);
+        setSubModalOpen(true);
+    };
+
+    const handleSubmitSubscription = async (plan: string) => {
+        if (!subModalUserId) return;
+        setUserActionLoadingId(subModalUserId);
+        setSubModalOpen(false);
+        try {
+            if (plan.toLowerCase() === 'revoke') {
+                await authAPI.adminManageSubscription(subModalUserId, { action: 'revoke' });
+                alert("Subscription revoked.");
+            } else {
+                await authAPI.adminManageSubscription(subModalUserId, { action: 'grant', plan });
+                alert(`Subscription ${plan} granted.`);
+            }
+            fetchUsers();
+        } catch (e: any) {
+            alert(extractApiErrorMessage(e?.response?.data || "Action failed"));
+        }
+        setUserActionLoadingId(null);
+    };
+
+    const handleManageDevices = async (targetUserId: number) => {
+        try {
+            setUserActionLoadingId(targetUserId);
+            const res = await authAPI.adminGetUserDevices(targetUserId);
+            const devices = res.data;
+            setDeviceModalList(devices);
+            setDeviceModalUserId(targetUserId);
+            setDeviceModalOpen(true);
+        } catch (e: any) {
+            alert(extractApiErrorMessage(e?.response?.data || "Failed to manage devices"));
+        }
+        setUserActionLoadingId(null);
+    };
+
+    const handleLogoutDeviceModal = async (deviceId: number) => {
+        if (!deviceModalUserId) return;
+        try {
+            await authAPI.adminLogoutUserDevice(deviceModalUserId, deviceId);
+            setDeviceModalList(prev => prev.filter(d => d.id !== deviceId));
+        } catch (e: any) {
+            alert("Failed to logout device");
+        }
     };
 
     const runSystemAction = async (action: 'resetAttempts' | 'clearAnalytics' | 'rerunEvaluation') => {
@@ -1785,10 +1838,29 @@ export default function AdminDashboardPage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {userList.map((u: any) => (
+                                                    {[...userList].sort((a, b) => (a.is_online === b.is_online ? 0 : a.is_online ? -1 : 1)).map((u: any) => (
                                                         <tr key={u.id || u.user_id} className="border-b last:border-0 hover:bg-muted/50">
                                                             <td className="py-2 pr-4 text-muted-foreground">{u.id || u.user_id}</td>
-                                                            <td className="py-2 pr-4 font-medium">{u.username}</td>
+                                                            <td className="py-2 pr-4 font-medium">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="relative flex items-center justify-center">
+                                                                        {u.is_online ? (
+                                                                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" title="Online now" />
+                                                                        ) : (
+                                                                            <span className="w-2 h-2 bg-slate-500 rounded-full" title={`Last seen: ${u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}`} />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex flex-col">
+                                                                        <span>{u.username}</span>
+                                                                        {!u.is_online && u.last_login && (
+                                                                            <span className="text-[9px] text-muted-foreground font-normal leading-tight">Seen: {new Date(u.last_login).toLocaleString()}</span>
+                                                                        )}
+                                                                        {u.is_online && (
+                                                                            <span className="text-[9px] text-emerald-400 font-normal leading-tight">Online now</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
                                                             <td className="py-2 pr-4 text-muted-foreground">{u.email || '—'}</td>
                                                             <td className="py-2 pr-4">
                                                                 <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-[10px]">
@@ -1829,6 +1901,22 @@ export default function AdminDashboardPage() {
                                                                         disabled={userActionLoadingId === Number(u.id || u.user_id)}
                                                                     >
                                                                         Reset Progress
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => handleManageSubscription(Number(u.id || u.user_id))}
+                                                                        disabled={userActionLoadingId === Number(u.id || u.user_id)}
+                                                                    >
+                                                                        Sub
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => handleManageDevices(Number(u.id || u.user_id))}
+                                                                        disabled={userActionLoadingId === Number(u.id || u.user_id)}
+                                                                    >
+                                                                        Devices
                                                                     </Button>
                                                                 </div>
                                                             </td>
@@ -3368,6 +3456,55 @@ export default function AdminDashboardPage() {
                     )}
                 </main>
             </div>
-        </>
+            {/* MODALS */}
+            {deviceModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="bg-card border shadow-lg rounded-xl w-full max-w-lg p-6 relative">
+                        <Button variant="ghost" size="sm" className="absolute top-2 right-2" onClick={() => setDeviceModalOpen(false)}>✕</Button>
+                        <h2 className="text-xl font-bold mb-1">Manage Devices</h2>
+                        <p className="text-sm text-muted-foreground mb-4">View and clear active sessions for this user.</p>
+                        
+                        {deviceModalList.length === 0 ? (
+                            <div className="p-8 text-center text-muted-foreground rounded-lg border border-dashed">
+                                No active devices found.
+                            </div>
+                        ) : (
+                            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                                {deviceModalList.map(d => (
+                                    <div key={d.id} className="p-3 border rounded-lg flex justify-between items-center bg-muted/20">
+                                        <div>
+                                            <p className="font-semibold text-sm">{d.device_name || 'Unknown Device'}</p>
+                                            <p className="text-xs text-muted-foreground">IP: {d.ip_address} • Last Login: {new Date(d.last_login).toLocaleString()}</p>
+                                        </div>
+                                        <Button size="sm" variant="destructive" onClick={() => handleLogoutDeviceModal(d.id)}>Logout</Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="mt-6 flex justify-end">
+                            <Button variant="outline" onClick={() => setDeviceModalOpen(false)}>Close</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {subModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+                    <div className="bg-card border shadow-lg rounded-xl w-full max-w-sm p-6 relative">
+                        <Button variant="ghost" size="sm" className="absolute top-2 right-2" onClick={() => setSubModalOpen(false)}>✕</Button>
+                        <h2 className="text-xl font-bold mb-1">Manage Subscription</h2>
+                        <p className="text-sm text-muted-foreground mb-4">Grant or revoke premium access.</p>
+                        <div className="space-y-2">
+                            <Button className="w-full justify-start" variant="outline" onClick={() => handleSubmitSubscription('1_month')}>Grant 1 Month</Button>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => handleSubmitSubscription('3_months')}>Grant 3 Months</Button>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => handleSubmitSubscription('1_year')}>Grant 1 Year</Button>
+                            <Button className="w-full justify-start" variant="outline" onClick={() => handleSubmitSubscription('legacy')}>Grant Legacy (Lifetime)</Button>
+                            <div className="h-px bg-border my-2" />
+                            <Button className="w-full justify-start text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-500/20" variant="outline" onClick={() => handleSubmitSubscription('revoke')}>Revoke Subscription</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

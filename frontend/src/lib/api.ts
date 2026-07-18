@@ -173,11 +173,15 @@ export const authAPI = {
   subscribeOrder: (plan?: string) => api.post('/auth/subscribe/order/', { plan }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
+  subscriptionStatus: () => api.get('/auth/subscribe/status/'),
   verifyScholarship: (answers: Record<string, string>) => api.post('/auth/verify-scholarship/', { answers }),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
   confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
     api.post('/auth/password-reset/confirm/', data),
+  // Device management
+  getDevices: () => api.get('/auth/devices/'),
+  logoutDevice: (device_id: number) => api.post('/auth/devices/logout/', { device_id }),
   // Token system
   getTokenBalance: () => api.get('/auth/tokens/'),
   purchaseTokens: (data: { amount: number; payment_id?: string }) => api.post('/auth/tokens/purchase/', data),
@@ -194,6 +198,16 @@ export const authAPI = {
   adminResetAttempts: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/reset-attempts/', data),
   adminClearAnalytics: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/clear-analytics/', data),
   adminRerunEvaluation: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/rerun-evaluation/', data),
+  
+  // Phase 3 Admin Routes
+  adminManageSubscription: (user_id: number, data: { action: 'grant' | 'revoke', plan?: string }) => 
+    api.post(`/auth/admin/users/${user_id}/subscription/`, data),
+  adminGetUserDevices: (user_id: number) => 
+    api.get(`/auth/admin/users/${user_id}/devices/`),
+  adminLogoutUserDevice: (user_id: number, device_id: number) => 
+    api.post(`/auth/admin/users/${user_id}/devices/`, { device_id }),
+  adminGetPayments: () => 
+    api.get('/auth/admin/payments/'),
 };
 
 export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {

@@ -39,23 +39,62 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
         user = self._upsert_local_user(supabase_user)
 
-        # Single session enforcement
-        # Temporarily disabled to prevent user lockouts due to concurrency
-        incoming_session_id = None
+        # ── Device Management & Limits ──
+        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
+        
+        # Premium student exception: ensure they never get locked out due to device limits/race conditions
+        if user.email in ['sbsp181107@gmail.com'] or user.role == 'admin':
+            return (user, None)
+            
         if incoming_session_id:
-            path = request_obj.path
-            is_sync_path = '/auth/profile/' in path or '/auth/login/' in path or '/auth/register/' in path
-            if is_sync_path:
-                if user.current_session_id != incoming_session_id:
-                    user.current_session_id = incoming_session_id
-                    user.save(update_fields=['current_session_id'])
+            from .models import UserDevice
+            
+            x_forwarded_for = request_obj.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                ip = x_forwarded_for.split(',')[0].strip()
             else:
-                if user.current_session_id and user.current_session_id != incoming_session_id:
-                    from rest_framework import exceptions
-                    raise exceptions.AuthenticationFailed({
-                        "detail": "ur logged in another device",
-                        "code": "session_invalid"
-                    })
+                ip = request_obj.META.get('REMOTE_ADDR')
+                
+            user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
+            
+            device, created = UserDevice.objects.get_or_create(
+                user=user,
+                device_fingerprint=incoming_session_id,
+                defaults={
+                    'device_name': user_agent,
+                    'ip_address': ip,
+                    'is_active': True
+                }
+            )
+            
+            if not created:
+                # Update last login
+                device.device_name = user_agent
+                device.ip_address = ip
+                device.save(update_fields=['device_name', 'ip_address', 'last_login'])
+                
+            if not device.is_active:
+                from rest_framework import exceptions
+                raise exceptions.AuthenticationFailed({
+                    "detail": "This device has been logged out or blocked.",
+                    "code": "device_inactive"
+                })
+                
+            # Enforce limits if it's a new device or checking limits
+            limit = 4 if getattr(user, 'is_subscribed', False) else 2
+            
+            active_devices = UserDevice.objects.filter(user=user, is_active=True).order_by('-last_login')
+            if active_devices.count() > limit:
+                # If this device isn't in the allowed top N devices, reject
+                allowed_ids = list(active_devices.values_list('id', flat=True)[:limit])
+                if device.id not in allowed_ids:
+                    allowed_paths = ['/auth/profile/', '/auth/devices/', '/auth/logout/']
+                    if not any(p in request_obj.path for p in allowed_paths):
+                        from rest_framework import exceptions
+                        raise exceptions.AuthenticationFailed({
+                            "detail": f"Maximum device limit reached ({limit} devices). Please manage devices in Settings.",
+                            "code": "device_limit_reached"
+                        })
 
         return (user, None)
 

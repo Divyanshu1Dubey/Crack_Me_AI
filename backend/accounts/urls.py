@@ -9,10 +9,15 @@ urlpatterns = [
     path('subscribe/', views.SubscribeView.as_view(), name='subscribe'),
     path('subscribe/order/', views.SubscribeOrderView.as_view(), name='subscribe_order'),
     path('subscribe/verify/', views.SubscribeVerifyView.as_view(), name='subscribe_verify'),
+    path('subscribe/status/', views.SubscriptionStatusView.as_view(), name='subscribe_status'),
+    path('subscribe/webhook/', views.RazorpayWebhookView.as_view(), name='razorpay_webhook'),
     path('verify-scholarship/', views.VerifyScholarshipView.as_view(), name='verify_scholarship'),
     # Password reset
     path('password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),
     path('password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    # Device Management
+    path('devices/', views.UserDeviceListView.as_view(), name='device_list'),
+    path('devices/logout/', views.UserDeviceLogoutView.as_view(), name='device_logout'),
     # Token system
     path('tokens/', views.TokenBalanceView.as_view(), name='token_balance'),
     path('tokens/purchase/', views.TokenPurchaseView.as_view(), name='token_purchase'),
@@ -30,4 +35,8 @@ urlpatterns = [
     path('admin/system/reset-attempts/', views.AdminSystemResetAttemptsView.as_view(), name='admin_system_reset_attempts'),
     path('admin/system/clear-analytics/', views.AdminSystemClearAnalyticsView.as_view(), name='admin_system_clear_analytics'),
     path('admin/system/rerun-evaluation/', views.AdminSystemRerunEvaluationView.as_view(), name='admin_system_rerun_evaluation'),
+    # Admin Phase 3 Routes
+    path('admin/users/<int:user_id>/subscription/', views.AdminSubscriptionManageView.as_view(), name='admin_subscription_manage'),
+    path('admin/users/<int:user_id>/devices/', views.AdminDeviceManageView.as_view(), name='admin_device_manage'),
+    path('admin/payments/', views.AdminPaymentHistoryView.as_view(), name='admin_payment_history'),
 ]

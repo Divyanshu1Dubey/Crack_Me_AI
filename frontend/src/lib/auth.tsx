@@ -14,6 +14,17 @@ import {
     isSupabaseAuthEnabled,
 } from './supabase';
 
+interface SubscriptionInfo {
+    plan: string;
+    plan_display_name: string;
+    status: string;
+    is_active: boolean;
+    starts_at: string | null;
+    expires_at: string | null;
+    days_remaining: number;
+    amount_paid: number;
+}
+
 interface User {
     id: number | string;
     username: string;
@@ -30,6 +41,7 @@ interface User {
     scholarship_test_passed?: boolean;
     scholarship_test_attempts?: number;
     scholarship_granted_price?: number;
+    subscription_info?: SubscriptionInfo | null;
 }
 
 interface AuthContextType {

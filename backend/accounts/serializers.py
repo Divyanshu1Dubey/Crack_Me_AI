@@ -54,20 +54,51 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
     token_info = serializers.SerializerMethodField()
+    subscription_info = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'phone', 'college', 'role', 'target_exam', 'target_year', 'avatar_url',
                   'created_at', 'is_admin', 'token_info', 'profile_bonus_rewarded', 'is_subscribed',
-                  'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price']
+                  'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price',
+                  'subscription_info']
+        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info']
 
     def get_role(self, obj):
         return 'admin' if obj.is_admin else 'student'
 
     def get_is_admin(self, obj):
         return obj.is_admin
+
+    def get_subscription_info(self, obj):
+        """Return current subscription details for the user."""
+        from .models import Subscription
+        sub = Subscription.get_active_subscription(obj)
+        if sub:
+            return {
+                'plan': sub.plan,
+                'plan_display_name': sub.plan_display_name,
+                'status': sub.status,
+                'is_active': sub.is_active,
+                'starts_at': sub.starts_at.isoformat() if sub.starts_at else None,
+                'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
+                'days_remaining': sub.days_remaining,
+                'amount_paid': float(sub.amount_paid),
+            }
+        # Backward compat: grandfathered lifetime user
+        if obj.is_subscribed:
+            return {
+                'plan': 'legacy',
+                'plan_display_name': 'Legacy Early Bird (Lifetime)',
+                'status': 'active',
+                'is_active': True,
+                'starts_at': obj.created_at.isoformat() if obj.created_at else None,
+                'expires_at': None,
+                'days_remaining': -1,
+                'amount_paid': 0,
+            }
+        return None
 
     def get_token_info(self, obj):
         """Return current token balance summary for the user."""
@@ -199,3 +230,11 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
             'metadata',
             'created_at',
         ]
+
+
+class UserDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import UserDevice
+        model = UserDevice
+        fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at']
+
