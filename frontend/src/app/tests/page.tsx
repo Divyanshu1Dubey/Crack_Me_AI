@@ -160,8 +160,8 @@ export default function TestsPage() {
                                             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {test.time_limit_minutes} min</span>
                                             <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
                                         </div>
-                                        <Button onClick={() => startTest(test.id)} className="w-full" size="sm">
-                                            Start Test <ChevronRight className="w-4 h-4" />
+                                        <Button variant="neon" onClick={() => startTest(test.id)} className="w-full" size="sm">
+                                            Start Test <ChevronRight className="w-4 h-4 ml-1" />
                                         </Button>
                                     </CardContent>
                                 </Card>

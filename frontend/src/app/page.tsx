@@ -367,13 +367,13 @@ export default function LandingPage() {
                 </p>
 
                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
-                  <Button size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
+                  <Button variant="gradient" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
                     <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                       Start Preparing
                       <ChevronRight className="ml-1.5 w-5 h-5" />
                     </Link>
                   </Button>
-                  <Button size="xl" variant="outline" asChild className="w-full rounded-2xl sm:w-auto font-semibold bg-background hover:bg-muted/50">
+                  <Button variant="glass" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold">
                     <Link href="#features">Explore Platform</Link>
                   </Button>
                 </div>

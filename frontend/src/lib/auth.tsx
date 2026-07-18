@@ -42,6 +42,7 @@ interface User {
     scholarship_test_attempts?: number;
     scholarship_granted_price?: number;
     subscription_info?: SubscriptionInfo | null;
+    is_online?: boolean;
 }
 
 interface AuthContextType {

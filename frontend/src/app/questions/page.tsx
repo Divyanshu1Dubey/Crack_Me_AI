@@ -35,6 +35,7 @@ import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 function FormattedText({ text, className = '' }: { text: string; className?: string }) {
     if (!text) return null;
     const cleaned = text
+        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
         .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
         .replace(/\*\s+\(/g, '\n* (');
@@ -569,8 +570,8 @@ function QuestionsContent() {
                                 <option value="">Year</option>
                                 {years.map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
-                            <Button onClick={handleSearch} size="sm" className="h-9 px-3 w-full">
-                                <Filter className="w-3.5 h-3.5 mr-1" /> Filter
+                            <Button variant="neon" onClick={handleSearch} size="sm" className="h-9 px-3 w-full group">
+                                <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
                             </Button>
                         </div>
                     </CardContent>
