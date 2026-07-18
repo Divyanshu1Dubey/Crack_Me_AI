@@ -79,6 +79,30 @@ export default function Header() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // PWA Install Prompt Logic
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      alert("App is already installed or your browser doesn't support installation from this device.");
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
   // Fetch data
   const fetchNotifications = useCallback(async () => {
     if (isFetchingNotifications.current) return;
@@ -351,7 +375,12 @@ export default function Header() {
 
         {/* Download App Button */}
         <div className="hidden sm:block">
-          <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary/20 text-primary hover:bg-primary/10">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 rounded-full border-primary/20 text-primary hover:bg-primary/10"
+            onClick={handleInstallClick}
+          >
             <Smartphone className="w-4 h-4" />
             <span>Download App</span>
           </Button>

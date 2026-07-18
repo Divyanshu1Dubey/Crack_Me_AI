@@ -22,7 +22,7 @@ class TestViewSet(viewsets.ModelViewSet):
     filterset_fields = ['test_type', 'subject', 'topic', 'exam_type']
 
     def get_queryset(self):
-        queryset = Test.objects.all()
+        queryset = Test.objects.select_related('subject', 'topic').all()
         if self.action in ['list', 'retrieve']:
             user = getattr(self.request, 'user', None)
             if not user or not user.is_authenticated or (not getattr(user, 'is_admin', False) and not getattr(user, 'is_superuser', False)):
@@ -614,7 +614,7 @@ class TestAttemptViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TestAttemptSerializer
 
     def get_queryset(self):
-        return TestAttempt.objects.filter(user=self.request.user)
+        return TestAttempt.objects.filter(user=self.request.user).select_related('test')
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
