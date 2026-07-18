@@ -66,12 +66,13 @@ function JobsContent() {
         if (isAuthenticated) {
             fetchJobs(1, true);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authLoading, isAuthenticated, router]);
 
     const fetchJobs = async (pageNum: number, isInitial = false) => {
         try {
             if (isInitial) setLoading(true);
-            const params: any = { page: pageNum, page_size: 15 };
+            const params: Record<string, string | number> = { page: pageNum, page_size: 15 };
             if (searchQuery) params.search = searchQuery;
             const res = await jobsAPI.list(params);
             const results = res.data.results || res.data || [];

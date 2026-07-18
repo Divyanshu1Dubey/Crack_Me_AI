@@ -14,15 +14,17 @@ const EXAM_OPTIONS = [
 
 export default function ExamSwitcher() {
   const router = useRouter();
-  const [exam, setExam] = useState('cms');
+  const [exam, setExam] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crack_target_exam') || 'cms';
+    }
+    return 'cms';
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     setMounted(true);
-    const saved = localStorage.getItem('crack_target_exam');
-    if (saved) {
-      setExam(saved);
-    }
   }, []);
 
   const handleExamChange = (val: string) => {

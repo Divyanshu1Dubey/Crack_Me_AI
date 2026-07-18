@@ -5,13 +5,14 @@ import { authAPI, analyticsAPI } from '@/lib/api';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import useSWR from 'swr';
-import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone } from 'lucide-react';
+import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone, Smartphone } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
 import ExamSwitcher from '@/components/ExamSwitcher';
+import { Button } from '@/components/ui/button';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
@@ -346,6 +347,14 @@ export default function Header() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Download App Button */}
+        <div className="hidden sm:block">
+          <Button variant="outline" size="sm" className="gap-2 rounded-full border-primary/20 text-primary hover:bg-primary/10">
+            <Smartphone className="w-4 h-4" />
+            <span>Download App</span>
+          </Button>
         </div>
 
         {/* Exam Switcher */}

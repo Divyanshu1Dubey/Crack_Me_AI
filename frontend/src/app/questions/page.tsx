@@ -490,7 +490,6 @@ function QuestionsContent() {
                                         <h2 className="text-lg font-bold text-foreground">
                                             🎯 Question Bank
                                         </h2>
-                                        </div>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                         Master {qbankStats.total} high-yield {selectedExam} clinical MCQs and PYQs.
