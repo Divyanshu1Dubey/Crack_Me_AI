@@ -258,6 +258,14 @@ export const jobsAPI = {
   remove: (id: number) => api.delete(`/jobs/${id}/`),
 };
 
+// Announcements API
+export const announcementsAPI = {
+  list: (params?: Record<string, string | number>) => api.get('/questions/announcements/', { params }),
+  get: (id: number) => api.get(`/questions/announcements/${id}/`),
+  create: (data: Record<string, unknown>) => api.post('/questions/announcements/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/announcements/${id}/`, data),
+  remove: (id: number) => api.delete(`/questions/announcements/${id}/`),
+};
 // Questions API
 export const questionsAPI = {
   list: (params?: Record<string, string | number>) => api.get('/questions/', { params }),

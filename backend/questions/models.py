@@ -1,5 +1,5 @@
 import re
-
+import uuid
 from django.db import models
 from django.conf import settings
 
@@ -102,6 +102,14 @@ class Question(models.Model):
     exam_source = models.CharField(max_length=50, default='UPSC CMS')
     times_asked = models.IntegerField(default=0, help_text='How many times this concept appeared')
     is_active = models.BooleanField(default=True)
+    
+    # 6-Task Architecture Upgrade Fields
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, null=True, unique=True)
+    display_number = models.IntegerField(null=True, blank=True, help_text='Number shown to students (scoped by year/paper)')
+    is_dropped = models.BooleanField(default=False, help_text='Dropped/disputed question excluded from scoring')
+    admin_edited = models.BooleanField(default=False, help_text='Flag to protect from seed script overwrites')
+    needs_review = models.BooleanField(default=False, help_text='Flag for partially digitized or disputed PYQs')
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -537,4 +545,27 @@ class QuestionAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user.username} | Q{self.question.id} | {'Correct' if self.is_correct else 'Incorrect'}"
+
+class Announcement(models.Model):
+    """Admin Notes / Announcements targeted at specific exam tracks."""
+    VISIBILITY_CHOICES = [
+        ('all', 'All Students'),
+        ('cms', 'UPSC CMS Only'),
+        ('neet_pg', 'NEET PG Only'),
+        ('usmle', 'USMLE Only'),
+        ('fmge', 'FMGE Only'),
+    ]
+
+    title = models.CharField(max_length=200)
+    body = models.TextField(help_text="Rich text content of the announcement")
+    target_exam_track = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='all')
+    target_users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, help_text="Specific users to see this (overrides exam track)")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
 

@@ -13,7 +13,7 @@ import { questionsAPI, aiAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
-  CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb
+  CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +74,13 @@ function PracticeContent() {
     const [tokenError, setTokenError] = useState(false);
     const [showPalette, setShowPalette] = useState(false);
     const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
+
+    const [flagOpen, setFlagOpen] = useState(false);
+    const [flagCategory, setFlagCategory] = useState('wrong_answer');
+    const [flagComment, setFlagComment] = useState('');
+    const [flagSubmitting, setFlagSubmitting] = useState(false);
+    const [flagSuccess, setFlagSuccess] = useState(false);
+    const [flagError, setFlagError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
@@ -158,6 +165,24 @@ function PracticeContent() {
                 else n.add(currentQ.id);
                 return n;
             });
+        }).catch(err => console.error(err));
+    };
+
+    const handleFlagSubmit = () => {
+        if (!currentQ || !flagComment.trim()) return;
+        setFlagSubmitting(true);
+        setFlagError(null);
+        questionsAPI.submitFeedback({
+            question: currentQ.id,
+            category: flagCategory,
+            comment: flagComment.trim(),
+        }).then(() => {
+            setFlagSuccess(true);
+            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); setFlagError(null); }, 2000);
+        }).catch((err: any) => {
+            setFlagError('Unable to submit feedback right now. Please try again.');
+        }).finally(() => {
+            setFlagSubmitting(false);
         });
     };
 
@@ -319,6 +344,46 @@ function PracticeContent() {
                                             <h5 className="text-sm font-bold text-amber-700 dark:text-amber-400">🧠 Memory Trick</h5>
                                             <p className="text-sm leading-relaxed mt-1">{String(currentQ.mnemonic)}</p>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* 🚩 Flag Wrong Answer */}
+                                <div className="flex justify-end mt-4">
+                                    <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}
+                                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                                        <Flag className="w-3.5 h-3.5" /> Flag Issue
+                                    </button>
+                                </div>
+                                {flagOpen && (
+                                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl mt-2 space-y-3 animate-fadeInUp">
+                                        <h5 className="text-sm font-bold flex items-center gap-2 text-red-500">
+                                            <Flag className="w-4 h-4" /> Report an Issue
+                                        </h5>
+                                        {flagSuccess ? (
+                                            <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted. You'll earn 2 tokens if accepted.</p>
+                                        ) : (
+                                            <>
+                                                {flagError && <p className="text-sm text-red-500">{flagError}</p>}
+                                                <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                    value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
+                                                    <option value="wrong_answer">Wrong Answer</option>
+                                                    <option value="discrepancy">Discrepancy in Options</option>
+                                                    <option value="out_of_syllabus">Out of Syllabus</option>
+                                                    <option value="typo">Typo/Formatting Issue</option>
+                                                    <option value="explanation_needed">Better Explanation Needed</option>
+                                                    <option value="other">Other</option>
+                                                </select>
+                                                <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
+                                                    placeholder="Describe the issue (e.g., correct answer should be B because...)"
+                                                    value={flagComment} onChange={e => setFlagComment(e.target.value)} />
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
+                                                        {flagSubmitting ? 'Submitting...' : 'Submit'}
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => { setFlagOpen(false); setFlagError(null); }}>Cancel</Button>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 )}
 

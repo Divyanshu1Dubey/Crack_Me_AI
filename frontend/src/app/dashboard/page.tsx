@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI, questionsAPI } from '@/lib/api';
+import { analyticsAPI, questionsAPI, announcementsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle, Clock, FileText, Flame,
@@ -32,6 +32,7 @@ interface HeatmapDay {
 const dashboardFetcher = () => analyticsAPI.getDashboard().then(r => r.data).catch(() => null);
 const heatmapFetcher = () => analyticsAPI.getHeatmap().then(r => r.data || []).catch(() => []);
 const streakFetcher = () => analyticsAPI.getStreak().then(r => r.data).catch(() => null);
+const announcementsFetcher = () => announcementsAPI.list().then(r => r.data || []).catch(() => []);
 
 const CAMPUS_MOMENTUM = [
     { name: 'Riya S.', college: 'AIIMS Delhi', note: '412 Qs this month' },
@@ -80,6 +81,12 @@ export default function DashboardPage() {
     const { data: streak } = useSWR(
         isAuthenticated ? 'streak' : null,
         streakFetcher,
+        swrConfig
+    );
+
+    const { data: announcements = [] } = useSWR(
+        isAuthenticated ? 'announcements' : null,
+        announcementsFetcher,
         swrConfig
     );
 
@@ -261,6 +268,28 @@ export default function DashboardPage() {
                         </Card>
                     )}
 
+                    {/* Announcements Feed */}
+                    {announcements.length > 0 && (
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground px-1">Platform Announcements</h3>
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                {announcements.slice(0, 3).map((ann: any) => (
+                                    <Card key={ann.id} className="border-indigo-100 bg-indigo-50/50 shadow-sm">
+                                        <CardContent className="p-4 flex flex-col justify-between h-full space-y-2">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <h4 className="font-semibold text-indigo-900">{ann.title}</h4>
+                                                    <Badge variant="outline" className="text-[10px] bg-white">{new Date(ann.created_at).toLocaleDateString()}</Badge>
+                                                </div>
+                                                <p className="text-xs text-indigo-700/80 line-clamp-3">{ann.body}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Hero Welcome Card */}
                     <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
@@ -280,6 +309,13 @@ export default function DashboardPage() {
                                     <p className="text-sky-100 text-sm md:text-base mb-6 max-w-xl">
                                         Your comprehensive preparation dashboard. Solve clinical case drills, review textbooks, and ask the AI Tutor for diagnostics guides.
                                     </p>
+                                    <div className="bg-sky-900/40 border border-sky-700/50 rounded-lg p-3 mb-6 max-w-xl flex items-start gap-3">
+                                        <Calendar className="w-5 h-5 text-sky-300 shrink-0 mt-0.5" />
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-sky-100">UPSC CMS 2026 Cycle Dates</h4>
+                                            <p className="text-xs text-sky-300">Notification: Apr 10, 2026 | Exam: Jul 19, 2026</p>
+                                        </div>
+                                    </div>
                                     <div className="flex flex-wrap gap-3">
                                         <Button asChild variant="secondary" className="bg-white text-slate-900 hover:bg-slate-100">
                                             <Link href="/tests">

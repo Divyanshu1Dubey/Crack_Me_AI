@@ -6,6 +6,7 @@ router = DefaultRouter()
 router.register(r'subjects', views.SubjectViewSet)
 router.register(r'topics', views.TopicViewSet)
 router.register(r'feedback', views.QuestionFeedbackViewSet)
+router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
 router.register(r'', views.QuestionViewSet, basename='question')
 
 # NOTE: Explicit paths must come BEFORE router.urls because the router's

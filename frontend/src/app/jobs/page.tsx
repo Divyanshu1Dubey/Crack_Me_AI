@@ -57,6 +57,7 @@ function JobsContent() {
     const [searchQuery, setSearchQuery] = useState('');
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [examTrack, setExamTrack] = useState('all');
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -74,6 +75,7 @@ function JobsContent() {
             if (isInitial) setLoading(true);
             const params: Record<string, string | number> = { page: pageNum, page_size: 15 };
             if (searchQuery) params.search = searchQuery;
+            if (examTrack !== 'all') params.exam_track = examTrack;
             const res = await jobsAPI.list(params);
             const results = res.data.results || res.data || [];
             
@@ -125,7 +127,7 @@ function JobsContent() {
                         </div>
                     </div>
 
-                    <form onSubmit={handleSearch} className="flex max-w-2xl gap-2">
+                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row max-w-3xl gap-3">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input 
@@ -135,6 +137,17 @@ function JobsContent() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
+                        <select 
+                            className="h-11 px-4 rounded-xl border border-border/80 bg-card text-sm"
+                            value={examTrack}
+                            onChange={(e) => setExamTrack(e.target.value)}
+                        >
+                            <option value="all">All Tracks</option>
+                            <option value="cms">UPSC CMS</option>
+                            <option value="neet_pg">NEET PG</option>
+                            <option value="fmge">FMGE</option>
+                            <option value="usmle">USMLE</option>
+                        </select>
                         <Button type="submit" className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition-all">
                             Search
                         </Button>

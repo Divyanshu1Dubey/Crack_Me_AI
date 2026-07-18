@@ -1,7 +1,12 @@
 from urllib.parse import urlsplit, urlunsplit
 
 from rest_framework import serializers
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot
+from .models import (
+    Subject, Topic, Question, QuestionBookmark, QuestionFeedback, 
+    Discussion, Note, Flashcard, QuestionImportJob, 
+    QuestionExtractionItem, AdminAIPromptVersion, 
+    QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement
+)
 
 
 def _derive_subtitles_url(video_url: str) -> str:
@@ -14,6 +19,11 @@ def _derive_subtitles_url(video_url: str) -> str:
     subtitles_path = f"{path[:-4]}.vtt"
     return urlunsplit((parsed.scheme, parsed.netloc, subtitles_path, parsed.query, parsed.fragment))
 
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Announcement
+        fields = '__all__'
 
 class SubjectSerializer(serializers.ModelSerializer):
     question_count = serializers.SerializerMethodField()
@@ -57,7 +67,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+        fields = ['id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review',
+                  'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
                   'year', 'subject', 'subject_name',
                   'topic', 'topic_name', 'difficulty', 'exam_source',
                   'concept_tags', 'concept_id', 'book_name', 'chapter', 'page_number', 'reference_text',
@@ -137,7 +148,8 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+            'id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review',
+            'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'year', 'subject', 'subject_name', 'topic', 'topic_name',
             'difficulty', 'concept_tags', 'concept_id', 'explanation', 'concept_explanation',
             'mnemonic', 'book_name', 'chapter', 'page_number', 'reference_text', 'paper',

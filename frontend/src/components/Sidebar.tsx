@@ -196,9 +196,21 @@ export default function Sidebar() {
                             <div>
                                 <div className="section-title sidebar-section-title mb-2">Admin</div>
                                 <div className="space-y-0.5">
-                                    <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname?.startsWith('/admin') ? 'active' : ''}`} aria-current={pathname?.startsWith('/admin') ? 'page' : undefined}>
-                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-4.5 h-4.5 shrink-0" variant={pathname?.startsWith('/admin') ? 'active' : 'default'} />
-                                        <span className="sidebar-label text-sm">Admin Panel</span>
+                                    <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin' ? 'active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}>
+                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin' ? 'active' : 'default'} />
+                                        <span className="sidebar-label text-sm">Admin Dashboard</span>
+                                    </Link>
+                                    <Link href="/admin/questions-editor" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/questions-editor' ? 'active' : ''}`}>
+                                        <CustomIcon name="question-mark" label="Q-Editor" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/questions-editor' ? 'active' : 'default'} />
+                                        <span className="sidebar-label text-sm">Questions Editor</span>
+                                    </Link>
+                                    <Link href="/admin/announcements" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/announcements' ? 'active' : ''}`}>
+                                        <CustomIcon name="medical-note" label="Notes" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/announcements' ? 'active' : 'default'} />
+                                        <span className="sidebar-label text-sm">Announcements</span>
+                                    </Link>
+                                    <Link href="/admin/jobs" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/jobs' ? 'active' : ''}`}>
+                                        <CustomIcon name="medical-bag" label="Jobs" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/jobs' ? 'active' : 'default'} />
+                                        <span className="sidebar-label text-sm">Manage Jobs</span>
                                     </Link>
                                 </div>
                             </div>

@@ -19,6 +19,11 @@ class Job(models.Model):
     posted_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    
+    # New fields for 6-Task Architecture Upgrade
+    eligibility_summary = models.TextField(blank=True, help_text="Short summary of eligibility criteria")
+    exam_track_tags = models.JSONField(default=list, blank=True, help_text="List of exam tracks (e.g. ['cms', 'neet_pg'])")
+    admin_edited = models.BooleanField(default=False, help_text="Flag to protect from automated overwrite")
 
     def __str__(self):
         return f"{self.title} at {self.hospital}"

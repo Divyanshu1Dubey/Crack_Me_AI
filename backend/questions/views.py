@@ -18,9 +18,9 @@ from django.db.models import Count, F, Max, Q, Value
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement
 from .serializers import (
-    SubjectSerializer, TopicSerializer,
+    SubjectSerializer, TopicSerializer, AnnouncementSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
     QuestionUploadSerializer, BookmarkSerializer,
     QuestionFeedbackSerializer, DiscussionSerializer,
@@ -71,6 +71,27 @@ def _ensure_question_bank_loaded():
         except Exception:
             logger.exception('Question bank bootstrap failed')
 
+
+class AnnouncementViewSet(viewsets.ModelViewSet):
+    """ViewSet for Admin Notes / Announcements."""
+    queryset = Announcement.objects.all()
+    serializer_class = AnnouncementSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            self.permission_classes = [permissions.IsAdminUser]
+        else:
+            self.permission_classes = [permissions.IsAuthenticated]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Announcement.objects.all()
+        # Ensure we filter by target_exam_track if applicable (dummy logic here assumes 'all' or student's target exam)
+        # Ideally, we filter based on user's exam track if they have one configured in their profile
+        return Announcement.objects.all() # Keep simple for now, filter logic can be expanded
 
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     """List and retrieve subjects."""
