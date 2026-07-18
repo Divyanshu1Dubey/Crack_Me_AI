@@ -1402,6 +1402,49 @@ class AdminSystemRerunEvaluationView(APIView):
         return Response({'message': 'Evaluation rerun completed', 'results': metadata})
 
 
+class AdminSystemBackupDataView(APIView):
+    """Backups core configuration data to JSON fixture."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request):
+        from django.core.management import call_command
+        import io
+        try:
+            # We just call the management command we created
+            call_command('backup_core_data')
+            create_admin_audit_log(
+                actor=request.user,
+                action='system_backup',
+                resource_type='system',
+                detail='Initiated core data backup to JSON',
+            )
+            return Response({'message': 'Core data structure backup completed successfully'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminSystemRestoreDataView(APIView):
+    """Restores core configuration data from JSON fixture."""
+
+    permission_classes = [IsControlTowerAdmin]
+    throttle_scope = 'admin_control_tower'
+
+    def post(self, request):
+        from django.core.management import call_command
+        try:
+            call_command('restore_core_data')
+            create_admin_audit_log(
+                actor=request.user,
+                action='system_restore',
+                resource_type='system',
+                detail='Restored core data structure from JSON',
+            )
+            return Response({'message': 'Core data structure restore completed successfully'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class PasswordResetConfirmView(APIView):
     """Confirm password reset with uid, token, and new password."""
 

@@ -3276,12 +3276,41 @@ export default function AdminDashboardPage() {
                     )}
 
                     {activeTab === 'security' && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Security Operations</CardTitle>
-                                <CardDescription>Upcoming controls: suspicious login flags, session revocation, and policy toggles.</CardDescription>
-                            </CardHeader>
-                        </Card>
+                        <div className="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Security Operations</CardTitle>
+                                    <CardDescription>Upcoming controls: suspicious login flags, session revocation, and policy toggles.</CardDescription>
+                                </CardHeader>
+                            </Card>
+                            <Card className="border-amber-500/30">
+                                <CardHeader>
+                                    <CardTitle className="text-amber-500 flex items-center gap-2">
+                                        <Database className="w-5 h-5" /> Data Structure Persistence
+                                    </CardTitle>
+                                    <CardDescription>Backup and restore core configuration data (Exams, Subjects, Topics, Jobs) across environments.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="flex gap-4">
+                                    <Button onClick={async () => {
+                                        try {
+                                            const res = await authAPI.adminBackupData();
+                                            alert(res.data?.message || 'Backup completed');
+                                        } catch (e: any) { alert(e.response?.data?.error || 'Failed to backup data'); }
+                                    }} variant="outline">
+                                        <FileSearch className="w-4 h-4 mr-2" /> Export Structure to JSON
+                                    </Button>
+                                    <Button onClick={async () => {
+                                        if (!confirm('Are you sure you want to restore data? This will overwrite matching records.')) return;
+                                        try {
+                                            const res = await authAPI.adminRestoreData();
+                                            alert(res.data?.message || 'Restore completed');
+                                        } catch (e: any) { alert(e.response?.data?.error || 'Failed to restore data'); }
+                                    }} variant="destructive">
+                                        <ShieldCheck className="w-4 h-4 mr-2" /> Import Structure from JSON
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
                     {activeTab === 'audit' && (

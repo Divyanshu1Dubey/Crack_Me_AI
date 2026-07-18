@@ -199,6 +199,9 @@ export const authAPI = {
   adminClearAnalytics: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/clear-analytics/', data),
   adminRerunEvaluation: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/rerun-evaluation/', data),
   
+  adminBackupData: () => api.post('/auth/admin/system/backup-data/'),
+  adminRestoreData: () => api.post('/auth/admin/system/restore-data/'),
+  
   // Phase 3 Admin Routes
   adminManageSubscription: (user_id: number, data: { action: 'grant' | 'revoke', plan?: string }) => 
     api.post(`/auth/admin/users/${user_id}/subscription/`, data),

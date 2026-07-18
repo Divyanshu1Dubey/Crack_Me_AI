@@ -23,6 +23,7 @@ import { Progress } from '@/components/ui/progress';
 function FormattedText({ text, className = '' }: { text: string; className?: string }) {
     if (!text) return null;
     const cleaned = text
+        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
         .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
         .replace(/\*\s+\(/g, '\n* (');

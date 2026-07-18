@@ -108,6 +108,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'axes.middleware.AxesMiddleware',
     'crack_cms.cache_middleware.DisableApiCacheMiddleware',
+    'accounts.middleware.UpdateLastSeenMiddleware',
 ]
 
 ROOT_URLCONF = 'crack_cms.urls'

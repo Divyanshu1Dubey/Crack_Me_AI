@@ -16,6 +16,9 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         success: "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
         warning: "bg-amber-500 text-white shadow-sm hover:bg-amber-600",
+        glass: "bg-white/10 dark:bg-black/10 backdrop-blur-md border border-white/20 dark:border-white/10 text-foreground shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/20 dark:hover:bg-white/5",
+        neon: "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.5)] hover:shadow-[0_0_25px_rgba(59,130,246,0.7)] border border-primary/50",
+        gradient: "bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all",
       },
       size: {
         default: "h-10 px-4 py-2",

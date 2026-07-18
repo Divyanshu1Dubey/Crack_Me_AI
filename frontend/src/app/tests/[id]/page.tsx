@@ -24,6 +24,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
     if (!text) return null;
     // Clean up the text: normalize line breaks for markdown
     const cleaned = text
+        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
         .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')  // Ensure Roman numeral items start on new lines
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')   // Codes section on new line
         .replace(/\*\s+\(/g, '\n* (');                // Option items on new lines

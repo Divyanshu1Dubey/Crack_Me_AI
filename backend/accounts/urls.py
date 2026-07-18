@@ -35,6 +35,8 @@ urlpatterns = [
     path('admin/system/reset-attempts/', views.AdminSystemResetAttemptsView.as_view(), name='admin_system_reset_attempts'),
     path('admin/system/clear-analytics/', views.AdminSystemClearAnalyticsView.as_view(), name='admin_system_clear_analytics'),
     path('admin/system/rerun-evaluation/', views.AdminSystemRerunEvaluationView.as_view(), name='admin_system_rerun_evaluation'),
+    path('admin/system/backup-data/', views.AdminSystemBackupDataView.as_view(), name='admin_system_backup_data'),
+    path('admin/system/restore-data/', views.AdminSystemRestoreDataView.as_view(), name='admin_system_restore_data'),
     # Admin Phase 3 Routes
     path('admin/users/<int:user_id>/subscription/', views.AdminSubscriptionManageView.as_view(), name='admin_subscription_manage'),
     path('admin/users/<int:user_id>/devices/', views.AdminDeviceManageView.as_view(), name='admin_device_manage'),
