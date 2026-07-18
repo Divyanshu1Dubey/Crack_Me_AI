@@ -123,7 +123,7 @@ export default function AdminQuestionsEditorPage() {
                     }}
                   />
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                <td className="px-6 py-4 text-sm text-gray-900 min-w-[300px] whitespace-normal break-words">
                   {q.question_text}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

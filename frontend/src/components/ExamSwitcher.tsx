@@ -28,6 +28,11 @@ export default function ExamSwitcher() {
   }, []);
 
   const handleExamChange = (val: string) => {
+    if (val !== 'cms') {
+      router.push(`/exams/${val.replace('_', '-')}`);
+      return;
+    }
+    
     setExam(val);
     localStorage.setItem('crack_target_exam', val);
     

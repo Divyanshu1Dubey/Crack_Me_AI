@@ -88,6 +88,26 @@ const examData = {
     syllabus: [
       { name: 'Full MBBS Syllabus', desc: 'Detailed breakdown coming soon.', weightage: 'N/A' }
     ]
+  },
+  'usmle': {
+    title: 'USMLE (United States Medical Licensing Examination)',
+    description: 'A multi-part professional exam sponsored by the FSMB and NBME, required for medical licensure in the United States.',
+    tags: ['International', 'Licensing', 'Step 1/2/3'],
+    eligibility: {
+      qualification: 'Coming Soon - Data being fetched from official portals.',
+      internship: 'Coming Soon - Data being fetched from official portals.',
+      ageLimit: 'Coming Soon - Data being fetched from official portals.',
+      nationality: 'Coming Soon - Data being fetched from official portals.'
+    },
+    pattern: {
+      type: 'Coming Soon',
+      totalMarks: 'Coming Soon',
+      duration: 'Coming Soon',
+      negativeMarking: 'Coming Soon'
+    },
+    syllabus: [
+      { name: 'Basic & Clinical Sciences', desc: 'Detailed breakdown coming soon.', weightage: 'N/A' }
+    ]
   }
 };
 

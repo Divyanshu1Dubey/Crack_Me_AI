@@ -37,14 +37,6 @@ const navSections: NavSection[] = [
         ]
     },
     {
-        title: 'Exams & Info',
-        items: [
-            { href: '/exams/upsc-cms', iconName: 'medical-book', label: 'UPSC CMS Info' },
-            { href: '/exams/neet-pg', iconName: 'medical-book', label: 'NEET PG Info' },
-            { href: '/jobs', iconName: 'briefcase', label: 'Job Postings' },
-        ]
-    },
-    {
         title: 'AI Tools',
         items: [
             { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor' },
