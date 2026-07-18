@@ -28,6 +28,7 @@ class CustomUser(AbstractUser):
     current_session_id = models.CharField(max_length=255, blank=True, default='')
     scholarship_test_passed = models.BooleanField(default=False)
     scholarship_test_attempts = models.IntegerField(default=0)
+    last_seen = models.DateTimeField(null=True, blank=True)
     scholarship_granted_price = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

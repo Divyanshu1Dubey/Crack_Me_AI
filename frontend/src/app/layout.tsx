@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
 import TrafficAnalytics from "@/components/TrafficAnalytics";
 import StickyExamCta from "@/components/StickyExamCta";
+import PWAProvider from "@/components/PWAProvider";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
@@ -78,7 +79,7 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  manifest: "/site.webmanifest",
+  manifest: "/manifest.json",
   icons: {
     icon: [{ url: "/cms-circle-logo.png", type: "image/png" }],
     apple: [{ url: "/cms-circle-logo.png", type: "image/png" }],
@@ -290,19 +291,21 @@ export default function RootLayout({
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
-        <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
-          <TooltipProvider>
-            <AuthProvider>
-              <DatadogInit />
-              <Suspense fallback={null}>
-                <TrafficAnalytics />
-              </Suspense>
-              <BackendWarmup />
-              <main id="main-content">{children}</main>
-              <StickyExamCta />
-            </AuthProvider>
-          </TooltipProvider>
-        </ThemeProvider>
+        <PWAProvider>
+          <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
+            <TooltipProvider>
+              <AuthProvider>
+                <DatadogInit />
+                <Suspense fallback={null}>
+                  <TrafficAnalytics />
+                </Suspense>
+                <BackendWarmup />
+                <main id="main-content">{children}</main>
+                <StickyExamCta />
+              </AuthProvider>
+            </TooltipProvider>
+          </ThemeProvider>
+        </PWAProvider>
       </body>
     </html>
   );

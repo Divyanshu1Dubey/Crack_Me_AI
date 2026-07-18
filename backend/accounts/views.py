@@ -1049,10 +1049,10 @@ class AdminUserLifecycleListView(APIView):
             bal = balances.get(u.id)
             available = bal.available_tokens if bal else 0
             
-            last_seen = device_last_login_map.get(u.id) or u.last_login
+            last_seen = u.last_seen or device_last_login_map.get(u.id) or u.last_login
             is_online = False
             if last_seen:
-                is_online = (now - last_seen) < timedelta(minutes=15)
+                is_online = (now - last_seen) < timedelta(minutes=10)
                 
             results.append({
                 'id': u.id,

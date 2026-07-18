@@ -1,0 +1,21 @@
+{
+  "name": "CrackCMS Companion",
+  "short_name": "CrackCMS",
+  "description": "UPSC CMS Preparation Platform",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    {
+      "src": "/cms-circle-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/cms-circle-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
 import ExamSwitcher from '@/components/ExamSwitcher';
 import { Button } from '@/components/ui/button';
+import { usePWA } from '@/components/PWAProvider';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
@@ -80,27 +81,10 @@ export default function Header() {
   }, []);
 
   // PWA Install Prompt Logic
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const { promptInstall } = usePWA();
 
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      alert("App is already installed or your browser doesn't support installation from this device.");
-      return;
-    }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-    }
+  const handleInstallClick = () => {
+    promptInstall();
   };
 
   // Fetch data
@@ -390,18 +374,22 @@ export default function Header() {
         <div className="hidden sm:block">
           <ExamSwitcher />
         </div>
-
         {/* Theme */}
         <ThemeToggle />
 
         {/* User avatar */}
-        <Link href="/settings" aria-label={settingsLabel}>
-          <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border transition-all hover:ring-primary">
-            <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-              {user?.first_name?.[0] || user?.username?.[0] || 'U'}
-            </AvatarFallback>
-          </Avatar>
-        </Link>
+        <div className="relative">
+          <Link href="/settings" aria-label={settingsLabel}>
+            <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border transition-all hover:ring-primary">
+              <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || '?'}
+              </AvatarFallback>
+            </Avatar>
+            {user?.is_online && (
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" title="Online"></span>
+            )}
+          </Link>
+        </div>
       </div>
 
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />

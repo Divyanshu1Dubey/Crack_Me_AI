@@ -56,14 +56,23 @@ class UserSerializer(serializers.ModelSerializer):
     token_info = serializers.SerializerMethodField()
     subscription_info = serializers.SerializerMethodField()
 
+    is_online = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'phone', 'college', 'role', 'target_exam', 'target_year', 'avatar_url',
                   'created_at', 'is_admin', 'token_info', 'profile_bonus_rewarded', 'is_subscribed',
                   'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price',
-                  'subscription_info']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info']
+                  'subscription_info', 'last_seen', 'is_online']
+        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online']
+
+    def get_is_online(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        if obj.last_seen:
+            return (timezone.now() - obj.last_seen) < timedelta(minutes=10)
+        return False
 
     def get_role(self, obj):
         return 'admin' if obj.is_admin else 'student'
