@@ -42,7 +42,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
     const markdownWithLineBreaks = cleaned
         .split('\n')
         .map(line => {
-            if (!line.trim()) return line;
+            if (!line.trim()) return '&nbsp;  ';
             if (line.endsWith('  ') || line.endsWith('\\')) return line;
             return line + '  ';
         })
@@ -163,6 +163,7 @@ function QuestionsContent() {
     const [questionDetail, setQuestionDetail] = useState<any>(null);
     const [showAnswer, setShowAnswer] = useState(false);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+    const [studyMode, setStudyMode] = useState<'practice' | 'exam'>('practice');
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const pageSize = 20;
@@ -363,21 +364,33 @@ function QuestionsContent() {
 
     const handleSelectOption = (opt: string) => {
         if (!detail) return;
+        if (showAnswer) return; // Prevent changing answer after revealed
         setSelectedAnswer(opt);
+        
+        if (studyMode === 'practice') {
+            setShowAnswer(true);
+            const qId = detail.id;
+            const isCorrect = opt === detail.correct_answer;
+            questionsAPI.attempt(qId, { selected_answer: opt }).then(res => {
+                const tokenEarned = res.data?.token_earned;
+                if (tokenEarned) {
+                    setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
+                }
+            }).catch(() => { });
+        }
+    };
+
+    const handleSubmitExamModeAnswer = () => {
+        if (!detail || !selectedAnswer || showAnswer) return;
         setShowAnswer(true);
-        
         const qId = detail.id;
-        const isCorrect = opt === detail.correct_answer;
-        
-        // Log attempt via API
-        questionsAPI.attempt(qId, { selected_answer: opt }).then(() => {
-            // Update local questions list
-            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
-            // Reload stats to reflect in progress tracker
-            questionsAPI.getStats({ exam_type: selectedExam }).then(res => setQbankStats(res.data));
-        }).catch(err => {
-            console.error('Failed to log QBank attempt:', err);
-        });
+        const isCorrect = selectedAnswer === detail.correct_answer;
+        questionsAPI.attempt(qId, { selected_answer: selectedAnswer }).then(res => {
+            const tokenEarned = res.data?.token_earned;
+            if (tokenEarned) {
+                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
+            }
+        }).catch(() => { });
     };
 
     /**
@@ -549,30 +562,50 @@ function QuestionsContent() {
                         )}
 
                         {/* Filters Row */}
-                        <div className="grid grid-cols-2 lg:grid-cols-[1fr_180px_130px_100px_100px] gap-2 lg:gap-3 items-center pt-1">
-                            <div className="relative col-span-2 lg:col-span-1 min-w-0">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input className="pl-10 h-9 text-xs w-full" placeholder="Search questions..."
-                                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                        <div className="flex flex-col gap-3 pt-1">
+                            {/* Top row: Search and Exam Mode Toggle */}
+                            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                                <div className="relative w-full sm:max-w-xs flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input className="pl-10 h-9 text-xs w-full" placeholder="Search questions..."
+                                        value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                                </div>
+                                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border border-border/60">
+                                    <button 
+                                        onClick={() => setStudyMode('practice')} 
+                                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                    >
+                                        Practice Mode
+                                    </button>
+                                    <button 
+                                        onClick={() => setStudyMode('exam')} 
+                                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                    >
+                                        Exam Mode
+                                    </button>
+                                </div>
                             </div>
-                            <select className="input-field h-9 text-xs px-2 w-full overflow-hidden" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
-                                <option value="">All Subjects</option>
-                                {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
-                            </select>
-                            <select className="input-field h-9 text-xs px-2 w-full" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
-                                <option value="">Difficulty</option>
-                                <option value="easy">Easy</option>
-                                <option value="medium">Medium</option>
-                                <option value="hard">Hard</option>
-                            </select>
-                            <select className="input-field h-9 text-xs px-2 w-full" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-                                <option value="">Year</option>
-                                {years.map(y => <option key={y} value={y}>{y}</option>)}
-                            </select>
-                            <Button variant="neon" onClick={handleSearch} size="sm" className="h-9 px-3 w-full group">
-                                <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
-                            </Button>
+                            {/* Bottom row: Select Filters */}
+                            <div className="grid grid-cols-2 lg:grid-cols-[1fr_130px_100px_100px] gap-2 lg:gap-3 items-center">
+                                <select className="input-field h-9 text-xs px-2 w-full overflow-hidden" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+                                    <option value="">All Subjects</option>
+                                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
+                                </select>
+                                <select className="input-field h-9 text-xs px-2 w-full" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
+                                    <option value="">Difficulty</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                                <select className="input-field h-9 text-xs px-2 w-full" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
+                                    <option value="">Year</option>
+                                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                                <Button variant="neon" onClick={handleSearch} size="sm" className="h-9 px-3 w-full group">
+                                    <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -696,8 +729,21 @@ function QuestionsContent() {
                                             })}
                                         </div>
 
-                                        {!showAnswer && !selectedAnswer && (
+                                        {!showAnswer && !selectedAnswer && studyMode === 'practice' && (
                                             <p className="text-xs text-center py-2" style={{ color: 'var(--text-secondary)' }}>👆 Select an option to reveal the answer & detailed analysis</p>
+                                        )}
+                                        
+                                        {!showAnswer && studyMode === 'exam' && (
+                                            <div className="mt-6 flex justify-end">
+                                                <Button 
+                                                    variant="neon" 
+                                                    onClick={handleSubmitExamModeAnswer} 
+                                                    disabled={!selectedAnswer}
+                                                    className="w-full sm:w-auto"
+                                                >
+                                                    Submit Answer
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

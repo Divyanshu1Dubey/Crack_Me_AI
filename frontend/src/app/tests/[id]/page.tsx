@@ -31,7 +31,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
     const markdownWithLineBreaks = cleaned
         .split('\n')
         .map(line => {
-            if (!line.trim()) return line;
+            if (!line.trim()) return '&nbsp;  ';
             if (line.endsWith('  ') || line.endsWith('\\')) return line;
             return line + '  ';
         })
@@ -52,6 +52,7 @@ interface Question {
     option_d: string;
     subject_name: string;
     topic_name: string;
+    year?: number;
     correct_answer?: string;
     explanation?: string;
     video_url?: string;
@@ -858,6 +859,7 @@ export default function TakeTestPage() {
                         <div className="flex gap-2 text-sm">
                             <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>{currentQ.subject_name}</span>
                             {currentQ.topic_name && <span className="badge" style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-secondary)' }}>{currentQ.topic_name}</span>}
+                            {currentQ.year && <span className="badge" style={{ background: 'rgba(236,72,153,0.1)', color: '#ec4899' }}>PYQ {currentQ.year}</span>}
                         </div>
                     </div>
 

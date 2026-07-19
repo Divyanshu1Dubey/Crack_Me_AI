@@ -28,7 +28,7 @@ function FormattedText({ text, className = '' }: { text: string; className?: str
         .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
         .replace(/\*\s+\(/g, '\n* (');
     const md = cleaned.split('\n').map(line => {
-        if (!line.trim()) return line;
+        if (!line.trim()) return '&nbsp;  ';
         if (line.endsWith('  ') || line.endsWith('\\')) return line;
         return line + '  ';
     }).join('\n');
