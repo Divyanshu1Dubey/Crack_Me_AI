@@ -5,14 +5,12 @@ import { useDock } from '@/context/DockContext';
 import { MessageSquare, Layers, X, Send, Save } from 'lucide-react';
 import { Button } from './ui/button';
 import api from '@/lib/api';
-import { useToast } from '@/components/ui/use-toast';
 
 export function FloatingDock() {
   const { activePanel, setActivePanel, contextQuestionId, selectedText, setSelectedText } = useDock();
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
 
   const handleAskAI = async () => {
     if (!aiQuery.trim()) return;
@@ -36,10 +34,10 @@ export function FloatingDock() {
         front: selectedText || 'New Flashcard',
         back: aiResponse || '...',
       });
-      toast({ title: 'Flashcard Saved', variant: 'default' });
+      alert('Flashcard Saved');
       setActivePanel('none');
     } catch (e) {
-      toast({ title: 'Error saving flashcard', variant: 'destructive' });
+      alert('Error saving flashcard');
     }
   };
 
@@ -99,13 +97,13 @@ export function FloatingDock() {
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
                     api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: true });
-                    toast({ title: 'Feedback sent', description: 'Thanks for your feedback!' });
+                    alert('Feedback sent: Thanks for your feedback!');
                   }}>
                     👍 Helpful
                   </Button>
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => {
                     api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: false, report_reason: 'User report from dock' });
-                    toast({ title: 'Reported', description: 'This response has been flagged for review.', variant: 'destructive' });
+                    alert('Reported: This response has been flagged for review.');
                   }}>
                     👎 Report
                   </Button>
