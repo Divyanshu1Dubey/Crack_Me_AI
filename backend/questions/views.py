@@ -1559,6 +1559,7 @@ class ChatAssistantView(APIView):
     """
     Handles unstructured queries from the Floating Ask-AI Dock.
     Passes contextual question text if provided.
+    Uses the real AIService.ask_tutor() with RAG grounding.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1568,6 +1569,12 @@ class ChatAssistantView(APIView):
 
         if not message:
             return Response({"error": "Message is required."}, status=400)
+
+        # Token check — admins bypass
+        from ai_engine.views import consume_ai_token, refund_ai_token
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
 
         # Build context if a question ID is provided
         context_str = ""
@@ -1580,14 +1587,13 @@ class ChatAssistantView(APIView):
             except Question.DoesNotExist:
                 pass
 
-        # Here we should invoke the RAG pipeline. For now, a placeholder that will be expanded in Task A.
-        # from ai_engine.rag_pipeline import generate_rag_response_sync
-        
         try:
-            full_prompt = context_str + "User Query: " + message
-            # reply = generate_rag_response_sync(full_prompt)
-            # Placeholder until RAG is fully integrated
-            reply = f"AI Assistant received your message. (Integration pending RAG updates). Context size: {len(context_str)}"
+            from ai_engine.services import AIService
+            service = AIService()
+            reply = service.ask_tutor(message, context_str)
             return Response({"reply": reply})
         except Exception as e:
-            return Response({"reply": f"AI Assistant error: {str(e)}"})
+            logger.error(f"ChatAssistant AI failed: {e}")
+            refund_ai_token(request)
+            return Response({"reply": "AI service temporarily unavailable. Your token has been refunded. Please try again."})
+

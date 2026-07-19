@@ -1036,20 +1036,30 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
         if options:
             options_str = "\n".join([f"  {k}: {v}" for k, v in options.items()])
 
-        prompt = f"""A UPSC CMS aspirant just answered a question. Provide a POWERFUL explanation that teaches them deeply.
+        prompt = f"""A UPSC CMS aspirant just answered a question. Your job is to provide an ACCURATE, POWERFUL explanation.
+
+**CRITICAL: You MUST independently determine the correct answer based on medical knowledge and textbooks. Do NOT blindly accept any answer key — verify it yourself.**
 
 Question: {question_text}
 Options:
 {options_str}
-Correct Answer: {correct_answer}
-Student Selected: {selected_answer} ({'CORRECT ✅' if is_correct else 'WRONG ❌'})
+Official Answer Key says: {correct_answer}
+Student Selected: {selected_answer} ({'CORRECT ✅' if is_correct else 'WRONG ❌'} according to answer key)
 {f'Subject: {subject}' if subject else ''}
 {f'Topic: {topic}' if topic else ''}
 {rag_context}
 
+INSTRUCTIONS:
+1. FIRST, independently determine the correct answer using your medical knowledge.
+2. If your answer DISAGREES with the official key, set "ai_verified_answer" to YOUR answer and "answer_mismatch" to true.
+3. If your answer AGREES with the official key, set "ai_verified_answer" to the same answer and "answer_mismatch" to false.
+
 You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
 {{
-  "why_correct": "4-5 line detailed explanation of why {correct_answer} is the right answer. Include mechanism/pathophysiology. Explain clearly as if teaching a student from scratch. Be thorough and include clinical reasoning.",
+  "ai_verified_answer": "The letter (A/B/C/D) YOU believe is correct based on medical knowledge",
+  "answer_mismatch": false,
+  "confidence_note": "If answer_mismatch is true, explain briefly WHY you disagree with the official key. If false, leave empty string.",
+  "why_correct": "4-5 line detailed explanation of why the ACTUALLY CORRECT answer is right. Include mechanism/pathophysiology. Explain clearly as if teaching a student from scratch. Be thorough and include clinical reasoning.",
   "why_wrong": {{ {', '.join([f'"{opt}": "2-3 lines: Why this is wrong, the key differentiator, and a quick trick to avoid picking this"' for opt in ['A','B','C','D'] if opt != correct_answer])} }},
   "textbook_reference": {{
     "book": "Name of standard textbook (Harrison/Ghai/Park/Bailey & Love/Dutta etc.)",

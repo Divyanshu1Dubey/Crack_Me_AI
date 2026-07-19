@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag, Target, Zap, GraduationCap, Lightbulb, Play } from 'lucide-react';
+import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, ChevronDown, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag, Target, Zap, GraduationCap, Lightbulb, Play } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import EngagingLoader from '@/components/EngagingLoader';
@@ -143,6 +143,7 @@ function QuestionsContent() {
     const [flagSubmitting, setFlagSubmitting] = useState(false);
     const [flagSuccess, setFlagSuccess] = useState(false);
     const [flagError, setFlagError] = useState<string | null>(null);
+    const [showAiDeepDive, setShowAiDeepDive] = useState(false);
 
     useEffect(() => {
         setContextQuestionId(selectedQuestion);
@@ -936,118 +937,140 @@ function QuestionsContent() {
                                                     )}
                                                 </div>
 
-                                                {/* 📖 Topic Deep Dive */}
-                                                {aiExplanation.topic_deep_dive && (
-                                                    <div className="explanation-card explanation-card-indigo">
-                                                        <div className="explanation-card-accent indigo"></div>
-                                                        <div className="p-4 pl-5">
-                                                            <h4 className="explanation-card-title indigo"><BookOpen className="w-4 h-4" /> 📖 Topic Deep Dive — Learn the Bigger Picture</h4>
-                                                            <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>{aiExplanation.topic_deep_dive}</p>
+                                                {/* 📚 Reference */}
+                                                {aiExplanation.textbook_reference?.book && (
+                                                    <div className="glass-card p-4 flex items-start gap-2.5">
+                                                        <Bookmark className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
+                                                        <div>
+                                                            <h6 className="text-xs font-bold mb-0.5" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
+                                                            <p className="text-xs font-semibold">{aiExplanation.textbook_reference.book}</p>
+                                                            {aiExplanation.textbook_reference.chapter && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Ch: {aiExplanation.textbook_reference.chapter}</p>}
+                                                            {aiExplanation.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {aiExplanation.textbook_reference.page}</p>}
                                                         </div>
                                                     </div>
                                                 )}
 
-                                                {/* ⚡ High Yield + ⚖️ Key Differentiators */}
-                                                {(aiExplanation.high_yield_points?.length > 0 || aiExplanation.key_differentiators?.length > 0) && (
-                                                    <div className="grid grid-cols-1 gap-3">
-                                                        {aiExplanation.high_yield_points?.length > 0 && (
-                                                            <div className="glass-card p-4">
-                                                                <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
-                                                                    <Zap className="w-3.5 h-3.5" /> ⚡ High Yield Points
-                                                                </h5>
-                                                                <ul className="space-y-2">
-                                                                    {aiExplanation.high_yield_points.map((point: string, i: number) => (
-                                                                        <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                                                            <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
-                                                                            <span>{point}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
+                                                {/* DEEP DIVE TOGGLE */}
+                                                {(aiExplanation.topic_deep_dive || aiExplanation.high_yield_points?.length > 0 || aiExplanation.key_differentiators?.length > 0 || aiExplanation.around_concepts?.length > 0 || aiExplanation.pyq_frequency || aiExplanation.similar_pyq || aiExplanation.clinical_pearl || aiExplanation.exam_tip || aiExplanation.quick_revision) && (
+                                                    <div className="mt-4">
+                                                        <button 
+                                                            onClick={() => setShowAiDeepDive(!showAiDeepDive)}
+                                                            className="flex items-center justify-between w-full p-3 glass-card hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                                            style={{ borderColor: 'rgba(99,102,241,0.3)' }}
+                                                        >
+                                                            <span className="font-bold text-sm flex items-center gap-2" style={{ color: '#6366f1' }}>
+                                                                <Brain className="w-4 h-4" /> Deep Dive & PYQ Analysis
+                                                            </span>
+                                                            {showAiDeepDive ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-indigo-500" />}
+                                                        </button>
+                                                        
+                                                        {showAiDeepDive && (
+                                                            <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 fade-in duration-200">
+                                                                {/* 📖 Topic Deep Dive */}
+                                                                {aiExplanation.topic_deep_dive && (
+                                                                    <div className="explanation-card explanation-card-indigo">
+                                                                        <div className="explanation-card-accent indigo"></div>
+                                                                        <div className="p-4 pl-5">
+                                                                            <h4 className="explanation-card-title indigo"><BookOpen className="w-4 h-4" /> 📖 Topic Deep Dive — Learn the Bigger Picture</h4>
+                                                                            <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>{aiExplanation.topic_deep_dive}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* ⚡ High Yield + ⚖️ Key Differentiators */}
+                                                                {(aiExplanation.high_yield_points?.length > 0 || aiExplanation.key_differentiators?.length > 0) && (
+                                                                    <div className="grid grid-cols-1 gap-3">
+                                                                        {aiExplanation.high_yield_points?.length > 0 && (
+                                                                            <div className="glass-card p-4">
+                                                                                <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
+                                                                                    <Zap className="w-3.5 h-3.5" /> ⚡ High Yield Points
+                                                                                </h5>
+                                                                                <ul className="space-y-2">
+                                                                                    {aiExplanation.high_yield_points.map((point: string, i: number) => (
+                                                                                        <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                                                                                            <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
+                                                                                            <span>{point}</span>
+                                                                                        </li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        )}
+                                                                        {aiExplanation.key_differentiators?.length > 0 && (
+                                                                            <div className="glass-card p-4">
+                                                                                <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+                                                                                    <ArrowRight className="w-3.5 h-3.5" /> ⚖️ Key Differentiators
+                                                                                </h5>
+                                                                                <ul className="space-y-2">
+                                                                                    {aiExplanation.key_differentiators.map((d: string, i: number) => (
+                                                                                        <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
+                                                                                            {d}
+                                                                                        </li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 💎 Pearl + 🎓 Exam Tip */}
+                                                                {(aiExplanation.clinical_pearl || aiExplanation.exam_tip) && (
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                                        {aiExplanation.clinical_pearl && (
+                                                                            <div className="glass-card p-3 flex items-start gap-2">
+                                                                                <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
+                                                                                <div>
+                                                                                    <h6 className="text-xs font-bold mb-0.5" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
+                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.clinical_pearl}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        {aiExplanation.exam_tip && (
+                                                                            <div className="glass-card p-3 flex items-start gap-2">
+                                                                                <GraduationCap className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
+                                                                                <div>
+                                                                                    <h6 className="text-xs font-bold mb-0.5" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
+                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.exam_tip}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 📝 Quick Revision */}
+                                                                {aiExplanation.quick_revision && (
+                                                                    <div className="quick-revision-card">
+                                                                        <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'var(--gradient-primary)' }}></div>
+                                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
+                                                                            <Lightbulb className="w-3.5 h-3.5" /> 📝 Quick Revision — Read Before Exam
+                                                                        </h5>
+                                                                        <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>{aiExplanation.quick_revision}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 🔗 Related Concepts */}
+                                                                {aiExplanation.around_concepts?.length > 0 && (
+                                                                    <div className="glass-card p-4">
+                                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#6366f1' }}>🔗 Related Concepts (Often Asked Together)</h5>
+                                                                        <div className="flex flex-wrap gap-1.5">
+                                                                            {aiExplanation.around_concepts.map((concept: string, i: number) => (
+                                                                                <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.15)' }}>{concept}</span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 📊 PYQ Intelligence */}
+                                                                {(aiExplanation.pyq_frequency || aiExplanation.similar_pyq) && (
+                                                                    <div className="glass-card p-4">
+                                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
+                                                                            <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
+                                                                        </h5>
+                                                                        {aiExplanation.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {aiExplanation.pyq_frequency}</p>}
+                                                                        {aiExplanation.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {aiExplanation.similar_pyq}</p>}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
-                                                        {aiExplanation.key_differentiators?.length > 0 && (
-                                                            <div className="glass-card p-4">
-                                                                <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                                                                    <ArrowRight className="w-3.5 h-3.5" /> ⚖️ Key Differentiators
-                                                                </h5>
-                                                                <ul className="space-y-2">
-                                                                    {aiExplanation.key_differentiators.map((d: string, i: number) => (
-                                                                        <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
-                                                                            {d}
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* 📚 Reference + 💎 Pearl + 🎓 Exam Tip */}
-                                                <div className="grid grid-cols-1 gap-3">
-                                                    {aiExplanation.textbook_reference?.book && (
-                                                        <div className="glass-card p-4 flex items-start gap-2.5">
-                                                            <Bookmark className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
-                                                            <div>
-                                                                <h6 className="text-xs font-bold mb-0.5" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
-                                                                <p className="text-xs font-semibold">{aiExplanation.textbook_reference.book}</p>
-                                                                {aiExplanation.textbook_reference.chapter && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Ch: {aiExplanation.textbook_reference.chapter}</p>}
-                                                                {aiExplanation.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {aiExplanation.textbook_reference.page}</p>}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {aiExplanation.clinical_pearl && (
-                                                            <div className="glass-card p-3 flex items-start gap-2">
-                                                                <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
-                                                                <div>
-                                                                    <h6 className="text-xs font-bold mb-0.5" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.clinical_pearl}</p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {aiExplanation.exam_tip && (
-                                                            <div className="glass-card p-3 flex items-start gap-2">
-                                                                <GraduationCap className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
-                                                                <div>
-                                                                    <h6 className="text-xs font-bold mb-0.5" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
-                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.exam_tip}</p>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* 📝 Quick Revision */}
-                                                {aiExplanation.quick_revision && (
-                                                    <div className="quick-revision-card">
-                                                        <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'var(--gradient-primary)' }}></div>
-                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
-                                                            <Lightbulb className="w-3.5 h-3.5" /> 📝 Quick Revision — Read Before Exam
-                                                        </h5>
-                                                        <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>{aiExplanation.quick_revision}</p>
-                                                    </div>
-                                                )}
-
-                                                {/* 🔗 Related Concepts */}
-                                                {aiExplanation.around_concepts?.length > 0 && (
-                                                    <div className="glass-card p-4">
-                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#6366f1' }}>🔗 Related Concepts (Often Asked Together)</h5>
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {aiExplanation.around_concepts.map((concept: string, i: number) => (
-                                                                <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.15)' }}>{concept}</span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* 📊 PYQ Intelligence */}
-                                                {(aiExplanation.pyq_frequency || aiExplanation.similar_pyq) && (
-                                                    <div className="glass-card p-4">
-                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
-                                                            <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
-                                                        </h5>
-                                                        {aiExplanation.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {aiExplanation.pyq_frequency}</p>}
-                                                        {aiExplanation.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {aiExplanation.similar_pyq}</p>}
                                                     </div>
                                                 )}
                                             </div>

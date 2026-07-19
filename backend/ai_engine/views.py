@@ -259,7 +259,19 @@ class ExplainAfterAnswerView(APIView):
                 db_question.concept_keywords = result.get('around_concepts', [])
                 db_question.ai_generated_at = timezone.now()
                 db_question.ai_model = 'RoundRobin-11'
-                db_question.ai_version = 'v1'
+                db_question.ai_version = 'v2-verify'
+                
+                # Auto-flag questions where AI disagrees with stored answer
+                ai_verified = result.get('ai_verified_answer', '').strip().upper()[:1]
+                answer_mismatch = result.get('answer_mismatch', False)
+                if answer_mismatch and ai_verified in ('A', 'B', 'C', 'D') and ai_verified != correct_answer:
+                    db_question.needs_review = True
+                    db_question.is_disputed = True
+                    logger.warning(
+                        f"ANSWER MISMATCH Q#{db_question.id}: DB says {correct_answer}, "
+                        f"AI says {ai_verified}. Reason: {result.get('confidence_note', 'N/A')[:200]}"
+                    )
+                
                 db_question.save()
                 
             return Response(result)
