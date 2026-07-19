@@ -940,7 +940,7 @@ body.sidebar-hidden .main-content {
 .formatted-text ol li {
   margin-bottom: 4px;
   line-height: 1.65;
-  list-style-type: upper-roman;
+  list-style-type: decimal;
 }
 .formatted-text em {
   font-style: italic;

@@ -19,7 +19,7 @@ export function FormattedText({ text, className = '' }: FormattedTextProps) {
     // remark-breaks handles newline -> <br> natively.
 
     return (
-        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
+        <div className={`formatted-text ${className}`}>
             <ReactMarkdown remarkPlugins={[remarkBreaks]}>{text}</ReactMarkdown>
         </div>
     );
