@@ -81,3 +81,19 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"[{self.role}] {self.content[:50]}..."
+
+class AIFeedback(models.Model):
+    """
+    Feedback on AI-generated responses from students (helpful / report).
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='feedback', null=True, blank=True)
+    query = models.TextField(help_text="The prompt or query sent to the AI")
+    response_text = models.TextField(help_text="The AI response that is being rated")
+    is_helpful = models.BooleanField(default=True)
+    report_reason = models.CharField(max_length=255, blank=True, help_text="Reason if reported (e.g. incorrect, inappropriate)")
+    comments = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{'Helpful' if self.is_helpful else 'Reported'} - {self.query[:30]}"

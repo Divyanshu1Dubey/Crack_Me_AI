@@ -96,6 +96,45 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                             "code": "device_limit_reached"
                         })
 
+            # Strict 1-device limit via session_key
+            if not user.session_key:
+                user.session_key = incoming_session_id
+                user.save(update_fields=['session_key'])
+            elif user.session_key != incoming_session_id:
+                # We have a mismatch. If this request comes from a DIFFERENT device, the older device is blocked.
+                # To prevent a deadlock where BOTH are blocked, we check the token's 'session_id' (which is the Supabase Session ID).
+                # But to keep it simple as requested: "invalidate the old session" -> we actually assume the current request
+                # is the NEW device if it recently logged in. Since we don't know which is newer without token decoding,
+                # we will just update session_key to the incoming_session_id if we want the NEW device to win, 
+                # but if we do that on every request it flaps.
+                # Better: decode JWT, extract 'session_id'. 
+                import jwt
+                try:
+                    payload = jwt.decode(token, options={"verify_signature": False})
+                    supa_session_id = payload.get('session_id')
+                    # We can use the Supabase session ID as the ultimate source of truth for "active device".
+                    # But since users share Supabase sessions (e.g. they login once and share the token), 
+                    # relying on `incoming_session_id` (frontend generated) is safer.
+                    pass
+                except Exception:
+                    pass
+                
+                # To strictly enforce 1 active device and block the old one:
+                # If they try to use an old device, their incoming_session_id != user.session_key.
+                # We raise AuthenticationFailed! But how do they ever login on a NEW device?
+                # On a NEW device, they must hit a login endpoint. But Supabase handles login on the frontend.
+                # So we allow the update ONLY if it's hitting a specific profile fetch endpoint, or we just reject the mismatch.
+                # For now, let's reject the mismatch, but allow it to update if they just logged in.
+                if request_obj.path == '/api/auth/profile/':
+                    user.session_key = incoming_session_id
+                    user.save(update_fields=['session_key'])
+                else:
+                    from rest_framework import exceptions
+                    raise exceptions.AuthenticationFailed({
+                        "detail": "You have been logged out because your account was accessed from another device.",
+                        "code": "concurrent_session"
+                    })
+
         return (user, None)
 
     def _fetch_supabase_user(self, token: str):

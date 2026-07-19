@@ -7,6 +7,7 @@ router.register(r'subjects', views.SubjectViewSet)
 router.register(r'topics', views.TopicViewSet)
 router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
+router.register(r'exam-tracks', views.ExamTrackViewSet, basename='examtrack')
 router.register(r'', views.QuestionViewSet, basename='question')
 
 # NOTE: Explicit paths must come BEFORE router.urls because the router's
@@ -24,6 +25,8 @@ urlpatterns = [
     path('discussions/<int:pk>/vote/', views.DiscussionVoteView.as_view(), name='discussion-vote'),
     path('discussions/<int:pk>/replies/', views.DiscussionRepliesView.as_view(), name='discussion-replies'),
     path('discussions/', views.DiscussionListCreateView.as_view(), name='discussion-list'),
+    # Chat AI Assistant
+    path('chat/', views.ChatAssistantView.as_view(), name='chat-assistant'),
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 ]

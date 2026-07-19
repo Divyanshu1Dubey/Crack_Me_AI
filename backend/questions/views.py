@@ -11,6 +11,7 @@ from django.core.files.storage import default_storage
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import viewsets, generics, permissions, status, filters
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -18,9 +19,9 @@ from django.db.models import Count, F, Max, Q, Value
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
 from .serializers import (
-    SubjectSerializer, TopicSerializer, AnnouncementSerializer,
+    SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
     QuestionUploadSerializer, BookmarkSerializer,
     QuestionFeedbackSerializer, DiscussionSerializer,
@@ -72,6 +73,13 @@ def _ensure_question_bank_loaded():
             logger.exception('Question bank bootstrap failed')
 
 
+class ExamTrackViewSet(viewsets.ReadOnlyModelViewSet):
+    """List and retrieve exam tracks."""
+    queryset = ExamTrack.objects.all()
+    serializer_class = ExamTrackSerializer
+    permission_classes = [permissions.AllowAny]
+
+
 class AnnouncementViewSet(viewsets.ModelViewSet):
     """ViewSet for Admin Notes / Announcements."""
     queryset = Announcement.objects.all()
@@ -112,7 +120,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     """Full CRUD for questions with filtering, search, and bookmark support."""
     queryset = Question.objects.select_related('subject', 'topic').all()
-    filterset_fields = ['year', 'subject', 'topic', 'difficulty', 'exam_type', 'is_verified_by_admin']
+    filterset_fields = ['year', 'subject', 'topic', 'difficulty', 'exam_type', 'is_verified_by_admin', 'is_scholarship_eligible', 'needs_review', 'is_controversial']
     search_fields = ['question_text', 'explanation', 'concept_tags']
     ordering_fields = ['year', 'difficulty', 'created_at']
 
@@ -1201,6 +1209,35 @@ class QuestionViewSet(viewsets.ModelViewSet):
         self._apply_revision_state(question, target.snapshot or {})
         return Response({'message': 'Question reverted to selected revision snapshot', 'question_id': question.id, 'revision_id': target.id})
 
+    @action(detail=True, methods=['post'], url_path='resolve-dispute')
+    def resolve_dispute(self, request, pk=None):
+        question = self.get_object()
+        corrected_answer = request.data.get('corrected_answer')
+        justification = request.data.get('justification')
+        
+        if not corrected_answer or not justification:
+            return Response({'error': 'Both corrected_answer and justification are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        old_answer = question.correct_answer
+        question.correct_answer = corrected_answer
+        question.is_disputed = False
+        question.save(update_fields=['correct_answer', 'is_disputed', 'updated_at'])
+
+        try:
+            from accounts.views import create_admin_audit_log
+            create_admin_audit_log(
+                actor=request.user,
+                action='RESOLVE_DISPUTE',
+                resource_type='Question',
+                resource_id=str(question.id),
+                detail=f"Resolved dispute. Changed answer from {old_answer} to {corrected_answer}",
+                metadata={'old_answer': old_answer, 'new_answer': corrected_answer, 'justification': justification}
+            )
+        except Exception as e:
+            logger.error(f"Failed to log dispute resolution: {e}")
+
+        return Response({'message': 'Dispute resolved successfully', 'new_answer': corrected_answer})
+
     def perform_create(self, serializer):
         self._normalize_question_payload(serializer.validated_data)
         serializer.save()
@@ -1518,3 +1555,39 @@ class FlashcardAnalyticsView(generics.GenericAPIView):
             },
         })
 
+class ChatAssistantView(APIView):
+    """
+    Handles unstructured queries from the Floating Ask-AI Dock.
+    Passes contextual question text if provided.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        message = request.data.get('message', '').strip()
+        context_question_id = request.data.get('context_question_id')
+
+        if not message:
+            return Response({"error": "Message is required."}, status=400)
+
+        # Build context if a question ID is provided
+        context_str = ""
+        if context_question_id:
+            try:
+                question = Question.objects.get(id=context_question_id)
+                context_str = f"Context Question: {question.question_text}\n"
+                context_str += f"A: {question.option_a}, B: {question.option_b}, C: {question.option_c}, D: {question.option_d}\n"
+                context_str += f"Correct Answer: {question.correct_answer}\n\n"
+            except Question.DoesNotExist:
+                pass
+
+        # Here we should invoke the RAG pipeline. For now, a placeholder that will be expanded in Task A.
+        # from ai_engine.rag_pipeline import generate_rag_response_sync
+        
+        try:
+            full_prompt = context_str + "User Query: " + message
+            # reply = generate_rag_response_sync(full_prompt)
+            # Placeholder until RAG is fully integrated
+            reply = f"AI Assistant received your message. (Integration pending RAG updates). Context size: {len(context_str)}"
+            return Response({"reply": reply})
+        except Exception as e:
+            return Response({"reply": f"AI Assistant error: {str(e)}"})

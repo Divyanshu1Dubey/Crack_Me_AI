@@ -41,6 +41,48 @@ const CAMPUS_MOMENTUM = [
     { name: 'Harsh V.', college: 'KGMU Lucknow', note: '58 weak topics fixed' },
 ] as const;
 
+const BonusTimerBanner = () => {
+    const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+
+    return (
+        <Card className="border-indigo-500/30 bg-linear-to-r from-indigo-500/10 via-purple-500/5 to-transparent shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none" />
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="space-y-1 flex-1">
+                    <h4 className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                        <Clock className="w-4 h-4 animate-pulse text-indigo-500" /> 
+                        Limited Time Bonus Offer!
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                        Give an exam right now to claim your bonus subscription. You have <span className="font-bold text-indigo-600 dark:text-indigo-400">{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span> remaining!
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                    <Link href="/tests">
+                        <Button size="sm" variant="neon" className="font-semibold">
+                            Give Exam Now
+                        </Button>
+                    </Link>
+                    <Link href="/subscription">
+                        <Button size="sm" variant="outline" className="font-semibold border-indigo-200 hover:bg-indigo-50 dark:border-indigo-900 dark:hover:bg-indigo-900/30">
+                            View Offers
+                        </Button>
+                    </Link>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 export default function DashboardPage() {
     const { user, loading: authLoading, isAuthenticated } = useAuth();
     const router = useRouter();
@@ -248,24 +290,7 @@ export default function DashboardPage() {
                 <div className="page-container space-y-6 pb-8">
                     {/* Premium Upgrade Banner */}
                     {!user?.is_subscribed && (
-                        <Card className="border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
-                            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold text-amber-500 flex items-center gap-1.5">
-                                        <Crown className="w-4 h-4" /> Claim Premium Pass — ₹129/mo (Unlock ₹79 rate via Scholarship!)
-                                    </h4>
-                                    <p className="text-xs text-muted-foreground">
-                                        Get complete access to NEET PG, UPSC CMS mock simulators, standard reference guides, and AI tutors.
-                                    </p>
-                                </div>
-                                <Link href="/subscription" className="shrink-0">
-                                    <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
-                                        View Subscription Offers
-                                    </Button>
-                                </Link>
-                            </CardContent>
-                        </Card>
+                        <BonusTimerBanner />
                     )}
 
                     {/* Announcements Feed */}

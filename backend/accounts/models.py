@@ -9,6 +9,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from questions.models import ExamTrack
 
 
 class CustomUser(AbstractUser):
@@ -20,9 +21,11 @@ class CustomUser(AbstractUser):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     phone = models.CharField(max_length=15, blank=True)
     college = models.CharField(max_length=200, blank=True, default='')
+    session_key = models.CharField(max_length=255, blank=True, null=True, help_text="Used to enforce single active session")
     profile_bonus_rewarded = models.BooleanField(default=False)
     is_subscribed = models.BooleanField(default=False)
     target_exam = models.CharField(max_length=50, default='UPSC CMS')
+    active_exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     target_year = models.IntegerField(null=True, blank=True)
     avatar_url = models.URLField(blank=True)
     current_session_id = models.CharField(max_length=255, blank=True, default='')

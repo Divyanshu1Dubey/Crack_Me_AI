@@ -20,6 +20,8 @@ import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, Loader2,
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import EngagingLoader from '@/components/EngagingLoader';
+import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
+import { useDock } from '@/context/DockContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,45 +29,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
-
-/**
- * Renders medical question text with proper formatting.
- * Converts raw markdown (bold, lists) into readable HTML.
- */
-function FormattedText({ text, className = '' }: { text: string; className?: string }) {
-    if (!text) return null;
-    const cleaned = text
-        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
-        .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')
-        .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
-        .replace(/\*\s+\(/g, '\n* (');
-    const markdownWithLineBreaks = cleaned
-        .split('\n')
-        .map(line => {
-            if (!line.trim()) return '&nbsp;  ';
-            if (line.endsWith('  ') || line.endsWith('\\')) return line;
-            return line + '  ';
-        })
-        .join('\n');
-    return (
-        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
-            <ReactMarkdown>{markdownWithLineBreaks}</ReactMarkdown>
-        </div>
-    );
-}
-
-/** Strips markdown symbols for plain-text previews (list cards, etc.) */
-function stripMarkdown(text: string): string {
-    return text
-        .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold** → bold
-        .replace(/\*([^*]+)\*/g, '$1')      // *italic* → italic
-        .replace(/\*+/g, '')                // leftover asterisks
-        .replace(/__(.+?)__/g, '$1')        // __underline__
-        .replace(/#+\s?/g, '')              // # headings
-        .replace(/`([^`]+)`/g, '$1')        // `code`
-        .replace(/\s{2,}/g, ' ')            // collapse whitespace
-        .trim();
-}
+import { FormattedText, stripMarkdown } from '@/components/FormattedText';
 
 /** Cleans option text — removes trailing asterisks/stars from PYQ data */
 function cleanOptionText(text: string): string {
@@ -146,6 +110,8 @@ export default function QuestionsPage() {
 
 function QuestionsContent() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const { activeTrack } = useExamTrack();
+    const { setContextQuestionId } = useDock();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [selectedExam, setSelectedExam] = useState<string>('cms');
@@ -177,6 +143,10 @@ function QuestionsContent() {
     const [flagSubmitting, setFlagSubmitting] = useState(false);
     const [flagSuccess, setFlagSuccess] = useState(false);
     const [flagError, setFlagError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setContextQuestionId(selectedQuestion);
+    }, [selectedQuestion, setContextQuestionId]);
 
     // Year selection modal states
     const [yearModalOpen, setYearModalOpen] = useState(false);
@@ -485,9 +455,9 @@ function QuestionsContent() {
     return (
         <div className="min-h-screen bg-background">
             <Sidebar />
-            <div className="main-content">
+            <div className="main-content lg:h-screen lg:overflow-hidden flex flex-col">
                 <Header />
-                <div className="page-container space-y-6 pb-8">
+                <div className="page-container space-y-4 pb-0 flex-1 flex flex-col min-h-0">
                 <p className="text-sm text-muted-foreground">
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
@@ -611,7 +581,7 @@ function QuestionsContent() {
                 </Card>
 
                 {/* Content */}
-                <div className="grid gap-6 lg:h-[calc(100dvh-220px)] lg:grid-cols-5">
+                <div className="grid gap-6 flex-1 min-h-0 lg:grid-cols-5">
                     {/* Question List */}
                     <div className="lg:col-span-2 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
                         <div className="space-y-3 px-1 py-0.5">

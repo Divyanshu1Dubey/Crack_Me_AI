@@ -398,3 +398,16 @@ Answer in a structured, student-friendly format."""
     def close(self):
         if self._conn:
             self._conn.close()
+
+
+def generate_rag_response_sync(prompt: str) -> str:
+    """Helper to instantiate pipeline and run RAG synchronously."""
+    try:
+        pipeline = RAGPipeline()
+        # rag_answer normally returns a dict with 'answer' and 'context_used'
+        res = pipeline.rag_answer(prompt, n_context=3)
+        pipeline.close()
+        return res.get('answer', str(res))
+    except Exception as e:
+        logger.error(f"RAG sync error: {e}")
+        return f"AI Assistant received your query but RAG failed: {e}"

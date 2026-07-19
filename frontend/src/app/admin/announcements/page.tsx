@@ -5,17 +5,23 @@ import { announcementsAPI } from '@/lib/api';
 
 export default function AdminAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     body: '',
-    target_exam_track: 'all',
+    exam_tracks: [] as number[],
   });
 
   const fetchAnnouncements = async () => {
     try {
       const res = await announcementsAPI.list();
-      setAnnouncements(res.data);
+      const data = res.data?.results || res.data || [];
+      setAnnouncements(Array.isArray(data) ? data : []);
+      // Quick fetch for tracks using generic API wrapper (or fetch directly)
+      const resTracks = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/exam-tracks/`);
+      const trackData = await resTracks.json();
+      setTracks(trackData?.results || trackData || []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -32,7 +38,7 @@ export default function AdminAnnouncementsPage() {
     try {
       await announcementsAPI.create(formData);
       fetchAnnouncements();
-      setFormData({ title: '', body: '', target_exam_track: 'all' });
+      setFormData({ title: '', body: '', exam_tracks: [] });
     } catch (error) {
       console.error(error);
       alert('Error creating announcement');
@@ -78,18 +84,21 @@ export default function AdminAnnouncementsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Target Exam Track</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Target Exam Tracks (Hold Ctrl/Cmd to select multiple)</label>
             <select
-              value={formData.target_exam_track}
-              onChange={(e) => setFormData({ ...formData, target_exam_track: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+              multiple
+              value={formData.exam_tracks.map(String)}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+                setFormData({ ...formData, exam_tracks: selected });
+              }}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-[100px]"
             >
-              <option value="all">All Students</option>
-              <option value="cms">UPSC CMS Only</option>
-              <option value="neet_pg">NEET PG Only</option>
-              <option value="usmle">USMLE Only</option>
-              <option value="fmge">FMGE Only</option>
+              {tracks.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
             </select>
+            <p className="text-xs text-gray-500 mt-1">Leave empty to target all students regardless of track.</p>
           </div>
           <button
             type="submit"

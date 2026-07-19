@@ -5,8 +5,13 @@ from .models import (
     Subject, Topic, Question, QuestionBookmark, QuestionFeedback, 
     Discussion, Note, Flashcard, QuestionImportJob, 
     QuestionExtractionItem, AdminAIPromptVersion, 
-    QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement
+    QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
 )
+
+class ExamTrackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamTrack
+        fields = '__all__'
 
 
 def _derive_subtitles_url(video_url: str) -> str:
@@ -148,7 +153,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review',
+            'id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review', 'is_disputed',
             'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'year', 'subject', 'subject_name', 'topic', 'topic_name',
             'difficulty', 'concept_tags', 'concept_id', 'explanation', 'concept_explanation',

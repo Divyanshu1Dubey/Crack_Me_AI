@@ -83,10 +83,10 @@ const FALLBACK_API_BASE_URL = USE_API_PROXY
 // Helper for generating page-session tracking ID
 const getOrCreateSessionId = (): string => {
   if (typeof window === 'undefined') return '';
-  let id = sessionStorage.getItem('crack_session_id');
+  let id = localStorage.getItem('crack_device_id');
   if (!id) {
-    id = 'sess_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-    sessionStorage.setItem('crack_session_id', id);
+    id = 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+    localStorage.setItem('crack_device_id', id);
   }
   return id;
 };

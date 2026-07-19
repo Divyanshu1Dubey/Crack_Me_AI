@@ -14,34 +14,7 @@ import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api
 import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
-
-/**
- * Renders medical question text with proper formatting.
- * Converts raw markdown (bold, lists, line breaks) into readable HTML.
- * Handles PYQ-style formatting: **bold**, * list items, Roman numerals.
- */
-function FormattedText({ text, className = '' }: { text: string; className?: string }) {
-    if (!text) return null;
-    // Clean up the text: normalize line breaks for markdown
-    const cleaned = text
-        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
-        .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')  // Ensure Roman numeral items start on new lines
-        .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')   // Codes section on new line
-        .replace(/\*\s+\(/g, '\n* (');                // Option items on new lines
-    const markdownWithLineBreaks = cleaned
-        .split('\n')
-        .map(line => {
-            if (!line.trim()) return '&nbsp;  ';
-            if (line.endsWith('  ') || line.endsWith('\\')) return line;
-            return line + '  ';
-        })
-        .join('\n');
-    return (
-        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
-            <ReactMarkdown>{markdownWithLineBreaks}</ReactMarkdown>
-        </div>
-    );
-}
+import { FormattedText } from '@/components/FormattedText';
 
 interface Question {
     id: number;

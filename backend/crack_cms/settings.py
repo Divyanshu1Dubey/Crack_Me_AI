@@ -107,6 +107,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'axes.middleware.AxesMiddleware',
+    'questions.middleware.RateLimitMiddleware',
     'crack_cms.cache_middleware.DisableApiCacheMiddleware',
     'accounts.middleware.UpdateLastSeenMiddleware',
 ]

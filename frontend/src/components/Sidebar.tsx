@@ -8,16 +8,18 @@ import { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
+import { useExamTrack } from '@/components/ExamTrackProvider';
 
 interface NavItem {
     href: string;
     iconName: string;
     label: string;
     adminOnly?: boolean;
+    requireTrack?: string[];
 }
 
 interface NavSection {
@@ -49,7 +51,7 @@ const navSections: NavSection[] = [
         items: [
             { href: '/resources', iconName: 'resources-folder', label: 'Resources' },
             { href: '/textbooks', iconName: 'textbooks-open-book', label: 'Textbooks' },
-            { href: '/jobs', iconName: 'briefcase', label: 'Jobs Portal' },
+            { href: '/jobs', iconName: 'briefcase', label: 'Jobs Portal', requireTrack: ['cms'] },
             { href: '/trends', iconName: 'trends-graph', label: 'Exam Trends' },
             { href: '/upload', iconName: 'upload-train', label: 'Upload & Train', adminOnly: true },
         ]
@@ -70,6 +72,7 @@ const navSections: NavSection[] = [
 export default function Sidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuth();
+    const { activeTrack } = useExamTrack();
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
@@ -173,6 +176,7 @@ export default function Sidebar() {
                                 <div className="space-y-0.5">
                                     {section.items
                                         .filter(item => !item.adminOnly || isAdmin)
+                                        .filter(item => !item.requireTrack || item.requireTrack.includes(activeTrack))
                                         .map((item) => {
                                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                                         return (
@@ -180,7 +184,8 @@ export default function Sidebar() {
                                                 <CustomIcon
                                                     name={item.iconName}
                                                     label={item.label}
-                                                    className="w-4.5 h-4.5 shrink-0"
+                                                    className="shrink-0"
+                                                    size={18}
                                                     variant={isActive ? 'active' : 'default'}
                                                 />
                                                 <span className="sidebar-label text-sm">{item.label}</span>
@@ -197,19 +202,19 @@ export default function Sidebar() {
                                 <div className="section-title sidebar-section-title mb-2">Admin</div>
                                 <div className="space-y-0.5">
                                     <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin' ? 'active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}>
-                                        <CustomIcon name="admin-shield" label="Admin Panel" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin' ? 'active' : 'default'} />
+                                        <ShieldAlert className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Admin Dashboard</span>
                                     </Link>
                                     <Link href="/admin/questions-editor" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/questions-editor' ? 'active' : ''}`}>
-                                        <CustomIcon name="question-mark" label="Q-Editor" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/questions-editor' ? 'active' : 'default'} />
+                                        <FileQuestion className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Questions Editor</span>
                                     </Link>
                                     <Link href="/admin/announcements" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/announcements' ? 'active' : ''}`}>
-                                        <CustomIcon name="medical-note" label="Notes" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/announcements' ? 'active' : 'default'} />
+                                        <Megaphone className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Announcements</span>
                                     </Link>
                                     <Link href="/admin/jobs" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/jobs' ? 'active' : ''}`}>
-                                        <CustomIcon name="medical-bag" label="Jobs" className="w-4.5 h-4.5 shrink-0" variant={pathname === '/admin/jobs' ? 'active' : 'default'} />
+                                        <Briefcase className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Manage Jobs</span>
                                     </Link>
                                 </div>
@@ -226,7 +231,7 @@ export default function Sidebar() {
                         <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Take one timed test daily and review your top 3 weak tags.</p>
                     </div>
                     <button onClick={handleLogout} className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <CustomIcon name="logout-exit" label="Sign Out" className="w-4.5 h-4.5" variant="active" />
+                        <LogOut className="w-5 h-5 shrink-0" />
                         <span className="sidebar-label text-sm">Sign Out</span>
                     </button>
                 </div>

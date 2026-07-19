@@ -644,3 +644,28 @@ class ChatMessageCreateView(APIView):
         session.save()
 
         return Response(ChatMessageSerializer(message).data, status=201)
+
+class AIFeedbackView(APIView):
+    """
+    Handle user feedback on AI responses.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .models import AIFeedback
+        query = request.data.get('query', '')
+        response_text = request.data.get('response_text', '')
+        is_helpful = request.data.get('is_helpful', True)
+        report_reason = request.data.get('report_reason', '')
+        comments = request.data.get('comments', '')
+
+        AIFeedback.objects.create(
+            user=request.user,
+            query=query,
+            response_text=response_text,
+            is_helpful=is_helpful,
+            report_reason=report_reason,
+            comments=comments
+        )
+
+        return Response({"status": "Feedback recorded."})

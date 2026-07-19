@@ -19,25 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-
-function FormattedText({ text, className = '' }: { text: string; className?: string }) {
-    if (!text) return null;
-    const cleaned = text
-        .replace(/^\s*\d+\.\s*/, '') // Strip leading scraped question numbers like "26. "
-        .replace(/\*\s+(?=[IVXLC]+\.\s)/g, '\n* ')
-        .replace(/\*\s*\*\*Codes/g, '\n\n**Codes')
-        .replace(/\*\s+\(/g, '\n* (');
-    const md = cleaned.split('\n').map(line => {
-        if (!line.trim()) return '&nbsp;  ';
-        if (line.endsWith('  ') || line.endsWith('\\')) return line;
-        return line + '  ';
-    }).join('\n');
-    return (
-        <div className={`formatted-text ${className}`} style={{ whiteSpace: 'pre-wrap' }}>
-            <ReactMarkdown>{md}</ReactMarkdown>
-        </div>
-    );
-}
+import { FormattedText } from '@/components/FormattedText';
 
 function cleanOptionText(text: string): string {
     return text.replace(/\s*\*+\s*$/, '').trim();

@@ -49,8 +49,8 @@ def generate_video(modeladmin, request, queryset):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'video_status', 'video_duration', 'ai_generated_at']
-    list_filter = ['year', 'subject', 'video_status', 'difficulty']
+    list_display = ['id', 'year', 'subject', 'topic', 'difficulty', 'is_scholarship_eligible', 'needs_review']
+    list_filter = ['year', 'subject', 'is_scholarship_eligible', 'is_controversial', 'needs_review', 'difficulty']
     search_fields = ['question_text', 'explanation']
     filter_horizontal = ['similar_questions']
     readonly_fields = ['created_at', 'updated_at', 'ai_generated_at', 'video_generated_at', 'video_version', 'video_error']
@@ -95,7 +95,7 @@ class QuestionAdmin(admin.ModelAdmin):
 
         ('Meta', {
 
-            'fields': ('is_active', 'times_asked', 'created_at', 'updated_at')
+            'fields': ('is_active', 'is_scholarship_eligible', 'is_controversial', 'needs_review', 'times_asked', 'created_at', 'updated_at')
 
         }),
 

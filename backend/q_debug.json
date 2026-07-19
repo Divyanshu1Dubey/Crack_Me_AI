@@ -1,0 +1,88 @@
+[
+    {
+        "id": 5830,
+        "text": "The most sensitive indicator of environmental iodine deficiency is:",
+        "A": "Prevalence of goitre",
+        "B": "Prevalence of neonatal hypothyroidism",
+        "C": "Prevalence of cretinism",
+        "D": "Urinary iodine excretion",
+        "correct": "B",
+        "explanation": "Urinary iodine excretion is the most sensitive indicator of environmental iodine deficiency as it directly reflects recent dietary iodine intake and is measurable in population surveys."
+    },
+    {
+        "id": 6751,
+        "text": "An 18 year old unmarried girl comes with complaints of heavy, prolonged bleeding during menses. Which among the following investigations is NOT usually advised?",
+        "A": "Urine pregnancy test",
+        "B": "Ultrasound uterus and adnexa",
+        "C": "Coagulation profile",
+        "D": "Dilatation and curettage",
+        "correct": "D",
+        "explanation": "Dilatation and curettage (D&C) is not usually advised as a first-line investigation for heavy, prolonged menstrual bleeding in an 18-year-old unmarried girl. It is an invasive procedure and is typically reserved for cases where other investigations are inconclusive or when there is a need to obtain tissue for histopathological examination. Urine pregnancy test, ultrasound, and coagulation profile are non-invasive and provide valuable initial information."
+    },
+    {
+        "id": 5552,
+        "text": "Which of the following are characteristics of Trichomonas vaginitis?\n1. Presence of greenish frothy discharge\n2. Vaginal pH > 4.5\n3. Presence of clue cells in microscopic examination\n4. Strawberry spots on the vaginal mucosa\nSelect the correct answer using the code given below:",
+        "A": "1, 2 and 3",
+        "B": "1, 2 and 4",
+        "C": "2, 3 and 4",
+        "D": "1, 3 and 4",
+        "correct": "B",
+        "explanation": "Trichomonas vaginitis is characterized by greenish frothy discharge (1), vaginal pH > 4.5 (2), and strawberry spots on the vaginal mucosa (4). Clue cells are seen in bacterial vaginosis, not trichomoniasis (3 is incorrect)."
+    },
+    {
+        "id": 1161,
+        "error": "Not found"
+    },
+    {
+        "id": 6273,
+        "error": "Not found"
+    },
+    {
+        "id": 4106,
+        "error": "Not found"
+    },
+    {
+        "id": 6530,
+        "text": "Which one of the following regarding amniotic fluid is true?",
+        "A": "The volume is highest at 28 weeks",
+        "B": "It reveals information about fetal lung maturity and wellbeing",
+        "C": "It is decreased in duodenal atresia in baby",
+        "D": "It is  decreased in gestational diabetes",
+        "correct": "B",
+        "explanation": "Amniotic fluid analysis (e.g., L/S ratio, phosphatidylglycerol) provides critical information about fetal lung maturity and overall fetal wellbeing."
+    },
+    {
+        "id": 6289,
+        "error": "Not found"
+    },
+    {
+        "id": 6702,
+        "text": "Which of the following drugs is NOT included in the management of Attention Deficit \nHyperactivity disorder?",
+        "A": "Amphetamine",
+        "B": "Atomoxetine",
+        "C": "Methylphenidate",
+        "D": "Trientine",
+        "correct": "D",
+        "explanation": "Trientine is a chelating agent used primarily in the treatment of Wilson's disease, not ADHD. Amphetamine, Atomoxetine, and Methylphenidate are commonly used in the management of ADHD."
+    },
+    {
+        "id": 6450,
+        "text": "Which of the following statements regarding HPV (Human Papilloma Virus) vaccine is NOT \ntrue? \nnot sexually active",
+        "A": "It can be safely administered in pregnancy",
+        "B": "The recommended age for initiation of vaccination is 10\u201312 years",
+        "C": "Catch up vaccination may be permitted up to 26 years of age, provided the woman is",
+        "D": "The vaccine is administered intramuscularly in deltoid region",
+        "correct": "",
+        "explanation": ""
+    },
+    {
+        "id": 6054,
+        "text": "Which one of the following treatments is considered as Gold standard for brucellosis in adults?",
+        "A": "Streptomycin and Doxycycline",
+        "B": "Azithromycin and Rifampin",
+        "C": "Trimethoprim and Sulfamethoxazole",
+        "D": "Amikacin and Ciprofloxacin",
+        "correct": "A",
+        "explanation": "The gold standard treatment for brucellosis in adults is a combination of Streptomycin and Doxycycline, as this regimen has been shown to be highly effective in treating the disease and preventing relapse."
+    }
+]

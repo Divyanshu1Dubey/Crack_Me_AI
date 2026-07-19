@@ -11,6 +11,10 @@ import DatadogInit from "@/components/DatadogInit";
 import TrafficAnalytics from "@/components/TrafficAnalytics";
 import StickyExamCta from "@/components/StickyExamCta";
 import PWAProvider from "@/components/PWAProvider";
+import { ExamTrackProvider } from "@/components/ExamTrackProvider";
+import { WatermarkOverlay } from "@/components/WatermarkOverlay";
+import { DockProvider } from "@/context/DockContext";
+import { FloatingDock } from "@/components/FloatingDock";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
@@ -295,13 +299,19 @@ export default function RootLayout({
           <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
             <TooltipProvider>
               <AuthProvider>
-                <DatadogInit />
-                <Suspense fallback={null}>
-                  <TrafficAnalytics />
-                </Suspense>
-                <BackendWarmup />
-                <main id="main-content">{children}</main>
-                <StickyExamCta />
+                <ExamTrackProvider>
+                  <DockProvider>
+                    <DatadogInit />
+                    <Suspense fallback={null}>
+                      <TrafficAnalytics />
+                    </Suspense>
+                    <BackendWarmup />
+                    <main id="main-content">{children}</main>
+                    <FloatingDock />
+                    <WatermarkOverlay />
+                    <StickyExamCta />
+                  </DockProvider>
+                </ExamTrackProvider>
               </AuthProvider>
             </TooltipProvider>
           </ThemeProvider>

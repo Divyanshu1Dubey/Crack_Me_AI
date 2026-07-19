@@ -15,7 +15,7 @@ class JobSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'hospital', 'location', 'category', 'category_name',
             'description', 'salary', 'apply_link', 'posted_at', 'expires_at',
-            'is_active', 'is_bookmarked'
+            'is_active', 'is_bookmarked', 'eligibility_summary', 'exam_track_tags', 'exam_tracks', 'admin_edited'
         ]
 
     def get_is_bookmarked(self, obj):

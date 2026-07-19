@@ -4,6 +4,33 @@ from django.db import models
 from django.conf import settings
 
 
+class ExamTrack(models.Model):
+    """
+    Core Exam Track model (e.g. UPSC CMS, NEET PG, USMLE, FMGE).
+    Drives theme context, eligibility, and job filtering across the platform.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. UPSC CMS")
+    code = models.CharField(max_length=20, unique=True, help_text="e.g. cms, neet_pg")
+    conducting_body = models.CharField(max_length=100, blank=True)
+    notification_date = models.DateField(null=True, blank=True)
+    application_start = models.DateField(null=True, blank=True)
+    application_end = models.DateField(null=True, blank=True)
+    exam_date = models.DateField(null=True, blank=True)
+    admit_card_date = models.DateField(null=True, blank=True)
+    result_date = models.DateField(null=True, blank=True)
+    vacancies = models.CharField(max_length=100, blank=True)
+    exam_pattern_summary = models.TextField(blank=True)
+    eligibility_summary = models.TextField(blank=True)
+    source_url = models.URLField(max_length=500, blank=True)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return self.name
+
+
 class Subject(models.Model):
     """Medical subjects like Medicine, Surgery, PSM, OBG, Pediatrics."""
     EXAM_CHOICES = [
@@ -16,6 +43,7 @@ class Subject(models.Model):
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=10, unique=True)
     exam_type = models.CharField(max_length=20, choices=EXAM_CHOICES, default='cms', help_text='Target exam for this subject')
+    exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
     paper = models.IntegerField(
         choices=[(1, 'Paper 1'), (2, 'Paper 2')],
         default=1,
@@ -35,6 +63,7 @@ class Subject(models.Model):
 class Topic(models.Model):
     """Topics within a subject, e.g., Nephrology under Medicine."""
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='topics')
+    exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='topics')
     name = models.CharField(max_length=200)
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subtopics')
     importance = models.IntegerField(
@@ -67,6 +96,7 @@ class Question(models.Model):
 
     # Core fields
     exam_type = models.CharField(max_length=20, choices=EXAM_CHOICES, default='cms')
+    exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='questions')
     question_text = models.TextField()
     option_a = models.TextField()
     option_b = models.TextField()
@@ -109,6 +139,11 @@ class Question(models.Model):
     is_dropped = models.BooleanField(default=False, help_text='Dropped/disputed question excluded from scoring')
     admin_edited = models.BooleanField(default=False, help_text='Flag to protect from seed script overwrites')
     needs_review = models.BooleanField(default=False, help_text='Flag for partially digitized or disputed PYQs')
+    
+    # Scholarship/Review Flags
+    is_scholarship_eligible = models.BooleanField(default=False, help_text='Eligible for scholarship test (balanced, verified)')
+    is_controversial = models.BooleanField(default=False, help_text='Flag for questions with ambiguous/controversial answers')
+    is_disputed = models.BooleanField(default=False, help_text='Answer key disputed by students or flagged for review')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -559,6 +594,7 @@ class Announcement(models.Model):
     title = models.CharField(max_length=200)
     body = models.TextField(help_text="Rich text content of the announcement")
     target_exam_track = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='all')
+    exam_tracks = models.ManyToManyField(ExamTrack, blank=True, related_name='announcements', help_text="Target exam tracks")
     target_users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, help_text="Specific users to see this (overrides exam track)")
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

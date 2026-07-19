@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from questions.models import ExamTrack
 
 class JobCategory(models.Model):
     name = models.CharField(max_length=100)
@@ -23,6 +24,7 @@ class Job(models.Model):
     # New fields for 6-Task Architecture Upgrade
     eligibility_summary = models.TextField(blank=True, help_text="Short summary of eligibility criteria")
     exam_track_tags = models.JSONField(default=list, blank=True, help_text="List of exam tracks (e.g. ['cms', 'neet_pg'])")
+    exam_tracks = models.ManyToManyField(ExamTrack, blank=True, related_name='jobs', help_text="Target exam tracks")
     admin_edited = models.BooleanField(default=False, help_text="Flag to protect from automated overwrite")
 
     def __str__(self):

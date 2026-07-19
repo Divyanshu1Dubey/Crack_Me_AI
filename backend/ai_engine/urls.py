@@ -34,4 +34,5 @@ urlpatterns = [
     path('chat/sessions/<int:pk>/', views.ChatSessionDetailView.as_view(), name='chat-session-detail'),
     path('chat/sessions/<int:session_id>/messages/', views.ChatMessageListView.as_view(), name='chat-messages'),
     path('chat/sessions/<int:session_id>/messages/add/', views.ChatMessageCreateView.as_view(), name='chat-message-add'),
+    path('feedback/', views.AIFeedbackView.as_view(), name='ai-feedback'),
 ]

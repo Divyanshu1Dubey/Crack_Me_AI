@@ -77,91 +77,17 @@ export default function SubscriptionPage() {
         setCurrentQuestionIdx(0);
 
         try {
-            const allQuestions = [
-                {
-                    id: 9901,
-                    question_text: "Which cranial nerve is responsible for the motor innervation of the muscles of mastication?",
-                    option_a: "Trigeminal nerve (CN V)",
-                    option_b: "Facial nerve (CN VII)",
-                    option_c: "Glossopharyngeal nerve (CN IX)",
-                    option_d: "Hypoglossal nerve (CN XII)",
-                },
-                {
-                    id: 9902,
-                    question_text: "A 4-year-old child presents with high fever, barking cough, and inspiratory stridor. X-ray of the neck shows subglottic narrowing (steeple sign). What is the diagnosis?",
-                    option_a: "Acute epiglottitis",
-                    option_b: "Croup (Laryngotrachobronchitis)",
-                    option_c: "Foreign body aspiration",
-                    option_d: "Retropharyngeal abscess",
-                },
-                {
-                    id: 9903,
-                    question_text: "Which enzyme is deficient in Gaucher's disease?",
-                    option_a: "Hexosaminidase A",
-                    option_b: "Glucocerebrosidase",
-                    option_c: "Alpha-galactosidase A",
-                    option_d: "Sphingomyelinase",
-                },
-                {
-                    id: 9904,
-                    question_text: "The primary auditory cortex is located in which lobe of the brain?",
-                    option_a: "Frontal lobe",
-                    option_b: "Parietal lobe",
-                    option_c: "Temporal lobe",
-                    option_d: "Occipital lobe",
-                },
-                {
-                    id: 9905,
-                    question_text: "Which of the following is a loop diuretic?",
-                    option_a: "Spironolactone",
-                    option_b: "Furosemide",
-                    option_c: "Hydrochlorothiazide",
-                    option_d: "Acetazolamide",
-                },
-                {
-                    id: 9906,
-                    question_text: "Which vitamin deficiency classically causes scurvy?",
-                    option_a: "Vitamin A",
-                    option_b: "Vitamin B12",
-                    option_c: "Vitamin C",
-                    option_d: "Vitamin D",
-                },
-                {
-                    id: 9907,
-                    question_text: "What is the most common cause of community-acquired pneumonia?",
-                    option_a: "Haemophilus influenzae",
-                    option_b: "Streptococcus pneumoniae",
-                    option_c: "Mycoplasma pneumoniae",
-                    option_d: "Staphylococcus aureus",
-                },
-                {
-                    id: 9908,
-                    question_text: "Which of the following is a classic symptom of diabetes mellitus?",
-                    option_a: "Polyuria",
-                    option_b: "Bradycardia",
-                    option_c: "Anorexia",
-                    option_d: "Hypothermia",
-                },
-                {
-                    id: 9909,
-                    question_text: "What is the primary function of red blood cells?",
-                    option_a: "Immune defense",
-                    option_b: "Oxygen transport",
-                    option_c: "Blood clotting",
-                    option_d: "Digestion",
-                },
-                {
-                    id: 9910,
-                    question_text: "Which organ primarily produces insulin?",
-                    option_a: "Liver",
-                    option_b: "Gallbladder",
-                    option_c: "Pancreas",
-                    option_d: "Spleen",
-                }
-            ];
+            // Fetch eligible questions for scholarship test
+            const res = await questionsAPI.list({ is_scholarship_eligible: 'true', limit: 50 });
+            let allQuestions = res.data?.results || res.data || [];
+            
+            if (allQuestions.length === 0) {
+                console.warn("No scholarship eligible questions found. Please flag some in admin panel.");
+                allQuestions = []; 
+            }
             
             // Shuffle and pick 5
-            const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+            const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
             setScholarshipQuestions(shuffled.slice(0, 5));
         } catch (err) {
             console.error('Failed to load scholarship questions:', err);
