@@ -5,8 +5,8 @@ from .models import AdminAuditLog, CustomUser, TokenBalance, TokenConfig, TokenT
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ['username', 'email', 'role', 'target_exam', 'is_active']
-    list_filter = ['role', 'target_exam', 'is_active']
+    list_display = ['username', 'email', 'role', 'target_exam', 'is_subscribed', 'scholarship_test_attempts', 'scholarship_test_passed', 'is_active']
+    list_filter = ['role', 'target_exam', 'is_subscribed', 'scholarship_test_passed', 'is_active']
     fieldsets = UserAdmin.fieldsets + (
         ('CMS Profile', {'fields': ('role', 'phone', 'target_exam', 'target_year', 'avatar_url')}),
     )

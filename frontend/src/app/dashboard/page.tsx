@@ -54,26 +54,26 @@ const BonusTimerBanner = () => {
     const seconds = timeLeft % 60;
 
     return (
-        <Card className="border-indigo-500/30 bg-linear-to-r from-indigo-500/10 via-purple-500/5 to-transparent shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none" />
+        <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
+            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
             <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="space-y-1 flex-1">
-                    <h4 className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
-                        <Clock className="w-4 h-4 animate-pulse text-indigo-500" /> 
+                    <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                        <Clock className="w-4 h-4 animate-pulse text-amber-500" /> 
                         Limited Time Bonus Offer!
                     </h4>
                     <p className="text-xs text-muted-foreground">
-                        Give an exam right now to claim your bonus subscription. You have <span className="font-bold text-indigo-600 dark:text-indigo-400">{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span> remaining!
+                        Give an exam right now to claim your bonus subscription. You have <span className="font-bold text-amber-600 dark:text-amber-400">{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span> remaining!
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2 shrink-0">
                     <Link href="/tests">
-                        <Button size="sm" variant="neon" className="font-semibold">
+                        <Button size="sm" className="font-semibold bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white shadow-lg shadow-amber-500/20 border-0">
                             Give Exam Now
                         </Button>
                     </Link>
                     <Link href="/subscription">
-                        <Button size="sm" variant="outline" className="font-semibold border-indigo-200 hover:bg-indigo-50 dark:border-indigo-900 dark:hover:bg-indigo-900/30">
+                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                             View Offers
                         </Button>
                     </Link>
@@ -289,9 +289,7 @@ export default function DashboardPage() {
                 <Header />
                 <div className="page-container space-y-6 pb-8">
                     {/* Premium Upgrade Banner */}
-                    {!user?.is_subscribed && (
-                        <BonusTimerBanner />
-                    )}
+                    <BonusTimerBanner />
 
                     {/* Announcements Feed */}
                     {announcements.length > 0 && (
