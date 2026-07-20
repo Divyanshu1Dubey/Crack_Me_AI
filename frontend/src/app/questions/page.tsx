@@ -492,8 +492,9 @@ function QuestionsContent() {
                                         <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2" />
                                     </div>
                                     <button 
-                                        onClick={() => setShowStatsDetail(!showStatsDetail)}
-                                        className="btn-secondary text-[11px] font-bold py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shrink-0 border border-border/80"
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); setShowStatsDetail(prev => !prev); }}
+                                        className="btn-secondary text-[11px] font-bold py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shrink-0 border border-border/80 relative z-10"
                                     >
                                         {showStatsDetail ? 'Hide Year Stats' : 'Show Year Stats'}
                                     </button>
@@ -510,7 +511,9 @@ function QuestionsContent() {
                                     return (
                                         <button
                                             key={item.year}
-                                            onClick={() => {
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
                                                 if (isSelected) {
                                                     setSelectedYear('');
                                                 } else {
