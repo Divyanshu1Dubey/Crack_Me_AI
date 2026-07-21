@@ -1014,6 +1014,74 @@ body.sidebar-hidden .main-content {
 [data-theme="dark"] .ai-tag-green { color: #6ee7b7; }
 
 /* ==========================================
+   Legal / Long-form content typography
+   Hand-styled (no @tailwindcss/typography) so headings, lists,
+   blockquotes and tables render correctly in light + dark.
+   ========================================== */
+.legal-content h2 {
+  margin: 2.25rem 0 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+  scroll-margin-top: 5rem;
+}
+.legal-content h3 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+.legal-content p {
+  margin: 0.85rem 0;
+  line-height: 1.75;
+  color: var(--color-foreground);
+}
+.legal-content ul,
+.legal-content ol {
+  margin: 0.75rem 0 0.75rem 1.25rem;
+  padding: 0;
+  color: var(--color-foreground);
+}
+.legal-content ul { list-style: disc; }
+.legal-content ol { list-style: decimal; }
+.legal-content li { margin: 0.4rem 0; line-height: 1.7; }
+.legal-content strong { color: var(--color-foreground); font-weight: 700; }
+.legal-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.legal-content blockquote {
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-accent);
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.legal-content hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 2rem 0;
+}
+.legal-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+.legal-content th,
+.legal-content td {
+  border: 1px solid var(--color-border);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+}
+.legal-content th {
+  background: var(--color-muted);
+  font-weight: 700;
+}
+
+/* ==========================================
    Question Bank Mobile Reorder
    On mobile, when a question is selected the detail card should sit
    AT THE TOP of the scroll, with the question list below it (so

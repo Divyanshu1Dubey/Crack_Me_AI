@@ -15,6 +15,7 @@ import { ExamTrackProvider } from "@/components/ExamTrackProvider";
 import { WatermarkOverlay } from "@/components/WatermarkOverlay";
 import { DockProvider } from "@/context/DockContext";
 import { FloatingDock } from "@/components/FloatingDock";
+import Footer from "@/components/Footer";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
@@ -48,6 +49,9 @@ export const metadata: Metadata = {
     canonical: "/",
     languages: {
       "en-IN": "/",
+      "en-US": "/",
+      "en-GB": "/",
+      "x-default": "/",
     },
   },
   applicationName: siteName,
@@ -312,6 +316,7 @@ export default function RootLayout({
                     </Suspense>
                     <BackendWarmup />
                     <main id="main-content">{children}</main>
+                    <Footer />
                     <FloatingDock />
                     <WatermarkOverlay />
                     <StickyExamCta />
