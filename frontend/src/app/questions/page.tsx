@@ -32,6 +32,43 @@ import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB } from '@/lib/textCleanup';
 
+/** Map frontend URL slugs → DB enums + human labels.
+ *  The Question model has TWO independent fields:
+ *    - `exam_type`  : CharField enum ('cms' | 'neet_pg' | 'usmle' | 'fmge')
+ *    - `exam_source`: CharField free text ('UPSC CMS' | 'NEET PG' | ...)
+ *  Frontend state holds the URL slug (e.g. 'neet-pg'). Two helpers convert:
+ *    - `slugToExamType(slug)` → enum string sent to /questions/ (filterset_field)
+ *    - `slugToExamSource(slug)` → label sent to /questions/stats/
+ *  Without these, `exam_type=neet-pg` is ignored (mixed exams) and
+ *  `exam_source=neet-pg` matches zero rows (0 years shown).
+ */
+const SLUG_TO_EXAM_TYPE: Record<string, string> = {
+    'cms': 'cms',
+    'neet-pg': 'neet_pg',
+    'neet_pg': 'neet_pg',
+    'ini-cet': 'cms',         // INI-CET falls back to cms enum (no row in DB yet)
+    'inicet': 'cms',
+    'fmge': 'fmge',
+    'usmle': 'usmle',
+    'medical-officer': 'cms', // same fallback
+};
+const SLUG_TO_EXAM_SOURCE: Record<string, string> = {
+    'cms': 'UPSC CMS',
+    'neet-pg': 'NEET PG',
+    'neet_pg': 'NEET PG',
+    'ini-cet': 'INI-CET',
+    'inicet': 'INI-CET',
+    'fmge': 'FMGE',
+    'usmle': 'USMLE',
+    'medical-officer': 'Medical Officer',
+};
+function slugToExamType(slug: string): string | undefined {
+    return SLUG_TO_EXAM_TYPE[slug];
+}
+function slugToExamSource(slug: string): string | undefined {
+    return SLUG_TO_EXAM_SOURCE[slug];
+}
+
 /** Small color-swatch chip used inside the exam-mode palette legend. */
 function LegendChip({ color, label }: { color: string; label: string }) {
     return (
@@ -274,11 +311,13 @@ function QuestionsContent() {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
             setListError(null);
+            const initialExamType = slugToExamType(selectedExam) || selectedExam;
+            const initialExamSource = slugToExamSource(selectedExam) || selectedExam;
             Promise.all([
-                questionsAPI.list({ page: 1, page_size: pageSize, exam_source: selectedExam }),
+                questionsAPI.list({ page: 1, page_size: pageSize, exam_type: initialExamType }),
                 questionsAPI.getSubjects(),
                 questionsAPI.getYears(),
-                questionsAPI.getStats({ exam_source: selectedExam }),
+                questionsAPI.getStats({ exam_source: initialExamSource }),
             ]).then(([qRes, sRes, yRes, statsRes]) => {
                 const qData = qRes.data;
                 setQuestions(qData.results || qData || []);
@@ -329,7 +368,8 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_type = selectedExam;
+        const examType = slugToExamType(selectedExam);
+        if (examType) params.exam_type = examType;
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,7 +382,8 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_type = selectedExam;
+        const examType = slugToExamType(selectedExam);
+        if (examType) params.exam_type = examType;
         fetchQuestions(params);
     };
 
@@ -362,7 +403,8 @@ function QuestionsContent() {
         if (selectedSubject) params.subject = selectedSubject;
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_type = selectedExam;
+        const examType = slugToExamType(selectedExam);
+        if (examType) params.exam_type = examType;
 
         setExamQuestionsLoading(true);
         const collected: Question[] = [];
@@ -512,7 +554,8 @@ function QuestionsContent() {
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
         if (selectedYear) params.year = selectedYear;
         if (searchQuery) params.search = searchQuery;
-        if (selectedExam) params.exam_type = selectedExam;
+        const examType = slugToExamType(selectedExam);
+        if (examType) params.exam_type = examType;
         setPage(1);
         fetchQuestions(params);
     };

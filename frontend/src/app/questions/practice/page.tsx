@@ -22,6 +22,23 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
+// Maps frontend URL slug → backend `exam_type` enum. Mirrors the table in
+// /questions/page.tsx so practice and bank views filter the same way.
+const PRACTICE_SLUG_TO_EXAM_TYPE: Record<string, string> = {
+    'cms': 'cms',
+    'neet-pg': 'neet_pg',
+    'neet_pg': 'neet_pg',
+    'ini-cet': 'cms',         // no INI-CET rows in DB yet — fall back to cms
+    'inicet': 'cms',
+    'fmge': 'fmge',
+    'usmle': 'usmle',
+    'medical-officer': 'cms',
+};
+function practiceSlugToExamType(slug: string | null): string | undefined {
+    if (!slug) return undefined;
+    return PRACTICE_SLUG_TO_EXAM_TYPE[slug];
+}
+
 export default function PracticePage() {
     return (
         <Suspense fallback={
@@ -68,7 +85,8 @@ function PracticeContent() {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (!year) { router.push('/questions'); return; }
         if (isAuthenticated && year) {
-            questionsAPI.list({ year, exam_type: examParam, page_size: 200 }).then(res => {
+            const resolvedExamType = practiceSlugToExamType(examParam) || examParam;
+            questionsAPI.list({ year, exam_type: resolvedExamType, page_size: 200 }).then(res => {
                 const qs = res.data.results || res.data || [];
                 setQuestions(qs);
             }).catch(() => {

@@ -804,23 +804,75 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='stats')
     def question_stats(self, request):
-        """Return question count statistics by subject, year, difficulty with user progress."""
+        """Return question count statistics by subject, year, difficulty with user progress.
+
+        Accepts either:
+          - ``exam_source`` (full DB label, e.g. ``"UPSC CMS"``, ``"NEET PG"``) — direct match
+          - ``exam_type``   (enum slug, e.g. ``"cms"``, ``"neet_pg"``)        — mapped
+          - ``exam``        (URL slug,  e.g. ``"cms"``, ``"neet-pg"``)        — mapped
+
+        The mapping collapses two distinct data-model concepts:
+          * ``Question.exam_type``   (enum: cms/neet_pg/usmle/fmge)
+          * ``Question.exam_source`` (free text: "UPSC CMS", "NEET PG", ...)
+
+        Older clients sent the short slug directly to ``exam_source`` which produced
+        an empty ``by_year`` array (the bug). The normaliser below resolves the
+        incoming key to the correct ``exam_source`` value before filtering so both
+        old and new client conventions Just Work.
+        """
         _ensure_question_bank_loaded()
         from django.db.models import Count
-        
+
+        # Slug → human label stored in Question.exam_source. Keep in sync with
+        # seed_data.py / import_neet_pg.py / import_txt.py --exam-source.
+        EXAM_SLUG_TO_SOURCE = {
+            'cms': 'UPSC CMS',
+            'upsc_cms': 'UPSC CMS',
+            'upsc-cms': 'UPSC CMS',
+            'neet_pg': 'NEET PG',
+            'neet-pg': 'NEET PG',
+            'neetpg': 'NEET PG',
+            'ini_cet': 'INI-CET',
+            'ini-cet': 'INI-CET',
+            'inicet': 'INI-CET',
+            'fmge': 'FMGE',
+            'usmle': 'USMLE',
+            'medical_officer': 'Medical Officer',
+            'medical-officer': 'Medical Officer',
+            'medicalofficer': 'Medical Officer',
+        }
+        # ``Question.exam_type`` enum → source. exam_type uses ``cms`` and
+        # ``neet_pg`` (underscores) so this is just the slug→source map
+        # restricted to enum keys.
+        EXAM_TYPE_TO_SOURCE = {k: v for k, v in EXAM_SLUG_TO_SOURCE.items()
+                               if k in {'cms', 'neet_pg', 'usmle', 'fmge'}}
+
         user = request.user
         has_user = user and user.is_authenticated
-        exam_source = request.query_params.get('exam_source')
-        
+
+        # Resolve whichever key the caller sent. Priority: explicit exam_source
+        # (literal DB label) wins; otherwise we accept exam_type or exam.
+        exam_source_param = request.query_params.get('exam_source')
+        exam_type_param = request.query_params.get('exam_type')
+        exam_slug_param = request.query_params.get('exam')
+
+        exam_source = None
+        if exam_source_param:
+            exam_source = exam_source_param
+        elif exam_type_param and exam_type_param in EXAM_TYPE_TO_SOURCE:
+            exam_source = EXAM_TYPE_TO_SOURCE[exam_type_param]
+        elif exam_slug_param and exam_slug_param in EXAM_SLUG_TO_SOURCE:
+            exam_source = EXAM_SLUG_TO_SOURCE[exam_slug_param]
+
         from questions.models import QuestionAttempt
-        
+
         # Base count
         total_qs = Question.objects.filter(is_active=True)
         if exam_source:
             total_qs = total_qs.filter(exam_source=exam_source)
-            
+
         total_count = total_qs.count()
-        
+
         solved_qs = QuestionAttempt.objects.filter(user=user) if has_user else QuestionAttempt.objects.none()
         if exam_source:
             solved_qs = solved_qs.filter(question__exam_source=exam_source)
