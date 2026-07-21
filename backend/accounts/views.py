@@ -582,17 +582,29 @@ class RazorpayWebhookView(APIView):
 
         webhook_secret = os.getenv('RAZORPAY_WEBHOOK_SECRET', '')
 
-        # Verify webhook signature if secret is configured
-        if webhook_secret:
-            received_signature = request.META.get('HTTP_X_RAZORPAY_SIGNATURE', '')
-            expected_signature = hmac.new(
-                webhook_secret.encode('utf-8'),
-                request.body,
-                hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(received_signature, expected_signature):
-                logger.warning('Razorpay webhook signature mismatch')
-                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+        # SECURITY: Refuse unsigned webhooks in production.
+        # If no secret is configured, this endpoint would accept ANY signed/unsigned request,
+        # letting attackers activate subscriptions. Reject by default.
+        if not webhook_secret:
+            logger.error('RAZORPAY_WEBHOOK_SECRET not configured — rejecting webhook')
+            return Response(
+                {'error': 'Webhook not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        received_signature = request.META.get('HTTP_X_RAZORPAY_SIGNATURE', '')
+        if not received_signature:
+            logger.warning('Razorpay webhook missing X-Razorpay-Signature header')
+            return Response({'error': 'Missing signature'}, status=status.HTTP_400_BAD_REQUEST)
+
+        expected_signature = hmac.new(
+            webhook_secret.encode('utf-8'),
+            request.body,
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(received_signature, expected_signature):
+            logger.warning('Razorpay webhook signature mismatch')
+            return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 
         payload = request.data
         event = payload.get('event', '')
@@ -1529,21 +1541,21 @@ class AdminSubscriptionManageView(APIView):
             )
             create_admin_audit_log(
                 actor=request.user,
-                action='user_role_update',
+                action='subscription_grant',
                 resource_type='subscription',
                 resource_id=str(user.id),
                 detail=f'Granted {plan} subscription to {user.username}',
             )
             return Response({'message': f'Subscription {plan} granted to {user.username}'})
-            
+
         elif action == 'revoke':
             Subscription.objects.filter(user=user, is_active=True).update(is_active=False, status='cancelled')
             user.is_subscribed = False
             user.save(update_fields=['is_subscribed'])
-            
+
             create_admin_audit_log(
                 actor=request.user,
-                action='user_role_update',
+                action='subscription_revoke',
                 resource_type='subscription',
                 resource_id=str(user.id),
                 detail=f'Revoked subscription for {user.username}',
@@ -1576,7 +1588,7 @@ class AdminDeviceManageView(APIView):
             device.save(update_fields=['is_active'])
             create_admin_audit_log(
                 actor=request.user,
-                action='user_role_update', # Using existing valid choice
+                action='device_logout',
                 resource_type='device',
                 resource_id=str(user_id),
                 detail=f'Logged out device {device_id} for user {user_id}',

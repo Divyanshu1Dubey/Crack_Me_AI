@@ -114,62 +114,99 @@ class TokenBalance(models.Model):
         """
         Use `amount` AI tokens. Returns True if successful, False if insufficient.
         Priority: free daily/weekly first, then feedback credits, then purchased.
+
+        Wrapped in transaction.atomic() with select_for_update() to prevent race
+        conditions where concurrent requests double-spend the same balance.
         """
-        self._reset_if_needed()
-        if self.available_tokens < amount:
-            return False
+        from django.db import transaction
+        with transaction.atomic():
+            # Lock the row for the duration of this transaction.
+            # On SQLite this is a no-op; on Postgres it issues SELECT ... FOR UPDATE.
+            locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
+            if locked is None:
+                return False
 
-        config = TokenConfig.get_config()
-        tokens_to_deduct = amount
+            locked._reset_if_needed()
+            if locked.available_tokens < amount:
+                return False
 
-        # 1. Deduct from free daily/weekly
-        free_daily_remaining = max(0, config.free_daily_tokens - self.daily_tokens_used)
-        free_weekly_remaining = max(0, config.free_weekly_tokens - self.weekly_tokens_used)
-        free_available = min(free_daily_remaining, free_weekly_remaining)
-        
-        deduct_from_free = min(free_available, tokens_to_deduct)
-        if deduct_from_free > 0:
-            self.daily_tokens_used += deduct_from_free
-            self.weekly_tokens_used += deduct_from_free
-            tokens_to_deduct -= deduct_from_free
+            config = TokenConfig.get_config()
+            tokens_to_deduct = amount
 
-        # 2. Deduct from feedback credits
-        if tokens_to_deduct > 0 and self.feedback_credits > 0:
-            deduct_from_feedback = min(self.feedback_credits, tokens_to_deduct)
-            self.feedback_credits -= deduct_from_feedback
-            tokens_to_deduct -= deduct_from_feedback
+            # 1. Deduct from free daily/weekly
+            free_daily_remaining = max(0, config.free_daily_tokens - locked.daily_tokens_used)
+            free_weekly_remaining = max(0, config.free_weekly_tokens - locked.weekly_tokens_used)
+            free_available = min(free_daily_remaining, free_weekly_remaining)
 
-        # 3. Deduct from purchased
-        if tokens_to_deduct > 0 and self.purchased_tokens > 0:
-            deduct_from_purchased = min(self.purchased_tokens, tokens_to_deduct)
-            self.purchased_tokens -= deduct_from_purchased
-            tokens_to_deduct -= deduct_from_purchased
+            deduct_from_free = min(free_available, tokens_to_deduct)
+            if deduct_from_free > 0:
+                locked.daily_tokens_used += deduct_from_free
+                locked.weekly_tokens_used += deduct_from_free
+                tokens_to_deduct -= deduct_from_free
 
-        self.total_tokens_used += amount
-        self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'feedback_credits', 'purchased_tokens', 'total_tokens_used'])
-        return True
+            # 2. Deduct from feedback credits
+            if tokens_to_deduct > 0 and locked.feedback_credits > 0:
+                deduct_from_feedback = min(locked.feedback_credits, tokens_to_deduct)
+                locked.feedback_credits -= deduct_from_feedback
+                tokens_to_deduct -= deduct_from_feedback
+
+            # 3. Deduct from purchased
+            if tokens_to_deduct > 0 and locked.purchased_tokens > 0:
+                deduct_from_purchased = min(locked.purchased_tokens, tokens_to_deduct)
+                locked.purchased_tokens -= deduct_from_purchased
+                tokens_to_deduct -= deduct_from_purchased
+
+            locked.total_tokens_used += amount
+            locked.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'feedback_credits', 'purchased_tokens', 'total_tokens_used'])
+
+            # Sync in-memory state so subsequent property reads in this request see new values
+            self.daily_tokens_used = locked.daily_tokens_used
+            self.weekly_tokens_used = locked.weekly_tokens_used
+            self.feedback_credits = locked.feedback_credits
+            self.purchased_tokens = locked.purchased_tokens
+            self.total_tokens_used = locked.total_tokens_used
+            return True
 
     def add_purchased_tokens(self, amount):
         """Add purchased tokens to the user's balance."""
-        self.purchased_tokens += amount
-        self.save(update_fields=['purchased_tokens'])
+        from django.db import transaction
+        with transaction.atomic():
+            locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
+            if locked is None:
+                return
+            locked.purchased_tokens += amount
+            locked.save(update_fields=['purchased_tokens'])
+            self.purchased_tokens = locked.purchased_tokens
 
     def refund_token(self, amount=1):
         """Refund tokens (used when AI call fails after token was consumed)."""
-        if self.total_tokens_used >= amount:
-            self.total_tokens_used -= amount
-        else:
-            self.total_tokens_used = 0
-            
-        # Simplistic refund: just refund as daily/weekly if possible
-        self.daily_tokens_used = max(0, self.daily_tokens_used - amount)
-        self.weekly_tokens_used = max(0, self.weekly_tokens_used - amount)
-        self.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
+        from django.db import transaction
+        with transaction.atomic():
+            locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
+            if locked is None:
+                return
+            if locked.total_tokens_used >= amount:
+                locked.total_tokens_used -= amount
+            else:
+                locked.total_tokens_used = 0
+
+            locked.daily_tokens_used = max(0, locked.daily_tokens_used - amount)
+            locked.weekly_tokens_used = max(0, locked.weekly_tokens_used - amount)
+            locked.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
+            self.daily_tokens_used = locked.daily_tokens_used
+            self.weekly_tokens_used = locked.weekly_tokens_used
+            self.total_tokens_used = locked.total_tokens_used
 
     def add_feedback_credit(self, amount=2):
         """Reward user for accepted feedback (default: +2 tokens)."""
-        self.feedback_credits += amount
-        self.save(update_fields=['feedback_credits'])
+        from django.db import transaction
+        with transaction.atomic():
+            locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
+            if locked is None:
+                return
+            locked.feedback_credits += amount
+            locked.save(update_fields=['feedback_credits'])
+            self.feedback_credits = locked.feedback_credits
 
 
 class TokenConfig(models.Model):
@@ -246,6 +283,9 @@ class AdminAuditLog(models.Model):
         ('user_block', 'User Block/Unblock'),
         ('user_role_update', 'User Role Update'),
         ('user_progress_reset', 'User Progress Reset'),
+        ('subscription_grant', 'Subscription Grant'),
+        ('subscription_revoke', 'Subscription Revoke'),
+        ('device_logout', 'Device Force Logout'),
         ('system_attempt_reset', 'System Attempt Reset'),
         ('system_analytics_clear', 'System Analytics Clear'),
         ('system_rerun_evaluation', 'System Rerun Evaluation'),
