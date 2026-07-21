@@ -116,7 +116,7 @@ def _create_tables_and_indexes(apps, schema_editor):
         license         VARCHAR(24) NOT NULL,
         attribution     VARCHAR(300) NOT NULL,
         approval_state  VARCHAR(16) NOT NULL DEFAULT 'pending',
-        approved_by_id  BIGINT NULL REFERENCES auth_user(id)
+        approved_by_id  BIGINT NULL REFERENCES accounts_customuser(id)
                           ON DELETE SET NULL,
         approved_at     TIMESTAMP NULL,
         quality_score   DOUBLE PRECISION NOT NULL DEFAULT 0.0,
@@ -217,7 +217,7 @@ def _create_tables_and_indexes(apps, schema_editor):
         entities_added  INTEGER NOT NULL DEFAULT 0,
         relations_added INTEGER NOT NULL DEFAULT 0,
         error_log       TEXT NOT NULL DEFAULT '',
-        triggered_by_id BIGINT NULL REFERENCES auth_user(id)
+        triggered_by_id BIGINT NULL REFERENCES accounts_customuser(id)
                           ON DELETE SET NULL,
         created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -253,14 +253,14 @@ def _create_tables_and_indexes(apps, schema_editor):
     -- ─── knowledge_useruploadattestation ──────────────────────
     CREATE TABLE IF NOT EXISTS knowledge_useruploadattestation (
         id              BIGSERIAL PRIMARY KEY,
-        user_id         BIGINT NOT NULL REFERENCES auth_user(id)
+        user_id         BIGINT NOT NULL REFERENCES accounts_customuser(id)
                           ON DELETE CASCADE,
         file            VARCHAR(100) NOT NULL,
         title           VARCHAR(255) NOT NULL,
         source_description VARCHAR(300) NOT NULL,
         rights_attested BOOLEAN NOT NULL DEFAULT FALSE,
         commercial_use_ok BOOLEAN NOT NULL DEFAULT TRUE,
-        reviewed_by_id  BIGINT NULL REFERENCES auth_user(id)
+        reviewed_by_id  BIGINT NULL REFERENCES accounts_customuser(id)
                           ON DELETE SET NULL,
         reviewed_at     TIMESTAMP NULL,
         decision        VARCHAR(16) NOT NULL DEFAULT 'pending',
