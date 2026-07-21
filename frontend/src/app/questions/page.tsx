@@ -1134,8 +1134,15 @@ function QuestionsContent() {
                                                         <p className="text-xs leading-relaxed text-muted-foreground">{textbookRef.reference}</p>
                                                     )}
                                                     {textbookScreenshot && (
-                                                        <div className="mt-2 rounded-lg overflow-hidden border border-border/40">
-                                                            <img src={textbookScreenshot} alt="Textbook page screenshot" className="w-full" />
+                                                        <div className="mt-2 rounded-lg overflow-hidden border border-border/40 bg-white">
+                                                            <img
+                                                              src={textbookScreenshot}
+                                                              alt="Textbook page screenshot"
+                                                              width={800}
+                                                              height={1000}
+                                                              loading="lazy"
+                                                              className="w-full h-auto"
+                                                            />
                                                             <p className="text-[10px] text-center text-muted-foreground py-1 bg-muted/30">Screenshot from textbook page</p>
                                                         </div>
                                                     )}
