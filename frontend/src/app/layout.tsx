@@ -45,6 +45,16 @@ export const metadata: Metadata = {
     default: siteTitle,
     template: `%s | ${siteName}`,
   },
+  // Google Search Console verification — paste the meta-tag code from
+  // https://search.google.com/search-console → URL Prefix → www.cracklabs.app
+  // → Verification → HTML tag. Rendered as <meta name="google-site-verification">
+  // by Next.js. Drop the value below; the env-var override is for Vercel.
+  verification: {
+    google: process.env.NEXT_PUBLIC_GSC_VERIFICATION || 'REPLACE_WITH_GSC_VERIFICATION_TOKEN',
+  },
+  other: {
+    'msvalidate.01': process.env.NEXT_PUBLIC_BING_VERIFICATION || '77389C63E8905F63F9327386A62DCC9A',
+  },
   description: siteDescription,
   alternates: {
     canonical: "/",
