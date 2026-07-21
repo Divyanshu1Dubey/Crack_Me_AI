@@ -267,7 +267,11 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
                             Join thousands of medical aspirants using CrackCMS to prepare smarter. Start free today.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register">
+                            <Link href="/register" onClick={() => {
+                                if (typeof window !== 'undefined' && (window as any).gtag) {
+                                    (window as any).gtag('event', 'register_intent', { source: 'pyq_landing' });
+                                }
+                            }}>
                                 <Button size="lg" className="gap-2 font-bold">
                                     Create free account <ArrowRight className="h-4 w-4" />
                                 </Button>

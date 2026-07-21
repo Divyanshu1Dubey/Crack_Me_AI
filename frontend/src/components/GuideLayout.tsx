@@ -170,7 +170,11 @@ export function GuideLayout({
                                 CrackCMS combines AI tutoring with 1,920+ PYQs and a full mock-test simulator.
                             </p>
                             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                                <Link href="/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create free account</Link>
+                                <Link href="/register" onClick={() => {
+                                    if (typeof window !== 'undefined' && (window as any).gtag) {
+                                        (window as any).gtag('event', 'register_intent', { source: 'guide_layout' });
+                                    }
+                                }} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create free account</Link>
                                 <Link href="/questions" className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-bold text-foreground hover:bg-muted">Browse question bank</Link>
                             </div>
                         </CardContent>

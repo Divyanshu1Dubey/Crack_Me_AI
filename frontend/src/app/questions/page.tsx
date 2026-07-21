@@ -623,6 +623,9 @@ function QuestionsContent() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (typeof window !== 'undefined' && (window as any).gtag) {
+                                            (window as any).gtag('event', 'mock_test_start', { type: 'exam', exam_slug: selectedExam });
+                                        }
                                         if (studyMode !== 'exam') setStudyMode('exam');
                                     }}
                                     className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors ${
@@ -637,6 +640,9 @@ function QuestionsContent() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (typeof window !== 'undefined' && (window as any).gtag) {
+                                            (window as any).gtag('event', 'mock_test_start', { type: 'practice', exam_slug: selectedExam });
+                                        }
                                         router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
                                     }}
                                     className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
@@ -734,6 +740,9 @@ function QuestionsContent() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
+                                                        if (typeof window !== 'undefined' && (window as any).gtag) {
+                                                            (window as any).gtag('event', 'pyq_year_open', { exam_slug: selectedExam, year: item.year });
+                                                        }
                                                         if (isSelected) {
                                                             setSelectedYear('');
                                                         } else {
@@ -1189,7 +1198,12 @@ function QuestionsContent() {
 
                                         {/* Generate AI Analysis button — shown directly below flag section */}
                                         {!aiExplanation && !aiLoading && !tokenError && (
-                                            <button onClick={() => fetchAiExplanation()}
+                                            <button onClick={() => {
+                                                if (typeof window !== 'undefined' && (window as any).gtag) {
+                                                    (window as any).gtag('event', 'ai_explain_request', { exam_slug: selectedExam });
+                                                }
+                                                fetchAiExplanation();
+                                            }}
                                                 className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-1">
                                                 <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                                 <div className="text-left">

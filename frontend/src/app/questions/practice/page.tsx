@@ -400,7 +400,12 @@ function PracticeContent() {
 
                                 {/* Generate AI Analysis button */}
                                 {!aiExplanation && !aiLoading && !tokenError && (
-                                    <button onClick={fetchAiExplanation}
+                                    <button onClick={() => {
+                                        if (typeof window !== 'undefined' && (window as any).gtag) {
+                                            (window as any).gtag('event', 'ai_explain_request', { source: 'practice' });
+                                        }
+                                        fetchAiExplanation();
+                                    }}
                                         className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                         <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                         <div className="text-left">
