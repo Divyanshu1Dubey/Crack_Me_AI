@@ -1579,26 +1579,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border/60 bg-muted/10 px-4 py-12 sm:px-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
-          <BrandMark href="/" compact showTagline={false} />
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground sm:justify-end">
-            <Link href="/exams/cms" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">UPSC CMS</Link>
-            <Link href="/exams/neet-pg" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">NEET PG</Link>
-            <Link href="/exams/usmle" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">USMLE</Link>
-            <span className="rounded-full border border-border/80 bg-card px-3 py-1 font-semibold">CMS Mock Tests</span>
-          </div>
-        </div>
-        
-        <div className="mx-auto mt-6 max-w-6xl border-t border-border/40 pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-muted-foreground">
-          <p>© 2026 CrackCMS | AI-powered UPSC CMS preparation platform</p>
-          <div className="flex gap-4">
-            <Link href="/privacy" className="hover:text-foreground hover:underline">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-foreground hover:underline">Terms of Service</Link>
-          </div>
-        </div>
-      </footer>
+      {/* Site-wide footer is rendered from root layout.tsx */}
     </div>
   );
 }

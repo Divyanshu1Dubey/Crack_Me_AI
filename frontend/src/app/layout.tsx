@@ -17,6 +17,7 @@ import { DockProvider } from "@/context/DockContext";
 import { FloatingDock } from "@/components/FloatingDock";
 import Footer from "@/components/Footer";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
+import { graphSchema, orgSchema, softwareAppSchema, websiteSchema } from "@/lib/metadata";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
 const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
@@ -105,6 +106,10 @@ export const viewport = {
   minimumScale: 1,
   maximumScale: 5,
   userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
+  ],
 };
 
 export default function RootLayout({
@@ -113,50 +118,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en-IN" suppressHydrationWarning>
       <head>
         <Script id="global-seo-structured-data" type="application/ld+json" strategy="beforeInteractive">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@graph": [
-              {
-                "@type": "Organization",
-                "@id": `${siteUrl}/#organization`,
-                name: siteName,
-                legalName: brandName,
-                url: siteUrl,
-                logo: {
-                  "@type": "ImageObject",
-                  url: `${siteUrl}/cms-circle-logo.png`,
-                  width: 512,
-                  height: 512,
-                },
-                description: siteDescription,
-                sameAs: [
-                  "https://github.com/Divyanshu1Dubey/Crack_Me_AI",
-                ],
-                contactPoint: {
-                  "@type": "ContactPoint",
-                  contactType: "customer support",
-                  availableLanguage: ["English", "Hindi"],
-                },
-              },
-              {
-                "@type": "WebSite",
-                "@id": `${siteUrl}/#website`,
-                name: siteName,
-                url: siteUrl,
-                inLanguage: "en-IN",
-                publisher: { "@id": `${siteUrl}/#organization` },
-                potentialAction: {
-                  "@type": "SearchAction",
-                  target: {
-                    "@type": "EntryPoint",
-                    urlTemplate: `${siteUrl}/questions?search={search_term_string}`,
-                  },
-                  "query-input": "required name=search_term_string",
-                },
-              },
+          {JSON.stringify(
+            graphSchema([
+              orgSchema(),
+              websiteSchema(),
               {
                 "@type": "WebPage",
                 "@id": `${siteUrl}/#webpage`,
@@ -167,42 +135,20 @@ export default function RootLayout({
                 about: { "@id": `${siteUrl}/#organization` },
                 inLanguage: "en-IN",
               },
-              {
-                "@type": "SoftwareApplication",
-                name: "CrackCMS UPSC CMS Preparation App",
-                operatingSystem: "Web",
-                applicationCategory: "EducationalApplication",
-                url: siteUrl,
-                description: "AI-powered UPSC CMS and medical exam preparation with PYQs, mock tests, flashcards, textbooks and analytics.",
-                offers: {
-                  "@type": "Offer",
-                  price: "0",
-                  priceCurrency: "INR",
-                  description: "Free tier available with premium medical exam preparation plans.",
-                },
-                aggregateRating: {
-                  "@type": "AggregateRating",
-                  ratingValue: "4.8",
-                  ratingCount: "1250",
-                  bestRating: "5",
-                  worstRating: "1",
-                },
-              },
+              softwareAppSchema(),
               {
                 "@type": "Course",
                 name: "UPSC CMS Complete Preparation Course",
-                description: "Comprehensive UPSC Combined Medical Services exam preparation with PYQs, AI-powered explanations, subject-wise mock tests and performance analytics.",
+                description:
+                  "Comprehensive UPSC Combined Medical Services exam preparation with PYQs, AI-powered explanations, subject-wise mock tests and performance analytics.",
                 provider: { "@id": `${siteUrl}/#organization` },
-                url: `${siteUrl}/#upsc-cms-preparation`,
+                url: `${siteUrl}/cms`,
                 educationalLevel: "Postgraduate",
                 inLanguage: "en-IN",
                 hasCourseInstance: {
                   "@type": "CourseInstance",
                   courseMode: "online",
-                  courseSchedule: {
-                    "@type": "Schedule",
-                    repeatFrequency: "P1D",
-                  },
+                  courseSchedule: { "@type": "Schedule", repeatFrequency: "P1D" },
                 },
                 offers: {
                   "@type": "Offer",
@@ -214,9 +160,10 @@ export default function RootLayout({
               {
                 "@type": "Course",
                 name: "NEET PG Complete Preparation Course",
-                description: "Medical PG revision with previous year questions, AI tutor, clinical MCQs and mock test simulator.",
+                description:
+                  "Medical PG revision with previous year questions, AI tutor, clinical MCQs and mock test simulator.",
                 provider: { "@id": `${siteUrl}/#organization` },
-                url: `${siteUrl}/#neet-pg-preparation`,
+                url: `${siteUrl}/neet-pg`,
                 educationalLevel: "Postgraduate",
                 inLanguage: "en-IN",
                 offers: {
@@ -275,13 +222,13 @@ export default function RootLayout({
                 "@type": "BreadcrumbList",
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
-                  { "@type": "ListItem", position: 2, name: "UPSC CMS Preparation", item: `${siteUrl}/#upsc-cms-preparation` },
-                  { "@type": "ListItem", position: 3, name: "NEET PG Preparation", item: `${siteUrl}/#neet-pg-preparation` },
+                  { "@type": "ListItem", position: 2, name: "UPSC CMS Preparation", item: `${siteUrl}/cms` },
+                  { "@type": "ListItem", position: 3, name: "NEET PG Preparation", item: `${siteUrl}/neet-pg` },
                   { "@type": "ListItem", position: 4, name: "Pricing", item: `${siteUrl}/subscription` },
                 ],
               },
-            ],
-          })}
+            ])
+          )}
         </Script>
         {shouldInjectGoogleTag && (
           <>

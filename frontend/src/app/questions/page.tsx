@@ -391,7 +391,7 @@ function QuestionsContent() {
         };
 
         fetchPage(1);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [studyMode, selectedYear, selectedSubject, selectedDifficulty, selectedExam, searchQuery, isAuthenticated]);
 
     const openQuestion = (id: number) => {

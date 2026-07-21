@@ -8,6 +8,7 @@
  */
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -31,11 +32,11 @@ export default async function ExamSlugDispatcher({ params }: Props) {
         We don&apos;t have a microsite for &quot;{slug}&quot; yet.
       </p>
       <div className="flex justify-center gap-3 flex-wrap">
-        <a href="/exams/cms" className="text-primary hover:underline">UPSC CMS</a>
+        <Link href="/exams/cms" className="text-primary hover:underline">UPSC CMS</Link>
         <span>·</span>
-        <a href="/exams/neet-pg" className="text-primary hover:underline">NEET PG</a>
+        <Link href="/exams/neet-pg" className="text-primary hover:underline">NEET PG</Link>
         <span>·</span>
-        <a href="/exams/usmle" className="text-primary hover:underline">USMLE</a>
+        <Link href="/exams/usmle" className="text-primary hover:underline">USMLE</Link>
       </div>
     </div>
   );
