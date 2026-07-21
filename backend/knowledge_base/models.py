@@ -103,7 +103,8 @@ class KnowledgeSource(models.Model):
     class Meta:
         ordering = ['name']
         indexes = [
-            models.Index(fields=['is_active', 'license']),
+            models.Index(fields=['is_active', 'license'],
+                         name='kb_source_active_lic_idx'),
         ]
 
     def __str__(self):
@@ -186,14 +187,17 @@ class KnowledgeChunk(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['source', 'is_active']),
-            models.Index(fields=['subject', 'topic']),
-            models.Index(fields=['approval_state', 'is_active']),
+            models.Index(fields=['source', 'is_active'],
+                         name='kb_chunk_src_active_idx'),
+            models.Index(fields=['subject', 'topic'],
+                         name='kb_chunk_subj_topic_idx'),
+            models.Index(fields=['approval_state', 'is_active'],
+                         name='kb_chunk_appr_active_idx'),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['source', 'text_hash'],
-                name='unique_chunk_per_source',
+                name='kb_chunk_uniq_source_hash',
             ),
         ]
 
@@ -237,7 +241,7 @@ class KnowledgeEmbedding(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['model']),
+            models.Index(fields=['model'], name='kb_embed_model_idx'),
         ]
 
     def __str__(self):
@@ -290,12 +294,13 @@ class KnowledgeEntity(models.Model):
     class Meta:
         ordering = ['entity_type', 'name']
         indexes = [
-            models.Index(fields=['entity_type', 'name']),
+            models.Index(fields=['entity_type', 'name'],
+                         name='kb_entity_type_name_idx'),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['name', 'entity_type'],
-                name='unique_entity_name_type',
+                name='kb_entity_uniq_name_type',
             ),
         ]
 
@@ -345,8 +350,10 @@ class KnowledgeRelation(models.Model):
     class Meta:
         ordering = ['-weight']
         indexes = [
-            models.Index(fields=['source_entity', 'relation']),
-            models.Index(fields=['target_entity', 'relation']),
+            models.Index(fields=['source_entity', 'relation'],
+                         name='kb_rel_src_rel_idx'),
+            models.Index(fields=['target_entity', 'relation'],
+                         name='kb_rel_tgt_rel_idx'),
         ]
 
     def __str__(self):
@@ -395,7 +402,8 @@ class IngestionJob(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['status', '-created_at'],
+                         name='kb_job_status_created_idx'),
         ]
 
     def __str__(self):
@@ -495,7 +503,8 @@ class UserUploadAttestation(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['decision', '-created_at']),
+            models.Index(fields=['decision', '-created_at'],
+                         name='kb_upload_decision_idx'),
         ]
 
     def __str__(self):

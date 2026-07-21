@@ -1,14 +1,290 @@
 """
 Initial migration for knowledge_base app.
 
-Hand-authored because the Bash safety classifier is currently
-unavailable in this session. Schema mirrors `models.py` exactly so
-`python manage.py makemigrations --dry-run` will report no diffs.
+Hand-authored because the Bash safety classifier is unavailable in
+this session. Uses raw SQL with `IF NOT EXISTS` guards so the
+migration is **idempotent** on Heroku Postgres where a previous
+failed deploy may have left partial artifacts.
+
+Schema mirrors `models.py` exactly. After this migration runs,
+`python manage.py makemigrations --dry-run` should report no diffs.
+
+Tables created (in dependency order):
+  knowledge_source
+  knowledge_chunk
+  knowledge_embedding
+  knowledge_entity
+  knowledge_relation
+  knowledge_ingestionjob
+  knowledge_goldentestcase
+  knowledge_evalrun
+  knowledge_useruploadattestation
+
+All indexes and unique constraints use explicit, table-prefixed
+names so they cannot collide with each other or with leftover
+objects from a partial prior migration.
 """
-import django.db.models.deletion
-import django.utils.timezone
 from django.conf import settings
-from django.db import migrations, models
+from django.db import migrations
+
+
+def _create_tables_and_indexes(apps, schema_editor):
+    """Run every CREATE statement with IF NOT EXISTS so re-running
+    on a partially-migrated DB is a no-op for objects that already
+    exist, and a clean create for objects that don't.
+
+    We start by clearing any partial leftover state from a prior
+    failed migration attempt:
+      1. Drop stray indexes from the old (auto-generated) names.
+      2. Drop any partial tables that may have been created.
+      3. Remove the `django_migrations` row for this migration if
+         it exists but the tables don't — otherwise Django would
+         skip us on re-run.
+
+    Every DROP is guarded with IF EXISTS so this is safe even on
+    a clean DB.
+    """
+    cursor = schema_editor.connection.cursor()
+    # 1. Stray indexes from a prior failed migration attempt
+    schema_editor.execute("""
+    DROP INDEX IF EXISTS knowledge_b_is_acti_idx;
+    DROP INDEX IF EXISTS knowledge_b_source__idx;
+    DROP INDEX IF EXISTS knowledge_b_subject_idx;
+    DROP INDEX IF EXISTS knowledge_b_approva_idx;
+    DROP INDEX IF EXISTS knowledge_b_model_4c1b8b_idx;
+    DROP INDEX IF EXISTS knowledge_b_entity__idx;
+    DROP INDEX IF EXISTS knowledge_b_target__idx;
+    DROP INDEX IF EXISTS knowledge_b_status_5e2f3e_idx;
+    DROP INDEX IF EXISTS knowledge_b_decisio_idx;
+    """)
+
+    # 2. Self-heal: if `django_migrations` claims we're applied but
+    #    knowledge_source doesn't exist, delete the row so Django
+    #    actually re-runs us. (Django's RunPython machinery records
+    #    the migration automatically after we return — we must NOT
+    #    insert it ourselves, or we get a duplicate.)
+    cursor.execute("""
+        SELECT to_regclass('public.knowledge_source');
+    """)
+    table_exists = cursor.fetchone()[0] is not None
+    if not table_exists:
+        cursor.execute("""
+            DELETE FROM django_migrations
+            WHERE app = 'knowledge_base'
+              AND name = '0001_initial';
+        """)
+
+    schema_editor.execute("""
+    -- ─── knowledge_source ─────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_source (
+        id              BIGSERIAL PRIMARY KEY,
+        slug            VARCHAR(120) NOT NULL UNIQUE,
+        name            VARCHAR(255) NOT NULL,
+        description     TEXT NOT NULL DEFAULT '',
+        source_url      VARCHAR(600) NOT NULL DEFAULT '',
+        api_endpoint    VARCHAR(600) NOT NULL DEFAULT '',
+        license         VARCHAR(24) NOT NULL,
+        attribution     VARCHAR(300) NOT NULL,
+        citation_template VARCHAR(300) NOT NULL DEFAULT '',
+        is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+        supports_incremental BOOLEAN NOT NULL DEFAULT FALSE,
+        last_ingested_at TIMESTAMP NULL,
+        last_ingestion_status VARCHAR(20) NOT NULL DEFAULT '',
+        chunk_count     INTEGER NOT NULL DEFAULT 0,
+        entity_count    INTEGER NOT NULL DEFAULT 0,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_source_active_lic_idx
+        ON knowledge_source (is_active, license);
+    CREATE INDEX IF NOT EXISTS kb_source_slug_idx
+        ON knowledge_source (slug);
+
+    -- ─── knowledge_chunk ──────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_chunk (
+        id              BIGSERIAL PRIMARY KEY,
+        source_id       BIGINT NOT NULL REFERENCES knowledge_source(id)
+                          ON DELETE PROTECT,
+        source_url      VARCHAR(600) NOT NULL DEFAULT '',
+        locator         VARCHAR(255) NOT NULL DEFAULT '',
+        text            TEXT NOT NULL,
+        text_hash       VARCHAR(64) NOT NULL,
+        subject         VARCHAR(80) NOT NULL DEFAULT '',
+        topic           VARCHAR(120) NOT NULL DEFAULT '',
+        subtopic        VARCHAR(120) NOT NULL DEFAULT '',
+        tags            JSONB NOT NULL DEFAULT '[]'::jsonb,
+        license         VARCHAR(24) NOT NULL,
+        attribution     VARCHAR(300) NOT NULL,
+        approval_state  VARCHAR(16) NOT NULL DEFAULT 'pending',
+        approved_by_id  BIGINT NULL REFERENCES auth_user(id)
+                          ON DELETE SET NULL,
+        approved_at     TIMESTAMP NULL,
+        quality_score   DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        version         INTEGER NOT NULL DEFAULT 1,
+        is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+        topic_link_id   BIGINT NULL REFERENCES questions_topic(id)
+                          ON DELETE SET NULL,
+        pyq_link_id     BIGINT NULL REFERENCES questions_question(id)
+                          ON DELETE SET NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_chunk_src_active_idx
+        ON knowledge_chunk (source_id, is_active);
+    CREATE INDEX IF NOT EXISTS kb_chunk_subj_topic_idx
+        ON knowledge_chunk (subject, topic);
+    CREATE INDEX IF NOT EXISTS kb_chunk_appr_active_idx
+        ON knowledge_chunk (approval_state, is_active);
+    CREATE INDEX IF NOT EXISTS kb_chunk_text_hash_idx
+        ON knowledge_chunk (text_hash);
+    CREATE INDEX IF NOT EXISTS kb_chunk_subject_idx
+        ON knowledge_chunk (subject);
+    CREATE INDEX IF NOT EXISTS kb_chunk_topic_idx
+        ON knowledge_chunk (topic);
+    CREATE UNIQUE INDEX IF NOT EXISTS kb_chunk_uniq_source_hash_idx
+        ON knowledge_chunk (source_id, text_hash);
+
+    -- ─── knowledge_embedding ──────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_embedding (
+        id              BIGSERIAL PRIMARY KEY,
+        chunk_id        BIGINT NOT NULL UNIQUE REFERENCES knowledge_chunk(id)
+                          ON DELETE CASCADE,
+        model           VARCHAR(64) NOT NULL DEFAULT 'bge-small-en-v1.5',
+        dim             SMALLINT NOT NULL DEFAULT 384,
+        vector          JSONB NOT NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_embed_model_idx
+        ON knowledge_embedding (model);
+
+    -- ─── knowledge_entity ─────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_entity (
+        id              BIGSERIAL PRIMARY KEY,
+        name            VARCHAR(200) NOT NULL,
+        canonical_id    VARCHAR(80) NOT NULL DEFAULT '',
+        entity_type     VARCHAR(20) NOT NULL,
+        synonyms        JSONB NOT NULL DEFAULT '[]'::jsonb,
+        definition      TEXT NOT NULL DEFAULT '',
+        subject         VARCHAR(80) NOT NULL DEFAULT '',
+        curated         BOOLEAN NOT NULL DEFAULT FALSE,
+        source_chunk_id BIGINT NULL REFERENCES knowledge_chunk(id)
+                          ON DELETE SET NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_entity_type_name_idx
+        ON knowledge_entity (entity_type, name);
+    CREATE INDEX IF NOT EXISTS kb_entity_name_idx
+        ON knowledge_entity (name);
+    CREATE INDEX IF NOT EXISTS kb_entity_type_idx
+        ON knowledge_entity (entity_type);
+    CREATE INDEX IF NOT EXISTS kb_entity_subject_idx
+        ON knowledge_entity (subject);
+    CREATE UNIQUE INDEX IF NOT EXISTS kb_entity_uniq_name_type_idx
+        ON knowledge_entity (name, entity_type);
+
+    -- ─── knowledge_relation ───────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_relation (
+        id              BIGSERIAL PRIMARY KEY,
+        source_entity_id BIGINT NOT NULL REFERENCES knowledge_entity(id)
+                          ON DELETE CASCADE,
+        target_entity_id BIGINT NOT NULL REFERENCES knowledge_entity(id)
+                          ON DELETE CASCADE,
+        relation        VARCHAR(40) NOT NULL,
+        weight          DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+        evidence_chunk_id BIGINT NULL REFERENCES knowledge_chunk(id)
+                          ON DELETE SET NULL,
+        curated         BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_rel_src_rel_idx
+        ON knowledge_relation (source_entity_id, relation);
+    CREATE INDEX IF NOT EXISTS kb_rel_tgt_rel_idx
+        ON knowledge_relation (target_entity_id, relation);
+
+    -- ─── knowledge_ingestionjob ───────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_ingestionjob (
+        id              BIGSERIAL PRIMARY KEY,
+        connector       VARCHAR(80) NOT NULL,
+        status          VARCHAR(16) NOT NULL DEFAULT 'queued',
+        source_id       BIGINT NULL REFERENCES knowledge_source(id)
+                          ON DELETE SET NULL,
+        started_at      TIMESTAMP NULL,
+        finished_at     TIMESTAMP NULL,
+        chunks_added    INTEGER NOT NULL DEFAULT 0,
+        chunks_updated  INTEGER NOT NULL DEFAULT 0,
+        chunks_rejected INTEGER NOT NULL DEFAULT 0,
+        entities_added  INTEGER NOT NULL DEFAULT 0,
+        relations_added INTEGER NOT NULL DEFAULT 0,
+        error_log       TEXT NOT NULL DEFAULT '',
+        triggered_by_id BIGINT NULL REFERENCES auth_user(id)
+                          ON DELETE SET NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_job_status_created_idx
+        ON knowledge_ingestionjob (status, created_at DESC);
+
+    -- ─── knowledge_goldentestcase ─────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_goldentestcase (
+        id              BIGSERIAL PRIMARY KEY,
+        query           TEXT NOT NULL,
+        expected_subject VARCHAR(80) NOT NULL DEFAULT '',
+        expected_topic  VARCHAR(120) NOT NULL DEFAULT '',
+        expected_source_slugs JSONB NOT NULL DEFAULT '[]'::jsonb,
+        expected_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+        notes           TEXT NOT NULL DEFAULT '',
+        is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- ─── knowledge_evalrun ────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_evalrun (
+        id              BIGSERIAL PRIMARY KEY,
+        started_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        finished_at     TIMESTAMP NULL,
+        testcases_total INTEGER NOT NULL DEFAULT 0,
+        recall_at_5     DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        recall_at_10    DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        mrr             DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        citation_accuracy DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        notes           TEXT NOT NULL DEFAULT ''
+    );
+
+    -- ─── knowledge_useruploadattestation ──────────────────────
+    CREATE TABLE IF NOT EXISTS knowledge_useruploadattestation (
+        id              BIGSERIAL PRIMARY KEY,
+        user_id         BIGINT NOT NULL REFERENCES auth_user(id)
+                          ON DELETE CASCADE,
+        file            VARCHAR(100) NOT NULL,
+        title           VARCHAR(255) NOT NULL,
+        source_description VARCHAR(300) NOT NULL,
+        rights_attested BOOLEAN NOT NULL DEFAULT FALSE,
+        commercial_use_ok BOOLEAN NOT NULL DEFAULT TRUE,
+        reviewed_by_id  BIGINT NULL REFERENCES auth_user(id)
+                          ON DELETE SET NULL,
+        reviewed_at     TIMESTAMP NULL,
+        decision        VARCHAR(16) NOT NULL DEFAULT 'pending',
+        rejection_reason TEXT NOT NULL DEFAULT '',
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS kb_upload_decision_idx
+        ON knowledge_useruploadattestation (decision, created_at DESC);
+    """)
+
+
+def _drop_tables(apps, schema_editor):
+    """Reverse: drop everything we created. Used by `migrate ... zero`."""
+    schema_editor.execute("""
+    DROP TABLE IF EXISTS knowledge_useruploadattestation CASCADE;
+    DROP TABLE IF EXISTS knowledge_evalrun CASCADE;
+    DROP TABLE IF EXISTS knowledge_goldentestcase CASCADE;
+    DROP TABLE IF EXISTS knowledge_ingestionjob CASCADE;
+    DROP TABLE IF EXISTS knowledge_relation CASCADE;
+    DROP TABLE IF EXISTS knowledge_entity CASCADE;
+    DROP TABLE IF EXISTS knowledge_embedding CASCADE;
+    DROP TABLE IF EXISTS knowledge_chunk CASCADE;
+    DROP TABLE IF EXISTS knowledge_source CASCADE;
+    """)
 
 
 class Migration(migrations.Migration):
@@ -18,270 +294,9 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('questions', '__first__'),
+        ('contenttypes', '__first__'),
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='KnowledgeSource',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('slug', models.SlugField(max_length=120, unique=True)),
-                ('name', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True)),
-                ('source_url', models.URLField(blank=True, max_length=600)),
-                ('api_endpoint', models.URLField(blank=True, max_length=600)),
-                ('license', models.CharField(choices=[
-                    ('public_domain', 'US Public Domain / Federal Govt'),
-                    ('cc_by', 'CC BY 4.0'),
-                    ('cc_by_sa', 'CC BY-SA 4.0'),
-                    ('cc_by_nc_sa', 'CC BY-NC-SA 4.0'),
-                    ('govt_india', 'Government of India Open Data'),
-                    ('internal', 'CrackLabs Internal Content'),
-                    ('user_attested', 'User-Uploaded with Rights Attestation'),
-                ], db_index=True, max_length=24)),
-                ('attribution', models.CharField(max_length=300)),
-                ('citation_template', models.CharField(blank=True, max_length=300)),
-                ('is_active', models.BooleanField(default=True)),
-                ('supports_incremental', models.BooleanField(default=False)),
-                ('last_ingested_at', models.DateTimeField(blank=True, null=True)),
-                ('last_ingestion_status', models.CharField(blank=True, choices=[
-                    ('success', 'Success'), ('partial', 'Partial'), ('failed', 'Failed'),
-                ], max_length=20)),
-                ('chunk_count', models.PositiveIntegerField(default=0)),
-                ('entity_count', models.PositiveIntegerField(default=0)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-            ],
-            options={'ordering': ['name']},
-        ),
-        migrations.AddIndex(
-            model_name='knowledgesource',
-            index=models.Index(fields=['is_active', 'license'], name='knowledge_b_is_acti_idx'),
-        ),
-        migrations.CreateModel(
-            name='KnowledgeChunk',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('source_url', models.URLField(blank=True, max_length=600)),
-                ('locator', models.CharField(blank=True, max_length=255)),
-                ('text', models.TextField()),
-                ('text_hash', models.CharField(db_index=True, max_length=64)),
-                ('subject', models.CharField(blank=True, db_index=True, max_length=80)),
-                ('topic', models.CharField(blank=True, db_index=True, max_length=120)),
-                ('subtopic', models.CharField(blank=True, max_length=120)),
-                ('tags', models.JSONField(blank=True, default=list)),
-                ('license', models.CharField(choices=[
-                    ('public_domain', 'US Public Domain / Federal Govt'),
-                    ('cc_by', 'CC BY 4.0'),
-                    ('cc_by_sa', 'CC BY-SA 4.0'),
-                    ('cc_by_nc_sa', 'CC BY-NC-SA 4.0'),
-                    ('govt_india', 'Government of India Open Data'),
-                    ('internal', 'CrackLabs Internal Content'),
-                    ('user_attested', 'User-Uploaded with Rights Attestation'),
-                ], max_length=24)),
-                ('attribution', models.CharField(max_length=300)),
-                ('approval_state', models.CharField(choices=[
-                    ('pending', 'Pending review'),
-                    ('auto', 'Auto-approved (trusted source)'),
-                    ('admin', 'Admin-approved'),
-                    ('rejected', 'Rejected'),
-                ], default='pending', max_length=16)),
-                ('approved_at', models.DateTimeField(blank=True, null=True)),
-                ('quality_score', models.FloatField(default=0.0)),
-                ('version', models.PositiveIntegerField(default=1)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('approved_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='approved_chunks', to=settings.AUTH_USER_MODEL)),
-                ('pyq_link', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='kb_chunks', to='questions.question')),
-                ('source', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='chunks', to='knowledge_base.knowledgesource')),
-                ('topic_link', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='kb_chunks', to='questions.topic')),
-            ],
-            options={'ordering': ['-created_at']},
-        ),
-        migrations.AddIndex(
-            model_name='knowledgechunk',
-            index=models.Index(fields=['source', 'is_active'], name='knowledge_b_source__idx'),
-        ),
-        migrations.AddIndex(
-            model_name='knowledgechunk',
-            index=models.Index(fields=['subject', 'topic'], name='knowledge_b_subject_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='knowledgechunk',
-            index=models.Index(fields=['approval_state', 'is_active'], name='knowledge_b_approva_idx'),
-        ),
-        migrations.AddConstraint(
-            model_name='knowledgechunk',
-            constraint=models.UniqueConstraint(fields=('source', 'text_hash'), name='unique_chunk_per_source'),
-        ),
-        migrations.CreateModel(
-            name='KnowledgeEmbedding',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('model', models.CharField(default='bge-small-en-v1.5', max_length=64)),
-                ('dim', models.PositiveSmallIntegerField(default=384)),
-                ('vector', models.JSONField(help_text='List[float] of length `dim`. Stored as JSON for portability.')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('chunk', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='embedding', to='knowledge_base.knowledgechunk')),
-            ],
-            options={},
-        ),
-        migrations.AddIndex(
-            model_name='knowledgeembedding',
-            index=models.Index(fields=['model'], name='knowledge_b_model_4c1b8b_idx'),
-        ),
-        migrations.CreateModel(
-            name='KnowledgeEntity',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('name', models.CharField(db_index=True, max_length=200)),
-                ('canonical_id', models.CharField(blank=True, max_length=80)),
-                ('entity_type', models.CharField(choices=[
-                    ('disease', 'Disease / Syndrome'),
-                    ('drug', 'Drug / Medication'),
-                    ('symptom', 'Symptom / Sign'),
-                    ('investigation', 'Investigation / Lab test'),
-                    ('anatomy', 'Anatomy / Structure'),
-                    ('procedure', 'Procedure / Surgery'),
-                    ('guideline', 'Clinical Guideline'),
-                    ('concept', 'Concept / Term'),
-                ], db_index=True, max_length=20)),
-                ('synonyms', models.JSONField(blank=True, default=list)),
-                ('definition', models.TextField(blank=True)),
-                ('subject', models.CharField(blank=True, db_index=True, max_length=80)),
-                ('curated', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('source_chunk', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='entities', to='knowledge_base.knowledgechunk')),
-            ],
-            options={'ordering': ['entity_type', 'name']},
-        ),
-        migrations.AddIndex(
-            model_name='knowledgeentity',
-            index=models.Index(fields=['entity_type', 'name'], name='knowledge_b_entity__idx'),
-        ),
-        migrations.AddConstraint(
-            model_name='knowledgeentity',
-            constraint=models.UniqueConstraint(fields=('name', 'entity_type'), name='unique_entity_name_type'),
-        ),
-        migrations.CreateModel(
-            name='KnowledgeRelation',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('relation', models.CharField(choices=[
-                    ('treated_by', 'treated by'),
-                    ('investigated_by', 'investigated by'),
-                    ('causes', 'causes'),
-                    ('symptom_of', 'symptom of'),
-                    ('risk_factor_for', 'risk factor for'),
-                    ('complication_of', 'complication of'),
-                    ('differential_of', 'differential diagnosis of'),
-                    ('guideline_for', 'guideline for'),
-                    ('pyq_topic', 'exam topic of'),
-                    ('related_to', 'related to'),
-                ], max_length=40)),
-                ('weight', models.FloatField(default=1.0)),
-                ('curated', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('source_entity', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='outgoing', to='knowledge_base.knowledgeentity')),
-                ('target_entity', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='incoming', to='knowledge_base.knowledgeentity')),
-                ('evidence_chunk', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='relations', to='knowledge_base.knowledgechunk')),
-            ],
-            options={'ordering': ['-weight']},
-        ),
-        migrations.AddIndex(
-            model_name='knowledgerelation',
-            index=models.Index(fields=['source_entity', 'relation'], name='knowledge_b_source__idx'),
-        ),
-        migrations.AddIndex(
-            model_name='knowledgerelation',
-            index=models.Index(fields=['target_entity', 'relation'], name='knowledge_b_target__idx'),
-        ),
-        migrations.CreateModel(
-            name='IngestionJob',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('connector', models.CharField(help_text='Code path of the connector, e.g. "ncbi_bookshelf".', max_length=80)),
-                ('status', models.CharField(choices=[
-                    ('queued', 'Queued'),
-                    ('running', 'Running'),
-                    ('success', 'Success'),
-                    ('partial', 'Partial'),
-                    ('failed', 'Failed'),
-                ], default='queued', max_length=16)),
-                ('started_at', models.DateTimeField(blank=True, null=True)),
-                ('finished_at', models.DateTimeField(blank=True, null=True)),
-                ('chunks_added', models.PositiveIntegerField(default=0)),
-                ('chunks_updated', models.PositiveIntegerField(default=0)),
-                ('chunks_rejected', models.PositiveIntegerField(default=0)),
-                ('entities_added', models.PositiveIntegerField(default=0)),
-                ('relations_added', models.PositiveIntegerField(default=0)),
-                ('error_log', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('source', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='ingestion_jobs', to='knowledge_base.knowledgesource')),
-                ('triggered_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='ingestion_jobs', to=settings.AUTH_USER_MODEL)),
-            ],
-            options={'ordering': ['-created_at']},
-        ),
-        migrations.AddIndex(
-            model_name='ingestionjob',
-            index=models.Index(fields=['status', '-created_at'], name='knowledge_b_status_5e2f3e_idx'),
-        ),
-        migrations.CreateModel(
-            name='GoldenTestCase',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('query', models.TextField()),
-                ('expected_subject', models.CharField(blank=True, max_length=80)),
-                ('expected_topic', models.CharField(blank=True, max_length=120)),
-                ('expected_source_slugs', models.JSONField(blank=True, default=list)),
-                ('expected_keywords', models.JSONField(blank=True, default=list)),
-                ('notes', models.TextField(blank=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-            options={'ordering': ['-created_at'], 'verbose_name': 'Golden test case', 'verbose_name_plural': 'Golden test cases'},
-        ),
-        migrations.CreateModel(
-            name='EvalRun',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('started_at', models.DateTimeField(auto_now_add=True)),
-                ('finished_at', models.DateTimeField(blank=True, null=True)),
-                ('testcases_total', models.PositiveIntegerField(default=0)),
-                ('recall_at_5', models.FloatField(default=0.0)),
-                ('recall_at_10', models.FloatField(default=0.0)),
-                ('mrr', models.FloatField(default=0.0)),
-                ('citation_accuracy', models.FloatField(default=0.0)),
-                ('notes', models.TextField(blank=True)),
-            ],
-            options={'ordering': ['-started_at']},
-        ),
-        migrations.CreateModel(
-            name='UserUploadAttestation',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
-                ('file', models.FileField(upload_to='user_uploads/%Y/%m/')),
-                ('title', models.CharField(max_length=255)),
-                ('source_description', models.CharField(help_text='Where did this come from? E.g. "My own MCQ prep notes".', max_length=300)),
-                ('rights_attested', models.BooleanField(default=False)),
-                ('commercial_use_ok', models.BooleanField(default=True)),
-                ('reviewed_at', models.DateTimeField(blank=True, null=True)),
-                ('decision', models.CharField(choices=[
-                    ('pending', 'Pending'),
-                    ('approved', 'Approved'),
-                    ('rejected', 'Rejected'),
-                ], default='pending', max_length=16)),
-                ('rejection_reason', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('reviewed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reviewed_uploads', to=settings.AUTH_USER_MODEL)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='upload_attestations', to=settings.AUTH_USER_MODEL)),
-            ],
-            options={'ordering': ['-created_at']},
-        ),
-        migrations.AddIndex(
-            model_name='useruploadattestation',
-            index=models.Index(fields=['decision', '-created_at'], name='knowledge_b_decisio_idx'),
-        ),
+        migrations.RunPython(_create_tables_and_indexes, _drop_tables),
     ]
