@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from questions.models import Subject, Topic, Question
 from ai_engine.services import AIService
+from questions.text_encoding import normalize_text, read_text_file
 
 logger = logging.getLogger(__name__)
 db_lock = threading.Lock()
@@ -93,8 +94,9 @@ class Command(BaseCommand):
                     continue
 
                 self.stdout.write(self.style.SUCCESS(f"\nProcessing {year} from: {file_path}"))
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                # Read via text_encoding so we never re-introduce mojibake
+                # if the file was written with a non-UTF-8 locale.
+                content = read_text_file(file_path)
 
                 questions = self._parse_file_content(content, year)
                 self.stdout.write(self.style.SUCCESS(f"Successfully parsed {len(questions)} questions for {year}."))
@@ -130,11 +132,11 @@ class Command(BaseCommand):
                         )
 
                         new_q = Question.objects.create(
-                            question_text=q_data["question_text"],
-                            option_a=q_data["option_a"],
-                            option_b=q_data["option_b"],
-                            option_c=q_data["option_c"],
-                            option_d=q_data["option_d"],
+                            question_text=normalize_text(q_data["question_text"]),
+                            option_a=normalize_text(q_data["option_a"]),
+                            option_b=normalize_text(q_data["option_b"]),
+                            option_c=normalize_text(q_data["option_c"]),
+                            option_d=normalize_text(q_data["option_d"]),
                             correct_answer="",
                             explanation="",
                             subject=subject,

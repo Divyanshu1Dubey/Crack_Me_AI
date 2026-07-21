@@ -245,15 +245,26 @@ class Question(models.Model):
         return text
 
     def save(self, *args, **kwargs):
-        self.question_text = self._normalize_statement_text(self.question_text)
-        self.option_a = self._normalize_text_value(self.option_a)
-        self.option_b = self._normalize_text_value(self.option_b)
-        self.option_c = self._normalize_text_value(self.option_c)
-        self.option_d = self._normalize_text_value(self.option_d)
-        self.explanation = self._normalize_text_value(self.explanation)
-        self.concept_explanation = self._normalize_text_value(self.concept_explanation)
-        self.mnemonic = self._normalize_text_value(self.mnemonic)
-        self.reference_text = self._normalize_text_value(self.reference_text)
+        # Root-cause fix for the ΓÇÿ / Ã© mojibake seen on the live site:
+        # normalize_text() repairs UTF-8-as-Latin-1 doubles and NFC-normalizes
+        # so "é" and "é" compare equal. Cheap, idempotent, safe to run on
+        # every save.
+        from questions.text_encoding import normalize_text
+
+        self.question_text = normalize_text(self._normalize_statement_text(self.question_text))
+        self.option_a = normalize_text(self._normalize_text_value(self.option_a))
+        self.option_b = normalize_text(self._normalize_text_value(self.option_b))
+        self.option_c = normalize_text(self._normalize_text_value(self.option_c))
+        self.option_d = normalize_text(self._normalize_text_value(self.option_d))
+        self.explanation = normalize_text(self._normalize_text_value(self.explanation))
+        self.concept_explanation = normalize_text(self._normalize_text_value(self.concept_explanation))
+        self.mnemonic = normalize_text(self._normalize_text_value(self.mnemonic))
+        self.reference_text = normalize_text(self._normalize_text_value(self.reference_text))
+        # AI-generated fields can also carry mojibake from provider responses
+        # that came back through a non-UTF-8 system pipe — sanitize them too.
+        self.ai_explanation = normalize_text(self.ai_explanation or "")
+        self.ai_mnemonic = normalize_text(self.ai_mnemonic or "")
+        self.ai_clinical_pearl = normalize_text(self.ai_clinical_pearl or "")
 
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
@@ -268,6 +279,9 @@ class Question(models.Model):
                 'concept_explanation',
                 'mnemonic',
                 'reference_text',
+                'ai_explanation',
+                'ai_mnemonic',
+                'ai_clinical_pearl',
             ])
             kwargs['update_fields'] = update_fields
 

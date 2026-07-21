@@ -1518,13 +1518,75 @@ export default function LandingPage() {
         </Card>
       </section>
 
+      {/* Choose your exam microsite */}
+      <section id="exam-microsites" className="px-4 sm:px-6 py-16 md:py-20 border-t border-border/60 bg-muted/20">
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center mb-10">
+            <Badge variant="outline" className="mb-4 border-primary/30 text-primary">Three Exams. One Workflow.</Badge>
+            <h2 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+              Pick your exam microsite
+            </h2>
+            <p className="mt-3 text-sm md:text-base text-muted-foreground max-w-2xl mx-auto">
+              Each exam gets its own dedicated experience — different subjects,
+              different PYQs, different mocks — but the same AI tutor and analytics you trust.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                href: '/exams/cms',
+                badge: 'UPSC',
+                name: 'UPSC CMS',
+                desc: 'Combined Medical Services. 2,000+ PYQs from 2018-2025. Paper I (Medicine + Paediatrics) and Paper II (Surgery + OBG + PSM).',
+                gradient: 'from-cyan-600 to-blue-700',
+                icon: '🩺',
+              },
+              {
+                href: '/exams/neet-pg',
+                badge: 'NEET PG',
+                name: 'NEET PG',
+                desc: 'Postgraduate entrance. 1,200+ PYQs across 19 PG subjects (2020-2025). All-India 50% quota + State quota prep.',
+                gradient: 'from-emerald-600 to-teal-700',
+                icon: '🎓',
+              },
+              {
+                href: '/exams/usmle',
+                badge: 'USMLE',
+                name: 'USMLE',
+                desc: 'Step 1 + Step 2 CK. High-yield lists, NBME-style vignettes. Beta access — join the waitlist.',
+                gradient: 'from-indigo-600 to-violet-700',
+                icon: '🌎',
+              },
+            ].map((c) => (
+              <Link key={c.href} href={c.href}
+                className="group rounded-3xl border border-border/60 bg-card/80 overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1">
+                <div className={`bg-gradient-to-br ${c.gradient} text-white p-6`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <Badge className="bg-white/15 text-white border border-white/20 backdrop-blur-sm">{c.badge}</Badge>
+                    <span className="text-3xl">{c.icon}</span>
+                  </div>
+                  <h3 className="text-2xl font-extrabold">{c.name}</h3>
+                </div>
+                <div className="p-5">
+                  <p className="text-sm text-muted-foreground leading-relaxed min-h-[5rem]">{c.desc}</p>
+                  <div className="mt-3 flex items-center text-sm font-semibold text-primary group-hover:gap-2 transition-all">
+                    Open microsite <ArrowRight className="ml-1 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-border/60 bg-muted/10 px-4 py-12 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
           <BrandMark href="/" compact showTagline={false} />
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground sm:justify-end">
-            <span className="rounded-full border border-border/80 bg-card px-3 py-1 font-semibold">UPSC CMS</span>
-            <span className="rounded-full border border-border/80 bg-card px-3 py-1 font-semibold">NEET PG</span>
+            <Link href="/exams/cms" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">UPSC CMS</Link>
+            <Link href="/exams/neet-pg" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">NEET PG</Link>
+            <Link href="/exams/usmle" className="rounded-full border border-border/80 bg-card hover:bg-primary/5 hover:text-primary px-3 py-1 font-semibold transition-colors">USMLE</Link>
             <span className="rounded-full border border-border/80 bg-card px-3 py-1 font-semibold">CMS Mock Tests</span>
           </div>
         </div>

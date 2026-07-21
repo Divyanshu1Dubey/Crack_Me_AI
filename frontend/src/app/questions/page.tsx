@@ -1263,7 +1263,7 @@ function QuestionsContent() {
                                 {/* Option 1: Practice Mode — opens fullscreen immersive page */}
                                 <button
                                     onClick={() => {
-                                        router.push(`/questions/practice?year=${modalYear}`);
+                                        router.push(`/questions/practice?year=${modalYear}&exam=${selectedExam}`);
                                     }}
                                     className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer"
                                 >

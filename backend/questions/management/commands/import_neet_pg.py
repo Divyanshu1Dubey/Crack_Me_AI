@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from questions.models import Subject, Topic, Question
 from ai_engine.services import AIService
+from questions.text_encoding import normalize_text, read_text_file
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +60,7 @@ class Command(BaseCommand):
         self.stdout.write("\nParsing NEET PG 2025 text file...")
         parsed_2025 = []
         if os.path.exists(txt_path):
-            with open(txt_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = read_text_file(txt_path)
             parsed_2025 = self._parse_2025_text(content)
             self.stdout.write(self.style.SUCCESS(f"Parsed {len(parsed_2025)} questions from NEET PG 2025 text file."))
         else:
@@ -222,13 +222,13 @@ class Command(BaseCommand):
 
             # Save question
             Question.objects.create(
-                question_text=q["question_text"],
-                option_a=q["option_a"],
-                option_b=q["option_b"],
-                option_c=q["option_c"],
-                option_d=q["option_d"],
+                question_text=normalize_text(q["question_text"]),
+                option_a=normalize_text(q["option_a"]),
+                option_b=normalize_text(q["option_b"]),
+                option_c=normalize_text(q["option_c"]),
+                option_d=normalize_text(q["option_d"]),
                 correct_answer=correct_ans,
-                explanation=explanation,
+                explanation=normalize_text(explanation) if isinstance(explanation, str) else explanation,
                 subject=subject,
                 topic=topic,
                 year=year,

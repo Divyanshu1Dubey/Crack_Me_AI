@@ -9,6 +9,7 @@
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -42,9 +43,11 @@ export default function PracticePage() {
 
 function PracticeContent() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const { activeTrack } = useExamTrack();
     const router = useRouter();
     const searchParams = useSearchParams();
     const year = searchParams.get('year');
+    const examParam = searchParams.get('exam') || activeTrack || 'cms';
 
     const [questions, setQuestions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -69,14 +72,14 @@ function PracticeContent() {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (!year) { router.push('/questions'); return; }
         if (isAuthenticated && year) {
-            questionsAPI.list({ year, page_size: 200 }).then(res => {
+            questionsAPI.list({ year, exam_type: examParam, page_size: 200 }).then(res => {
                 const qs = res.data.results || res.data || [];
                 setQuestions(qs);
             }).catch(() => {
                 setQuestions([]);
             }).finally(() => setLoading(false));
         }
-    }, [authLoading, isAuthenticated, router, year]);
+    }, [authLoading, isAuthenticated, router, year, examParam]);
 
     const currentQ = questions[currentIdx];
     const totalQ = questions.length;
