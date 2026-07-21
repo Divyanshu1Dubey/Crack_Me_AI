@@ -42,6 +42,7 @@ urlpatterns = [
     path("api/tests/", include("tests_engine.urls")),
     path("api/analytics/", include("analytics.urls")),
     path("api/ai/", include("ai_engine.urls")),
+    path("api/knowledge/", include("knowledge_base.urls")),
     path("api/textbooks/", include("textbooks.urls")),
     path("api/resources/", include("resources.urls")),
     path("api/video/", include("video_engine.urls")),

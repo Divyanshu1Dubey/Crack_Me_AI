@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'video_engine',
     'django_q',
     'jobs',
+    'knowledge_base',
     # Security
     'axes',
 ]
@@ -442,15 +443,39 @@ if REDIS_URL:
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             },
             'TIMEOUT': 86400,  # 24 hours default
-        }
+        },
+        # Dedicated cache for KB retrieval so it doesn't share quota
+        # with sessions / generic view cache.
+        'kb_retrieval': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'TIMEOUT': 3600,
+        },
     }
 else:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'crackcms-cache',
-        }
+        },
+        'kb_retrieval': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'crackcms-kb',
+        },
     }
+
+# ── Knowledge Base ──────────────────────────────────────────────────────
+KB_FALLBACK_THRESHOLD = int(os.getenv('KB_FALLBACK_THRESHOLD', '10'))
+KB_DEFAULT_TOP_K = int(os.getenv('KB_DEFAULT_TOP_K', '8'))
+KB_USE_RERANK = os.getenv('KB_USE_RERANK', 'true').lower() == 'true'
+KB_USE_KG_BOOST = os.getenv('KB_USE_KG_BOOST', 'true').lower() == 'true'
+
+# Embedding
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'bge-small-en-v1.5')
+NCBI_API_KEY = os.getenv('NCBI_API_KEY', '')
 
 # ── Security Hardening ──────────────────────────────────────────────
 # Browser-level protections against common web vulnerabilities (OWASP).

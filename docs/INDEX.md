@@ -99,6 +99,15 @@ For hands-on work:
 | [reports/IMPLEMENTATION_LOGIN_RESET.md](./reports/IMPLEMENTATION_LOGIN_RESET.md) | Login + password-reset feature completion report |
 | [reports/CHANGELOG.md](./reports/CHANGELOG.md) | Historical implementation log (NVIDIA Mistral integration + docs consolidation) |
 
+## `knowledge-base/` — Monica AI Tutor Knowledge Platform
+
+| File | Purpose |
+|---|---|
+| [knowledge-base/ARCHITECTURE.md](./knowledge-base/ARCHITECTURE.md) | Source-whitelisted RAG + KG + citation engine backing Monica |
+| [knowledge-base/SOURCES.md](./knowledge-base/SOURCES.md) | Legally-defensible source whitelist (NCBI / OpenStax / Govt / Internal only) |
+| [knowledge-base/SETUP.md](./knowledge-base/SETUP.md) | Supabase + Upstash Redis + Cloudflare CDN one-time setup |
+| [knowledge-base/INGESTION.md](./knowledge-base/INGESTION.md) | How to ingest new content + run daily/weekly ops |
+
 ---
 
 ## Cross-Reference Table
@@ -121,6 +130,7 @@ For hands-on work:
 | Scaling plan | [SCALING_ROADMAP.md](./SCALING_ROADMAP.md) |
 | Prioritized improvements | [IMPROVEMENTS.md](./IMPROVEMENTS.md) |
 | AI-assistant rules | [AI_ASSISTANT_RULES.md](./AI_ASSISTANT_RULES.md) |
+| Knowledge base / Monica | [knowledge-base/ARCHITECTURE.md](./knowledge-base/ARCHITECTURE.md) + [knowledge-base/SOURCES.md](./knowledge-base/SOURCES.md) |
 
 ---
 
