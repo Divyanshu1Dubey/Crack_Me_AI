@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { FormattedText } from '@/components/FormattedText';
 
 function cleanOptionText(text: string): string {
     return text.replace(/\s*\*+\s*$/, '').trim();
