@@ -154,6 +154,23 @@ export default function Sidebar() {
             <div className={`sidebar-overlay ${open ? 'active' : ''}`} onClick={() => setOpen(false)} />
 
             <div className={`sidebar ${open ? 'open' : ''} ${desktopOpen ? '' : 'desktop-hidden'}`} style={{ display: 'flex', flexDirection: 'column' }} aria-label="Primary sidebar navigation">
+                {/* Mobile drawer header — visible only on mobile (<768px).
+                    Provides a clear close affordance + identifies the panel so
+                    users don't think the menu is the same as the page content. */}
+                <div className="sidebar-mobile-header">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <BrandMark href="/dashboard" className="min-w-0" compact />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setOpen(false)}
+                        aria-label="Close menu"
+                        className="flex items-center justify-center w-9 h-9 rounded-xl border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
                 {/* Logo */}
                 <div className="px-4 pt-2 pb-3">
                     <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">

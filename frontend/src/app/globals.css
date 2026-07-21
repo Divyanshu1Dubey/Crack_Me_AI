@@ -590,22 +590,119 @@ body.sidebar-hidden .main-content {
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.24s ease;
-    width: 88%;
-    max-width: 320px;
-    box-shadow: 0 20px 44px rgba(2, 6, 23, 0.28);
+    transform: translateX(-110%);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    width: min(86%, 340px);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.32);
+    border-right: 1px solid var(--color-border);
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
   .sidebar.open {
     transform: translateX(0);
   }
   .main-content {
     margin-left: 0;
-    padding: 12px;
+    padding: 56px 12px 116px; /* 56px leaves room for the floating menu button */
     padding-bottom: 116px; /* Space for bottom nav + sticky CTA */
   }
   .page-container {
     padding-inline: 2px;
+  }
+  /* Tighter mobile link spacing — bigger tap targets, no horizontal scroll */
+  .sidebar-link {
+    padding: 12px 14px;
+    margin: 0 6px;
+    font-size: 15px;
+    border-radius: 12px;
+  }
+  /* Section labels get a bit more breathing room on mobile */
+  .sidebar-section-title {
+    padding-inline: 14px;
+  }
+}
+
+/* ─── Mobile sidebar: richer drawer UX ───
+   Adds a fixed header (logo + close button) inside the drawer so
+   tapping the menu gives users a clear "this is the app shell"
+   affordance. Also adds an animation polish and a backdrop that
+   blurs the content. */
+.sidebar-mobile-header {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  /* The first child of the sidebar (the logo block) gets an extra
+     top margin on mobile so the drawer header doesn't crowd it. */
+  .sidebar > .sidebar-mobile-header + div {
+    padding-top: 14px;
+  }
+
+  /* When the drawer is closed we still want a subtle shadow peek
+     so users can tell it's slide-in rather than hidden outright. */
+  .sidebar-overlay {
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
+  /* On mobile, force sidebar items to show their text labels
+     (no longer hide them like on the tablet 72px column layout). */
+  .sidebar .sidebar-label {
+    display: inline !important;
+  }
+}
+
+/* Mobile overlay — slightly darker, smooth fade */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  z-index: 35;
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+.sidebar-overlay.active {
+  display: block;
+  opacity: 1;
+}
+
+/* Mobile menu button */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 6, 23, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.mobile-menu-btn:hover { transform: scale(1.04); }
+.mobile-menu-btn:active { transform: scale(0.96); }
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
   }
 }
 
@@ -663,12 +760,6 @@ body.sidebar-hidden .main-content {
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
 }
 
-@media (max-width: 768px) {
-  .mobile-menu-btn {
-    display: flex;
-  }
-}
-
 /* Disabled button */
 .btn-primary:disabled {
   opacity: 0.5;
@@ -723,73 +814,181 @@ body.sidebar-hidden .main-content {
   margin-bottom: 4px;
 }
 
-/* AI Response Styling */
-.ai-response h1,
-.ai-response h2,
-.ai-response h3,
-.ai-response h4 {
-  margin-top: 12px;
+/* AI Response Styling — Tailwind 4 compatible.
+   Do NOT use @tailwindcss/typography — it's not installed, so
+   `prose prose-invert prose-sm` adds zero CSS and leaves raw "#"
+   markers visible. Hand-styled below. */
+.ai-response {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.65;
 }
 
-.ai-response ul,
-.ai-response ol {
-  list-style: none;
-  padding-left: 0;
-}
-
-.ai-response table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0;
-  font-size: 13px;
-}
-
-.ai-response th {
-  text-align: left;
-  padding: 8px 12px;
-  background: var(--bg-primary);
-  border-bottom: 2px solid var(--accent-primary);
+.ai-response .ai-h1 {
+  font-size: 18px;
+  font-weight: 800;
   color: var(--accent-primary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ai-response td {
-  padding: 8px 12px;
+  margin: 14px 0 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--glass-border);
-  font-size: 12px;
+  letter-spacing: -0.01em;
 }
 
-.ai-response blockquote {
-  border-left: 3px solid var(--accent-warning);
-  background: rgba(245, 158, 11, 0.05);
-  margin: 8px 0;
-  padding: 8px 12px;
-  border-radius: 0 8px 8px 0;
+.ai-response .ai-h2 {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  letter-spacing: -0.01em;
 }
 
-.ai-response code {
-  background: rgba(6, 182, 212, 0.1);
-  color: #06b6d4;
-  padding: 2px 6px;
+.ai-response .ai-h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #d97706;
+  margin: 12px 0 4px;
+}
+
+.ai-response .ai-h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #7c3aed;
+  margin: 10px 0 4px;
+}
+
+.ai-response .ai-p {
+  margin: 6px 0;
+  color: var(--text-primary);
+  line-height: 1.65;
+}
+
+.ai-response .ai-strong {
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.ai-response .ai-em {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.ai-response .ai-ul,
+.ai-response .ai-ol {
+  margin: 6px 0 6px 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-response .ai-ol {
+  list-style: decimal;
+  padding-left: 20px;
+}
+
+.ai-response .ai-li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.ai-response .ai-li-dot {
+  margin-top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.ai-response .ai-code {
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--accent-primary);
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-.ai-response pre {
+.ai-response .ai-pre {
   background: var(--bg-primary);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0;
   overflow-x: auto;
+  color: var(--text-primary);
+  font-size: 12px;
 }
 
-.ai-response hr {
+.ai-response .ai-blockquote {
+  border-left: 3px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 6%, transparent);
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 0 8px 8px 0;
+  color: var(--text-primary);
+}
+
+.ai-response .ai-hr {
   border: none;
   border-top: 1px solid var(--glass-border);
   margin: 12px 0;
 }
+
+.ai-response .ai-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.ai-response .ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.ai-response .ai-th {
+  text-align: left;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-bottom: 2px solid var(--accent-primary);
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.ai-response .ai-td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-primary);
+}
+
+.ai-response .ai-link {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-response .ai-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0 4px 4px 0;
+}
+
+.ai-tag-pink  { background: rgba(236, 72, 153, 0.15); color: #be185d; border: 1px solid rgba(236, 72, 153, 0.3); }
+.ai-tag-amber { background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3); }
+.ai-tag-green { display: block; margin: 8px 0; padding: 8px 12px; border-radius: 8px; background: rgba(16, 185, 129, 0.08); color: #047857; border: 1px solid rgba(16, 185, 129, 0.25); }
+
+[data-theme="dark"] .ai-tag-pink  { color: #f9a8d4; }
+[data-theme="dark"] .ai-tag-amber { color: #fcd34d; }
+[data-theme="dark"] .ai-tag-green { color: #6ee7b7; }
 
 /* ═══ Review Mode & Question Bank Shared Styles ═══ */
 

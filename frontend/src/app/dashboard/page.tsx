@@ -41,17 +41,74 @@ const CAMPUS_MOMENTUM = [
     { name: 'Harsh V.', college: 'KGMU Lucknow', note: '58 weak topics fixed' },
 ] as const;
 
+const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
+const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
+
+function getBonusEndTimestamp(): number {
+    if (typeof window === 'undefined') return Date.now() + BONUS_TOTAL_SECONDS * 1000;
+    const stored = window.localStorage.getItem(BONUS_END_KEY);
+    const now = Date.now();
+    if (stored) {
+        const parsed = Number(stored);
+        if (Number.isFinite(parsed) && parsed > now) return parsed;
+    }
+    const end = now + BONUS_TOTAL_SECONDS * 1000;
+    window.localStorage.setItem(BONUS_END_KEY, String(end));
+    return end;
+}
+
 const BonusTimerBanner = () => {
-    const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes
+    // Persist the deadline in localStorage so the countdown survives
+    // re-renders (SWR revalidations, route changes, tabs refocusing) and
+    // never resets to 1:00:00 mid-session.
+    //
+    // Lazy `useState` initializer reads the stored end-timestamp synchronously
+    // on mount so the FIRST render already shows the correct remaining time.
+    // Without this, the banner would briefly flash 60:00 every time the
+    // dashboard tree remounts (e.g., returning from another route, SWR
+    // focus revalidation, or page visibility change) — which is what was
+    // making the timer feel like it "starts again from 1 hour".
+    const [timeLeft, setTimeLeft] = useState<number>(() => {
+        const endTs = getBonusEndTimestamp();
+        return Math.max(0, Math.floor((endTs - Date.now()) / 1000));
+    });
     useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
-        }, 1000);
+        const endTs = getBonusEndTimestamp();
+        const tick = () => {
+            const remaining = Math.max(0, Math.floor((endTs - Date.now()) / 1000));
+            setTimeLeft(remaining);
+        };
+        tick();
+        const timer = setInterval(tick, 1000);
         return () => clearInterval(timer);
     }, []);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
+    const expired = timeLeft <= 0;
+
+    if (expired) {
+        return (
+            <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                        <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-500" />
+                            Bonus offer ended
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                            The next bonus window opens in a few hours. Subscribe to lock in the early-bird price.
+                        </p>
+                    </div>
+                    <Link href="/subscription">
+                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                            View Offers
+                        </Button>
+                    </Link>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">

@@ -16,7 +16,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, ChevronDown, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag, Target, Zap, GraduationCap, Lightbulb, Play } from 'lucide-react';
+import { BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight, ChevronDown, Loader2, Brain, Sparkles, CheckCircle, ArrowRight, Flag, Target, Zap, GraduationCap, Lightbulb, Play, Calendar, ListChecks } from 'lucide-react';
 import Header from '@/components/Header';
 import DiscussionThread from '@/components/DiscussionThread';
 import EngagingLoader from '@/components/EngagingLoader';
@@ -36,24 +36,52 @@ function cleanOptionText(text: string): string {
     return text.replace(/\s*\*+\s*$/, '').trim();
 }
 
-/** Cleans AI response text — strips JSON/code fence artifacts that appear when AI parsing fails */
+/** Small color-swatch chip used inside the exam-mode palette legend. */
+function LegendChip({ color, label }: { color: string; label: string }) {
+    return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+            <span className={`w-2.5 h-2.5 rounded-sm ${color}`} />
+            {label}
+        </span>
+    );
+}
+
+/** Cleans AI response text — strips JSON/code fence artifacts that appear
+ * when AI parsing fails, normalizes stray markdown heading markers, and
+ * collapses newlines so the FormattedText renderer can format the rest.
+ */
 function cleanAiText(text: string): string {
     if (!text) return text;
     let t = text.trim();
+
     // Strip code fences: ```json ... ```
     if (t.startsWith('```')) t = t.replace(/^```\w*\n?/, '');
     if (t.endsWith('```')) t = t.slice(0, -3);
     t = t.trim();
+
+    // Strip a stray leading "json" keyword the model sometimes prepends.
+    if (t.toLowerCase().startsWith('json')) t = t.slice(4).trim();
+
     // If it looks like a JSON object, try to extract the why_correct field
+    // (AI sometimes returns the full JSON instead of just the string).
     if (t.startsWith('{')) {
         try {
             const parsed = JSON.parse(t);
-            if (parsed.why_correct) return parsed.why_correct;
+            if (typeof parsed === 'object' && parsed) {
+                if (parsed.why_correct) return cleanAiText(parsed.why_correct);
+                if (parsed.explanation) return cleanAiText(parsed.explanation);
+            }
         } catch { /* not valid JSON, continue */ }
     }
-    // Strip leading "json" keyword
-    if (t.toLowerCase().startsWith('json')) t = t.slice(4).trim();
-    return t;
+
+    // Replace ATX heading markers (#, ##, ###) with bold so they render as
+    // emphasis instead of as literal "#" characters in the UI.
+    // "### Why this is correct" → "**Why this is correct**"
+    t = t.replace(/^\s{0,3}#{1,6}\s+(.+)$/gm, '**$1**');
+    // Collapse 3+ blank lines down to one.
+    t = t.replace(/\n{3,}/g, '\n\n');
+
+    return t.trim();
 }
 
 interface Question {
@@ -130,6 +158,14 @@ function QuestionsContent() {
     const [showAnswer, setShowAnswer] = useState(false);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [studyMode, setStudyMode] = useState<'practice' | 'exam'>('practice');
+    // Exam-mode state — tracks which questions the user answered in the
+    // current session, used by the right-rail palette.
+    const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean; answeredAt: number }>>({});
+    const [examPaletteOpen, setExamPaletteOpen] = useState(true);
+    // Reset exam state when toggling modes or changing filters.
+    useEffect(() => {
+        setExamAnswers({});
+    }, [studyMode, selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery]);
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const pageSize = 20;
@@ -155,6 +191,13 @@ function QuestionsContent() {
     const [startingSimulation, setStartingSimulation] = useState(false);
     const [simulationError, setSimulationError] = useState<string | null>(null);
     const [showStatsDetail, setShowStatsDetail] = useState(false);
+
+    // Exam-mode full-year question index. When the user enters exam mode
+    // for a specific year, we fetch ALL questions for that year (paginated
+    // until exhausted) so the right-rail palette can render every question
+    // number — like a real UPSC CMS test HUD (240 buttons for 240 questions).
+    const [examQuestions, setExamQuestions] = useState<Question[]>([]);
+    const [examQuestionsLoading, setExamQuestionsLoading] = useState(false);
 
     // Textbook reference states
     const [textbookRef, setTextbookRef] = useState<any>(null);
@@ -303,6 +346,54 @@ function QuestionsContent() {
         fetchQuestions(params);
     };
 
+    // Exam-mode: load ALL questions for the selected year (or current filter
+    // set) so the right-rail palette can show every question number like a
+    // real test HUD — not just the 20 currently visible on the list page.
+    // Paginated until exhausted; capped at 600 to avoid runaway fetches.
+    useEffect(() => {
+        if (studyMode !== 'exam') {
+            setExamQuestions([]);
+            return;
+        }
+        if (!isAuthenticated) return;
+
+        const params: Record<string, string | number> = { page: 1, page_size: 100 };
+        if (selectedYear) params.year = selectedYear;
+        if (selectedSubject) params.subject = selectedSubject;
+        if (selectedDifficulty) params.difficulty = selectedDifficulty;
+        if (searchQuery) params.search = searchQuery;
+        if (selectedExam) params.exam_type = selectedExam;
+
+        setExamQuestionsLoading(true);
+        const collected: Question[] = [];
+        const HARD_CAP = 600;
+        const MAX_PAGES = 30;
+
+        const fetchPage = (pageNum: number): Promise<void> => {
+            return questionsAPI.list({ ...params, page: pageNum })
+                .then(res => {
+                    const d = res.data;
+                    const items: Question[] = (d.results || d || []);
+                    collected.push(...items);
+                    const total = d.count || items.length;
+                    const reachedEnd = items.length < 100 || collected.length >= total || collected.length >= HARD_CAP;
+                    if (reachedEnd || pageNum >= MAX_PAGES) {
+                        setExamQuestions(collected);
+                        setExamQuestionsLoading(false);
+                        return;
+                    }
+                    return fetchPage(pageNum + 1);
+                })
+                .catch(() => {
+                    setExamQuestions(collected);
+                    setExamQuestionsLoading(false);
+                });
+        };
+
+        fetchPage(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [studyMode, selectedYear, selectedSubject, selectedDifficulty, selectedExam, searchQuery, isAuthenticated]);
+
     const openQuestion = (id: number) => {
         setSelectedQuestion(id);
         setShowAnswer(false);
@@ -362,6 +453,9 @@ function QuestionsContent() {
                 setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
             }
         }).catch(() => { });
+        // Mark this question answered in the exam palette (only visible
+        // when studyMode === 'exam').
+        setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
     };
 
     /**
@@ -463,6 +557,62 @@ function QuestionsContent() {
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
 
+                {/* ═══ Persistent Year Banner ═══
+                    Pinned at the top of the page once a year is selected so
+                    users always see which PYQ year they're working on. Previously
+                    the year chip lived inside the filter card and got buried,
+                    so users lost track of their context on mobile. */}
+                {selectedYear && (
+                    <div className="sticky top-2 z-20 -mx-1">
+                        <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 backdrop-blur-sm shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                                    <Calendar className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Active PYQ Bank</p>
+                                    <p className="text-base sm:text-lg font-bold text-foreground truncate">
+                                        UPSC CMS {selectedYear} · {qbankStats?.by_year?.find((b: any) => String(b.year) === selectedYear)?.count ?? '—'} Questions
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (studyMode !== 'exam') setStudyMode('exam');
+                                    }}
+                                    className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors ${
+                                        studyMode === 'exam'
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-card text-foreground border-border hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+                                    }`}
+                                >
+                                    <Target className="w-3.5 h-3.5 inline mr-1" />
+                                    Exam Mode
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
+                                    }}
+                                    className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                                >
+                                    <BookOpen className="w-3.5 h-3.5 inline mr-1" />
+                                    Practice Fullscreen
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedYear('')}
+                                    className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-1 underline-offset-2 hover:underline"
+                                >
+                                    Change year
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Unified Dashboard & Filters Panel.
                     `overflow-visible` here (instead of `overflow-hidden`) so the
                     native <select> dropdowns for Subject/Difficulty/Year can
@@ -547,6 +697,23 @@ function QuestionsContent() {
                             </div>
                         )}
 
+                        {/* Persistent year chip — moved to a sticky top banner
+                            above the filter card (see banner above). Kept the
+                            "Clear year" affordance accessible inside the filter
+                            card as well for convenience. */}
+                        {selectedYear && (
+                            <div className="flex items-center gap-2 -mt-1 text-[11px] text-muted-foreground">
+                                <span>Showing only {selectedYear} questions</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedYear('')}
+                                    className="font-semibold text-primary hover:underline underline-offset-2"
+                                >
+                                    Clear year
+                                </button>
+                            </div>
+                        )}
+
                         {/* Filters Row */}
                         <div className="flex flex-col gap-3 pt-1">
                             {/* Top row: Search and Exam Mode Toggle */}
@@ -626,9 +793,9 @@ function QuestionsContent() {
                 </Card>
 
                 {/* Content */}
-                <div className="grid gap-6 flex-1 min-h-0 lg:grid-cols-5">
+                <div className="grid gap-4 sm:gap-6 flex-1 min-h-0 lg:grid-cols-5">
                     {/* Question List */}
-                    <div className="lg:col-span-2 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
+                    <div className="lg:col-span-2 max-lg:order-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
                         <div className="space-y-3 px-1 py-0.5">
                         {loading ? (
                             <div className="space-y-3">
@@ -698,7 +865,78 @@ function QuestionsContent() {
                     </div>
 
                     {/* Question Detail */}
-                    <div className="lg:col-span-3 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
+                    {/* Exam-mode question palette — shows all questions in the current
+                            filter with attempted / not-attempted state. Rendered as
+                            a sticky right rail on desktop and a collapsible
+                            bottom-sheet trigger on mobile. */}
+                    {studyMode === 'exam' && examPaletteOpen && (
+                        <Card className="lg:col-span-1 border-border/80 bg-card/90 backdrop-blur-sm shadow-sm sticky top-0 self-start">
+                            <CardContent className="p-4 space-y-3 max-h-[calc(100vh-180px)] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Question Palette</h4>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            {Object.keys(examAnswers).length}/{examQuestions.length || questions.length} answered
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setExamPaletteOpen(false)}
+                                        className="lg:hidden text-xs text-muted-foreground hover:text-foreground"
+                                    >Hide</button>
+                                </div>
+
+                                {/* Legend */}
+                                <div className="flex flex-wrap gap-2 text-[10px]">
+                                    <LegendChip color="bg-emerald-500" label="Correct" />
+                                    <LegendChip color="bg-red-500" label="Wrong" />
+                                    <LegendChip color="bg-amber-400" label="Current" />
+                                    <LegendChip color="bg-muted-foreground/40" label="Unseen" />
+                                </div>
+
+                                {/* The grid — uses the full exam-mode question
+                                    list (all 240 questions for the year, fetched
+                                    in pages) so the palette covers every question
+                                    like a real UPSC CMS test HUD. Previously this
+                                    only mapped over the 20 currently-visible page
+                                    items, leaving the rest as empty slots. */}
+                                {examQuestionsLoading && examQuestions.length === 0 ? (
+                                    <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        Loading full palette…
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-6 gap-1.5">
+                                        {examQuestions.map((q, idx) => {
+                                            const ans = examAnswers[q.id];
+                                            const isCurrent = q.id === selectedQuestion;
+                                            const status = ans
+                                                ? ans.isCorrect ? 'correct' : 'wrong'
+                                                : isCurrent ? 'current' : 'unseen';
+                                            const statusClass = {
+                                                correct: 'bg-emerald-500 text-white border-emerald-500',
+                                                wrong: 'bg-red-500 text-white border-red-500',
+                                                current: 'bg-amber-400 text-amber-950 border-amber-400 ring-2 ring-amber-400/40',
+                                                unseen: 'bg-muted text-muted-foreground border-border hover:bg-muted/80',
+                                            }[status];
+                                            return (
+                                                <button
+                                                    key={q.id}
+                                                    type="button"
+                                                    onClick={() => openQuestion(q.id)}
+                                                    className={`aspect-square rounded-lg border text-[11px] font-bold flex items-center justify-center transition-colors ${statusClass}`}
+                                                    aria-label={`Question ${idx + 1}, ${status}`}
+                                                >
+                                                    {idx + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <div className={`${studyMode === 'exam' && examPaletteOpen ? 'lg:col-span-2' : 'lg:col-span-3'} max-lg:order-2 lg:overflow-y-auto lg:overscroll-contain lg:pr-2 max-lg:max-h-[80vh] max-lg:overflow-y-auto max-lg:rounded-2xl max-lg:border max-lg:border-border/60 max-lg:bg-card/70 max-lg:p-3 max-lg:backdrop-blur-sm`} style={{ scrollbarWidth: 'thin' }}>
                         {selectedQuestion && !detail ? (
                             // Skeleton placeholder while the question detail loads —
                             // previously the right pane showed stale content from the
@@ -746,9 +984,22 @@ function QuestionsContent() {
                                                 const isSelected = selectedAnswer === opt;
                                                 const isWrong = isSelected && !isCorrect && showAnswer;
 
+                                                // Readable palette — was using `opacity-80`
+                                                // on wrong/unselected options which made
+                                                // the option text invisible in light mode.
                                                 return (
                                                     <div key={opt}
-                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${showAnswer ? (isCorrect ? 'border-emerald-500 bg-emerald-500/5' : isWrong ? 'border-red-500/50 opacity-80' : 'border-border/70 bg-muted/35 opacity-100') : (isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted')}`}
+                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                                            showAnswer
+                                                                ? (isCorrect
+                                                                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 text-foreground'
+                                                                    : isWrong
+                                                                        ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 text-foreground'
+                                                                        : 'border-border/70 bg-muted/40 text-foreground')
+                                                                : (isSelected
+                                                                    ? 'border-primary bg-primary/5 ring-1 ring-primary text-foreground'
+                                                                    : 'border-border bg-card hover:bg-muted/60 text-foreground')
+                                                        }`}
                                                         onClick={() => handleSelectOption(opt)}>
                                                         <div className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${showAnswer ? (isCorrect ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground') : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}`}>{opt}</div>
                                                         <div className="flex-1 text-sm font-medium">{cleanOptionText(String(optionText))}</div>
@@ -760,7 +1011,7 @@ function QuestionsContent() {
                                         </div>
 
                                         {!showAnswer && !selectedAnswer && studyMode === 'practice' && (
-                                            <p className="text-xs text-center py-2" style={{ color: 'var(--text-secondary)' }}>👆 Select an option to reveal the answer & detailed analysis</p>
+                                            <p className="text-xs text-center py-2 text-muted-foreground">👆 Select an option to reveal the answer & detailed analysis</p>
                                         )}
                                         
                                         {!showAnswer && studyMode === 'exam' && (
@@ -781,11 +1032,21 @@ function QuestionsContent() {
                                 {/* === ANSWER ANALYSIS === */}
                                 {showAnswer && (
                                     <div className="space-y-3 animate-fadeInUp">
-                                        {/* ✅ Correct Answer */}
-                                        <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900/50">
-                                            <CardContent className="p-4">
-                                                <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}</h4>
-                                                {detail.explanation && <p className="text-sm leading-relaxed mt-2 text-emerald-900/80 dark:text-emerald-100/70">{String(detail.explanation)}</p>}
+                                        {/* ✅ Correct Answer — light/dark readable palette:
+                                            bg-emerald-50 was washed out so explanation body
+                                            was nearly invisible. Switched to a stronger
+                                            emerald tone with an opaque white inner card so
+                                            the body text inherits proper contrast. */}
+                                        <Card className="border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60">
+                                            <CardContent className="p-4 space-y-2">
+                                                <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                                    <CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}
+                                                </h4>
+                                                {detail.explanation && (
+                                                    <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
+                                                        {String(detail.explanation)}
+                                                    </div>
+                                                )}
                                             </CardContent>
                                         </Card>
 
@@ -980,7 +1241,7 @@ function QuestionsContent() {
                                                             <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: '#10b981' }}>
                                                                 <CheckCircle className="w-3.5 h-3.5" /> Why {detail.correct_answer} is Correct
                                                             </h5>
-                                                            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', lineHeight: '1.7' }}>{cleanAiText(aiExplanation.why_correct)}</p>
+                                                            <FormattedText text={cleanAiText(aiExplanation.why_correct)} />
                                                         </div>
                                                     )}
                                                     {aiExplanation.why_wrong && Object.keys(aiExplanation.why_wrong).length > 0 && (
@@ -1031,7 +1292,7 @@ function QuestionsContent() {
                                                                         <div className="explanation-card-accent indigo"></div>
                                                                         <div className="p-4 pl-5">
                                                                             <h4 className="explanation-card-title indigo"><BookOpen className="w-4 h-4" /> 📖 Topic Deep Dive — Learn the Bigger Picture</h4>
-                                                                            <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>{aiExplanation.topic_deep_dive}</p>
+                                                                            <FormattedText text={cleanAiText(aiExplanation.topic_deep_dive)} />
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -1102,7 +1363,7 @@ function QuestionsContent() {
                                                                         <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
                                                                             <Lightbulb className="w-3.5 h-3.5" /> 📝 Quick Revision — Read Before Exam
                                                                         </h5>
-                                                                        <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>{aiExplanation.quick_revision}</p>
+                                                                        <FormattedText text={cleanAiText(aiExplanation.quick_revision)} />
                                                                     </div>
                                                                 )}
 
@@ -1124,8 +1385,8 @@ function QuestionsContent() {
                                                                         <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
                                                                             <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
                                                                         </h5>
-                                                                        {aiExplanation.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {aiExplanation.pyq_frequency}</p>}
-                                                                        {aiExplanation.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {aiExplanation.similar_pyq}</p>}
+                                                                        {aiExplanation.pyq_frequency && <FormattedText text={`📈 **Frequency:** ${cleanAiText(aiExplanation.pyq_frequency)}`} />}
+                                                                        {aiExplanation.similar_pyq && <FormattedText text={`📋 **Similar Questions:** ${cleanAiText(aiExplanation.similar_pyq)}`} />}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1237,10 +1498,28 @@ function QuestionsContent() {
             </div>
             </div>
 
-            {/* Year Modal Popup */}
+            {/* Mobile exam palette toggle — only in exam mode and when the
+                right-rail palette is hidden. Shows count against the full
+                exam-mode question set (240) instead of the loaded page (20). */}
+            {studyMode === 'exam' && !examPaletteOpen && (
+                <button
+                    type="button"
+                    onClick={() => setExamPaletteOpen(true)}
+                    className="fixed bottom-20 right-4 z-30 lg:hidden bg-indigo-600 text-white shadow-lg rounded-full px-4 py-2 text-xs font-bold flex items-center gap-2"
+                >
+                    <ListChecks className="w-4 h-4" />
+                    Palette ({Object.keys(examAnswers).length}/{examQuestions.length || questions.length})
+                </button>
+            )}
+
+            {/* Year Modal Popup — centered on desktop, anchored near the top
+                on mobile so the two option buttons (Practice / Exam Simulation)
+                are immediately visible instead of being squeezed at the bottom
+                of a small viewport. The wrapper scrolls if the card itself
+                overflows on tall phones. */}
             {yearModalOpen && modalYear && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-                    <Card className="max-w-md w-full border-border/80 bg-card/95 shadow-xl relative overflow-hidden animate-fadeInUp">
+                <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 backdrop-blur-xs p-4 pt-16 sm:pt-4 overflow-y-auto animate-fadeIn">
+                    <Card className="max-w-md w-full border-border/80 bg-card shadow-2xl relative overflow-hidden animate-fadeInUp">
                         <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
                         <CardContent className="p-6 space-y-6">
                             <div className="text-center space-y-2">

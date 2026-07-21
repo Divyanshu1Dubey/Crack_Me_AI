@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
-import ReactMarkdown from 'react-markdown';
+import { FormattedText } from '@/components/FormattedText';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
   CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
@@ -309,15 +309,24 @@ function PracticeContent() {
                         {/* Answer Analysis */}
                         {showAnswer && (
                             <div className="space-y-4 animate-fadeInUp">
-                                {/* Result Banner */}
-                                <Card className={`${isCorrect ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900/50' : 'border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900/50'}`}>
-                                    <CardContent className="p-4">
-                                        <h4 className={`text-sm font-bold flex items-center gap-2 ${isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
+                                {/* Result Banner — light/dark readable palette.
+                                    The previous emerald/red palette washed out the
+                                    explanation body in light mode. Now uses stronger
+                                    border + opaque inner panel so body text inherits
+                                    foreground contrast. */}
+                                <Card className={isCorrect
+                                    ? 'border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60'
+                                    : 'border-red-300 bg-red-50/80 dark:bg-red-950/30 dark:border-red-800/60'}
+                                >
+                                    <CardContent className="p-4 space-y-2">
+                                        <h4 className={`text-sm font-bold flex items-center gap-2 ${isCorrect ? 'text-emerald-800 dark:text-emerald-300' : 'text-red-800 dark:text-red-300'}`}>
                                             <CheckCircle className="w-4 h-4" />
                                             {isCorrect ? 'Correct!' : `Incorrect — Answer: ${currentQ.correct_answer}`}
                                         </h4>
                                         {currentQ.explanation && (
-                                            <p className="text-sm leading-relaxed mt-2 opacity-80">{String(currentQ.explanation)}</p>
+                                            <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
+                                                {String(currentQ.explanation)}
+                                            </div>
                                         )}
                                     </CardContent>
                                 </Card>
@@ -416,13 +425,13 @@ function PracticeContent() {
                                         {aiExplanation.why_correct && (
                                             <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/10"><CardContent className="p-4">
                                                 <h5 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mb-2"><CheckCircle className="w-3.5 h-3.5" /> Why Correct</h5>
-                                                <div className="text-sm leading-relaxed"><ReactMarkdown>{String(aiExplanation.why_correct)}</ReactMarkdown></div>
+                                                <FormattedText text={String(aiExplanation.why_correct)} />
                                             </CardContent></Card>
                                         )}
                                         {aiExplanation.mnemonic && (
                                             <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10"><CardContent className="p-4">
                                                 <h5 className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-2"><Lightbulb className="w-3.5 h-3.5" /> AI Mnemonic</h5>
-                                                <div className="text-sm leading-relaxed"><ReactMarkdown>{String(aiExplanation.mnemonic)}</ReactMarkdown></div>
+                                                <FormattedText text={String(aiExplanation.mnemonic)} />
                                             </CardContent></Card>
                                         )}
                                         {aiExplanation.textbook_reference && (
@@ -430,7 +439,7 @@ function PracticeContent() {
                                                 <h5 className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-2"><Bookmark className="w-3.5 h-3.5" /> Textbook Reference</h5>
                                                 <div className="text-sm leading-relaxed">
                                                     {typeof aiExplanation.textbook_reference === 'string'
-                                                        ? <ReactMarkdown>{aiExplanation.textbook_reference}</ReactMarkdown>
+                                                        ? <FormattedText text={String(aiExplanation.textbook_reference)} />
                                                         : (
                                                             <div className="space-y-0.5">
                                                                 {aiExplanation.textbook_reference.book && <p className="font-semibold">{aiExplanation.textbook_reference.book}</p>}
@@ -445,7 +454,7 @@ function PracticeContent() {
                                         {aiExplanation.exam_tip && (
                                             <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/10"><CardContent className="p-4">
                                                 <h5 className="text-xs font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1.5 mb-2"><Sparkles className="w-3.5 h-3.5" /> Exam Tip</h5>
-                                                <div className="text-sm leading-relaxed"><ReactMarkdown>{String(aiExplanation.exam_tip)}</ReactMarkdown></div>
+                                                <FormattedText text={String(aiExplanation.exam_tip)} />
                                             </CardContent></Card>
                                         )}
                                     </div>

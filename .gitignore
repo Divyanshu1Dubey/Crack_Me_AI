@@ -69,3 +69,7 @@ backend/*.jpg
 backend/*.png
 backend/scratch/
 
+# Local Claude Code session state
+.claude/
+graphify-out/
+
