@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { TrackedLink } from '@/components/TrackedLink';
 import Script from 'next/script';
 import { CheckCircle2, Sparkles, Target, BookOpen, Brain, FileText, Trophy, Zap, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -383,15 +384,11 @@ export function ExamLandingLayout(c: ExamLandingContent) {
                             Join 47,000+ medical aspirants using CrackCMS to prepare smarter. Start free today.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register" onClick={() => {
-                                if (typeof window !== 'undefined' && (window as any).gtag) {
-                                    (window as any).gtag('event', 'register_intent', { source: 'exam_landing' });
-                                }
-                            }}>
+                            <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'exam_landing' }}>
                                 <Button size="lg" className="gap-2 font-bold">
                                     Create free account <ArrowRight className="h-4 w-4" />
                                 </Button>
-                            </Link>
+                            </TrackedLink>
                             <Link href="/subscription">
                                 <Button size="lg" variant="outline" className="gap-2 font-bold">
                                     See premium plans
