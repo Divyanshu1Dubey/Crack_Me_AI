@@ -432,15 +432,21 @@ RAG_CHUNK_OVERLAP = 50
 TEXTBOOK_SCREENSHOT_DIR = str(MEDIA_ROOT / 'textbook_screenshots')
 
 # ── Cache Configuration ─────────────────────────────────────────────
-# Uses Redis if REDIS_URL is set, otherwise falls back to local memory cache.
-REDIS_URL = os.getenv('REDIS_URL', '')
-if REDIS_URL:
+# Uses Redis if REDIS_URL is set AND valid, otherwise falls back to
+# local memory cache. The redis:// / rediss:// check prevents a crash
+# in django_redis when the env var is set to a bare hostname or empty
+# placeholder (which happened on DigitalOcean App Platform).
+REDIS_URL = os.getenv('REDIS_URL', '').strip()
+_redis_url_valid = REDIS_URL and REDIS_URL.startswith(('redis://', 'rediss://', 'unix://'))
+
+if _redis_url_valid:
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,   # don't crash if Redis goes down
             },
             'TIMEOUT': 86400,  # 24 hours default
         },
@@ -451,11 +457,19 @@ if REDIS_URL:
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
             },
             'TIMEOUT': 3600,
         },
     }
 else:
+    if REDIS_URL:
+        import logging as _logging
+        _logging.getLogger('django').warning(
+            'REDIS_URL is set (%r) but does not start with redis://, '
+            'rediss://, or unix://. Falling back to LocMemCache.',
+            REDIS_URL[:40],
+        )
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
