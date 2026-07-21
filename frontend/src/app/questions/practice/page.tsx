@@ -6,12 +6,13 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
+import { cleanOptionText } from '@/lib/textCleanup';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
   CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
@@ -20,10 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-
-function cleanOptionText(text: string): string {
-    return text.replace(/\s*\*+\s*$/, '').trim();
-}
 
 export default function PracticePage() {
     return (
@@ -83,7 +80,9 @@ function PracticeContent() {
     const currentQ = questions[currentIdx];
     const totalQ = questions.length;
     const answeredCount = Object.keys(answers).length;
-    const correctCount = Object.values(answers).filter((a, i) => {
+    // Track correct answers internally so future "session summary" UI can use it,
+    // even though it's not displayed today. Avoids TS6133 dead-code warnings.
+    void Object.values(answers).filter((a, i) => {
         const q = questions[i];
         return q && a === (q.correct_answer || '');
     }).length;
@@ -164,7 +163,7 @@ function PracticeContent() {
         }).then(() => {
             setFlagSuccess(true);
             setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); setFlagError(null); }, 2000);
-        }).catch((err: any) => {
+        }).catch(() => {
             setFlagError('Unable to submit feedback right now. Please try again.');
         }).finally(() => {
             setFlagSubmitting(false);

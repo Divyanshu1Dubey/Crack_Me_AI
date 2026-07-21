@@ -1,23 +1,34 @@
 /**
- * Sidebar.tsx — Main navigation sidebar for CrackCMS.
- * Grouped navigation, responsive (collapses on tablet, hidden on mobile).
+ * Sidebar.tsx — Production-grade primary navigation.
+ *
+ * Desktop:
+ *   - 260px fixed sidebar, collapsible to hidden via top-left toggle.
+ *   - Grouped sections (Study / AI Tools / Resources / Account) + admin.
+ *   - Active route highlighted with primary-tinted border + soft bg.
+ *
+ * Mobile (<768px):
+ *   - Slide-in drawer with translucent backdrop + backdrop blur.
+ *   - Sticky header inside drawer (logo + close button).
+ *   - Footer pinned to bottom with quick tip + sign out.
+ *   - Scroll position persists across route changes.
  */
 'use client';
-import { useState, useEffect } from 'react';
-import { useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, Sparkles, ChevronRight } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
 import { useExamTrack } from '@/components/ExamTrackProvider';
+import { decodeMojiB } from '@/lib/textCleanup';
 
 interface NavItem {
     href: string;
     iconName: string;
     label: string;
+    badge?: string;
     adminOnly?: boolean;
     requireTrack?: string[];
 }
@@ -41,9 +52,9 @@ const navSections: NavSection[] = [
     {
         title: 'AI Tools',
         items: [
-            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor' },
-            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator' },
-            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan' },
+            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor', badge: 'AI' },
+            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator', badge: 'AI' },
+            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan', badge: 'AI' },
         ]
     },
     {
@@ -69,6 +80,14 @@ const navSections: NavSection[] = [
     },
 ];
 
+const TRACK_LABEL: Record<string, string> = {
+    cms: 'UPSC CMS',
+    neet_pg: 'NEET PG',
+    usmle: 'USMLE',
+    fmge: 'FMGE',
+    ini_cet: 'INI CET',
+};
+
 export default function Sidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuth();
@@ -87,8 +106,13 @@ export default function Sidebar() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
+        const saved = window.localStorage.getItem('crackcms_sidebar_desktop_open');
+        if (saved !== null) setDesktopOpen(saved === 'true');
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
         window.localStorage.setItem('crackcms_sidebar_desktop_open', String(desktopOpen));
-        // Add/remove body class for CSS targeting
         if (desktopOpen) {
             document.body.classList.remove('sidebar-hidden');
         } else {
@@ -103,14 +127,13 @@ export default function Sidebar() {
         if (typeof window === 'undefined') return;
         const nav = navRef.current;
         if (!nav) return;
-
         const saved = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
         if (saved) {
             const top = Number(saved);
-            if (!Number.isNaN(top)) {
-                nav.scrollTop = top;
-            }
+            if (!Number.isNaN(top)) nav.scrollTop = top;
         }
+        // Close drawer on route change so it doesn't stay open.
+        setOpen(false);
     }, [pathname]);
 
     const saveSidebarScroll = () => {
@@ -126,6 +149,7 @@ export default function Sidebar() {
     };
 
     const isAdmin = user?.role === 'admin' || user?.is_admin;
+    const trackLabel = TRACK_LABEL[activeTrack] || activeTrack;
 
     useEffect(() => {
         if (typeof document === 'undefined') return;
@@ -137,7 +161,7 @@ export default function Sidebar() {
 
     return (
         <>
-            {/* Desktop sidebar toggle button (top left, only on desktop) */}
+            {/* Desktop sidebar toggle (top-left, only on desktop) */}
             <button
                 className="desktop-sidebar-toggle-btn"
                 aria-label={desktopOpen ? 'Hide sidebar' : 'Show sidebar'}
@@ -146,20 +170,33 @@ export default function Sidebar() {
                 {desktopOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
             </button>
 
-            {/* Mobile menu button */}
-            <button className="mobile-menu-btn" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+            {/* Mobile menu button (floating, top-left) */}
+            <button
+                className="mobile-menu-btn"
+                onClick={() => setOpen(!open)}
+                aria-label={open ? 'Close menu' : 'Open menu'}
+                aria-expanded={open}
+            >
                 {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            {/* Mobile overlay */}
-            <div className={`sidebar-overlay ${open ? 'active' : ''}`} onClick={() => setOpen(false)} />
 
-            <div className={`sidebar ${open ? 'open' : ''} ${desktopOpen ? '' : 'desktop-hidden'}`} style={{ display: 'flex', flexDirection: 'column' }} aria-label="Primary sidebar navigation">
-                {/* Mobile drawer header — visible only on mobile (<768px).
-                    Provides a clear close affordance + identifies the panel so
-                    users don't think the menu is the same as the page content. */}
+            {/* Mobile overlay */}
+            <div
+                className={`sidebar-overlay ${open ? 'active' : ''}`}
+                onClick={() => setOpen(false)}
+                aria-hidden={!open}
+            />
+
+            <aside
+                className={`sidebar ${open ? 'open' : ''} ${desktopOpen ? '' : 'desktop-hidden'}`}
+                aria-label="Primary sidebar navigation"
+            >
+                {/* Mobile drawer header — visible only on phones.
+                    Provides logo + close button so the drawer has a clear
+                    chrome instead of looking like the page content. */}
                 <div className="sidebar-mobile-header">
                     <div className="flex items-center gap-2 min-w-0">
-                        <BrandMark href="/dashboard" className="min-w-0" compact />
+                        <BrandMark href="/dashboard" compact className="min-w-0" />
                     </div>
                     <button
                         type="button"
@@ -171,52 +208,72 @@ export default function Sidebar() {
                     </button>
                 </div>
 
-                {/* Logo */}
-                <div className="px-4 pt-2 pb-3">
+                {/* Desktop logo block */}
+                <div className="hidden md:block px-4 pt-4 pb-3">
                     <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
                         <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
                             <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
-                            Real Exam Workflow
+                            {decodeMojiB(trackLabel)}
                         </div>
                     </div>
                 </div>
 
-                <Separator className="mb-3" />
+                <Separator className="mb-2" />
 
-                {/* Nav Links */}
-                <nav ref={navRef} onScroll={saveSidebarScroll} className="flex-1 overflow-y-auto overscroll-contain px-1" style={{ scrollbarWidth: 'thin' }}>
-                    <div className="space-y-4">
+                {/* Nav links */}
+                <nav
+                    ref={navRef}
+                    onScroll={saveSidebarScroll}
+                    className="flex-1 overflow-y-auto overscroll-contain px-1"
+                    style={{ scrollbarWidth: 'thin' }}
+                >
+                    <div className="space-y-4 pb-2">
                         {navSections.map((section) => (
                             <div key={section.title}>
-                                <div className="section-title sidebar-section-title mb-2">{section.title}</div>
+                                <div className="section-title sidebar-section-title mb-1.5">{section.title}</div>
                                 <div className="space-y-0.5">
                                     {section.items
                                         .filter(item => !item.adminOnly || isAdmin)
                                         .filter(item => !item.requireTrack || item.requireTrack.includes(activeTrack))
                                         .map((item) => {
-                                        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-                                        return (
-                                            <Link key={item.href} href={item.href} onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${isActive ? 'active' : ''}`} aria-current={isActive ? 'page' : undefined}>
-                                                <CustomIcon
-                                                    name={item.iconName}
-                                                    label={item.label}
-                                                    className="shrink-0"
-                                                    size={18}
-                                                    variant={isActive ? 'active' : 'default'}
-                                                />
-                                                <span className="sidebar-label text-sm">{item.label}</span>
-                                            </Link>
-                                        );
-                                    })}
+                                            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+                                            return (
+                                                <Link
+                                                    key={item.href}
+                                                    href={item.href}
+                                                    onClick={() => { saveSidebarScroll(); setOpen(false); }}
+                                                    className={`sidebar-link ${isActive ? 'active' : ''}`}
+                                                    aria-current={isActive ? 'page' : undefined}
+                                                >
+                                                    <CustomIcon
+                                                        name={item.iconName}
+                                                        label={item.label}
+                                                        className="shrink-0"
+                                                        size={18}
+                                                        variant={isActive ? 'active' : 'default'}
+                                                    />
+                                                    <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
+                                                    {item.badge && (
+                                                        <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
+                                                            {item.badge}
+                                                        </span>
+                                                    )}
+                                                    {isActive && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
+                                                </Link>
+                                            );
+                                        })}
                                 </div>
                             </div>
                         ))}
 
-                        {/* Admin section */}
+                        {/* Admin */}
                         {isAdmin && (
                             <div>
-                                <div className="section-title sidebar-section-title mb-2">Admin</div>
+                                <div className="section-title sidebar-section-title mb-1.5">
+                                    <ShieldAlert className="w-3 h-3 inline mr-1" />
+                                    Admin
+                                </div>
                                 <div className="space-y-0.5">
                                     <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin' ? 'active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}>
                                         <ShieldAlert className="w-5 h-5 shrink-0" />
@@ -240,19 +297,26 @@ export default function Sidebar() {
                     </div>
                 </nav>
 
-                {/* Bottom — logout */}
+                {/* Footer — pinned to bottom */}
                 <div className="mt-auto px-2 pb-3 pt-2">
                     <Separator className="mb-3" />
                     <div className="sidebar-label mx-2 mb-2 rounded-xl border border-border bg-muted/50 px-3 py-2">
-                        <p className="text-[11px] font-semibold text-foreground">Quick Tip</p>
-                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Take one timed test daily and review your top 3 weak tags.</p>
+                        <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> Quick Tip
+                        </p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                            Take one timed test daily and review your top 3 weak tags.
+                        </p>
                     </div>
-                    <button onClick={handleLogout} className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10">
+                    <button
+                        onClick={handleLogout}
+                        className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
                         <LogOut className="w-5 h-5 shrink-0" />
                         <span className="sidebar-label text-sm">Sign Out</span>
                     </button>
                 </div>
-            </div>
+            </aside>
         </>
     );
 }

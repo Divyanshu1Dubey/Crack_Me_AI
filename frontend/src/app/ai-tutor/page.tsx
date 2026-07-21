@@ -13,6 +13,7 @@ import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
 import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { decodeMojiB } from '@/lib/textCleanup';
 
 interface Message {
     role: 'user' | 'ai';
@@ -490,7 +491,7 @@ export default function AITutorPage() {
                                                         a: ({ href, children }) => <a href={href} className="ai-link" target="_blank" rel="noreferrer">{children}</a>,
                                                     }}
                                                 >
-                                                    {msg.content}
+                                                    {decodeMojiB(msg.content)}
                                                 </ReactMarkdown>
                                             </div>
                                         ) : (

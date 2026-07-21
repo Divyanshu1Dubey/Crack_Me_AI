@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import { decodeMojiB } from '@/lib/textCleanup';
 
 interface FormattedTextProps {
     text: string;
@@ -10,33 +11,34 @@ interface FormattedTextProps {
 /**
  * Renders medical question text with proper formatting.
  * Uses remark-breaks to honor line breaks exactly as typed in the admin panel.
+ *
+ * Also decodes UTF-8 mojibake so text originally stored with double-encoded
+ * punctuation ("ΓÇÿ", "ΓÇÖ", etc.) renders correctly.
  */
 export function FormattedText({ text, className = '' }: FormattedTextProps) {
     if (!text) return null;
 
-    // We no longer strip starting numbers or do heavy string replacements
-    // because that breaks exact spacing and formatting that admins type.
-    // remark-breaks handles newline -> <br> natively.
+    const clean = decodeMojiB(text);
 
     return (
         <div className={`formatted-text ${className}`}>
-            <ReactMarkdown remarkPlugins={[remarkBreaks]}>{text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkBreaks]}>{clean}</ReactMarkdown>
         </div>
     );
 }
 
-/** 
- * Strips markdown symbols for plain-text previews (list cards, etc.) 
- * We keep this here if needed by other components.
+/**
+ * Strips markdown symbols for plain-text previews (list cards, etc.).
+ * Also decodes mojibake so the preview shows real punctuation.
  */
 export function stripMarkdown(text: string): string {
     if (!text) return '';
-    return text
-        .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold** → bold
-        .replace(/\*(.+?)\*/g, '$1')       // *italic* → italic
-        .replace(/`(.+?)`/g, '$1')         // `code` → code
-        .replace(/!\[.*?\]\(.*?\)/g, '')   // remove images
-        .replace(/\[(.+?)\]\(.*?\)/g, '$1')// [link](url) → link
-        .replace(/#/g, '')                 // remove headers
+    return decodeMojiB(text)
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/!\[.*?\]\(.*?\)/g, '')
+        .replace(/\[(.+?)\]\(.*?\)/g, '$1')
+        .replace(/#/g, '')
         .trim();
 }

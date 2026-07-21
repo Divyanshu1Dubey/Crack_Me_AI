@@ -10,7 +10,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
@@ -30,11 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown } from '@/components/FormattedText';
-
-/** Cleans option text — removes trailing asterisks/stars from PYQ data */
-function cleanOptionText(text: string): string {
-    return text.replace(/\s*\*+\s*$/, '').trim();
-}
+import { cleanOptionText, decodeMojiB } from '@/lib/textCleanup';
 
 /** Small color-swatch chip used inside the exam-mode palette legend. */
 function LegendChip({ color, label }: { color: string; label: string }) {
@@ -53,6 +49,10 @@ function LegendChip({ color, label }: { color: string; label: string }) {
 function cleanAiText(text: string): string {
     if (!text) return text;
     let t = text.trim();
+
+    // Decode double-encoded UTF-8 mojibake (ΓÇÿ → ', etc.) so model output
+    // that came back as Latin-1-of-UTF-8 renders correctly.
+    t = decodeMojiB(t);
 
     // Strip code fences: ```json ... ```
     if (t.startsWith('```')) t = t.replace(/^```\w*\n?/, '');
@@ -559,7 +559,7 @@ function QuestionsContent() {
 
                 {/* ═══ Persistent Year Banner ═══
                     Pinned at the top of the page once a year is selected so
-                    users always see which PYQ year they're working on. Previously
+                    users always see which PYQ year they are working on. Previously
                     the year chip lived inside the filter card and got buried,
                     so users lost track of their context on mobile. */}
                 {selectedYear && (
@@ -661,39 +661,78 @@ function QuestionsContent() {
                             </div>
                         )}
 
-                        {/* Collapsible Year Breakdown Details */}
+                        {/* Collapsible Year Breakdown Details — every year
+                            from the stats API, in a scrollable grid. Clicking
+                            a year tile applies the year filter directly (so
+                            "Show Year Stats" reveals the bank + one tap
+                            narrows the question list to that year). The
+                            long-form "Open Year" button on each tile brings
+                            up the modal with Practice / Exam Simulation. */}
                         {qbankStats && showStatsDetail && (
                             <div
                                 id="year-stats-panel"
-                                className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 pb-3 border-b border-border/40 animate-fadeIn"
+                                className="pt-1 pb-3 border-b border-border/40 animate-fadeIn space-y-2"
                             >
-                                {qbankStats.by_year?.map((item: any) => {
-                                    const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
-                                    const isSelected = selectedYear === String(item.year);
-                                    return (
-                                        <button
-                                            key={item.year}
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (isSelected) {
-                                                    setSelectedYear('');
-                                                } else {
-                                                    setModalYear(String(item.year));
-                                                    setYearModalOpen(true);
-                                                    setSimulationError(null);
-                                                }
-                                            }}
-                                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
-                                        >
-                                            <p className="text-[11px] font-bold text-foreground">{item.year}</p>
-                                            <p className="text-[9px] text-muted-foreground mt-0.5">{item.solved}/{item.count}</p>
-                                            <div className="w-full bg-border/40 h-0.5 rounded-full overflow-hidden mt-1">
-                                                <div className="bg-primary h-full transition-all" style={{ width: `${solvedPct}%` }} />
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                        Tap a year to filter · long-press / right-click for the Practice & Exam modal
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {(qbankStats.by_year || []).length} years
+                                    </p>
+                                </div>
+                                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-[260px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                                    {(qbankStats.by_year || []).map((item: any) => {
+                                        const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
+                                        const isSelected = selectedYear === String(item.year);
+                                        const isComplete = item.count > 0 && item.solved >= item.count;
+                                        return (
+                                            <div key={item.year} className="relative group">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setSelectedYear('');
+                                                        } else {
+                                                            setSelectedYear(String(item.year));
+                                                        }
+                                                    }}
+                                                    className={`w-full p-2 rounded-xl border text-center transition-all cursor-pointer ${isSelected ? 'border-primary bg-primary/10 ring-2 ring-primary/50' : 'border-border/60 bg-muted/30 hover:border-primary/30 hover:bg-muted/65'}`}
+                                                    aria-pressed={isSelected}
+                                                    aria-label={`Filter to PYQ ${item.year}, ${item.solved} of ${item.count} solved`}
+                                                >
+                                                    <p className="text-[11px] font-bold text-foreground">{item.year}</p>
+                                                    <p className="text-[9px] text-muted-foreground mt-0.5">
+                                                        {item.solved}/{item.count}
+                                                    </p>
+                                                    <div className="w-full bg-border/40 h-1 rounded-full overflow-hidden mt-1">
+                                                        <div
+                                                            className={`h-full transition-all ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`}
+                                                            style={{ width: `${solvedPct}%` }}
+                                                        />
+                                                    </div>
+                                                    {isComplete && (
+                                                        <p className="text-[8px] text-emerald-500 font-extrabold mt-0.5">DONE</p>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setModalYear(String(item.year));
+                                                        setYearModalOpen(true);
+                                                        setSimulationError(null);
+                                                    }}
+                                                    className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-card border border-border shadow-sm rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
+                                                    title="Open Practice / Exam modal"
+                                                    aria-label={`Open ${item.year} Practice and Exam modal`}
+                                                >
+                                                    ⤴
+                                                </button>
                                             </div>
-                                        </button>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 
@@ -793,9 +832,9 @@ function QuestionsContent() {
                 </Card>
 
                 {/* Content */}
-                <div className="grid gap-4 sm:gap-6 flex-1 min-h-0 lg:grid-cols-5">
+                <div className={`qbank-grid flex-1 min-h-0 ${selectedQuestion ? 'has-selected' : ''} ${studyMode === 'exam' ? 'qbank-mode-exam' : ''}`}>
                     {/* Question List */}
-                    <div className="lg:col-span-2 max-lg:order-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
+                    <div className="qbank-list lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
                         <div className="space-y-3 px-1 py-0.5">
                         {loading ? (
                             <div className="space-y-3">
@@ -870,7 +909,7 @@ function QuestionsContent() {
                             a sticky right rail on desktop and a collapsible
                             bottom-sheet trigger on mobile. */}
                     {studyMode === 'exam' && examPaletteOpen && (
-                        <Card className="lg:col-span-1 border-border/80 bg-card/90 backdrop-blur-sm shadow-sm sticky top-0 self-start">
+                        <Card className="qbank-palette border-border/80 bg-card/90 backdrop-blur-sm shadow-sm sticky top-0 self-start">
                             <CardContent className="p-4 space-y-3 max-h-[calc(100vh-180px)] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -936,7 +975,7 @@ function QuestionsContent() {
                         </Card>
                     )}
 
-                    <div className={`${studyMode === 'exam' && examPaletteOpen ? 'lg:col-span-2' : 'lg:col-span-3'} max-lg:order-2 lg:overflow-y-auto lg:overscroll-contain lg:pr-2 max-lg:max-h-[80vh] max-lg:overflow-y-auto max-lg:rounded-2xl max-lg:border max-lg:border-border/60 max-lg:bg-card/70 max-lg:p-3 max-lg:backdrop-blur-sm`} style={{ scrollbarWidth: 'thin' }}>
+                    <div className="qbank-detail lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
                         {selectedQuestion && !detail ? (
                             // Skeleton placeholder while the question detail loads —
                             // previously the right pane showed stale content from the
@@ -1044,7 +1083,7 @@ function QuestionsContent() {
                                                 </h4>
                                                 {detail.explanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                        {String(detail.explanation)}
+                                                        <FormattedText text={String(detail.explanation)} />
                                                     </div>
                                                 )}
                                             </CardContent>

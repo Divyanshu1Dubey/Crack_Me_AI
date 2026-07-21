@@ -458,47 +458,70 @@ h4 {
   color: #f87171;
 }
 
-/* Sidebar */
+/* Sidebar — production grade */
 .sidebar {
-  background: color-mix(in srgb, var(--color-card) 84%, white 16%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-card) 92%, transparent) 0%,
+    color-mix(in srgb, var(--color-card) 86%, transparent) 100%
+  );
   border-right: 1px solid var(--color-border);
   width: 260px;
-  height: 100vh;
+  height: 100dvh; /* dynamic viewport for mobile keyboards */
   padding: 14px 0;
   position: fixed;
   left: 0;
   top: 0;
   z-index: 40;
   overflow: hidden;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 1px 0 0 var(--color-border), 4px 0 24px rgba(2, 6, 23, 0.06);
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 10px 14px;
   margin: 0 8px;
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--color-muted-foreground);
-  transition: all 0.18s ease;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
   border: 1px solid transparent;
   text-decoration: none;
   font-size: 14px;
+  position: relative;
 }
 
 .sidebar-link:hover {
   color: var(--color-foreground);
-  background: color-mix(in srgb, var(--color-accent) 68%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 78%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  transform: translateX(2px);
 }
 
 .sidebar-link.active {
   color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   border-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
   font-weight: 600;
+}
+
+/* Active accent stripe — adds a 3px primary bar on the leading edge
+   of the active route, like Linear / Vercel sidebars. */
+.sidebar-link.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--color-primary);
+  border-radius: 0 3px 3px 0;
 }
 
 .main-content {
@@ -592,7 +615,7 @@ body.sidebar-hidden .main-content {
   .sidebar {
     transform: translateX(-110%);
     transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
-    width: min(86%, 340px);
+    width: min(88%, 360px);
     box-shadow: 0 24px 60px rgba(2, 6, 23, 0.32);
     border-right: 1px solid var(--color-border);
     padding-top: env(safe-area-inset-top, 0);
@@ -600,6 +623,7 @@ body.sidebar-hidden .main-content {
   }
   .sidebar.open {
     transform: translateX(0);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45), 8px 0 30px rgba(2, 6, 23, 0.18);
   }
   .main-content {
     margin-left: 0;
@@ -641,12 +665,6 @@ body.sidebar-hidden .main-content {
     flex-shrink: 0;
   }
 
-  /* The first child of the sidebar (the logo block) gets an extra
-     top margin on mobile so the drawer header doesn't crowd it. */
-  .sidebar > .sidebar-mobile-header + div {
-    padding-top: 14px;
-  }
-
   /* When the drawer is closed we still want a subtle shadow peek
      so users can tell it's slide-in rather than hidden outright. */
   .sidebar-overlay {
@@ -659,6 +677,11 @@ body.sidebar-hidden .main-content {
      (no longer hide them like on the tablet 72px column layout). */
   .sidebar .sidebar-label {
     display: inline !important;
+  }
+
+  /* Disable hover translateX on touch (looks weird with sticky finger). */
+  .sidebar-link:hover {
+    transform: none;
   }
 }
 
@@ -989,6 +1012,44 @@ body.sidebar-hidden .main-content {
 [data-theme="dark"] .ai-tag-pink  { color: #f9a8d4; }
 [data-theme="dark"] .ai-tag-amber { color: #fcd34d; }
 [data-theme="dark"] .ai-tag-green { color: #6ee7b7; }
+
+/* ==========================================
+   Question Bank Mobile Reorder
+   On mobile, when a question is selected the detail card should sit
+   AT THE TOP of the scroll, with the question list below it (so
+   students see the answer card first, then swipe to next). On desktop
+   the layout remains a 3-column grid.
+   ========================================== */
+.qbank-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (max-width: 1023px) {
+  .qbank-grid {
+    grid-template-columns: 1fr;
+  }
+  /* Reorder: when .has-selected is present, list moves to order-2
+     (below) and detail moves to order-1 (top). */
+  .qbank-grid.has-selected .qbank-list { order: 2; }
+  .qbank-grid.has-selected .qbank-detail { order: 1; }
+  .qbank-detail {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(180deg, var(--color-background) 78%, transparent);
+    padding-bottom: 8px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .qbank-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+  .qbank-grid.qbank-mode-exam {
+    grid-template-columns: minmax(0, 2fr) auto minmax(0, 2fr);
+  }
+}
 
 /* ═══ Review Mode & Question Bank Shared Styles ═══ */
 
