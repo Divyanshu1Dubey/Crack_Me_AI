@@ -5,7 +5,7 @@ const content: ExamLandingContent = {
     name: 'Medical Officer',
     fullName: 'Medical Officer Recruitment Exams',
     title: 'Medical Officer Exam Preparation — State & Central Govt MO Jobs | CrackCMS',
-    description: 'Crack Medical Officer recruitment exams — state PSC, NHM, ESIC, Railways, Defence, NRHM. PYQs, mock tests, AI tutor for all state-level and central medical officer posts.',
+    description: 'Prepare for Medical Officer recruitment exams — state PSC, NHM, ESIC, Railways & Defence. Practice PYQs, mock tests and AI explanations on CrackCMS.',
     tagline: 'Crack Medical Officer recruitment exams — state PSCs, NHM, ESIC, Railways, Defence. AI-powered MCQs and mock tests.',
     heroBullets: [
         '6,000+ Medical Officer PYQs across all state and central recruitments',

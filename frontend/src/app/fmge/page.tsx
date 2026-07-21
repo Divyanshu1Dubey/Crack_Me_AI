@@ -5,7 +5,7 @@ const content: ExamLandingContent = {
     name: 'FMGE',
     fullName: 'Foreign Medical Graduate Examination',
     title: 'FMGE Preparation 2026 — MCI Screening Test for Foreign MBBS | CrackCMS',
-    description: 'Crack FMGE 2026 (MCI Screening Test) with 8,000+ previous MCQs, AI tutor, mock tests and clinical case drills. The most-trusted FMGE prep platform for foreign MBBS graduates.',
+    description: 'Crack FMGE 2026 (MCI Screening Test) with 8,000+ previous MCQs, AI tutor, mock tests and clinical case drills for foreign MBBS graduates on CrackCMS.',
     tagline: 'Pass FMGE on your first attempt with 8,000+ MCI-aligned MCQs, AI tutor, and full mock tests.',
     heroBullets: [
         '8,000+ FMGE-aligned MCQs covering all 19 subjects',

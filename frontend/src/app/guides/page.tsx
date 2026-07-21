@@ -8,7 +8,7 @@ import { siteName, siteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
     title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET | CrackCMS',
-    description: 'In-depth guides on UPSC CMS, NEET PG, INI-CET, FMGE, USMLE, Medical Officer recruitment, government doctor jobs, and AI in medical education. Written by practising clinicians.',
+    description: 'In-depth prep guides for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE, and Medical Officer exams. Written by practicing clinicians on CrackCMS.',
     alternates: { canonical: '/guides', languages: { 'en-IN': '/guides' } },
     openGraph: {
         type: 'website',

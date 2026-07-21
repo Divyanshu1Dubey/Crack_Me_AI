@@ -5,7 +5,7 @@ export const brandName = "CrackLabs AI";
 export const siteTitle =
   "CrackCMS - UPSC CMS Preparation App with AI Tutor, PYQs and Mock Tests";
 export const siteDescription =
-  "Prepare for UPSC CMS and medical PG exams with CrackCMS by CrackLabs AI. Practice PYQs, topic-wise MCQs, mock tests, AI explanations, flashcards, textbooks, analytics and exam strategy in one medical preparation platform.";
+  "Prepare for UPSC CMS and medical PG exams with CrackCMS by CrackLabs AI. Practice 1,920+ PYQs, AI-explained MCQs, mock tests, and full exam simulations.";
 
 export const defaultOgImage = "/cms-circle-logo.png";
 

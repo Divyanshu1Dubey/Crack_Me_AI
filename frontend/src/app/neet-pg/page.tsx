@@ -5,7 +5,7 @@ const content: ExamLandingContent = {
     name: 'NEET PG',
     fullName: 'National Eligibility cum Entrance Test (Postgraduate)',
     title: 'NEET PG Preparation 2026 — PYQs, Mock Tests, AI Tutor | CrackCMS',
-    description: 'Crack NEET PG 2026 with 18,000+ previous year MCQs, AI explanations, clinical case simulations, and full mock tests. Highest-rated NEET PG prep platform.',
+    description: 'Crack NEET PG 2026 with 18,000+ previous year MCQs, AI-powered explanations, clinical case simulations, and full mock test series on CrackCMS.',
     tagline: 'India\'s most comprehensive NEET PG preparation platform — 18,000+ PYQs across all 19 subjects, AI tutor, and All-India rank predictor.',
     heroBullets: [
         '18,000+ NEET PG MCQs across all 19 clinical & para-clinical subjects',

@@ -5,7 +5,7 @@ const content: ExamLandingContent = {
     name: 'UPSC CMS',
     fullName: 'Combined Medical Services Examination',
     title: 'UPSC CMS Preparation 2026 — AI Tutor, PYQs, Mock Tests | CrackCMS',
-    description: 'Prepare for UPSC CMS 2026 with 1,920+ previous year questions, AI-powered explanations, full mock tests and a CMS exam simulator. CrackCMS is the highest-rated CMS prep platform.',
+    description: 'Prepare for UPSC CMS 2026 with 1,920+ previous year questions, AI explanations, full mock test series, and an exam simulator on CrackCMS.',
     tagline: 'Crack the Combined Medical Services exam with the most-trusted AI tutor, 1,920+ PYQs, and full UPSC CMS mock test series.',
     heroBullets: [
         '1,920+ previous-year UPSC CMS questions (2009-2024)',

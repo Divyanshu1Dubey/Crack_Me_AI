@@ -5,7 +5,7 @@ const content: ExamLandingContent = {
     name: 'Government Doctor Jobs',
     fullName: 'Central & State Government MBBS Doctor Posts',
     title: 'Government Doctor Jobs 2026 — Medical Officer, Specialist, GDMO Posts | CrackCMS',
-    description: 'Latest 2026 government doctor vacancies — UPSC CMS, state PSCs, AIIMS, Railways, ESIC, NHM, Defence Medical Corps. Salary, eligibility, syllabus, PYQs for every central & state MBBS post.',
+    description: 'Latest 2026 government doctor jobs guide for MBBS — UPSC CMS, state PSCs, AIIMS, ESIC, Railways & Defence. Salary, eligibility, and PYQs.',
     tagline: 'Find every central and state government MBBS doctor vacancy in one place — UPSC CMS, AIIMS, PSCs, NHM, ESIC, Defence, Railways.',
     heroBullets: [
         'Every central & state MBBS doctor post in one searchable catalog',
