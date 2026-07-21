@@ -1,6 +1,10 @@
 import type { MetadataRoute } from 'next';
 import { siteUrl } from '@/lib/seo';
 import { getAllCmsYears } from '@/lib/pyqYearData';
+import { getAllCmsSubjects } from '@/lib/subjectHubData';
+import { getAllCmsCutoffYears } from '@/lib/cutoffData';
+import { getAllCmsBookSlugs } from '@/lib/bookDeepDiveData';
+import { getAllCmsStrategySlugs } from '@/lib/strategyData';
 
 export default function sitemap(): MetadataRoute.Sitemap {
     const now = new Date();
@@ -11,6 +15,64 @@ export default function sitemap(): MetadataRoute.Sitemap {
         lastModified: now,
         changeFrequency: 'monthly' as const,
         priority: 0.85,
+    }));
+
+    // Programmatic subject-hub routes
+    const subjectRoutes = getAllCmsSubjects().map((slug) => ({
+        url: `${siteUrl}/cms/subject/${slug}`,
+        lastModified: now,
+        changeFrequency: 'monthly' as const,
+        priority: 0.85,
+    }));
+
+    // Programmatic cutoff routes
+    const cutoffRoutes = getAllCmsCutoffYears().map((year) => ({
+        url: `${siteUrl}/cms/cutoff/${year}`,
+        lastModified: now,
+        changeFrequency: 'yearly' as const,
+        priority: 0.8,
+    }));
+
+    // Programmatic book deep-dive routes
+    const bookRoutes = getAllCmsBookSlugs().map((slug) => ({
+        url: `${siteUrl}/cms/books/${slug}`,
+        lastModified: now,
+        changeFrequency: 'monthly' as const,
+        priority: 0.8,
+    }));
+
+    // Programmatic strategy routes
+    const strategyRoutes = getAllCmsStrategySlugs().map((slug) => ({
+        url: `${siteUrl}/cms/strategy/${slug}`,
+        lastModified: now,
+        changeFrequency: 'monthly' as const,
+        priority: 0.8,
+    }));
+
+    // Comparison pages — high commercial intent, top-priority for indexing
+    const comparisonRoutes = [
+        { url: `${siteUrl}/cms/vs-neet-pg`, priority: 0.85 },
+        { url: `${siteUrl}/cms/vs-ini-cet`, priority: 0.85 },
+        { url: `${siteUrl}/neet-pg/vs-usmle`, priority: 0.85 },
+        { url: `${siteUrl}/fmge/vs-next`, priority: 0.85 },
+    ].map((r) => ({
+        url: r.url,
+        lastModified: now,
+        changeFrequency: 'monthly' as const,
+        priority: r.priority,
+    }));
+
+    // Index hubs for the new programmatic sections
+    const hubRoutes = [
+        { url: `${siteUrl}/cms/subject`, priority: 0.8 },
+        { url: `${siteUrl}/cms/cutoff`, priority: 0.8 },
+        { url: `${siteUrl}/cms/books`, priority: 0.8 },
+        { url: `${siteUrl}/cms/strategy`, priority: 0.8 },
+    ].map((r) => ({
+        url: r.url,
+        lastModified: now,
+        changeFrequency: 'weekly' as const,
+        priority: r.priority,
     }));
 
     // Priority policy:
@@ -77,5 +139,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: r.priority,
     }));
 
-    return [...staticEntries, ...yearRoutes];
+    return [
+        ...staticEntries,
+        ...yearRoutes,
+        ...subjectRoutes,
+        ...cutoffRoutes,
+        ...bookRoutes,
+        ...strategyRoutes,
+        ...comparisonRoutes,
+        ...hubRoutes,
+    ];
 }

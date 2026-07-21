@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB } from '@/lib/textCleanup';
+import { analytics } from '@/lib/analytics';
 
 /** Map frontend URL slugs → DB enums + human labels.
  *  The Question model has TWO independent fields:
@@ -507,6 +508,7 @@ function QuestionsContent() {
     const fetchAiExplanation = (retryCount: number = 0) => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
+        analytics.aiExplainRequest(selectedExam, d.id, String(d.subject_name || ''));
         setAiLoading(true);
         setAiExplanation(null);
         setTokenError(false);
@@ -623,9 +625,7 @@ function QuestionsContent() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (typeof window !== 'undefined' && (window as any).gtag) {
-                                            (window as any).gtag('event', 'mock_test_start', { type: 'exam', exam_slug: selectedExam });
-                                        }
+                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null);
                                         if (studyMode !== 'exam') setStudyMode('exam');
                                     }}
                                     className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors ${
@@ -640,9 +640,7 @@ function QuestionsContent() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (typeof window !== 'undefined' && (window as any).gtag) {
-                                            (window as any).gtag('event', 'mock_test_start', { type: 'practice', exam_slug: selectedExam });
-                                        }
+                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null);
                                         router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
                                     }}
                                     className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
@@ -740,9 +738,7 @@ function QuestionsContent() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        if (typeof window !== 'undefined' && (window as any).gtag) {
-                                                            (window as any).gtag('event', 'pyq_year_open', { exam_slug: selectedExam, year: item.year });
-                                                        }
+                                                        analytics.pyqYearOpen(selectedExam, item.year, item.solved || 0, item.count || 0);
                                                         if (isSelected) {
                                                             setSelectedYear('');
                                                         } else {
