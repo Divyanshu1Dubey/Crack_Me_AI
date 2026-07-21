@@ -104,7 +104,7 @@ def _create_tables_and_indexes(apps, schema_editor):
     CREATE TABLE IF NOT EXISTS knowledge_chunk (
         id              BIGSERIAL PRIMARY KEY,
         source_id       BIGINT NOT NULL REFERENCES knowledge_source(id)
-                          ON DELETE PROTECT,
+                          ON DELETE RESTRICT,
         source_url      VARCHAR(600) NOT NULL DEFAULT '',
         locator         VARCHAR(255) NOT NULL DEFAULT '',
         text            TEXT NOT NULL,
