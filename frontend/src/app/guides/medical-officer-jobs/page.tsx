@@ -93,7 +93,7 @@ export default function MedicalOfficerJobsGuide() {
                 Some of the most popular:
             </p>
             <table>
-                <thead><tr><th>State</th><th>Recruiter</th><th>Annual vacancies (approx)</th></th></tr></thead>
+                <thead><tr><th>State</th><th>Recruiter</th><th>Annual vacancies (approx)</th></tr></thead>
                 <tbody>
                     <tr><td>Uttar Pradesh</td><td>UPPSC</td><td>2,000+</td></tr>
                     <tr><td>Madhya Pradesh</td><td>MPPSC</td><td>1,500+</td></tr>
