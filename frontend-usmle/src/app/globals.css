@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ==========================================
+   CrackUSMLE — USMLE Preparation Platform
+   Brand: deep purple (#7c3aed) — authority,
+   precision, US clinical default.
+   Body font: Inter (clinical UI default).
+   Display font: Space Grotesk.
+   ========================================== */
+
+@theme {
+  --font-sans: var(--font-inter), var(--font-manrope), sans-serif;
+  --font-display: var(--font-space-grotesk), sans-serif;
+  --color-background: #fafafa;
+  --color-foreground: #1a1530;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1530;
+  --color-primary: #7c3aed;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f5f3ff;
+  --color-secondary-foreground: #2e1065;
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #4b5563;
+  --color-accent: #ede9fe;
+  --color-accent-foreground: #2e1065;
+  --color-destructive: #ef4444;
+  --color-border: #e9e5f5;
+  --color-input: #e9e5f5;
+  --color-ring: #7c3aed;
+  --radius: 0.875rem;
+}
+
+:root {
+  color-scheme: light;
+  --font-body: var(--font-inter);
+  --accent-primary: #7c3aed;
+  --accent-secondary: #6d28d9;
+  --gradient-primary: linear-gradient(125deg, #7c3aed, #6d28d9, #2e1065);
+  --hero-orb: radial-gradient(circle at 12% 12%, rgba(124, 58, 237, 0.08), transparent 42%),
+    radial-gradient(circle at 88% 88%, rgba(109, 40, 217, 0.05), transparent 45%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 243, 255, 0.92));
+}
+
+[data-theme="dark"] {
+  --color-background: #0c0a1e;
+  --color-foreground: #e9e5f5;
+  --color-card: #15123a;
+  --color-card-foreground: #e9e5f5;
+  --color-primary: #a78bfa;
+  --color-primary-foreground: #0c0a1e;
+  --color-secondary: #1e1b4b;
+  --color-secondary-foreground: #e9e5f5;
+  --color-muted: #1e1b4b;
+  --color-muted-foreground: #a5a3c2;
+  --color-accent: #2e1065;
+  --color-accent-foreground: #e9e5f5;
+  --color-border: #2e1065;
+  --color-input: #2e1065;
+  --color-ring: #a78bfa;
+  color-scheme: dark;
+  --accent-primary: #a78bfa;
+  --accent-secondary: #c4b5fd;
+  --gradient-primary: linear-gradient(125deg, #a78bfa, #c4b5fd, #7c3aed);
+  --hero-orb: radial-gradient(circle at 12% 12%, rgba(167, 139, 250, 0.16), transparent 42%),
+    radial-gradient(circle at 88% 88%, rgba(124, 58, 237, 0.1), transparent 45%),
+    linear-gradient(180deg, rgba(12, 10, 30, 0.97), rgba(21, 18, 58, 0.95));
+}
+
+* { box-sizing: border-box; border-color: var(--color-border); }
+html { overflow-x: hidden; }
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
+  min-height: 100vh;
+  background-image: var(--hero-orb);
+  overflow-x: hidden;
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.glass-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) + 2px);
+  transition: all 0.2s ease;
+  box-shadow: 0 10px 30px rgba(46, 16, 101, 0.06);
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+.btn-primary:hover { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(124, 58, 237, 0.32); }
+.input-field {
+  background: var(--color-card);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--color-foreground);
+  width: 100%;
+  font-size: 14px;
+}
+.input-field:focus { outline: none; border-color: var(--color-ring); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }

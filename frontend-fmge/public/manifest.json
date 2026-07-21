@@ -1,0 +1,10 @@
+{
+  "name": "CrackFMGE — Foreign Medical Graduate Examination Prep",
+  "short_name": "CrackFMGE",
+  "description": "Pass FMGE on the first attempt with NBE-pattern 300-question mocks and AI explanations",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#d97706",
+  "theme_color": "#d97706",
+  "icons": [{ "src": "/fmge-logo.png", "sizes": "any", "type": "image/png" }]
+}

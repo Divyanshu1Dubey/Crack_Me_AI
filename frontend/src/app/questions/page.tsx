@@ -463,8 +463,12 @@ function QuestionsContent() {
                     1,920 PYQs + AI-curated important questions — Master the exam with targeted practice
                 </p>
 
-                {/* Unified Dashboard & Filters Panel */}
-                <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-hidden">
+                {/* Unified Dashboard & Filters Panel.
+                    `overflow-visible` here (instead of `overflow-hidden`) so the
+                    native <select> dropdowns for Subject/Difficulty/Year can
+                    overflow the card instead of being clipped — that was causing
+                    the "cut text" look on the filter row. */}
+                <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-visible">
                     <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
                     <CardContent className="p-4 space-y-4">
                         {/* Header & Main Stats Row */}
@@ -480,20 +484,25 @@ function QuestionsContent() {
                                         Master {qbankStats.total} high-yield {selectedExam} clinical MCQs and PYQs.
                                     </p>
                                 </div>
-                                
+
                                 <div className="flex flex-1 max-w-md items-center gap-4">
-                                    <div className="flex-1 space-y-1">
-                                        <div className="flex justify-between text-xs font-semibold">
-                                            <span>Overall Progress</span>
-                                            <span className="text-primary font-bold">
+                                    <div className="flex-1 space-y-1 min-w-0">
+                                        <div className="flex justify-between text-xs font-semibold gap-2">
+                                            <span className="truncate">Overall Progress</span>
+                                            <span className="text-primary font-bold shrink-0">
                                                 {qbankStats.total_solved} / {qbankStats.total} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
                                             </span>
                                         </div>
                                         <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2" />
                                     </div>
-                                    <button 
+                                    {/* Show/Hide Year Stats — explicit `type=button` so it never submits
+                                        a parent form, and `aria-expanded` so screen readers + tests
+                                        can verify the toggle actually fired. */}
+                                    <button
                                         type="button"
-                                        onClick={(e) => { e.preventDefault(); setShowStatsDetail(prev => !prev); }}
+                                        aria-expanded={showStatsDetail}
+                                        aria-controls="year-stats-panel"
+                                        onClick={() => setShowStatsDetail(prev => !prev)}
                                         className="btn-secondary text-[11px] font-bold py-1.5 px-3 flex items-center gap-1.5 cursor-pointer shrink-0 border border-border/80 relative z-10"
                                     >
                                         {showStatsDetail ? 'Hide Year Stats' : 'Show Year Stats'}
@@ -504,7 +513,10 @@ function QuestionsContent() {
 
                         {/* Collapsible Year Breakdown Details */}
                         {qbankStats && showStatsDetail && (
-                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 pb-3 border-b border-border/40 animate-fadeIn">
+                            <div
+                                id="year-stats-panel"
+                                className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 pb-3 border-b border-border/40 animate-fadeIn"
+                            >
                                 {qbankStats.by_year?.map((item: any) => {
                                     const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
                                     const isSelected = selectedYear === String(item.year);
@@ -538,45 +550,74 @@ function QuestionsContent() {
                         {/* Filters Row */}
                         <div className="flex flex-col gap-3 pt-1">
                             {/* Top row: Search and Exam Mode Toggle */}
-                            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-                                <div className="relative w-full sm:max-w-xs flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                                <div className="relative w-full sm:max-w-xs flex-1 min-w-0">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                                     <Input className="pl-10 h-9 text-xs w-full" placeholder="Search questions..."
                                         value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                                 </div>
-                                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border border-border/60">
-                                    <button 
-                                        onClick={() => setStudyMode('practice')} 
+                                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border border-border/60 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStudyMode('practice')}
                                         className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
                                     >
                                         Practice Mode
                                     </button>
-                                    <button 
-                                        onClick={() => setStudyMode('exam')} 
+                                    <button
+                                        type="button"
+                                        onClick={() => setStudyMode('exam')}
                                         className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
                                     >
                                         Exam Mode
                                     </button>
                                 </div>
                             </div>
-                            {/* Bottom row: Select Filters */}
-                            <div className="grid grid-cols-2 lg:grid-cols-[1fr_130px_100px_100px] gap-2 lg:gap-3 items-center">
-                                <select className="input-field h-9 text-xs px-2 w-full overflow-hidden" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+                            {/* Bottom row: Select Filters.
+                                Min width 0 on children so grid items shrink correctly
+                                on narrow viewports; consistent h-10 across all four
+                                controls to remove button-size inconsistency. */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-3 items-center">
+                                <select
+                                    aria-label="Filter by subject"
+                                    className="input-field h-10 text-xs px-3 w-full min-w-0 truncate"
+                                    value={selectedSubject}
+                                    onChange={e => setSelectedSubject(e.target.value)}
+                                >
                                     <option value="">All Subjects</option>
-                                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>)}
+                                    {subjects.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>
+                                    ))}
                                 </select>
-                                <select className="input-field h-9 text-xs px-2 w-full" value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}>
+                                <select
+                                    aria-label="Filter by difficulty"
+                                    className="input-field h-10 text-xs px-3 w-full min-w-0"
+                                    value={selectedDifficulty}
+                                    onChange={e => setSelectedDifficulty(e.target.value)}
+                                >
                                     <option value="">Difficulty</option>
                                     <option value="easy">Easy</option>
                                     <option value="medium">Medium</option>
                                     <option value="hard">Hard</option>
                                 </select>
-                                <select className="input-field h-9 text-xs px-2 w-full" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
+                                <select
+                                    aria-label="Filter by year"
+                                    className="input-field h-10 text-xs px-3 w-full min-w-0"
+                                    value={selectedYear}
+                                    onChange={e => setSelectedYear(e.target.value)}
+                                >
                                     <option value="">Year</option>
-                                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                                    {years.map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
                                 </select>
-                                <Button variant="neon" onClick={handleSearch} size="sm" className="h-9 px-3 w-full group">
+                                <Button
+                                    variant="neon"
+                                    onClick={handleSearch}
+                                    size="sm"
+                                    className="h-10 px-3 w-full group"
+                                >
                                     <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
                                 </Button>
                             </div>
@@ -658,7 +699,22 @@ function QuestionsContent() {
 
                     {/* Question Detail */}
                     <div className="lg:col-span-3 lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
-                        {selectedQuestion && detail ? (
+                        {selectedQuestion && !detail ? (
+                            // Skeleton placeholder while the question detail loads —
+                            // previously the right pane showed stale content from the
+                            // previous question until the new fetch resolved.
+                            <div className="space-y-3 px-1 py-0.5 animate-fadeIn" aria-busy="true" aria-label="Loading question">
+                                <Skeleton className="h-8 w-2/3 rounded-md" />
+                                <Skeleton className="h-6 w-1/3 rounded-md" />
+                                <Skeleton className="h-32 w-full rounded-2xl" />
+                                <div className="space-y-2">
+                                    {[0, 1, 2, 3].map(i => (
+                                        <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                                    ))}
+                                </div>
+                                <Skeleton className="h-20 w-full rounded-xl" />
+                            </div>
+                        ) : selectedQuestion && detail ? (
                             <div className="animate-fadeInUp space-y-4 px-1 py-0.5">
                                 {/* Question Card */}
                                 <div className="glass-card rounded-2xl border border-primary/40 shadow-[0_18px_40px_rgba(14,116,144,0.16)]">

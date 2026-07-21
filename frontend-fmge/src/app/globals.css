@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ==========================================
+   CrackFMGE — Foreign Medical Graduate Exam Prep
+   Brand: warm amber (#d97706) — welcoming,
+   achievement, exam-confidence.
+   Display font: Plus Jakarta Sans (rounded,
+   approachable). Body font: Manrope.
+   ========================================== */
+
+@theme {
+  --font-sans: var(--font-manrope), sans-serif;
+  --font-display: var(--font-jakarta), var(--font-space-grotesk), sans-serif;
+  --color-background: #fffbeb;
+  --color-foreground: #271300;
+  --color-card: #ffffff;
+  --color-card-foreground: #271300;
+  --color-primary: #d97706;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #fef3c7;
+  --color-secondary-foreground: #451a03;
+  --color-muted: #fef3c7;
+  --color-muted-foreground: #57534e;
+  --color-accent: #fde68a;
+  --color-accent-foreground: #451a03;
+  --color-destructive: #ef4444;
+  --color-border: #fde68a;
+  --color-input: #fde68a;
+  --color-ring: #d97706;
+  --radius: 0.875rem;
+}
+
+:root {
+  color-scheme: light;
+  --font-body: var(--font-manrope);
+  --accent-primary: #d97706;
+  --accent-secondary: #b45309;
+  --gradient-primary: linear-gradient(125deg, #d97706, #b45309, #451a03);
+  --hero-orb: radial-gradient(circle at 12% 12%, rgba(217, 119, 6, 0.08), transparent 42%),
+    radial-gradient(circle at 88% 88%, rgba(180, 83, 9, 0.05), transparent 45%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(254, 243, 199, 0.85));
+}
+
+[data-theme="dark"] {
+  --color-background: #1c1207;
+  --color-foreground: #fef3c7;
+  --color-card: #2a1a0a;
+  --color-card-foreground: #fef3c7;
+  --color-primary: #f59e0b;
+  --color-primary-foreground: #1c1207;
+  --color-secondary: #451a03;
+  --color-secondary-foreground: #fef3c7;
+  --color-muted: #451a03;
+  --color-muted-foreground: #fbbf24;
+  --color-accent: #78350f;
+  --color-accent-foreground: #fef3c7;
+  --color-border: #78350f;
+  --color-input: #78350f;
+  --color-ring: #f59e0b;
+  color-scheme: dark;
+  --accent-primary: #f59e0b;
+  --accent-secondary: #fbbf24;
+  --gradient-primary: linear-gradient(125deg, #f59e0b, #fbbf24, #d97706);
+  --hero-orb: radial-gradient(circle at 12% 12%, rgba(245, 158, 11, 0.16), transparent 42%),
+    radial-gradient(circle at 88% 88%, rgba(217, 119, 6, 0.1), transparent 45%),
+    linear-gradient(180deg, rgba(28, 18, 7, 0.97), rgba(42, 26, 10, 0.95));
+}
+
+* { box-sizing: border-box; border-color: var(--color-border); }
+html { overflow-x: hidden; }
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
+  min-height: 100vh;
+  background-image: var(--hero-orb);
+  overflow-x: hidden;
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.glass-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) + 2px);
+  transition: all 0.2s ease;
+  box-shadow: 0 10px 30px rgba(180, 83, 9, 0.07);
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+.btn-primary:hover { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(217, 119, 6, 0.32); }
+.input-field {
+  background: var(--color-card);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--color-foreground);
+  width: 100%;
+  font-size: 14px;
+}
+.input-field:focus { outline: none; border-color: var(--color-ring); box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.16); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }

@@ -22,14 +22,19 @@ const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
 const shouldInjectGoogleTag =
   Boolean(gaMeasurementId) && (process.env.NODE_ENV === "production" || analyticsInDev);
 
+// latin-ext ensures curly quotes ('), em-dashes (—), ellipsis (…), and common
+// European diacritics render correctly. Without it, characters fall back to the
+// system font, which produced tofu boxes ("ΓÇÿXΓÇÖ") in PYQ question text.
 const manrope = Manrope({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-manrope",
+  display: "swap",
 });
 
 const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-space-grotesk",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -296,7 +301,7 @@ export default function RootLayout({
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <PWAProvider>
-          <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
+          <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="crackcms-theme">
             <TooltipProvider>
               <AuthProvider>
                 <ExamTrackProvider>

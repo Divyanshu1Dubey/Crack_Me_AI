@@ -1,0 +1,10 @@
+{
+  "name": "CrackUSMLE — Step 1, 2 CK & 3 Prep",
+  "short_name": "CrackUSMLE",
+  "description": "AI-powered USMLE preparation with Step-specific question banks and NBME score estimator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#7c3aed",
+  "theme_color": "#7c3aed",
+  "icons": [{ "src": "/usmle-logo.png", "sizes": "any", "type": "image/png" }]
+}
