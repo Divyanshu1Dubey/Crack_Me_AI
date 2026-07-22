@@ -59,10 +59,16 @@ class InternalNotesConnector(ConnectorBase):
 
     def __init__(self, base_dir: Optional[str] = None):
         super().__init__()
-        self.base_dir = Path(
-            base_dir or str(getattr(settings, "MEDURA_TRAIN_DIR",
-                                    settings.BASE_DIR / "Medura_Train"))
+        # Fall back through: explicit arg → settings.MEDURA_TRAIN_DIR →
+        # BASE_DIR/Medura_Train → BASE_DIR. The last fallback prevents
+        # Path(None) on fresh checkouts where nothing is configured yet
+        # (the connector just yields no chunks, no error).
+        chosen = (
+            base_dir
+            or getattr(settings, "MEDURA_TRAIN_DIR", None)
+            or getattr(settings, "BASE_DIR", Path.cwd()) / "Medura_Train"
         )
+        self.base_dir = Path(chosen) if chosen else Path.cwd()
 
     def _detect_subject(self, filename: str) -> str:
         f = filename.lower()

@@ -27,9 +27,13 @@ class UserUploadsConnector(ConnectorBase):
 
     def __init__(self, base_dir: Optional[str] = None):
         super().__init__()
-        self.base_dir = Path(
-            base_dir or str(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "media"))
-        )
+        # base_dir is unused — files come from UserUploadAttestation.file.path.
+        # Kept on the instance for API compatibility but never read.
+        chosen = (
+            base_dir
+            or str(getattr(settings, "MEDIA_ROOT", None) or "")
+        ) or str(getattr(settings, "BASE_DIR", Path.cwd()) / "media")
+        self.base_dir = Path(chosen)
 
     def fetch(self, **kwargs) -> Iterable[RawChunk]:
         approved = UserUploadAttestation.objects.filter(

@@ -284,10 +284,13 @@ class GovernmentGuidelinesConnector(ConnectorBase):
                  max_size_mb: float = 50.0):
         super().__init__()
         from django.conf import settings as _s
-        self.base_dir = Path(
-            base_dir or str(getattr(_s, "MEDURA_TRAIN_DIR",
-                                    _s.BASE_DIR / "Medura_Train"))
-        )
+        # Bulletproof path: explicit arg → MEDURA_TRAIN_DIR → BASE_DIR/Medura_Train.
+        # Never pass None to Path() — that's a TypeError on fresh checkouts.
+        chosen = (
+            base_dir
+            or str(getattr(_s, "MEDURA_TRAIN_DIR", None) or "")
+        ) or str(_s.BASE_DIR / "Medura_Train")
+        self.base_dir = Path(chosen)
         self.max_size_mb = max_size_mb
 
     def fetch(self, **kwargs) -> Iterable[RawChunk]:
