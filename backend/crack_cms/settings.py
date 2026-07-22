@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     'django_q',
     'jobs',
     'knowledge_base',
+    'importers',
     # Security
     'axes',
 ]

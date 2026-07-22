@@ -47,6 +47,7 @@ urlpatterns = [
     path("api/resources/", include("resources.urls")),
     path("api/video/", include("video_engine.urls")),
     path("api/jobs/", include("jobs.urls")),
+    path("api/imports/neetpg/", include("importers.neetpg.urls")),
 ]
 
 if settings.DEBUG:

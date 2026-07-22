@@ -214,6 +214,74 @@ class Question(models.Model):
         help_text='Questions testing the same concept'
     )
 
+    # ── Phase 2: NEET PG / recall-bank fields (additive) ────────────────
+    # These power the recall importer and recall-aware search. Existing
+    # rows are unaffected — every field has a sensible default.
+    RECALL_STATUS_CHOICES = [
+        ('recall', 'Recall'),
+        ('coaching_compiled', 'Coaching Compiled'),
+        ('official_compiled', 'Official / Compiled'),
+    ]
+    QUESTION_TYPE_CHOICES = [
+        ('single_best', 'Single Best Answer'),
+        ('multiple_correct', 'Multiple Correct'),
+        ('assertion_reason', 'Assertion-Reason'),
+        ('match', 'Match the Following'),
+        ('image_based', 'Image-Based'),
+        ('numerical', 'Numerical'),
+    ]
+    CLINICAL_CATEGORY_CHOICES = [
+        ('clinical', 'Clinical'),
+        ('preclinical', 'Preclinical'),
+        ('paraclinical', 'Paraclinical'),
+    ]
+    SESSION_CHOICES = [
+        ('jan', 'January'),
+        ('jul', 'July'),
+        ('may', 'May'),
+        ('nov', 'November'),
+        ('none', 'None'),
+    ]
+
+    recall_status = models.CharField(
+        max_length=32, choices=RECALL_STATUS_CHOICES,
+        default='official_compiled', db_index=True,
+        help_text='Recall / coaching-compiled / official-compiled provenance.',
+    )
+    question_type = models.CharField(
+        max_length=32, choices=QUESTION_TYPE_CHOICES,
+        default='single_best', db_index=True,
+        help_text='Question format (single best, multiple correct, A/R, image-based, etc.)',
+    )
+    clinical_category = models.CharField(
+        max_length=32, choices=CLINICAL_CATEGORY_CHOICES,
+        default='clinical', db_index=True,
+        help_text='Preclinical / Paraclinical / Clinical classification.',
+    )
+    session = models.CharField(
+        max_length=16, choices=SESSION_CHOICES, default='',
+        blank=True, help_text='Exam session for the year (jan/jul/may/nov/none).',
+    )
+    confidence_score = models.DecimalField(
+        max_digits=4, decimal_places=3, default=1.000,
+        help_text='Weighted OCR + parse + completeness score (0..1).',
+    )
+    ocr_confidence = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text='Tesseract avg confidence (0..100).',
+    )
+    extraction_confidence = models.DecimalField(
+        max_digits=4, decimal_places=3, default=1.000,
+        help_text='Parser confidence (0..1).',
+    )
+    is_image_based = models.BooleanField(
+        default=False, help_text='Image is required to answer this question.',
+    )
+    recall_text_hash = models.CharField(
+        max_length=64, default='', blank=True, db_index=True,
+        help_text='sha256 of normalised question text — used for cross-PDF dedup.',
+    )
+
     class Meta:
         ordering = ['-year', 'subject']
         indexes = [
@@ -223,6 +291,8 @@ class Question(models.Model):
             models.Index(fields=['paper']),
             models.Index(fields=['is_active', 'is_verified_by_admin']),
             models.Index(fields=['subject', 'topic', 'year', 'difficulty']),
+            models.Index(fields=['question_type']),
+            models.Index(fields=['clinical_category']),
         ]
 
     def _normalize_text_value(self, value):
@@ -618,4 +688,242 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Phase 2 — NEET PG / INI-CET / AIIMS PG recall-bank models
+# ════════════════════════════════════════════════════════════════════════
+# These models extend (do not replace) the existing schema. They are the
+# integration surface for `backend/importers/neetpg/`. Existing rows are
+# unaffected — every model below is new and every field has a default.
+
+
+class RecallSource(models.Model):
+    """One row per source PDF ingested by the recall importer.
+
+    A source is uniquely identified by (pdf_sha256, page_start, page_end)
+    — re-importing the same file with a different page range creates a new
+    row. The same file ingested twice with the same range is rejected by
+    the unique constraint.
+    """
+
+    SCAN_TYPE_CHOICES = [
+        ('digital', 'Digital'),
+        ('scanned', 'Scanned'),
+        ('hybrid', 'Hybrid'),
+    ]
+
+    pdf_filename = models.CharField(max_length=255)
+    pdf_path = models.CharField(max_length=512)
+    pdf_sha256 = models.CharField(max_length=64)
+    pdf_sha256_short = models.CharField(max_length=16, db_index=True)
+    pdf_size_bytes = models.BigIntegerField(default=0)
+    page_count = models.IntegerField(default=0)
+    page_start = models.IntegerField(null=True, blank=True)
+    page_end = models.IntegerField(null=True, blank=True)
+    question_count = models.IntegerField(default=0)
+    scan_type = models.CharField(max_length=16, choices=SCAN_TYPE_CHOICES, default='hybrid')
+    recall_status = models.CharField(max_length=32, default='recall')
+    publisher = models.CharField(max_length=160, blank=True)
+    pdf_metadata = models.JSONField(default=dict, blank=True)
+    import_job = models.ForeignKey(
+        'QuestionImportJob',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recall_sources',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pdf_sha256', 'page_start', 'page_end'],
+                name='uniq_recall_source_sha_pagerange',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['scan_type']),
+            models.Index(fields=['recall_status']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.pdf_filename} ({self.pdf_sha256_short})"
+
+
+class QuestionSource(models.Model):
+    """Provenance bridge — every Question may appear in multiple PDFs.
+
+    Records per-PDF original text, OCR confidence, extraction confidence,
+    and the import job that produced the row. Append-only — never updated
+    or deleted by the importer (rollback soft-deletes the Question, not
+    this row).
+    """
+
+    question = models.ForeignKey(
+        Question, on_delete=models.PROTECT, related_name='recall_sources',
+    )
+    recall_source = models.ForeignKey(
+        RecallSource, on_delete=models.PROTECT, related_name='question_sources',
+    )
+    page_number = models.IntegerField()
+    question_number_in_pdf = models.IntegerField(null=True, blank=True)
+    original_text = models.TextField(blank=True)
+    extracted_text = models.TextField(blank=True)
+    ocr_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    extraction_confidence = models.DecimalField(max_digits=4, decimal_places=3, default=1.000)
+    import_job_id = models.CharField(max_length=64, blank=True)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['recall_source', 'page_number']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recall_source', 'page_number', 'question_number_in_pdf'],
+                name='uniq_question_source_page_qno',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['question']),
+            models.Index(fields=['recall_source', 'page_number']),
+            models.Index(fields=['import_job_id']),
+        ]
+
+    def __str__(self):
+        return f"Q{self.question_id} <- {self.recall_source_id}/p{self.page_number}"
+
+
+class QuestionImage(models.Model):
+    """Multi-image slot for a Question.
+
+    The existing `Question.page_screenshot` (ImageField) is kept as the
+    primary image. This model holds every other extracted figure plus
+    optional OCR / caption / modality metadata.
+    """
+
+    MODALITY_CHOICES = [
+        ('radiology', 'Radiology'),
+        ('histopathology', 'Histopathology'),
+        ('gross_pathology', 'Gross Pathology'),
+        ('ecg', 'ECG'),
+        ('ct', 'CT'),
+        ('mri', 'MRI'),
+        ('x_ray', 'X-Ray'),
+        ('ultrasound', 'Ultrasound'),
+        ('clinical_photo', 'Clinical Photograph'),
+        ('instrument', 'Instrument'),
+        ('chart', 'Chart'),
+        ('flowchart', 'Flowchart'),
+        ('microbiology', 'Microbiology Slide'),
+        ('slide', 'Slide'),
+        ('embryology', 'Embryology'),
+        ('anatomy', 'Anatomy Diagram'),
+        ('biochem_pathway', 'Biochemistry Pathway'),
+        ('dermatology', 'Dermatology'),
+        ('ophthalmology_fundus', 'Ophthalmology Fundus'),
+        ('other', 'Other'),
+    ]
+    ROLE_CHOICES = [
+        ('primary', 'Primary'),
+        ('option', 'Option'),
+        ('illustration', 'Illustration'),
+        ('explanation', 'Explanation'),
+    ]
+
+    question = models.ForeignKey(
+        Question, on_delete=models.PROTECT, related_name='images',
+    )
+    recall_source = models.ForeignKey(
+        RecallSource, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='images',
+    )
+    page_number = models.IntegerField()
+    image_index_in_page = models.IntegerField(default=0)
+    file = models.ImageField(upload_to='recall_images/%Y/%m/', blank=True, null=True)
+    mime = models.CharField(max_length=32, default='image/png')
+    width = models.IntegerField(default=0)
+    height = models.IntegerField(default=0)
+    bytes = models.BigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True)
+    sha256_short = models.CharField(max_length=16, blank=True, db_index=True)
+    phash = models.CharField(max_length=16, blank=True)
+    dhash = models.CharField(max_length=16, blank=True)
+    modality = models.CharField(max_length=32, choices=MODALITY_CHOICES, default='other')
+    modality_subtype = models.CharField(max_length=64, blank=True)
+    body_region = models.CharField(max_length=64, blank=True)
+    ocr_text = models.TextField(blank=True)
+    caption = models.TextField(blank=True)
+    caption_source = models.CharField(max_length=32, default='none')
+    ocr_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    extraction_confidence = models.DecimalField(max_digits=4, decimal_places=3, default=1.000)
+    has_diagram = models.BooleanField(default=False)
+    has_table = models.BooleanField(default=False)
+    is_watermarked = models.BooleanField(default=False)
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES, default='illustration')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['question', 'page_number', 'image_index_in_page']
+        indexes = [
+            models.Index(fields=['question']),
+            models.Index(fields=['modality']),
+            models.Index(fields=['phash']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"Image#{self.id} Q{self.question_id} ({self.modality})"
+
+
+class DuplicateCluster(models.Model):
+    """Canonical-question pointer for a set of duplicate Question rows.
+
+    The canonical question is the highest-confidence member; ties broken
+    by earliest `created_at`. Member rows are NEVER deleted — they stay
+    in `Question` (soft-deleted) and remain queryable.
+    """
+
+    canonical_question = models.ForeignKey(
+        Question, on_delete=models.PROTECT, related_name='canonical_for',
+    )
+    similarity_threshold = models.DecimalField(max_digits=4, decimal_places=3, default=0.920)
+    detection_method = models.CharField(max_length=32, default='rapidfuzz')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['detection_method']),
+        ]
+
+    def __str__(self):
+        return f"Cluster#{self.id} -> Q{self.canonical_question_id}"
+
+
+class DuplicateMember(models.Model):
+    cluster = models.ForeignKey(
+        DuplicateCluster, on_delete=models.CASCADE, related_name='members',
+    )
+    question = models.ForeignKey(
+        Question, on_delete=models.PROTECT, related_name='cluster_memberships',
+    )
+    similarity_score = models.DecimalField(max_digits=4, decimal_places=3, default=1.000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['cluster', '-similarity_score']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cluster', 'question'],
+                name='uniq_duplicate_member',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['question']),
+        ]
+
+    def __str__(self):
+        return f"Cluster{self.cluster_id} <- Q{self.question_id} ({self.similarity_score})"
 

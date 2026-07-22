@@ -19,7 +19,7 @@ from django.db.models import Count, F, Max, Q, Value
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember
 from .serializers import (
     SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
@@ -28,6 +28,15 @@ from .serializers import (
     NoteSerializer, FlashcardSerializer, QuestionImportJobSerializer, QuestionExtractionItemSerializer,
     AdminAIPromptVersionSerializer, QuestionAIOperationLogSerializer, QuestionRevisionSnapshotSerializer
 )
+from .recall_serializers import (
+    # Used directly here:
+    RecallSourceSerializer,
+    DuplicateClusterSerializer,
+    # Imported indirectly via `questions.recall_search`:
+    # - QuestionImageSerializer (recall_question_images)
+    # - QuestionSourceSerializer (recall_question_sources)
+)
+from . import recall_search as _recall_search
 
 
 logger = logging.getLogger(__name__)
@@ -289,6 +298,36 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if self.action in ['bookmark', 'my_bookmarks', 'attempt', 'submit_feedback']:
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
+
+    # ── Phase 2: recall-aware endpoints (additive) ──────────────────────
+
+    @action(detail=False, methods=['get'], url_path='recall_search',
+            permission_classes=[permissions.AllowAny])
+    def recall_search(self, request):
+        return _recall_search.recall_search(self, request)
+
+    @action(detail=True, methods=['get'], url_path='images',
+            permission_classes=[permissions.AllowAny])
+    def images(self, request, pk=None):
+        return _recall_search.recall_question_images(self, request, pk=pk)
+
+    @action(detail=True, methods=['get'], url_path='sources',
+            permission_classes=[permissions.AllowAny])
+    def sources(self, request, pk=None):
+        return _recall_search.recall_question_sources(self, request, pk=pk)
+
+    @action(detail=False, methods=['get'], url_path='recall_sources',
+            permission_classes=[permissions.AllowAny])
+    def recall_sources(self, request):
+        """List RecallSource rows — useful for the recall bank landing page."""
+        qs = RecallSource.objects.filter(is_active=True).order_by("-created_at")[:200]
+        return Response(RecallSourceSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=False, methods=['get'], url_path='duplicate_clusters',
+            permission_classes=[permissions.AllowAny])
+    def duplicate_clusters(self, request):
+        qs = DuplicateCluster.objects.all().order_by("-created_at")[:100]
+        return Response(DuplicateClusterSerializer(qs, many=True, context={"request": request}).data)
 
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
