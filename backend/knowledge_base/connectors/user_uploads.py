@@ -47,13 +47,20 @@ class UserUploadsConnector(ConnectorBase):
                 continue
 
             n = path.name.lower()
-            # Same defence-in-depth as internal connector
-            for marker in [
+            # Same defence-in-depth as internal connector. We strip the
+            # extension + non-alpha so "park" doesn't match "parking" or
+            # "parks_psm_cms_notes.md" — we only want to refuse filenames
+            # that explicitly reference a copyrighted textbook or
+            # competitor platform as the document subject.
+            import re as _re
+            cleaned = _re.sub(r"[^a-z0-9]+", " ", n).strip()
+            tokens = set(cleaned.split())
+            for marker in (
                 "harrison", "bailey", "love", "robbins", "park", "ghai",
                 "nelson", "ganong", "guyton", "kdt", "tripathi", "katzung",
                 "marrow", "prepladder", "dams", "prepcms", "gomed",
-            ]:
-                if marker in n:
+            ):
+                if marker in tokens:
                     logger.warning(f"REFUSED user upload {path.name} — contains '{marker}'")
                     continue
 

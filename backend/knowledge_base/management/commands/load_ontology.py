@@ -23,5 +23,6 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Totals: {result['total_entities']} entities, "
             f"{result['total_relations']} relations, "
-            f"{result['total_sources']} sources"
+            f"{result['total_sources']} sources "
+            f"(0+ on re-run = data already present, not failure)"
         )

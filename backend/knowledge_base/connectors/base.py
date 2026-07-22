@@ -20,8 +20,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Iterable
 
-from django.utils import timezone
-
 from knowledge_base.models import (
     PROHIBITED_LICENSE_MARKERS, KnowledgeSource, LICENSE_CHOICES,
 )
@@ -56,7 +54,8 @@ class ConnectorBase(ABC):
 
     def __init__(self):
         self._source: Optional[KnowledgeSource] = None
-        self._prohibited_markers = PROHIBITED_LICENSE_MARKERS
+        # _prohibited_markers is now read from models.PROHIBITED_LICENSE_MARKERS
+        # lazily inside `_get_prohibited_patterns`, so we don't cache it here.
 
     @property
     def source(self) -> KnowledgeSource:
@@ -82,18 +81,47 @@ class ConnectorBase(ABC):
 
     # ─── Guards ────────────────────────────────────────────
 
+    # Pre-compiled regexes for prohibited markers — word-boundary
+    # aware so "park" does not match "parkinson" / "parking" and
+    # "kdt" does not match words containing those letters.
+    # Markers may contain spaces; we use a custom boundary that also
+    # accepts punctuation (`.` for "k.d.", `-` for compound names).
+    _PROHIBITED_PATTERNS = None  # built lazily below
+
+    @classmethod
+    def _get_prohibited_patterns(cls):
+        """Lazily compile word-boundary regexes for each marker."""
+        if cls._PROHIBITED_PATTERNS is not None:
+            return cls._PROHIBITED_PATTERNS
+        from knowledge_base.models import PROHIBITED_LICENSE_MARKERS
+        compiled = []
+        for marker in PROHIBITED_LICENSE_MARKERS:
+            # Escape special regex chars but allow the spaces to be
+            # flexible (any whitespace between words).
+            escaped = re.escape(marker).replace(r"\ ", r"\s+")
+            # Word boundary on the OUTSIDE only — `(?<!\w) ... (?!\w)`
+            # so `k.d.` matches "K.D. Tripathi" but not "kid".
+            pat = re.compile(rf"(?<!\w){escaped}(?!\w)", re.IGNORECASE)
+            compiled.append((marker, pat))
+        cls._PROHIBITED_PATTERNS = compiled
+        return compiled
+
     def _guard_text(self, text: str) -> str:
         """Reject text that contains prohibited markers.
 
         Defence-in-depth: even if a connector is misconfigured, the
         loader will refuse to ingest chunks that look like they came
         from a copyrighted textbook or competitor platform.
+
+        Uses word-boundary matching so common medical prose that
+        happens to contain "park" (e.g. "Park's Preventive Medicine
+        textbook summary") is correctly matched, while unrelated
+        words like "parkinson", "parking", "parkland" are NOT.
         """
         if not text or len(text.strip()) < 30:
             return ""
-        lower = text.lower()
-        for marker in self._prohibited_markers:
-            if marker in lower:
+        for marker, pat in self._get_prohibited_patterns():
+            if pat.search(text):
                 logger.warning(
                     f"[{self.source_slug}] REFUSED chunk — contains "
                     f"prohibited marker '{marker}'"

@@ -27,6 +27,7 @@ import logging
 import re
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Iterable, Optional
 
 from django.conf import settings

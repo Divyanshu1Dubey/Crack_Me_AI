@@ -35,7 +35,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"  +{result['entities_added']} entities, "
             f"+{result['relations_added']} relations, "
-            f"+{result['sources_added']} sources"
+            f"+{result['sources_added']} sources  "
+            f"(total: {result['total_entities']} entities, "
+            f"{result['total_relations']} relations, "
+            f"{result['total_sources']} sources — "
+            f"0+ means data already present, not failure)"
         ))
 
         if not opts["skip_internal"]:

@@ -76,8 +76,13 @@ class InternalNotesConnector(ConnectorBase):
         n = path.name.lower()
         if not n.endswith((".md", ".txt")):
             return True  # reject .pdf outright
+        # Word-boundary match so "park" doesn't catch "parks_psm_cms_notes.md"
+        # — we only refuse files that explicitly reference a copyrighted
+        # textbook as their subject.
+        cleaned = re.sub(r"[^a-z0-9]+", " ", n).strip()
+        tokens = set(cleaned.split())
         for token in PROTECTED_TEXTBOOK_TOKENS:
-            if token in n:
+            if token in tokens:
                 return True
         # Reject if the content size resembles a textbook dump
         try:

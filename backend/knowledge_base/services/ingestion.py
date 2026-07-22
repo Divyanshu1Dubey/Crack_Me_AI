@@ -117,13 +117,17 @@ class IngestionService:
     @transaction.atomic
     def _write_chunk(self, raw) -> str:
         """Write or update one chunk. Returns 'added' | 'updated' | 'rejected'."""
-        # Final license guard
+        # Final license guard — word-boundary matching so legitimate
+        # medical prose that happens to mention a textbook name (e.g.
+        # "Park's Preventive Medicine summary") is correctly refused,
+        # while unrelated substrings like "parkinson" / "parking" pass.
         text = (raw.text or "").strip()
         if len(text) < 30:
             return "rejected"
-        lower = text.lower()
+        import re as _re_ingest
         for marker in PROHIBITED_LICENSE_MARKERS:
-            if marker in lower:
+            escaped = _re_ingest.escape(marker).replace(r"\ ", r"\s+")
+            if _re_ingest.search(rf"(?<!\w){escaped}(?!\w)", text, _re_ingest.IGNORECASE):
                 logger.warning(f"REFUSED chunk containing '{marker}'")
                 return "rejected"
 
