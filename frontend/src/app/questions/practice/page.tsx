@@ -60,7 +60,20 @@ function PracticeContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const year = searchParams.get('year');
-    const examParam = searchParams.get('exam') || activeTrack || 'cms';
+    // `exam` URL slug may use hyphen (neet-pg) or underscore (neet_pg);
+    // convert hyphen to underscore so backend enum match works.
+    const rawExam = searchParams.get('exam');
+    const examParam = (rawExam ? rawExam.replace('-', '_') : null) || activeTrack || 'cms';
+    // Human-readable label for the top-bar badge so NEET PG doesn't show
+    // as a slug.
+    const examLabel: Record<string, string> = {
+        cms: 'UPSC CMS',
+        neet_pg: 'NEET PG',
+        ini_cet: 'INI-CET',
+        usmle: 'USMLE',
+        fmge: 'FMGE',
+    };
+    const currentExamLabel = examLabel[examParam] || examParam;
 
     const [questions, setQuestions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -218,7 +231,7 @@ function PracticeContent() {
                 <Card className="max-w-md p-8 text-center space-y-4">
                     <BookOpen className="w-12 h-12 text-muted-foreground mx-auto" />
                     <h2 className="text-lg font-bold">No Questions Found</h2>
-                    <p className="text-sm text-muted-foreground">No questions available for year {year}.</p>
+                    <p className="text-sm text-muted-foreground">No {currentExamLabel} questions available for year {year}.</p>
                     <Button onClick={() => router.push('/questions')}>
                         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Question Bank
                     </Button>
@@ -239,7 +252,7 @@ function PracticeContent() {
                         <ArrowLeft className="w-4 h-4" /> Exit Practice
                     </button>
                     <div className="h-5 w-px bg-border/60" />
-                    <Badge variant="secondary" className="text-xs font-bold">📖 {year} PYQ Practice</Badge>
+                    <Badge variant="secondary" className="text-xs font-bold">📖 {currentExamLabel} {year} PYQ Practice</Badge>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -503,7 +516,7 @@ function PracticeContent() {
                     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setShowPalette(false)}>
                         <div className="bg-card rounded-2xl border border-border/80 shadow-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto m-4" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-bold">Question Palette — {year} PYQs</h3>
+                                <h3 className="text-sm font-bold">Question Palette — {currentExamLabel} {year} PYQs</h3>
                                 <button onClick={() => setShowPalette(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer">
                                     <X className="w-4 h-4" />
                                 </button>

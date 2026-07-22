@@ -73,3 +73,6 @@ backend/scratch/
 .claude/
 graphify-out/
 
+# Imported massive directories
+tesseract/
+backend/importers/neetpg/_output/

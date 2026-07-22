@@ -180,7 +180,30 @@ function QuestionsContent() {
     const { setContextQuestionId } = useDock();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [selectedExam, setSelectedExam] = useState<string>('cms');
+    // Honor `?exam=neet-pg` (or other slugs) from the URL. Fall back to
+    // ExamTrackProvider's choice so NEET PG users actually see NEET PG
+    // instead of being silently routed to UPSC CMS.
+    const urlExam = searchParams.get('exam');
+    const examFromUrl = urlExam ? urlExam.replace('-', '_') : null;
+    const [selectedExam, setSelectedExam] = useState<string>(
+        examFromUrl || activeTrack || 'cms'
+    );
+    // Sync URL → state on mount and when URL changes.
+    useEffect(() => {
+        if (examFromUrl && examFromUrl !== selectedExam) {
+            setSelectedExam(examFromUrl);
+        }
+    }, [examFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Sync state → URL so the choice is bookmarkable + shareable.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const url = new URL(window.location.href);
+        const slug = String(selectedExam).replace('_', '-');
+        if (url.searchParams.get('exam') !== slug) {
+            url.searchParams.set('exam', slug);
+            window.history.replaceState({}, '', url.toString());
+        }
+    }, [selectedExam]);
     const [questions, setQuestions] = useState<Question[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
@@ -617,7 +640,7 @@ function QuestionsContent() {
                                 <div className="min-w-0">
                                     <p className="text-xs font-semibold uppercase tracking-wider text-primary">Active PYQ Bank</p>
                                     <p className="text-base sm:text-lg font-bold text-foreground truncate">
-                                        UPSC CMS {selectedYear} · {qbankStats?.by_year?.find((b: any) => String(b.year) === selectedYear)?.count ?? '—'} Questions
+                                        {SLUG_TO_EXAM_SOURCE[selectedExam] || 'UPSC CMS'} {selectedYear} · {qbankStats?.by_year?.find((b: any) => String(b.year) === selectedYear)?.count ?? '—'} Questions
                                     </p>
                                 </div>
                             </div>
@@ -678,7 +701,7 @@ function QuestionsContent() {
                                         </h2>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Master {qbankStats.total} high-yield {selectedExam} clinical MCQs and PYQs.
+                                        Master {qbankStats.total} high-yield {SLUG_TO_EXAM_SOURCE[selectedExam] || selectedExam} clinical MCQs and PYQs.
                                     </p>
                                 </div>
 
@@ -1618,7 +1641,7 @@ function QuestionsContent() {
                                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2 text-primary">
                                     <Target className="w-6 h-6 animate-pulse" />
                                 </div>
-                                <h3 className="text-xl font-bold text-foreground">UPSC CMS {modalYear} PYQs</h3>
+                                <h3 className="text-xl font-bold text-foreground">{SLUG_TO_EXAM_SOURCE[selectedExam] || 'UPSC CMS'} {modalYear} PYQs</h3>
                                 <p className="text-xs text-muted-foreground">
                                     Select how you would like to prepare with the {modalYear} question bank.
                                 </p>

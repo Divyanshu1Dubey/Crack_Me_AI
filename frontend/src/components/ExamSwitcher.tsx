@@ -28,18 +28,21 @@ export default function ExamSwitcher() {
   }, []);
 
   const handleExamChange = (val: string) => {
-    if (val !== 'cms') {
-      router.push(`/exams/${val.replace('_', '-')}`);
-      return;
-    }
-    
+    // Persist the user's choice everywhere so the rest of the app can
+    // pick it up. For non-CMS exams we land on the Question Bank (not the
+    // marketing landing) so users actually see the question set they
+    // expect.
     setExam(val);
     localStorage.setItem('crack_target_exam', val);
-    
-    // Dispatch a custom event so other components can react
+    localStorage.setItem('active_exam_track', val);
     window.dispatchEvent(new Event('exam_changed'));
-    
-    // Optionally trigger a soft refresh
+
+    if (val === 'cms') {
+      router.push('/questions?exam=cms');
+    } else {
+      const slug = val.replace('_', '-');
+      router.push(`/questions?exam=${slug}`);
+    }
     router.refresh();
   };
 

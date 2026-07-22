@@ -80,8 +80,12 @@ def map_subject(stem: str, fallback: Optional[str] = None) -> Optional[str]:
 
 
 def map_topic_subject(stem: str, subject: str) -> Optional[str]:
-    """Refine topic inside the chosen subject — currently a single-tier
-    keyword match. Will be upgraded to a hierarchical lookup table."""
+    """Refine topic inside the chosen subject — single-tier keyword match.
+
+    `table` is keyed by subject name; each value is a list of topic
+    keywords (flat strings, NOT (topic, [kws]) tuples — that was the
+    Patho/Pharm bug fixed here).
+    """
     table = {
         "General Medicine": ["cardiology", "respiratory", "gastroenterology", "nephrology", "endocrinology", "neurology", "hematology"],
         "General Surgery": ["gastrointestinal", "trauma", "vascular", "urology", "oncology", "endocrine surgery"],
@@ -91,10 +95,9 @@ def map_topic_subject(stem: str, subject: str) -> Optional[str]:
         "Pharmacology": ["general pharmacology", "autonomic", "cns", "chemotherapy", "endocrine"],
     }
     text = (stem or "").lower()
-    for topic, kws in table.get(subject, []):
-        for kw in kws:
-            if kw in text:
-                return topic
+    for kw in table.get(subject, []):
+        if kw in text:
+            return kw
     return None
 
 

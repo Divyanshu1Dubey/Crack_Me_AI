@@ -107,9 +107,18 @@ def process_one_pdf(
 
     fallback_subject = topic_mapper.fallback_subject_from_filename(pdf_path.name)
 
+    # Pre-compute pdfplumber fallback text per page. Some scanned PDFs
+    # have a hidden OCR text layer that PyMuPDF can't read but pdfplumber
+    # can. We pull that once up front, then plug it in per-page when the
+    # PyMuPDF layer is empty.
+    plumber_text: dict[int, str] = pdf_reader.extract_text_via_pdfplumber_pages(pdf_path)
+
     # 1+2. Iterate pages: classify, extract text/images, OCR fallback.
     for page in pdf_reader.iter_pages(doc):
         text = page.text or ""
+        # Fallback: if PyMuPDF gave us nothing, use pdfplumber's text.
+        if not text.strip() and plumber_text.get(page.page_number, "").strip():
+            text = plumber_text[page.page_number]
         feats = classifier_mod.features_for(page.page_number, text, page.image_count)
         page_features.append(feats)
         cls = classifier_mod.classify(feats)

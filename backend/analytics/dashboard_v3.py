@@ -24,7 +24,7 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
@@ -214,7 +214,20 @@ class DashboardV3View(APIView):
 
     def get(self, request):
         user = request.user
-        return Response({
+        # 60-second per-user cache — keeps the dashboard snappy when a
+        # user refreshes the page repeatedly.  Bypassed via
+        # `?nocache=1` for tests / debugging.
+        if request.query_params.get("nocache") != "1":
+            try:
+                from django.core.cache import cache
+                key = f"dashboard_v3:{user.id}"
+                payload = cache.get(key)
+                if payload is not None:
+                    payload["cache"] = "hit"
+                    return Response(payload)
+            except Exception:  # pragma: no cover - defensive
+                pass
+        payload = {
             "accuracy": _accuracy(user),
             "average_time": _average_time(user),
             "weak_subjects": _weak_subjects(user),
@@ -223,7 +236,14 @@ class DashboardV3View(APIView):
             "revision_progress": _revision_progress(user),
             "pyq_coverage": _pyq_coverage(user),
             "generated_at": timezone.now().isoformat(),
-        })
+            "cache": "miss",
+        }
+        try:
+            from django.core.cache import cache
+            cache.set(f"dashboard_v3:{user.id}", payload, 60)
+        except Exception:  # pragma: no cover
+            pass
+        return Response(payload)
 
 
 class HeatmapSubjectView(APIView):

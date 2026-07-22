@@ -1048,6 +1048,16 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'medical-officer': 'Medical Officer',
             'medicalofficer': 'Medical Officer',
         }
+        # Extra alias table — recall imports and legacy imports use
+        # "(recall)" / "(official)" suffixes that the dashboard needs
+        # to fold back to the same bucket. When the slug resolves to
+        # "NEET PG", we additionally match anything starting with that
+        # label (without the LIKE wildcard). See the filtering block
+        # below — `_startswith` is applied directly to the bare prefix.
+        EXAM_SOURCE_PREFIXES = {
+            'NEET PG': ('NEET PG',),
+            'UPSC CMS': ('UPSC CMS',),
+        }
         # ``Question.exam_type`` enum → source. exam_type uses ``cms`` and
         # ``neet_pg`` (underscores) so this is just the slug→source map
         # restricted to enum keys.
@@ -1076,43 +1086,88 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # Base count
         total_qs = Question.objects.filter(is_active=True)
         if exam_source:
-            total_qs = total_qs.filter(exam_source=exam_source)
+            like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+            if like_patterns:
+                from django.db.models import Q
+                q = Q(exam_source=exam_source)
+                for pat in like_patterns:
+                    q |= Q(exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                total_qs = total_qs.filter(q)
+            else:
+                total_qs = total_qs.filter(exam_source=exam_source)
 
         total_count = total_qs.count()
 
         solved_qs = QuestionAttempt.objects.filter(user=user) if has_user else QuestionAttempt.objects.none()
         if exam_source:
-            solved_qs = solved_qs.filter(question__exam_source=exam_source)
+            like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+            if like_patterns:
+                from django.db.models import Q
+                q = Q(question__exam_source=exam_source)
+                for pat in like_patterns:
+                    q |= Q(question__exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                solved_qs = solved_qs.filter(q)
+            else:
+                solved_qs = solved_qs.filter(question__exam_source=exam_source)
         total_solved = solved_qs.count()
-        
+
         # Progress by year
         by_year_raw = total_qs.values('year').annotate(count=Count('id')).order_by('-year')
         by_year = []
         for item in by_year_raw:
             year = item['year']
-            solved = QuestionAttempt.objects.filter(user=user, question__year=year)
+            # AnonymousUser can't be FK-cast to int; guard so the dashboard
+            # still works for guests (count=0 for solved fields).
+            if has_user:
+                solved = QuestionAttempt.objects.filter(user=user, question__year=year)
+            else:
+                solved = QuestionAttempt.objects.none()
             if exam_source:
-                solved = solved.filter(question__exam_source=exam_source)
+                like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+                if like_patterns:
+                    from django.db.models import Q as _Q
+                    q2 = _Q(question__exam_source=exam_source)
+                    for pat in like_patterns:
+                        q2 |= _Q(question__exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                    solved = solved.filter(q2)
+                else:
+                    solved = solved.filter(question__exam_source=exam_source)
             solved_count = solved.count() if has_user else 0
             by_year.append({
                 'year': year,
                 'count': item['count'],
                 'solved': solved_count
             })
-            
+
         # Progress by subject
         by_subject = []
         for subject in Subject.objects.all():
             q_qs = Question.objects.filter(subject=subject, is_active=True)
             if exam_source:
-                q_qs = q_qs.filter(exam_source=exam_source)
+                like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+                if like_patterns:
+                    from django.db.models import Q as _Q
+                    q2 = _Q(exam_source=exam_source)
+                    for pat in like_patterns:
+                        q2 |= _Q(exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                    q_qs = q_qs.filter(q2)
+                else:
+                    q_qs = q_qs.filter(exam_source=exam_source)
             count = q_qs.count()
             if count == 0 and exam_source == 'NEET PG':
                 # Skip 0 question subjects for NEET PG
                 continue
-            solved = QuestionAttempt.objects.filter(user=user, question__subject=subject)
+            solved = QuestionAttempt.objects.filter(user=user, question__subject=subject) if has_user else QuestionAttempt.objects.none()
             if exam_source:
-                solved = solved.filter(question__exam_source=exam_source)
+                like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+                if like_patterns:
+                    from django.db.models import Q as _Q
+                    q2 = _Q(question__exam_source=exam_source)
+                    for pat in like_patterns:
+                        q2 |= _Q(question__exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                    solved = solved.filter(q2)
+                else:
+                    solved = solved.filter(question__exam_source=exam_source)
             solved_count = solved.count() if has_user else 0
             by_subject.append({
                 'id': subject.id,
@@ -1127,9 +1182,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
         by_difficulty = []
         for item in by_difficulty_raw:
             diff = item['difficulty']
-            solved = QuestionAttempt.objects.filter(user=user, question__difficulty=diff)
+            solved = QuestionAttempt.objects.filter(user=user, question__difficulty=diff) if has_user else QuestionAttempt.objects.none()
             if exam_source:
-                solved = solved.filter(question__exam_source=exam_source)
+                like_patterns = EXAM_SOURCE_PREFIXES.get(exam_source, ())
+                if like_patterns:
+                    from django.db.models import Q as _Q
+                    q2 = _Q(question__exam_source=exam_source)
+                    for pat in like_patterns:
+                        q2 |= _Q(question__exam_source__startswith=pat.rstrip("%") if pat.endswith("%") else pat)
+                    solved = solved.filter(q2)
+                else:
+                    solved = solved.filter(question__exam_source=exam_source)
             solved_count = solved.count() if has_user else 0
             by_difficulty.append({
                 'difficulty': diff,

@@ -138,6 +138,21 @@ class DjangoWriter:
         correct_answer = self._first_answer_label(q)
         confidence = Decimal(str(round(q.confidence_score, 3))).quantize(Decimal("0.001"))
 
+        # Pull year from (in order): recall_source.pdf_filename (e.g.
+        # NEET-PG-2021-...) → recall_source PDF metadata creationDate →
+        # 0 (frontend year filter just hides those rows).
+        guessed_year = self._guess_year(recall_source.pdf_filename or "")
+        if not guessed_year:
+            try:
+                meta = getattr(recall_source, "pdf_metadata", {}) or {}
+                # PyMuPDF dates look like "D:20210315..."; normalise to YYYY.
+                import re as _re
+                m = _re.search(r"(20\d{2})", str(meta.get("creationDate") or meta.get("modDate") or ""))
+                if m:
+                    guessed_year = int(m.group(1))
+            except Exception:
+                guessed_year = 0
+
         defaults = {
             "question_text": normalize_text(q.stem or q.stem_raw),
             "option_a": normalize_text(options_text[0] or ""),
@@ -145,8 +160,8 @@ class DjangoWriter:
             "option_c": normalize_text(options_text[2] or ""),
             "option_d": normalize_text(options_text[3] or ""),
             "correct_answer": correct_answer or "A",
-            "year": int(getattr(recall_source, "page_count", 0) or 0) and self._guess_year(recall_source.pdf_filename) or 0,
-            "subject": subject or self._default_subject(),
+            "year": guessed_year,
+            "subject": subject or self._subject_row_for(q.subject) or self._default_subject(),
             "topic": topic,
             "difficulty": q.difficulty if q.difficulty in ("easy", "medium", "hard") else "medium",
             "exam_type": "neet_pg",
@@ -262,6 +277,23 @@ class DjangoWriter:
 
     def _emit_extraction_item(self, q: ParsedQuestion, source: RecallSource,
                               status: str = "pending", note: str = "") -> None:
+        # When `self.import_job` is None (CLI one-shots that run without
+        # a QuestionImportJob), fall back to a "system" job so the FK is
+        # satisfied. Without this the IntegrityError fires when no PDF
+        # gets a parent job.
+        if self.import_job is None:
+            try:
+                self.import_job = QuestionImportJob.objects.create(
+                    job_type="pdf",
+                    status="running",
+                    source_filename=source.pdf_filename or "unknown",
+                    stored_file_path=source.pdf_path or "",
+                    summary={"triggered_via": "_emit_extraction_item fallback"},
+                )
+            except Exception:
+                # If even the fallback fails, swallow it — the import is
+                # best-effort and the main Question row is what matters.
+                return
         QuestionExtractionItem.objects.create(
             job=self.import_job,
             status=status,
@@ -315,6 +347,60 @@ class DjangoWriter:
         text = stem.lower()
         for subj in Subject.objects.all()[:50]:
             if subj.name.lower() in text:
+                return subj
+        return None
+
+    # Map topic_mapper output strings to Subject rows in the catalogue.
+    # Some NEET PG subject names don't exactly match the catalogue
+    # (e.g. "General Medicine" → "General Medicine", "OBG" → "Obstetrics &
+    # Gynecology", "Forensic Medicine" → "FMT"). This table is the bridge.
+    _SUBJECT_NAME_MAP = {
+        "anatomy": "Anatomy",
+        "physiology": "Physiology",
+        "biochemistry": "Biochemistry",
+        "pathology": "Pathology",
+        "microbiology": "Microbiology",
+        "pharmacology": "Pharmacology",
+        "forensic medicine": "Forensic Medicine",
+        "fmt": "Forensic Medicine",
+        "psm": "PSM",
+        "preventive & social medicine": "PSM",
+        "ophthalmology": "Ophthalmology",
+        "ent": "ENT",
+        "general medicine": "General Medicine",
+        "medicine": "General Medicine",
+        "general surgery": "Surgery",
+        "surgery": "Surgery",
+        "obg": "Obstetrics & Gynecology",
+        "obstetrics & gynaecology": "Obstetrics & Gynecology",
+        "obstetrics & gynecology": "Obstetrics & Gynecology",
+        "paediatrics": "Pediatrics",
+        "pediatrics": "Pediatrics",
+        "dermatology": "Dermatology",
+        "orthopaedics": "Orthopaedics",
+        "orthopedics": "Orthopaedics",
+        "anaesthesia": "Anaesthesia",
+        "anesthesia": "Anaesthesia",
+        "radiodiagnosis": "Radiodiagnosis",
+        "radiology": "Radiodiagnosis",
+        "psychiatry": "Psychiatry",
+    }
+
+    @classmethod
+    def _subject_row_for(cls, name: Optional[str]) -> Optional[Subject]:
+        """Translate a topic_mapper string → Subject row. Cached per process."""
+        if not name:
+            return None
+        norm = name.strip().lower()
+        target = cls._SUBJECT_NAME_MAP.get(norm, name.strip())
+        if not hasattr(cls, "_SUBJECT_CACHE"):
+            cls._SUBJECT_CACHE = {s.name.lower(): s for s in Subject.objects.all()}
+        # Try direct name first, then case-insensitive lookup, then catalog match.
+        if target.lower() in cls._SUBJECT_CACHE:
+            return cls._SUBJECT_CACHE[target.lower()]
+        # Final fallback: fuzzy contains-match in catalogue.
+        for cat_name, subj in cls._SUBJECT_CACHE.items():
+            if target.lower() in cat_name or cat_name in target.lower():
                 return subj
         return None
 

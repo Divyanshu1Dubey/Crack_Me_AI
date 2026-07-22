@@ -2,10 +2,14 @@
 
 All entry points degrade gracefully if PyMuPDF is missing — they raise
 `PdfBackendUnavailable` so callers can fall back to other backends.
+
+A pdfplumber-based text-extraction helper is exposed as
+`extract_text_via_pdfplumber()` for scanned PDFs where PyMuPDF's
+text layer is empty (some scanned-but-OCR'd PDFs store the recognised
+text in a way that pdfplumber can recover but PyMuPDF cannot).
 """
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
@@ -16,6 +20,13 @@ try:
 except Exception:  # pragma: no cover - import-time probe
     fitz = None  # type: ignore
     _HAS_FITZ = False
+
+try:
+    import pdfplumber  # type: ignore
+    _HAS_PDFPLUMBER = True
+except Exception:  # pragma: no cover
+    pdfplumber = None  # type: ignore
+    _HAS_PDFPLUMBER = False
 
 
 class PdfBackendUnavailable(RuntimeError):
@@ -54,6 +65,11 @@ def is_encrypted(doc) -> bool:
 
 
 def iter_pages(doc) -> Iterator[PageExtract]:
+    """Yield a PageExtract per page.
+
+    Text extraction happens in PyMuPDF; per-page pdfplumber fallback
+    is applied by the runner (which has the path), not here.
+    """
     for i, page in enumerate(doc, start=1):
         text = page.get_text("text") or ""
         images = page.get_images(full=True) or []
@@ -66,6 +82,26 @@ def iter_pages(doc) -> Iterator[PageExtract]:
             width=float(page.rect.width),
             height=float(page.rect.height),
         )
+
+
+def extract_text_via_pdfplumber_pages(pdf_path: Path) -> dict[int, str]:
+    """Open `pdf_path` with pdfplumber and return {1-indexed_page: text}.
+
+    Used as a fallback when PyMuPDF's text layer is empty (some scanned
+    PDFs). Returns an empty dict when pdfplumber is unavailable or the
+    PDF can't be opened.
+    """
+    if not _HAS_PDFPLUMBER:
+        return {}
+    out: dict[int, str] = {}
+    try:
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            for idx, page in enumerate(pdf.pages, start=1):
+                t = page.extract_text() or ""
+                out[idx] = t
+    except Exception:
+        return {}
+    return out
 
 
 def render_page_png(doc, page_number: int, dpi: int = 200) -> Optional[bytes]:
@@ -93,6 +129,7 @@ __all__ = [
     "metadata",
     "is_encrypted",
     "iter_pages",
+    "extract_text_via_pdfplumber_pages",
     "render_page_png",
     "extract_image_bytes",
 ]
