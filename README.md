@@ -1,40 +1,54 @@
-﻿# Crack_Me_AI — UPSC CMS Exam Preparation Platform
 
-> AI-powered UPSC Combined Medical Services (CMS) exam prep platform with 10 AI providers, RAG-grounded tutoring, 2000+ PYQ questions, spaced repetition flashcards, and adaptive testing.
+# 🏥 Crack_Me_AI — UPSC CMS Exam Preparation Platform
 
-**Live**: [crack-me-ai1.vercel.app](https://crack-me-ai1.vercel.app/) | **API**: [crackcms-backend.onrender.com/api/](https://crackcms-backend.onrender.com/api/)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js%2016-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![Django](https://img.shields.io/badge/Backend-Django%205-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Language-Python%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS%204-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](#license)
+
+> **AI-Powered UPSC Combined Medical Services (CMS) Exam Preparation Platform** featuring 10 round-robin AI providers, RAG-grounded tutoring, 2,000+ past year questions (PYQs), spaced repetition flashcards (SM-2), and adaptive testing.
+
+🌐 **Live:** [crack-me-ai1.vercel.app](https://crack-me-ai1.vercel.app/)  
+⚙️ **API:** [crackcms-backend.onrender.com/api/](https://crackcms-backend.onrender.com/api/)
 
 ---
 
+## 📋 Table of Contents
 
-
-## Table of Contents
-
-1. [Quick Start](#quick-start)
-2. [Architecture](#architecture)
-3. [Tech Stack](#tech-stack)
-4. [AI System](#ai-system)
-5. [Question Bank & Data Pipeline](#question-bank--data-pipeline)
-6. [Token Economy](#token-economy)
-7. [API Reference](#api-reference)
-8. [Frontend Pages](#frontend-pages)
-9. [Training the AI (Adding Content)](#training-the-ai-adding-content)
-10. [Question Management](#question-management)
-11. [API Keys Setup](#api-keys-setup)
-12. [Gmail Setup (Password Reset)](#gmail-setup-password-reset)
-13. [Ollama Setup (Local AI)](#ollama-setup-local-ai)
-14. [Deployment](#deployment)
-15. [Testing](#testing)
-16. [Troubleshooting](#troubleshooting)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [AI System](#ai-system)
+  - [10 AI Providers (Round-Robin)](#10-ai-providers-round-robin)
+  - [How Round-Robin Works](#how-round-robin-works)
+  - [AI Features](#ai-features)
+  - [RAG Pipeline](#rag-pipeline)
+- [Question Bank & Data Pipeline](#question-bank--data-pipeline)
+- [Token Economy](#token-economy)
+- [API Reference](#api-reference)
+- [Frontend Pages](#frontend-pages)
+- [Training the AI (Adding Content)](#training-the-ai-adding-content)
+- [Question Management](#question-management)
+- [API Keys Setup](#api-keys-setup)
+- [Gmail Setup (Password Reset)](#gmail-setup-password-reset)
+- [Ollama Setup (Local AI)](#ollama-setup-local-ai)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Security](#security)
+- [License](#license)
 
 ---
 
 ## Quick Start
 
 ### Backend (Django)
+
 ```powershell
 cd backend
-..\\.venv\Scripts\Activate.ps1
+..\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py loaddata questions_fixture.json
@@ -43,7 +57,8 @@ python manage.py runserver 8000
 Runs on **http://localhost:8000**
 
 ### Frontend (Next.js)
-```powershell
+
+```bash
 cd frontend
 npm install
 npm run dev
@@ -51,7 +66,8 @@ npm run dev
 Runs on **http://localhost:3000**
 
 ### Create Admin Account
-```powershell
+
+```bash
 cd backend
 python manage.py createsuperuser
 ```
@@ -60,51 +76,55 @@ python manage.py createsuperuser
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                   FRONTEND (Next.js 16)                       │
-│  Dashboard │ Question Bank │ AI Tutor │ Flashcards │ Tests    │
-│                    Axios (JWT Bearer)                         │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-┌────────────────────────┼─────────────────────────────────────┐
-│                   BACKEND (Django 5 + DRF)                    │
-│  accounts │ questions │ ai_engine │ analytics │ tests_engine  │
-│  (JWT +   │ (CRUD +   │ (10 AI    │ (topics,  │ (adaptive    │
-│   tokens) │  discuss) │  providers│  streaks) │  tests)      │
-│                                                               │
-│  ┌──────────┐  ┌──────────────┐  ┌────────────┐              │
-│  │ SQLite   │  │ RAG Store    │  │ Cache      │              │
-│  │ Database │  │ (TF-IDF)     │  │ (LocMem)   │              │
-│  └──────────┘  └──────────────┘  └────────────┘              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Frontend ["FRONTEND (Next.js 16)"]
+        UI["Dashboard | Question Bank | AI Tutor | Flashcards | Tests"]
+    end
+
+    subgraph Backend ["BACKEND (Django 5 + DRF)"]
+        Accounts["accounts (JWT + tokens)"]
+        Questions["questions (CRUD + discuss)"]
+        AIEngine["ai_engine (10 AI providers)"]
+        Analytics["analytics (topics, streaks)"]
+        TestsEngine["tests_engine (adaptive tests)"]
+        
+        DB[("SQLite Database")]
+        RAGStore[("RAG Store (TF-IDF)")]
+        Cache[("Cache (LocMem)")]
+    end
+
+    UI -->|Axios with JWT Bearer| Backend
+    AIEngine --> RAGStore
+    Backend --> DB
+    Backend --> Cache
 ```
 
 ### Backend Apps
 
 | App | Purpose |
-|-----|---------|
-| **accounts** | CustomUser, JWT auth, token balance, password reset |
-| **questions** | 2004+ PYQs, bookmarks, discussions, notes, flashcards (SM-2) |
-| **ai_engine** | 10-provider round-robin AI, RAG pipeline, explain-after-answer |
-| **analytics** | Topic performance, daily activity, streaks, badges |
-| **tests_engine** | Adaptive tests, PYQ simulation, attempt tracking |
-| **textbooks** | Textbook library, chapter indexing |
-| **resources** | UPSC exam resources, document catalog |
+| :--- | :--- |
+| `accounts` | CustomUser, JWT auth, token balance, password reset |
+| `questions` | 2004+ PYQs, bookmarks, discussions, notes, flashcards (SM-2) |
+| `ai_engine` | 10-provider round-robin AI, RAG pipeline, explain-after-answer |
+| `analytics` | Topic performance, daily activity, streaks, badges |
+| `tests_engine` | Adaptive tests, PYQ simulation, attempt tracking |
+| `textbooks` | Textbook library, chapter indexing |
+| `resources` | UPSC exam resources, document catalog |
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI |
-| Backend | Django 5.x, Django REST Framework, SimpleJWT |
-| Database | SQLite3 |
-| AI Providers | Groq, Cerebras, Gemini, Cohere, OpenRouter ×2, GitHub Models, HuggingFace, Mistral, DeepSeek |
-| RAG | SQLite TF-IDF (4,972+ chunks from 79 sources) |
-| Auth Security | django-axes (brute-force protection) |
-| CI/CD | GitHub Actions → Render (backend) + Vercel (frontend) |
+| :--- | :--- |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI |
+| **Backend** | Django 5.x, Django REST Framework, SimpleJWT |
+| **Database** | SQLite3 |
+| **AI Providers** | Groq, Cerebras, Gemini, Cohere, OpenRouter ×2, GitHub Models, HuggingFace, Mistral, DeepSeek |
+| **RAG** | SQLite TF-IDF (4,972+ chunks from 79 sources) |
+| **Auth Security** | `django-axes` (brute-force protection) |
+| **CI/CD** | GitHub Actions → Render (backend) + Vercel (frontend) |
 
 ---
 
@@ -113,30 +133,27 @@ python manage.py createsuperuser
 ### 10 AI Providers (Round-Robin)
 
 | # | Provider | Model | Rate Limit |
-|---|----------|-------|------------|
-| 1 | Groq | Llama 3.3 70B | 30 RPM, 14,400 RPD |
-| 2 | Cerebras | Llama 3.1 8B | 30 RPM |
-| 3 | Gemini | Flash 2.0 | 15 RPM, 1,500 RPD/model |
-| 4 | Cohere | Command-A | 20 RPM |
-| 5 | OpenRouter | Free models | 20 RPM |
-| 6 | OpenRouter2 | Free models (2nd key) | 20 RPM |
-| 7 | GitHub Models | GPT-4o Mini | 150 RPM |
-| 8 | HuggingFace | Llama 3.3 70B | ~10 RPM |
-| 9 | Mistral | mistral-small | ~30 RPM |
-| 10 | DeepSeek | deepseek-chat | Pay-as-you-go (LAST) |
-| fallback | Ollama | llama3.2:3b | Local, unlimited |
+| :-: | :--- | :--- | :--- |
+| **1** | Groq | Llama 3.3 70B | 30 RPM, 14,400 RPD |
+| **2** | Cerebras | Llama 3.1 8B | 30 RPM |
+| **3** | Gemini | Flash 2.0 | 15 RPM, 1,500 RPD/model |
+| **4** | Cohere | Command-A | 20 RPM |
+| **5** | OpenRouter | Free models | 20 RPM |
+| **6** | OpenRouter2 | Free models (2nd key) | 20 RPM |
+| **7** | GitHub Models | GPT-4o Mini | 150 RPM |
+| **8** | HuggingFace | Llama 3.3 70B | ~10 RPM |
+| **9** | Mistral | mistral-small | ~30 RPM |
+| **10** | DeepSeek | deepseek-chat | Pay-as-you-go *(LAST)* |
+| **fallback** | Ollama | llama3.2:3b | Local, unlimited |
 
-**Deadline**: 120 seconds per request. Auto-failover to next provider on error/timeout.
+> **Deadline:** 120 seconds per request. Auto-failover to next provider on error/timeout.
 
 ### How Round-Robin Works
 
-```
-Request 1 → Groq (if fails → Cerebras → Gemini → ...)
-Request 2 → Cerebras (if fails → Gemini → Cohere → ...)
-Request N → provider[N % 10]
-All 10 fail → Ollama (local fallback)
-```
-
+- **Request 1** → Groq *(if fails → Cerebras → Gemini → ...)*
+- **Request 2** → Cerebras *(if fails → Gemini → Cohere → ...)*
+- **Request N** → `provider[N % 10]`
+- **All 10 fail** → Ollama (local fallback)
 - Thread-safe rotation via `threading.Lock`
 - Each provider wrapped with timeout (15-20s)
 - DeepSeek tried last (paid)
@@ -144,40 +161,46 @@ All 10 fail → Ollama (local fallback)
 ### AI Features
 
 | Feature | Endpoint | Description |
-|---------|----------|-------------|
-| AI Tutor | `POST /api/ai/tutor/` | RAG-enhanced chat tutoring |
-| Explain After Answer | `POST /api/ai/explain-answer/` | Rich JSON explanation with mnemonic |
-| Mnemonic Generator | `POST /api/ai/mnemonic/` | Memory aids for topics |
-| Concept Explainer | `POST /api/ai/explain/` | Topic explanations at different levels |
-| Question Generator | `POST /api/ai/generate-questions/` | AI-generated MCQs |
-| Study Plan | `POST /api/ai/study-plan/` | Personalized study roadmap |
+| :--- | :--- | :--- |
+| **AI Tutor** | `POST /api/ai/tutor/` | RAG-enhanced chat tutoring |
+| **Explain After Answer** | `POST /api/ai/explain-answer/` | Rich JSON explanation with mnemonic |
+| **Mnemonic Generator** | `POST /api/ai/mnemonic/` | Memory aids for topics |
+| **Concept Explainer** | `POST /api/ai/explain/` | Topic explanations at different levels |
+| **Question Generator** | `POST /api/ai/generate-questions/` | AI-generated MCQs |
+| **Study Plan** | `POST /api/ai/study-plan/` | Personalized study roadmap |
 
-### Explain After Answer (JSON Response)
+#### Explain After Answer (JSON Response)
 
 ```json
 {
   "is_correct": true,
   "correct_answer": "B",
   "why_correct": "Detailed explanation...",
-  "why_others_wrong": {"A": "...", "C": "...", "D": "..."},
+  "why_others_wrong": {
+    "A": "...",
+    "C": "...",
+    "D": "..."
+  },
   "mnemonic": "Memory aid...",
-  "high_yield_points": ["Fact 1", "Fact 2"],
+  "high_yield_points": [
+    "Fact 1",
+    "Fact 2"
+  ],
   "textbook_reference": "Harrison's Ch. 15"
 }
 ```
 
-Cached for 24 hours (key: MD5 of question + answer).
+> Cached for 24 hours (key: MD5 of question + answer).
 
 ### RAG Pipeline
 
-```
-User Query → TF-IDF Tokenization → SQLite RAG Store →
-  Top-K Chunks (cosine similarity) → Context Injection → AI Prompt → Response
+```text
+User Query → TF-IDF Tokenization → SQLite RAG Store → Top-K Chunks (cosine similarity) → Context Injection → AI Prompt → Response
 ```
 
-- **Storage**: `chroma_db/rag_store.sqlite3` (4,972+ chunks)
-- **Sources**: 17 textbook notes, 16 PYQ papers, 51 web articles (79 total)
-- **Chunk size**: ~200-500 tokens with overlap
+- **Storage:** `chroma_db/rag_store.sqlite3` (4,972+ chunks)
+- **Sources:** 17 textbook notes, 16 PYQ papers, 51 web articles (79 total)
+- **Chunk size:** ~200-500 tokens with overlap
 
 ---
 
@@ -185,22 +208,20 @@ User Query → TF-IDF Tokenization → SQLite RAG Store →
 
 ### Current Stats
 
-- **2,004+ questions** from UPSC CMS 2018-2025
-- **5 subjects**, **47 topics**
+- 2,004+ questions from UPSC CMS 2018-2025
+- 5 subjects, 47 topics
 - All questions enriched with explanations, mnemonics, concept tags
 
 ### Data Flow
 
-```
-Source (PDF/TXT/MD) → Import Scripts → Django DB →
-  AI Enrichment (answers, explanations) → Export Fixture →
-    questions_fixture.json → Deploy (build.sh loads fixture)
+```text
+Source (PDF/TXT/MD) → Import Scripts → Django DB → AI Enrichment (answers, explanations) → Export Fixture → questions_fixture.json → Deploy (build.sh loads fixture)
 ```
 
 ### Enrichment Fields
 
 | Field | Source | Description |
-|-------|--------|-------------|
+| :--- | :--- | :--- |
 | `correct_answer` | AI voting (3 providers) | Multi-model consensus |
 | `explanation` | AI | 3-4 sentence explanation |
 | `mnemonic` | AI | Memory aid |
@@ -228,20 +249,20 @@ python _check_db.py                   # Database integrity
 ## Token Economy
 
 | Token Type | Allocation | Expiry |
-|-----------|-----------|--------|
-| Daily Free | 10/day | Midnight reset |
-| Weekly Free | 50/week | Sunday reset |
-| Purchased | Configurable | Never |
-| Feedback Reward | +2 per verified report | Never |
+| :--- | :--- | :--- |
+| **Daily Free** | 10/day | Midnight reset |
+| **Weekly Free** | 50/week | Sunday reset |
+| **Purchased** | Configurable | Never |
+| **Feedback Reward** | +2 per verified report | Never |
 
-- Each AI feature costs **1 token**
+- Each AI feature costs 1 token
 - Admin/staff users bypass token limits
 - Consumption priority: Free → Feedback credits → Purchased
 
 ### Admin Token Management
 
 | Endpoint | Description |
-|----------|-------------|
+| :--- | :--- |
 | `GET /api/auth/tokens/admin/users/` | All users + balances |
 | `POST /api/auth/tokens/admin/grant/` | Grant/revoke tokens |
 | `POST /api/auth/tokens/admin/transfer/` | Transfer between users |
@@ -253,66 +274,66 @@ python _check_db.py                   # Database integrity
 ### Authentication (`/api/auth/`)
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register/` | Register new user |
-| POST | `/api/auth/login/` | Login (returns JWT) |
-| GET | `/api/auth/profile/` | Get user profile |
-| PUT | `/api/auth/profile/` | Update profile |
-| GET | `/api/auth/tokens/` | Token balance |
-| POST | `/api/auth/tokens/purchase/` | Purchase tokens |
+| :-: | :--- | :--- |
+| `POST` | `/api/auth/register/` | Register new user |
+| `POST` | `/api/auth/login/` | Login (returns JWT) |
+| `GET` | `/api/auth/profile/` | Get user profile |
+| `PUT` | `/api/auth/profile/` | Update profile |
+| `GET` | `/api/auth/tokens/` | Token balance |
+| `POST` | `/api/auth/tokens/purchase/` | Purchase tokens |
 
 ### Questions (`/api/questions/`)
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/questions/subjects/` | List subjects |
-| GET | `/api/questions/topics/` | List topics |
-| GET | `/api/questions/questions/` | List questions (filter by subject/year/difficulty) |
-| POST | `/api/questions/questions/{id}/bookmark/` | Toggle bookmark |
-| GET | `/api/questions/flashcards/` | List flashcards |
-| POST | `/api/questions/flashcards/` | Create flashcard |
-| POST | `/api/questions/flashcards/{id}/review/` | SM-2 review |
+| :-: | :--- | :--- |
+| `GET` | `/api/questions/subjects/` | List subjects |
+| `GET` | `/api/questions/topics/` | List topics |
+| `GET` | `/api/questions/questions/` | List questions (filter by subject/year/difficulty) |
+| `POST` | `/api/questions/questions/{id}/bookmark/` | Toggle bookmark |
+| `GET` | `/api/questions/flashcards/` | List flashcards |
+| `POST` | `/api/questions/flashcards/` | Create flashcard |
+| `POST` | `/api/questions/flashcards/{id}/review/` | SM-2 review |
 
 ### AI Engine (`/api/ai/`)
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/ai/tutor/` | AI tutor (RAG-enhanced) |
-| POST | `/api/ai/mnemonic/` | Generate mnemonic |
-| POST | `/api/ai/explain/` | Explain concept |
-| POST | `/api/ai/analyze-answer/` | Analyze answer |
-| POST | `/api/ai/explain-answer/` | Explain after answer |
-| POST | `/api/ai/generate-questions/` | Generate MCQs |
-| POST | `/api/ai/study-plan/` | Study plan |
-| GET | `/api/ai/status/` | Provider status |
-| GET | `/api/ai/test/` | Quick AI test |
-| POST | `/api/ai/knowledge/upload/` | Upload to knowledge base |
-| POST | `/api/ai/knowledge/scan/` | Scan & index new files |
+| :-: | :--- | :--- |
+| `POST` | `/api/ai/tutor/` | AI tutor (RAG-enhanced) |
+| `POST` | `/api/ai/mnemonic/` | Generate mnemonic |
+| `POST` | `/api/ai/explain/` | Explain concept |
+| `POST` | `/api/ai/analyze-answer/` | Analyze answer |
+| `POST` | `/api/ai/explain-answer/` | Explain after answer |
+| `POST` | `/api/ai/generate-questions/` | Generate MCQs |
+| `POST` | `/api/ai/study-plan/` | Study plan |
+| `GET` | `/api/ai/status/` | Provider status |
+| `GET` | `/api/ai/test/` | Quick AI test |
+| `POST` | `/api/ai/knowledge/upload/` | Upload to knowledge base |
+| `POST` | `/api/ai/knowledge/scan/` | Scan & index new files |
 
 ### Tests (`/api/tests/`)
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/tests/tests/` | List tests |
-| POST | `/api/tests/tests/` | Create test |
-| POST | `/api/tests/tests/{id}/submit/` | Submit answers |
-| GET | `/api/tests/tests/{id}/review/` | Review results |
+| :-: | :--- | :--- |
+| `GET` | `/api/tests/tests/` | List tests |
+| `POST` | `/api/tests/tests/` | Create test |
+| `POST` | `/api/tests/tests/{id}/submit/` | Submit answers |
+| `GET` | `/api/tests/tests/{id}/review/` | Review results |
 
 ### Analytics (`/api/analytics/`)
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/analytics/dashboard/` | Dashboard stats |
-| GET | `/api/analytics/performance/` | Performance over time |
-| GET | `/api/analytics/topics/` | Topic-wise performance |
-| GET | `/api/analytics/roadmap/` | Study roadmap |
+| :-: | :--- | :--- |
+| `GET` | `/api/analytics/dashboard/` | Dashboard stats |
+| `GET` | `/api/analytics/performance/` | Performance over time |
+| `GET` | `/api/analytics/topics/` | Topic-wise performance |
+| `GET` | `/api/analytics/roadmap/` | Study roadmap |
 
 ---
 
 ## Frontend Pages
 
 | Route | Page | Description |
-|-------|------|-------------|
+| :--- | :--- | :--- |
 | `/` | Landing | Hero section, features, CTA |
 | `/login` | Login | JWT authentication |
 | `/register` | Register | New user signup |
@@ -340,7 +361,7 @@ python _check_db.py                   # Database integrity
 ### Step 1: Place Files
 
 | Content Type | Folder | Formats |
-|---|---|---|
+| :--- | :--- | :--- |
 | Textbooks / Notes | `backend/Medura_Train/textbooks/` | `.pdf`, `.md`, `.txt` |
 | PYQ Papers | `backend/Medura_Train/PYQ/` | `.pdf`, `.md`, `.txt` |
 | Web Content | `backend/Medura_Train/web_knowledge/` | `.md`, `.txt` |
@@ -363,7 +384,7 @@ This scans all folders, skips already-indexed files, chunks new content (~200 wo
 
 ### Tips
 
-- **Markdown works best** — chunks cleanly on headers
+- Markdown works best — chunks cleanly on headers
 - Use descriptive filenames: `pharmacology_autonomic_drugs.md`
 - Use headers and bullet points for better searchability
 
@@ -378,7 +399,7 @@ This scans all folders, skips already-indexed files, chunks new content (~200 wo
 ### Methods to Add/Edit Questions
 
 | Method | Best For |
-|--------|----------|
+| :--- | :--- |
 | Django Admin (`/admin/`) | Editing individual questions via GUI |
 | REST API | Programmatic bulk imports |
 | Direct fixture edit | Careful manual JSON edits |
@@ -424,16 +445,16 @@ DEEPSEEK_API_KEY=sk-...
 ### Get Keys At
 
 | Provider | URL |
-|----------|-----|
-| Groq | https://console.groq.com/keys |
-| Cerebras | https://cloud.cerebras.ai |
-| Gemini | https://aistudio.google.com/apikey |
-| GitHub Models | https://github.com/settings/tokens |
-| OpenRouter | https://openrouter.ai |
-| Cohere | https://dashboard.cohere.com |
-| HuggingFace | https://huggingface.co/settings/tokens |
-| Mistral | https://console.mistral.ai/api-keys |
-| DeepSeek | https://platform.deepseek.com/api_keys |
+| :--- | :--- |
+| Groq | [console.groq.com/keys](https://console.groq.com/keys) |
+| Cerebras | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
+| Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| GitHub Models | [github.com/settings/tokens](https://github.com/settings/tokens) |
+| OpenRouter | [openrouter.ai](https://openrouter.ai) |
+| Cohere | [dashboard.cohere.com](https://dashboard.cohere.com) |
+| HuggingFace | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| Mistral | [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) |
+| DeepSeek | [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) |
 
 ### Test Keys
 
@@ -446,15 +467,17 @@ python test_api_keys.py
 
 ## Gmail Setup (Password Reset)
 
-1. Enable **2-Step Verification** at https://myaccount.google.com/security
-2. Create an **App Password** at https://myaccount.google.com/apppasswords (select Mail → Other → "CrackCMS")
+1. Enable 2-Step Verification at [myaccount.google.com/security](https://myaccount.google.com/security)
+2. Create an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (select Mail → Other → "CrackCMS")
 3. Add to `.env`:
-   ```env
-   EMAIL_HOST_USER=crackwith.ai@gmail.com
-   EMAIL_HOST_PASSWORD=abcd efgh ijkl mnop
-   FRONTEND_URL=http://localhost:3000
-   ```
-4. In production (Render), set `FRONTEND_URL=https://crack-me-ai1.vercel.app`
+
+```env
+EMAIL_HOST_USER=crackwith.ai@gmail.com
+EMAIL_HOST_PASSWORD=YOUR_APP_PASSWORD
+FRONTEND_URL=http://localhost:3000
+```
+
+> In production (Render), set `FRONTEND_URL=https://crack-me-ai1.vercel.app`
 
 ---
 
@@ -464,9 +487,9 @@ Ollama runs AI locally as the final fallback when all cloud providers fail.
 
 ### Install
 
-- **Windows**: Download from https://ollama.com/download/windows
-- **macOS**: `brew install ollama`
-- **Linux**: `curl -fsSL https://ollama.com/install.sh | sh`
+- **Windows:** Download from [ollama.com/download/windows](https://ollama.com/download/windows)
+- **macOS:** `brew install ollama`
+- **Linux:** `curl -fsSL https://ollama.com/install.sh | sh`
 
 ### Pull Model
 
@@ -488,35 +511,25 @@ No API key needed. CrackCMS connects to `http://localhost:11434` automatically. 
 
 ### Backend (Render)
 
-- **Build command**: `./build.sh` (installs deps, migrates, loads fixture)
-- **Start command**: `gunicorn crack_cms.wsgi:application`
-- **Config**: `render.yaml` has all env var definitions
-
-Required Render environment variables:
-```
-DJANGO_SECRET_KEY, GEMINI_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY,
-CEREBRAS_API_KEY, OPENROUTER_API_KEY, OPENROUTER_API_KEY2,
-COHERE_API_KEY, GITHUB_TOKEN, HUGGINGFACE_API_KEY, MISTRAL_API_KEY,
-CORS_ALLOWED_ORIGINS=https://crack-me-ai1.vercel.app,
-CSRF_TRUSTED_ORIGINS=https://crack-me-ai1.vercel.app
-```
+- **Build command:** `./build.sh` (installs deps, migrates, loads fixture)
+- **Start command:** `gunicorn crack_cms.wsgi:application`
+- **Config:** `render.yaml` has all env var definitions
+- **Required Render environment variables:**
+  `DJANGO_SECRET_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_API_KEY2`, `COHERE_API_KEY`, `GITHUB_TOKEN`, `HUGGINGFACE_API_KEY`, `MISTRAL_API_KEY`, `CORS_ALLOWED_ORIGINS=https://crack-me-ai1.vercel.app`, `CSRF_TRUSTED_ORIGINS=https://crack-me-ai1.vercel.app`
 
 ### Frontend (Vercel)
 
-- **Framework**: Next.js (auto-detected)
-- **Config**: `vercel.json` has rewrites + security headers
-
-Required Vercel environment variable:
-```
-NEXT_PUBLIC_API_URL=https://crackcms-backend.onrender.com/api
-```
+- **Framework:** Next.js (auto-detected)
+- **Config:** `vercel.json` has rewrites + security headers
+- **Required Vercel environment variable:**
+  `NEXT_PUBLIC_API_URL=https://crackcms-backend.onrender.com/api`
 
 ### CI/CD (GitHub Actions)
 
 `.github/workflows/ci.yml` runs on push to `main`/`develop`:
-1. Backend tests & lint (Python 3.12)
-2. Frontend build & lint (Node 20)
-3. Security scanning (Bandit + Safety)
+- Backend tests & lint (Python 3.12)
+- Frontend build & lint (Node 20)
+- Security scanning (Bandit + Safety)
 
 ---
 
@@ -545,7 +558,7 @@ python test_api_keys.py
 ## Troubleshooting
 
 | Problem | Solution |
-|---------|----------|
+| :--- | :--- |
 | Module not found | `pip install -r requirements.txt` (activate venv first) |
 | Database errors | `python manage.py migrate` |
 | AI not responding | Check `.env` API keys; run `python test_api_keys.py` |
@@ -560,13 +573,14 @@ python test_api_keys.py
 ## Security
 
 - JWT authentication (1-day access, 7-day refresh tokens)
-- django-axes brute-force protection (5 attempts → 30min lockout)
+- `django-axes` brute-force protection (5 attempts → 30min lockout)
 - CORS restricted to allowed origins
-- Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
-- Dependency scanning via GitHub Actions (Bandit + Safety + npm audit)
+- Security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`)
+- Dependency scanning via GitHub Actions (`Bandit` + `Safety` + `npm audit`)
 
 ---
 
 ## License
 
 Private repository. All rights reserved.
+```
