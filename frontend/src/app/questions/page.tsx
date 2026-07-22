@@ -664,7 +664,12 @@ function QuestionsContent() {
                                     type="button"
                                     onClick={() => {
                                         analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null);
-                                        router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
+                                        const slug = String(selectedExam).replace('_', '-');
+                                        if (slug === 'neet-pg') {
+                                            router.push(`/questions/neet-pg/practice?year=${selectedYear}`);
+                                        } else {
+                                            router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
+                                        }
                                     }}
                                     className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                                 >

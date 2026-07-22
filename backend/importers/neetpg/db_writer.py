@@ -219,7 +219,9 @@ class DjangoWriter:
         """Save an extracted image into QuestionImage.
 
         Dedup by sha256_short — if an image with the same sha exists,
-        we link to the existing one (no duplicate row).
+        we link to the existing one (no duplicate row).  Also writes
+        the raw bytes into ``MEDIA_ROOT/<recall_path>`` so the image
+        is served by Django at MEDIA_URL.
         """
         if not img.sha256_short:
             return None
@@ -227,6 +229,28 @@ class DjangoWriter:
         existing = QuestionImage.objects.filter(sha256_short=img.sha256_short).first()
         if existing:
             return existing
+
+        # Copy the bytes into MEDIA_ROOT so the browser can fetch them.
+        # We persist under ``recall_images/<sha16>/<sha16>.<ext>`` — a
+        # stable path that dedup against existing rows works against.
+        media_rel = None
+        if img.file_path:
+            try:
+                from django.core.files import File
+                from django.conf import settings
+
+                src = Path(img.file_path)
+                if src.exists():
+                    ext = src.suffix.lstrip(".") or "png"
+                    rel = Path("recall_images") / img.sha256_short[:2] / f"{img.sha256_short}.{ext}"
+                    full = Path(settings.MEDIA_ROOT) / rel
+                    full.parent.mkdir(parents=True, exist_ok=True)
+                    if not full.exists():
+                        with open(src, "rb") as r, open(full, "wb") as w:
+                            w.write(r.read())
+                    media_rel = str(rel).replace("\\", "/")
+            except Exception as e:  # pragma: no cover
+                LOG.warning("failed to persist image to MEDIA_ROOT: %s", e)
 
         qi = QuestionImage.objects.create(
             question=question,
@@ -255,6 +279,12 @@ class DjangoWriter:
             role="illustration",
             is_active=True,
         )
+        if media_rel:
+            # Use the FileField API so Django stores the relative path.
+            from django.core.files import File
+            from django.conf import settings
+            with open(Path(settings.MEDIA_ROOT) / media_rel, "rb") as f:
+                qi.file.save(media_rel, File(f), save=True)
         self.stats.images_created += 1
         return qi
 
