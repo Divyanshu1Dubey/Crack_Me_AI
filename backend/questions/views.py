@@ -37,6 +37,10 @@ from .recall_serializers import (
     # - QuestionSourceSerializer (recall_question_sources)
 )
 from . import recall_search as _recall_search
+from . import recall_images as _recall_images  # Phase 3 image facets
+from . import practice_modes as _practice_modes  # Phase 3 practice queues
+from . import ai_per_question as _ai_per_question  # Phase 3 AI endpoints
+from . import practice_experience as _practice_experience  # Phase 3 flag/confidence/time
 
 
 logger = logging.getLogger(__name__)
@@ -328,6 +332,170 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def duplicate_clusters(self, request):
         qs = DuplicateCluster.objects.all().order_by("-created_at")[:100]
         return Response(DuplicateClusterSerializer(qs, many=True, context={"request": request}).data)
+
+    # ── Phase 3: image facets + practice queues + AI per question ───────
+
+    @action(detail=False, methods=['get'], url_path='images/facets',
+            permission_classes=[permissions.AllowAny])
+    def images_facets(self, request):
+        """`GET /api/questions/images/facets/` — aggregate image counts."""
+        return Response(_recall_images.list_images_facets(self, request))
+
+    @action(detail=False, methods=['get'], url_path='practice_modes',
+            permission_classes=[permissions.AllowAny])
+    def practice_modes(self, request):
+        """`GET /api/questions/practice_modes/` — supported mode catalogue."""
+        return Response({"modes": _practice_modes.list_modes()})
+
+    @action(detail=False, methods=['get'], url_path='practice_queue',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_queue(self, request):
+        """`GET /api/questions/practice_queue/?mode=weak_topics&year=2023...`
+
+        Returns ordered question ids the client should request in
+        sequence. Existing `list` action is unaffected.
+        """
+        mode = request.query_params.get("mode", "random")
+        try:
+            count = min(int(request.query_params.get("count", 30)), 100)
+        except ValueError:
+            count = 30
+        try:
+            seed = int(request.query_params.get("seed")) if request.query_params.get("seed") else None
+        except ValueError:
+            seed = None
+        params = {"count": count, "seed": seed}
+        for k in ("year", "subject_id", "topic_id"):
+            v = request.query_params.get(k)
+            if v:
+                params[k] = v
+
+        ids = _practice_modes.build_queue(mode, request.user, params)
+        return Response({
+            "mode": mode,
+            "count": len(ids),
+            "question_ids": ids,
+        })
+
+    @action(detail=True, methods=['get'], url_path='ai/concept',
+            permission_classes=[permissions.AllowAny])
+    def ai_concept(self, request, pk=None):
+        q = self.get_object()
+        return Response({"concept": _ai_per_question.concept(q)})
+
+    @action(detail=True, methods=['get'], url_path='ai/why_correct',
+            permission_classes=[permissions.AllowAny])
+    def ai_why_correct(self, request, pk=None):
+        q = self.get_object()
+        return Response({"why_correct": _ai_per_question.why_correct(q)})
+
+    @action(detail=True, methods=['get'], url_path='ai/why_incorrect',
+            permission_classes=[permissions.AllowAny])
+    def ai_why_incorrect(self, request, pk=None):
+        q = self.get_object()
+        return Response({"why_incorrect": _ai_per_question.why_incorrect(q)})
+
+    @action(detail=True, methods=['get'], url_path='ai/clinical',
+            permission_classes=[permissions.AllowAny])
+    def ai_clinical(self, request, pk=None):
+        q = self.get_object()
+        return Response({"clinical_significance": _ai_per_question.clinical_significance(q)})
+
+    @action(detail=True, methods=['get'], url_path='ai/mnemonic',
+            permission_classes=[permissions.AllowAny])
+    def ai_mnemonic(self, request, pk=None):
+        q = self.get_object()
+        return Response({"memory_trick": _ai_per_question.memory_trick(q)})
+
+    @action(detail=True, methods=['get'], url_path='ai/related_pyqs',
+            permission_classes=[permissions.AllowAny])
+    def ai_related_pyqs(self, request, pk=None):
+        q = self.get_object()
+        try:
+            limit = min(int(request.query_params.get("limit", 8)), 25)
+        except ValueError:
+            limit = 8
+        return Response({"related_pyqs": _ai_per_question.related_pyqs(q, limit=limit)})
+
+    @action(detail=True, methods=['get'], url_path='ai/related_topics',
+            permission_classes=[permissions.AllowAny])
+    def ai_related_topics(self, request, pk=None):
+        q = self.get_object()
+        try:
+            limit = min(int(request.query_params.get("limit", 8)), 25)
+        except ValueError:
+            limit = 8
+        return Response({"related_topics": _ai_per_question.related_topics(q, limit=limit)})
+
+    @action(detail=True, methods=['get'], url_path='ai/exam_importance',
+            permission_classes=[permissions.AllowAny])
+    def ai_exam_importance(self, request, pk=None):
+        q = self.get_object()
+        return Response({"exam_importance": _ai_per_question.exam_importance(q)})
+
+    # ── Phase 3: question experience endpoints (flag / time / conf / elim) ──
+
+    @action(detail=True, methods=['get'], url_path='practice/state',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_state(self, request, pk=None):
+        q = self.get_object()
+        return Response(_practice_experience.get_state(q, request.user))
+
+    @action(detail=True, methods=['post'], url_path='practice/flag',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_flag(self, request, pk=None):
+        q = self.get_object()
+        flag = bool(request.data.get("flag", True))
+        return Response(_practice_experience.set_flag(q, request.user, flag))
+
+    @action(detail=True, methods=['post'], url_path='practice/confidence',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_confidence(self, request, pk=None):
+        q = self.get_object()
+        try:
+            rating = int(request.data.get("rating", 3))
+        except (TypeError, ValueError):
+            rating = 3
+        return Response(_practice_experience.set_confidence(q, request.user, rating))
+
+    @action(detail=True, methods=['post'], url_path='practice/eliminate',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_eliminate(self, request, pk=None):
+        q = self.get_object()
+        opts = request.data.get("options") or []
+        return Response(_practice_experience.set_elimination(q, request.user, opts))
+
+    @action(detail=True, methods=['post'], url_path='practice/time',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_time(self, request, pk=None):
+        q = self.get_object()
+        try:
+            seconds = int(request.data.get("seconds", 0))
+        except (TypeError, ValueError):
+            seconds = 0
+        total = _practice_experience.add_time_spent(q, request.user, seconds)
+        return Response({"time_spent_seconds": total, "question_id": q.id})
+
+    @action(detail=True, methods=['post'], url_path='practice/attempt',
+            permission_classes=[permissions.IsAuthenticated])
+    def practice_attempt(self, request, pk=None):
+        q = self.get_object()
+        answer = (request.data.get("answer") or "").upper()[:1]
+        try:
+            time_spent = int(request.data.get("time_spent", 0))
+        except (TypeError, ValueError):
+            time_spent = 0
+        try:
+            confidence = int(request.data.get("confidence", 0)) or None
+        except (TypeError, ValueError):
+            confidence = None
+        correct_answer = (q.correct_answer or "").upper()[:1]
+        is_correct = answer == correct_answer
+        return Response(_practice_experience.submit_attempt(
+            q, request.user,
+            answer=answer, correct=is_correct,
+            time_spent=time_spent, confidence=confidence,
+        ))
 
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):

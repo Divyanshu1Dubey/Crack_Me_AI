@@ -111,3 +111,10 @@ class DuplicateClusterAdmin(admin.ModelAdmin):
 class DuplicateMemberAdmin(admin.ModelAdmin):
     list_display = ("id", "cluster_id", "question_id", "similarity_score", "created_at")
     readonly_fields = tuple(f.name for f in DuplicateMember._meta.fields)
+
+    actions = ["action_set_similarity_one"]
+
+    @admin.action(description="Mark similarity=1.0 (exact duplicate)")
+    def action_set_similarity_one(self, request, queryset):
+        n = queryset.update(similarity_score=1.0)
+        self.message_user(request, f"Set similarity=1.0 on {n} members.")

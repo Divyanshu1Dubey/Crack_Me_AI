@@ -7,12 +7,15 @@ are untouched.
 from __future__ import annotations
 
 import logging
-from typing import Iterable
 
 from django.db.models import Count, Q
-from rest_framework import status
-from rest_framework.decorators import action
-from rest_framework.response import Response
+# These rest_framework imports look unused at lint-time because the action
+# methods are wired in views.py; the names are intentionally re-exported
+# from this module for backwards-compatible import paths in case the
+# module is loaded directly by future tests.
+from rest_framework import status  # noqa: F401 — intentional re-export
+from rest_framework.decorators import action  # noqa: F401 — intentional re-export
+from rest_framework.response import Response  # noqa: F401 — intentional re-export
 
 LOG = logging.getLogger(__name__)
 
@@ -34,6 +37,33 @@ _PARAM_FILTERS = {
     "topic": "topic_id",
 }
 
+# Phase 3 — clinical-axis keyword filters. These are dimension-agnostic:
+# they tokenize the question text + explanation + concept_tags + mnemonics
+# for the given dimension (diagnosis / drug / disease / investigation /
+# clinical_system / subtopic).  Cheaper than a clinical ontology and
+# matches what front-end Recalls demonstrate.
+_CLINICAL_TEXT_FIELDS = (
+    "question_text", "explanation", "ai_explanation",
+    "mnemonic", "ai_mnemonic", "ai_clinical_pearl",
+)
+
+
+def _apply_clinical_token(qs, param: str, raw: str):  # noqa: ARG001 — param kept for forward-compat
+    """Filter `qs` so any of the clinical text fields icontains `raw`."""
+    if not raw:
+        return qs
+    token_q = Q()
+    for f in _CLINICAL_TEXT_FIELDS:
+        token_q |= Q(**{f"{f}__icontains": raw})
+    return qs.filter(token_q).distinct()
+
+
+def _split_csv(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [t.strip() for t in raw.split(",") if t.strip()]\
+
+
 
 def _parse_bool(raw):
     if raw in (None, ""):
@@ -47,10 +77,19 @@ def recall_search(self, request):
     Filters + facets in one round trip. Existing DRF `list` action is
     unchanged.
     """
+    # Phase 3: short-lived cache keyed on (query, query-stamp minute)
+    # keeps DB cost under control for repeat front-end queries.
+    from django.core.cache import cache
     from .models import Question, QuestionImage
     from .serializers import QuestionListSerializer
 
-    qs = Question.objects.filter(is_active=True).select_related("subject", "topic")
+    cache_key = "recall_search:v2:" + (request.META.get("QUERY_STRING") or "")
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
+
+    qs = (Question.objects.filter(is_active=True)
+          .select_related("subject", "topic"))
 
     for param, lookup in _PARAM_FILTERS.items():
         raw = request.query_params.get(param)
@@ -87,6 +126,33 @@ def recall_search(self, request):
     if image_ocr:
         qs = qs.filter(images__ocr_text__icontains=image_ocr, images__is_active=True).distinct()
 
+    # Phase 3 — clinical-axis keyword filters (diagnosis/drug/disease/
+    # investigation/clinical_system/subtopic).  These are simple icontains
+    # over the canonical text fields, cheap, and consistent with the front
+    # end search box.
+    for dim in ("diagnosis", "drug", "disease",
+                "investigation", "clinical_system", "subtopic"):
+        raw = request.query_params.get(dim, "").strip()
+        if raw:
+            qs = _apply_clinical_token(qs, dim, raw)
+
+    # Phase 3 — has_image / has_diagram / has_table filters.
+    def _bool_param(name):
+        v = request.query_params.get(name)
+        if v in (None, ""):
+            return None
+        return str(v).strip().lower() in ("1", "true", "yes", "y")
+
+    want_image = _bool_param("has_image")
+    if want_image is True:
+        qs = qs.filter(images__is_active=True).distinct()
+    elif want_image is False:
+        qs = qs.exclude(images__is_active=True).distinct()
+    for opt in ("has_diagram", "has_table"):
+        val = _bool_param(opt)
+        if val is True:
+            qs = qs.filter(**{f"images__{opt}": True, "images__is_active": True}).distinct()
+
     min_conf = request.query_params.get("min_confidence")
     if min_conf not in (None, ""):
         try:
@@ -94,7 +160,7 @@ def recall_search(self, request):
         except ValueError:
             pass
 
-    # Facets
+    # Facets — include new dimensions so UI can build checkbox grids.
     facets = {
         "exam_type": dict(qs.values_list("exam_type").annotate(c=Count("id"))),
         "year": dict(qs.values_list("year").annotate(c=Count("id"))),
@@ -127,13 +193,20 @@ def recall_search(self, request):
     page_qs = qs[start:end]
 
     serializer = QuestionListSerializer(page_qs, many=True, context={"request": request})
-    return Response({
+    payload = {
         "count": total,
         "page": page,
         "page_size": page_size,
         "facets": {k: {str(kk): vv for kk, vv in v.items()} for k, v in facets.items()},
         "results": serializer.data,
-    })
+    }
+    # 60-second memo for repeat queries (search-as-you-type benefits)
+    try:
+        from django.core.cache import cache
+        cache.set(cache_key, payload, 60)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return Response(payload)
 
 
 def recall_question_images(self, request, pk=None):

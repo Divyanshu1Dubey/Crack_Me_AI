@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import dashboard_v3 as views_v3
 
 urlpatterns = [
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
@@ -28,5 +29,11 @@ urlpatterns = [
     path('admin/weak-area-control/', views.AdminWeakAreaControlView.as_view(), name='admin-weak-area-control'),
     path('admin/campaigns/', views.AdminCampaignListCreateView.as_view(), name='admin-campaigns'),
     path('admin/campaigns/<int:pk>/send-now/', views.AdminCampaignSendNowView.as_view(), name='admin-campaign-send-now'),
+    # Phase 3 — combined dashboard + new analytics endpoints (additive).
+    path('dashboard_v3/', views_v3.DashboardV3View.as_view(), name='dashboard-v3'),
+    path('heatmap/subject/', views_v3.HeatmapSubjectView.as_view(), name='heatmap-subject'),
+    path('revision_progress/', views_v3.RevisionProgressView.as_view(), name='revision-progress'),
+    path('pyq_coverage/', views_v3.PYQCoverageView.as_view(), name='pyq-coverage'),
+    path('average_time/', views_v3.AverageTimeView.as_view(), name='average-time'),
+    path('search_analytics/', views_v3.SearchAnalyticsView.as_view(), name='search-analytics'),
 ]
-
