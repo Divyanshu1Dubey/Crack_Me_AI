@@ -15,7 +15,7 @@
  */
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import FormattedText from "@/components/FormattedText";
+import { FormattedText } from "@/components/FormattedText";
 import RecallBadge from "@/components/recall/RecallBadge";
 import ImageGallery from "@/components/recall/ImageGallery";
 import ProvenanceList from "@/components/recall/ProvenanceList";
