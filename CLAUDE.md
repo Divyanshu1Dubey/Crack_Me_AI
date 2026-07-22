@@ -37,7 +37,7 @@ Only after reading the relevant documentation should you open individual source 
 - **AI**: 11-provider round-robin with RAG over TF-IDF SQLite store
 - **Auth**: Custom JWT + Supabase (hybrid); django-axes brute-force protection
 - **Deployment**: Render (backend) + Vercel (frontend); GitHub Actions CI
-- **Live**: `crack-me-ai1.vercel.app` ↔ `crackcms-backend.onrender.com/api/`
+- **Live**: `cracklabs.app` ↔ `crackcms-vsthc.ondigitalocean.app/api/`
 
 ## Common Commands
 
@@ -136,7 +136,7 @@ backend/
 
 5. **Auth Flow** — Hybrid Supabase-first with Django JWT backup. `frontend/src/lib/api.ts` attaches Supabase access token via interceptor; auto-clears local session on `session_invalid` (single-device enforcement). Backend `accounts/supabase_auth.py` + `supabase_rest_auth.py` bridge Supabase identities. `django-axes` locks accounts after 5 failed attempts (30 min).
 
-6. **Multi-Base API Failover** — `api.ts` resolves base URL from `NEXT_PUBLIC_API_URL` (or localhost for dev) with automatic failover to `NEXT_PUBLIC_API_FALLBACK_URL` on 502/503/504. `crackcms-backend.onrender.com` is treated as unhealthy by default — production uses DigitalOcean URL baked into `DEFAULT_PRODUCTION_API_URL`.
+6. **Multi-Base API Failover** — `api.ts` resolves base URL from `NEXT_PUBLIC_API_URL` (or localhost for dev) with automatic failover to `NEXT_PUBLIC_API_FALLBACK_URL` on 502/503/504. The legacy Render URL `crackcms-backend.onrender.com` is intentionally blacklisted as unhealthy; production uses the DigitalOcean URL `crackcms-vsthc.ondigitalocean.app/api` baked into `DEFAULT_PRODUCTION_API_URL`.
 
 7. **Background Tasks** — `django-q2` broker for async work; `video_engine/tasks.py` and `questions/tasks.py` schedule enrichment + video generation.
 

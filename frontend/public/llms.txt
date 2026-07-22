@@ -1,0 +1,151 @@
+# CrackCMS — llms.txt
+
+> AI-powered medical exam preparation platform for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and Medical Officer recruitment. Built by CrackLabs.
+
+- Site: https://cracklabs.app
+- API: https://crackcms-vsthc.ondigitalocean.app/api/
+- Source: https://github.com/Divyanshu-Dubey/crack_cms
+- Contact: support@cracklabs.app
+- Primary markets: India (en-IN), United States, United Kingdom
+- Languages: English
+- Audience: MBBS / interns / postgraduate aspirants preparing for Indian and international medical competitive exams
+
+## What this platform does
+
+CrackCMS is a vertically-integrated medical exam-preparation SaaS that fuses a curated question bank with multi-provider AI tutoring grounded in standard textbooks and prior-year questions (PYQs).
+
+Four interlocking value layers:
+
+1. Question Bank — 1,920+ verified MCQs for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and Medical Officer exams with explanations, mnemonics, high-yield points, and textbook references.
+2. AI Tutor — RAG-grounded chat tutor, concept explainer, mnemonic generator, and explain-after-answer that independently verifies the official answer key.
+3. Adaptive Testing — Custom tests, full PYQ simulators with timed sessions, review mode, and analytics.
+4. Progress Intelligence — Streaks, badges, leaderboards, topic-wise performance, weak-topic detection, score prediction, study roadmap.
+
+## Exam tracks covered
+
+| Track | Landing | Coverage |
+|---|---|---|
+| UPSC CMS | /cms | 1,920+ PYQs, MCQ practice, cutoffs, books, strategy |
+| NEET PG | /neet-pg | Practice, comparison vs USMLE |
+| INI-CET | /ini-cet | AIIMS / PGIMER / JIPMER PG entrance |
+| FMGE | /fmge | Foreign Medical Graduate screening exam |
+| USMLE | /usmle | Step-by-step US residency prep |
+| Medical Officer | /medical-officer | State PSC, ESIC, NHM recruitments |
+| Government Doctor Jobs | /government-doctor-jobs | Vacancies, eligibility, cutoffs |
+
+## Knowledge Base (Monica AI)
+
+RAG engine at `backend/knowledge_base` powers question answering with citations. Hybrid retrieval = BM25 + dense vectors + knowledge graph + Reciprocal Rank Fusion.
+
+- Module: `backend/knowledge_base`
+- Ontology: 80+ medical entities, 100+ relations
+- Retrieval: hybrid BM25 + dense + KG + RRF
+- Embeddings: `services/embedding.py`
+- Ingestion: Internal corpus + NCBI + whitelisted Indian sources + user uploads
+- Whitelisted sources: UPSC, MoHFW India, NHM India, NMC India, ICMR, NCBI, WHO, NHS, CDC, NICE, OpenMD, KEGG, DrugBank
+- Refused: Harrison's, Bailey & Love, Marrow, PrepLadder — copyrighted material
+- Citation engine: every answer carries `[Source Title — Page]` inline markers
+- Monica assistant: `services/monica.py`
+
+Endpoints:
+- POST /api/kb/ask/ — Ask Monica
+- POST /api/kb/search/ — Hybrid retrieval
+- GET /api/kb/stats/ — KB statistics
+- GET /api/kb/sources/ — Whitelisted source catalog
+- POST /api/kb/upload/ — Upload user document
+- POST /api/kb/ingest/ — Trigger ingestion
+- POST /api/kb/index/ — Rebuild embeddings
+- POST /api/kb/extract-kg/ — Extract knowledge graph
+- POST /api/kb/eval/ — Run retrieval evaluation
+- GET /api/kb/health/ — KB health probe
+
+Management commands:
+- `python manage.py load_ontology`
+- `python manage.py build_kb --max 2000`
+- `python manage.py ingest_source upsc|mohfw-india|nhm-india|nmc-india|icmr|ncbi`
+- `python manage.py evaluate_kb`
+
+## AI Providers (11 + local fallback)
+
+Round-robin via `backend/ai_engine/services.py`. Thread-safe counter, 120s deadline, 15–20s per provider.
+
+| # | Provider | Model | Free tier | Notes |
+|---|---|---|---|---|
+| 1 | Groq | Llama 3.3 70B | 30 RPM | Fastest |
+| 2 | Cerebras | Llama 3.1 8B | 30 RPM | Low-latency |
+| 3 | Gemini | gemini-2.0-flash + flash-lite | 15 RPM | 2 keys |
+| 4 | Cohere | Command-A | 20 RPM | Long-context |
+| 5 | OpenRouter | Free models | 20 RPM | Key 1 |
+| 6 | OpenRouter | Free models | 20 RPM | Key 2 (separate quota) |
+| 7 | GitHub Models | GPT-4o Mini | 150 RPM | PAT-authenticated |
+| 8 | HuggingFace | Llama 3.3 70B | 10 RPM | Inference API |
+| 9 | Mistral | mistral-small | 30 RPM | |
+| 10 | NVIDIA | Mistral 7B | TBD | build.nvidia.com |
+| 11 | DeepSeek | deepseek-chat | Paid | Last resort |
+| F | Ollama | llama3.2:3b | Local | Unmetered fallback |
+
+Provider error phrases are filtered so users never see raw API errors.
+
+## Token Economy
+
+Every AI call costs 1 token.
+
+| Pool | Quota | Reset |
+|---|---|---|
+| Daily free | 10 | Midnight (server TZ) |
+| Weekly free | 50 | Sunday |
+| Feedback reward | +2 per verified report | On approval |
+| Purchased | Per-pack | Never |
+
+Consumption priority: Daily → Weekly → Feedback → Purchased. Admin/staff bypass. Daily/weekly are auto-seeded into every TokenBalance row on the post_migrate signal.
+
+## Authentication
+
+Hybrid Supabase-first with Django JWT backup. django-axes locks accounts after 5 failed attempts (30 min). Supabase handles identity and device binding via accounts.UserDevice; frontend/src/lib/api.ts clears the local session and redirects on code: session_invalid.
+
+## Frontend routes (Next.js 16 App Router)
+
+Auth: /login, /register, /forgot-password, /reset-password, /auth/callback
+Core: /dashboard, /questions, /questions/practice, /simulator, /tests, /tests/[id], /flashcards, /bookmarks, /analytics, /trends, /leaderboard, /roadmap
+AI: /ai-tutor, /generate, /upload, /textbooks
+Account: /settings, /tokens, /subscription, /resources, /jobs
+Admin: /admin, /admin/questions-editor, /admin/jobs, /admin/announcements
+Exams: /cms, /neet-pg, /ini-cet, /fmge, /usmle, /medical-officer, /government-doctor-jobs, /exams/[slug], /exams/cms, /exams/neet-pg, /exams/usmle
+SEO hubs: /cms/pyq, /cms/subject, /cms/books, /cms/cutoff, /cms/strategy, /cms/vs-ini-cet, /cms/vs-neet-pg, /neet-pg/vs-usmle, /fmge/vs-next
+Guides: /guides/upsc-cms-complete-guide, /guides/neet-pg-complete-guide, /guides/ini-cet-complete-guide, /guides/fmge-complete-guide, /guides/usmle-step-1-guide, /guides/medical-officer-jobs, /guides/study-plan-builder, /guides/ai-in-medical-education
+Legal: /about, /privacy-policy, /terms, /refund-policy, /cookie-policy, /disclaimer, /editorial-policy, /medical-review-policy
+Support: /contact, /feedback
+
+## API surface (selected)
+
+Auth: /api/auth/register/, /api/auth/login/, /api/auth/profile/, /api/auth/password-reset/, /api/auth/tokens/, /api/auth/tokens/purchase/, /api/auth/subscribe/order/, /api/auth/subscribe/verify/, /api/auth/subscribe/webhook/, /api/auth/devices/, /api/auth/admin/*
+Questions: /api/questions/, /api/questions/subjects/, /api/questions/topics/, /api/questions/exam-tracks/, /api/questions/<id>/bookmark/, /api/questions/notes/, /api/questions/discussions/, /api/questions/flashcards/, /api/questions/flashcards/<id>/review/
+Tests: /api/tests/, /api/tests/<id>/submit/, /api/tests/<id>/review/, /api/tests/attempts/
+AI: /api/ai/tutor/, /api/ai/explain-answer/, /api/ai/explain/, /api/ai/mnemonic/, /api/ai/study-plan/, /api/ai/high-yield/, /api/ai/generate-questions/, /api/ai/rag-search/, /api/ai/rag-answer/, /api/ai/textbook-reference/, /api/ai/knowledge/upload/, /api/ai/knowledge/scan/, /api/ai/knowledge/stats/
+Analytics: /api/analytics/dashboard/, /api/analytics/topic-performance/, /api/analytics/heatmap/, /api/analytics/recent-attempts/, /api/analytics/score-prediction/, /api/analytics/performance-trend/, /api/analytics/weak-topics/, /api/analytics/roadmap/
+Knowledge Base: see Knowledge Base section above.
+Textbooks: /api/textbooks/books/, /api/textbooks/uploads/
+
+## Technology stack
+
+Frontend: Next.js 16.1.6, React 19.2.4, TypeScript 5, Tailwind 4, Radix UI, Axios, SWR, @supabase/ssr, Recharts, Playwright.
+Backend: Django 5, DRF, SimpleJWT, django-axes, django-cors-headers, django-q2, dj-database-url, Sentry, Datadog, gunicorn, whitenoise.
+Data: SQLite3 (Postgres-ready), Git LFS for PDFs and chroma_db.
+AI: 11-provider rotation + Ollama fallback + TF-IDF RAG over chroma_db/rag_store.sqlite3.
+Payments: Razorpay.
+Observability: Sentry, Datadog RUM, GA4, GTM.
+Hosting: Render (backend) + Vercel (frontend) + Supabase (auth).
+
+## Principles
+
+- Grounded answers — every AI response is cited to a textbook, PYQ, or whitelisted source.
+- Multi-provider resilience — 11 providers + local Ollama so a single outage cannot take the platform offline.
+- Token-aligned incentives — freemium free tier + paid Razorpay plans.
+- Single-device enforcement — paid content is bound to one active device per user.
+- Fixture-first question workflow — questions_fixture.json is the production source of truth.
+- No PBN, no scraping, no copyrighted ingestion.
+
+## See also
+
+- llms-full.txt — exhaustive reference (every model, every endpoint, every management command, every convention).
+- docs/PROJECT_OVERVIEW.md, docs/ARCHITECTURE.md, docs/DATA_MODEL.md, docs/API_REFERENCE.md, docs/FEATURES.md, docs/AUTHENTICATION.md, docs/ADMIN_SYSTEM.md, docs/AI_ASSISTANT_RULES.md, docs/KNOWN_GAPS.md in this repository.

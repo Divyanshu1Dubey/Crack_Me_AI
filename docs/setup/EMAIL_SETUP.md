@@ -76,7 +76,7 @@ In your hosting dashboard → Environment:
 EMAIL_HOST_USER=crackwith.ai@gmail.com
 EMAIL_HOST_PASSWORD=abcdefghijklmnop
 DEFAULT_FROM_EMAIL=CrackCMS <crackwith.ai@gmail.com>
-FRONTEND_URL=https://crack-me-ai1.vercel.app
+FRONTEND_URL=https://cracklabs.app
 EMAIL_TIMEOUT=20
 ```
 

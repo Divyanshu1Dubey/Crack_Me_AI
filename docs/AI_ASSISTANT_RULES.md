@@ -143,7 +143,7 @@ If you must modify a critical file, **explain why in the PR description and tag 
 6. Push branch + open PR
 7. CI runs: lint, test, bandit, safety, build
 8. Merge to main → Render + Vercel auto-deploy
-9. Verify production: curl https://crackcms-backend.onrender.com/api/health/
+9. Verify production: curl https://crackcms-vsthc.ondigitalocean.app/api/health/
 10. Monitor Sentry + Datadog for errors
 ```
 

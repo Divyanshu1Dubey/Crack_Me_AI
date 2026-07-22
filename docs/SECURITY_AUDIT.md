@@ -128,7 +128,7 @@
 ## 5. CORS
 
 ### Current state
-`CORS_ALLOWED_ORIGINS` is read from env. Production sets it to `https://crack-me-ai1.vercel.app`. Local dev allows `http://localhost:3000`.
+`CORS_ALLOWED_ORIGINS` is read from env. Production sets it to `https://cracklabs.app`. Local dev allows `http://localhost:3000`.
 
 ### Strengths
 - Production origin locked

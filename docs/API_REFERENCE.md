@@ -6,7 +6,7 @@
 
 ## Conventions
 
-- **Base URL**: `https://crackcms-backend.onrender.com/api` (production), `http://localhost:8000/api` (dev), `https://crackcms-vsthc.ondigitalocean.app/api` (default fallback baked into `frontend/src/lib/api.ts`).
+- **Base URL**: `https://crackcms-vsthc.ondigitalocean.app/api` (production), `http://localhost:8000/api` (dev). The legacy Render URL `https://crackcms-backend.onrender.com/api` is intentionally blacklisted as unhealthy in `frontend/src/lib/api.ts`.
 - **Content-Type**: `application/json` for all write requests.
 - **Authentication header**: `Authorization: Bearer <token>` (Supabase access token preferred; Django JWT accepted).
 - **Session header**: `X-Session-ID: <crack_device_id>` (auto-injected by `frontend/src/lib/api.ts`).
@@ -629,12 +629,12 @@ All endpoints below are **token-metered** (1 token per call) unless noted.
 ### Django JWT (fallback)
 
 ```bash
-curl -X POST https://crackcms-backend.onrender.com/api/auth/login/ \
+curl -X POST https://crackcms-vsthc.ondigitalocean.app/api/auth/login/ \
   -H "Content-Type: application/json" \
   -d '{"username":"student42","password":"StrongP@ssw0rd!"}'
 # {"access":"eyJ...","refresh":"eyJ..."}
 
-curl https://crackcms-backend.onrender.com/api/auth/profile/ \
+curl https://crackcms-vsthc.ondigitalocean.app/api/auth/profile/ \
   -H "Authorization: Bearer eyJ..."
 ```
 
@@ -647,7 +647,7 @@ Frontend `api.ts` interceptor automatically attaches `Authorization: Bearer <sup
 `api.ts` generates and sends a per-browser fingerprint:
 
 ```bash
-curl https://crackcms-backend.onrender.com/api/questions/ \
+curl https://crackcms-vsthc.ondigitalocean.app/api/questions/ \
   -H "Authorization: Bearer <token>" \
   -H "X-Session-ID: dev_a1b2c3d4_1719900000"
 ```

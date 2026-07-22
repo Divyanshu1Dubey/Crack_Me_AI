@@ -1,0 +1,202 @@
+{
+  "info": {
+    "name": "CrackCMS API",
+    "description": "Complete API catalog for CrackCMS — auth, questions, tests, AI, analytics, knowledge base, textbooks. Import into Postman, set the `token` variable after login, and you're ready to explore. Base URL is configurable per environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "crackcms-2026-07-22",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    }
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://crackcms-vsthc.ondigitalocean.app/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "flashcardId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        { "name": "Register", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"first_name\": \"Demo\",\n  \"last_name\": \"User\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/register/", "host": ["{{baseUrl}}"], "path": ["auth","register",""] } } },
+        { "name": "Login", "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 200) { const j = pm.response.json(); if (j.access) pm.collectionVariables.set('token', j.access); }"] } } ], "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/login/", "host": ["{{baseUrl}}"], "path": ["auth","login",""] } } },
+        { "name": "Get profile", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/profile/", "host": ["{{baseUrl}}"], "path": ["auth","profile",""] } } },
+        { "name": "Update profile", "request": { "method": "PATCH", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"first_name\": \"Demo\",\n  \"last_name\": \"User\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/profile/", "host": ["{{baseUrl}}"], "path": ["auth","profile",""] } } },
+        { "name": "Request password reset", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"email\": \"{{userEmail}}\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/password-reset/", "host": ["{{baseUrl}}"], "path": ["auth","password-reset",""] } } },
+        { "name": "Confirm password reset", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"uid\": \"<uid>\",\n  \"token\": \"<token>\",\n  \"new_password\": \"<new>\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/password-reset/confirm/", "host": ["{{baseUrl}}"], "path": ["auth","password-reset","confirm",""] } } },
+        { "name": "Token balance", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/tokens/", "host": ["{{baseUrl}}"], "path": ["auth","tokens",""] } } },
+        { "name": "Token history", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/tokens/history/", "host": ["{{baseUrl}}"], "path": ["auth","tokens","history",""] } } },
+        { "name": "Purchase token pack", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"pack_id\": \"starter\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/tokens/purchase/", "host": ["{{baseUrl}}"], "path": ["auth","tokens","purchase",""] } } },
+        { "name": "Subscribe — create order", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"plan\": \"monthly\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/subscribe/order/", "host": ["{{baseUrl}}"], "path": ["auth","subscribe","order",""] } } },
+        { "name": "Subscribe — verify", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"razorpay_order_id\": \"<oid>\",\n  \"razorpay_payment_id\": \"<pid>\",\n  \"razorpay_signature\": \"<sig>\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/subscribe/verify/", "host": ["{{baseUrl}}"], "path": ["auth","subscribe","verify",""] } } },
+        { "name": "Subscribe — webhook", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/subscribe/webhook/", "host": ["{{baseUrl}}"], "path": ["auth","subscribe","webhook",""] } } },
+        { "name": "Subscription status", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/subscribe/status/", "host": ["{{baseUrl}}"], "path": ["auth","subscribe","status",""] } } },
+        { "name": "List my devices", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/devices/", "host": ["{{baseUrl}}"], "path": ["auth","devices",""] } } },
+        { "name": "Force-logout a device", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"device_id\": \"<device>\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/devices/logout/", "host": ["{{baseUrl}}"], "path": ["auth","devices","logout",""] } } }
+      ]
+    },
+    {
+      "name": "Questions",
+      "item": [
+        { "name": "List exam tracks", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/exam-tracks/", "host": ["{{baseUrl}}"], "path": ["questions","exam-tracks",""] } } },
+        { "name": "List subjects", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/subjects/", "host": ["{{baseUrl}}"], "path": ["questions","subjects",""] } } },
+        { "name": "List topics", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/topics/?subject=1", "host": ["{{baseUrl}}"], "path": ["questions","topics",""] } } },
+        { "name": "List questions", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/?exam_track=upsc-cms&subject=1&year=2024", "host": ["{{baseUrl}}"], "path": ["questions",""] } } },
+        { "name": "Get question", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/{{questionId}}/", "host": ["{{baseUrl}}"], "path": ["questions","{{questionId}}",""] } } },
+        { "name": "Toggle bookmark", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/questions/{{questionId}}/bookmark/", "host": ["{{baseUrl}}"], "path": ["questions","{{questionId}}","bookmark",""] } } },
+        { "name": "List notes", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/notes/", "host": ["{{baseUrl}}"], "path": ["questions","notes",""] } } },
+        { "name": "Create note", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"question_id\": \"{{questionId}}\",\n  \"body\": \"Acute mesenteric ischemia — first step is CT angiography.\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/notes/", "host": ["{{baseUrl}}"], "path": ["questions","notes",""] } } },
+        { "name": "Update note", "request": { "method": "PUT", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"body\": \"Updated.\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/notes/1/", "host": ["{{baseUrl}}"], "path": ["questions","notes","1",""] } } },
+        { "name": "Delete note", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/questions/notes/1/", "host": ["{{baseUrl}}"], "path": ["questions","notes","1",""] } } },
+        { "name": "List discussions", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/discussions/?question_id={{questionId}}", "host": ["{{baseUrl}}"], "path": ["questions","discussions",""] } } },
+        { "name": "Create discussion", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"question_id\": \"{{questionId}}\",\n  \"title\": \"Why not option C?\",\n  \"body\": \"Harrison says...\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/discussions/", "host": ["{{baseUrl}}"], "path": ["questions","discussions",""] } } },
+        { "name": "Discussion replies", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/discussions/1/replies/", "host": ["{{baseUrl}}"], "path": ["questions","discussions","1","replies",""] } } },
+        { "name": "Discussion vote", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"vote\": \"up\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/discussions/1/vote/", "host": ["{{baseUrl}}"], "path": ["questions","discussions","1","vote",""] } } },
+        { "name": "List flashcards", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/flashcards/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards",""] } } },
+        { "name": "Create flashcard", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"question_id\": \"{{questionId}}\",\n  \"front\": \"Cause of high-output cardiac failure in beriberi?\",\n  \"back\": \"Thiamine deficiency\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/flashcards/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards",""] } } },
+        { "name": "Update flashcard", "request": { "method": "PUT", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"front\": \"...\",\n  \"back\": \"...\"\n}"}, "url": { "raw": "{{baseUrl}}/questions/flashcards/{{flashcardId}}/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards","{{flashcardId}}",""] } } },
+        { "name": "Delete flashcard", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/questions/flashcards/{{flashcardId}}/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards","{{flashcardId}}",""] } } },
+        { "name": "Flashcard SM-2 review", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"quality\": 4\n}"}, "url": { "raw": "{{baseUrl}}/questions/flashcards/{{flashcardId}}/review/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards","{{flashcardId}}","review",""] } } },
+        { "name": "Flashcard analytics", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/questions/flashcards/analytics/", "host": ["{{baseUrl}}"], "path": ["questions","flashcards","analytics",""] } } }
+      ]
+    },
+    {
+      "name": "Tests",
+      "item": [
+        { "name": "List tests", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/tests/", "host": ["{{baseUrl}}"], "path": ["tests",""] } } },
+        { "name": "Create test", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"title\": \"My custom test\",\n  \"exam_track\": \"upsc-cms\",\n  \"question_ids\": [1,2,3],\n  \"duration_minutes\": 30\n}"}, "url": { "raw": "{{baseUrl}}/tests/", "host": ["{{baseUrl}}"], "path": ["tests",""] } } },
+        { "name": "Submit test", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"answers\": {\"1\":\"B\",\"2\":\"A\"},\n  \"time_taken_sec\": 1200\n}"}, "url": { "raw": "{{baseUrl}}/tests/{{testId}}/submit/", "host": ["{{baseUrl}}"], "path": ["tests","{{testId}}","submit",""] } } },
+        { "name": "Review test", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/tests/{{testId}}/review/", "host": ["{{baseUrl}}"], "path": ["tests","{{testId}}","review",""] } } },
+        { "name": "List attempts", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/tests/attempts/", "host": ["{{baseUrl}}"], "path": ["tests","attempts",""] } } }
+      ]
+    },
+    {
+      "name": "AI",
+      "item": [
+        { "name": "AI tutor (RAG chat)", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"message\": \"Explain the pathophysiology of acute pancreatitis\",\n  \"subject\": \"Medicine\",\n  \"session_id\": null\n}"}, "url": { "raw": "{{baseUrl}}/ai/tutor/", "host": ["{{baseUrl}}"], "path": ["ai","tutor",""] } } },
+        { "name": "Explain after answer", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"question_id\": \"{{questionId}}\",\n  \"selected_answer\": \"B\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/explain-answer/", "host": ["{{baseUrl}}"], "path": ["ai","explain-answer",""] } } },
+        { "name": "Explain concept", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"topic\": \"Mitral stenosis\",\n  \"depth\": \"intermediate\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/explain/", "host": ["{{baseUrl}}"], "path": ["ai","explain",""] } } },
+        { "name": "Generate mnemonic", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"topic\": \"Causes of pancreatitis — I GET SMASHED\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/mnemonic/", "host": ["{{baseUrl}}"], "path": ["ai","mnemonic",""] } } },
+        { "name": "Study plan", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"days\": 30,\n  \"weak_subjects\": [\"Medicine\"]\n}"}, "url": { "raw": "{{baseUrl}}/ai/study-plan/", "host": ["{{baseUrl}}"], "path": ["ai","study-plan",""] } } },
+        { "name": "High-yield topics", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/ai/high-yield/?exam_track=upsc-cms", "host": ["{{baseUrl}}"], "path": ["ai","high-yield",""] } } },
+        { "name": "Generate questions", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"topic\": \"Mitral stenosis\",\n  \"count\": 5\n}"}, "url": { "raw": "{{baseUrl}}/ai/generate-questions/", "host": ["{{baseUrl}}"], "path": ["ai","generate-questions",""] } } },
+        { "name": "RAG search", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"query\": \"DKA management\",\n  \"top_k\": 8\n}"}, "url": { "raw": "{{baseUrl}}/ai/rag-search/", "host": ["{{baseUrl}}"], "path": ["ai","rag-search",""] } } },
+        { "name": "RAG answer", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"query\": \"DKA management\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/rag-answer/", "host": ["{{baseUrl}}"], "path": ["ai","rag-answer",""] } } },
+        { "name": "Textbook reference", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"question_id\": \"{{questionId}}\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/textbook-reference/", "host": ["{{baseUrl}}"], "path": ["ai","textbook-reference",""] } } },
+        { "name": "Knowledge upload (legacy RAG)", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"url\": \"https://example.com/page\"\n}"}, "url": { "raw": "{{baseUrl}}/ai/knowledge/upload/", "host": ["{{baseUrl}}"], "path": ["ai","knowledge","upload",""] } } },
+        { "name": "Knowledge scan (legacy RAG)", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/ai/knowledge/scan/", "host": ["{{baseUrl}}"], "path": ["ai","knowledge","scan",""] } } },
+        { "name": "Knowledge stats (legacy RAG)", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/ai/knowledge/stats/", "host": ["{{baseUrl}}"], "path": ["ai","knowledge","stats",""] } } },
+        { "name": "Screenshot", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/ai/screenshot/{{questionId}}/", "host": ["{{baseUrl}}"], "path": ["ai","screenshot","{{questionId}}",""] } } }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        { "name": "Dashboard", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/dashboard/", "host": ["{{baseUrl}}"], "path": ["analytics","dashboard",""] } } },
+        { "name": "Topic performance", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/topic-performance/", "host": ["{{baseUrl}}"], "path": ["analytics","topic-performance",""] } } },
+        { "name": "Heatmap", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/heatmap/", "host": ["{{baseUrl}}"], "path": ["analytics","heatmap",""] } } },
+        { "name": "Recent attempts", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/recent-attempts/", "host": ["{{baseUrl}}"], "path": ["analytics","recent-attempts",""] } } },
+        { "name": "Score prediction", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/score-prediction/", "host": ["{{baseUrl}}"], "path": ["analytics","score-prediction",""] } } },
+        { "name": "Performance trend", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/performance-trend/", "host": ["{{baseUrl}}"], "path": ["analytics","performance-trend",""] } } },
+        { "name": "Weak topics", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/weak-topics/", "host": ["{{baseUrl}}"], "path": ["analytics","weak-topics",""] } } },
+        { "name": "Roadmap", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/roadmap/", "host": ["{{baseUrl}}"], "path": ["analytics","roadmap",""] } } },
+        { "name": "Streak", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/streak/", "host": ["{{baseUrl}}"], "path": ["analytics","streak",""] } } },
+        { "name": "Badges", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/badges/", "host": ["{{baseUrl}}"], "path": ["analytics","badges",""] } } },
+        { "name": "Leaderboard", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/analytics/leaderboard/", "host": ["{{baseUrl}}"], "path": ["analytics","leaderboard",""] } } }
+      ]
+    },
+    {
+      "name": "Knowledge Base (Monica AI)",
+      "item": [
+        { "name": "Health", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/kb/health/", "host": ["{{baseUrl}}"], "path": ["kb","health",""] } } },
+        { "name": "Stats", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/kb/stats/", "host": ["{{baseUrl}}"], "path": ["kb","stats",""] } } },
+        { "name": "Whitelisted sources", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/kb/sources/", "host": ["{{baseUrl}}"], "path": ["kb","sources",""] } } },
+        { "name": "Search", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"query\": \"DKA management\",\n  \"top_k\": 8,\n  \"retrievers\": [\"bm25\",\"dense\",\"kg\"]\n}"}, "url": { "raw": "{{baseUrl}}/kb/search/", "host": ["{{baseUrl}}"], "path": ["kb","search",""] } } },
+        { "name": "Ask Monica", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"query\": \"First-line treatment for status epilepticus in adults?\",\n  \"subject\": \"Medicine\"\n}"}, "url": { "raw": "{{baseUrl}}/kb/ask/", "host": ["{{baseUrl}}"], "path": ["kb","ask",""] } } },
+        { "name": "Upload user document", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/kb/upload/", "host": ["{{baseUrl}}"], "path": ["kb","upload",""] } } },
+        { "name": "Trigger ingestion (admin)", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"source\": \"upsc\",\n  \"max_docs\": 25\n}"}, "url": { "raw": "{{baseUrl}}/kb/ingest/", "host": ["{{baseUrl}}"], "path": ["kb","ingest",""] } } },
+        { "name": "Rebuild embeddings (admin)", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"max_chunks\": 2000\n}"}, "url": { "raw": "{{baseUrl}}/kb/index/", "host": ["{{baseUrl}}"], "path": ["kb","index",""] } } },
+        { "name": "Extract KG (admin)", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/kb/extract-kg/", "host": ["{{baseUrl}}"], "path": ["kb","extract-kg",""] } } },
+        { "name": "Run eval (admin)", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/kb/eval/", "host": ["{{baseUrl}}"], "path": ["kb","eval",""] } } }
+      ]
+    },
+    {
+      "name": "Textbooks",
+      "item": [
+        { "name": "List textbooks", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/textbooks/books/", "host": ["{{baseUrl}}"], "path": ["textbooks","books",""] } } },
+        { "name": "Upload PDF", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/textbooks/uploads/", "host": ["{{baseUrl}}"], "path": ["textbooks","uploads",""] } } }
+      ]
+    },
+    {
+      "name": "Resources & Jobs",
+      "item": [
+        { "name": "Resource catalog", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/resources/catalog/", "host": ["{{baseUrl}}"], "path": ["resources","catalog",""] } } },
+        { "name": "Download resource", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/resources/download/<id>/", "host": ["{{baseUrl}}"], "path": ["resources","download","<id>",""] } } },
+        { "name": "Job listings", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/jobs/", "host": ["{{baseUrl}}"], "path": ["jobs",""] } } }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        { "name": "Admin users", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/admin/users/", "host": ["{{baseUrl}}"], "path": ["auth","admin","users",""] } } },
+        { "name": "Block / unblock user", "request": { "method": "PATCH", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"is_active\": false\n}"}, "url": { "raw": "{{baseUrl}}/auth/admin/users/{{userId}}/block/", "host": ["{{baseUrl}}"], "path": ["auth","admin","users","{{userId}}","block",""] } } },
+        { "name": "Update user role", "request": { "method": "PATCH", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"is_staff\": true\n}"}, "url": { "raw": "{{baseUrl}}/auth/admin/users/{{userId}}/role/", "host": ["{{baseUrl}}"], "path": ["auth","admin","users","{{userId}}","role",""] } } },
+        { "name": "Reset user progress", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/admin/users/{{userId}}/reset-progress/", "host": ["{{baseUrl}}"], "path": ["auth","admin","users","{{userId}}","reset-progress",""] } } },
+        { "name": "Admin payments", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/admin/payments/", "host": ["{{baseUrl}}"], "path": ["auth","admin","payments",""] } } },
+        { "name": "Admin token grant", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"user_id\": \"{{userId}}\",\n  \"amount\": 100,\n  \"reason\": \"goodwill\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/tokens/admin/grant/", "host": ["{{baseUrl}}"], "path": ["auth","tokens","admin","grant",""] } } },
+        { "name": "Admin token transfer", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"from_user_id\": \"{{userId}}\",\n  \"to_user_id\": \"<other>\",\n  \"amount\": 10\n}"}, "url": { "raw": "{{baseUrl}}/auth/tokens/admin/transfer/", "host": ["{{baseUrl}}"], "path": ["auth","tokens","admin","transfer",""] } } },
+        { "name": "Admin token audit log", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/tokens/admin/audit-logs/", "host": ["{{baseUrl}}"], "path": ["auth","tokens","admin","audit-logs",""] } } },
+        { "name": "System — reset attempts", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"scope\": \"user\",\n  \"user_id\": \"{{userId}}\"\n}"}, "url": { "raw": "{{baseUrl}}/auth/admin/system/reset-attempts/", "host": ["{{baseUrl}}"], "path": ["auth","admin","system","reset-attempts",""] } } },
+        { "name": "System — clear analytics", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/admin/system/clear-analytics/", "host": ["{{baseUrl}}"], "path": ["auth","admin","system","clear-analytics",""] } } },
+        { "name": "System — rerun evaluation", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/admin/system/rerun-evaluation/", "host": ["{{baseUrl}}"], "path": ["auth","admin","system","rerun-evaluation",""] } } },
+        { "name": "System — backup data", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/admin/system/backup-data/", "host": ["{{baseUrl}}"], "path": ["auth","admin","system","backup-data",""] } } },
+        { "name": "System — restore data", "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/auth/admin/system/restore-data/", "host": ["{{baseUrl}}"], "path": ["auth","admin","system","restore-data",""] } } }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        { "name": "Health check", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/", "host": ["{{baseUrl}}"], "path": ["health",""] } } },
+        { "name": "API root", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] } } }
+      ]
+    }
+  ]
+}

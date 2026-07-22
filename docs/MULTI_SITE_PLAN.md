@@ -167,7 +167,7 @@ additions are needed:**
 
 | Site | Vercel project | Domain | Backend |
 |---|---|---|---|
-| UPSC CMS (existing) | `crack-cms` | `crack-me-ai1.vercel.app` | `crackcms-vsthc.ondigitalocean.app/api` |
+| UPSC CMS (existing) | `crack-cms` | `cracklabs.app` | `crackcms-vsthc.ondigitalocean.app/api` |
 | NEET PG | `crack-neetpg` | `neetpg.crackme-ai.com` | same |
 | USMLE | `crack-usmle` | `usmle.crackme-ai.com` | same |
 | FMGE | `crack-fmge` | `fmge.crackme-ai.com` | same |

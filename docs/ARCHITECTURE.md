@@ -272,10 +272,10 @@ See [`ADMIN_SYSTEM.md`](./ADMIN_SYSTEM.md) for the admin permission matrix.
 flowchart LR
     Dev[Developer] -->|git push| GH[GitHub main]
     GH -->|trigger| GHA[GitHub Actions\nCI: lint, test, build, bandit, safety]
-    GHA -->|on success| Render[Render.com\nbackend]
+    GHA -->|on success| DO[DigitalOcean App Service\nbackend]
     GHA -->|on success| Vercel[Vercel\nfrontend]
-    Render -->|gunicorn + whitenoise| LiveAPI[crackcms-backend.onrender.com/api]
-    Vercel -->|Next.js| LiveFE[crack-me-ai1.vercel.app]
+    DO -->|gunicorn + whitenoise| LiveAPI[crackcms-vsthc.ondigitalocean.app/api]
+    Vercel -->|Next.js| LiveFE[cracklabs.app]
     User([End User]) --> LiveFE
     LiveFE --> LiveAPI
     LiveAPI --> Supa[(Supabase)]
@@ -288,7 +288,7 @@ flowchart LR
 - **Build**: `backend/build.sh` runs `pip install → collectstatic → migrate → import_neet_pg`
 - **Start**: `gunicorn crack_cms.wsgi:application --workers 1 --threads 4 --timeout 180`
 - **Config**: `render.yaml` (env vars referenced by `crack_cms/settings.py`)
-- **Required env**: `DJANGO_SECRET_KEY`, all AI keys, `CORS_ALLOWED_ORIGINS=https://crack-me-ai1.vercel.app`, `CSRF_TRUSTED_ORIGINS=…`, `FRONTEND_URL`
+- **Required env**: `DJANGO_SECRET_KEY`, all AI keys, `CORS_ALLOWED_ORIGINS=https://cracklabs.app`, `CSRF_TRUSTED_ORIGINS=…`, `FRONTEND_URL`
 
 ### Frontend Deploy (Vercel)
 
@@ -481,8 +481,8 @@ flowchart LR
 | `ALLOWED_HOSTS` | Yes (prod) | Comma-separated |
 | `DATABASE_URL` | No | Postgres override of SQLite |
 | `GROQ_API_KEY` … `DEEPSEEK_API_KEY` | No (graceful skip) | All 11 AI providers |
-| `CORS_ALLOWED_ORIGINS` | Yes (prod) | `https://crack-me-ai1.vercel.app` |
-| `CSRF_TRUSTED_ORIGINS` | Yes (prod) | `https://crack-me-ai1.vercel.app` |
+| `CORS_ALLOWED_ORIGINS` | Yes (prod) | `https://cracklabs.app` |
+| `CSRF_TRUSTED_ORIGINS` | Yes (prod) | `https://cracklabs.app` |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Yes (prod) | Gmail App Password |
 | `FRONTEND_URL` | Yes (prod) | Used in password-reset emails |
 | `SENTRY_DSN` | No | Enables Sentry init |

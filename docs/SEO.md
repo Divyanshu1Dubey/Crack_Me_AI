@@ -104,8 +104,8 @@ The frontend should inject JSON-LD for key page types.
   "@context": "https://schema.org",
   "@type": "Organization",
   "name": "CrackLabs",
-  "url": "https://crack-me-ai1.vercel.app",
-  "logo": "https://crack-me-ai1.vercel.app/logo.png",
+  "url": "https://cracklabs.app",
+  "logo": "https://cracklabs.app/logo.png",
   "sameAs": [
     "https://twitter.com/cracklabs",
     "https://www.linkedin.com/company/cracklabs"

@@ -1,0 +1,554 @@
+# CrackCMS — llms-full.txt
+
+> Authoritative machine-readable reference for the CrackCMS platform. Covers product, architecture, data model, API, AI provider pool, knowledge base, deployment, and conventions. Read llms.txt first for a summary.
+
+- Domain: https://cracklabs.app
+- API base: https://crackcms-vsthc.ondigitalocean.app/api/
+- GitHub: https://github.com/Divyanshu-Dubey/crack_cms
+- Repository root: crack_cms/
+- Last-verified: 2026-07-22
+
+---
+
+## 1. Product
+
+CrackCMS (full product name: Crack_Me_AI) is an AI-powered exam-preparation platform for Indian and international medical competitive exams, operated by CrackLabs.
+
+### 1.1 Personas
+
+| Persona | Description | Primary need |
+|---|---|---|
+| UPSC CMS Aspirant | Final-year MBBS / intern preparing for Combined Medical Services | High-yield MCQ practice + explanations |
+| NEET PG Aspirant | Postgraduate medical entrance candidate | PYQ practice, adaptive tests, performance tracking |
+| Medical student (general) | Self-directed learner consolidating a topic | Concept explainers, mnemonics, RAG-grounded answers |
+| Coaching admin | EdTech operator seeding content or moderating questions | Admin panel, knowledge-base upload, fixture export |
+| Premium subscriber | Paying user on Razorpay plan | Unlimited tokens, advanced analytics, deep study plans |
+
+### 1.2 Business goals
+
+1. Minimize vendor lock-in — 11-provider AI rotation + Ollama fallback.
+2. Monetize via freemium — Daily/weekly free tokens drive acquisition; Razorpay subscriptions and token purchases drive revenue.
+3. Build a defensible moat — TF-IDF RAG store over indexed textbooks and PYQs becomes more valuable with every document ingested.
+4. Operate at low infra cost — SQLite + free-tier AI quotas + DigitalOcean free tier + Vercel free keep monthly burn near zero.
+5. Ship fast — Fixture-first question workflow, CSV-driven answer review, admin tooling.
+
+### 1.3 Exam coverage
+
+| Track | URL | Coverage |
+|---|---|---|
+| UPSC CMS | /cms | 1,920+ PYQs, MCQ practice, cutoffs, books, strategy |
+| NEET PG | /neet-pg | Practice, comparison vs USMLE |
+| INI-CET | /ini-cet | AIIMS / PGIMER / JIPMER PG entrance |
+| FMGE | /fmge | Foreign Medical Graduate screening exam |
+| USMLE | /usmle | Step-by-step US residency prep |
+| Medical Officer | /medical-officer | State PSC, ESIC, NHM recruitments |
+| Government Doctor Jobs | /government-doctor-jobs | Vacancies, eligibility, cutoffs |
+
+---
+
+## 2. Tech stack
+
+### 2.1 Frontend (Next.js 16 App Router, --webpack dev server)
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16.1.6 (App Router, --webpack dev server, NOT turbopack) |
+| UI runtime | React 19.2.4 |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS 4 + Radix UI primitives |
+| State / data | SWR, React Context (Dock, ExamTrack, Auth) |
+| HTTP | Axios with interceptors + multi-base failover |
+| Auth | @supabase/ssr, @supabase/supabase-js, jwt-decode |
+| Charts | recharts |
+| Markdown | react-markdown + remark-breaks |
+| Theming | next-themes |
+| Icons | lucide-react + custom icon manifest pipeline |
+| Observability | @datadog/browser-logs, @datadog/browser-rum |
+| Tests | @playwright/test |
+| Lint | ESLint 9 + eslint-config-next |
+
+### 2.2 Backend
+
+| Layer | Technology |
+|---|---|
+| Framework | Django 5 + DRF |
+| Auth | djangorestframework-simplejwt + django-axes + Supabase bridge |
+| Database | SQLite3 (default), Postgres-ready via dj_database_url |
+| Background tasks | django-q2 |
+| Cache | django-redis (optional; LocMem fallback) |
+| Security | django-axes, django-cors-headers, security headers in vercel.json |
+| RAG | Custom SQLite + TF-IDF (chroma_db/rag_store.sqlite3) + knowledge_base app |
+| PDF | PyMuPDF |
+| TTS / Video | edge-tts, moviepy |
+| Payments | razorpay |
+| Observability | sentry-sdk[django], ddtrace, python-json-logger |
+| Server | gunicorn + whitenoise |
+
+### 2.3 External services
+
+| Service | Purpose |
+|---|---|
+| DigitalOcean App Service | Backend hosting (gunicorn) |
+| Vercel | Frontend hosting (Next.js) |
+| Supabase | Identity provider + alternative Postgres DB |
+| Sentry | Error tracking + tracing |
+| Datadog | RUM + browser logs |
+| Google Analytics | Web analytics |
+| Razorpay | Subscriptions + token purchases |
+| Gmail SMTP | Password-reset email |
+| GitHub LFS | PDF textbook + sqlite storage |
+| GitHub Actions | CI/CD |
+
+---
+
+## 3. Repository layout
+
+```
+crack_cms/
+├── README.md                  # User-facing setup + API reference
+├── CLAUDE.md                  # Claude Code orientation
+├── docs/                      # Single source of truth for documentation
+├── frontend/                  # Next.js 16 app
+├── backend/
+│   ├── crack_cms/             # Project (settings, root URLs, middleware)
+│   ├── accounts/              # Users, JWT, tokens, devices, Supabase bridge
+│   ├── questions/             # MCQ bank, flashcards, discussions, notes
+│   ├── tests_engine/          # Adaptive + PYQ tests, attempts
+│   ├── analytics/             # Stats, streaks, roadmap, feedback
+│   ├── ai_engine/             # 11-provider orchestrator + RAG
+│   ├── textbooks/             # Indexed textbook library
+│   ├── resources/             # UPSC exam resource catalog
+│   ├── video_engine/          # edge-tts + moviepy slide videos
+│   ├── jobs/                  # Career / job listings
+│   ├── knowledge_base/        # Monica AI — hybrid RAG + KG + citations
+│   ├── chroma_db/             # rag_store.sqlite3 (TF-IDF vectors)
+│   ├── Medura_Train/          # Source documents for RAG ingestion
+│   ├── questions_fixture.json # Production seed (loaded by build.sh)
+│   ├── build.sh               # DigitalOcean deploy contract
+│   └── requirements.txt
+├── mobile-app/                # Companion mobile (Capacitor wrapper)
+├── scripts/                   # Root-level utility scripts
+└── .github/                   # CI workflows + Copilot + skills + agents
+```
+
+---
+
+## 4. AI provider pool (11 + Ollama fallback)
+
+Implementation: backend/ai_engine/services.py. Thread-safe counter via threading.Lock. 120-second deadline per request, 15–20-second per provider timeout. Provider error phrases are filtered (_PROVIDER_ERROR_PHRASES) so users never see raw upstream errors.
+
+| # | Provider | Model | Quota | Cost |
+|---|---|---|---|---|
+| 1 | Groq | llama-3.3-70b-versatile | 30 RPM, 14,400 RPD | Free |
+| 2 | Cerebras | llama-3.1-8b | 30 RPM, ~1M tok/day | Free |
+| 3 | Gemini | gemini-2.0-flash, gemini-2.0-flash-lite | 15 RPM, 1,500 RPD/model | Free |
+| 4 | Cohere | command-a | 20 RPM, 1,000 req/mo | Free |
+| 5 | OpenRouter | Free models | 20 RPM | Free (key 1) |
+| 6 | OpenRouter | Free models | 20 RPM | Free (key 2) |
+| 7 | GitHub Models | gpt-4o-mini | 150 RPM, 15K RPD | Free (PAT) |
+| 8 | HuggingFace | meta-llama/llama-3.3-70b-instruct | ~10 RPM | Free |
+| 9 | Mistral | mistral-small-latest | ~30 RPM | Free |
+| 10 | NVIDIA | mistral-7b-instruct | TBD | Free (build.nvidia.com) |
+| 11 | DeepSeek | deepseek-chat | Pay-as-you-go | Paid — tried LAST |
+| F | Ollama | llama3.2:3b | Local, unlimited | Free |
+
+Required env: GROQ_API_KEY, CEREBRAS_API_KEY, GEMINI_API_KEY (×2), GITHUB_TOKEN, OPENROUTER_API_KEY, OPENROUTER_API_KEY2, COHERE_API_KEY, HUGGINGFACE_API_KEY, MISTRAL_API_KEY, NVIDIA_MISTRAL_API_KEY, DEEPSEEK_API_KEY, TOGETHER_API_KEY, AIML_API_KEY. Missing keys = silent skip in round-robin.
+
+Set DISABLE_RAG=1 for memory-constrained hosts (kills RAG embedding load).
+
+---
+
+## 5. Knowledge Base — Monica AI
+
+Module: backend/knowledge_base/. URL prefix: /api/kb/.
+
+### 5.1 Components
+
+| Concern | Module |
+|---|---|
+| Models | models.py — Source, Document, Chunk, Entity, Relation, Embedding, Citation, EvalResult |
+| Ontology | ontology/data.py (80+ entities, 100+ relations) + ontology/loader.py |
+| Connectors | connectors/internal.py, connectors/ncbi.py, connectors/user_uploads.py |
+| Services | services/embedding.py, services/indexer.py, services/ingestion.py, services/monica.py |
+| Retrieval | retrieval/pipeline.py (RRF over BM25 + dense vectors + KG), retrieval/kg_extractor.py |
+| Eval | eval/ — retrieval evaluation harness |
+| Management | management/commands/{load_ontology,build_kb,ingest_source,evaluate_kb}.py |
+| Admin | admin.py — Django admin registration |
+| Views | views.py — DRF views wired to URLs |
+| URLs | urls.py |
+
+### 5.2 Endpoints (all under /api/kb/)
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | /ask/ | Ask Monica (RAG-grounded answer with citations) |
+| POST | /search/ | Hybrid retrieval (BM25 + vector + KG) |
+| GET | /stats/ | KB statistics (chunks, sources, entities, relations) |
+| GET | /sources/ | Whitelisted source catalog |
+| POST | /upload/ | Upload user document |
+| POST | /ingest/ | Trigger ingestion for a source |
+| POST | /index/ | Rebuild embeddings |
+| POST | /extract-kg/ | Extract knowledge graph from chunks |
+| POST | /eval/ | Run retrieval evaluation harness |
+| GET | /health/ | KB health probe |
+
+### 5.3 Management commands
+
+| Command | Purpose |
+|---|---|
+| python manage.py load_ontology | Load entity/relation ontology into DB |
+| python manage.py build_kb --max 2000 | Chunk + embed + index whitelisted sources |
+| python manage.py ingest_source <name> | Ingest one whitelisted source (upsc, mohfw-india, nhm-india, nmc-india, icmr, ncbi, who, nhs, cdc, nice, openmd, kegg, drugbank) |
+| python manage.py evaluate_kb | Run retrieval eval, write eval results |
+
+### 5.4 Whitelisted sources (allowed)
+
+- Indian: UPSC, MoHFW India, NHM India, NMC India, ICMR
+- International: NCBI, WHO, NHS, CDC, NICE, OpenMD, KEGG, DrugBank
+
+### 5.5 Refused sources (legal constraint)
+
+- Harrison's Principles of Internal Medicine
+- Bailey & Love's Short Practice of Surgery
+- Marrow (PrepLadder)
+
+### 5.6 Citation engine
+
+Every Monica answer carries inline [Source Title — Page] markers. Source allowlist enforced in the connector layer; ingestion is refused if source is not whitelisted.
+
+---
+
+## 6. RAG pipeline (legacy + KB)
+
+Two parallel RAG surfaces:
+
+1. Legacy question-bank RAG at backend/ai_engine/rag_pipeline.py — TF-IDF + IDF cache over chroma_db/rag_store.sqlite3, chunks ~200–500 tokens, PDF >50 MB auto-skipped, ingestion via _train_all.py from Medura_Train/{textbooks,PYQ,web_knowledge}/.
+2. Knowledge Base (Monica AI) at backend/knowledge_base/ — hybrid BM25 + dense vectors + knowledge graph + RRF, with whitelisted source connector pipeline.
+
+Set DISABLE_RAG=1 to bypass legacy RAG on memory-constrained hosts.
+
+---
+
+## 7. Data model (summary)
+
+### 7.1 accounts app
+- CustomUser — extends AbstractUser; email login, role flags
+- UserDevice — single-device enforcement
+- TokenBalance — daily/weekly/purchased/feedback buckets
+- TokenConfig — global config (quotas, prices)
+- TokenTransaction — append-only ledger
+- Subscription — Razorpay plan + status
+- PaymentAttempt — Razorpay order/verify
+- AdminAuditLog — staff actions
+
+### 7.2 questions app
+- ExamTrack — UPSC CMS / NEET PG / etc.
+- Subject, Topic
+- Question — correct_answer, explanation, mnemonic, high_yield_points, textbook_reference, concept_tags, difficulty
+- QuestionBookmark
+- Note
+- Discussion, DiscussionVote
+- Flashcard — SM-2 (ease_factor, interval, next_review, repetitions)
+
+### 7.3 tests_engine app
+- Test — config: question set, time, filters
+- TestAttempt — user run
+- QuestionResponse — per-question answer + correctness
+
+### 7.4 analytics app
+- UserTopicPerformance
+- DailyActivity
+- Streak, Badge, LeaderboardEntry
+
+### 7.5 ai_engine app
+- ChatSession, ChatMessage — AI tutor history
+- Textbook, TextbookChapter
+- RagQueryCache — 24h response cache for AI tutor
+
+### 7.6 knowledge_base app (Monica AI)
+- Source — whitelisted source catalog
+- Document — raw ingested doc
+- Chunk — 200–500 token span
+- Entity — ontology node
+- Relation — ontology edge
+- Embedding — dense vector + BM25 score
+- Citation — answer ↔ source mapping
+- EvalResult — retrieval eval metrics
+
+### 7.7 jobs, resources, video_engine apps
+- JobListing — career openings
+- ExamResource — curated links
+- VideoJob, VideoArtifact — slide-video records
+
+---
+
+## 8. API reference
+
+### 8.1 Auth (/api/auth/)
+| Method | Path | Description |
+|---|---|---|
+| POST | /register/ | Register (creates TokenBalance) |
+| POST | /login/ | JWT login |
+| GET | /profile/ | Get profile |
+| PUT/PATCH | /profile/ | Update profile |
+| POST | /password-reset/ | Request reset email |
+| POST | /password-reset/confirm/ | Confirm with token |
+| GET | /tokens/ | Balance |
+| POST | /tokens/purchase/ | Buy token pack |
+| GET | /tokens/history/ | Transaction history |
+| POST | /subscribe/order/ | Create Razorpay order |
+| POST | /subscribe/verify/ | Verify payment signature |
+| POST | /subscribe/webhook/ | Razorpay webhook |
+| GET | /subscribe/status/ | Current subscription |
+| GET | /devices/ | List user devices |
+| POST | /devices/logout/ | Force-logout a device |
+| GET | /admin/payments/ | Admin payment history |
+| GET | /admin/users/ | Paginated user list |
+| PATCH | /admin/users/<id>/block/ | Block/unblock |
+| PATCH | /admin/users/<id>/role/ | Promote to admin |
+| POST | /admin/users/<id>/reset-progress/ | Reset progress |
+| POST | /admin/system/reset-attempts/ | Reset attempts (all/user) |
+| POST | /admin/system/clear-analytics/ | Clear analytics |
+| POST | /admin/system/rerun-evaluation/ | Re-run scoring |
+| POST | /admin/system/backup-data/ | Backup |
+| POST | /admin/system/restore-data/ | Restore |
+
+### 8.2 Questions (/api/questions/)
+| Method | Path | Description |
+|---|---|---|
+| GET | /subjects/ | List subjects |
+| GET | /topics/ | List topics |
+| GET | /exam-tracks/ | List exam tracks |
+| GET | / | List questions (filter subject/year/difficulty/topic) |
+| GET | /<id>/ | Detail |
+| POST | /<id>/bookmark/ | Toggle bookmark |
+| GET/POST | /notes/ | List/create note |
+| GET/PUT/DELETE | /notes/<id>/ | Manage a note |
+| GET/POST | /discussions/ | List/create |
+| GET/POST | /discussions/<id>/replies/ | Replies |
+| POST | /discussions/<id>/vote/ | Upvote/downvote |
+| GET/POST | /flashcards/ | List/create |
+| GET/PUT/DELETE | /flashcards/<id>/ | Detail |
+| POST | /flashcards/<id>/review/ | Submit SM-2 review (quality 0–5) |
+| GET | /flashcards/analytics/ | Retention stats |
+
+### 8.3 Tests (/api/tests/)
+| Method | Path | Description |
+|---|---|---|
+| GET | / | List tests |
+| POST | / | Create test |
+| POST | /<id>/submit/ | Submit answers |
+| GET | /<id>/review/ | Review results |
+| GET | /attempts/ | List attempts |
+
+### 8.4 AI (/api/ai/)
+| Method | Path | Description |
+|---|---|---|
+| POST | /tutor/ | RAG-enhanced chat tutoring |
+| POST | /explain-answer/ | Structured post-answer explanation |
+| POST | /explain/ | Topic explanation at chosen depth |
+| POST | /mnemonic/ | Memory aid for topic |
+| POST | /study-plan/ | AI-generated study plan |
+| GET | /high-yield/ | High-yield topics |
+| POST | /generate-questions/ | Generate N MCQs |
+| POST | /rag-search/ | Top-K RAG chunks |
+| POST | /rag-answer/ | RAG-grounded answer |
+| POST | /textbook-reference/ | Reference for a question |
+| GET | /screenshot/<qid>/ | Page screenshot |
+| POST | /knowledge/upload/ | Upload to legacy RAG |
+| POST | /knowledge/scan/ | Scan + reindex legacy RAG |
+| GET | /knowledge/stats/ | Legacy KB stats |
+
+### 8.5 Analytics (/api/analytics/)
+| Method | Path | Description |
+|---|---|---|
+| GET | /dashboard/ | Aggregate |
+| GET | /topic-performance/ | Per-topic stats |
+| GET | /heatmap/ | Daily activity heatmap |
+| GET | /recent-attempts/ | Recent attempts |
+| GET | /score-prediction/ | Predicted score |
+| GET | /performance-trend/ | Trend line |
+| GET | /weak-topics/ | Accuracy < threshold |
+| GET | /roadmap/ | Roadmap based on weak topics |
+
+### 8.6 Knowledge Base (/api/kb/)
+See section 5.2.
+
+### 8.7 Textbooks (/api/textbooks/)
+| Method | Path | Description |
+|---|---|---|
+| GET | /books/ | List textbooks |
+| POST | /uploads/ | Upload PDF |
+
+---
+
+## 9. Frontend route map (Next.js 16 App Router)
+
+| Section | Routes |
+|---|---|
+| Auth | /login, /register, /forgot-password, /reset-password, /auth/callback |
+| Core study | /dashboard, /questions, /questions/practice, /simulator, /tests, /tests/[id], /flashcards, /bookmarks, /analytics, /trends, /leaderboard, /roadmap |
+| AI | /ai-tutor, /generate, /upload, /textbooks |
+| Account | /settings, /tokens, /subscription, /resources, /jobs |
+| Admin | /admin, /admin/questions-editor, /admin/jobs, /admin/announcements |
+| Exam landings | /cms, /neet-pg, /ini-cet, /fmge, /usmle, /medical-officer, /government-doctor-jobs, /exams/[slug], /exams/cms, /exams/neet-pg, /exams/usmle |
+| SEO hubs | /cms/pyq, /cms/subject, /cms/books, /cms/cutoff, /cms/strategy, /cms/vs-ini-cet, /cms/vs-neet-pg, /neet-pg/vs-usmle, /fmge/vs-next |
+| Guides | /guides/upsc-cms-complete-guide, /guides/neet-pg-complete-guide, /guides/ini-cet-complete-guide, /guides/fmge-complete-guide, /guides/usmle-step-1-guide, /guides/medical-officer-jobs, /guides/study-plan-builder, /guides/ai-in-medical-education |
+| Legal / trust | /about, /privacy-policy, /terms, /refund-policy, /cookie-policy, /disclaimer, /editorial-policy, /medical-review-policy |
+| Support | /contact, /feedback |
+
+---
+
+## 10. Authentication & session
+
+- Hybrid Supabase-first with Django JWT backup.
+- Axios interceptor (frontend/src/lib/api.ts) attaches Supabase access token; clears local session on code: session_invalid (single-device enforcement).
+- Backend bridge: accounts/supabase_auth.py, accounts/supabase_rest_auth.py.
+- django-axes locks accounts after 5 failed login attempts (30 min lockout).
+- Single-device enforcement via UserDevice table; device mismatch returns code: session_invalid and triggers redirect.
+
+---
+
+## 11. Token economy
+
+| Pool | Quota | Reset | Priority |
+|---|---|---|---|
+| Daily free | 10 | Midnight (server TZ) | 1 |
+| Weekly free | 50 | Sunday | 2 |
+| Feedback reward | +2 per verified report | On approval | 3 |
+| Purchased | Per-pack | Never | 4 |
+
+- Admin/staff bypass consumption entirely.
+- Insufficient balance returns HTTP 402 Payment Required.
+- Each call decrements 1 token from highest-priority pool and writes a TokenTransaction row.
+- Daily/weekly quotas are seeded into every TokenBalance on the post_migrate signal.
+
+---
+
+## 12. Deployment & infrastructure
+
+| Concern | Detail |
+|---|---|
+| Backend host | DigitalOcean App Service (gunicorn) — crackcms-vsthc.ondigitalocean.app |
+| Frontend host | Vercel — cracklabs.app (custom domain; Vercel alias crack-me-ai1.vercel.app redirects to it) |
+| Auth | Supabase (Auth + Postgres alternative) |
+| DB | SQLite3 by default; Postgres-ready via dj_database_url |
+| Static | whitenoise (backend), Vercel static (frontend) |
+| CI | GitHub Actions: Python 3.12 / Node 20 |
+| Build contract | backend/build.sh — install deps, migrate, collectstatic, loaddata, import_neet_pg |
+| Multi-base failover | frontend/src/lib/api.ts resolves base URL from NEXT_PUBLIC_API_URL with automatic failover to NEXT_PUBLIC_API_FALLBACK_URL on 502/503/504 |
+
+### 12.1 Required backend env (production)
+
+DJANGO_SECRET_KEY, all AI provider keys, CORS_ALLOWED_ORIGINS, CSRF_TRUSTED_ORIGINS, FRONTEND_URL (password-reset links), DATABASE_URL, SENTRY_DSN, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY.
+
+### 12.2 Required frontend env
+
+NEXT_PUBLIC_API_URL, NEXT_PUBLIC_API_FALLBACK_URL, NEXT_PUBLIC_USE_API_PROXY (optional), Supabase keys.
+
+### 12.3 DigitalOcean deploy contract (backend/build.sh)
+
+1. pip install -r requirements.txt
+2. python manage.py migrate --noinput
+3. python manage.py collectstatic --noinput
+4. python manage.py loaddata questions_fixture.json (idempotent via --fake-initial)
+5. python manage.py import_neet_pg
+6. (Optional) load_ontology, build_kb, ingest_source — run from console, NOT in build.sh
+
+---
+
+## 13. Conventions
+
+- Minimal, targeted changes; never revert user changes.
+- Auth behavior must remain Supabase-first consistent.
+- Preserve Next.js static generation stability.
+- Use existing patterns before introducing new abstractions.
+- Reference docs: README.md, ARCHITECTURE.md, DOCUMENTATION.md, plan-crackCmsPlatformFixAndEnhancement.prompt.md, .github/skills/*, .github/agents/*.
+- Be concise and factual; mention exact files changed; verify with build/test commands.
+- No PBN, no scraping, no link-scheme tactics (YMYL compliance).
+- No copyrighted material ingestion into the knowledge base.
+
+---
+
+## 14. Setup gotchas
+
+- Frontend dev server uses --webpack (NOT turbopack) — see frontend/package.json dev script.
+- build.sh is the deploy contract — add new one-shot deploy steps there.
+- Venv paths: both .venv\ (root) and backend/.venv\ exist; activate root then cd backend. Backend pip installs go in root venv.
+- Git LFS for **/textbooks/*.pdf and *.sqlite3.
+- .gitignore exceptions: db.sqlite3, chroma_db/rag_store.sqlite3, chroma_db/chroma.sqlite3 ARE committed (deployment needs them); other *.sqlite3 are ignored.
+
+---
+
+## 15. Useful commands
+
+### Backend
+- python manage.py runserver 8000
+- python manage.py migrate / makemigrations
+- python manage.py createsuperuser
+- python manage.py loaddata questions_fixture.json
+- python manage.py check --deploy
+- python manage.py makemigrations --check --dry-run
+- python manage.py test --verbosity=2
+- python test_all.py / python test_all.py --quick
+- python test_all.py --endpoints-only / --auth-only
+- python test_api_keys.py
+- python validate_questions.py
+- python _train_all.py
+- python _export_fixture.py
+- python _review_and_fix_answers.py export --year 2018
+
+### Knowledge Base
+- python manage.py load_ontology
+- python manage.py build_kb --max 2000
+- python manage.py ingest_source upsc
+- python manage.py ingest_source mohfw-india
+- python manage.py ingest_source nhm-india
+- python manage.py ingest_source nmc-india
+- python manage.py ingest_source icmr
+- python manage.py ingest_source ncbi
+- python manage.py evaluate_kb
+
+### Frontend
+- npm run dev -- --webpack
+- npm run build / npm run start
+- npm run lint
+- npm run icons:download
+- npx playwright test
+
+### Pre-commit / security
+- bandit -r backend/ -x backend/__pycache__,backend/migrations --skip B101
+- safety check -r backend/requirements.txt
+- npm audit --audit-level=high
+- python scripts/scan_secrets.py
+
+---
+
+## 16. Single-device enforcement — detail
+
+When the same Supabase identity signs in from a second device:
+1. Backend issues a new session and marks the previous UserDevice row inactive.
+2. Subsequent requests from the old device receive code: session_invalid.
+3. Axios interceptor clears local session and redirects to /login.
+4. accounts.UserDeviceLogoutView allows explicit device-list management.
+
+---
+
+## 17. Open-source alignment
+
+- Released under the repository LICENSE.
+- No telemetry beyond Datadog RUM (opt-in via env) and GA4 (cookie consent).
+- Refuses ingestion of copyrighted textbooks to comply with publisher agreements.
+
+---
+
+## 18. See also
+
+- llms.txt — concise index
+- docs/PROJECT_OVERVIEW.md, docs/ARCHITECTURE.md, docs/FEATURES.md, docs/DATA_MODEL.md, docs/API_REFERENCE.md, docs/AUTHENTICATION.md, docs/ADMIN_SYSTEM.md, docs/AI_ASSISTANT_RULES.md, docs/KNOWN_GAPS.md, docs/SECURITY_AUDIT.md, docs/PERFORMANCE.md, docs/SEO.md, docs/CODE_QUALITY.md, docs/SCALING_ROADMAP.md, docs/IMPROVEMENTS.md
+- docs/setup/API_KEYS.md, docs/setup/EMAIL_SETUP.md
+- docs/guides/QUESTION_MANAGEMENT.md
+- docs/audit/FINAL_REPORT.md
+- docs/mcp/README.md — knowledge_base MCP server card
+- docs/api/postman_collection.json — Postman collection
+- .github/skills/gwnt/SKILL.md — knowledge_base content generation workflow

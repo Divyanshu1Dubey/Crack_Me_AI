@@ -10,8 +10,7 @@
 
 > **AI-Powered UPSC Combined Medical Services (CMS) Exam Preparation Platform** featuring 10 round-robin AI providers, RAG-grounded tutoring, 2,000+ past year questions (PYQs), spaced repetition flashcards (SM-2), and adaptive testing.
 
-🌐 **Live:** [crack-me-ai1.vercel.app](https://crack-me-ai1.vercel.app/)  
-⚙️ **API:** [crackcms-backend.onrender.com/api/](https://crackcms-backend.onrender.com/api/)
+**Live**: [cracklabs.app](https://cracklabs.app) | **API**: [crackcms-vsthc.ondigitalocean.app/api/](https://crackcms-vsthc.ondigitalocean.app/api/)
 
 ---
 
@@ -470,14 +469,12 @@ python test_api_keys.py
 1. Enable 2-Step Verification at [myaccount.google.com/security](https://myaccount.google.com/security)
 2. Create an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (select Mail → Other → "CrackCMS")
 3. Add to `.env`:
-
-```env
-EMAIL_HOST_USER=crackwith.ai@gmail.com
-EMAIL_HOST_PASSWORD=YOUR_APP_PASSWORD
-FRONTEND_URL=http://localhost:3000
-```
-
-> In production (Render), set `FRONTEND_URL=https://crack-me-ai1.vercel.app`
+   ```env
+   EMAIL_HOST_USER=crackwith.ai@gmail.com
+   EMAIL_HOST_PASSWORD=abcd efgh ijkl mnop
+   FRONTEND_URL=http://localhost:3000
+   ```
+4. In production (DigitalOcean App Service), set `FRONTEND_URL=https://cracklabs.app`
 
 ---
 
@@ -511,18 +508,28 @@ No API key needed. CrackCMS connects to `http://localhost:11434` automatically. 
 
 ### Backend (Render)
 
-- **Build command:** `./build.sh` (installs deps, migrates, loads fixture)
-- **Start command:** `gunicorn crack_cms.wsgi:application`
-- **Config:** `render.yaml` has all env var definitions
-- **Required Render environment variables:**
-  `DJANGO_SECRET_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_API_KEY2`, `COHERE_API_KEY`, `GITHUB_TOKEN`, `HUGGINGFACE_API_KEY`, `MISTRAL_API_KEY`, `CORS_ALLOWED_ORIGINS=https://crack-me-ai1.vercel.app`, `CSRF_TRUSTED_ORIGINS=https://crack-me-ai1.vercel.app`
+- **Build command**: `./build.sh` (installs deps, migrates, loads fixture)
+- **Start command**: `gunicorn crack_cms.wsgi:application`
+- **Config**: `render.yaml` has all env var definitions
+
+Required Render environment variables:
+```
+DJANGO_SECRET_KEY, GEMINI_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY,
+CEREBRAS_API_KEY, OPENROUTER_API_KEY, OPENROUTER_API_KEY2,
+COHERE_API_KEY, GITHUB_TOKEN, HUGGINGFACE_API_KEY, MISTRAL_API_KEY,
+CORS_ALLOWED_ORIGINS=https://cracklabs.app,
+CSRF_TRUSTED_ORIGINS=https://cracklabs.app
+```
 
 ### Frontend (Vercel)
 
-- **Framework:** Next.js (auto-detected)
-- **Config:** `vercel.json` has rewrites + security headers
-- **Required Vercel environment variable:**
-  `NEXT_PUBLIC_API_URL=https://crackcms-backend.onrender.com/api`
+- **Framework**: Next.js (auto-detected)
+- **Config**: `vercel.json` has rewrites + security headers
+
+Required Vercel environment variable:
+```
+NEXT_PUBLIC_API_URL=https://crackcms-vsthc.ondigitalocean.app/api
+```
 
 ### CI/CD (GitHub Actions)
 

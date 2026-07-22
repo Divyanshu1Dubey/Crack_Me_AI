@@ -234,7 +234,7 @@ The frontend `middleware.ts` performs redirects to `/login` for unauthenticated 
 ### Defense layers (outermost first)
 
 1. **TLS** (Vercel + Render terminate HTTPS; production: HSTS 1 year, include subdomains, preload, SSL redirect).
-2. **CORS**: `CORS_ALLOWED_ORIGINS` restricted to `https://crack-me-ai1.vercel.app` (prod). Custom headers: `x-session-id` added to defaults.
+2. **CORS**: `CORS_ALLOWED_ORIGINS` restricted to `https://cracklabs.app` (prod; also accepts the Vercel alias `https://crack-me-ai1.vercel.app`). Custom headers: `x-session-id` added to defaults.
 3. **Security headers** (`vercel.json` + Django): `X-Content-Type-Options`, `X-Frame-Options=DENY`, `Referrer-Policy=strict-origin-when-cross-origin`, `Permissions-Policy`, `SECURE_BROWSER_XSS_FILTER=True`.
 4. **CSRF**: Django CSRF middleware on session endpoints; JWT/Supabase endpoints use Bearer auth (CSRF-immune). `CSRF_COOKIE_HTTPONLY=True`, `CSRF_TRUSTED_ORIGINS` configured.
 5. **Authentication**: `accounts.supabase_rest_auth.SupabaseJWTAuthentication` (primary) + `SessionAuthentication` fallback.

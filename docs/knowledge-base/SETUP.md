@@ -42,23 +42,50 @@ KB_USE_KG_BOOST=true
 
 ### A3. Run migrations + initial KB build (10 min)
 
-SSH or one-off container on the backend app:
+**You do NOT need to re-run this on every deploy.** The Postgres
+database persists across deploys on DigitalOcean App Service, and:
+
+- `migrate` is idempotent and self-healing (the `0001_initial` migration
+  drops any leftover `knowledge_base_*` or legacy `knowledge_*` tables
+  before recreating them).
+- `load_ontology` uses `update_or_create`, so re-running it just refreshes
+  fields on already-existing entities / relations / sources and reports
+  `+0 added` (which means data was already present, NOT a failure).
+- `ingest_source` deduplicates via `(source, text_hash)`, so re-running it
+  on the same file is a no-op. New files in `Medura_Train/` are picked up
+  the next time you run it.
+- `EmbeddingIndexer` only fills chunks that don't have an embedding for
+  the current model.
+
+**The first deploy** after this KB work is integrated, run these once
+on the one-off container so the KB has data:
 
 ```bash
-python manage.py migrate
-python manage.py load_ontology
-python manage.py build_kb --max 2000
-python manage.py ingest_source upsc
-python manage.py ingest_source mohfw-india
+python manage.py migrate                 # self-heals any half-state
+python manage.py load_ontology            # seed entities + sources
+python manage.py ingest_source internal-notes          # .md notes
+python manage.py ingest_source upsc                   # or one-time
+python manage.py ingest_source mohfw-india             # optional connectors
 python manage.py ingest_source nhm-india
 python manage.py ingest_source nmc-india
 python manage.py ingest_source icmr
+python manage.py shell -c "
+from knowledge_base.services.indexer import EmbeddingIndexer
+print('Indexed', EmbeddingIndexer().index_pending(max_chunks=5000), 'chunks')
+"
 ```
 
-After build_kb finishes you should see ~50-200 internal chunks
-indexed. The connectors that hit network sources (`ncbi-bookshelf`,
-`openstax-*`) are deliberately not run automatically — schedule them
-separately (Part C).
+**Subsequent deploys** automatically run `migrate` + `load_ontology` +
+`ingest_source internal-notes` + the embedding indexer via `build.sh`.
+The local `.md`-notes ingest runs every deploy — it's idempotent and
+only adds new content, so this gives you "free" content refresh every
+time you push new notes to the repo.
+
+After `index_pending` finishes you should see ~50-200 internal chunks
+embedded (more if your `Medura_Train/textbooks/` is large). Network
+connectors (`ncbi-bookshelf`, `openstax-*`) are deliberately NOT run
+automatically on every deploy to avoid cold-start rate-limit failures;
+schedule them separately (see Part E — `KB_INGEST_NETWORK=1` opt-in).
 
 ---
 
@@ -120,8 +147,8 @@ SSL — no extra config.
 In your Vercel project (or wherever the frontend is hosted):
 
 ```
-NEXT_PUBLIC_API_URL=https://crackcms-backend.onrender.com
-NEXT_PUBLIC_KB_HEALTH_URL=https://crackcms-backend.onrender.com/api/knowledge/health
+NEXT_PUBLIC_API_URL=https://crackcms-vsthc.ondigitalocean.app/api
+NEXT_PUBLIC_KB_HEALTH_URL=https://crackcms-vsthc.ondigitalocean.app/api/knowledge/health
 ```
 
 `NEXT_PUBLIC_KB_HEALTH_URL` is optional; useful for the KB admin
@@ -130,6 +157,25 @@ dashboard.
 ---
 
 ## Part E — Daily operations (15 min/day)
+
+### Do I need to re-ingest after every deploy?
+
+**No.** Your `build.sh` now runs `load_ontology`,
+`ingest_source internal-notes`, and the embedding indexer automatically
+on every deploy — all three are idempotent. The Postgres database
+persists across deploys, so chunks + entities + sources stay where they
+are.
+
+You only need to manually ingest:
+
+| When | What to run |
+|------|-------------|
+| **First deploy** to a new DB | `migrate` + `load_ontology` + all connectors from Part A3 |
+| **New `.md` notes** added to `Medura_Train/textbooks/` | `ingest_source internal-notes` (auto-runs on deploy too) |
+| **New ontology version** published | `load_ontology --reset` |
+| **New textbook** PDF/MD dropped in | `manage.py shell` then `EmbeddingIndexer().index_pending()` |
+| **Weekly fresh content** from NCBI / OpenStax | run the network commands below (or set `KB_INGEST_NETWORK=1` for one deploy) |
+| **Embeddings out of sync** | re-run `index_pending` (only fills missing ones) |
 
 ### Refresh embeddings for new chunks
 
@@ -150,6 +196,18 @@ python manage.py ingest_source openstax-psychology --max 20
 
 (NCBI without an API key is throttled to ~3 req/sec. Get a free key
 from your NCBI account to go to 10/sec.)
+
+### One-time: opt-in to network ingest on every deploy
+
+If you want the network connectors to run automatically on every
+deploy (only do this once you're confident in your rate-limit budget):
+
+```bash
+# On DigitalOcean → backend service → env vars
+KB_INGEST_NETWORK=1
+```
+
+Next deploy will then pull from NCBI + OpenStax as part of `build.sh`.
 
 ### Run eval
 

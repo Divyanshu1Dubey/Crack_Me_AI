@@ -1,33 +1,42 @@
 #!/usr/bin/env bash
 # Backend build script for CrackCMS
+#
+# KB ingest policy: we run the local "internal-notes" connector AND the
+# embedding indexer on EVERY deploy because both are idempotent
+# (`update_or_create` on text_hash + the indexer only fills missing rows).
+# Network connectors (NCBI / OpenStax / PMC) are skipped by default to
+# avoid cold-start rate-limit failures on transient deploys; set
+# `KB_INGEST_NETWORK=1` to enable them.
 set -o errexit
 
 pip install --no-cache-dir -r requirements.txt
 python manage.py collectstatic --no-input
 
-# Pre-migration hook: rename legacy tables so --fake-initial can detect them and skip CreateModel
-python manage.py shell -c "
-from django.db import connection
-with connection.cursor() as cursor:
-    cursor.execute('''
-        ALTER TABLE IF EXISTS knowledge_source RENAME TO knowledge_base_knowledgesource;
-        ALTER TABLE IF EXISTS knowledge_chunk RENAME TO knowledge_base_knowledgechunk;
-        ALTER TABLE IF EXISTS knowledge_embedding RENAME TO knowledge_base_knowledgeembedding;
-        ALTER TABLE IF EXISTS knowledge_entity RENAME TO knowledge_base_knowledgeentity;
-        ALTER TABLE IF EXISTS knowledge_relation RENAME TO knowledge_base_knowledgerelation;
-        ALTER TABLE IF EXISTS knowledge_ingestionjob RENAME TO knowledge_base_ingestionjob;
-        ALTER TABLE IF EXISTS knowledge_goldentestcase RENAME TO knowledge_base_goldentestcase;
-        ALTER TABLE IF EXISTS knowledge_evalrun RENAME TO knowledge_base_evalrun;
-        ALTER TABLE IF EXISTS knowledge_useruploadattestation RENAME TO knowledge_base_useruploadattestation;
-    ''')
-"
+# Self-healing migration handles stale KB tables — no manual ALTER needed.
+python manage.py migrate --no-input
 
-python manage.py migrate --no-input --fake-initial
+# Import dataset for NEET PG
+python manage.py import_neet_pg
 
 # Knowledge Base: load ontology + whitelisted sources (idempotent)
 python manage.py load_ontology
 
-# Import dataset for NEET PG
-python manage.py import_neet_pg
+# One-shot ingest: internal .md notes (idempotent via text_hash).
+# Always safe to re-run; only new content lands in the KB.
+python manage.py ingest_source internal-notes || true
+
+# Backfill embeddings for any chunks that lack them (idempotent).
+python manage.py shell -c "
+from knowledge_base.services.indexer import EmbeddingIndexer
+print('Indexed', EmbeddingIndexer().index_pending(max_chunks=2000), 'chunks')
+" || true
+
+# Optional: pull fresh content from network sources on deploys that opt in.
+# Disabled by default — set KB_INGEST_NETWORK=1 to enable.
+if [ "${KB_INGEST_NETWORK:-0}" = "1" ]; then
+    python manage.py ingest_source ncbi-bookshelf --query "hypertension" --max 25 || true
+    python manage.py ingest_source openstax-microbiology --max 20 || true
+    python manage.py ingest_source openstax-psychology --max 20 || true
+fi
 
 # build.sh is complete
