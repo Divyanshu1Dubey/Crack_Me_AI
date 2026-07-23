@@ -15,6 +15,13 @@ python manage.py collectstatic --no-input
 # Self-healing migration handles stale KB tables — no manual ALTER needed.
 python manage.py migrate --no-input
 
+# Bootstrap MEDIA_ROOT for recall image persistence.
+# The importer writes extracted images into MEDIA_ROOT/recall_images/...
+# so the browser can fetch them via MEDIA_URL. Without this mkdir,
+# Django's storage backend silently fails the first write with
+# SuspiciousFileOperation, leaving the QuestionImage row with no file.
+python manage.py shell -c "from pathlib import Path; from django.conf import settings; p = Path(settings.MEDIA_ROOT) / 'recall_images'; p.mkdir(parents=True, exist_ok=True); print('Bootstrapped', p)"
+
 # Import dataset for NEET PG
 python manage.py import_neet_pg
 

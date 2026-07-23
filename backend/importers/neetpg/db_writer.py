@@ -27,7 +27,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from questions.models import (
@@ -189,19 +189,31 @@ class DjangoWriter:
                 defaults=defaults,
             )
 
-            QuestionSource.objects.get_or_create(
-                question=question,
-                recall_source=recall_source,
-                page_number=q.page_number or 0,
-                question_number_in_pdf=q.question_number_in_pdf,
-                defaults={
-                    "original_text": q.raw or "",
-                    "extracted_text": q.stem or q.stem_raw or "",
-                    "ocr_confidence": defaults["ocr_confidence"],
-                    "extraction_confidence": defaults["extraction_confidence"],
-                    "import_job_id": str(self.import_job.id) if self.import_job else "",
-                },
-            )
+            try:
+                QuestionSource.objects.get_or_create(
+                    question=question,
+                    recall_source=recall_source,
+                    page_number=q.page_number or 0,
+                    question_number_in_pdf=q.question_number_in_pdf,
+                    defaults={
+                        "original_text": q.raw or "",
+                        "extracted_text": q.stem or q.stem_raw or "",
+                        "ocr_confidence": defaults["ocr_confidence"],
+                        "extraction_confidence": defaults["extraction_confidence"],
+                        "import_job_id": str(self.import_job.id) if self.import_job else "",
+                    },
+                )
+            except IntegrityError:
+                # Mid-PDF re-import can collide on
+                # uniq_question_source_page_qno. The question text is already
+                # saved (above), so skip the source link rather than abort
+                # the entire transaction.
+                LOG.warning(
+                    "Duplicate QuestionSource for %s p%s q%s — skipping source link",
+                    recall_source,
+                    q.page_number,
+                    q.question_number_in_pdf,
+                )
 
         if created:
             self.stats.questions_created += 1
@@ -281,9 +293,21 @@ class DjangoWriter:
         )
         if media_rel:
             # Use the FileField API so Django stores the relative path.
+            # IMPORTANT: delete any previously-attached file before saving,
+            # otherwise Django rejects the write with SuspiciousFileOperation
+            # when an image with the same relative path already exists on disk.
             from django.core.files import File
             from django.conf import settings
-            with open(Path(settings.MEDIA_ROOT) / media_rel, "rb") as f:
+
+            full = Path(settings.MEDIA_ROOT) / media_rel
+            # Idempotency: if an old file is attached, drop it from the
+            # underlying storage so re-imports can write the same path again.
+            if qi.file:
+                try:
+                    qi.file.delete(save=False)
+                except Exception as e:  # pragma: no cover
+                    LOG.warning("failed to drop previous file before resave: %s", e)
+            with open(full, "rb") as f:
                 qi.file.save(media_rel, File(f), save=True)
         self.stats.images_created += 1
         return qi

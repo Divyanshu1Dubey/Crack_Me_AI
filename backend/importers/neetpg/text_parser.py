@@ -32,8 +32,14 @@ QUESTION_PREFIX = re.compile(
     re.IGNORECASE,
 )
 
+# Match the OPTION LABEL only, leaving the option text as the rest of the
+# matched line. In re.MULTILINE mode, `$` matches end-of-line — so the
+# previous pattern `(.+?)\s*$` greedily ate the option text up to EOL,
+# and `_parse_options()` then sliced a near-empty window between matches
+# because `m.end()` landed at end-of-line. Capture the label only; the
+# caller slices chunk[end : next_label_start].
 OPTION_PREFIX = re.compile(
-    r"^\s*([A-Fa-f])[\.\)]\s+(.+?)\s*$",
+    r"^\s*([A-Fa-f])[\.\)]\s+",
     re.MULTILINE,
 )
 
@@ -97,6 +103,9 @@ def _parse_options(chunk: str) -> list[ParsedOption]:
         text = chunk[start:end].strip()
         # Drop trailing answer/explanation fragments within the option text.
         text = re.split(r"\b(?:Ans|Answer|Explanation|Exp)\s*[:\-]", text, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+        # Drop trailing bare page numbers (e.g. MARROW PDFs put the next
+        # page footer inside the chunk window: "option text\n3737").
+        text = re.sub(r"\s+\d{2,4}\s*$", "", text).strip()
         options.append(ParsedOption(label=label, text=text))
     return options
 
@@ -201,10 +210,23 @@ def parse_page(
             stats.explanations_found += 1
 
         stem_raw = chunk
-        stem = _strip_image_refs(chunk.split("\n", 1)[0] if "\n" in chunk else chunk).strip()
-        # If stem is just the option prefix section, take the full chunk minus options.
-        if options and stem and stem.endswith(options[0].text):
-            stem = ""
+        # Stem = everything in the chunk up to the FIRST option label, so
+        # the question text can span multiple lines (Derma-style PDFs put
+        # the question on 2-3 lines before a) b) c) d)).
+        if options:
+            first_opt = options[0]
+            cut = chunk.find(f"{first_opt.label.lower()})")
+            if cut < 0:
+                cut = chunk.find(f"{first_opt.label.lower()}.")
+            stem_src = chunk[:cut] if cut > 0 else chunk
+        else:
+            stem_src = chunk
+        # Drop trailing page numbers like "3737" on their own line.
+        stem_src = re.sub(r"\n+\s*\d{2,4}\s*$", "", stem_src)
+        stem = _strip_image_refs(stem_src).strip()
+        # The chunk always starts after "Question N:" so the leading ":" +
+        # newline is leftover syntax — strip it so the stem reads naturally.
+        stem = re.sub(r"^[:\-,\s\n]+", "", stem).strip()
 
         qtype = _detect_question_type(stem or chunk, options)
 
