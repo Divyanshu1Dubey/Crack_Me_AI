@@ -147,12 +147,12 @@ export default function NeetPgPlayer({
         (async () => {
             try {
                 const imgs = await questionsAPI.getImages(current.id);
-                if (!cancelled) setImages((imgs as QuestionImage[]) || []);
+                if (!cancelled) setImages((imgs.data as QuestionImage[]) || []);
             } catch { if (!cancelled) setImages([]); }
             try {
                 const sim = await questionsAPI.getSimilar(current.id);
                 if (!cancelled) {
-                    const data = (sim as any)?.results ?? (sim as any) ?? [];
+                    const data = (sim.data as any)?.results ?? (sim.data as any) ?? [];
                     setRelated(Array.isArray(data) ? data.slice(0, 8) : []);
                 }
             } catch { if (!cancelled) setRelated([]); }
