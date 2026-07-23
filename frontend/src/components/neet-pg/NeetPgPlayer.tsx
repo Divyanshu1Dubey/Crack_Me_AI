@@ -235,15 +235,9 @@ export default function NeetPgPlayer({
     };
 
     if (!total) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-white to-emerald-50">
-                <div className="text-center space-y-3">
-                    <Stethoscope className="w-10 h-10 mx-auto text-teal-500" />
-                    <p className="text-base font-semibold text-slate-700">No NEET PG questions available</p>
-                    <Button onClick={handleExit}>Back to NEET PG Bank</Button>
-                </div>
-            </div>
-        );
+        // Empty state lives in the parent route — render a quiet placeholder
+        // here so we never pre-commit the empty branch on the server.
+        return null;
     }
 
     const correctAnswer = (current.correct_answer || '').toUpperCase().trim();

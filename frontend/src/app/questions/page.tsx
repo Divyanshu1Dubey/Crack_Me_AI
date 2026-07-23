@@ -47,11 +47,12 @@ const SLUG_TO_EXAM_TYPE: Record<string, string> = {
     'cms': 'cms',
     'neet-pg': 'neet_pg',
     'neet_pg': 'neet_pg',
-    'ini-cet': 'cms',         // INI-CET falls back to cms enum (no row in DB yet)
-    'inicet': 'cms',
+    'ini-cet': 'ini_cet',     // Phase 9: dedicated INI-CET player uses ini_cet
+    'inicet': 'ini_cet',
+    'ini-cet-pg': 'ini_cet',
     'fmge': 'fmge',
     'usmle': 'usmle',
-    'medical-officer': 'cms', // same fallback
+    'medical-officer': 'cms', // legacy fallback
 };
 const SLUG_TO_EXAM_SOURCE: Record<string, string> = {
     'cms': 'UPSC CMS',

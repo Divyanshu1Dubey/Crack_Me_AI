@@ -36,6 +36,7 @@ class Subject(models.Model):
     EXAM_CHOICES = [
         ('cms', 'UPSC CMS'),
         ('neet_pg', 'NEET PG'),
+        ('ini_cet', 'INI-CET'),
         ('usmle', 'USMLE'),
         ('fmge', 'FMGE'),
     ]
@@ -90,6 +91,7 @@ class Question(models.Model):
     EXAM_CHOICES = [
         ('cms', 'UPSC CMS'),
         ('neet_pg', 'NEET PG'),
+        ('ini_cet', 'INI-CET'),
         ('usmle', 'USMLE'),
         ('fmge', 'FMGE'),
     ]

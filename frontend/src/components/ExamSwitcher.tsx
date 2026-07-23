@@ -8,9 +8,18 @@ import { BookOpen } from 'lucide-react';
 const EXAM_OPTIONS = [
   { value: 'cms', label: 'UPSC CMS' },
   { value: 'neet_pg', label: 'NEET PG' },
+  { value: 'ini_cet', label: 'INI-CET' },
   { value: 'usmle', label: 'USMLE' },
   { value: 'fmge', label: 'FMGE' },
 ];
+
+const ROUTE_BY_EXAM: Record<string, string> = {
+  cms: '/questions?exam=cms',
+  neet_pg: '/questions/neet-pg/practice',
+  ini_cet: '/questions/inicet/practice',
+  usmle: '/questions?exam=usmle',
+  fmge: '/questions?exam=fmge',
+};
 
 export default function ExamSwitcher() {
   const router = useRouter();
@@ -22,33 +31,14 @@ export default function ExamSwitcher() {
   });
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-     
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   const handleExamChange = (val: string) => {
-    // Persist the user's choice everywhere so the rest of the app can
-    // pick it up. For non-CMS exams we land on the Question Bank (not the
-    // marketing landing) so users actually see the question set they
-    // expect.
     setExam(val);
     localStorage.setItem('crack_target_exam', val);
     localStorage.setItem('active_exam_track', val);
     window.dispatchEvent(new Event('exam_changed'));
-
-    if (val === 'cms') {
-      router.push('/questions?exam=cms');
-    } else if (val === 'neet_pg') {
-      // NEET PG has its own dedicated Player with a teal palette, image
-      // viewer, AI Tutor dock, and similar-PYQs sidebar — sending it to
-      // the generic /questions bank page leaves users on the UPSC CMS
-      // blue UI with collapsed options and a leaked watermark.
-      router.push('/questions/neet-pg/practice');
-    } else {
-      const slug = val.replace('_', '-');
-      router.push(`/questions?exam=${slug}`);
-    }
+    router.push(ROUTE_BY_EXAM[val] || `/questions?exam=${val}`);
     router.refresh();
   };
 

@@ -85,7 +85,14 @@ const TRACK_LABEL: Record<string, string> = {
     neet_pg: 'NEET PG',
     usmle: 'USMLE',
     fmge: 'FMGE',
-    ini_cet: 'INI CET',
+    ini_cet: 'INI-CET',
+};
+
+/** Map generic /questions href → exam-specific dedicated player URL.
+ *  Phase 9: each exam with image-rich recalls gets its own player route. */
+const EXAM_TRACK_PLAYER_HREF: Record<string, string> = {
+    neet_pg: '/questions/neet-pg/practice',
+    ini_cet: '/questions/inicet/practice',
 };
 
 export default function Sidebar() {
@@ -237,12 +244,11 @@ export default function Sidebar() {
                                         .filter(item => !item.adminOnly || isAdmin)
                                         .filter(item => !item.requireTrack || item.requireTrack.includes(activeTrack))
                                         .map((item) => {
-                                            // Resolve /questions for NEET PG to the dedicated
-                                            // /questions/neet-pg/practice route so users land on
-                                            // the new player instead of the (UPSC-CMS-style)
-                                            // generic bank page.
-                                            const resolvedHref = item.href === '/questions' && activeTrack === 'neet_pg'
-                                                ? '/questions/neet-pg/practice'
+                                            // Resolve /questions for tracks with a dedicated
+                                            // player (NEET PG + INI-CET) so users land on the
+                                            // new player instead of the (UPSC-CMS-style) bank.
+                                            const resolvedHref = item.href === '/questions' && EXAM_TRACK_PLAYER_HREF[activeTrack]
+                                                ? EXAM_TRACK_PLAYER_HREF[activeTrack]
                                                 : item.href;
                                             const isActive = pathname === resolvedHref
                                                 || pathname?.startsWith(resolvedHref + '/')
