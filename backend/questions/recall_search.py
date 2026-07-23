@@ -212,7 +212,7 @@ def recall_search(self, request):
 def recall_question_images(self, request, pk=None):
     """GET /api/questions/{id}/images/  — list QuestionImage rows for a question."""
     from .models import QuestionImage
-    from .serializers import QuestionImageSerializer  # type: ignore
+    from .recall_serializers import QuestionImageSerializer  # type: ignore
     images = QuestionImage.objects.filter(question_id=pk, is_active=True).order_by("page_number", "image_index_in_page")
     try:
         page_size = min(int(request.query_params.get("page_size", 50)), 200)
@@ -225,7 +225,7 @@ def recall_question_images(self, request, pk=None):
 def recall_question_sources(self, request, pk=None):
     """GET /api/questions/{id}/sources/  — list QuestionSource rows for a question."""
     from .models import QuestionSource
-    from .serializers import QuestionSourceSerializer  # type: ignore
+    from .recall_serializers import QuestionSourceSerializer  # type: ignore
     rows = QuestionSource.objects.filter(question_id=pk).select_related("recall_source").order_by("imported_at")
     return Response(QuestionSourceSerializer(rows, many=True, context={"request": request}).data)
 

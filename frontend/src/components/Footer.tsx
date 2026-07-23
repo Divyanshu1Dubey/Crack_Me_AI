@@ -17,7 +17,7 @@ export default function Footer() {
             links: [
                 { label: 'UPSC CMS', href: '/cms' },
                 { label: 'NEET PG', href: '/neet-pg' },
-                { label: 'INI-CET', href: '/ini-cet' },
+                { label: 'INI-CET', href: '/inicet' },
                 { label: 'FMGE', href: '/fmge' },
                 { label: 'USMLE Step 1', href: '/usmle' },
                 { label: 'Medical Officer', href: '/medical-officer' },
