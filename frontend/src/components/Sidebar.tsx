@@ -237,11 +237,20 @@ export default function Sidebar() {
                                         .filter(item => !item.adminOnly || isAdmin)
                                         .filter(item => !item.requireTrack || item.requireTrack.includes(activeTrack))
                                         .map((item) => {
-                                            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+                                            // Resolve /questions for NEET PG to the dedicated
+                                            // /questions/neet-pg/practice route so users land on
+                                            // the new player instead of the (UPSC-CMS-style)
+                                            // generic bank page.
+                                            const resolvedHref = item.href === '/questions' && activeTrack === 'neet_pg'
+                                                ? '/questions/neet-pg/practice'
+                                                : item.href;
+                                            const isActive = pathname === resolvedHref
+                                                || pathname?.startsWith(resolvedHref + '/')
+                                                || (resolvedHref === '/questions' && (pathname === '/questions' || pathname?.startsWith('/questions/')));
                                             return (
                                                 <Link
                                                     key={item.href}
-                                                    href={item.href}
+                                                    href={resolvedHref}
                                                     onClick={() => { saveSidebarScroll(); setOpen(false); }}
                                                     className={`sidebar-link ${isActive ? 'active' : ''}`}
                                                     aria-current={isActive ? 'page' : undefined}

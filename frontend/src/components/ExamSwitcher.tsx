@@ -39,6 +39,12 @@ export default function ExamSwitcher() {
 
     if (val === 'cms') {
       router.push('/questions?exam=cms');
+    } else if (val === 'neet_pg') {
+      // NEET PG has its own dedicated Player with a teal palette, image
+      // viewer, AI Tutor dock, and similar-PYQs sidebar — sending it to
+      // the generic /questions bank page leaves users on the UPSC CMS
+      // blue UI with collapsed options and a leaked watermark.
+      router.push('/questions/neet-pg/practice');
     } else {
       const slug = val.replace('_', '-');
       router.push(`/questions?exam=${slug}`);

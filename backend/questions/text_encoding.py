@@ -105,6 +105,19 @@ _MOJIBAKE_TABLE: dict[str, str] = {
     "â€”": "—",
     "â€¦": "…",
 
+    # Single-encoded right single quote (only one UTF-8-as-latin1 round-trip
+    # survived into the DB). The 3-char sequence `â` (U+00E2) + `\x80`
+    # (U+0080) + `\x99` (U+0099) is exactly the UTF-8 bytes of `'` (U+2019)
+    # interpreted as Latin-1 codepoints. Without this entry the cleanup
+    # script reports mojibake but normalize_text cannot repair it.
+    "â\x80\x99": "’",
+    "â\x80\x9c": "“",
+    "â\x80\x9d": "”",
+    "â\x80\x98": "‘",
+    "â\x80\x99s": "’s",
+    "â\x80\x9cs": "'s",
+    "â\x80\x9ds": "'s",
+
     # NBSP / zero-width artefacts occasionally survive from upstream tooling.
     "Â ": " ",
 }
@@ -169,10 +182,6 @@ def normalize_text(value: str | None) -> str:
     if value is None:
         return ""
     text = fix_mojibake(value)
-    try:
-        text = codecs.decode(codecs.encode(text, "utf-8"), "unicode_escape")
-    except Exception:
-        pass
     # NFC normalize.
     import unicodedata
     text = unicodedata.normalize("NFC", text)
