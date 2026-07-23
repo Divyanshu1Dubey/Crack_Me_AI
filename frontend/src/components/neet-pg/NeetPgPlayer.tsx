@@ -404,9 +404,7 @@ export default function NeetPgPlayer({
                         {/* Stem */}
                         <div className="px-6 py-6">
                             <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed text-[15px]">
-                                <FormattedText>
-                                    {current.question_text}
-                                </FormattedText>
+                                <FormattedText text={current.question_text || ''} />
                             </div>
                         </div>
 
@@ -449,7 +447,7 @@ export default function NeetPgPlayer({
                                                         label}
                                             </span>
                                             <span className="flex-1 text-slate-800 text-[14px] leading-relaxed">
-                                                <FormattedText>{cleanOptionText(raw)}</FormattedText>
+                                                <FormattedText text={cleanOptionText(raw) || ''} />
                                             </span>
                                         </button>
                                     );
@@ -468,7 +466,7 @@ export default function NeetPgPlayer({
                                     <Lightbulb className="w-4 h-4" /> Explanation
                                 </h3>
                                 <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                                    <FormattedText>{current.explanation}</FormattedText>
+                                    <FormattedText text={current.explanation || ''} />
                                 </div>
                             </div>
                         )}
@@ -565,7 +563,7 @@ export default function NeetPgPlayer({
                                 )}
                                 {state.aiExplanation && (
                                     <div className="mt-3 prose prose-sm max-w-none text-slate-700 text-[13px] leading-relaxed">
-                                        <FormattedText>{state.aiExplanation}</FormattedText>
+                                        <FormattedText text={state.aiExplanation || ''} />
                                     </div>
                                 )}
                                 {!state.aiExplanation && !state.aiLoading && !state.aiError && (
@@ -605,7 +603,7 @@ export default function NeetPgPlayer({
                                                     {r.year && <Badge variant="outline" className="text-[10px] py-0 px-1.5">{r.year}</Badge>}
                                                 </div>
                                                 <p className="text-xs text-slate-700 line-clamp-3">
-                                                    <FormattedText>{r.question_text}</FormattedText>
+                                                    <FormattedText text={r.question_text || ''} />
                                                 </p>
                                             </a>
                                         </li>
