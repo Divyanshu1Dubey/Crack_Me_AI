@@ -85,6 +85,8 @@ urlpatterns = [
     path("api/video/", include("video_engine.urls")),
     path("api/jobs/", include("jobs.urls")),
     path("api/imports/neetpg/", include("importers.neetpg.urls")),
+    # Production Content Ingestion Platform (Phase 1, additive).
+    path("api/ingestion/", include("ingestion.urls")),
 ]
 
 if settings.DEBUG:

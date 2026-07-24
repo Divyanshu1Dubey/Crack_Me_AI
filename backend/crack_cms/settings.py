@@ -94,6 +94,9 @@ INSTALLED_APPS = [
     'jobs',
     'knowledge_base',
     'importers',
+    # Production Content Ingestion Platform (Phase 1, additive only).
+    # Isolated from UPSC CMS — see backend/ingestion/.
+    'ingestion',
     # Security
     'axes',
 ]
