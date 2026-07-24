@@ -5,8 +5,9 @@ import { ingestionAPI } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export default async function BatchDetail({ params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export default async function BatchDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id: idStr } = await params;
+  const id = Number(idStr);
   let batch: any = null;
   try {
     const r: any = await ingestionAPI.getBatch(id);

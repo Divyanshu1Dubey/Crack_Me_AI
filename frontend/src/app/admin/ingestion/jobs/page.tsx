@@ -8,13 +8,14 @@ export const dynamic = "force-dynamic";
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; exam?: string };
+  searchParams: Promise<{ status?: string; exam?: string }>;
 }) {
+  const sp = await searchParams;
   let jobs: any[] = [];
   try {
     const r: any = await ingestionAPI.listJobs({
-      status: searchParams.status,
-      parent_exam: searchParams.exam,
+      ...(sp.status ? { status: sp.status } : {}),
+      ...(sp.exam ? { parent_exam: sp.exam } : {}),
       page_size: 100,
     });
     const data = r?.data;
@@ -31,7 +32,7 @@ export default async function JobsPage({
           Status
           <select
             name="status"
-            defaultValue={searchParams.status || ""}
+            defaultValue={sp.status || ""}
             className="block border rounded px-2 py-1 ml-1"
           >
             <option value="">all</option>
@@ -46,7 +47,7 @@ export default async function JobsPage({
           Exam
           <select
             name="exam"
-            defaultValue={searchParams.exam || ""}
+            defaultValue={sp.exam || ""}
             className="block border rounded px-2 py-1 ml-1"
           >
             <option value="">all</option>

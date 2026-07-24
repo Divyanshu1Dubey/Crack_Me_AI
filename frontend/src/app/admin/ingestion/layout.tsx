@@ -26,7 +26,7 @@ export default function IngestionLayout({
 
   useEffect(() => {
     if (loading) return;
-    const isAdmin = !!user && (user.role === 'admin' || user.is_admin || user.is_superuser);
+    const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
     if (!isAdmin) {
       router.replace(`/login?next=${encodeURIComponent(pathname || '/admin/ingestion')}`);
     }
