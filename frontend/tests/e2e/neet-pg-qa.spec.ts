@@ -124,3 +124,82 @@ test.describe('Bug #7/#10 — image-based + topic wiring', () => {
         expect(data.count).toBeGreaterThan(0);
     });
 });
+
+/**
+ * Bug #R3 — sidebar overlap on /practice (2026-07-25).
+ *
+ * The /questions/neet-pg/practice and /questions/inicet/practice routes
+ * render <Sidebar/> and the player as top-level siblings inside an
+ * ExamTrackProvider, bypassing the root <main className="main-content">
+ * that supplies the 260px sidebar margin-left.
+ *
+ * Without the offset the question card was drawn directly under the fixed
+ * sidebar. The fix (commit e57d32f) adds the `main-content` class to the
+ * player wrapper. These tests assert the geometry on both desktop
+ * (sidebar present, expect left=260) and after toggling the sidebar off
+ * via the top-left hide button (expect left=0).
+ */
+test.describe('Bug #R3 — sidebar overlap on /practice', () => {
+    test('NEET PG practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('aside[aria-label="Primary sidebar navigation"]')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('text=/Q 1 \\/ \\d+/')).toBeVisible({ timeout: 30000 });
+
+        const layout = await page.evaluate(() => {
+            const aside = document.querySelector('aside[aria-label="Primary sidebar navigation"]') as HTMLElement | null;
+            const mainContent = document.querySelector('.main-content') as HTMLElement | null;
+            return {
+                sidebar: aside ? { left: Math.round(aside.getBoundingClientRect().left), right: Math.round(aside.getBoundingClientRect().right), width: Math.round(aside.getBoundingClientRect().width) } : null,
+                mainContent: mainContent ? { left: Math.round(mainContent.getBoundingClientRect().left) } : null,
+                vw: window.innerWidth,
+            };
+        });
+        expect(layout.sidebar, 'sidebar must be present').not.toBeNull();
+        expect(layout.mainContent, '.main-content wrapper must be present').not.toBeNull();
+        expect(layout.sidebar!.right).toBe(260);
+        // CRITICAL: main-content.left must clear the sidebar (>= 260).
+        expect(layout.mainContent!.left).toBeGreaterThanOrEqual(260);
+    });
+
+    test('NEET PG practice: collapsing the sidebar pushes content back to left=0', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('aside[aria-label="Primary sidebar navigation"]')).toBeVisible({ timeout: 15000 });
+        // Toggle off the desktop sidebar
+        await page.locator('.desktop-sidebar-toggle-btn').click();
+        await page.waitForTimeout(200); // allow class swap
+
+        const layout = await page.evaluate(() => {
+            const mainContent = document.querySelector('.main-content') as HTMLElement | null;
+            const aside = document.querySelector('aside[aria-label="Primary sidebar navigation"]') as HTMLElement | null;
+            const body = document.body;
+            return {
+                mainContentLeft: mainContent ? Math.round(mainContent.getBoundingClientRect().left) : null,
+                bodyHasSidebarHidden: body.classList.contains('sidebar-hidden'),
+                asideDisplay: aside ? getComputedStyle(aside).display : null,
+            };
+        });
+        expect(layout.bodyHasSidebarHidden).toBe(true);
+        expect(layout.asideDisplay).toBe('none');
+        // When sidebar is hidden, main-content.left should collapse to 0 (modulo the 20px global padding).
+        expect(layout.mainContentLeft).toBeLessThanOrEqual(20);
+    });
+
+    test('INI-CET practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/inicet/practice', { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('aside[aria-label="Primary sidebar navigation"]')).toBeVisible({ timeout: 15000 });
+
+        const layout = await page.evaluate(() => {
+            const aside = document.querySelector('aside[aria-label="Primary sidebar navigation"]') as HTMLElement | null;
+            const mainContent = document.querySelector('.main-content') as HTMLElement | null;
+            return {
+                sidebar: aside ? { right: Math.round(aside.getBoundingClientRect().right) } : null,
+                mainContentLeft: mainContent ? Math.round(mainContent.getBoundingClientRect().left) : null,
+            };
+        });
+        expect(layout.sidebar, 'sidebar must be present').not.toBeNull();
+        expect(layout.mainContentLeft, 'main-content.left must clear the sidebar').toBeGreaterThanOrEqual(260);
+    });
+});
