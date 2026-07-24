@@ -69,6 +69,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
     user_selected_answer = serializers.CharField(read_only=True, required=False)
     user_is_correct = serializers.BooleanField(read_only=True, required=False)
     video_subtitles_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -82,7 +83,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'effective_answer', 'effective_explanation',
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
                   'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
-                  'video_thumbnail', 'video_duration', 'video_subtitles_url']
+                  'video_thumbnail', 'video_duration', 'video_subtitles_url',
+                  'is_image_based', 'page_screenshot', 'images']
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
@@ -121,6 +123,29 @@ class QuestionListSerializer(serializers.ModelSerializer):
     def get_video_subtitles_url(self, obj):
         return _derive_subtitles_url(getattr(obj, 'video_url', '') or '')
 
+    def get_images(self, obj):
+        out = []
+        for img in obj.images.all():
+            if not img.is_active:
+                continue
+            try:
+                url = img.file.url if img.file else ''
+            except Exception:
+                url = ''
+            out.append({
+                'id': img.id,
+                'page_number': img.page_number,
+                'image_index_in_page': img.image_index_in_page,
+                'role': img.role,
+                'modality': img.modality,
+                'mime': img.mime,
+                'width': img.width,
+                'height': img.height,
+                'url': url,
+                'sha256_short': img.sha256_short,
+            })
+        return out
+
 
 class QuestionAdminListSerializer(QuestionListSerializer):
     """Admin list serializer that exposes lock controls."""
@@ -149,6 +174,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     user_selected_answer = serializers.SerializerMethodField()
     user_is_correct = serializers.SerializerMethodField()
     video_subtitles_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -160,6 +186,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'mnemonic', 'book_name', 'chapter', 'page_number', 'reference_text', 'paper',
             'source', 'exam_source', 'times_asked', 'is_active', 'created_at', 'updated_at',
             'textbook_references', 'learning_technique', 'shortcut_tip', 'page_screenshot',
+            'is_image_based', 'images',
             'concept_keywords', 'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
@@ -168,6 +195,29 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'video_thumbnail', 'video_duration', 'video_version', 'video_error',
             'video_generated_at', 'video_subtitles_url',
         ]
+
+    def get_images(self, obj):
+        out = []
+        for img in obj.images.all():
+            if not img.is_active:
+                continue
+            try:
+                url = img.file.url if img.file else ''
+            except Exception:
+                url = ''
+            out.append({
+                'id': img.id,
+                'page_number': img.page_number,
+                'image_index_in_page': img.image_index_in_page,
+                'role': img.role,
+                'modality': img.modality,
+                'mime': img.mime,
+                'width': img.width,
+                'height': img.height,
+                'url': url,
+                'sha256_short': img.sha256_short,
+            })
+        return out
 
     def get_user_selected_answer(self, obj):
         request = self.context.get('request')

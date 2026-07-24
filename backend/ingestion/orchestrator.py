@@ -37,7 +37,7 @@ from .constants import (
     STAGE_CONSERVATIVE_GATE,
 )
 from .exceptions import InvalidJobTransitionError
-from .models import BatchRun, ImportJob, ImportLog, MaterialAsset
+from .models import BatchRun, ImportJob, ImportJobStage, ImportLog, MaterialAsset
 from .pipeline_stages import load_summary_json, record_stage8_artifacts, run_mce_stage
 
 LOG = logging.getLogger("ingestion.orchestrator")
@@ -150,7 +150,7 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     ctx = _build_mce_context(material, artefact_root)
     ck = latest_checkpoint(job)
     last_stage = ck.last_completed_stage if ck else ""
-    resume_page = ck.last_processed_page if ck and ck.last_processed_stage == last_stage else None
+    resume_page = ck.last_processed_page if ck and ck.last_completed_stage == last_stage else None
 
     summary = {
         "job_id": job.id,
@@ -159,8 +159,19 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
         "started_at": timezone.now().isoformat(),
     }
 
+    # The conservative_gate is a post-MCE gate that is NOT an MCE stage —
+    # it does not appear in pipeline_stages._STAGE_CALLABLES. Run it
+    # OUTSIDE the MCE loop so the orchestrator's pipeline_order stops at
+    # stage_db_writer; we then invoke the gate directly.
+    mce_pipeline = [s for s in PIPELINE_ORDER if s != STAGE_CONSERVATIVE_GATE]
+
+    # Post-extraction stages (graph + RAG) are best-effort enrichment. If
+    # they fail, the conservative gate can still run from the QA artefacts
+    # that Stage 8 already produced. Don't fail the whole job on them.
+    POST_EXTRACTION_STAGES = {"9_graph", "10_rag"}
+
     try:
-        for stage_name in PIPELINE_ORDER:
+        for stage_name in mce_pipeline:
             # Cancellation check at every stage boundary.
             job.refresh_from_db(fields=["status"])
             if job.status == JOB_CANCELLED:
@@ -168,7 +179,7 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
                 return {"job_id": job.id, "status": JOB_CANCELLED, "stage": stage_name}
 
             # Skip stages that are already complete on resume.
-            if last_stage and PIPELINE_ORDER.index(stage_name) <= PIPELINE_ORDER.index(last_stage):
+            if last_stage and mce_pipeline.index(stage_name) <= mce_pipeline.index(last_stage):
                 _log(job, "INFO", f"Skipping {stage_name} (resumed past it)", stage_name)
                 continue
 
@@ -181,6 +192,22 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
                     resume_from_page=resume_page if stage_name == last_stage else None,
                 )
             except Exception as e:
+                if stage_name in POST_EXTRACTION_STAGES:
+                    _log(job, "WARNING",
+                         f"Post-extraction stage {stage_name} failed (non-fatal): {e}",
+                         stage_name)
+                    # Save a checkpoint so we know we tried.
+                    save_checkpoint(
+                        job=job,
+                        material=material,
+                        last_completed_stage=stage_name,
+                        last_processed_page=ctx.page_count,
+                        current_page=ctx.page_count,
+                        artifact_root=artefact_root,
+                        artifact_sha16=material.sha256_short,
+                        checkpoint_data={"stage_metrics": "failed-non-fatal"},
+                    )
+                    continue
                 _log(job, "ERROR", f"Stage {stage_name} failed: {e}", stage_name)
                 _transition(job, to_status=JOB_FAILED, completed_at=timezone.now(),
                             error={"stage": stage_name, "message": str(e)})
@@ -212,9 +239,23 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
         # Stage 8 artefacts: record so the conservative gate can find them.
         record_stage8_artifacts(job, artefact_root)
 
-        # Conservative gate
-        from .conservative_gate import apply_qa_v2_verdict
-        counts = apply_qa_v2_verdict(job=job, artefact_root=artefact_root)
+        # Conservative gate — record its own ImportJobStage row.
+        gate_row = ImportJobStage.objects.create(
+            job=job,
+            stage_name=STAGE_CONSERVATIVE_GATE,
+            status="running",
+        )
+        try:
+            from .conservative_gate import apply_qa_v2_verdict
+            counts = apply_qa_v2_verdict(job=job, artefact_root=artefact_root)
+            gate_row.status = "completed"
+            gate_row.metrics = counts
+            gate_row.save(update_fields=["status", "metrics"])
+        except Exception as e:
+            gate_row.status = "failed"
+            gate_row.errors = [str(e)]
+            gate_row.save(update_fields=["status", "errors"])
+            raise
         summary["verdict"] = counts
         summary["summary_json"] = load_summary_json(artefact_root)
 

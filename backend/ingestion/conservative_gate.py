@@ -54,6 +54,33 @@ def _strategy(job: ImportJob) -> str:
     return (cfg.get("strategy") or STRATEGY_AUTO_PR_ONLY).strip()
 
 
+def _load_stage7_payloads(artefact_root: Path) -> dict[str, dict]:
+    """Load all Stage 7 structured outputs into ``{qid: question_payload}``.
+
+    Walks ``<artefact_root>/07_structured/p*.json`` (one per page), each
+    containing a ``questions`` array. Builds the dict keyed by the
+    question id (``p<page>_q<nn>``) so the conservative gate can join it
+    with the QA V2 per-question summary by id.
+    """
+    out: dict[str, dict] = {}
+    structured_dir = artefact_root / "07_structured"
+    if not structured_dir.exists():
+        LOG.warning("Stage 7 structured dir missing: %s", structured_dir)
+        return out
+    for page_file in sorted(structured_dir.glob("p*.json")):
+        try:
+            import json as _json
+            data = _json.loads(page_file.read_text(encoding="utf-8"))
+        except Exception as e:
+            LOG.warning("Could not load %s: %s", page_file, e)
+            continue
+        for q in (data.get("questions") or []):
+            if isinstance(q, dict) and q.get("id"):
+                out[q["id"]] = q
+    LOG.info("Loaded %d Stage 7 payloads from %s", len(out), structured_dir)
+    return out
+
+
 def _authorise_writer():
     """Lazy import of DjangoWriter so we don't import the legacy
     importers package at module import time."""
@@ -190,10 +217,28 @@ def apply_qa_v2_verdict(
         LOG.warning("No per_question_qa.json for job %s — skipping gate.", job.id)
         return counts
 
+    # Stage 7 structured payloads keyed by question id (e.g. "p001_q00").
+    # The QA V2 summary is keyed the same way; we join on the id.
+    stage7_payloads = _load_stage7_payloads(artefact_root)
+
+    # Normalise: ``per_q`` may be a dict (qid → qa row) or a list of
+    # (qid, qa row) tuples from json.load.  Force (qid, row) iteration.
+    if isinstance(per_q, dict):
+        items = list(per_q.items())
+    else:
+        items = []
+        for row in per_q or []:
+            if isinstance(row, dict):
+                qid = row.get("id") or row.get("question_id")
+                items.append((qid, row))
+
     pr_payloads: list[dict] = []
-    for row in per_q:
+    for qid, row in items:
         status = row.get("status")
         payload = row.get("payload") or {}
+        # Merge with Stage 7 payload (always has stem, options, answer).
+        if qid and qid in stage7_payloads:
+            payload = {**stage7_payloads[qid], **payload}
         page = int(row.get("page_number") or payload.get("page_number") or 0)
         qno = int(row.get("question_number_in_pdf") or payload.get("question_number_in_pdf") or 0)
         failing = list(row.get("failing_axes") or [])
