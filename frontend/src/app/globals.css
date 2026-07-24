@@ -561,6 +561,7 @@ h4 {
 
 body.sidebar-hidden .main-content {
   margin-left: 0 !important;
+  padding-left: 0 !important;
 }
 
 /* Option card for MCQs */

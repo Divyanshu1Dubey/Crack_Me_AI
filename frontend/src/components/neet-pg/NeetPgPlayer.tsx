@@ -243,7 +243,11 @@ export default function NeetPgPlayer({
     const correctAnswer = (current.correct_answer || '').toUpperCase().trim();
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40">
+        // `main-content` honours the `body.sidebar-hidden` toggle (see globals.css).
+        // The global `.main-content` rule already applies a 260px desktop
+        // margin-left to clear the fixed sidebar; on mobile the sidebar is a
+        // drawer so no offset is needed.
+        <div className="main-content min-h-screen bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40">
             {/* Header */}
             <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-teal-100 shadow-sm">
                 <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-3">
