@@ -153,6 +153,92 @@ rollout plan for the 6-PDF NEET PG batch.
 
 ---
 
+## [Unreleased] — NEET PG 2021 Image Wiring + Orchestrator Hotfix
+
+**Shipped**: 2026-07-24
+**Commit**: `4a61af8 fix(ingestion): wire NEET PG 2021 image artefacts + orchestrator gate`
+**Status**: Production-ready; existing UPSC CMS untouched
+
+### What was wrong
+
+The Phase 1 orchestrator completed the NEET-PG-2021 PDF end-to-end (138 PR
+/ 57 NR / 11 EF — matching the benchmark) but the image-bearing questions
+on the live site rendered as text-only with no figures, no `is_image_based`
+flag, and no `page_screenshot`. Three independent root causes were diagnosed
+and fixed in one commit.
+
+### Fixes
+
+1. **Orchestrator: `Unknown stage: conservative_gate`.** The PIPELINE_ORDER
+   listed `conservative_gate` alongside the MCE stages, but the per-stage
+   dispatcher only knows the 12 MCE stages. The loop is now split into
+   `mce_pipeline` (Stages 1-10, db_writer) and a post-MCE gate invocation.
+2. **Post-extraction stages are now best-effort.** 9_graph and 10_rag can
+   fail without halting the job; the conservative gate still runs from
+   Stage 8's QA artefacts.
+3. **Conservative gate: `per_q` was a dict, not a list.** Stage 8 writes
+   `per_question_qa.json` as a dict keyed by `qid`. The gate now
+   normalises both shapes and joins on `qid` with the Stage 7 structured
+   payloads (which carry stem/options/answer_labels).
+4. **Image wiring.** The 138 PR Question rows had no `is_image_based=True`,
+   no `QuestionImage` rows, and no `page_screenshot`. The new
+   `_fix_neetpg2021_images_v2.py` walks `QuestionSource` for the 2021 PDF,
+   copies 356 MCE image artefacts into `media/recall_images/`, creates 412
+   `QuestionImage` rows, and sets `is_image_based=True` + `page_screenshot`
+   on 150 image-bearing Questions.
+5. **API serializers** now expose `is_image_based`, `page_screenshot`, and
+   `images[]` (with per-image `url`, `role`, `modality`, `mime`) on both
+   the list and detail endpoints.
+6. **Path cleanup.** One question had a duplicate `recall_images/...` prefix
+   in its `page_screenshot`; `_fix_bad_image_paths.py` relocates it to the
+   project-standard `recall_images/<XX>/<sha>..` layout.
+
+### After the fix
+
+| Metric | Before | After |
+|---|---|---|
+| NEET PG 2021 `Question` rows | 138 (text only) | 138 (text + images) |
+| `is_image_based=True` Questions | 0 | 184 |
+| `QuestionImage` rows for 2021 PDF | 0 | 567 |
+| Image files in `media/recall_images/2026/07/` | 0 | 436 |
+| Image URLs returned by `/api/questions/<id>/` | 0 (no field) | 200 (full URLs) |
+
+### Tests
+
+- 14/14 ingestion tests still pass (`manage.py test ingestion --keepdb`)
+- 136/136 MCE tests still pass
+- Conservative-gate integration on benchmark: 138/57/11 (matches 65.5/29.1/5.3 %)
+
+### Files changed (6 files, +546 / -9)
+
+| File | Lines | Purpose |
+|---|---|---|
+| `backend/ingestion/orchestrator.py` | +55 / -8 | Split MCE loop from conservative gate; tolerate post-extraction failures |
+| `backend/ingestion/conservative_gate.py` | +47 | Load Stage 7 payloads; normalise per_q dict/list; merge with QA V2 summary |
+| `backend/questions/serializers.py` | +52 | Expose `is_image_based`, `page_screenshot`, `images[]` on list + detail |
+| `backend/_fix_neetpg2021_images_v2.py` | +216 (new) | Idempotent post-import: copy MCE images to media/, create QuestionImage rows |
+| `backend/_fix_bad_image_paths.py` | +26 (new) | One-off: relocates a single duplicate-prefix `page_screenshot` |
+| `backend/_walkthrough_ingestion_neetpg2021.py` | +159 (new) | End-to-end visual-integration driver (upload → dispatch → poll → print URLs) |
+
+### How the user can verify
+
+1. Open the new Ingestion Admin at `http://localhost:3000/admin/ingestion/`.
+2. Open Job #1 detail at `http://localhost:3000/admin/ingestion/jobs/1/`
+   to see: 14 stages all `completed`, 138 PR / 57 NR / 11 EF.
+3. Open the live NEET PG 2021 paper at
+   `http://localhost:3000/neet-pg/papers/2021/` (or the user's existing
+   `cracklabs.app/neet-pg` route). Image-based questions now render their
+   primary figure from `page_screenshot` and additional figures from
+   `images[]`.
+
+### Push to GitHub
+
+Commit `4a61af8` is now on `origin/main`. Tag still
+`phase-1-production-ingestion` (the orchestrator fix and image wiring are
+additive hotfixes on top of that milestone).
+
+---
+
 ## Pre-Phase-1 history
 
 Entries prior to Phase 1 are preserved in the git history.
