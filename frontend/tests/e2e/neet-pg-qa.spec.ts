@@ -67,6 +67,21 @@ test.describe('Bug #4 — /questions/neet-pg/practice must include Sidebar shell
         // Sidebar nav element must exist (was missing entirely before)
         await expect(page.locator('aside[aria-label="Primary sidebar navigation"]')).toBeVisible({ timeout: 15000 });
     });
+
+    // Regression for Bug #R2 (2026-07-25): the player used to hit the
+    // "No NEET PG questions available" empty state even though the API
+    // returned 2497 results. Root cause: Axios wrapper was never unwrapped
+    // — fetchAllNeetPgQuestions read res?.results (undefined) instead of
+    // res?.data?.results. This test asserts the player chrome actually
+    // renders for at least one question from the 2021 paper.
+    test('NEET PG 2021 paper renders at least one question in the player', async ({ page }) => {
+        await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });
+        // The empty-state branch literally says "No NEET PG questions available".
+        await expect(page.locator('text=/No NEET PG questions available/i')).toHaveCount(0, { timeout: 30000 });
+        // The player chrome shows "Q 1 / N" once questions load. If N is 0 the
+        // badge would never render.
+        await expect(page.locator('text=/Q 1 \\/ \\d+/')).toBeVisible({ timeout: 30000 });
+    });
 });
 
 test.describe('Bug #1 — React #418 hydration on /neet-pg', () => {
