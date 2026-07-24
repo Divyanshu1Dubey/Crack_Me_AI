@@ -28,12 +28,18 @@ async function fetchAllIniCetQuestions(
     let page = 1;
     // eslint-disable-next-line no-constant-condition
     while (true) {
+        // questionsAPI.list returns the Axios response wrapper, so the
+        // paginated body lives at `.data` — NOT `.results` directly. Same
+        // Bug #R2 root cause as /questions/neet-pg/practice (fix
+        // commit 5558447). Without this unwrap the player silently renders
+        // the empty-state branch.
         const res: any = await questionsAPI.list({ ...params, page, page_size: 20 });
-        const chunk: any[] = res?.results ?? (Array.isArray(res) ? res : []);
+        const body = res?.data ?? res;
+        const chunk: any[] = body?.results ?? (Array.isArray(body) ? body : []);
         if (!chunk.length) break;
         results.push(...chunk);
         onProgress?.(results.length);
-        const next = res?.next;
+        const next = body?.next;
         if (!next) break;
         page += 1;
         if (page > ALL_PAGES) break;
