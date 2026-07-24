@@ -125,6 +125,32 @@ test.describe('Bug #7/#10 — image-based + topic wiring', () => {
     });
 });
 
+test.describe('Bug #R1 — WatermarkOverlay opacity must stay near-invisible', () => {
+    test('overlay container opacity is <= 0.10 (screen-recording deterrent, not user-visible)', async ({ page }) => {
+        await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('text=/Q 1 \\/ \\d+/')).toBeVisible({ timeout: 30000 });
+        const overlay = await page.evaluate(() => {
+            const candidates = document.querySelectorAll('div[class*="opacity-"][class*="pointer-events-none"]');
+            let lowest = 1.0;
+            let sample: any = null;
+            candidates.forEach((el) => {
+                const o = parseFloat(getComputedStyle(el).opacity);
+                if (o < lowest) {
+                    lowest = o;
+                    sample = {
+                        className: el.className,
+                        text: (el.textContent || '').slice(0, 80),
+                        childCount: el.children.length,
+                    };
+                }
+            });
+            return { lowest, sample };
+        });
+        expect(overlay.sample, 'expected at least one opacity-N pointer-events-none overlay').not.toBeNull();
+        expect(overlay.lowest, 'overlay opacity must be near-invisible').toBeLessThanOrEqual(0.10);
+    });
+});
+
 /**
  * Bug #R3 — sidebar overlap on /practice (2026-07-25).
  *
