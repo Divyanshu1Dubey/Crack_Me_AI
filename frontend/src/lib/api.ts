@@ -269,6 +269,53 @@ export const announcementsAPI = {
   update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/announcements/${id}/`, data),
   remove: (id: number) => api.delete(`/questions/announcements/${id}/`),
 };
+
+// Production Content Ingestion Platform (Phase 1) — isolated from
+// the UPSC CMS. Mounted at /api/ingestion/. Admin-only.
+export const ingestionAPI = {
+  // Jobs
+  listJobs: (params?: Record<string, string | number>) =>
+    api.get('/ingestion/jobs/', { params }),
+  getJob: (id: number) => api.get(`/ingestion/jobs/${id}/`),
+  createJob: (data: {
+    material_sha16: string;
+    parent_exam: string;
+    batch_id?: number;
+    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+  }) => api.post('/ingestion/jobs/', data),
+  retryJob: (id: number) => api.post(`/ingestion/jobs/${id}/retry/`, {}),
+  cancelJob: (id: number) => api.post(`/ingestion/jobs/${id}/cancel/`, {}),
+  listStages: (id: number) => api.get(`/ingestion/jobs/${id}/stages/`),
+  listCheckpoints: (id: number) => api.get(`/ingestion/jobs/${id}/checkpoints/`),
+  listLogs: (id: number, params?: Record<string, string | number>) =>
+    api.get(`/ingestion/jobs/${id}/logs/`, { params }),
+  listStagedQuestions: (id: number, params?: Record<string, string | number>) =>
+    api.get(`/ingestion/jobs/${id}/staged-questions/`, { params }),
+
+  // Materials
+  listMaterials: (params?: Record<string, string | number>) =>
+    api.get('/ingestion/materials/', { params }),
+  getMaterial: (sha16: string) => api.get(`/ingestion/materials/${sha16}/`),
+  uploadMaterial: (file: File, meta: { exam_hint?: string } = {}) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (meta.exam_hint) fd.append('exam_hint', meta.exam_hint);
+    return api.post('/ingestion/materials/upload/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Batches
+  listBatches: (params?: Record<string, string | number>) =>
+    api.get('/ingestion/batches/', { params }),
+  getBatch: (id: number) => api.get(`/ingestion/batches/${id}/`),
+  createBatch: (data: {
+    name: string;
+    material_sha16s: string[];
+    parent_exam: string;
+    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+  }) => api.post('/ingestion/batches/', data),
+};
 // Questions API
 export const questionsAPI = {
   list: (params?: Record<string, string | number>) => api.get('/questions/', { params }),

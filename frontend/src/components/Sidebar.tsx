@@ -306,6 +306,10 @@ export default function Sidebar() {
                                         <Briefcase className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Manage Jobs</span>
                                     </Link>
+                                    <Link href="/admin/ingestion" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/ingestion' ? 'active' : ''}`}>
+                                        <FileQuestion className="w-5 h-5 shrink-0" />
+                                        <span className="sidebar-label text-sm">Ingestion</span>
+                                    </Link>
                                 </div>
                             </div>
                         )}
