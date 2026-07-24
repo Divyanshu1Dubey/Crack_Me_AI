@@ -98,7 +98,7 @@ const EXAM_TRACK_PLAYER_HREF: Record<string, string> = {
 export default function Sidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuth();
-    const { activeTrack } = useExamTrack();
+    const { activeTrack, hydrated } = useExamTrack();
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
@@ -156,7 +156,13 @@ export default function Sidebar() {
     };
 
     const isAdmin = user?.role === 'admin' || user?.is_admin;
-    const trackLabel = TRACK_LABEL[activeTrack] || activeTrack;
+    // IMPORTANT: only honour the activeTrack from the provider AFTER hydration.
+    // Until then the server-rendered HTML used 'cms' (the default), so the
+    // /questions href on the client must also be '/questions' to avoid React
+    // #418 hydration mismatches. Once `hydrated` flips, we re-render with
+    // the real exam-specific player URL.
+    const effectiveTrack = hydrated ? activeTrack : 'cms';
+    const trackLabel = TRACK_LABEL[effectiveTrack] || effectiveTrack;
 
     useEffect(() => {
         if (typeof document === 'undefined') return;
@@ -242,13 +248,13 @@ export default function Sidebar() {
                                 <div className="space-y-0.5">
                                     {section.items
                                         .filter(item => !item.adminOnly || isAdmin)
-                                        .filter(item => !item.requireTrack || item.requireTrack.includes(activeTrack))
+                                        .filter(item => !item.requireTrack || item.requireTrack.includes(effectiveTrack))
                                         .map((item) => {
                                             // Resolve /questions for tracks with a dedicated
                                             // player (NEET PG + INI-CET) so users land on the
                                             // new player instead of the (UPSC-CMS-style) bank.
-                                            const resolvedHref = item.href === '/questions' && EXAM_TRACK_PLAYER_HREF[activeTrack]
-                                                ? EXAM_TRACK_PLAYER_HREF[activeTrack]
+                                            const resolvedHref = item.href === '/questions' && EXAM_TRACK_PLAYER_HREF[effectiveTrack]
+                                                ? EXAM_TRACK_PLAYER_HREF[effectiveTrack]
                                                 : item.href;
                                             const isActive = pathname === resolvedHref
                                                 || pathname?.startsWith(resolvedHref + '/')

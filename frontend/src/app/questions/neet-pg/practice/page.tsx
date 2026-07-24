@@ -18,6 +18,10 @@ import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { questionsAPI } from '@/lib/api';
 import NeetPgPlayer from '@/components/neet-pg/NeetPgPlayer';
+import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
+import EngagingLoader from '@/components/EngagingLoader';
+import { ExamTrackProvider } from '@/components/ExamTrackProvider';
 import { Loader2, Stethoscope } from 'lucide-react';
 
 const ALL_PAGES = 200; // DRF caps page_size at 20, so paginate to fetch everything.
@@ -158,12 +162,15 @@ function NeetPgPracticeInner() {
 
 export default function NeetPgPracticePage() {
     return (
-        <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40">
-                <Loader2 className="w-10 h-10 animate-spin text-teal-600" />
-            </div>
-        }>
-            <NeetPgPracticeInner />
-        </Suspense>
+        <ExamTrackProvider>
+            <Sidebar />
+            <Suspense fallback={
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40">
+                    <Loader2 className="w-10 h-10 animate-spin text-teal-600" />
+                </div>
+            }>
+                <NeetPgPracticeInner />
+            </Suspense>
+        </ExamTrackProvider>
     );
 }
