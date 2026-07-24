@@ -17,7 +17,8 @@ export default async function JobsPage({
       parent_exam: searchParams.exam,
       page_size: 100,
     });
-    jobs = r?.results || r || [];
+    const data = r?.data;
+    jobs = Array.isArray(data) ? data : (data?.results || []);
   } catch {
     jobs = [];
   }

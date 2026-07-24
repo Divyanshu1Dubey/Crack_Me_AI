@@ -18,15 +18,17 @@ export default function UploadPage() {
     setBusy(true);
     setMsg(null);
     try {
-      const mat: any = await ingestionAPI.uploadMaterial(file, { exam_hint: exam });
-      setMsg(`Uploaded sha16=${mat.sha256_short}. Creating job…`);
-      const job: any = await ingestionAPI.createJob({
-        material_sha16: mat.sha256_short,
+      const matRes: any = await ingestionAPI.uploadMaterial(file, { exam_hint: exam });
+      const mat = matRes?.data;
+      setMsg(`Uploaded sha16=${mat?.sha256_short}. Creating job…`);
+      const jobRes: any = await ingestionAPI.createJob({
+        material_sha16: mat?.sha256_short,
         parent_exam: exam,
         strategy: "auto-pr-only",
       });
-      setMsg(`Job #${job.id} dispatched.`);
-      router.push(`/admin/ingestion/jobs/${job.id}`);
+      const job = jobRes?.data;
+      setMsg(`Job #${job?.id} dispatched.`);
+      if (job?.id) router.push(`/admin/ingestion/jobs/${job.id}`);
     } catch (err: any) {
       setMsg(`Error: ${err?.message || "unknown"}`);
     } finally {

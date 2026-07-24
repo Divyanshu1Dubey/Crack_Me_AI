@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 
 async function loadOverview() {
   try {
-    const jobs = await ingestionAPI.listJobs({ page_size: 10 });
-    return jobs?.results || jobs || [];
+    const r: any = await ingestionAPI.listJobs({ page_size: 10 });
+    const data = r?.data;
+    return Array.isArray(data) ? data : (data?.results || []);
   } catch {
     return [];
   }

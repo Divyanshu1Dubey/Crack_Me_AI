@@ -9,7 +9,8 @@ export default async function BatchDetail({ params }: { params: { id: string } }
   const id = Number(params.id);
   let batch: any = null;
   try {
-    batch = await ingestionAPI.getBatch(id);
+    const r: any = await ingestionAPI.getBatch(id);
+    batch = r?.data;
   } catch {
     batch = null;
   }

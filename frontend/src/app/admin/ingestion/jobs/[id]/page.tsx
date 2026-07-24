@@ -11,9 +11,12 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
   let stages: any[] = [];
   let logs: any[] = [];
   try {
-    job = await ingestionAPI.getJob(id);
-    stages = await ingestionAPI.listStages(id);
-    logs = await ingestionAPI.listLogs(id, { page_size: 100 });
+    const jobRes = await ingestionAPI.getJob(id);
+    job = jobRes.data;
+    const stagesRes = await ingestionAPI.listStages(id);
+    stages = Array.isArray(stagesRes.data) ? stagesRes.data : (stagesRes.data?.results || []);
+    const logsRes = await ingestionAPI.listLogs(id, { page_size: 100 });
+    logs = Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data?.results || []);
   } catch {
     job = null;
   }

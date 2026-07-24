@@ -9,7 +9,8 @@ export default async function BatchesPage() {
   let batches: any[] = [];
   try {
     const r: any = await ingestionAPI.listBatches();
-    batches = r?.results || r || [];
+    const data = r?.data;
+    batches = Array.isArray(data) ? data : (data?.results || []);
   } catch {
     batches = [];
   }
