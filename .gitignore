@@ -80,3 +80,14 @@ graphify-out/
 # Imported massive directories
 tesseract/
 backend/importers/neetpg/_output/
+
+# Production Ingestion Platform (Phase 1) — generated per-job artefact trees
+backend/_artifacts_ingestion/
+backend/_artifacts/
+backend/_artifacts_benchmark_post_fix/
+backend/_audit_sample.json
+backend/_run_benchmark.py
+
+# Local Tesseract / OCR tool installations (large binaries)
+tools/
+
