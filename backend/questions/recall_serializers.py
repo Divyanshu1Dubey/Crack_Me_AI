@@ -24,11 +24,11 @@ class QuestionImageSerializer(serializers.ModelSerializer):
         if not obj.file:
             return None
         request = self.context.get("request")
+        path = f"/api/questions/images/{obj.id}/serve/"
         try:
-            url = obj.file.url
+            return request.build_absolute_uri(path) if request else path
         except Exception:
-            return None
-        return request.build_absolute_uri(url) if request else url
+            return path
 
 
 class QuestionSourceSerializer(serializers.ModelSerializer):

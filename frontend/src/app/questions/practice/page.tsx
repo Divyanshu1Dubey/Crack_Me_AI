@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText, extractAnalysisFromJson } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
   CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
@@ -147,12 +147,12 @@ function PracticeContent() {
         setTokenError(false);
         setAiError(null);
         aiAPI.explainAfterAnswer({
-            question_text: currentQ.question_text,
+            question_text: sanitizeQuestionText(currentQ.question_text),
             options: {
-                A: currentQ.option_a || currentQ.option_A || '',
-                B: currentQ.option_b || currentQ.option_B || '',
-                C: currentQ.option_c || currentQ.option_C || '',
-                D: currentQ.option_d || currentQ.option_D || '',
+                A: sanitizeOptionText(currentQ.option_a || currentQ.option_A || ''),
+                B: sanitizeOptionText(currentQ.option_b || currentQ.option_B || ''),
+                C: sanitizeOptionText(currentQ.option_c || currentQ.option_C || ''),
+                D: sanitizeOptionText(currentQ.option_d || currentQ.option_D || ''),
             },
             correct_answer: currentQ.correct_answer || '',
             selected_answer: answers[currentQ.id] || '',
@@ -294,7 +294,7 @@ function PracticeContent() {
                         {/* Question Text */}
                         <div className="glass-card rounded-2xl border border-primary/30 shadow-lg p-6">
                             <div className="text-base font-medium leading-relaxed">
-                                <FormattedText text={String(currentQ.question_text)} />
+                                <FormattedText text={sanitizeQuestionText(currentQ.question_text)} />
                             </div>
                         </div>
 
@@ -302,7 +302,8 @@ function PracticeContent() {
                         <div className="space-y-3">
                             {['A', 'B', 'C', 'D'].map(opt => {
                                 const key = `option_${opt.toLowerCase()}`;
-                                const optionText = currentQ[key] || currentQ[`option_${opt}`];
+                                const rawOption = currentQ[key] || currentQ[`option_${opt}`];
+                                const optionText = sanitizeOptionText(rawOption);
                                 if (!optionText) return null;
                                 const isCorrectOpt = currentQ.correct_answer === opt;
                                 const isSelected = selectedAnswer === opt;

@@ -12,10 +12,26 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play } from 'lucide-react';
+import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
 import { extractAnalysisFromJson } from '@/lib/textCleanup';
+import ImageViewer from '@/components/image/ImageViewer';
+
+interface QuestionImage {
+    id: number;
+    file_url?: string | null;
+    url?: string | null;
+    caption?: string | null;
+    modality?: string | null;
+    modality_subtype?: string | null;
+    page_number?: number;
+    image_index_in_page?: number;
+    has_diagram?: boolean;
+    has_table?: boolean;
+    width?: number;
+    height?: number;
+}
 
 interface Question {
     id: number;
@@ -34,6 +50,8 @@ interface Question {
     video_thumbnail?: string;
     video_subtitles_url?: string;
     video_duration?: number;
+    images?: QuestionImage[];
+    is_image_based?: boolean;
 }
 
 interface TestData {
@@ -72,6 +90,7 @@ export default function TakeTestPage() {
     const [flagComment, setFlagComment] = useState('');
     const [flagSubmitting, setFlagSubmitting] = useState(false);
     const [flagSuccess, setFlagSuccess] = useState(false);
+    const [zoomImg, setZoomImg] = useState<any>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimes = useRef<Record<number, number>>({});
     const timeSpent = useRef<Record<number, number>>({});
@@ -276,6 +295,7 @@ export default function TakeTestPage() {
         };
 
         return (
+            <>
             <div className="min-h-screen bg-background">
                 {/* Sticky Header */}
                 <div className="sticky top-0 z-50 px-4 md:px-6 py-3 flex items-center justify-between" style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
@@ -359,6 +379,32 @@ export default function TakeTestPage() {
                             <div className="text-base md:text-lg font-medium leading-relaxed mb-6" style={{ color: 'var(--text-primary)' }}>
                                 <FormattedText text={rq?.question_text || ''} />
                             </div>
+
+                            {/* Images */}
+                            {rq?.images && rq.images.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                    {rq.images.map(img => (
+                                        <button
+                                            key={img.id}
+                                            type="button"
+                                            onClick={() => setZoomImg(img)}
+                                            className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-[var(--accent-primary)] focus:outline-none"
+                                        >
+                                            <img
+                                                src={img.url || img.file_url || ''}
+                                                alt={img.caption || `Question image`}
+                                                loading="lazy"
+                                                className="w-full h-auto object-contain bg-white max-h-[420px]"
+                                            />
+                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                                                <span className="text-white text-xs flex items-center gap-1">
+                                                    <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
                             {/* Concept Tags */}
                             {rd?.concept_tags && rd.concept_tags.length > 0 && (
@@ -717,6 +763,26 @@ export default function TakeTestPage() {
                     </div>
                 </div>
             </div>
+            {zoomImg && (
+                <ImageViewer
+                    images={(questions[reviewIdx]?.images || []).map(img => ({
+                        id: img.id,
+                        file_url: img.url || img.file_url || '',
+                        caption: img.caption,
+                        modality: img.modality,
+                        modality_subtype: img.modality_subtype,
+                        page_number: img.page_number,
+                        image_index_in_page: img.image_index_in_page,
+                        has_diagram: img.has_diagram,
+                        has_table: img.has_table,
+                        width: img.width,
+                        height: img.height,
+                    }))}
+                    startIndex={questions[reviewIdx]?.images?.findIndex(i => i.id === zoomImg.id) || 0}
+                    onClose={() => setZoomImg(null)}
+                />
+            )}
+            </>
         );
     }
 
@@ -841,6 +907,31 @@ export default function TakeTestPage() {
                         <div className="text-lg leading-relaxed font-medium mb-10 pb-6" style={{ borderBottom: '1px solid var(--glass-border)' }}>
                             <FormattedText text={currentQ.question_text} />
                         </div>
+                        {/* Images */}
+                        {currentQ?.images && currentQ.images.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                {currentQ.images.map(img => (
+                                    <button
+                                        key={img.id}
+                                        type="button"
+                                        onClick={() => setZoomImg(img)}
+                                        className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-[var(--accent-primary)] focus:outline-none"
+                                    >
+                                        <img
+                                            src={img.url || img.file_url || ''}
+                                            alt={img.caption || `Question image`}
+                                            loading="lazy"
+                                            className="w-full h-auto object-contain bg-white max-h-[420px]"
+                                        />
+                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                                            <span className="text-white text-xs flex items-center gap-1">
+                                                <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <div className="space-y-3 max-w-3xl">
                             {['A', 'B', 'C', 'D'].map(opt => {
                                 const optionText = currentQ[`option_${opt.toLowerCase()}` as keyof Question] || currentQ[`option_${opt}` as keyof Question];
@@ -962,6 +1053,26 @@ export default function TakeTestPage() {
                     </div>
                 </div>
             </div>
+
+            {zoomImg && (
+                <ImageViewer
+                    images={(questions[currentIdx]?.images || []).map(img => ({
+                        id: img.id,
+                        file_url: img.url || img.file_url || '',
+                        caption: img.caption,
+                        modality: img.modality,
+                        modality_subtype: img.modality_subtype,
+                        page_number: img.page_number,
+                        image_index_in_page: img.image_index_in_page,
+                        has_diagram: img.has_diagram,
+                        has_table: img.has_table,
+                        width: img.width,
+                        height: img.height,
+                    }))}
+                    startIndex={questions[currentIdx]?.images?.findIndex(i => i.id === zoomImg.id) || 0}
+                    onClose={() => setZoomImg(null)}
+                />
+            )}
         </div>
     );
 }
