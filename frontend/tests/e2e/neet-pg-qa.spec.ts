@@ -754,3 +754,74 @@ test.describe('PHASE 4 — Practice modes', () => {
         expect(data.question_ids.length).toBeLessThanOrEqual(100);
     });
 });
+
+/**
+ * PHASE 6 — AI Tutor UI (2026-07-25).
+ *
+ * The new <AiTutorPanel/> component supports:
+ *   - Custom prompt (textarea) that the backend threads into the rubric
+ *   - Quick-prompt chips (Why correct? / Mnemonic / Clinical pearl / etc.)
+ *   - Cache badge with relative timestamp when `cached: true`
+ *   - Progressive reveal (proxies streaming until SSE lands)
+ *   - Stop button (AbortController)
+ *   - Regenerate button (force_regenerate=true bypasses 24h cache)
+ *
+ * Backend contract:
+ *   POST /api/ai/explain-question/<id>/
+ *     body: { selected_answer?, question_text?, subject?, topic?,
+ *             prompt?, force_regenerate? }
+ *   resp: { explanation: <markdown>, cached: bool,
+ *           question_id: int, ai_model?: str, ai_generated_at?: ISO }
+ *
+ * These tests assert the API contract shape — the actual UI rendering
+ * is exercised manually + by the existing 401-or-200 wiring tests.
+ */
+test.describe('PHASE 6 — AI Tutor', () => {
+    test('explain-question payload accepts prompt + force_regenerate without 4xx', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        const r = await ctx.post('/api/ai/explain-question/10194/', {
+            data: {
+                selected_answer: 'B',
+                question_text: 'Test',
+                prompt: 'Why is B the right answer?',
+                force_regenerate: false,
+            },
+        });
+        // 200 = success, 401 = auth required, 429 = rate-limited
+        // 404 = missing URL pattern (the bug we are NOT guarding against here)
+        expect([200, 401, 429].includes(r.status()), `unexpected status ${r.status()}`).toBe(true);
+    });
+
+    test('explain-question payload returns cache metadata when present', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        const r = await ctx.post('/api/ai/explain-question/10194/', { data: {} });
+        expect([200, 401, 429].includes(r.status())).toBe(true);
+        if (r.status() !== 200) return;
+        const body = await r.json();
+        expect(body).toHaveProperty('explanation');
+        expect(typeof body.explanation).toBe('string');
+        expect(body).toHaveProperty('cached');
+        expect(typeof body.cached).toBe('boolean');
+        expect(body).toHaveProperty('question_id');
+        expect(body.question_id).toBe(10194);
+    });
+
+    test('explain-question UI: <AiTutorPanel/> renders on NEET PG player', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });
+        if (page.url().includes('/login')) {
+            test.skip(true, 'route is auth-gated; require QA_TEST_USER env to enable');
+            return;
+        }
+        // Wait for the player chrome.
+        await expect(page.locator('text=/Q 1 \\/ \\d+/')).toBeVisible({ timeout: 30000 });
+        // The AI Tutor heading + the Submit button + the chips are all
+        // rendered unconditionally by AiTutorPanel.
+        await expect(page.locator('text=AI Tutor')).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('[data-testid="ai-tutor-submit"]')).toBeVisible({ timeout: 10000 });
+        // Quick-prompt chips
+        await expect(page.locator('button:has-text("Why correct?")')).toBeVisible();
+        await expect(page.locator('button:has-text("Mnemonic")')).toBeVisible();
+        await expect(page.locator('button:has-text("Clinical pearl")')).toBeVisible();
+    });
+});
