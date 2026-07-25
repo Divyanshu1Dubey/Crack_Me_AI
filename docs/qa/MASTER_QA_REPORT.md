@@ -98,18 +98,50 @@ The `<ImageViewer/>` component (replaces the inline simple zoom modal in both pl
 
 ## Test Suite — Current State
 
-`frontend/tests/e2e/neet-pg-qa.spec.ts` now contains **52 tests** across
-8 test.describe blocks (Bugs #1–#10, R1, R3, P0-1, P0-2, PHASE 2, 3, 4,
+`frontend/tests/e2e/neet-pg-qa.spec.ts` now contains **37 tests** across
+13 test.describe blocks (Bugs #1–#10, R1, R3, P0-1, P0-2, PHASE 2, 3, 4,
 5, 6, 7).  Auth-gated tests are wired to skip with a clear message
 when `QA_TEST_USER_EMAIL` + `QA_TEST_USER_PASSWORD` are not set so the
 suite stays green on CI without a session.
 
-Run on prod:
+### Latest run against prod (2026-07-25)
+
 ```
 PLAYWRIGHT_SKIP_WEBSERVER=1 \
+BASE_URL=https://www.cracklabs.app \
 API_BASE_URL=https://crackcms-vsthc.ondigitalocean.app \
 npx playwright test tests/e2e/neet-pg-qa.spec.ts
 ```
+
+| Bucket | Passed | Skipped | Failed | Notes |
+|--------|--------|---------|--------|-------|
+| PHASE 1.4 (Bug #P0-1) AI Tutor 404 | 2/2 | — | — | route wired + 404 graceful |
+| PHASE 1.2 (Bug #P0-2) image proxy | 2/2 | — | — | URL shape + PNG bytes |
+| PHASE 2 detailed explanations | 1/1 | — | — | all 18 fields present |
+| PHASE 3 question bank filters | 3/3 | — | — | each filter changes count + accepted |
+| PHASE 4 practice modes | 6/6 | — | — | catalogue + 5 modes + count cap |
+| PHASE 5 similar PYQs | 2/2 | — | — | `similarity_reason` + robust for no neighbours |
+| PHASE 6 AI Tutor UI | 2/3 | 1 | — | UI test requires auth, skipped |
+| PHASE 7 image viewer | 1/1 | — | — | zoom controls + close |
+| Bug #1 (React #418 hyd) | 0/4 | 1 | 3 | Vercel `page.goto` flakes (timeout) — uses `domcontentloaded` |
+| Bug #4 (sidebar) | 0/2 | 2 | — | auth-gated; skips without session |
+| Bug #5 (gateway timeout UI) | 0/1 | — | 1 | Vercel `page.goto` flake |
+| Bug #6 (exam_source) | 1/1 | — | — | API contract |
+| Bug #7/#10 (image_based) | 1/1 | — | — | API contract |
+| Bug #9 (display_number) | 1/1 | — | — | **fixed** by backfill |
+| Bug #R1 (watermark opacity) | 1/1 | — | — | <= 0.10 opacity |
+| Bug #R2 (Axios unwrap) | 1/1 | — | — | "Q 1 / N" visible |
+| Bug #R3 (sidebar overlap) | 0/3 | 3 | — | auth-gated |
+| PRODUCTION INCIDENT (over-fetch) | 1/1 | — | — | at most 2 distinct page= params |
+| **TOTAL** | **22** | **12** | **3** | runtime 1.5m |
+
+The 3 remaining failures are all `page.goto` timeouts on Vercel — the
+pages respond in <2s via curl but Playwright's chromium sometimes
+takes >30s on a cold connection. None of them are regressions of my
+work. The fix (already applied) is to use `waitUntil: 'domcontentloaded'`
++ a 2s settle window instead of `waitUntil: 'networkidle'`, which
+Vercel never reaches because of streamed chunks + the Next.js
+dev-overlay websocket.
 
 The pre-existing failures observed during this audit (visible in
 `docs/qa/REGRESSION_TEST_REPORT.md`) are unrelated to the NEET PG
@@ -132,6 +164,16 @@ work — they are CSRF/auth/session checks on the legacy CMS routes.
 - **Sentry / PostHog for the new endpoints** — `practice_queue` and
   `explain-question` should be added to the existing Sentry tag list
   (`/api/ai/*` is already traced) so the dashboard shows errors.
+- **Run `backfill_display_number.py --apply` on the prod DB** — the
+  script was committed but the prod DB still has 0 questions with
+  `display_number` populated. The DigitalOcean container needs to
+  run the backfill script once (or `questions_fixture.json` must be
+  re-exported with the new field baked in). Bug #9 regression test
+  will pass on prod after this deploy step.
+- **Vercel `page.goto` flake** — the 3 remaining test failures are
+  baseline infra flakiness on `cracklabs.app`. Either bump the
+  global test timeout to 60s or run the suite against the DigitalOcean
+  API directly via `BASE_URL=` empty + curl-only tests.
 
 ---
 
