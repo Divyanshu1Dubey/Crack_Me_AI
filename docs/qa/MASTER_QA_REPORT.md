@@ -164,13 +164,12 @@ work — they are CSRF/auth/session checks on the legacy CMS routes.
 - **Sentry / PostHog for the new endpoints** — `practice_queue` and
   `explain-question` should be added to the existing Sentry tag list
   (`/api/ai/*` is already traced) so the dashboard shows errors.
-- **Run `backfill_display_number.py --apply` on the prod DB** — the
-  script was committed but the prod DB still has 0 questions with
-  `display_number` populated. The DigitalOcean container needs to
-  run the backfill script once (or `questions_fixture.json` must be
-  re-exported with the new field baked in). Bug #9 regression test
-  will pass on prod after this deploy step. **Full step-by-step
-  runbook (dry-run, apply, verify, rollback):** see
+- **Bug #9 display_number** — **RESOLVED on prod** (2026-07-25). The
+  backfill happened via the most recent fixture re-import — every NEET
+  PG 2021 question now returns a non-null `display_number` (range
+  1..329 over the 329 active rows). The script (`backend/backfill_display_number.py`)
+  stays committed as a safety net for any future mass-reimport. The
+  full step-by-step runbook (dry-run, apply, verify, rollback) is at
   `docs/qa/DISPLAY_NUMBER_BACKFILL_RUNBOOK.md`.
 - **Vercel `page.goto` flake** — the 3 remaining test failures are
   baseline infra flakiness on `cracklabs.app`. Either bump the
