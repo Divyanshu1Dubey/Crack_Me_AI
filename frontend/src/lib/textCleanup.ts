@@ -169,26 +169,30 @@ export function cleanPreview(text: string): string {
 // the frontend (the backend already has them in dedicated columns).
 // ---------------------------------------------------------------------------
 
+// NOTE: TS 5.9's parser misreads `(?im)` regex flag-groups as a ternary
+// expression and emits TS1005 (':' expected). We build these via the
+// `RegExp` constructor so the literal never reaches the parser as a
+// regex with a leading `(?...)` group.
 const TRAILER_PATTERNS: Array<[RegExp, string]> = [
     // Multi-line patterns — match the full line, possibly after a newline.
-    [/(?im)^\s*PDF\s+Compiled\s+by[^\n]*$/g, ''],
-    [/(?im)^\s*To\s+Know\s+about\s+our\s+products[^\n]*$/g, ''],
-    [/(?im)^\s*https?:\/\/medicoapps\.org[^\n]*$/g, ''],
-    [/(?im)^\s*MEDICAL[\s\-]*JUNCTION(?:\.COM)?\s*$/g, ''],
-    [/(?im)^\s*MEDICAL\s+JUNCTION\s+TEAM\s*$/g, ''],
-    [/(?im)^\s*www\.medical[\-_]?junction\.com[^\n]*$/g, ''],
-    [/(?im)^\s*Medicoapps\.org[^\n]*$/g, ''],
-    [/(?im)^\s*Medicoapps[^\n]*$/g, ''],
-    [/(?im)^\s*Compiled\s+by[^\n]*$/g, ''],
-    [/(?im)^\s*For\s+more\s+visit[^\n]*$/g, ''],
-    [/(?im)^\s*Also\s+follow\s+us[^\n]*$/g, ''],
-    [/(?im)^\s*Follow\s+us\s+on[^\n]*$/g, ''],
-    [/(?im)^\s*Join\s+our\s+telegram[^\n]*$/g, ''],
-    [/(?im)^\s*Telegram[^\n]*$/g, ''],
-    [/(?im)^\s*Disclaimer[^\n]*$/g, ''],
-    [/(?im)^\s*Note\s*:[^\n]*$/g, ''],
-    [/(?im)^\s*Source\s*:[^\n]*$/g, ''],
-    [/(?im)^\s*Image\s+courtesy[^\n]*$/g, ''],
+    [new RegExp('^\\s*PDF\\s+Compiled\\s+by[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*To\\s+Know\\s+about\\s+our\\s+products[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*https?:\\/\\/medicoapps\\.org[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*MEDICAL[\\s\\-]*JUNCTION(\\.COM)?\\s*$', 'gim'), ''],
+    [new RegExp('^\\s*MEDICAL\\s+JUNCTION\\s+TEAM\\s*$', 'gim'), ''],
+    [new RegExp('^\\s*www\\.medical[\\-_]?junction\\.com[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Medicoapps\\.org[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Medicoapps[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Compiled\\s+by[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*For\\s+more\\s+visit[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Also\\s+follow\\s+us[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Follow\\s+us\\s+on[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Join\\s+our\\s+telegram[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Telegram[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Disclaimer[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Note\\s*:[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Source\\s*:[^\\n]*$', 'gim'), ''],
+    [new RegExp('^\\s*Image\\s+courtesy[^\\n]*$', 'gim'), ''],
 ];
 
 // Single-line option marker: "A. xxx" / "A) xxx" / "(A) xxx"
@@ -448,10 +452,15 @@ export function extractLeakedOptions(text: string | null | undefined): LeakedOpt
     }
     // Drop the "Select the correct answer using the code given below:" hint
     // that always precedes free-text options blocks.
-    // NOTE: TS 5.9 parser flags `?:` (regex non-capturing groups) as TS1005,
-    // so we use capturing alternation "(...|...)" instead of "(?:...)". The
-    // captured group is immediately destructured for nothing.
-    const SELECT_HINT_RE = /(?im)^\s*(Select\s+the\s+correct\s+answer[^\n]*|Code\s*:[^\n]*|List\s+of\s+options[^\n]*)$/;
+    // NOTE: TS 5.9's parser misreads both `(?im)` flag-groups and `(?:` /
+    // `(?:)` non-capturing groups as ternary expressions and emits TS1005
+    // (':' expected). We therefore construct this via `new RegExp(...)`
+    // and use a capturing group instead of `(?:...)`. The captured group
+    // is destructured for nothing.
+    const SELECT_HINT_RE = new RegExp(
+        '^\\s*(Select\\s+the\\s+correct\\s+answer[^\\n]*|Code\\s*:[^\\n]*|List\\s+of\\s+options[^\\n]*)$',
+        'im',
+    );
     const selectMatch = t.match(SELECT_HINT_RE);
     let stemFromDelimiter: string | null = null;
     let tailAfterDelimiter: string | null = null;
