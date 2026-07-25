@@ -1,5 +1,9 @@
+'use client';
+
 import Link from 'next/link';
 import Script from 'next/script';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 import { siteName, siteUrl } from '@/lib/seo';
 import { Mail, MapPin, Phone, Github, Twitter, Linkedin, Stethoscope } from 'lucide-react';
 
@@ -9,6 +13,14 @@ import { Mail, MapPin, Phone, Github, Twitter, Linkedin, Stethoscope } from 'luc
  * schema so Google can read the link graph directly.
  */
 export default function Footer() {
+    const { user } = useAuth();
+    const pathname = usePathname() || '';
+
+    // Hide footer for logged-in users on all pages except subscription and contact
+    const showFooter = !user || pathname.startsWith('/subscription') || pathname.startsWith('/contact');
+
+    if (!showFooter) return null;
+
     const year = new Date().getFullYear();
 
     const linkGroups: { title: string; links: { label: string; href: string }[] }[] = [
