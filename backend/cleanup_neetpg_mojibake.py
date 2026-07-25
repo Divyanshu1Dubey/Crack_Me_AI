@@ -39,7 +39,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # Strings that count as "mojibake signatures" once they survive UTF-8
 # decoding as latin-1. The full set is conservative — these are common
 # in MARROW + Way2online + zygote PDF flavours.
-_MOJI = re.compile(r"(Ã|Â|â)[^\na-zA-Z]")
+_MOJI = re.compile(
+    r"(?:"  # one of the following
+    # Ã<x> — double-encoded latin-1 supplement (Ã© = é, Ã¢ = â, etc.)
+    r"Ã[\x80-\xbf]"
+    # Â<x> — UTF-8 latin-1 supplement decoded as latin-1 (Â® = ®, Â° = °, Â· = ·, Â© = ©, etc.)
+    r"|Â[\x80-\xbf]"
+    # â<x> — UTF-8 general punctuation / typographic quotes decoded as latin-1
+    r"|â[\x80\x91\x92\x93\x94\x99]"
+    # smart-quote specifically (most common)
+    r"|â\x80[\x93\x94\x98\x99]"
+    # double-encoded UTF-8 (Â followed by Â)
+    r"|\xc2\xc2"
+    r")"
+)
 
 
 def _mojibake_score(text: str) -> int:
