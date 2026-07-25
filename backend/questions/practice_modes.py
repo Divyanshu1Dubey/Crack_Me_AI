@@ -115,6 +115,42 @@ def _image_only(qs, *, count: int = 25):
     )
 
 
+def _timed_exam(qs, *, count: int = 60):
+    """Full-paper timed mock — newest-year questions, mixed difficulty."""
+    return list(
+        qs.filter(year__isnull=False)
+          .order_by("-year", "id")
+          .values_list("id", flat=True)[:count]
+    )
+
+
+def _custom(qs, *, count: int = 20, **filters):
+    """Multi-filter — Year + Subject + Topic + Difficulty + Image-only.
+
+    Each filter is optional; missing filter = no constraint. Unknown
+    filters are silently ignored so future client params don't break
+    older builds.
+    """
+    f = qs
+    if filters.get("year"):
+        f = f.filter(year=filters["year"])
+    if filters.get("subject_id"):
+        f = f.filter(subject_id=filters["subject_id"])
+    if filters.get("topic_id"):
+        f = f.filter(topic_id=filters["topic_id"])
+    if filters.get("difficulty"):
+        f = f.filter(difficulty=filters["difficulty"])
+    if str(filters.get("is_image_based")).lower() in ("true", "1", "yes"):
+        f = f.filter(is_image_based=True)
+    if str(filters.get("has_explanation")).lower() in ("true", "1", "yes"):
+        from django.db.models import Q
+        f = f.filter(~Q(explanation="") | ~Q(ai_explanation=""))
+    if str(filters.get("has_ai_enrichment")).lower() in ("true", "1", "yes"):
+        from django.db.models import Q
+        f = f.exclude(ai_explanation="")
+    return list(f.order_by("-year", "id").values_list("id", flat=True)[:count])
+
+
 _MODE_BUILDERS: dict[str, Callable] = {
     "random":        lambda qs, user, params: _random(qs, count=params.get("count", 20),
                                                      seed=params.get("seed")),
@@ -140,6 +176,8 @@ _MODE_BUILDERS: dict[str, Callable] = {
     "rapid_revision": lambda qs, user, params: _rapid_revision(qs, count=params.get("count", 30)),
     "high_yield":    lambda qs, user, params: _high_yield(qs, count=params.get("count", 30)),
     "clinical_cases": lambda qs, user, params: _clinical_cases(qs, count=params.get("count", 25)),
+    "timed":         lambda qs, user, params: _timed_exam(qs, count=params.get("count", 60)),
+    "custom":        lambda qs, user, params: _custom(qs, **params),
 }
 
 

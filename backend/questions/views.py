@@ -456,7 +456,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
         except ValueError:
             seed = None
         params = {"count": count, "seed": seed}
-        for k in ("year", "subject_id", "topic_id"):
+        for k in ("year", "subject_id", "topic_id", "difficulty",
+                  "is_image_based", "has_explanation", "has_ai_enrichment"):
             v = request.query_params.get(k)
             if v:
                 params[k] = v
