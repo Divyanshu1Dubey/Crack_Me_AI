@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText, extractAnalysisFromJson, extractLeakedOptions, isLikelyGarbled, safeDisplayText, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson, extractLeakedOptions, isLikelyGarbled, nonPlaceholderExplanation, safeDisplayText, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -593,10 +593,24 @@ export default function NeetPgPlayer({
                             >
                                 {/* Why correct answer */}
                                 {(() => {
-                                    const expText = state.aiExplanation
-                                        || (current as any).effective_explanation
-                                        || current.explanation
-                                        || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '');
+                                    // Order matters:
+                                    //   1. The user's just-clicked AI output
+                                    //      (state.aiExplanation).
+                                    //   2. The serializer's effective_explanation,
+                                    //      which already prefers admin overrides
+                                    //      and parsed-JSON AI output.
+                                    //   3. The plain `explanation` column.
+                                    // The raw `ai_explanation` field is INTENTIONALLY
+                                    // NOT in the chain — when an admin has run
+                                    // `force-regenerate` the field contains a
+                                    // placeholder string ("Regenerated AI
+                                    // explanation placeholder.") that we never
+                                    // want to render verbatim. Filter any
+                                    // remaining placeholder through
+                                    // nonPlaceholderExplanation() as a defence.
+                                    const expText = nonPlaceholderExplanation(state.aiExplanation)
+                                        || nonPlaceholderExplanation((current as { effective_explanation?: string }).effective_explanation)
+                                        || nonPlaceholderExplanation(current.explanation);
                                     if (expText) {
                                         return (
                                             <section data-testid="expl-why-correct">

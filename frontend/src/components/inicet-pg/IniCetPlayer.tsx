@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText, extractAnalysisFromJson } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson, nonPlaceholderExplanation } from '@/lib/textCleanup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -478,24 +478,33 @@ export default function IniCetPlayer({
                                 className="border-t border-indigo-200 bg-gradient-to-br from-indigo-50/60 via-white to-sky-50/40 px-6 py-5 space-y-4"
                             >
                                 {/* Why correct answer */}
-                                {(current as any).effective_explanation || current.explanation || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '') ? (
-                                    <section data-testid="expl-why-correct">
-                                        <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-2 flex items-center gap-1.5">
-                                            <Lightbulb className="w-4 h-4" /> Why the correct answer is right
-                                        </h3>
-                                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                                            <FormattedText
-                                                text={extractAnalysisFromJson(
-                                                    (current as any).effective_explanation
-                                                    || current.explanation
-                                                    || (typeof (current as any).ai_explanation === 'string'
-                                                        ? (current as any).ai_explanation
-                                                        : '')
-                                                )}
-                                            />
-                                        </div>
-                                    </section>
-                                ) : null}
+                                {(() => {
+                                    // Filter out the admin `force-regenerate`
+                                    // placeholder strings so they never render
+                                    // verbatim. The plain `ai_explanation` field
+                                    // is intentionally not in the chain — when
+                                    // an admin hits force-regenerate on a
+                                    // question without a real explanation, the
+                                    // column gets the placeholder string and the
+                                    // serializer/UI is supposed to fall through
+                                    // to the regular `explanation` field.
+                                    const eff = nonPlaceholderExplanation(
+                                        (current as { effective_explanation?: string }).effective_explanation,
+                                    );
+                                    const fallback = nonPlaceholderExplanation(current.explanation);
+                                    const expText = eff || fallback;
+                                    if (!expText) return null;
+                                    return (
+                                        <section data-testid="expl-why-correct">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-2 flex items-center gap-1.5">
+                                                <Lightbulb className="w-4 h-4" /> Why the correct answer is right
+                                            </h3>
+                                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                                                <FormattedText text={extractAnalysisFromJson(expText)} />
+                                            </div>
+                                        </section>
+                                    );
+                                })()}
 
                                 {/* Concept deep-dive */}
                                 {current.concept_explanation ? (

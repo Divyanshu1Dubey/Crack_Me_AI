@@ -321,6 +321,34 @@ export function extractAnalysisFromJson(text: any): string {
     return text;
 }
 
+// Recognised admin-side placeholder strings stored in `ai_explanation`,
+// `ai_answer`, and `ai_mnemonic` by the `force-regenerate` admin endpoint
+// when those fields weren't already populated. Mirrors the list in
+// `backend/questions/serializers.py::_parse_ai_explanation_to_markdown`.
+const ADMIN_AI_PLACEHOLDER_PATTERNS: RegExp[] = [
+    /regenerated ai explanation placeholder/i,
+    /regenerated mnemonic for question/i,
+    /regenerated answer for question/i,
+];
+
+/**
+ * Returns the trimmed string when it contains real AI content, or an empty
+ * string when the input is empty / only whitespace / matches one of the
+ * admin-side placeholder strings (e.g. "Regenerated AI explanation
+ * placeholder."). Used by the NEET-PG / INI-CET players to fall back to
+ * their "tap the AI Tutor button" hint instead of rendering a placeholder
+ * as if it were a real explanation.
+ */
+export function nonPlaceholderExplanation(text: string | null | undefined): string {
+    if (!text || typeof text !== "string") return "";
+    const trimmed = text.trim();
+    if (!trimmed) return "";
+    for (const re of ADMIN_AI_PLACEHOLDER_PATTERNS) {
+        if (re.test(trimmed)) return "";
+    }
+    return trimmed;
+}
+
 // ---------------------------------------------------------------------------
 // Defence-in-depth: extract leaked options from a recall question whose
 // `option_a..d` columns are empty but whose `question_text` still contains

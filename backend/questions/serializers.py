@@ -23,6 +23,23 @@ def _parse_ai_explanation_to_markdown(ai_exp: str) -> str | None:
     if not ai_exp or not isinstance(ai_exp, str):
         return None
     stripped = ai_exp.strip()
+    if not stripped:
+        return None
+    # Known admin placeholder: when an admin hits the
+    # `force-regenerate` endpoint without locking the explanation,
+    # `ai_explanation` is seeded with a placeholder like
+    # "Regenerated AI explanation placeholder." It must NOT be
+    # surfaced to end-users as if it were a real answer — treat it
+    # as unparseable so callers fall through to the regular
+    # `explanation` field (or empty).
+    placeholder_markers = (
+        "regenerated ai explanation placeholder",
+        "regenerated mnemonic for question",
+        "regenerated answer for question",
+    )
+    lowered = stripped.lower()
+    if any(marker in lowered for marker in placeholder_markers):
+        return None
     if not stripped.startswith('{'):
         return None
     try:
