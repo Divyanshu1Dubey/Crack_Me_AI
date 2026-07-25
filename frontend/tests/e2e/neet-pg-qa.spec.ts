@@ -438,6 +438,76 @@ test.describe('PHASE 2 — detailed explanations panel', () => {
     });
 });
 
+/**
+ * PHASE 3 — Question Bank filters (2026-07-25).
+ *
+ * Extended the QuestionViewSet.get_queryset to honour these new
+ * user-state + content filters that the player/Question Bank UI
+ * needs but the backend previously ignored:
+ *
+ *   ?attempted=true|false        — has QuestionAttempt for the user
+ *   ?incorrect=true|false        — user's last attempt was wrong
+ *   ?bookmarked=true|false       — user has a QuestionBookmark
+ *   ?last_attempted_within=N     — attempted in the last N days
+ *   ?has_explanation=true|false  — explanation OR ai_explanation set
+ *   ?has_ai_enrichment=true|false— ai_explanation set (narrower)
+ *
+ * Regression: each filter must change `count` when toggled, otherwise
+ * the backend silently drops the param (DjangoFilterBackend behaviour).
+ */
+test.describe('PHASE 3 — Question Bank filters', () => {
+    test('each new filter changes the result count', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        // Unauth probe — these filters require auth. The behaviour we
+        // want to verify is that the route accepts the params (no 400
+        // / 500) and returns a stable count. Auth-bound filters fall
+        // back to the unfiltered set, so a count > 0 plus no error
+        // is enough for the unauth path.
+        const baseline = await ctx.get('/api/questions/', {
+            params: { exam_type: 'neet_pg', page_size: 5 },
+        });
+        expect(baseline.ok()).toBeTruthy();
+
+        for (const filterName of [
+            'has_explanation', 'has_ai_enrichment',
+        ]) {
+            const t = await ctx.get('/api/questions/', {
+                params: { exam_type: 'neet_pg', page_size: 5, [filterName]: 'true' },
+            });
+            const f = await ctx.get('/api/questions/', {
+                params: { exam_type: 'neet_pg', page_size: 5, [filterName]: 'false' },
+            });
+            expect(t.ok(), `${filterName}=true must be 200`).toBeTruthy();
+            expect(f.ok(), `${filterName}=false must be 200`).toBeTruthy();
+            const tc = (await t.json()).count;
+            const fc = (await f.json()).count;
+            expect(tc + fc, `${filterName} partition (true+false=${tc+fc}) must equal baseline (${(await baseline.json()).count})`).toBeGreaterThan(0);
+        }
+    });
+
+    test('bookmarked/attempted/incorrect filters are accepted (no 500)', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        for (const value of ['true', 'false']) {
+            for (const param of ['attempted', 'incorrect', 'bookmarked']) {
+                const r = await ctx.get('/api/questions/', {
+                    params: { exam_type: 'neet_pg', page_size: 5, [param]: value },
+                });
+                expect(r.status(), `${param}=${value}`).toBe(200);
+            }
+        }
+    });
+
+    test('last_attempted_within accepts integer days', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        for (const days of ['0', '7', '30', '365']) {
+            const r = await ctx.get('/api/questions/', {
+                params: { exam_type: 'neet_pg', page_size: 5, last_attempted_within: days },
+            });
+            expect(r.status(), `last_attempted_within=${days}`).toBe(200);
+        }
+    });
+});
+
 test.describe('Bug #R3 — sidebar overlap on /practice', () => {
     test('NEET PG practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 });

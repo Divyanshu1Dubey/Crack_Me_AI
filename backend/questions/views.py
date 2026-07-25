@@ -305,6 +305,72 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(accuracy__lte=float(accuracy_max))
         except (TypeError, ValueError):
             pass
+
+        # PHASE 3 — user-state filters (2026-07-25).
+        # The annotations above already compute `is_bookmarked`,
+        # `user_selected_answer`, and `user_is_correct` per-user. These
+        # query params let the client filter on them without needing
+        # a separate /me/questions/ endpoint. All require an
+        # authenticated user; unauth requests get back an unfiltered
+        # list rather than 403 so the page is still usable when the
+        # auth cookie is missing (graceful degradation).
+        if user and getattr(user, 'is_authenticated', False):
+            attempted = self.request.query_params.get('attempted')
+            if attempted in ('true', '1', 'yes'):
+                queryset = queryset.filter(user_selected_answer__isnull=False)
+            elif attempted in ('false', '0', 'no'):
+                queryset = queryset.filter(user_selected_answer__isnull=True)
+
+            incorrect = self.request.query_params.get('incorrect')
+            if incorrect in ('true', '1', 'yes'):
+                queryset = queryset.filter(user_is_correct=False)
+            elif incorrect in ('false', '0', 'no'):
+                queryset = queryset.filter(user_is_correct=True)
+
+            bookmarked = self.request.query_params.get('bookmarked')
+            if bookmarked in ('true', '1', 'yes'):
+                queryset = queryset.filter(is_bookmarked=True)
+            elif bookmarked in ('false', '0', 'no'):
+                queryset = queryset.filter(is_bookmarked=False)
+
+            # last_attempted_within=N (days). 0/empty means "any".
+            last_within = self.request.query_params.get('last_attempted_within')
+            if last_within not in (None, ''):
+                try:
+                    days = int(last_within)
+                    if days > 0:
+                        from datetime import timedelta
+                        from django.utils import timezone
+                        cutoff = timezone.now() - timedelta(days=days)
+                        from questions.models import QuestionAttempt
+                        # Re-use the same Exists pattern as the annotate
+                        # above; this re-filters by recency on the attempt
+                        # rather than on the question row.
+                        recent_qs = QuestionAttempt.objects.filter(
+                            question_id=OuterRef('pk'),
+                            user=user,
+                            attempted_at__gte=cutoff,
+                        )
+                        queryset = queryset.filter(Exists(recent_qs))
+                except (TypeError, ValueError):
+                    pass
+
+        # has_explanation — quick check for the empty-state CTA
+        # "no questions have explanations yet" without fetching the body.
+        has_expl = self.request.query_params.get('has_explanation')
+        if has_expl in ('true', '1', 'yes'):
+            queryset = queryset.exclude(explanation='') | queryset.exclude(ai_explanation='')
+        elif has_expl in ('false', '0', 'no'):
+            queryset = queryset.filter(explanation='', ai_explanation='')
+
+        # has_ai_enrichment — same shape, narrower (excludes
+        # admin-edited explanations, only counts AI-generated ones).
+        has_ai = self.request.query_params.get('has_ai_enrichment')
+        if has_ai in ('true', '1', 'yes'):
+            queryset = queryset.exclude(ai_explanation='')
+        elif has_ai in ('false', '0', 'no'):
+            queryset = queryset.filter(ai_explanation='')
+
         return queryset
 
     def list(self, request, *args, **kwargs):
