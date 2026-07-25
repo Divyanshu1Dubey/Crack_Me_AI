@@ -133,10 +133,13 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     """Full CRUD for questions with filtering, search, and bookmark support."""
     queryset = Question.objects.select_related('subject', 'topic').all()
-    # NOTE: exam_source, is_image_based, is_image_based need to be in filterset_fields
-    # so /api/questions/?exam_source=NEET+PG and ?is_image_based=true actually filter.
+    # NOTE: exam_source is NOT in filterset_fields on purpose — Bug #6
+    # (2026-07-25) discovered that DjangoFilterBackend's exact-match
+    # behaviour rejects valid labels like 'NEET PG (recall)' when the
+    # client passes 'NEET PG'. Prefix-match fallback is implemented in
+    # get_queryset() instead.
     filterset_fields = [
-        'year', 'subject', 'topic', 'difficulty', 'exam_type', 'exam_source',
+        'year', 'subject', 'topic', 'difficulty', 'exam_type',
         'is_image_based', 'is_verified_by_admin', 'is_scholarship_eligible',
         'needs_review', 'is_controversial', 'display_number', 'is_active',
         'page_number',
@@ -226,6 +229,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset().order_by('-id')
         user = getattr(self.request, 'user', None)
         is_admin = bool(user and getattr(user, 'is_authenticated', False) and (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)))
+
+        # Bug #6 (2026-07-25): exam_source filter silently returned 0 results
+        # because Question.exam_source stores labels like "NEET PG (recall)"
+        # while the API client passes "NEET PG". DjangoFilter's default
+        # exact-match mode rejected everything. Match the prefix the same
+        # way the stats endpoint already does (see _exam_source_q()).
+        exam_source_param = self.request.query_params.get('exam_source')
+        if exam_source_param:
+            exam_q = Q(exam_source=exam_source_param)
+            for prefix in ('NEET PG', 'UPSC CMS', 'INI-CET', 'USMLE', 'FMGE'):
+                if exam_source_param.startswith(prefix):
+                    exam_q = exam_q | Q(exam_source__startswith=prefix)
+                    break
+            queryset = queryset.filter(exam_q)
         admin_actions = {
             'create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate',
             'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload',
