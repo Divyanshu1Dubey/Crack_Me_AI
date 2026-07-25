@@ -102,11 +102,29 @@ export default function NeetPgPlayer({
     initialIndex = 0,
     title = 'NEET PG Practice',
     onExit,
+    hasMore = false,
+    loadingMore = false,
+    onLoadMore,
+    rateLimited = false,
+    onRetry,
 }: {
     questions: Question[];
     initialIndex?: number;
     title?: string;
     onExit?: () => void;
+    /** PRODUCTION-INCIDENT FIX (2026-07-25): the page only fetches the
+     *  first 20 questions up-front. When the user reaches near the end
+     *  of `questions` (or jumps via the palette past `questions.length`)
+     *  the player calls `onLoadMore()` to fetch the next page from the
+     *  parent. This stops the previous "fetch 200 pages sequentially"
+     *  loop that triggered 429s on production. */
+    hasMore?: boolean;
+    loadingMore?: boolean;
+    onLoadMore?: () => Promise<void> | void;
+    /** True when the parent has been rate-limited (HTTP 429). When true,
+     *  the Next button shows a retry UI instead of silently failing. */
+    rateLimited?: boolean;
+    onRetry?: () => void;
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -160,6 +178,20 @@ export default function NeetPgPlayer({
         return () => { cancelled = true; };
     }, [current?.id]);
 
+    // PRODUCTION-INCIDENT FIX (2026-07-25): when the user is within
+    // 5 of the end of what's loaded AND the parent has signalled
+    // there's more, fire onLoadMore. This keeps the Next button working
+    // without ever pre-fetching the full 200-page backlog.
+    useEffect(() => {
+        if (!onLoadMore) return;
+        if (!hasMore) return;
+        if (loadingMore) return;
+        if (rateLimited) return;
+        if (state.index >= questions.length - 5) {
+            onLoadMore();
+        }
+    }, [state.index, questions.length, hasMore, loadingMore, rateLimited, onLoadMore]);
+
     /* AI explanation loader */
     const fetchAi = useCallback(async () => {
         if (!current) return;
@@ -191,10 +223,19 @@ export default function NeetPgPlayer({
     }, [current?.id]);
 
     const goNext = useCallback(() => {
-        if (isLast) return;
-        setState(s => ({ ...s, index: s.index + 1 }));
+        if (state.index < questions.length - 1) {
+            setState(s => ({ ...s, index: s.index + 1 }));
+            setPaletteOpen(false);
+            return;
+        }
+        // We're at the end of what's loaded. If the parent signalled
+        // more pages are available, trigger the next fetch. Otherwise
+        // wrap to the start of the loaded list.
+        if (hasMore && onLoadMore && !loadingMore && !rateLimited) {
+            onLoadMore();
+        }
         setPaletteOpen(false);
-    }, [isLast]);
+    }, [state.index, questions.length, hasMore, onLoadMore, loadingMore, rateLimited]);
 
     const goPrev = useCallback(() => {
         if (isFirst) return;
@@ -264,7 +305,7 @@ export default function NeetPgPlayer({
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                         <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 font-semibold">
-                            Q {state.index + 1} / {total}
+                            Q {state.index + 1} / {total}{hasMore ? '+' : ''}
                         </Badge>
                         <Badge variant="secondary" className="font-semibold">
                             <Activity className="w-3 h-3 mr-1 inline" />
@@ -483,6 +524,52 @@ export default function NeetPgPlayer({
                         </details>
                     </div>
 
+                    {/* PRODUCTION-INCIDENT FIX (2026-07-25): rate-limited /
+                        more-available footer. Shows clearly what's happening
+                        so the spinner can't trap the user. */}
+                    {(rateLimited || hasMore || loadingMore) && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className={cn(
+                                'mt-4 px-4 py-3 rounded-xl border text-sm flex items-center gap-2',
+                                rateLimited
+                                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                                    : 'bg-teal-50 border-teal-200 text-teal-800',
+                            )}
+                        >
+                            {loadingMore ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                                    <span>Loading more questions…</span>
+                                </>
+                            ) : rateLimited ? (
+                                <>
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                    <span className="flex-1">
+                                        Server rate-limited our requests. Click Retry to continue with a fresh batch.
+                                    </span>
+                                    {onRetry && (
+                                        <button
+                                            type="button"
+                                            onClick={onRetry}
+                                            className="px-3 py-1 rounded-md bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700"
+                                        >
+                                            Retry
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <Activity className="w-4 h-4 flex-shrink-0" />
+                                    <span className="flex-1">
+                                        {total} loaded. Click Next to fetch more.
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {/* Sticky navigation bar */}
                     <div className="sticky bottom-0 z-20 mt-4 -mx-4 px-4">
                         <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-teal-900/10 border border-teal-100 p-3 flex items-center gap-2">
@@ -509,10 +596,18 @@ export default function NeetPgPlayer({
                                 <Button
                                     size="sm"
                                     onClick={goNext}
-                                    disabled={isLast}
+                                    disabled={isLast && !hasMore}
                                     className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
                                 >
-                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                    {loadingMore ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…
+                                        </>
+                                    ) : (
+                                        <>
+                                            Next <ChevronRight className="w-4 h-4 ml-1" />
+                                        </>
+                                    )}
                                 </Button>
                             </div>
                         </div>

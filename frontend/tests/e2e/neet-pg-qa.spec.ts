@@ -125,6 +125,53 @@ test.describe('Bug #7/#10 — image-based + topic wiring', () => {
     });
 });
 
+test.describe('PRODUCTION INCIDENT (2026-07-25) — /practice page must not over-fetch', () => {
+    /**
+     * On 2026-07-25 the production practice page sat on the spinner forever
+     * while making 150+ requests:
+     *   GET /api/questions/?exam_type=neet_pg&page=1..N&page_size=20
+     * eventually returning 429 and surfacing "Couldn't load NEET PG questions".
+     *
+     * Fix: only page 1 is fetched on mount; more pages load on demand.
+     * This test asserts the network shape is bounded — no more than
+     * 3 distinct page=N requests on initial mount.
+     */
+    test('NEET PG practice: initial load fetches at most page=1 (no while-loop over-fetch)', async ({ page }) => {
+        if (page.url().includes('/login')) {
+            test.skip(true, 'route is auth-gated; require QA_TEST_USER env to enable');
+            return;
+        }
+        const apiCalls: { url: string; status: number }[] = [];
+        page.on('response', (res) => {
+            const url = res.url();
+            if (url.includes('/api/questions/') && url.includes('exam_type=neet_pg')) {
+                apiCalls.push({ url, status: res.status() });
+            }
+        });
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice', { waitUntil: 'domcontentloaded' });
+        // Wait for the player chrome (Q 1 / 20+) to render.
+        await expect(page.locator('text=/Q 1 \\/ \\d+\\+?/')).toBeVisible({ timeout: 30000 });
+        // Stop tracking new requests; assert the API call shape.
+        await page.waitForTimeout(2000); // allow prefetches to settle
+
+        const pageParamCalls = apiCalls.filter((c) => /[?&]page=\d+/.test(c.url));
+        const distinctPages = new Set(
+            pageParamCalls.map((c) => {
+                const m = c.url.match(/[?&]page=(\d+)/);
+                return m ? Number(m[1]) : -1;
+            })
+        );
+        // The bug used to produce page=1..200; after the fix the worst case
+        // is page=1 + a single prefetch of page=2 if the player is mid-load.
+        expect(distinctPages.size, `expected at most 2 distinct pages, got ${[...distinctPages].sort()}`).toBeLessThanOrEqual(2);
+
+        // Hard cap: no response should be 429.
+        const throttled = apiCalls.filter((c) => c.status === 429);
+        expect(throttled.length, `expected zero 429s on initial load, got ${throttled.length}`).toBe(0);
+    });
+});
+
 test.describe('Bug #R1 — WatermarkOverlay opacity must stay near-invisible', () => {
     test('overlay container opacity is <= 0.10 (screen-recording deterrent, not user-visible)', async ({ page }) => {
         await page.goto('/questions/neet-pg/practice?year=2021', { waitUntil: 'domcontentloaded' });

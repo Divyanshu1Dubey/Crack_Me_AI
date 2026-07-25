@@ -107,11 +107,24 @@ export default function IniCetPlayer({
     initialIndex = 0,
     title = 'INI-CET Practice',
     onExit,
+    hasMore = false,
+    loadingMore = false,
+    onLoadMore,
+    rateLimited = false,
+    onRetry,
 }: {
     questions: Question[];
     initialIndex?: number;
     title?: string;
     onExit?: () => void;
+    /** PRODUCTION-INCIDENT FIX (2026-07-25): the parent only fetches
+     *  the first 20 questions; when the user reaches near the end the
+     *  player calls onLoadMore() to fetch the next page on demand. */
+    hasMore?: boolean;
+    loadingMore?: boolean;
+    onLoadMore?: () => Promise<void> | void;
+    rateLimited?: boolean;
+    onRetry?: () => void;
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -192,10 +205,16 @@ export default function IniCetPlayer({
     }, [current?.id]);
 
     const goNext = useCallback(() => {
-        if (state.index >= total - 1) return;
-        setState(s => ({ ...s, index: s.index + 1 }));
+        if (state.index < total - 1) {
+            setState(s => ({ ...s, index: s.index + 1 }));
+            setPaletteOpen(false);
+            return;
+        }
+        if (hasMore && onLoadMore && !loadingMore && !rateLimited) {
+            onLoadMore();
+        }
         setPaletteOpen(false);
-    }, [state.index, total]);
+    }, [state.index, total, hasMore, onLoadMore, loadingMore, rateLimited]);
     const goPrev = useCallback(() => {
         if (state.index <= 0) return;
         setState(s => ({ ...s, index: s.index - 1 }));
@@ -219,6 +238,16 @@ export default function IniCetPlayer({
         window.addEventListener('keydown', h);
         return () => window.removeEventListener('keydown', h);
     }, [goNext, goPrev, submitAttempt, state.selected]);
+
+    // PRODUCTION-INCIDENT FIX (2026-07-25): auto-load the next page
+    // when within 5 of the end of what's loaded. Prevents the Next
+    // button from hitting an empty tail.
+    useEffect(() => {
+        if (!onLoadMore || !hasMore || loadingMore || rateLimited) return;
+        if (state.index >= total - 5) {
+            onLoadMore();
+        }
+    }, [state.index, total, hasMore, loadingMore, rateLimited, onLoadMore]);
 
     const toggleBookmark = useCallback(async () => {
         if (!current) return;
@@ -255,7 +284,7 @@ export default function IniCetPlayer({
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                         <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-semibold">
-                            Q {state.index + 1} / {total}
+                            Q {state.index + 1} / {total}{hasMore ? '+' : ''}
                         </Badge>
                         <Badge variant="secondary" className="font-semibold">
                             <Activity className="w-3 h-3 mr-1 inline" />
@@ -476,6 +505,49 @@ export default function IniCetPlayer({
                         </details>
                     </div>
 
+                    {(rateLimited || hasMore || loadingMore) && (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className={cn(
+                                'mt-4 px-4 py-3 rounded-xl border text-sm flex items-center gap-2',
+                                rateLimited
+                                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                                    : 'bg-indigo-50 border-indigo-200 text-indigo-800',
+                            )}
+                        >
+                            {loadingMore ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                                    <span>Loading more questions…</span>
+                                </>
+                            ) : rateLimited ? (
+                                <>
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                    <span className="flex-1">
+                                        Server rate-limited our requests. Click Retry to continue with a fresh batch.
+                                    </span>
+                                    {onRetry && (
+                                        <button
+                                            type="button"
+                                            onClick={onRetry}
+                                            className="px-3 py-1 rounded-md bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700"
+                                        >
+                                            Retry
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <Activity className="w-4 h-4 flex-shrink-0" />
+                                    <span className="flex-1">
+                                        {total} loaded. Click Next to fetch more.
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     <div className="sticky bottom-0 z-20 mt-4 -mx-4 px-4">
                         <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-indigo-900/10 border border-indigo-100 p-3 flex items-center gap-2">
                             <Button variant="outline" size="sm" onClick={goPrev} disabled={isFirst} className="border-indigo-200 hover:bg-indigo-50">
@@ -495,10 +567,18 @@ export default function IniCetPlayer({
                                 <Button
                                     size="sm"
                                     onClick={goNext}
-                                    disabled={isLast}
+                                    disabled={isLast && !hasMore}
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
                                 >
-                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                    {loadingMore ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading…
+                                        </>
+                                    ) : (
+                                        <>
+                                            Next <ChevronRight className="w-4 h-4 ml-1" />
+                                        </>
+                                    )}
                                 </Button>
                             </div>
                         </div>

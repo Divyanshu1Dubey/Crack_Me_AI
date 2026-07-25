@@ -10,41 +10,45 @@
  * Loads via /api/questions/?exam_type=ini_cet&... and hands them off to
  * <IniCetPlayer>. Independent of NEET PG — different palette, image-rich
  * explanation panels.
+ *
+ * PRODUCTION-INCIDENT FIX (2026-07-25): previously this route fetched
+ * EVERY page up to ALL_PAGES=200 sequentially, which caused 429s and
+ * infinite spinner (same root cause as /questions/neet-pg/practice).
+ * Now fetches only page 1 on mount and asks the player to call
+ * onLoadMore() when more pages are needed.
  */
 'use client';
-import { Suspense, useEffect, useState, useMemo } from 'react';
+import { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { questionsAPI } from '@/lib/api';
 import IniCetPlayer from '@/components/inicet-pg/IniCetPlayer';
-import { Loader2, BookOpen } from 'lucide-react';
+import { Loader2, BookOpen, RefreshCcw } from 'lucide-react';
 
-const ALL_PAGES = 200;
+const PAGE_SIZE = 20;
 
-async function fetchAllIniCetQuestions(
+interface FetchPageResult {
+    questions: any[];
+    hasMore: boolean;
+    rateLimited?: boolean;
+}
+
+async function fetchIniCetPage(
     params: Record<string, string | number>,
-    onProgress?: (loaded: number) => void,
-): Promise<any[]> {
-    const results: any[] = [];
-    let page = 1;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-        // questionsAPI.list returns the Axios response wrapper, so the
-        // paginated body lives at `.data` — NOT `.results` directly. Same
-        // Bug #R2 root cause as /questions/neet-pg/practice (fix
-        // commit 5558447). Without this unwrap the player silently renders
-        // the empty-state branch.
-        const res: any = await questionsAPI.list({ ...params, page, page_size: 20 });
+    page: number,
+): Promise<FetchPageResult> {
+    try {
+        const res: any = await questionsAPI.list({ ...params, page, page_size: PAGE_SIZE });
         const body = res?.data ?? res;
         const chunk: any[] = body?.results ?? (Array.isArray(body) ? body : []);
-        if (!chunk.length) break;
-        results.push(...chunk);
-        onProgress?.(results.length);
-        const next = body?.next;
-        if (!next) break;
-        page += 1;
-        if (page > ALL_PAGES) break;
+        const hasMore = !!body?.next && chunk.length > 0;
+        return { questions: chunk, hasMore };
+    } catch (e: any) {
+        const status = e?.response?.status ?? e?.status;
+        if (status === 429) {
+            return { questions: [], hasMore: false, rateLimited: true };
+        }
+        throw e;
     }
-    return results;
 }
 
 function IniCetPracticeInner() {
@@ -58,47 +62,90 @@ function IniCetPracticeInner() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [mounted, setMounted] = useState(false);
-    const [loadedCount, setLoadedCount] = useState(0);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [rateLimited, setRateLimited] = useState(false);
+    const inFlight = useRef(false);
 
     useEffect(() => { setMounted(true); }, []);
 
+    const filterParams = useMemo<Record<string, string | number>>(() => {
+        const p: Record<string, string | number> = { exam_type: 'ini_cet' };
+        if (year) p.year = year;
+        if (subject) p.subject = subject;
+        if (topic) p.topic = topic;
+        return p;
+    }, [year, subject, topic]);
+
     useEffect(() => {
-        let cancelled = false;
         if (!mounted) return;
+        let cancelled = false;
         setLoading(true);
         setError(null);
+        setRateLimited(false);
         setQuestions([]);
-        setLoadedCount(0);
+        setPage(1);
+        setHasMore(true);
 
         (async () => {
-            try {
-                const params: Record<string, string | number> = { exam_type: 'ini_cet' };
-                if (year) params.year = year;
-                if (subject) params.subject = subject;
-                if (topic) params.topic = topic;
-
-                const results = await fetchAllIniCetQuestions(params, (n) => {
-                    if (!cancelled) setLoadedCount(n);
-                });
-
-                let initialIndex = 0;
-                if (startId) {
-                    const i = results.findIndex((q: any) => String(q.id) === startId);
-                    if (i >= 0) initialIndex = i;
-                }
-                if (!cancelled) {
-                    setQuestions(results);
-                    setLoading(false);
-                }
-            } catch (e: any) {
-                if (!cancelled) {
-                    setError(e?.message || 'Failed to load INI-CET questions');
-                    setLoading(false);
-                }
+            const result = await fetchIniCetPage(filterParams, 1);
+            if (cancelled) return;
+            if (result.rateLimited) {
+                setRateLimited(true);
+                setLoading(false);
+                return;
             }
-        })();
+            let initialIndex = 0;
+            if (startId) {
+                const i = result.questions.findIndex((q: any) => String(q.id) === startId);
+                if (i >= 0) initialIndex = i;
+            }
+            setQuestions(result.questions);
+            setHasMore(result.hasMore);
+            setPage(1);
+            setLoading(false);
+            (window as any).__iniCetInitialIndex = initialIndex;
+        })().catch((e) => {
+            if (cancelled) return;
+            setError(e?.message || 'Failed to load INI-CET questions');
+            setLoading(false);
+        });
         return () => { cancelled = true; };
-    }, [year, subject, topic, startId, mounted]);
+    }, [filterParams, startId, mounted]);
+
+    const loadMore = useCallback(async () => {
+        if (inFlight.current || !hasMore || loadingMore || rateLimited) return;
+        inFlight.current = true;
+        setLoadingMore(true);
+        try {
+            const nextPage = page + 1;
+            const result = await fetchIniCetPage(filterParams, nextPage);
+            if (result.rateLimited) {
+                setRateLimited(true);
+                return;
+            }
+            setQuestions((prev) => [...prev, ...result.questions]);
+            setHasMore(result.hasMore);
+            setPage(nextPage);
+        } catch (e: any) {
+            setError(e?.message || 'Failed to load more questions');
+        } finally {
+            setLoadingMore(false);
+            inFlight.current = false;
+        }
+    }, [filterParams, hasMore, loadingMore, page, rateLimited]);
+
+    const retryFromScratch = useCallback(() => {
+        setRateLimited(false);
+        setError(null);
+        setLoading(true);
+        setQuestions([]);
+        setPage(1);
+        setHasMore(true);
+        setMounted(false);
+        setTimeout(() => setMounted(true), 0);
+    }, []);
 
     const title = useMemo(() => {
         const parts = ['INI-CET'];
@@ -108,14 +155,36 @@ function IniCetPracticeInner() {
         return parts.join(' · ');
     }, [year, subject, topic]);
 
+    const initialIndex = (window as any).__iniCetInitialIndex || 0;
+
     if (!mounted || (loading && questions.length === 0)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50/40 via-white to-sky-50/40">
                 <div className="text-center space-y-3">
                     <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mx-auto" />
                     <p className="text-sm text-slate-600 font-semibold">
-                        Loading INI-CET Practice… {loadedCount > 0 ? `(${loadedCount} loaded)` : ''}
+                        Loading INI-CET Practice…
                     </p>
+                </div>
+            </div>
+        );
+    }
+
+    if (rateLimited && questions.length === 0) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-rose-50 p-4">
+                <div className="text-center max-w-md space-y-4">
+                    <BookOpen className="w-10 h-10 mx-auto text-rose-500" />
+                    <h2 className="text-lg font-bold text-slate-800">Server is rate-limiting requests</h2>
+                    <p className="text-sm text-slate-600">
+                        We&rsquo;re loading too many questions at once. Click below to retry with a small batch.
+                    </p>
+                    <button
+                        onClick={retryFromScratch}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                    >
+                        <RefreshCcw className="w-4 h-4" /> Retry
+                    </button>
                 </div>
             </div>
         );
@@ -128,6 +197,12 @@ function IniCetPracticeInner() {
                     <BookOpen className="w-10 h-10 mx-auto text-rose-500" />
                     <h2 className="text-lg font-bold text-slate-800">Couldn't load INI-CET questions</h2>
                     <p className="text-sm text-slate-600">{error}</p>
+                    <button
+                        onClick={retryFromScratch}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                    >
+                        <RefreshCcw className="w-4 h-4" /> Retry
+                    </button>
                 </div>
             </div>
         );
@@ -135,7 +210,7 @@ function IniCetPracticeInner() {
 
     if (!loading && questions.length === 0) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-sky-50">
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-sky-50/40">
                 <div className="text-center space-y-3">
                     <BookOpen className="w-10 h-10 mx-auto text-indigo-500" />
                     <p className="text-base font-semibold text-slate-700">No INI-CET questions available</p>
@@ -150,7 +225,18 @@ function IniCetPracticeInner() {
         );
     }
 
-    return <IniCetPlayer questions={questions} title={title} />;
+    return (
+        <IniCetPlayer
+            questions={questions}
+            title={title}
+            initialIndex={initialIndex}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={loadMore}
+            rateLimited={rateLimited}
+            onRetry={retryFromScratch}
+        />
+    );
 }
 
 export default function IniCetPracticePage() {
