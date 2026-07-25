@@ -66,9 +66,10 @@ class DjangoWriter:
     """Writes parsed output into the production schema."""
 
     def __init__(self, import_job: Optional[QuestionImportJob] = None,
-                 batch_size: int = 500):
+                 batch_size: int = 500, exam_type: str = "neet_pg"):
         self.import_job = import_job
         self.batch_size = batch_size
+        self.exam_type = exam_type
         self.stats = WriterStats()
 
     # ---------------------------------------------------------------- RecallSource
@@ -185,7 +186,7 @@ class DjangoWriter:
         with transaction.atomic():
             question, created = Question.objects.update_or_create(
                 recall_text_hash=text_hash,
-                exam_type="neet_pg",
+                exam_type=self.exam_type,
                 defaults=defaults,
             )
 
@@ -462,7 +463,7 @@ class DjangoWriter:
         """If another Question already has the same recall_text_hash, form a cluster."""
         existing = (
             Question.objects
-            .filter(recall_text_hash=text_hash, exam_type="neet_pg")
+            .filter(recall_text_hash=text_hash, exam_type=self.exam_type)
             .exclude(id=question.id)
             .order_by("-confidence_score", "created_at")
             .first()

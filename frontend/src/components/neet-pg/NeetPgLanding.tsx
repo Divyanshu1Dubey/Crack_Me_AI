@@ -233,18 +233,6 @@ export default function NeetPgLanding() {
         </div>
       </section>
 
-      {/* ════════════════ PATTERN STRIP ════════════════ */}
-      <section className="border-y border-border/60 bg-card/60 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <PatternStat icon={Target} label="Mode" value="CBT" />
-          <PatternStat icon={BookOpen} label="Questions" value="200 MCQs" />
-          <PatternStat icon={Clock} label="Time" value="3h 30m" />
-          <PatternStat icon={Award} label="Marks" value="+4 / −1" />
-          <PatternStat icon={GraduationCap} label="Total Marks" value="800" />
-          <PatternStat icon={Sparkles} label="Syllabus" value="NBE 2026" />
-        </div>
-      </section>
-
       {/* ════════════════ YEAR GRID ════════════════ */}
       <section id="years" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
@@ -294,6 +282,20 @@ export default function NeetPgLanding() {
         )}
       </section>
 
+      {/* ════════════════ PATTERN STRIP ════════════════ */}
+      <section className="border-y border-border/60 bg-card/60 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <PatternStat icon={Target} label="Mode" value="CBT" />
+          <PatternStat icon={BookOpen} label="Questions" value="200 MCQs" />
+          <PatternStat icon={Clock} label="Time" value="3h 30m" />
+          <PatternStat icon={Award} label="Marks" value="+4 / −1" />
+          <PatternStat icon={GraduationCap} label="Total Marks" value="800" />
+          <PatternStat icon={Sparkles} label="Syllabus" value="NBE 2026" />
+        </div>
+      </section>
+
+
+
       {/* ════════════════ SUBJECT GRID ════════════════ */}
       <section id="subjects" className="bg-gradient-to-br from-emerald-50/40 via-background to-teal-50/40 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
@@ -327,7 +329,7 @@ export default function NeetPgLanding() {
                 const Icon = v.icon;
                 const count = s.question_count ?? 0;
                 return (
-                  <Link key={s.id} href={`/questions/neet-pg/practice?subject=${encodeURIComponent(s.name)}`}
+                  <Link key={s.id} href={`/questions/neet-pg/practice?subject=${s.id}`}
                         className="group">
                     <Card className={cn(
                       'h-full border-border/60 bg-card/90 hover:border-emerald-400/60 transition-all group-hover:shadow-xl group-hover:-translate-y-0.5 overflow-hidden',

@@ -19,7 +19,7 @@ from importers.neetpg.config import get_config
 from questions.models import QuestionImportJob
 
 
-def main(source_dir: str):
+def main(source_dir: str, exam_type: str = "neet_pg"):
     src = Path(source_dir).absolute()
     if not src.exists():
         raise SystemExit(f"source dir not found: {src}")
@@ -34,6 +34,7 @@ def main(source_dir: str):
     print(f"Created QuestionImportJob id={job.id}")
 
     cfg = get_config()
+    cfg.exam_type = exam_type
     pdfs = sorted(src.glob("*.pdf"))
     print(f"Found {len(pdfs)} PDFs in {src}")
     total = {"questions": 0, "images": 0, "sources": 0, "errors": 0}
@@ -66,4 +67,6 @@ def main(source_dir: str):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "../neet-pg_and_material")
+    source = sys.argv[1] if len(sys.argv) > 1 else "../neet-pg_and_material"
+    exam = sys.argv[2] if len(sys.argv) > 2 else "neet_pg"
+    main(source, exam)

@@ -78,3 +78,31 @@ class StagedQuestionAdmin(admin.ModelAdmin):
                     "question_number_in_pdf", "created_at")
     list_filter = ("qa_status", "review_status")
     search_fields = ("question_payload__stem",)
+    actions = ["publish_to_live"]
+
+    @admin.action(description="Approve and Publish to Live Question Bank")
+    def publish_to_live(self, request, queryset):
+        from .conservative_gate import _import_production_ready
+        
+        # Group by job for batching
+        jobs = {}
+        for sq in queryset:
+            if sq.job_id not in jobs:
+                jobs[sq.job_id] = {"job": sq.job, "payloads": [], "sq_objs": []}
+            jobs[sq.job_id]["payloads"].append(sq.question_payload)
+            jobs[sq.job_id]["sq_objs"].append(sq)
+            
+        total_created = 0
+        total_updated = 0
+        for job_data in jobs.values():
+            c, u, _ = _import_production_ready(
+                job=job_data["job"],
+                pr_payloads=job_data["payloads"]
+            )
+            total_created += c
+            total_updated += u
+            for sq in job_data["sq_objs"]:
+                sq.review_status = "approved"
+                sq.save(update_fields=["review_status"])
+                
+        self.message_user(request, f"Published {total_created} new questions, updated {total_updated} existing questions.")

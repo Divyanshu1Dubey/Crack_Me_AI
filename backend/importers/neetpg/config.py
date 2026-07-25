@@ -27,8 +27,9 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-@dataclass(frozen=True)
+@dataclass
 class Config:
+    exam_type: str = "neet_pg"
     output_dir: Path = field(
         default_factory=lambda: Path(
             os.environ.get(

@@ -59,6 +59,7 @@ const SLUG_TO_EXAM_SOURCE: Record<string, string> = {
     'neet-pg': 'NEET PG',
     'neet_pg': 'NEET PG',
     'ini-cet': 'INI-CET',
+    'ini_cet': 'INI-CET',
     'inicet': 'INI-CET',
     'fmge': 'FMGE',
     'usmle': 'USMLE',

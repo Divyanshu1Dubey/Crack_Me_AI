@@ -115,10 +115,10 @@ def process_one_pdf(
 
     # 1+2. Iterate pages: classify, extract text/images, OCR fallback.
     for page in pdf_reader.iter_pages(doc):
-        text = page.text or ""
-        # Fallback: if PyMuPDF gave us nothing, use pdfplumber's text.
-        if not text.strip() and plumber_text.get(page.page_number, "").strip():
-            text = plumber_text[page.page_number]
+        # Prefer pdfplumber text if available because PyMuPDF extracts mojibake from custom fonts
+        text = plumber_text.get(page.page_number, "").strip()
+        if not text:
+            text = page.text or ""
         feats = classifier_mod.features_for(page.page_number, text, page.image_count)
         page_features.append(feats)
         cls = classifier_mod.classify(feats)
@@ -213,6 +213,7 @@ def process_one_pdf(
         recall_status="recall",
         import_job_id=import_job_id,
         force=force,
+        exam_type=getattr(cfg, "exam_type", "neet_pg"),
     )
 
     elapsed = time.monotonic() - started
@@ -242,6 +243,7 @@ def _persist_into_db(
     recall_status: str,
     import_job_id: Optional[str],
     force: bool = False,  # noqa: ARG001 — kept for parity with runner's main arg set
+    exam_type: str = "neet_pg",
 ) -> dict:
     """Translate Phase-1 output into Django ORM rows.
 
@@ -265,7 +267,7 @@ def _persist_into_db(
                 import_job = QuestionImportJob.objects.filter(id=int(import_job_id)).first()
             except (TypeError, ValueError):
                 import_job = None
-        writer = DjangoWriter(import_job=import_job)
+        writer = DjangoWriter(import_job=import_job, exam_type=exam_type)
         recall_source = writer.upsert_recall_source(
             pdf_path=pdf_path, fingerprint=fingerprint,
             scan_type=scan_type, recall_status=recall_status,

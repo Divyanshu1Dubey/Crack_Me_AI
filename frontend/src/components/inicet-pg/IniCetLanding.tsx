@@ -345,7 +345,7 @@ export default function IniCetLanding() {
                 const Icon = v.icon;
                 const count = s.question_count ?? 0;
                 return (
-                  <Link key={s.id} href={`/questions/inicet/practice?subject=${encodeURIComponent(s.name)}`}
+                  <Link key={s.id} href={`/questions/inicet/practice?subject=${s.id}`}
                         className="group">
                     <Card className={cn(
                       'h-full border-border/60 bg-card/90 hover:border-indigo-400/60 transition-all group-hover:shadow-xl group-hover:-translate-y-0.5 overflow-hidden',
