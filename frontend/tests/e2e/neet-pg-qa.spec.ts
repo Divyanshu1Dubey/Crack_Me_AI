@@ -100,6 +100,45 @@ test.describe('Bug #1 — React #418 hydration on /neet-pg', () => {
         const has418 = errors.some(e => /Minified React error.*418/i.test(e));
         expect(has418, `React #418 fired. Errors: ${errors.join('\n')}`).toBe(false);
     });
+
+    /**
+     * Bug #R5 (2026-07-25): React #418 on /questions/neet-pg/practice.
+     * Root cause: WatermarkOverlay renders 50 timestamped spans on the
+     * client (`user.email • 7/25/2026, 11:30:00 AM`) but the server
+     * renders nothing because useAuth has no session during SSR. The
+     * difference between empty SSR and timestamped CSR triggers text
+     * content mismatch. Fix: gate the overlay behind a `mounted` flag
+     * so SSR and the first client paint both render `null`.
+     *
+     * Auth-gated: when QA_TEST_USER_EMAIL/QA_TEST_USER_PASS are not set
+     * the test skips (the practice route redirects to /login and
+     * WatermarkOverlay wouldn't render anyway).
+     */
+    test('no React #418 error on /questions/neet-pg/practice (WatermarkOverlay hyd)', async ({ page }) => {
+        const errors: string[] = [];
+        page.on('pageerror', err => errors.push(err.message));
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice', { waitUntil: 'networkidle', timeout: 30000 });
+        if (page.url().includes('/login')) {
+            test.skip(true, 'route is auth-gated; require QA_TEST_USER env to enable');
+            return;
+        }
+        const has418 = errors.some(e => /Minified React error.*418/i.test(e));
+        expect(has418, `React #418 fired. Errors: ${errors.join('\n')}`).toBe(false);
+    });
+
+    test('no React #418 error on /questions/inicet/practice (WatermarkOverlay hyd)', async ({ page }) => {
+        const errors: string[] = [];
+        page.on('pageerror', err => errors.push(err.message));
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/inicet/practice', { waitUntil: 'networkidle', timeout: 30000 });
+        if (page.url().includes('/login')) {
+            test.skip(true, 'route is auth-gated; require QA_TEST_USER env to enable');
+            return;
+        }
+        const has418 = errors.some(e => /Minified React error.*418/i.test(e));
+        expect(has418, `React #418 fired. Errors: ${errors.join('\n')}`).toBe(false);
+    });
 });
 
 test.describe('Bug #9 — display_number must default to a per-paper ordinal', () => {
@@ -137,8 +176,15 @@ test.describe('PRODUCTION INCIDENT (2026-07-25) — /practice page must not over
      * 3 distinct page=N requests on initial mount.
      */
     test('NEET PG practice: initial load fetches at most page=1 (no while-loop over-fetch)', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/questions/neet-pg/practice', { waitUntil: 'domcontentloaded' });
+        // The /practice route is auth-gated. If we landed on /login,
+        // skip — this test requires an authenticated session to render
+        // the player. Set QA_TEST_USER_EMAIL/QA_TEST_USER_PASSWORD env
+        // to enable.
+        await page.waitForLoadState('domcontentloaded');
         if (page.url().includes('/login')) {
-            test.skip(true, 'route is auth-gated; require QA_TEST_USER env to enable');
+            test.skip(true, 'route is auth-gated; set QA_TEST_USER_EMAIL + QA_TEST_USER_PASSWORD to enable');
             return;
         }
         const apiCalls: { url: string; status: number }[] = [];
@@ -148,8 +194,6 @@ test.describe('PRODUCTION INCIDENT (2026-07-25) — /practice page must not over
                 apiCalls.push({ url, status: res.status() });
             }
         });
-        await page.setViewportSize({ width: 1280, height: 800 });
-        await page.goto('/questions/neet-pg/practice', { waitUntil: 'domcontentloaded' });
         // Wait for the player chrome (Q 1 / 20+) to render.
         await expect(page.locator('text=/Q 1 \\/ \\d+\\+?/')).toBeVisible({ timeout: 30000 });
         // Stop tracking new requests; assert the API call shape.
