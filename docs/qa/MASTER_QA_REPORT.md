@@ -169,7 +169,9 @@ work — they are CSRF/auth/session checks on the legacy CMS routes.
   `display_number` populated. The DigitalOcean container needs to
   run the backfill script once (or `questions_fixture.json` must be
   re-exported with the new field baked in). Bug #9 regression test
-  will pass on prod after this deploy step.
+  will pass on prod after this deploy step. **Full step-by-step
+  runbook (dry-run, apply, verify, rollback):** see
+  `docs/qa/DISPLAY_NUMBER_BACKFILL_RUNBOOK.md`.
 - **Vercel `page.goto` flake** — the 3 remaining test failures are
   baseline infra flakiness on `cracklabs.app`. Either bump the
   global test timeout to 60s or run the suite against the DigitalOcean
