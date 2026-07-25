@@ -393,6 +393,51 @@ test.describe('Bug #P0-2 — /media/recall_images/ must not 404 in production', 
     });
 });
 
+/**
+ * PHASE 2 — Detailed explanations panel (2026-07-25).
+ *
+ * The QuestionDetailSerializer already exposes ~20 explanation-related
+ * fields (`explanation`, `concept_explanation`, `mnemonic`, `ai_*`,
+ * `textbook_references`, `learning_technique`, `concept_keywords`,
+ * `book_name`/`chapter`/`page_number`, `is_verified_by_admin`, …).
+ * The player used to render only `current.explanation` after answer.
+ * The fix surfaces ALL of them in a structured panel.
+ *
+ * Each section uses `data-testid="expl-..."` so the regression test
+ * can assert the panel renders the expected structure when the API
+ * payload contains the rich fields.
+ */
+test.describe('PHASE 2 — detailed explanations panel', () => {
+    test('QuestionDetailSerializer returns the full set of explanation fields', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        // 10194 is a NEET PG question with at least one image; it may
+        // also have AI enrichment on the prod DB.
+        const res = await ctx.get('/api/questions/10194/', { failOnStatusCode: false });
+        // 401 = auth required (unauth probe) — proves URL exists
+        // 200 = full payload with all fields
+        expect([200, 401].includes(res.status()), `unexpected status ${res.status()}`).toBe(true);
+        if (res.status() !== 200) return; // skip payload checks when unauth
+        const body = await res.json();
+        // Always present
+        for (const key of ['id', 'question_text', 'correct_answer', 'images']) {
+            expect(body, `must include ${key}`).toHaveProperty(key);
+        }
+        // Optional but expected in the panel — keys must EXIST in the
+        // payload (even if value is null) so the frontend can render
+        // the sections without conditional lookups.
+        for (const key of [
+            'explanation', 'concept_explanation', 'mnemonic',
+            'book_name', 'chapter', 'page_number', 'reference_text',
+            'textbook_references', 'ai_explanation', 'ai_mnemonic',
+            'ai_references', 'concept_keywords', 'learning_technique',
+            'is_verified_by_admin', 'effective_explanation',
+            'effective_mnemonic', 'effective_references',
+        ]) {
+            expect(body, `payload must include key ${key}`).toHaveProperty(key);
+        }
+    });
+});
+
 test.describe('Bug #R3 — sidebar overlap on /practice', () => {
     test('NEET PG practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 });

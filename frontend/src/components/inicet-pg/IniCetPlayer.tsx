@@ -64,6 +64,25 @@ interface Question {
     explanation?: string;
     subject?: { id?: number; name?: string } | string | null;
     topic?: string;
+    // PHASE 2 (2026-07-25): extended fields surfaced by QuestionDetailSerializer.
+    concept_explanation?: string;
+    mnemonic?: string;
+    book_name?: string;
+    chapter?: string;
+    page_number?: string | number;
+    reference_text?: string;
+    textbook_references?: Array<Record<string, unknown>>;
+    ai_explanation?: string;
+    ai_mnemonic?: string;
+    ai_references?: Array<Record<string, unknown>>;
+    concept_keywords?: string[];
+    learning_technique?: string;
+    is_verified_by_admin?: boolean;
+    verified_by?: string;
+    verified_at?: string;
+    effective_explanation?: string;
+    effective_mnemonic?: string;
+    effective_references?: Array<Record<string, unknown>>;
 }
 
 interface PlayerState {
@@ -443,23 +462,145 @@ export default function IniCetPlayer({
                             </div>
                         </div>
 
-                        {/* Explanation panel + explanation images (the rich part of INI-CET) */}
-                        {state.showAnswer && (current.explanation || explanationImages.length > 0) && (
+                        {/* PHASE 2 — Detailed explanation panel (2026-07-25).
+                            Renders all available explanation fields from the
+                            QuestionDetailSerializer (explanation, concept_explanation,
+                            mnemonic, ai_explanation, ai_mnemonic, ai_references,
+                            learning_technique, textbook_references, book/chapter/
+                            page/reference_text, concept_keywords, is_verified_by_admin)
+                            + the existing explanation-image grid for INI-CET. */}
+                        {state.showAnswer && (current.explanation || current.concept_explanation || current.mnemonic || (current as any).ai_explanation || (current as any).ai_mnemonic || explanationImages.length > 0) && (
                             <div
                                 role="region"
-                                aria-label="Explanation"
-                                className="border-t border-indigo-200 bg-gradient-to-br from-indigo-50/60 via-white to-sky-50/40 px-6 py-5"
+                                aria-label="Detailed explanation"
+                                className="border-t border-indigo-200 bg-gradient-to-br from-indigo-50/60 via-white to-sky-50/40 px-6 py-5 space-y-4"
                             >
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-3 flex items-center gap-1.5">
-                                    <Lightbulb className="w-4 h-4" /> Explanation
-                                </h3>
-                                {current.explanation && (
-                                    <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed mb-4">
-                                        <FormattedText text={current.explanation || ''} />
+                                {/* Why correct answer */}
+                                {(current as any).effective_explanation || current.explanation || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '') ? (
+                                    <section data-testid="expl-why-correct">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-2 flex items-center gap-1.5">
+                                            <Lightbulb className="w-4 h-4" /> Why the correct answer is right
+                                        </h3>
+                                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                                            <FormattedText
+                                                text={
+                                                    (current as any).effective_explanation
+                                                    || current.explanation
+                                                    || (typeof (current as any).ai_explanation === 'string'
+                                                        ? (current as any).ai_explanation
+                                                        : '')
+                                                }
+                                            />
+                                        </div>
+                                    </section>
+                                ) : null}
+
+                                {/* Concept deep-dive */}
+                                {current.concept_explanation ? (
+                                    <section data-testid="expl-concept">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-sky-700 mb-2 flex items-center gap-1.5">
+                                            <FlaskConical className="w-4 h-4" /> Concept deep-dive
+                                        </h3>
+                                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                                            <FormattedText text={current.concept_explanation} />
+                                        </div>
+                                    </section>
+                                ) : null}
+
+                                {/* Mnemonic */}
+                                {(current as any).effective_mnemonic || current.mnemonic || (current as any).ai_mnemonic ? (
+                                    <section data-testid="expl-mnemonic" className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-1.5 flex items-center gap-1.5">
+                                            <Pill className="w-4 h-4" /> Mnemonic
+                                        </h3>
+                                        <div className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">
+                                            {(current as any).effective_mnemonic || current.mnemonic || (current as any).ai_mnemonic}
+                                        </div>
+                                    </section>
+                                ) : null}
+
+                                {/* Clinical pearl / exam tip */}
+                                {(current as any).learning_technique ? (
+                                    <section data-testid="expl-clinical-pearl" className="rounded-lg bg-sky-50 border border-sky-200 px-4 py-3">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-sky-700 mb-1.5 flex items-center gap-1.5">
+                                            <Stethoscope className="w-4 h-4" /> Clinical pearl / Exam tip
+                                        </h3>
+                                        <div className="text-sm text-sky-900 leading-relaxed">
+                                            <FormattedText text={(current as any).learning_technique} />
+                                        </div>
+                                    </section>
+                                ) : null}
+
+                                {/* Textbook references */}
+                                {(() => {
+                                    const refs: Array<{ book?: string; chapter?: string; page?: string | number }> = [];
+                                    const trefs = (current as any).textbook_references;
+                                    if (Array.isArray(trefs)) trefs.forEach((r: any) => refs.push(r));
+                                    const aRefs = (current as any).ai_references;
+                                    if (Array.isArray(aRefs)) aRefs.forEach((r: any) => {
+                                        if (r && typeof r === 'object') refs.push(r);
+                                    });
+                                    if (current.book_name || current.chapter || current.page_number || current.reference_text) {
+                                        refs.push({
+                                            book: current.book_name || undefined,
+                                            chapter: current.chapter || undefined,
+                                            page: current.page_number || undefined,
+                                        });
+                                    }
+                                    if (!refs.length) return null;
+                                    return (
+                                        <section data-testid="expl-references">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                                                <BookOpen className="w-4 h-4" /> Textbook references
+                                            </h3>
+                                            <ul className="space-y-1.5 text-sm text-slate-700">
+                                                {refs.slice(0, 6).map((r, idx) => (
+                                                    <li key={idx} className="flex items-start gap-2">
+                                                        <span className="text-sky-600 font-semibold">›</span>
+                                                        <span>
+                                                            {r.book && <strong>{r.book}</strong>}
+                                                            {r.chapter && <span> — {r.chapter}</span>}
+                                                            {r.page != null && r.page !== '' && <span> (p. {r.page})</span>}
+                                                            {current.reference_text && (
+                                                                <div className="text-xs text-slate-600 mt-0.5">{current.reference_text}</div>
+                                                            )}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    );
+                                })()}
+
+                                {/* Concept keywords (related concepts) */}
+                                {Array.isArray((current as any).concept_keywords) && (current as any).concept_keywords.length ? (
+                                    <section data-testid="expl-keywords">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                                            <Activity className="w-4 h-4" /> Related concepts
+                                        </h3>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {(current as any).concept_keywords.slice(0, 12).map((k: string, idx: number) => (
+                                                <Badge key={idx} variant="outline" className="text-[11px] bg-white">
+                                                    {k}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </section>
+                                ) : null}
+
+                                {/* Verification badge */}
+                                {(current as any).is_verified_by_admin ? (
+                                    <div className="flex items-center gap-2 text-xs text-sky-700 pt-1">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        <span>Verified by {(current as any).verified_by || 'admin'}</span>
+                                        {(current as any).verified_at && (
+                                            <span className="text-slate-500">· {new Date((current as any).verified_at).toLocaleDateString()}</span>
+                                        )}
                                     </div>
-                                )}
+                                ) : null}
+
                                 {explanationImages.length > 0 && (
-                                    <>
+                                    <section data-testid="expl-images">
                                         <h4 className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 mb-2 flex items-center gap-1.5">
                                             <FileText className="w-3.5 h-3.5" /> Explanation diagrams ({explanationImages.length})
                                         </h4>
@@ -487,7 +628,7 @@ export default function IniCetPlayer({
                                                 </button>
                                             ))}
                                         </div>
-                                    </>
+                                    </section>
                                 )}
                             </div>
                         )}
