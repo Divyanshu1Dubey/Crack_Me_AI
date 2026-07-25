@@ -71,7 +71,11 @@ function IniCetPracticeInner() {
     useEffect(() => { setMounted(true); }, []);
 
     const filterParams = useMemo<Record<string, string | number>>(() => {
-        const p: Record<string, string | number> = { exam_type: 'ini_cet' };
+        // INI-CET rows aren't in the DB yet — fall back to the CMS exam_type
+        // enum so the backend returns rows (mirrors the slug map in
+        // /questions/practice/page.tsx). Once INI-CET rows are added, change
+        // this back to 'ini_cet'.
+        const p: Record<string, string | number> = { exam_type: 'cms' };
         if (year) p.year = year;
         if (subject) p.subject = subject;
         if (topic) p.topic = topic;
