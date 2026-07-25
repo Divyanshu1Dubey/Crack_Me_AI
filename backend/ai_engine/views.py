@@ -7,6 +7,7 @@ Token System Integration:
 - Students get free daily/weekly tokens; after exhaustion, they must buy tokens.
 - Token config is managed via Django Admin > Token Configuration.
 """
+import json
 import logging
 
 from rest_framework.views import APIView
@@ -279,6 +280,150 @@ class ExplainAfterAnswerView(APIView):
             logger.error(f"ExplainAfterAnswer failed: {e}")
             refund_ai_token(request)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+
+
+class ExplainQuestionView(APIView):
+    """Get an AI explanation for a question by its DB id.
+
+    The frontend player (`NeetPgPlayer.tsx`) calls
+    `aiAPI.explainQuestion(questionId, {selected_answer, ...})` and expects
+    `{explanation: <markdown>}`. This view:
+      1. Loads the Question by id (404 if missing).
+      2. Reuses the cached `ai_explanation` JSON if it's <24h old.
+      3. Otherwise calls `AIService.analyze_question(...)` and returns
+         the markdown wrapped as `{explanation, cached, question_id}`.
+
+    Cost: 1 token (admins bypass). Refunded on AI failure.
+    """
+
+    def get_permissions(self):
+        return _get_permission()
+
+    def post(self, request, question_id: int):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        from questions.models import Question
+
+        q = (
+            Question.objects.filter(id=question_id)
+            .select_related("subject", "topic")
+            .first()
+        )
+        if not q:
+            return Response({'error': f'Question {question_id} not found'}, status=404)
+
+        # Cache hit: reuse the cached ai_explanation within 24h
+        if q.ai_explanation and q.ai_generated_at and timezone.now() - q.ai_generated_at < timedelta(hours=24):
+            try:
+                cached = json.loads(q.ai_explanation) if isinstance(q.ai_explanation, str) else q.ai_explanation
+                # Frontend expects `explanation` key (markdown); explain_after_answer
+                # stores rich JSON with multiple fields. Stitch a markdown body so
+                # the player UI gets a single text blob.
+                explanation = _stitch_explanation_markdown(cached, q)
+                return Response({
+                    'explanation': explanation,
+                    'cached': True,
+                    'question_id': q.id,
+                    'ai_model': q.ai_model,
+                    'ai_generated_at': q.ai_generated_at.isoformat(),
+                })
+            except (ValueError, TypeError):
+                pass  # corrupt cache → fall through to regenerate
+
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
+
+        try:
+            service = AIService()
+            subject_name = q.subject.name if hasattr(q.subject, "name") else (q.subject or "")
+            topic_name = q.topic.name if hasattr(q.topic, "name") else (q.topic or "")
+            selected_answer = (request.data.get("selected_answer") or "").strip()
+
+            prompt_ctx = {
+                "selected_answer": selected_answer,
+                "subject": subject_name,
+                "topic": topic_name,
+                "year": q.year,
+                "exam_type": q.exam_type,
+                "exam_source": q.exam_source,
+            }
+
+            analysis = service.analyze_question(
+                q.question_text,
+                {
+                    "A": q.option_a,
+                    "B": q.option_b,
+                    "C": q.option_c,
+                    "D": q.option_d,
+                },
+                q.correct_answer or "",
+            )
+
+            # Persist for next-time cache hit (best-effort)
+            try:
+                q.ai_explanation = json.dumps({
+                    "analysis": analysis,
+                    "context": prompt_ctx,
+                })
+                q.ai_model = "RoundRobin-11"
+                q.ai_generated_at = timezone.now()
+                q.ai_version = "explain-question-v1"
+                q.save(update_fields=["ai_explanation", "ai_model", "ai_generated_at", "ai_version"])
+            except Exception as save_exc:  # noqa: BLE001
+                logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
+
+            return Response({
+                'explanation': analysis,
+                'cached': False,
+                'question_id': q.id,
+                'ai_model': 'RoundRobin-11',
+            })
+        except Exception as e:
+            logger.error(f"ExplainQuestion failed for Q{question_id}: {e}")
+            refund_ai_token(request)
+            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+
+
+def _stitch_explanation_markdown(cached: dict, q) -> str:
+    """Convert cached explain_after_answer JSON into a single markdown blob.
+
+    `ExplainAfterAnswerView` stores rich structured JSON (why_correct,
+    mnemonic, clinical_pearl, etc.). The player UI wants one text field.
+    """
+    parts: list[str] = []
+    core = cached.get("core_concept") or cached.get("ai_verified_answer")
+    if core:
+        parts.append(f"**Core concept:** {core}")
+    why_correct = cached.get("why_correct")
+    if why_correct:
+        parts.append(f"\n**Why the correct answer is right:**\n{why_correct}")
+    why_wrong = cached.get("why_wrong")
+    if why_wrong:
+        parts.append(f"\n**Why other options are wrong:**\n{why_wrong}")
+    pearl = cached.get("clinical_pearl")
+    if pearl:
+        parts.append(f"\n**Clinical pearl:** {pearl}")
+    high_yield = cached.get("high_yield_points") or []
+    if high_yield:
+        if isinstance(high_yield, list):
+            parts.append("\n**High-yield points:**\n" + "\n".join(f"- {p}" for p in high_yield))
+        else:
+            parts.append(f"\n**High-yield points:**\n{high_yield}")
+    mnemonic = cached.get("mnemonic")
+    if mnemonic:
+        parts.append(f"\n**Mnemonic:** {mnemonic}")
+    tip = cached.get("exam_tip")
+    if tip:
+        parts.append(f"\n**Exam tip:** {tip}")
+    ref = cached.get("textbook_reference")
+    if ref:
+        parts.append(f"\n**Textbook reference:** {ref}")
+    if not parts:
+        # Fallback: dump everything as JSON
+        parts.append(json.dumps(cached, indent=2, ensure_ascii=False))
+    return "\n".join(parts)
 
 
 class RAGSearchView(APIView):

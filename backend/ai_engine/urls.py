@@ -8,6 +8,9 @@ urlpatterns = [
     path('explain/', views.ExplainConceptView.as_view(), name='ai-explain'),
     path('analyze/', views.AnalyzeQuestionView.as_view(), name='ai-analyze'),
     path('explain-answer/', views.ExplainAfterAnswerView.as_view(), name='ai-explain-answer'),
+    # Per-question AI explain (Bug #P0-1, 2026-07-25): the NEET PG player
+    # calls `aiAPI.explainQuestion(questionId, ...)` and expects 200.
+    path('explain-question/<int:question_id>/', views.ExplainQuestionView.as_view(), name='ai-explain-question'),
 
     # RAG-powered endpoints
     path('rag-search/', views.RAGSearchView.as_view(), name='ai-rag-search'),

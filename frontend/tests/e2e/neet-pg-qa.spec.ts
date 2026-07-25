@@ -265,6 +265,49 @@ test.describe('Bug #R1 — WatermarkOverlay opacity must stay near-invisible', (
  * Auth-gated: when QA_TEST_USER_EMAIL/QA_TEST_USER_PASS are not set the
  * tests skip (the practice route redirects to /login).
  */
+/**
+ * Bug #P0-1 (2026-07-25) — AI Tutor 404.
+ *
+ * The NEET PG player (`NeetPgPlayer.tsx` line 200) calls
+ *   aiAPI.explainQuestion(current.id, {...})
+ * which POSTs to `/api/ai/explain-question/<id>/`. Before the fix,
+ * that URL returned 404 because the backend `ai_engine/urls.py` had
+ * no matching route. The fix adds:
+ *   - `path('explain-question/<int:question_id>/',
+ *          views.ExplainQuestionView.as_view(), ...)`
+ *   - `ExplainQuestionView` class in `views.py` that loads the
+ *     Question, returns cached explanation (≤24h) or calls the AI
+ *     round-robin via `AIService.analyze_question(...)`.
+ *
+ * Auth-gated: when QA_TEST_USER_EMAIL/PASS are unset, the 401 path
+ * is still meaningful — it proves the route exists and DRF auth is
+ * applied (a 404 here would mean the URL pattern is missing).
+ */
+test.describe('Bug #P0-1 — AI Tutor /api/ai/explain-question/<id>/ must not 404', () => {
+    test('route is wired: 401 (auth) or 200 (cached/explanation), never 404', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        const res = await ctx.post('/api/ai/explain-question/10194/', { data: {} });
+        // 401 = auth required (expected when no token) → URL exists
+        // 200 = request succeeded with explanation
+        // 404 = URL not wired (the bug we are guarding against)
+        expect(
+            [200, 401].includes(res.status()),
+            `expected 200 or 401, got ${res.status()} — URL pattern is missing`
+        ).toBe(true);
+    });
+
+    test('missing question id returns 404 (graceful not-found, not 500)', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        const res = await ctx.post('/api/ai/explain-question/9999999/', { data: {} });
+        // 401 = auth blocked the request before the lookup → fine
+        // 404 = looked up, question missing → the correct graceful response
+        expect(
+            [404, 401].includes(res.status()),
+            `expected 404 or 401, got ${res.status()}`
+        ).toBe(true);
+    });
+});
+
 test.describe('Bug #R3 — sidebar overlap on /practice', () => {
     test('NEET PG practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 });
