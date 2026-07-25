@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson, isLikelyGarbled, safeDisplayText } from '@/lib/textCleanup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -559,13 +559,13 @@ export default function NeetPgPlayer({
                                         </h3>
                                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
                                             <FormattedText
-                                                text={
+                                                text={extractAnalysisFromJson(
                                                     (current as any).effective_explanation
                                                     || current.explanation
                                                     || (typeof (current as any).ai_explanation === 'string'
                                                         ? (current as any).ai_explanation
                                                         : '')
-                                                }
+                                                )}
                                             />
                                         </div>
                                     </section>
@@ -848,7 +848,10 @@ export default function NeetPgPlayer({
                                                         </div>
                                                     </div>
                                                     <p className="text-xs text-slate-700 line-clamp-3">
-                                                        <FormattedText text={r.question_text || ''} />
+                                                        {isLikelyGarbled(r.question_text || '')
+                                                            ? <span className="italic text-slate-500">Question #{r.id}{r.year ? ` (${r.year})` : ''}</span>
+                                                            : <FormattedText text={r.question_text || ''} />
+                                                        }
                                                     </p>
                                                 </a>
                                             </li>

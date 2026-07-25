@@ -15,6 +15,7 @@ import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
+import { extractAnalysisFromJson } from '@/lib/textCleanup';
 
 interface Question {
     id: number;
@@ -465,7 +466,7 @@ export default function TakeTestPage() {
                             <div className="explanation-card-accent green"></div>
                             <div className="p-5 pl-6">
                                 <h4 className="explanation-card-title green"><CheckCircle className="w-4 h-4" /> Answer Explanation</h4>
-                                <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)' }}>{String(explanation)}</p>
+                                <div className="text-sm leading-relaxed mt-2 prose prose-sm max-w-none" style={{ color: 'var(--text-secondary)' }}><FormattedText text={extractAnalysisFromJson(String(explanation))} /></div>
                             </div>
                         </div>
                     )}

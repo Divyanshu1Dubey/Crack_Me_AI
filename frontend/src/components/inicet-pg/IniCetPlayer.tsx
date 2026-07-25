@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson } from '@/lib/textCleanup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -485,13 +485,13 @@ export default function IniCetPlayer({
                                         </h3>
                                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
                                             <FormattedText
-                                                text={
+                                                text={extractAnalysisFromJson(
                                                     (current as any).effective_explanation
                                                     || current.explanation
                                                     || (typeof (current as any).ai_explanation === 'string'
                                                         ? (current as any).ai_explanation
                                                         : '')
-                                                }
+                                                )}
                                             />
                                         </div>
                                     </section>

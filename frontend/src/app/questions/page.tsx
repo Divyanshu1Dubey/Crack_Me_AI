@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown } from '@/components/FormattedText';
-import { cleanOptionText, decodeMojiB } from '@/lib/textCleanup';
+import { cleanOptionText, decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
 
 /** Map frontend URL slugs → DB enums + human labels.
@@ -1160,7 +1160,7 @@ function QuestionsContent() {
                                                 </h4>
                                                 {detail.explanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                        <FormattedText text={String(detail.explanation)} />
+                                                        <FormattedText text={extractAnalysisFromJson(String(detail.explanation))} />
                                                     </div>
                                                 )}
                                             </CardContent>

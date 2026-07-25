@@ -397,7 +397,28 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
 
     `ExplainAfterAnswerView` stores rich structured JSON (why_correct,
     mnemonic, clinical_pearl, etc.). The player UI wants one text field.
+
+    `ExplainQuestionView` stores `{"analysis": "<markdown>", "context": {...}}`
+    — in that case the `analysis` value IS the final markdown.
     """
+    # Fast-path: ExplainQuestionView cache format — the "analysis" key
+    # holds the complete markdown string produced by analyze_question().
+    analysis_val = cached.get("analysis")
+    if analysis_val and isinstance(analysis_val, str):
+        # If the analysis value itself is a JSON string, try parsing it
+        # and recursively extracting structured fields from it.
+        stripped = analysis_val.strip()
+        if stripped.startswith('{'):
+            try:
+                inner = json.loads(stripped)
+                if isinstance(inner, dict):
+                    return _stitch_explanation_markdown(inner, q)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        # Plain markdown — use directly (this is the normal case for
+        # ExplainQuestionView responses).
+        return analysis_val
+
     parts: list[str] = []
     core = cached.get("core_concept") or cached.get("ai_verified_answer")
     if core:
@@ -427,7 +448,8 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
     if ref:
         parts.append(f"\n**Textbook reference:** {ref}")
     if not parts:
-        # Fallback: dump everything as JSON
+        # Last resort: if the cached dict has no known keys, dump as JSON
+        # so we at least surface *something* (shouldn't normally happen).
         parts.append(json.dumps(cached, indent=2, ensure_ascii=False))
     return "\n".join(parts)
 

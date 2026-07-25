@@ -7,6 +7,79 @@ from .models import (
     QuestionExtractionItem, AdminAIPromptVersion, 
     QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
 )
+import json as _json
+
+
+def _parse_ai_explanation_to_markdown(ai_exp: str) -> str | None:
+    """Parse a JSON-encoded ai_explanation into a readable markdown string.
+
+    Handles two cache formats:
+      1. ExplainQuestionView: {"analysis": "<markdown>", "context": {...}}
+         → return the analysis value directly (it's already markdown).
+      2. ExplainAfterAnswerView: {"core_concept": ..., "why_correct": ..., ...}
+         → stitch structured fields into a markdown document.
+    Returns None if parsing fails or if the input isn't valid JSON.
+    """
+    if not ai_exp or not isinstance(ai_exp, str):
+        return None
+    stripped = ai_exp.strip()
+    if not stripped.startswith('{'):
+        return None
+    try:
+        data = _json.loads(stripped)
+    except Exception:
+        return None
+
+    # Fast-path: ExplainQuestionView wraps everything in an "analysis" key.
+    analysis_val = data.get("analysis")
+    if analysis_val and isinstance(analysis_val, str):
+        # If the analysis value is itself JSON, try parsing recursively.
+        inner_stripped = analysis_val.strip()
+        if inner_stripped.startswith('{'):
+            try:
+                inner = _json.loads(inner_stripped)
+                if isinstance(inner, dict):
+                    result = _parse_ai_explanation_to_markdown(_json.dumps(inner))
+                    if result:
+                        return result
+            except (ValueError, _json.JSONDecodeError):
+                pass
+        # Plain markdown from analyze_question() — use directly.
+        return analysis_val
+
+    # Structured format: stitch known fields into markdown.
+    parts: list[str] = []
+    core = data.get("core_concept") or data.get("ai_verified_answer")
+    if core:
+        parts.append(f"**Core concept:** {core}")
+    why_correct = data.get("why_correct")
+    if why_correct:
+        parts.append(f"**Why the correct answer is right:**\n{why_correct}")
+    why_wrong = data.get("why_wrong")
+    if why_wrong:
+        parts.append(f"**Why other options are wrong:**\n{why_wrong}")
+    pearl = data.get("clinical_pearl")
+    if pearl:
+        parts.append(f"**Clinical pearl:** {pearl}")
+    high_yield = data.get("high_yield_points") or []
+    if high_yield:
+        if isinstance(high_yield, list):
+            parts.append("**High-yield points:**\n" + "\n".join(f"- {p}" for p in high_yield))
+        else:
+            parts.append(f"**High-yield points:**\n{high_yield}")
+    mnemonic = data.get("mnemonic")
+    if mnemonic:
+        parts.append(f"**Mnemonic:** {mnemonic}")
+    tip = data.get("exam_tip")
+    if tip:
+        parts.append(f"**Exam tip:** {tip}")
+    ref = data.get("textbook_reference")
+    if ref:
+        parts.append(f"**Textbook reference:** {ref}")
+    if parts:
+        return "\n\n".join(parts)
+    return None
+
 
 class ExamTrackSerializer(serializers.ModelSerializer):
     class Meta:
@@ -101,7 +174,11 @@ class QuestionListSerializer(serializers.ModelSerializer):
             return obj.admin_explanation_override or obj.explanation
         if obj.admin_explanation_override:
             return obj.admin_explanation_override
-        return obj.ai_explanation or obj.explanation
+        ai_exp = obj.ai_explanation
+        parsed = _parse_ai_explanation_to_markdown(ai_exp)
+        if parsed:
+            return parsed
+        return ai_exp or obj.explanation
 
     def get_revision_count(self, obj):
         return getattr(obj, 'revision_count', 0) or 0
@@ -291,7 +368,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         return _derive_subtitles_url(getattr(obj, 'video_url', '') or '')
 
     def get_similar(self, obj):
-        similar_qs = obj.similar_questions.all()[:5]
+        similar_qs = obj.similar_questions.filter(is_active=True)[:5]
         return QuestionListSerializer(similar_qs, many=True, context=self.context).data
 
     def get_is_bookmarked(self, obj):
@@ -312,7 +389,11 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             return obj.admin_explanation_override or obj.explanation
         if obj.admin_explanation_override:
             return obj.admin_explanation_override
-        return obj.ai_explanation or obj.explanation
+        ai_exp = obj.ai_explanation
+        parsed = _parse_ai_explanation_to_markdown(ai_exp)
+        if parsed:
+            return parsed
+        return ai_exp or obj.explanation
 
     def get_effective_mnemonic(self, obj):
         if obj.admin_mnemonic_override:

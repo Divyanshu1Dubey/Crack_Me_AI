@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson } from '@/lib/textCleanup';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
   CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
@@ -353,8 +353,8 @@ function PracticeContent() {
                                             {isCorrect ? 'Correct!' : `Incorrect — Answer: ${currentQ.correct_answer}`}
                                         </h4>
                                         {currentQ.explanation && (
-                                            <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                {String(currentQ.explanation)}
+                                            <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground prose prose-sm max-w-none">
+                                                <FormattedText text={extractAnalysisFromJson(String(currentQ.explanation))} />
                                             </div>
                                         )}
                                     </CardContent>
@@ -366,7 +366,7 @@ function PracticeContent() {
                                         <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                         <div>
                                             <h5 className="text-sm font-bold text-amber-700 dark:text-amber-400">🧠 Memory Trick</h5>
-                                            <p className="text-sm leading-relaxed mt-1">{String(currentQ.mnemonic)}</p>
+                                            <p className="text-sm leading-relaxed mt-1"><FormattedText text={String(currentQ.mnemonic)} /></p>
                                         </div>
                                     </div>
                                 )}
