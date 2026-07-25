@@ -525,8 +525,20 @@ test.describe('PHASE 3 — Question Bank filters', () => {
 test.describe('PHASE 5 — Similar PYQs with reason', () => {
     test('similar endpoint returns items with similarity_reason', async () => {
         const ctx = await request.newContext({ baseURL: API_BASE });
-        // Q#6844 has 3 images — guaranteed to produce same_image matches.
-        const res = await ctx.get('/api/questions/6844/similar/', { failOnStatusCode: false });
+        // Discover an image-bearing question dynamically — local DB
+        // and prod DB have different id ranges so hard-coding 6844
+        // would fail against one or the other.
+        const list = await ctx.get('/api/questions/', {
+            params: { exam_type: 'neet_pg', is_image_based: 'true', page_size: 1 },
+        });
+        expect(list.ok()).toBeTruthy();
+        const body = await list.json();
+        const qid = body.results?.[0]?.id;
+        if (!qid) {
+            test.skip(true, 'no image-bearing question available on this deployment');
+            return;
+        }
+        const res = await ctx.get(`/api/questions/${qid}/similar/`, { failOnStatusCode: false });
         expect([200, 401].includes(res.status()), `unexpected status ${res.status()}`).toBe(true);
         if (res.status() !== 200) return;
         const data = await res.json();
@@ -536,7 +548,6 @@ test.describe('PHASE 5 — Similar PYQs with reason', () => {
             expect(item.similarity_reason, 'every similar item must carry a reason').toMatch(
                 /^(curated|same_concept|same_image|same_topic|same_subject)$/
             );
-            // First item should be ranked highest in the priority order.
         }
         // Capped at 8 per the endpoint contract.
         expect(data.length).toBeLessThanOrEqual(8);
