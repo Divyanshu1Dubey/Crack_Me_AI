@@ -23,7 +23,7 @@ import {
     ZoomIn, ZoomOut, Maximize2, Stethoscope, Pill, FlaskConical,
     AlertTriangle, Eye, EyeOff, Pin, PinOff, Highlighter,
     Clock, ChevronDown, ChevronUp, Activity, HeartPulse,
-    BookOpen,
+    BookOpen, LayoutGrid, Filter,
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
@@ -552,7 +552,7 @@ export default function NeetPgPlayer({
                                 className="border-t border-emerald-200 bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 px-6 py-5 space-y-4"
                             >
                                 {/* Why correct answer */}
-                                {(current as any).effective_explanation || current.explanation || (current as any).ai_explanation ? (
+                                {state.aiExplanation || (current as any).effective_explanation || current.explanation || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '') ? (
                                     <section data-testid="expl-why-correct">
                                         <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1.5">
                                             <Lightbulb className="w-4 h-4" /> Why the correct answer is right
@@ -560,6 +560,7 @@ export default function NeetPgPlayer({
                                         <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
                                             <FormattedText
                                                 text={extractAnalysisFromJson(
+                                                    state.aiExplanation ||
                                                     (current as any).effective_explanation
                                                     || current.explanation
                                                     || (typeof (current as any).ai_explanation === 'string'
@@ -753,16 +754,28 @@ export default function NeetPgPlayer({
                             >
                                 <ChevronLeft className="w-4 h-4 mr-1" /> Prev
                             </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPaletteOpen(true)}
-                                className="border-teal-300 text-teal-700 hover:bg-teal-50"
-                                aria-label="Question palette"
-                            >
-                                <span className="font-semibold">Palette</span>
-                                <span className="ml-1 text-xs opacity-70">{state.index + 1}/{total}</span>
-                            </Button>
+                            <div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPaletteOpen(true)}
+                                    className="border-teal-300 text-teal-700 hover:bg-teal-50"
+                                    aria-label="Question palette"
+                                >
+                                    <LayoutGrid className="w-4 h-4 sm:mr-1 mr-0" />
+                                    <span className="font-semibold hidden sm:inline">Palette</span>
+                                    <span className="ml-1 text-xs opacity-70 hidden sm:inline">{state.index + 1}/{total}</span>
+                                </Button>
+                            </div>
+                            <div>
+                                <a
+                                    href="/neet-pg"
+                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-teal-300 text-teal-700 hover:bg-teal-50 h-8 px-3"
+                                >
+                                    <Filter className="w-4 h-4 sm:mr-1 mr-0" />
+                                    <span className="font-semibold hidden sm:inline">Filters</span>
+                                </a>
+                            </div>
                             <div className="ml-auto">
                                 <Button
                                     size="sm"
