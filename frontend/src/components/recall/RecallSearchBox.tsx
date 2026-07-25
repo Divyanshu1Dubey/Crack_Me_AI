@@ -47,7 +47,10 @@ export default function RecallSearchBox({ initialQuery = "", onResults }: Props)
       if (q.trim()) params.q = q.trim();
       Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
       Object.entries(clinical).forEach(([k, v]) => { if (v) params[k] = v; });
-      const r = await api.get("/api/questions/recall_search/", { params });
+      // The api.ts baseURL already ends in `/api`, so this path is
+      // relative to the base (NOT absolute). The previous leading
+      // `/api/` produced `/api/api/...` which 404'd on the backend.
+      const r = await api.get("/questions/recall_search/", { params });
       setFacets(r.data?.facets || {});
       setCount(r.data?.count ?? null);
       onResults?.(r.data?.results || [], r.data?.facets || {});

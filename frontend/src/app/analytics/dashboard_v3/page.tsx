@@ -25,7 +25,7 @@ export default function DashboardV3Page() {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get("/api/analytics/dashboard_v3/");
+        const r = await api.get("/analytics/dashboard_v3/");
         if (alive) setD(r.data);
       } catch (e: any) {
         if (alive) setErr(e?.message || "Failed to load dashboard");

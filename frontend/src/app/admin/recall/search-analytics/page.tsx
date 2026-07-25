@@ -21,7 +21,7 @@ export default function SearchAnalyticsPage() {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get("/api/analytics/search_analytics/");
+        const r = await api.get("/analytics/search_analytics/");
         if (alive) setD(r.data);
       } catch (e: any) {
         if (alive) setErr(e?.message || "Failed");

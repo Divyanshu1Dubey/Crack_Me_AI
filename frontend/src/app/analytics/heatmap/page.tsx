@@ -19,7 +19,7 @@ export default function HeatmapPage() {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get("/api/analytics/heatmap/subject/");
+        const r = await api.get("/analytics/heatmap/subject/");
         if (alive) setData(r.data || {});
       } catch (e: any) {
         if (alive) setErr(e?.message || "Heatmap failed to load");

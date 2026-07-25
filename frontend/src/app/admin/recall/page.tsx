@@ -28,9 +28,9 @@ export default function AdminRecallPage() {
     (async () => {
       try {
         const [j, im, cl] = await Promise.all([
-          api.get("/api/imports/neetpg/jobs/"),
-          api.get("/api/questions/recall_sources/"),
-          api.get("/api/questions/duplicate_clusters/"),
+          api.get("/imports/neetpg/jobs/"),
+          api.get("/questions/recall_sources/"),
+          api.get("/questions/duplicate_clusters/"),
         ]);
         if (!alive) return;
         setJobs(j.data?.results || j.data || []);
