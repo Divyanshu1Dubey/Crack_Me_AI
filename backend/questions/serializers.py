@@ -128,8 +128,16 @@ class QuestionListSerializer(serializers.ModelSerializer):
         for img in obj.images.all():
             if not img.is_active:
                 continue
+            # Bug #P0-2 (2026-07-25): /media/... URLs 404 in production
+            # because static(MEDIA_URL) is DEBUG-only and the render
+            # container doesn't ship the local PNGs. Emit the
+            # auth-gated /api/questions/images/<id>/serve/ proxy URL
+            # instead so the player always has a reachable target.
             try:
-                url = img.file.url if img.file else ''
+                if img.file:
+                    url = self._build_image_serve_url(img)
+                else:
+                    url = ''
             except Exception:
                 url = ''
             out.append({
@@ -145,6 +153,23 @@ class QuestionListSerializer(serializers.ModelSerializer):
                 'sha256_short': img.sha256_short,
             })
         return out
+
+    def _build_image_serve_url(self, img):
+        """Return the prod-safe proxy URL for a QuestionImage.
+
+        Uses request.build_absolute_uri when available so the player
+        always hits the same origin as the API. Falls back to a
+        relative path so a missing context (e.g. management shell)
+        still produces a usable URL.
+        """
+        path = f"/api/questions/images/{img.id}/serve/"
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if request is not None:
+            try:
+                return request.build_absolute_uri(path)
+            except Exception:  # noqa: BLE001
+                return path
+        return path
 
 
 class QuestionAdminListSerializer(QuestionListSerializer):
@@ -201,8 +226,16 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         for img in obj.images.all():
             if not img.is_active:
                 continue
+            # Bug #P0-2 (2026-07-25): /media/... URLs 404 in production
+            # because static(MEDIA_URL) is DEBUG-only and the render
+            # container doesn't ship the local PNGs. Emit the
+            # auth-gated /api/questions/images/<id>/serve/ proxy URL
+            # instead so the player always has a reachable target.
             try:
-                url = img.file.url if img.file else ''
+                if img.file:
+                    url = self._build_image_serve_url(img)
+                else:
+                    url = ''
             except Exception:
                 url = ''
             out.append({
@@ -218,6 +251,23 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
                 'sha256_short': img.sha256_short,
             })
         return out
+
+    def _build_image_serve_url(self, img):
+        """Return the prod-safe proxy URL for a QuestionImage.
+
+        Uses request.build_absolute_uri when available so the player
+        always hits the same origin as the API. Falls back to a
+        relative path so a missing context (e.g. management shell)
+        still produces a usable URL.
+        """
+        path = f"/api/questions/images/{img.id}/serve/"
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if request is not None:
+            try:
+                return request.build_absolute_uri(path)
+            except Exception:  # noqa: BLE001
+                return path
+        return path
 
     def get_user_selected_answer(self, obj):
         request = self.context.get('request')

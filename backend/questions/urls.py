@@ -27,6 +27,11 @@ urlpatterns = [
     path('discussions/', views.DiscussionListCreateView.as_view(), name='discussion-list'),
     # Chat AI Assistant
     path('chat/', views.ChatAssistantView.as_view(), name='chat-assistant'),
+    # Bug #P0-2 (2026-07-25): prod /media/recall_images/ 404s because
+    # static(MEDIA_URL, ...) is DEBUG-only in crack_cms/urls.py AND the
+    # render container doesn't ship the local PNGs in git. This view
+    # streams the QuestionImage.file binary through Django instead.
+    path('images/<int:image_id>/serve/', views.QuestionImageServeView.as_view(), name='question-image-serve'),
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 ]

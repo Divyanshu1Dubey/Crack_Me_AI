@@ -8,6 +8,7 @@ from io import StringIO
 from django.conf import settings
 from django.core.management import call_command
 from django.core.files.storage import default_storage
+from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import viewsets, generics, permissions, status, filters
@@ -1935,4 +1936,111 @@ class ChatAssistantView(APIView):
             logger.error(f"ChatAssistant AI failed: {e}")
             refund_ai_token(request)
             return Response({"reply": "AI service temporarily unavailable. Your token has been refunded. Please try again."})
+
+
+class QuestionImageServeView(APIView):
+    """Serve a `QuestionImage.file` binary through Django.
+
+    **Why this exists**: `/media/recall_images/...` 404s in production
+    because (a) Django's `static(MEDIA_URL, ...)` helper is gated behind
+    `DEBUG=True` in `crack_cms/urls.py`, and (b) gunicorn does not serve
+    user uploads out of the box. The render container doesn't ship
+    3,000+ PNG files in git either, so the file physically exists on the
+    origin but the URL is unreachable.
+
+    **What this does**: streams the file from whichever storage backend
+    is configured (FileSystemStorage locally; will transparently work
+    with S3 / DigitalOcean Spaces once `DEFAULT_FILE_STORAGE` is
+    swapped). Auth-gated because the question bank is paywalled.
+
+    **URL contract**:
+        GET /api/questions/images/<int:image_id>/serve/?w=480&q=72
+
+    Optional query params (best-effort, ignored if Pillow unavailable):
+      - `w` : max width in px (preserves aspect ratio, never upscales)
+      - `q` : JPEG quality 1-100 (default 80)
+
+    Returns 404 if the row is missing or inactive. Returns 200 with the
+    binary when the file exists locally. Returns 503 with a clear JSON
+    error if the file is missing on disk (the 3,496-row DB has only 257
+    files locally; remote prod may have a different mix).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, image_id: int):
+        img = (
+            QuestionImage.objects.filter(id=image_id, is_active=True)
+            .only("id", "question_id", "file", "mime", "width", "height")
+            .first()
+        )
+        if not img or not img.file:
+            raise Http404("Question image not found")
+
+        try:
+            f = img.file.open("rb")
+        except (FileNotFoundError, OSError, ValueError):
+            logger.warning("QuestionImage #%s file missing on disk", image_id)
+            return Response(
+                {
+                    "error": "image file missing on server",
+                    "image_id": image_id,
+                    "hint": "re-upload via admin or importer",
+                },
+                status=503,
+            )
+
+        # Best-effort resize via Pillow if requested. Failing open (serve
+        # the raw bytes) is acceptable — the player still renders.
+        w_param = request.query_params.get("w")
+        q_param = request.query_params.get("q")
+        if w_param or q_param:
+            try:
+                from io import BytesIO
+                from PIL import Image
+
+                try:
+                    target_w = max(1, min(int(w_param), 4096)) if w_param else None
+                    quality = max(1, min(int(q_param), 100)) if q_param else 80
+                except ValueError:
+                    target_w, quality = None, 80
+
+                raw = f.read()
+                f.close()
+                pil_img = Image.open(BytesIO(raw))
+                if target_w and pil_img.width > target_w:
+                    ratio = target_w / float(pil_img.width)
+                    new_size = (target_w, max(1, int(pil_img.height * ratio)))
+                    pil_img = pil_img.resize(new_size, Image.LANCZOS)
+                out_mime = (img.mime or "image/jpeg").lower()
+                if out_mime in ("image/jpeg", "image/jpg") or out_mime == "image/png" and target_w:
+                    buf = BytesIO()
+                    save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True}
+                    pil_img = pil_img.convert("RGB")
+                    pil_img.save(buf, **save_kwargs)
+                    out_mime = "image/jpeg"
+                else:
+                    buf = BytesIO()
+                    pil_img.save(buf, format="PNG", optimize=True)
+                    out_mime = "image/png"
+                buf.seek(0)
+                resp = HttpResponse(buf.read(), content_type=out_mime)
+                resp["Content-Length"] = buf.tell()
+                resp["Cache-Control"] = "private, max-age=3600"
+                return resp
+            except ImportError:
+                # Pillow not installed — fall through to raw bytes
+                pass
+            except Exception as resize_exc:  # noqa: BLE001
+                logger.warning("Image resize failed for #%s: %s", image_id, resize_exc)
+
+        # Raw passthrough
+        try:
+            f.seek(0)
+        except Exception:  # noqa: BLE001
+            pass
+        content_type = (img.mime or "application/octet-stream").strip()
+        resp = FileResponse(f, content_type=content_type)
+        resp["Cache-Control"] = "private, max-age=3600"
+        return resp
 
