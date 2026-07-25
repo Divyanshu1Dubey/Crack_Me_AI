@@ -779,6 +779,7 @@ export default function TakeTestPage() {
                         height: img.height,
                     }))}
                     startIndex={questions[reviewIdx]?.images?.findIndex(i => i.id === zoomImg.id) || 0}
+                    open={!!zoomImg}
                     onClose={() => setZoomImg(null)}
                 />
             )}
@@ -1070,6 +1071,7 @@ export default function TakeTestPage() {
                         height: img.height,
                     }))}
                     startIndex={questions[currentIdx]?.images?.findIndex(i => i.id === zoomImg.id) || 0}
+                    open={!!zoomImg}
                     onClose={() => setZoomImg(null)}
                 />
             )}
