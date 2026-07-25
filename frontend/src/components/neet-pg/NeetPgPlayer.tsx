@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import AiTutorPanel from '@/components/ai/AiTutorPanel';
+import ImageViewer from '@/components/image/ImageViewer';
 
 interface Option { label: string; text: string; }
 interface QuestionImage {
@@ -904,31 +905,25 @@ export default function NeetPgPlayer({
                 </div>
             )}
 
-            {/* Image zoom (fullscreen) */}
-            {zoomImg && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-                    onClick={() => setZoomImg(null)}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Image viewer"
-                >
-                    <button
-                        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
-                        aria-label="Close image viewer"
-                    >
-                        <XIcon className="w-5 h-5" />
-                    </button>
-                    {zoomImg.file_url && (
-                        <img
-                            src={zoomImg.file_url}
-                            alt={zoomImg.caption || 'Question image'}
-                            className="max-w-full max-h-full object-contain"
-                            // Native pinch zoom works on touchscreens automatically.
-                        />
-                    )}
-                </div>
-            )}
+            {/* Image viewer (Phase-7) — zoom / pan / fullscreen / annotations / side-by-side */}
+            <ImageViewer
+                images={images.map((img) => ({
+                    id: img.id,
+                    file_url: img.file_url,
+                    caption: img.caption,
+                    modality: img.modality,
+                    modality_subtype: img.modality_subtype,
+                    page_number: img.page_number,
+                    image_index_in_page: img.image_index_in_page,
+                    has_diagram: img.has_diagram,
+                    has_table: img.has_table,
+                    width: img.width,
+                    height: img.height,
+                }))}
+                startIndex={zoomImg ? Math.max(0, images.findIndex((i) => i.id === zoomImg.id)) : 0}
+                open={!!zoomImg}
+                onClose={() => setZoomImg(null)}
+            />
         </div>
     );
 }
