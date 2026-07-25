@@ -44,7 +44,7 @@ export const metadata: Metadata = {
         images: [defaultOgImage],
     },
     manifest: "/manifest.json",
-    icons: { icon: [{ url: "/neetpg-logo.png", type: "image/png" }] },
+    icons: { icon: [{ url: "/favicon.ico", type: "image/x-icon" }] },
 };
 
 export const viewport = {

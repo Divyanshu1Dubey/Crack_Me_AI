@@ -7,6 +7,6 @@
   "background_color": "#059669",
   "theme_color": "#059669",
   "icons": [
-    { "src": "/neetpg-logo.png", "sizes": "any", "type": "image/png" }
+    { "src": "/favicon.ico", "sizes": "any", "type": "image/x-icon" }
   ]
 }

@@ -1,6 +1,11 @@
-import Link from "next/link";
 import { Brain, BookOpen, Stethoscope, Sparkles, Trophy, Activity } from "lucide-react";
 import { brandName, siteDescription, siteTitle } from "@/lib/seo";
+
+// The NEET PG landing page is a marketing surface only — the live app
+// (questions, tests, flashcards, AI tutor, analytics, bookmarks) lives
+// on the main CrackCMS site. CTAs redirect there via external links.
+// Override with NEXT_PUBLIC_MAIN_APP_URL.
+const MAIN_APP_URL = process.env.NEXT_PUBLIC_MAIN_APP_URL || "https://cracklabs.app";
 
 export default function HomePage() {
     return (
@@ -13,7 +18,9 @@ export default function HomePage() {
                     <span className="text-lg font-bold">{brandName}</span>
                 </div>
                 <nav className="flex items-center gap-2">
-                    <Link href="/login" className="btn-primary text-sm">Sign in</Link>
+                    <a href={`${MAIN_APP_URL}/login`} target="_blank" rel="noopener noreferrer" className="btn-primary text-sm">
+                        Sign in
+                    </a>
                 </nav>
             </header>
 
@@ -30,14 +37,14 @@ export default function HomePage() {
                         {siteDescription}
                     </p>
                     <div className="flex flex-wrap justify-center gap-3 pt-4">
-                        <Link href="/questions" className="btn-primary">
+                        <a href={`${MAIN_APP_URL}/practice?exam=neet_pg`} target="_blank" rel="noopener noreferrer" className="btn-primary">
                             <BookOpen className="w-4 h-4" />
                             Start Practising
-                        </Link>
-                        <Link href="/tests" className="btn-primary" style={{ background: "transparent", color: "var(--accent-primary)", border: "1px solid var(--color-border)" }}>
+                        </a>
+                        <a href={`${MAIN_APP_URL}/simulator?exam=neet_pg`} target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ background: "transparent", color: "var(--accent-primary)", border: "1px solid var(--color-border)" }}>
                             <Trophy className="w-4 h-4" />
                             Take a Grand Test
-                        </Link>
+                        </a>
                     </div>
                 </div>
 
