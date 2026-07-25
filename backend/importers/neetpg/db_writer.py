@@ -370,7 +370,7 @@ class DjangoWriter:
     @staticmethod
     def _flatten_options(q: ParsedQuestion) -> list[str]:
         labels = ["A", "B", "C", "D", "E", "F"]
-        out: list[str] = [""] * 4
+        out: list[str] = [""] * len(labels)
         for opt in q.options:
             if opt.label in labels:
                 out[labels.index(opt.label)] = opt.text or ""
