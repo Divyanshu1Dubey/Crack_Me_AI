@@ -791,7 +791,7 @@ export default function NeetPgPlayer({
                     <AiTutorPanel
                         questionId={current.id}
                         questionText={current.question_text}
-                        correctAnswer={current.correct_answer}
+                        correctAnswer={current.correct_answer ?? undefined}
                         subject={typeof current.subject === 'object' ? (current.subject as any)?.name : (current.subject as any)}
                         topic={current.topic ?? null}
                         selectedAnswer={state.selected}
