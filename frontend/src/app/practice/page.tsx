@@ -30,7 +30,7 @@ import QuestionTimer from "@/components/question/QuestionTimer";
 import PracticeExamTimer from "@/components/question/PracticeExamTimer";
 import RevealExplanation from "@/components/question/RevealExplanation";
 import RelatedPanel from "@/components/question/RelatedPYQs";
-import { api, questionsAPI } from "@/lib/api";
+import api, { questionsAPI } from "@/lib/api";
 import { Loader2, Settings2, ChevronDown, ChevronUp, Filter, Shuffle } from "lucide-react";
 
 interface QRow {
