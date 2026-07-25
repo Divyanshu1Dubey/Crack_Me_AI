@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiAPI } from "@/lib/api";
 import { FormattedText } from "@/components/FormattedText";
+import { extractAnalysisFromJson } from "@/lib/textCleanup";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -139,7 +140,8 @@ export default function AiTutorPanel({
 
         try {
             const r: any = await aiAPI.explainQuestion(questionId, payload, { signal: ctrl.signal });
-            const text = (r?.explanation ?? r?.text ?? r?.markdown ?? "") as string;
+            const rawText = (r?.explanation ?? r?.text ?? r?.markdown ?? "");
+            const text = extractAnalysisFromJson(rawText);
             setCached(!!r?.cached);
             setAiModel(r?.ai_model ?? null);
             setAiGeneratedAt(r?.ai_generated_at ?? null);

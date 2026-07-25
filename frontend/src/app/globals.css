@@ -1254,7 +1254,7 @@ body.sidebar-hidden .main-content {
   line-height: 1.7;
 }
 .formatted-text strong {
-  color: var(--text-primary);
+  color: inherit;
   font-weight: 700;
 }
 .formatted-text ul, .formatted-text ol {
@@ -1283,7 +1283,7 @@ body.sidebar-hidden .main-content {
 }
 .formatted-text em {
   font-style: italic;
-  color: var(--text-secondary);
+  color: inherit;
 }
 .formatted-text code {
   background: rgba(6, 182, 212, 0.1);

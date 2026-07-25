@@ -157,8 +157,28 @@ export function cleanPreview(text: string): string {
  * try to extract the readable "analysis" markdown from it.
  * Returns the original string if it's not JSON or has no analysis key.
  */
-export function extractAnalysisFromJson(text: string): string {
-    if (!text) return text;
+export function extractAnalysisFromJson(text: any): string {
+    if (!text) return "";
+    
+    // If it's already an object (e.g., parsed by Axios or Next.js)
+    if (typeof text === 'object') {
+        if (text.analysis && typeof text.analysis === 'string') {
+            return text.analysis;
+        }
+        // Try structured format fallback
+        const parts: string[] = [];
+        if (text.core_concept) parts.push(`**Core concept:** ${text.core_concept}`);
+        if (text.why_correct) parts.push(`**Why correct:** ${text.why_correct}`);
+        if (text.why_wrong) parts.push(`**Why wrong:** ${text.why_wrong}`);
+        if (text.clinical_pearl) parts.push(`**Clinical pearl:** ${text.clinical_pearl}`);
+        if (text.mnemonic) parts.push(`**Mnemonic:** ${text.mnemonic}`);
+        if (parts.length > 0) return parts.join('\n\n');
+        
+        // Final fallback: just stringify it so it isn't [object Object]
+        try { return JSON.stringify(text, null, 2); } catch { return ""; }
+    }
+
+    if (typeof text !== 'string') text = String(text);
     const trimmed = text.trim();
     if (!trimmed.startsWith('{')) return text;
     try {
