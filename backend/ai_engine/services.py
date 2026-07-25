@@ -826,8 +826,16 @@ Structure your explanation as:
         return self._call_ai(prompt, max_tokens=3000)
 
     def analyze_question(self, question_text: str, options: dict = None,
-                         correct_answer: str = "") -> str:
-        """Analyze a CMS question — identify concepts, predict topics."""
+                         correct_answer: str = "", user_prompt: str = "") -> str:
+        """Analyze a CMS question — identify concepts, predict topics.
+
+        `user_prompt` (optional) lets the caller override the default
+        "Explain why the correct answer is right" framing with a custom
+        question (e.g. "Give me a mnemonic", "Differential diagnosis?").
+        When provided, it is prepended to the structured rubric so the
+        model still emits the same headings but leads with the user's
+        intent.
+        """
         prompt = f"""Analyze this UPSC CMS question:
 Question: {question_text}
 {f'Options: {json.dumps(options)}' if options else ''}
@@ -842,6 +850,15 @@ Provide:
 6. **Textbook Reference** (exact book & chapter if possible)
 7. **Exam Strategy** (How to approach this type of question)
 8. **Mnemonic** for remembering this concept"""
+
+        if user_prompt:
+            prompt = (
+                f"{user_prompt.strip()}\n\n"
+                f"Frame your answer using the same structure as a standard "
+                f"explanation (Core concept, Why correct, Why others wrong, "
+                f"Mnemonic, Clinical pearl where applicable).\n\n---\n\n"
+                f"{prompt}"
+            )
 
         return self._call_ai(prompt, max_tokens=2500)
 

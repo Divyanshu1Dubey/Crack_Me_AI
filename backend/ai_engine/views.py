@@ -314,22 +314,27 @@ class ExplainQuestionView(APIView):
             return Response({'error': f'Question {question_id} not found'}, status=404)
 
         # Cache hit: reuse the cached ai_explanation within 24h
-        if q.ai_explanation and q.ai_generated_at and timezone.now() - q.ai_generated_at < timedelta(hours=24):
-            try:
-                cached = json.loads(q.ai_explanation) if isinstance(q.ai_explanation, str) else q.ai_explanation
-                # Frontend expects `explanation` key (markdown); explain_after_answer
-                # stores rich JSON with multiple fields. Stitch a markdown body so
-                # the player UI gets a single text blob.
-                explanation = _stitch_explanation_markdown(cached, q)
-                return Response({
-                    'explanation': explanation,
-                    'cached': True,
-                    'question_id': q.id,
-                    'ai_model': q.ai_model,
-                    'ai_generated_at': q.ai_generated_at.isoformat(),
-                })
-            except (ValueError, TypeError):
-                pass  # corrupt cache → fall through to regenerate
+        # unless the client asked for a custom prompt (different output)
+        # or forced regeneration (e.g. user clicked "Regenerate").
+        client_prompt = (request.data.get("prompt") or "").strip()
+        force_regen = bool(request.data.get("force_regenerate"))
+        if not client_prompt and not force_regen:
+            if q.ai_explanation and q.ai_generated_at and timezone.now() - q.ai_generated_at < timedelta(hours=24):
+                try:
+                    cached = json.loads(q.ai_explanation) if isinstance(q.ai_explanation, str) else q.ai_explanation
+                    # Frontend expects `explanation` key (markdown); explain_after_answer
+                    # stores rich JSON with multiple fields. Stitch a markdown body so
+                    # the player UI gets a single text blob.
+                    explanation = _stitch_explanation_markdown(cached, q)
+                    return Response({
+                        'explanation': explanation,
+                        'cached': True,
+                        'question_id': q.id,
+                        'ai_model': q.ai_model,
+                        'ai_generated_at': q.ai_generated_at.isoformat(),
+                    })
+                except (ValueError, TypeError):
+                    pass  # corrupt cache → fall through to regenerate
 
         ok, err = consume_ai_token(request)
         if not ok:
@@ -359,6 +364,7 @@ class ExplainQuestionView(APIView):
                     "D": q.option_d,
                 },
                 q.correct_answer or "",
+                user_prompt=client_prompt,
             )
 
             # Persist for next-time cache hit (best-effort)

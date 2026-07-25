@@ -449,8 +449,8 @@ export const aiAPI = {
     subject?: string;
     topic?: string;
   }) => api.post('/ai/explain-answer/', data, { timeout: AI_TIMEOUT }),
-  explainQuestion: (questionId: number, data: Record<string, unknown> = {}) =>
-    api.post(`/ai/explain-question/${questionId}/`, data, { timeout: AI_TIMEOUT }),
+  explainQuestion: (questionId: number, data: Record<string, unknown> = {}, config?: Record<string, unknown>) =>
+    api.post(`/ai/explain-question/${questionId}/`, data, { timeout: AI_TIMEOUT, ...config }),
   // RAG endpoints
   ragSearch: (data: { query: string; book?: string; n_results?: number }) => api.post('/ai/rag-search/', data, { timeout: AI_TIMEOUT }),
   ragAnswer: (data: { question: string }) => api.post('/ai/rag-answer/', data, { timeout: AI_TIMEOUT }),

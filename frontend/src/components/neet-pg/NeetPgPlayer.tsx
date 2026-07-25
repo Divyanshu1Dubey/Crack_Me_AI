@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import AiTutorPanel from '@/components/ai/AiTutorPanel';
 
 interface Option { label: string; text: string; }
 interface QuestionImage {
@@ -785,57 +786,15 @@ export default function NeetPgPlayer({
 
                 {/* Right: AI panel + Related PYQs */}
                 <aside className="col-span-12 lg:col-span-5 xl:col-span-4 order-1 lg:order-2 space-y-4">
-                    {/* AI panel */}
-                    <div className="bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
-                        <button
-                            onClick={() => setAiPanelOpen(o => !o)}
-                            className="w-full px-4 py-3 flex items-center justify-between text-left"
-                            aria-expanded={aiPanelOpen}
-                        >
-                            <span className="flex items-center gap-2">
-                                <Brain className="w-4 h-4 text-violet-600" />
-                                <span className="text-sm font-bold text-slate-800">AI Tutor</span>
-                            </span>
-                            {aiPanelOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-                        </button>
-                        {aiPanelOpen && (
-                            <div className="px-4 pb-4">
-                                <Button
-                                    onClick={fetchAi}
-                                    disabled={state.aiLoading}
-                                    size="sm"
-                                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold"
-                                >
-                                    {state.aiLoading ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Thinking…
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-4 h-4 mr-2" />
-                                            {state.aiExplanation ? 'Regenerate explanation' : 'Explain with AI'}
-                                        </>
-                                    )}
-                                </Button>
-                                {state.aiError && (
-                                    <div className="mt-3 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
-                                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                                        <span>{state.aiError}</span>
-                                    </div>
-                                )}
-                                {state.aiExplanation && (
-                                    <div className="mt-3 prose prose-sm max-w-none text-slate-700 text-[13px] leading-relaxed">
-                                        <FormattedText text={state.aiExplanation || ''} />
-                                    </div>
-                                )}
-                                {!state.aiExplanation && !state.aiLoading && !state.aiError && (
-                                    <p className="mt-3 text-xs text-slate-500">
-                                        Get an evidence-grounded explanation with differentials, workup, and clinical pearls.
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                    {/* AI panel — Phase-6 AiTutorPanel (custom prompt, cache badge, progressive reveal, stop) */}
+                    <AiTutorPanel
+                        questionId={current.id}
+                        questionText={current.question_text}
+                        correctAnswer={current.correct_answer}
+                        subject={typeof current.subject === 'object' ? (current.subject as any)?.name : (current.subject as any)}
+                        topic={current.topic ?? null}
+                        selectedAnswer={state.selected}
+                    />
 
                     {/* Related PYQs sidebar */}
                     {related.length > 0 && (
