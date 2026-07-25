@@ -508,6 +508,58 @@ test.describe('PHASE 3 — Question Bank filters', () => {
     });
 });
 
+/**
+ * PHASE 5 — Similar PYQs with reason (2026-07-25).
+ *
+ * /api/questions/<id>/similar/ now ranks similar questions across five
+ * buckets and tags each one with a `similarity_reason`:
+ *
+ *   curated         — listed in `similar_questions` M2M (admin-curated)
+ *   same_concept    — same `concept_id` (AI-assigned stable concept)
+ *   same_image      — shares a QuestionImage sha256_short
+ *   same_topic      — same topic FK (fallback within subject)
+ *   same_subject    — same subject FK (broadest fallback)
+ *
+ * The frontend sidebar renders a coloured badge per item + a tooltip.
+ */
+test.describe('PHASE 5 — Similar PYQs with reason', () => {
+    test('similar endpoint returns items with similarity_reason', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        // Q#6844 has 3 images — guaranteed to produce same_image matches.
+        const res = await ctx.get('/api/questions/6844/similar/', { failOnStatusCode: false });
+        expect([200, 401].includes(res.status()), `unexpected status ${res.status()}`).toBe(true);
+        if (res.status() !== 200) return;
+        const data = await res.json();
+        expect(Array.isArray(data)).toBe(true);
+        expect(data.length).toBeGreaterThan(0);
+        for (const item of data) {
+            expect(item.similarity_reason, 'every similar item must carry a reason').toMatch(
+                /^(curated|same_concept|same_image|same_topic|same_subject)$/
+            );
+            // First item should be ranked highest in the priority order.
+        }
+        // Capped at 8 per the endpoint contract.
+        expect(data.length).toBeLessThanOrEqual(8);
+    });
+
+    test('similar endpoint is robust for a question with no neighbours', async () => {
+        const ctx = await request.newContext({ baseURL: API_BASE });
+        // Pick an obscure exam_type — UPSC CMS often has low-volume subjects.
+        const list = await ctx.get('/api/questions/', {
+            params: { exam_type: 'usmle', page_size: 1 },
+        });
+        expect(list.ok()).toBeTruthy();
+        const body = await list.json();
+        if (!body.results?.length) return; // skip if DB empty
+        const qid = body.results[0].id;
+        const r = await ctx.get(`/api/questions/${qid}/similar/`);
+        // Either 200 with results, or 200 with [] — never 500.
+        expect(r.status()).toBe(200);
+        const data = await r.json();
+        expect(Array.isArray(data)).toBe(true);
+    });
+});
+
 test.describe('Bug #R3 — sidebar overlap on /practice', () => {
     test('NEET PG practice: question card clears the 260px sidebar on desktop', async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 });

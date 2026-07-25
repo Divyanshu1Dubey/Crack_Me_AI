@@ -103,6 +103,25 @@ interface PlayerState {
 const SCORE_CORRECT = 4;
 const SCORE_WRONG = -1;
 
+// PHASE 5 — Similar PYQ reason labels (2026-07-25). Each item in the
+// "Similar PYQs" sidebar carries a `similarity_reason` from the API.
+// We render a coloured badge + a tooltip so the user understands WHY
+// each question is being recommended.
+const SIM_REASON_LABEL: Record<string, string> = {
+    curated: 'Curated',
+    same_concept: 'Same concept',
+    same_image: 'Same image',
+    same_topic: 'Same topic',
+    same_subject: 'Same subject',
+};
+const SIM_REASON_TITLE: Record<string, string> = {
+    curated: 'Listed in the curated "similar questions" set by an admin',
+    same_concept: 'Tests the same underlying medical concept (concept_id match)',
+    same_image: 'Shares the same diagram or photo (sha256 fingerprint match)',
+    same_topic: 'Tests the same topic but a different concept',
+    same_subject: 'Tests the same subject — broader fallback',
+};
+
 function difficultyTone(d?: string): 'easy' | 'medium' | 'hard' | 'unknown' {
     const s = (d || '').toLowerCase();
     if (s.includes('easy')) return 'easy';
@@ -835,22 +854,46 @@ export default function NeetPgPlayer({
                             </button>
                             {relatedOpen && (
                                 <ul className="px-3 pb-3 space-y-2 max-h-[420px] overflow-y-auto" role="list">
-                                    {related.map(r => (
-                                        <li key={r.id} role="listitem">
-                                            <a
-                                                href={`/questions/neet-pg/practice?q=${r.id}`}
-                                                className="block p-3 rounded-lg border border-slate-100 hover:border-teal-300 hover:bg-teal-50/30 transition-colors"
-                                            >
-                                                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                                                    <span>Q{r.id}</span>
-                                                    {r.year && <Badge variant="outline" className="text-[10px] py-0 px-1.5">{r.year}</Badge>}
-                                                </div>
-                                                <p className="text-xs text-slate-700 line-clamp-3">
-                                                    <FormattedText text={r.question_text || ''} />
-                                                </p>
-                                            </a>
-                                        </li>
-                                    ))}
+                                    {related.map(r => {
+                                        const reason = (r as any).similarity_reason as string | undefined;
+                                        return (
+                                            <li key={r.id} role="listitem">
+                                                <a
+                                                    href={`/questions/neet-pg/practice?q=${r.id}`}
+                                                    className="block p-3 rounded-lg border border-slate-100 hover:border-teal-300 hover:bg-teal-50/30 transition-colors"
+                                                    data-testid="similar-pyq-row"
+                                                >
+                                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1 gap-2">
+                                                        <span>Q{r.id}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            {reason && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        'text-[10px] py-0 px-1.5 font-medium',
+                                                                        reason === 'same_concept' || reason === 'curated'
+                                                                            ? 'border-violet-300 text-violet-700 bg-violet-50'
+                                                                            : reason === 'same_image'
+                                                                                ? 'border-pink-300 text-pink-700 bg-pink-50'
+                                                                                : reason === 'same_topic'
+                                                                                    ? 'border-teal-300 text-teal-700 bg-teal-50'
+                                                                                    : 'border-slate-300 text-slate-600 bg-slate-50',
+                                                                    )}
+                                                                    title={SIM_REASON_TITLE[reason] || ''}
+                                                                >
+                                                                    {SIM_REASON_LABEL[reason] || reason.replace(/_/g, ' ')}
+                                                                </Badge>
+                                                            )}
+                                                            {r.year && <Badge variant="outline" className="text-[10px] py-0 px-1.5">{r.year}</Badge>}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-slate-700 line-clamp-3">
+                                                        <FormattedText text={r.question_text || ''} />
+                                                    </p>
+                                                </a>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>

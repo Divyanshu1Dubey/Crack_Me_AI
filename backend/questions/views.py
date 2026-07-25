@@ -1295,21 +1295,99 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='similar')
     def similar_questions(self, request, pk=None):
-        """Return similar questions based on subject, topic, and text similarity."""
+        """Return similar questions with an attached similarity_reason.
+
+        PHASE 5 (2026-07-25): each item now carries a `similarity_reason`
+        one of:
+          - 'same_concept'        — same `concept_id`
+          - 'same_topic'          — same `topic` FK
+          - 'same_subject'        — same `subject` FK only
+          - 'same_image'          — shares a QuestionImage sha256_short
+          - 'curated'             — listed in `similar_questions` M2M
+
+        Ranking: curated M2M > same_concept > same_image > same_topic >
+        same_subject. Capped at 8 results.
+        """
         question = self.get_object()
-        
-        # Base filter: Same subject, exclude self
-        base_qs = Question.objects.filter(subject=question.subject).exclude(id=question.id)
-        
-        # If topic exists, prioritize same topic
-        if question.topic:
-            similar = base_qs.filter(topic=question.topic).order_by('?')[:3]
-        else:
-            # Otherwise random from same subject
-            similar = base_qs.order_by('?')[:3]
-            
-        serializer = QuestionListSerializer(similar, many=True, context={'request': request})
-        return Response(serializer.data)
+        LIMIT = 8
+
+        # Bucket 1: explicit M2M curation (admin-set "questions testing
+        # the same concept"). Always surface these first if present.
+        curated_ids = list(question.similar_questions.values_list('id', flat=True))
+        # Bucket 2: same concept_id (stable AI-assigned concept key).
+        same_concept_ids = []
+        if question.concept_id:
+            same_concept_ids = list(
+                Question.objects.filter(concept_id=question.concept_id)
+                .exclude(id=question.id)
+                .exclude(id__in=curated_ids)
+                .values_list('id', flat=True)[:LIMIT]
+            )
+        # Bucket 3: shares an image (same sha256_short fingerprint).
+        same_image_ids = []
+        image_hashes = list(
+            question.images.filter(is_active=True).values_list('sha256_short', flat=True)
+        )
+        if image_hashes:
+            same_image_ids = list(
+                QuestionImage.objects.filter(
+                    is_active=True, sha256_short__in=image_hashes
+                )
+                .exclude(question_id=question.id)
+                .exclude(question_id__in=curated_ids + same_concept_ids)
+                .values_list('question_id', flat=True)
+                .distinct()[:LIMIT]
+            )
+        # Bucket 4: same topic.
+        same_topic_ids = []
+        if question.topic_id:
+            same_topic_ids = list(
+                Question.objects.filter(topic_id=question.topic_id)
+                .exclude(id=question.id)
+                .exclude(id__in=curated_ids + same_concept_ids + same_image_ids)
+                .values_list('id', flat=True)[:LIMIT]
+            )
+        # Bucket 5: same subject (fallback so we always return *something*
+        # — better to suggest something than an empty sidebar).
+        same_subject_ids = list(
+            Question.objects.filter(subject_id=question.subject_id)
+            .exclude(id=question.id)
+            .exclude(id__in=curated_ids + same_concept_ids + same_image_ids + same_topic_ids)
+            .values_list('id', flat=True)[: max(0, LIMIT - len(curated_ids) - len(same_concept_ids) - len(same_image_ids) - len(same_topic_ids))]
+        )
+
+        # Stitch the buckets in priority order. The dict preserves
+        # order (Python 3.7+) so the first occurrence wins.
+        ordered_ids: list[int] = []
+        reasons: dict[int, str] = {}
+        for bid, reason in (
+            (curated_ids, 'curated'),
+            (same_concept_ids, 'same_concept'),
+            (same_image_ids, 'same_image'),
+            (same_topic_ids, 'same_topic'),
+            (same_subject_ids, 'same_subject'),
+        ):
+            for qid in bid:
+                if qid in reasons:
+                    continue  # already ranked higher
+                reasons[qid] = reason
+                ordered_ids.append(qid)
+                if len(ordered_ids) >= LIMIT:
+                    break
+            if len(ordered_ids) >= LIMIT:
+                break
+
+        # Re-hydrate in the priority order via a single query.
+        from django.db.models import Case, When, IntegerField
+        preserve = Case(*[When(pk=pk, then=pos) for pos, pk in enumerate(ordered_ids)],
+                        default=len(ordered_ids), output_field=IntegerField())
+        qs = Question.objects.filter(pk__in=ordered_ids).order_by(preserve)
+        data = QuestionListSerializer(qs, many=True, context={'request': request}).data
+
+        # Attach the reason to each serialized item.
+        for item, qid in zip(data, [d.id for d in qs]):
+            item['similarity_reason'] = reasons.get(qid, 'same_subject')
+        return Response(data)
 
     @action(detail=True, methods=['patch'], url_path='verify')
     def verify(self, request, pk=None):
