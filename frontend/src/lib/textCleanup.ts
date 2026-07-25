@@ -195,7 +195,8 @@ const TRAILER_PATTERNS: Array<[RegExp, string]> = [
 const OPTION_LINE = /^\s*\(?([A-Da-d])\)?[\.\)]\s+(.+?)\s*$/;
 
 // Leaked "Answer: X" / "Answer-X" / "Answer <A: …" line.
-const ANSWER_LINE = /^\s*Answer\s*[\-<:>]\s*<?\s*[A-Da-d][^\n]*$/i;
+const ANSWER_LINE = /^\s*Answer\s*[\-<:>]\s*<?\s*([A-Da-d])[^\n]*$/i;
+const ANSWER_INLINE = /\bAnswer\s*[\-<:>]\s*<?\s*([A-Da-d])\b/i;
 // Leaked "Explanation:" line — the body's explanation should already be in
 // the `explanation` field, so we drop everything from here onward.
 const EXPL_START_LINE = /^\s*Explan?ation\s*[\-:]?\s*$/i;
@@ -314,4 +315,235 @@ export function extractAnalysisFromJson(text: any): string {
         // Not JSON — return as-is
     }
     return text;
+}
+
+// ---------------------------------------------------------------------------
+// Defence-in-depth: extract leaked options from a recall question whose
+// `option_a..d` columns are empty but whose `question_text` still contains
+// the embedded options block. Some Medical-Junction / NEET PG recall PDFs
+// were imported with the full PDF block stuffed into `question_text` and
+// the dedicated columns left blank. Until the cleanup script runs against
+// the entire corpus, the frontend must still render a solvable question.
+//
+// `extractLeakedOptions(text)` returns:
+//   - `stem`: the cleaned question stem (without the leaked options/answer)
+//   - `options`: { A, B, C, D } if a complete 4-option block was found, else null
+//   - `correctAnswer`: leaked single letter (A/B/C/D) if found, else null
+//   - `optionLabels`: the labels to render on the buttons (e.g. ["1", "2", "3", "4"])
+//                     — empty string when the leak uses bare letters A-D.
+//
+// Recognised shapes (whitespace/separator-flexible):
+//   "A. foo  B. bar  C. baz  D. qux"
+//   "1. foo  2. bar  3. baz  4. qux"
+//   "1 and 2 only" / "2 and 3 only" / "1, 2 and 3" (free-text style)
+//
+// Also recognises "Answer: X" / "Answer-X" / "Answer <X: …" answer leaks.
+// ---------------------------------------------------------------------------
+
+export interface LeakedOptions {
+    stem: string;
+    options: { A: string; B: string; C: string; D: string } | null;
+    correctAnswer: string | null;
+    optionLabels: string[];
+}
+
+// Matches a single option line at the start of a (trimmed) line. Accepts:
+//   "A. foo" / "A) foo" / "(A) foo" / "A - foo" / "A: foo"
+const LETTER_OPT = /^\s*\(?([A-Da-d])\)?\s*[\.\)\:\-]\s+(.+?)\s*$/;
+// Matches a numbered option line: "1. foo" / "1) foo" / "(1) foo"
+const NUMBER_OPT = /^\s*\(?([1-4])\)?\s*[\.\)\:\-]\s+(.+?)\s*$/;
+
+/**
+ * Walk every non-empty line of the input and bucket them into A/B/C/D
+ * depending on which kind of label the line starts with. Returns null when
+ * fewer than 4 lines match (gives up — the embedded text isn't a clean
+ * leaked-options block).
+ */
+function bucketByLabels(lines: string[]): { A: string; B: string; C: string; D: string } | null {
+    const out: Partial<Record<'A' | 'B' | 'C' | 'D', string>> = {};
+    let labelKind: 'letter' | 'number' | null = null;
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        const lm = line.match(LETTER_OPT);
+        if (lm) {
+            if (labelKind && labelKind !== 'letter') return null;
+            labelKind = 'letter';
+            const L = lm[1].toUpperCase() as 'A' | 'B' | 'C' | 'D';
+            // First-write wins — protects against duplicate label lines.
+            if (!out[L]) out[L] = lm[2].trim();
+            continue;
+        }
+        const nm = line.match(NUMBER_OPT);
+        if (nm) {
+            if (labelKind && labelKind !== 'number') return null;
+            labelKind = 'number';
+            const n = parseInt(nm[1], 10) - 1;
+            const L = (['A', 'B', 'C', 'D'] as const)[n];
+            if (!out[L]) out[L] = nm[2].trim();
+            continue;
+        }
+        // A line without a label, while we still have unmatched options, is
+        // treated as a continuation of the previous option (multi-line
+        // options happen — e.g. "1.  \n  Emphysema  \n  2. ...").
+        if (labelKind && (out.A || out.B || out.C || out.D)) {
+            const last = (['A', 'B', 'C', 'D'] as const).slice().reverse().find(k => out[k]);
+            if (last) out[last] = `${out[last]} ${line}`.trim();
+        }
+    }
+    if (!out.A || !out.B || !out.C || !out.D) return null;
+    return out as { A: string; B: string; C: string; D: string };
+}
+
+/**
+ * Some recall rows put the options on a single line: "1 and 2 only  2 and
+ * 3 only  1 and 3 only  1, 2 and 3". We detect this by counting "1"/"2"/"3"/"4"
+ * tokens separated by 2+ spaces or newlines.
+ */
+function parseFreeTextOptions(text: string): { A: string; B: string; C: string; D: string } | null {
+    // Split on lines OR 2+ spaces. The recall blocks render options on
+    // separate lines, but PDFs sometimes collapse them.
+    const parts = text.split(/\n|\s{2,}(?=[1234]\s)/).map(p => p.trim()).filter(Boolean);
+    if (parts.length < 4) return null;
+    // Heuristic: first 4 distinct short parts (<80 chars) are the options.
+    const candidates = parts.slice(0, 4);
+    if (candidates.some(p => p.length > 80)) return null;
+    // Each candidate must reference at least one of 1/2/3/4 — pulls junk
+    // (e.g. "Select the correct answer using the code given below:") out.
+    if (!candidates.every(p => /\b[1234]\b/.test(p))) return null;
+    return {
+        A: decodeMojiB(candidates[0]),
+        B: decodeMojiB(candidates[1]),
+        C: decodeMojiB(candidates[2]),
+        D: decodeMojiB(candidates[3]),
+    };
+}
+
+export function extractLeakedOptions(text: string | null | undefined): LeakedOptions {
+    const empty: LeakedOptions = { stem: '', options: null, correctAnswer: null, optionLabels: [] };
+    if (!text) return empty;
+
+    let t = decodeMojiB(String(text));
+
+    // Pull a leaked answer first — works whether the answer is on its own
+    // line ("Answer: D") or inline mid-paragraph ("Answer <A: ...").
+    let correctAnswer: string | null = null;
+    const lineMatch = t.match(ANSWER_LINE);
+    if (lineMatch) correctAnswer = lineMatch[1].toUpperCase();
+    if (!correctAnswer) {
+        const inlineMatch = t.match(ANSWER_INLINE);
+        if (inlineMatch) correctAnswer = inlineMatch[1].toUpperCase();
+    }
+    // Drop everything from any "Answer:" leak onward so the parser below
+    // doesn't see the answer letter as a stray option label.
+    if (correctAnswer) {
+        const li = t.search(ANSWER_LINE);
+        if (li >= 0) t = t.slice(0, li);
+        t = t.replace(ANSWER_INLINE, '').trim();
+    }
+
+    // Drop trailers as well — they're noise to the parser.
+    for (const [pattern] of TRAILER_PATTERNS) {
+        t = t.replace(pattern, '');
+    }
+    // Drop the "Select the correct answer using the code given below:" hint
+    // that always precedes free-text options blocks.
+    // NOTE: TS 5.9 parser flags `?:` (regex non-capturing groups) as TS1005,
+    // so we use capturing alternation "(...|...)" instead of "(?:...)". The
+    // captured group is immediately destructured for nothing.
+    const SELECT_HINT_RE = /(?im)^\s*(Select\s+the\s+correct\s+answer[^\n]*|Code\s*:[^\n]*|List\s+of\s+options[^\n]*)$/;
+    const selectMatch = t.match(SELECT_HINT_RE);
+    let stemFromDelimiter: string | null = null;
+    let tailAfterDelimiter: string | null = null;
+    if (selectMatch && typeof selectMatch.index === 'number') {
+        const splitAt = selectMatch.index;
+        stemFromDelimiter = t.slice(0, splitAt).trim();
+        tailAfterDelimiter = t.slice(splitAt + selectMatch[0].length).trim();
+    }
+
+    // ── Strategy 1: clean lettered/numbered blocks (A. foo / 1. foo). ──
+    // Apply to the tail if we have a delimiter; otherwise to the whole text.
+    const forLabelParse = tailAfterDelimiter ?? t;
+    const lineBucketed = bucketByLabels(forLabelParse.split('\n'));
+    if (lineBucketed) {
+        const stemSource = stemFromDelimiter ?? t.split('\n').filter(raw => {
+            const line = raw.trim();
+            if (!line) return true;
+            return !line.match(LETTER_OPT) && !line.match(NUMBER_OPT);
+        }).join('\n');
+        const stem = stemSource.replace(/\n{3,}/g, '\n\n').trim();
+        const labels = lineBucketed.A.match(LETTER_OPT) ? ['A', 'B', 'C', 'D'] : ['1', '2', '3', '4'];
+        return { stem, options: lineBucketed, correctAnswer, optionLabels: labels };
+    }
+
+    // ── Strategy 2: free-text options ("1 and 2 only" / "2 and 3 only" …).
+    // Apply to the tail (post-Select-the-correct-answer block) when a
+    // delimiter exists — this is the common recall shape where the stem
+    // contains its own numbered indicators (1./2./3.) and the options
+    // block is the 4 trailing short lines.
+    if (tailAfterDelimiter !== null) {
+        const ft = parseFreeTextOptions(tailAfterDelimiter);
+        if (ft) {
+            const stem = (stemFromDelimiter ?? '').replace(/\n{3,}/g, '\n\n').trim();
+            return { stem, options: ft, correctAnswer, optionLabels: ['1', '2', '3', '4'] };
+        }
+    }
+
+    // ── Strategy 2b: 4 trailing unlabelled lines after a delimiter. The
+    // Medical-Junction recall dump often renders options as plain text
+    // (no A./1. prefix), one per line, immediately after the question
+    // stem. We grab the *last* 4 non-empty lines of the post-delimiter
+    // tail as A/B/C/D in order.
+    if (tailAfterDelimiter !== null) {
+        const tailLines = tailAfterDelimiter.split('\n').map(l => l.trim()).filter(Boolean);
+        if (tailLines.length >= 4) {
+            const last4 = tailLines.slice(-4);
+            if (last4.every(l => l.length > 1 && l.length < 120)) {
+                const ft = {
+                    A: decodeMojiB(last4[0]),
+                    B: decodeMojiB(last4[1]),
+                    C: decodeMojiB(last4[2]),
+                    D: decodeMojiB(last4[3]),
+                };
+                // Pull those 4 lines out of the tail to keep the stem clean.
+                const stemLines = tailAfterDelimiter.split('\n').filter(l => !last4.includes(l.trim()));
+                const stem = ((stemFromDelimiter ?? '') + '\n' + stemLines.join('\n')).replace(/\n{3,}/g, '\n\n').trim();
+                return { stem, options: ft, correctAnswer, optionLabels: ['A', 'B', 'C', 'D'] };
+            }
+        }
+    }
+
+    // ── Strategy 3: free-text options embedded in the whole text (no delimiter).
+    const freeText = parseFreeTextOptions(t);
+    if (freeText) {
+        const stem = t.split(/\n/).filter(l => {
+            const trimmed = l.trim();
+            if (!trimmed) return true;
+            return !(/\b[1234]\b/.test(trimmed) && trimmed.length < 80);
+        }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        return { stem, options: freeText, correctAnswer, optionLabels: ['1', '2', '3', '4'] };
+    }
+
+    // ── Strategy 3b: 4 unlabelled trailing lines, no delimiter. The
+    // Medical-Junction recall dump often renders options as plain text
+    // (no A./1. prefix), one per line, immediately after the question
+    // stem. We grab the last 4 non-empty lines as A/B/C/D in order.
+    {
+        const allLines = t.split('\n').map(l => l.trim()).filter(Boolean);
+        if (allLines.length >= 4) {
+            const last4 = allLines.slice(-4);
+            if (last4.every(l => l.length > 1 && l.length < 120)) {
+                const ft = {
+                    A: decodeMojiB(last4[0]),
+                    B: decodeMojiB(last4[1]),
+                    C: decodeMojiB(last4[2]),
+                    D: decodeMojiB(last4[3]),
+                };
+                const stem = allLines.slice(0, -4).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+                return { stem, options: ft, correctAnswer, optionLabels: ['A', 'B', 'C', 'D'] };
+            }
+        }
+    }
+
+    return { stem: t.trim(), options: null, correctAnswer, optionLabels: [] };
 }

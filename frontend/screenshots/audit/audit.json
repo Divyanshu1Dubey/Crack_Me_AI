@@ -1,0 +1,2075 @@
+[
+  {
+    "name": "home",
+    "url": "/",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007746240&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEEAAGQ&ae=a&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119896803&sid=1785007746&sct=1&seg=0&dl=https%3A%2F%2Fwww.cracklabs.app%2Flogin&dt=Login%20%7C%20CrackCMS&_s=2&tfd=6519",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007746240&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=3&tag_exp=115938466~115938468~118897920~118897930~119896803&dp=%2Fadmin&dl=https%3A%2F%2Fwww.cracklabs.app%2Fadmin&dt=Admin%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&en=page_view&_ee=1&_et=2214&tfd=6951",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.googletagmanager.com/td?id=G-MM88RT1QQK&v=3&t=t&pid=498327962&gtm=45je67m0v9256910878za200zd9256910878&seq=2&exp=115938466~115938468~118897920~118897930~119896803&dl=www.cracklabs.app%2Flogin&tdp=G-MM88RT1QQK;256910878;0;0;0&mde=G-MM88RT1QQK;17_2;19_1;47_1;61_1&fin=1&z=0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.googletagmanager.com/gtag/js?id=G-MM88RT1QQK&is_td=1&v=3&t=t&pid=498327962&gtm=45je67m0v9256910878za200zd9256910878&seq=2&exp=115938466~115938468~118897920~118897930~119896803&dl=www.cracklabs.app%2Flogin&tdp=G-MM88RT1QQK;256910878;0;0;0&mde=G-MM88RT1QQK;17_2;19_1;47_1;61_1&fin=1&z=0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "AI Powered UPSC CMS Platform",
+      "Everything Needed for High-Performance CMS Prep",
+      "Clinical PYQ Atlas",
+      "Doctor-Grade AI Tutor",
+      "Smart Exam Engine",
+      "Rapid Recall AI (SM-2)",
+      "Question Generator",
+      "Loved by medical students preparing for UPSC CMS"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\home.png"
+  },
+  {
+    "name": "login",
+    "url": "/login",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007750920&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938468~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2F&dt=CrackCMS%20-%20UPSC%20CMS%20Preparation%20App%20with%20AI%20Tutor%2C%20PYQs%20and%20Mock%20Tests&sid=1785007746&sct=1&seg=1&_s=1&tfd=6163",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Admin Panel"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\login.png"
+  },
+  {
+    "name": "register",
+    "url": "/register",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/admin-dashboard/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=444lg",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007756231&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=4&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938469~118395335~118897920~118897930~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fadmin&dt=Admin%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=6500",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=17qrm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=m0mb1",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/admin-dashboard/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=m0mb1",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Admin Panel"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\register.png"
+  },
+  {
+    "name": "forgot-password",
+    "url": "/forgot-password",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=10p75",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/_next/static/chunks/8905ab4227672426.js",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=m0mb1",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007758807&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=3&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938465~115938469~118897920~118897930~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fadmin&dt=Admin%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3815",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=15p65",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1iosg",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Admin Panel"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\forgot-password.png"
+  },
+  {
+    "name": "neet-pg-landing",
+    "url": "/neet-pg",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=17qrm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/guides?_rsc=17qrm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007761982&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=19&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938465~115938469~118395334~118897920~118897930~119724321~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fadmin&dt=Admin%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3739",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=17qrm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=17qrm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "NEET PG\nCrack it with 2,300+ PYQs, AI Tutor & Image-Rich Recalls",
+      "Year-wise PYQ Practice",
+      "19 PG Subjects · Tap to Practise",
+      "Anaesthesia",
+      "Anatomy",
+      "Biochemistry",
+      "Dermatology",
+      "ENT"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\neet-pg-landing.png"
+  },
+  {
+    "name": "inicet-landing",
+    "url": "/inicet",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/_next/static/chunks/f0a7ba34039cf99e.js",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/_next/static/chunks/b30fb0403255872e.js",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?_rsc=1416k",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/neet-pg?_rsc=o9i8s",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007764984&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=6&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938466~115938469~118395334~118897920~118897930~119527020~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fneet-pg&dt=NEET%20PG%202026%20%E2%80%94%202%2C300%2B%20PYQs%20%C2%B7%2019%20Subjects%20%C2%B7%20AI%20Tutor%20%7C%20CrackCMS%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3710",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?exam=neet-pg&_rsc=11yhb",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions/neet-pg/practice?_rsc=1416k",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/_next/static/chunks/d90df0190ccd2945.js",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "INI-CET\nImage-Heavy Recalls · AIIMS-Standard · AI Tutor",
+      "CRACKCMS COVERS INI-CET FOR INDIA'S INSTITUTES OF NATIONAL IMPORTANCE",
+      "Recent INI-CET Papers",
+      "More INI-CET content is on the way",
+      "19 INI-CET Subjects · Tap to Practise",
+      "Anaesthesia",
+      "Anatomy",
+      "Biochemistry"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\inicet-landing.png"
+  },
+  {
+    "name": "cms-landing",
+    "url": "/cms",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?exam=ini-cet&_rsc=1553p",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions/inicet/practice?year=2025&_rsc=tbau7",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007768047&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=18&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938465~115938469~118395334~118897920~118897930~119527020~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Finicet&dt=INI-CET%202026%20%E2%80%94%20AIIMS-Standard%20Recalls%20%C2%B7%20AI%20Tutor%20%7C%20CrackCMS%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=4031",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions/inicet/practice?year=2025&_rsc=lmozj",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?exam=ini-cet&_rsc=1q8hb",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Crack UPSC CMS with AI-powered prep",
+      "Everything you need to crack UPSC CMS, in one app",
+      "AI tutor",
+      "1,920+ PYQs",
+      "Adaptive tests",
+      "Textbook-linked",
+      "Gamified streaks",
+      "Offline-friendly"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\cms-landing.png"
+  },
+  {
+    "name": "fmge-landing",
+    "url": "/fmge",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007771277&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=8&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938466~115938468~118395333~118897920~118897930~119724321~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fcms&dt=UPSC%20CMS%20Preparation%202026%20%E2%80%94%20AI%20Tutor%2C%20PYQs%2C%20Mock%20Tests%20%7C%20CrackCMS%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3773",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Crack FMGE with AI-powered prep",
+      "Everything you need to crack FMGE, in one app",
+      "AI tutor",
+      "8,000+ PYQs",
+      "Adaptive tests",
+      "Textbook-linked",
+      "Gamified streaks",
+      "Offline-friendly"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\fmge-landing.png"
+  },
+  {
+    "name": "usmle-landing",
+    "url": "/usmle",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007774255&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=2&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938468~118897920~118897930~119527019~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Ffmge&dt=FMGE%20Preparation%202026%20%E2%80%94%20MCI%20Screening%20Test%20for%20Foreign%20MBBS%20%7C%20CrackCMS%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3645",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Crack USMLE with AI-powered prep",
+      "Everything you need to crack USMLE, in one app",
+      "AI tutor",
+      "10,000+ PYQs",
+      "Adaptive tests",
+      "Textbook-linked",
+      "Gamified streaks",
+      "Offline-friendly"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\usmle-landing.png"
+  },
+  {
+    "name": "dashboard",
+    "url": "/dashboard",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007777121&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=0&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938466~115938469~118897920~118897930~119724320~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fusmle&dt=USMLE%20Step%201%20Preparation%20%E2%80%94%20AI%20Tutor%2C%20First%20Aid%20MCQs%2C%20NBME%20Bank%20%7C%20CrackCMS%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3352",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Dashboard"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\dashboard.png"
+  },
+  {
+    "name": "questions",
+    "url": "/questions",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/_next/image?url=%2Fdashboard_hero.png&w=640&q=75",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=18t7j",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=oh8t4",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/subscription?_rsc=18t7j",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=585va",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007779836&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=2&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938468~118012008~118897920~118897930~119724320~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fdashboard&dt=Dashboard%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3289",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007782642&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115616986~115938466~115938468~118897920~118897930~119381663~119896802&dp=%2Fquestions&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions&dt=Questions%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&en=page_view&_ee=1&_et=256&tfd=2336",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Question Bank"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\questions.png"
+  },
+  {
+    "name": "practice",
+    "url": "/questions/practice",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/?page=1&page_size=20&exam_type=cms",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007782642&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=3&tag_exp=115616986~115938466~115938468~118897920~118897930~119381663~119896802&sid=1785007746&sct=1&seg=1&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions%3Fexam%3Dcms&dr=https%3A%2F%2Fwww.cracklabs.app%2Fquestions&dt=Questions%20%7C%20CrackCMS&en=user_engagement&_et=1526&tfd=3879",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/subjects/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/stats/?exam_source=UPSC+CMS",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007782642&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAGQ&ae=a&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=2&tag_exp=115616986~115938466~115938468~118897920~118897930~119381663~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions%3Fexam%3Dcms&dr=https%3A%2F%2Fwww.cracklabs.app%2Fquestions&sid=1785007746&sct=1&seg=1&dt=Questions%20%7C%20CrackCMS&en=page_view&_et=1021&tfd=3876",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\practice.png"
+  },
+  {
+    "name": "practice-neet-pg",
+    "url": "/questions/neet-pg/practice?year=2021",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007785803&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=15&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938469~118897920~118897930~119527020~119896803&dp=%2Fquestions%2Fpractice&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions%2Fpractice&dt=Questions%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3156",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/auth/tokens/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/years/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/?page=1&page_size=20&exam_type=cms",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/subjects/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/stats/?exam_source=UPSC+CMS",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/?page=1&page_size=20&exam_type=cms",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=1rvel",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "NEET PG · 2021",
+      "CHOOSE THE CORRECT OPTION"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\practice-neet-pg.png"
+  },
+  {
+    "name": "practice-inicet",
+    "url": "/questions/inicet/practice",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=1muag",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/questions/12641/similar/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=5npda",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007788479&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938466~115938468~118897920~118897930~119724320~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions%2Fneet-pg%2Fpractice%3Fyear%3D2021&dt=Questions%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3797",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1nhhj",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=1eqfu",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\practice-inicet.png"
+  },
+  {
+    "name": "bookmarks",
+    "url": "/bookmarks",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007791642&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=8&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119381663~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fquestions%2Finicet%2Fpractice&dt=Questions%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3643",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Bookmarks",
+      "Bookmarks",
+      "Rebuilding your revision shelf..."
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\bookmarks.png"
+  },
+  {
+    "name": "ai-tutor",
+    "url": "/ai-tutor",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/simulator?_rsc=xabo0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=xabo0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=xabo0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/flashcards?_rsc=xabo0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007794633&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fbookmarks&dt=Bookmarks%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3910",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "AI Tutor",
+      "AI Tutor",
+      "Ask any medical question"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\ai-tutor.png"
+  },
+  {
+    "name": "analytics",
+    "url": "/analytics",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=du5c0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007797803&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938465~115938468~118897920~118897930~119527020~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fai-tutor&dt=AI%20Tutor%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3751",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=kwskm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=kwskm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/flashcards?_rsc=kwskm",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=1boyh",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Analytics",
+      "Performance Analytics"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\analytics.png"
+  },
+  {
+    "name": "leaderboard",
+    "url": "/leaderboard",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1rh0x",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=1rh0x",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=1rh0x",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=1rh0x",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007800494&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938466~115938468~118395335~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fanalytics&dt=Analytics%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3623",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007803310&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAGQ&ae=a&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=7&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115616985~115938466~115938469~118395334~118897920~118897930~119896803&sid=1785007746&sct=1&seg=1&dl=https%3A%2F%2Fwww.cracklabs.app%2Fleaderboard&dt=Leaderboard%20%7C%20CrackCMS&en=scroll&epn.percent_scrolled=90&_et=9&tfd=1156",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Leaderboard",
+      "Leaderboard",
+      "Campus Momentum"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\leaderboard.png"
+  },
+  {
+    "name": "settings",
+    "url": "/settings",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=l4qoe",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=l4qoe",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=l4qoe",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/leaderboard/?period=all",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/leaderboard/?period=all",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=l4qoe",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007803310&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=7&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938466~115938469~118395334~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fleaderboard&dt=Leaderboard%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=2&tfd=3577",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007806065&_gaz=1&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=18&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115616986~115938465~115938468~118897920~118897930~119724321~119896803&dp=%2Fsettings&dl=https%3A%2F%2Fwww.cracklabs.app%2Fsettings&dt=Settings%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&en=page_view&_ee=1&_et=180&tfd=935",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Settings",
+      "Settings",
+      "Profile",
+      "Preferences",
+      "Connected Devices",
+      "Session"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\settings.png"
+  },
+  {
+    "name": "subscription",
+    "url": "/subscription",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/simulator?_rsc=ovqpc",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=ovqpc",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=ovqpc",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=ovqpc",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007806065&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=18&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=2&tag_exp=115616986~115938465~115938468~118897920~118897930~119724321~119896803&sid=1785007746&sct=1&seg=1&dl=https%3A%2F%2Fwww.cracklabs.app%2Fsettings&dt=Settings%20%7C%20CrackCMS&en=user_engagement&_et=2542&tfd=3490",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "CrackCMS",
+      "Premium Membership Hub",
+      "Diagnose 5/5 Correctly to Get Monthly Pass for ₹79",
+      "1 Month Pass",
+      "3 Months Pass",
+      "1 Year Unlimited",
+      "Premium Inclusions & Resource Coverage",
+      "EXAMS"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\subscription.png"
+  },
+  {
+    "name": "tokens",
+    "url": "/tokens",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/simulator?_rsc=1349z",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/flashcards?_rsc=1349z",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/analytics/announcements/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007808992&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=11&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938468~118897920~118897930~119527020~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fsubscription&dt=CrackCMS%20Premium%20Plans%20for%20UPSC%20CMS%20Preparation%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3296",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=1349z",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=1349z",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "AI Tokens",
+      "AI Tokens",
+      "Token Management",
+      "How Tokens Work",
+      "Transaction History"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\tokens.png"
+  },
+  {
+    "name": "flashcards",
+    "url": "/flashcards",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/auth/tokens/admin/users/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/guides?_rsc=zfhml",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/guides/upsc-cms-complete-guide?_rsc=zfhml",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=zfhml",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007811616&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=1&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938465~115938468~118395335~118897920~118897930~119527020~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Ftokens&dt=Tokens%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3472",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=zfhml",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/auth/tokens/admin/users/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007814625&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAGQ&ae=a&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=14&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115938466~115938468~118897920~118897930~119896802&sid=1785007746&sct=1&seg=1&dl=https%3A%2F%2Fwww.cracklabs.app%2Fflashcards&dt=Flashcards%20%7C%20CrackCMS&en=scroll&epn.percent_scrolled=90&_et=12&tfd=1081",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Flashcards",
+      "Flashcards & Study Notes"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\flashcards.png"
+  },
+  {
+    "name": "tests",
+    "url": "/tests",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=16tak",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/privacy-policy?_rsc=16tak",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/about?_rsc=16tak",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/contact?_rsc=16tak",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007814625&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=14&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fflashcards&dt=Flashcards%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=2&tfd=3576",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Tests",
+      "Test Center",
+      "GENERATE NEW TEST",
+      "Subject-wise Test",
+      "AVAILABLE TESTS"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\tests.png"
+  },
+  {
+    "name": "simulator",
+    "url": "/simulator",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?_rsc=1847h",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=1847h",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007817593&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Ftests&dt=Tests%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3681",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/tests/?exam_type=cms",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=1847h",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/flashcards?_rsc=1847h",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "CMS Simulator",
+      "CMS Exam Simulator",
+      "About UPSC CMS Exam",
+      "Paper 1 — Full Mock",
+      "Paper 2 — Full Mock",
+      "📋 Simulation Tips"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\simulator.png"
+  },
+  {
+    "name": "recall-search",
+    "url": "/recall/search",
+    "status": 200,
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=b3fyw",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/simulator?_rsc=b3fyw",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007820570&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=3&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938465~115938468~118897920~118897930~119527019~119724320~119793973~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fsimulator&dt=Simulator%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=4090",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=b3fyw",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/generate?_rsc=b3fyw",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/api/questions/recall_search/?page_size=30",
+        "failure": null,
+        "status": 404
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Recall bank search"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\recall-search.png"
+  },
+  {
+    "name": "textbooks",
+    "url": "/textbooks",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007823644&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=13&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118395335~118897920~118897930~119724322~119791748~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Frecall%2Fsearch&dt=CrackCMS%20-%20UPSC%20CMS%20Preparation%20App%20with%20AI%20Tutor%2C%20PYQs%20and%20Mock%20Tests&sid=1785007746&sct=1&seg=1&_s=1&tfd=3583",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Textbooks",
+      "Textbooks & References"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\textbooks.png"
+  },
+  {
+    "name": "resources",
+    "url": "/resources",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007826514&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938469~118897920~118897930~119724320~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Ftextbooks&dt=Textbooks%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3587",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/ai-tutor?_rsc=fb9st",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/simulator?_rsc=fb9st",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=fb9st",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/flashcards?_rsc=fb9st",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "CMS Study Hub",
+      "UPSC Combined Medical Services (CMS) Examination",
+      "Paper I",
+      "Paper II",
+      "Marking Scheme",
+      "Eligibility Criteria",
+      "Salary & Benefits",
+      "Recruiting For"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\resources.png"
+  },
+  {
+    "name": "trends",
+    "url": "/trends",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=8wyr4",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007829350&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=11&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616986~115938466~115938469~118897920~118897930~119724321~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fresources&dt=UPSC%20CMS%20Resources%2C%20Syllabus%2C%20FAQ%20and%20Booklist%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3753",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=eiwmr",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=ecd8l",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=xrzkl",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Exam Trends",
+      "Total Questions",
+      "Core Subjects",
+      "Top Subject",
+      "Year-wise Subject Weightage",
+      "AI-Analyzed PYQ Trends (2018–2024)"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\trends.png"
+  },
+  {
+    "name": "jobs",
+    "url": "/jobs",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/dashboard?_rsc=zhhgp",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=6aepl",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=stqps",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007832455&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=19&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118395333~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Ftrends&dt=Trends%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3974",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?_rsc=zhhgp",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "CrackCMS",
+      "Medical Jobs Portal"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\jobs.png"
+  },
+  {
+    "name": "roadmap",
+    "url": "/roadmap",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=v92km",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=zz4jt",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=wyjio",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007835560&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=9&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119724321~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fjobs&dt=CrackCMS%20-%20UPSC%20CMS%20Preparation%20App%20with%20AI%20Tutor%2C%20PYQs%20and%20Mock%20Tests&sid=1785007746&sct=1&seg=1&_s=1&tfd=4220",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=bo8v9",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "AI-Powered Study Plan",
+      "Study Roadmap"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\roadmap.png"
+  },
+  {
+    "name": "generate",
+    "url": "/generate",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007839059&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Froadmap&dt=Roadmap%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=4790",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=1ppjp",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1i5e3",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/settings?_rsc=10hlx",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/roadmap?_rsc=1auck",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007842643&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAGQ&ae=a&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=9&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115616985~115938465~115938468~118395335~118897920~118897930~119724320~119896803&sid=1785007746&sct=1&seg=1&dl=https%3A%2F%2Fwww.cracklabs.app%2Fgenerate&dt=Generate%20%7C%20CrackCMS&en=scroll&epn.percent_scrolled=90&_et=17&tfd=1223",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "Question Generator",
+      "No Questions Yet"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\generate.png"
+  },
+  {
+    "name": "exams-cms",
+    "url": "/exams/cms",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=8c8to",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=1ywmc",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007842643&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=9&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115616985~115938465~115938468~118395335~118897920~118897930~119724320~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fgenerate&dt=Generate%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=2&tfd=6057",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/questions?_rsc=8c8to",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tests?_rsc=1izd0",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "UPSC CMS\nUPSC Combined Medical Services",
+      "About the UPSC CMS exam",
+      "Subjects you'll master",
+      "General Medicine",
+      "Paediatrics",
+      "Surgery",
+      "Obstetrics & Gynaecology",
+      "Preventive & Social Medicine"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\exams-cms.png"
+  },
+  {
+    "name": "exams-neet-pg",
+    "url": "/exams/neet-pg",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007848209&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118395335~118897920~118897930~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fexams%2Fcms&dt=UPSC%20CMS%20%E2%80%94%20Crack%20PYQs%202018-2025%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3547",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "NEET PG\nNEET PG (National Eligibility cum Entrance Test — Postgraduate)",
+      "About the NEET PG exam",
+      "Subjects you'll master",
+      "Anatomy",
+      "Physiology",
+      "Biochemistry",
+      "Pathology",
+      "Pharmacology"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\exams-neet-pg.png"
+  },
+  {
+    "name": "exams-usmle",
+    "url": "/exams/usmle",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007851012&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=12&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118897920~118897930~119404702~119527020~119724321~119896802&dl=https%3A%2F%2Fwww.cracklabs.app%2Fexams%2Fneet-pg&dt=NEET%20PG%20%E2%80%94%20Crack%20PYQs%202020-2025%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3326",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "USMLE\nUSMLE (United States Medical Licensing Examination)",
+      "About the USMLE exam",
+      "Subjects you'll master",
+      "Anatomy",
+      "Physiology",
+      "Biochemistry & Genetics",
+      "Pathology",
+      "Pharmacology"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\exams-usmle.png"
+  },
+  {
+    "name": "contact",
+    "url": "/contact",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007853741&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=2&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938465~115938469~118395334~118897920~118897930~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fexams%2Fusmle&dt=USMLE%20%E2%80%94%20Coming%20Soon%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=3706",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "CrackCMS",
+      "Contact Us",
+      "EXAMS",
+      "PREPARE",
+      "GUIDES",
+      "COMPANY",
+      "LEGAL"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\contact.png"
+  },
+  {
+    "name": "about",
+    "url": "/about",
+    "status": 200,
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "failedRequests": [
+      {
+        "url": "https://www.cracklabs.app/privacy-policy?_rsc=u79zh",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/cdn-cgi/rum?",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://crackcms-vsthc.ondigitalocean.app/api/health/",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://queue.simpleanalyticscdn.com/append",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=j6ol5",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/privacy-policy?_rsc=i5r6x",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://www.cracklabs.app/tokens?_rsc=1u7i6",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      },
+      {
+        "url": "https://analytics.google.com/g/collect?v=2&tid=G-MM88RT1QQK&gtm=45je67m0v9256910878za200zd9256910878&_p=1785007856808&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGQ&are=1&cid=1951702254.1785007747&frm=0&pscdl=noapi&rcb=19&sr=1280x720&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=0&uap=Windows&uapv=10.0&uaw=0&ul=en-us&gaf=2&tag_exp=115938466~115938468~118395333~118897920~118897930~119724322~119896803&dl=https%3A%2F%2Fwww.cracklabs.app%2Fcontact&dt=Contact%20CrackCMS%20Support%20%7C%20CrackCMS&sid=1785007746&sct=1&seg=1&_s=1&tfd=4104",
+        "failure": "net::ERR_ABORTED",
+        "status": null
+      }
+    ],
+    "nextErrorOverlay": false,
+    "headingMatches": [
+      "About CrackCMS — Built by Doctors, Powered by AI",
+      "Our mission",
+      "What we've built",
+      "By the numbers",
+      "What we believe",
+      "Patient-first thinking",
+      "AI + human review",
+      "Evidence over opinion"
+    ],
+    "screenshot": "C:\\Users\\DIVYANSHU\\Desktop\\crack_cms\\frontend\\screenshots\\audit\\about.png"
+  }
+]

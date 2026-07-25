@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
-import { cleanOptionText, extractAnalysisFromJson, isLikelyGarbled, safeDisplayText } from '@/lib/textCleanup';
+import { cleanOptionText, extractAnalysisFromJson, extractLeakedOptions, isLikelyGarbled, safeDisplayText, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -323,16 +323,42 @@ export default function NeetPgPlayer({
         return null;
     }
 
-    const correctAnswer = (current.correct_answer || '').toUpperCase().trim();
+    // ──────────────────────────────────────────────────────────────────
+    // Defence-in-depth (2026-07-26): many NEET PG recall rows were
+    // imported with the entire PDF block (stem + options + answer key +
+    // explanation) stuffed into `question_text` and the dedicated
+    // `option_a..d` columns left empty. When that happens, we have to
+    // parse the leaked options out of the stem at render time so the
+    // student can still solve the question. `extractLeakedOptions` also
+    // captures a leaked "Answer: X" line so we can grade the attempt.
+    // ──────────────────────────────────────────────────────────────────
+    const rawOptionCols = {
+        A: sanitizeOptionText((current as any).option_a),
+        B: sanitizeOptionText((current as any).option_b),
+        C: sanitizeOptionText((current as any).option_c),
+        D: sanitizeOptionText((current as any).option_d),
+    };
+    const hasColumnOptions = !!(rawOptionCols.A && rawOptionCols.B && rawOptionCols.C && rawOptionCols.D);
+    const leaked = !hasColumnOptions ? extractLeakedOptions(current.question_text) : null;
+    const optionLabels: string[] = hasColumnOptions
+        ? ['A', 'B', 'C', 'D']
+        : (leaked?.optionLabels?.length ? leaked.optionLabels : ['A', 'B', 'C', 'D']);
+    const optionTexts: Record<'A' | 'B' | 'C' | 'D', string> = hasColumnOptions
+        ? rawOptionCols
+        : (leaked?.options ?? { A: '', B: '', C: '', D: '' });
+    const correctAnswer = ((current.correct_answer || leaked?.correctAnswer || '') as string).toUpperCase().trim();
+    const displayStem = hasColumnOptions
+        ? sanitizeQuestionText(current.question_text) || ''
+        : (leaked?.stem ?? sanitizeQuestionText(current.question_text) ?? '');
 
     return (
         // `main-content` honours the `body.sidebar-hidden` toggle (see globals.css).
         // The global `.main-content` rule already applies a 260px desktop
         // margin-left to clear the fixed sidebar; on mobile the sidebar is a
         // drawer so no offset is needed.
-        <div className="main-content min-h-screen bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40">
+        <div className="main-content min-h-screen bg-gradient-to-br from-teal-50/40 via-white to-emerald-50/40 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
             {/* Header */}
-            <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 border-b border-teal-100 shadow-sm">
+            <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 dark:bg-slate-900/85 border-b border-teal-100 dark:border-slate-800 shadow-sm">
                 <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-3">
                     <button
                         onClick={handleExit}
@@ -359,15 +385,20 @@ export default function NeetPgPlayer({
             </header>
 
             <main className="max-w-[1600px] mx-auto px-4 py-6 grid grid-cols-12 gap-4">
-                {/* Left: Question + Options */}
+                {/* Left: Question + Options — must be order-1 on ALL viewports so
+                    students on phones (390px) see the question stem + options
+                    ABOVE the AI Tutor / Related PYQs sidebar. The earlier
+                    `order-2 lg:order-1` combination buried the question below
+                    the fold on mobile, effectively making the product
+                    unusable on phones. */}
                 <section className={cn(
                     'col-span-12 lg:col-span-7 xl:col-span-8',
-                    'order-2 lg:order-1',
+                    'order-1',
                 )}>
                     {/* Question card */}
-                    <div className="bg-white rounded-2xl shadow-xl shadow-teal-900/5 border border-teal-100/60 overflow-hidden">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-teal-900/5 dark:shadow-black/30 border border-teal-100/60 dark:border-slate-800 overflow-hidden">
                         {/* Top badges */}
-                        <div className="px-6 py-3 bg-gradient-to-r from-teal-50/40 via-emerald-50/30 to-white border-b border-teal-100 flex flex-wrap items-center gap-2 text-xs">
+                        <div className="px-6 py-3 bg-gradient-to-r from-teal-50/40 via-emerald-50/30 to-white dark:from-slate-800/60 dark:via-slate-800/40 dark:to-slate-900 border-b border-teal-100 dark:border-slate-800 flex flex-wrap items-center gap-2 text-xs">
                             {current.subject && (
                                 <Badge className="bg-teal-600 text-white font-semibold border-teal-700">
                                     <Pill className="w-3 h-3 mr-1" />
@@ -484,8 +515,8 @@ export default function NeetPgPlayer({
 
                         {/* Stem */}
                         <div className="px-6 py-6">
-                            <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed text-[15px]">
-                                <FormattedText text={current.question_text || ''} />
+                            <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-100 leading-relaxed text-[15px]">
+                                <FormattedText text={displayStem} />
                             </div>
                         </div>
 
@@ -495,44 +526,53 @@ export default function NeetPgPlayer({
                                 Choose the correct option
                             </h3>
                             <div className="grid grid-cols-1 gap-3">
-                                {(['A', 'B', 'C', 'D'] as const).map((label) => {
-                                    const raw = (current as any)[`option_${label.toLowerCase()}`] as string;
-                                    if (!raw || !raw.trim()) return null;
-                                    const isSelected = state.selected === label;
-                                    const isCorrect = state.showAnswer && correctAnswer === label;
+                                {(['A', 'B', 'C', 'D'] as const).map((key, idx) => {
+                                    const raw = optionTexts[key];
+                                    const cleanedRaw = sanitizeOptionText(raw);
+                                    if (!cleanedRaw || !cleanedRaw.trim()) return null;
+                                    const label = optionLabels[idx] || key;
+                                    const isSelected = state.selected === key;
+                                    const isCorrect = state.showAnswer && correctAnswer === key;
                                     const isWrong = state.showAnswer && isSelected && !isCorrect;
                                     return (
                                         <button
-                                            key={label}
+                                            key={key}
                                             type="button"
                                             disabled={state.showAnswer}
-                                            onClick={() => submitAttempt(label)}
+                                            onClick={() => submitAttempt(key)}
                                             className={cn(
                                                 'group flex items-start gap-3 p-4 rounded-xl border text-left transition-all',
                                                 'hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500',
-                                                isCorrect && 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300',
-                                                isWrong && 'border-rose-400 bg-rose-50',
-                                                !isCorrect && !isWrong && isSelected && 'border-teal-500 bg-teal-50',
-                                                !isCorrect && !isWrong && !isSelected && 'border-slate-200 bg-white hover:border-teal-300',
+                                                isCorrect && 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-2 ring-emerald-300 dark:ring-emerald-700',
+                                                isWrong && 'border-rose-400 bg-rose-50 dark:bg-rose-950/40',
+                                                !isCorrect && !isWrong && isSelected && 'border-teal-500 bg-teal-50 dark:bg-teal-950/40',
+                                                !isCorrect && !isWrong && !isSelected && 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-teal-300 dark:hover:border-teal-500',
                                             )}
+                                            data-testid={`option-${key}`}
+                                            aria-label={`Option ${label}`}
                                         >
                                             <span className={cn(
                                                 'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 transition-all',
                                                 isCorrect ? 'bg-emerald-600 text-white' :
                                                     isWrong ? 'bg-rose-500 text-white' :
                                                         isSelected ? 'bg-teal-600 text-white' :
-                                                            'bg-slate-100 text-slate-600 group-hover:bg-teal-100 group-hover:text-teal-700',
+                                                            'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 group-hover:bg-teal-100 dark:group-hover:bg-teal-900 group-hover:text-teal-700 dark:group-hover:text-teal-300',
                                             )}>
                                                 {isCorrect ? <CheckCircle2 className="w-4 h-4" /> :
                                                     isWrong ? <XIcon className="w-4 h-4" /> :
                                                         label}
                                             </span>
-                                            <span className="flex-1 text-slate-800 text-[14px] leading-relaxed">
-                                                <FormattedText text={cleanOptionText(raw) || ''} />
+                                            <span className="flex-1 text-slate-800 dark:text-slate-100 text-[14px] leading-relaxed">
+                                                <FormattedText text={cleanOptionText(cleanedRaw) || ''} />
                                             </span>
                                         </button>
                                     );
                                 })}
+                                {optionTexts.A && !optionTexts.B && (
+                                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                        Some options for this question are missing in the question bank. Submit what you can.
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -552,25 +592,39 @@ export default function NeetPgPlayer({
                                 className="border-t border-emerald-200 bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 px-6 py-5 space-y-4"
                             >
                                 {/* Why correct answer */}
-                                {state.aiExplanation || (current as any).effective_explanation || current.explanation || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '') ? (
-                                    <section data-testid="expl-why-correct">
-                                        <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1.5">
-                                            <Lightbulb className="w-4 h-4" /> Why the correct answer is right
-                                        </h3>
-                                        <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
-                                            <FormattedText
-                                                text={extractAnalysisFromJson(
-                                                    state.aiExplanation ||
-                                                    (current as any).effective_explanation
-                                                    || current.explanation
-                                                    || (typeof (current as any).ai_explanation === 'string'
-                                                        ? (current as any).ai_explanation
-                                                        : '')
-                                                )}
-                                            />
-                                        </div>
-                                    </section>
-                                ) : null}
+                                {(() => {
+                                    const expText = state.aiExplanation
+                                        || (current as any).effective_explanation
+                                        || current.explanation
+                                        || (typeof (current as any).ai_explanation === 'string' ? (current as any).ai_explanation : '');
+                                    if (expText) {
+                                        return (
+                                            <section data-testid="expl-why-correct">
+                                                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1.5">
+                                                    <Lightbulb className="w-4 h-4" /> Why the correct answer is right
+                                                </h3>
+                                                <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+                                                    <FormattedText text={extractAnalysisFromJson(expText)} />
+                                                </div>
+                                            </section>
+                                        );
+                                    }
+                                    // Fallback for the recall batch where the explanation
+                                    // field hasn't been populated yet. The student must
+                                    // at least see the correct answer + a hint that the
+                                    // AI explanation is in flight — never an empty panel.
+                                    return (
+                                        <section data-testid="expl-why-correct-fallback">
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1.5">
+                                                <Lightbulb className="w-4 h-4" /> Why the correct answer is right
+                                            </h3>
+                                            <div className="rounded-lg bg-emerald-50/60 border border-emerald-200 px-4 py-3 text-sm text-slate-700 leading-relaxed">
+                                                The correct answer is <strong>option {correctAnswer || (optionLabels[0] || 'A')}</strong>.
+                                                {' '}A detailed explanation is not yet available for this question — tap the AI Tutor button on the right to generate one instantly.
+                                            </div>
+                                        </section>
+                                    );
+                                })()}
 
                                 {/* Concept deep-dive */}
                                 {current.concept_explanation ? (
@@ -744,7 +798,7 @@ export default function NeetPgPlayer({
 
                     {/* Sticky navigation bar */}
                     <div className="sticky bottom-0 z-20 mt-4 -mx-4 px-4">
-                        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-teal-900/10 border border-teal-100 p-3 flex items-center gap-2">
+                        <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-teal-900/10 dark:shadow-black/40 border border-teal-100 dark:border-slate-800 p-3 flex items-center gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -812,7 +866,7 @@ export default function NeetPgPlayer({
 
                     {/* Related PYQs sidebar */}
                     {related.length > 0 && (
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                             <button
                                 onClick={() => setRelatedOpen(o => !o)}
                                 className="w-full px-4 py-3 flex items-center justify-between text-left"
@@ -820,7 +874,7 @@ export default function NeetPgPlayer({
                             >
                                 <span className="flex items-center gap-2">
                                     <Target className="w-4 h-4 text-teal-600" />
-                                    <span className="text-sm font-bold text-slate-800">Similar PYQs</span>
+                                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Similar PYQs</span>
                                     <Badge variant="secondary" className="text-xs">{related.length}</Badge>
                                 </span>
                                 {relatedOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}

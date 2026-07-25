@@ -19,7 +19,7 @@ export default function LoginClient() {
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | ''>('');
     const [magicLoading, setMagicLoading] = useState(false);
-    const { login, magicLinkLogin, oauthLogin } = useAuth();
+    const { login, magicLinkLogin, oauthLogin, user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const authErrorFromCallback = (searchParams.get('authError') || '').trim();
@@ -30,7 +30,14 @@ export default function LoginClient() {
         setLoading(true);
         try {
             await login(identifier, password);
-            router.push('/admin');
+            // Send admins to the control tower, students to their dashboard.
+            // Previously this hard-coded /admin for everyone, which meant
+            // students landed on an admin-only page after every login.
+            const next = searchParams.get('next');
+            const isAdmin =
+                String((user as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
+                ((user as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
+            router.push(next || (isAdmin ? '/admin' : '/dashboard'));
         } catch (err: unknown) {
             const error = err as { response?: { data?: unknown } };
             if (error.response?.data) {
@@ -43,7 +50,7 @@ export default function LoginClient() {
                     return;
                 }
                 if (err.message.toLowerCase().includes('invalid login credentials')) {
-                    setError('Invalid Supabase email/password. Note: Django superuser credentials do not sign in on this page. Use or reset the account in Supabase Auth.');
+                    setError('Invalid email or password. If you signed up before Supabase was enabled, please reset your password to sign in here.');
                     return;
                 }
                 setError(err.message);
@@ -59,7 +66,7 @@ export default function LoginClient() {
         <AuthShell
             badge="Welcome Back"
             title="Resume Your Winning Streak"
-            description="Log in to access your personalized UPSC CMS study dashboard and continue climbing the ranks."
+            description="Log in to access your personalized study dashboard across UPSC CMS, NEET PG, INI-CET, FMGE and USMLE."
             highlights={[
                 'Track your daily progress, accuracy, and weak topics.',
                 'Access deep AI explanations and medical mnemonics.',

@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown } from '@/components/FormattedText';
-import { cleanOptionText, decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
+import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
 
 /** Map frontend URL slugs → DB enums + human labels.
@@ -539,12 +539,12 @@ function QuestionsContent() {
         setTokenError(false);
         setAiError(null);
         aiAPI.explainAfterAnswer({
-            question_text: d.question_text,
+            question_text: sanitizeQuestionText(d.question_text),
             options: {
-                A: d.option_a || d.option_A || '',
-                B: d.option_b || d.option_B || '',
-                C: d.option_c || d.option_C || '',
-                D: d.option_d || d.option_D || '',
+                A: sanitizeOptionText(d.option_a || d.option_A || ''),
+                B: sanitizeOptionText(d.option_b || d.option_B || ''),
+                C: sanitizeOptionText(d.option_c || d.option_C || ''),
+                D: sanitizeOptionText(d.option_d || d.option_D || ''),
             },
             correct_answer: d.correct_answer || '',
             selected_answer: selectedAnswer || '',
@@ -952,7 +952,7 @@ function QuestionsContent() {
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(q.question_text).slice(0, 150)}{q.question_text.length > 150 ? '...' : ''}</p>
+                                        <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(sanitizeQuestionText(q.question_text)).slice(0, 150)}{stripMarkdown(sanitizeQuestionText(q.question_text)).length > 150 ? '...' : ''}</p>
                                         <div className="mt-2 flex flex-wrap gap-1.5">
                                             <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name || 'Topic unavailable'}</Badge>
                                             {q.year && <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>}
@@ -1088,14 +1088,15 @@ function QuestionsContent() {
                                     {/* Question Text — rendered with markdown */}
                                     <div className="p-5">
                                         <div className="text-base font-medium leading-relaxed mb-5">
-                                            <FormattedText text={String(detail.question_text)} />
+                                            <FormattedText text={sanitizeQuestionText(detail.question_text)} />
                                         </div>
 
                                         {/* Options */}
                                         <div className="space-y-2.5 mb-4">
                                             {['A', 'B', 'C', 'D'].map(opt => {
                                                 const key = `option_${opt.toLowerCase()}`;
-                                                const optionText = detail[key] || detail[`option_${opt}`];
+                                                const rawOption = detail[key] || detail[`option_${opt}`];
+                                                const optionText = sanitizeOptionText(rawOption);
                                                 if (!optionText) return null;
                                                 const isCorrect = detail.correct_answer === opt;
                                                 const isSelected = selectedAnswer === opt;

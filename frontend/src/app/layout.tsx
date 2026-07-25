@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeSync } from "@/components/ThemeSync";
 import BackendWarmup from "@/components/BackendWarmup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
@@ -263,6 +264,7 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <PWAProvider>
           <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="crackcms-theme">
+            <ThemeSync />
             <TooltipProvider>
               <AuthProvider>
                 <ExamTrackProvider>
