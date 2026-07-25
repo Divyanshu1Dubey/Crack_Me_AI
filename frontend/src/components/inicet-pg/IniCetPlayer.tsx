@@ -601,6 +601,47 @@ export default function IniCetPlayer({
                                     </div>
                                 ) : null}
 
+                                {/* ═══ Generate AI Analysis — inline button ═══ */}
+                                {!state.aiExplanation && !state.aiLoading && !state.aiError && (
+                                    <button
+                                        onClick={() => {
+                                            if (typeof window !== 'undefined' && (window as any).gtag) {
+                                                (window as any).gtag('event', 'ai_explain_request', { source: 'inicet_practice' });
+                                            }
+                                            fetchAi();
+                                        }}
+                                        className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:shadow-md"
+                                        data-testid="generate-ai-analysis"
+                                    >
+                                        <Brain className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                                        <div className="text-left">
+                                            <span className="text-sm font-bold block text-indigo-700 dark:text-indigo-300">Generate AI Analysis</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Mnemonics, explanations, exam tips & textbook references</span>
+                                        </div>
+                                    </button>
+                                )}
+
+                                {/* AI Loading */}
+                                {state.aiLoading && (
+                                    <div className="flex items-center justify-center gap-3 p-6 rounded-xl border border-indigo-200 bg-indigo-50/30 dark:bg-indigo-900/10">
+                                        <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                                        <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Analyzing question with AI…</span>
+                                    </div>
+                                )}
+
+                                {/* AI Error */}
+                                {state.aiError && (
+                                    <div className="rounded-xl border border-rose-200 bg-rose-50/80 dark:bg-rose-950/20 p-4 text-center space-y-2">
+                                        <p className="text-sm font-bold text-rose-700 dark:text-rose-400">{state.aiError}</p>
+                                        <button
+                                            onClick={fetchAi}
+                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 hover:underline"
+                                        >
+                                            <Sparkles className="w-3 h-3" /> Retry AI Analysis
+                                        </button>
+                                    </div>
+                                )}
+
                                 {explanationImages.length > 0 && (
                                     <section data-testid="expl-images">
                                         <h4 className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 mb-2 flex items-center gap-1.5">

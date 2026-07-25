@@ -733,6 +733,47 @@ export default function NeetPgPlayer({
                                         )}
                                     </div>
                                 ) : null}
+
+                                {/* ═══ Generate AI Analysis — inline button ═══ */}
+                                {!state.aiExplanation && !state.aiLoading && !state.aiError && (
+                                    <button
+                                        onClick={() => {
+                                            if (typeof window !== 'undefined' && (window as any).gtag) {
+                                                (window as any).gtag('event', 'ai_explain_request', { source: 'neet_pg_practice' });
+                                            }
+                                            fetchAi();
+                                        }}
+                                        className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:shadow-md"
+                                        data-testid="generate-ai-analysis"
+                                    >
+                                        <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                                        <div className="text-left">
+                                            <span className="text-sm font-bold block text-blue-700 dark:text-blue-300">Generate AI Analysis</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">Mnemonics, explanations, exam tips & textbook references</span>
+                                        </div>
+                                    </button>
+                                )}
+
+                                {/* AI Loading */}
+                                {state.aiLoading && (
+                                    <div className="flex items-center justify-center gap-3 p-6 rounded-xl border border-blue-200 bg-blue-50/30 dark:bg-blue-900/10">
+                                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Analyzing question with AI…</span>
+                                    </div>
+                                )}
+
+                                {/* AI Error */}
+                                {state.aiError && (
+                                    <div className="rounded-xl border border-rose-200 bg-rose-50/80 dark:bg-rose-950/20 p-4 text-center space-y-2">
+                                        <p className="text-sm font-bold text-rose-700 dark:text-rose-400">{state.aiError}</p>
+                                        <button
+                                            onClick={fetchAi}
+                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 hover:underline"
+                                        >
+                                            <Sparkles className="w-3 h-3" /> Retry AI Analysis
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
