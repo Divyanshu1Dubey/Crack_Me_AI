@@ -1477,31 +1477,91 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='force-regenerate')
     def force_regenerate(self, request, pk=None):
-        """Force regenerate AI fields while respecting lock precedence."""
+        """Force regenerate AI fields while respecting lock precedence.
+
+        Calls the real AIService.analyze_question() — never writes
+        placeholder text. If the AI service is unavailable, returns 503
+        and leaves the existing ai_* fields intact.
+        """
         question = self.get_object()
 
+        # Nothing to do if every AI field is locked — surface a clear 4xx
+        # so admins don't trigger an empty round-trip audit log entry.
+        if question.lock_answer and question.lock_explanation:
+            return Response(
+                {'error': 'All AI fields are locked; nothing to regenerate.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from ai_engine.services import AIService
+        try:
+            service = AIService()
+            options = {
+                'A': question.option_a or '',
+                'B': question.option_b or '',
+                'C': question.option_c or '',
+                'D': question.option_d or '',
+            }
+            analysis = service.analyze_question(
+                question_text=question.question_text or '',
+                options=options,
+                correct_answer=question.correct_answer or '',
+            )
+        except Exception as e:
+            logger.error(f"force_regenerate AI call failed for question {question.id}: {e}")
+            return Response(
+                {'error': 'AI service temporarily unavailable; existing fields left unchanged.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if not analysis:
+            return Response(
+                {'error': 'AI service returned an empty response; existing fields left unchanged.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Map the analysis sections back to Question fields, gated by lock flags.
+        # analyze_question returns a free-form markdown explanation; we
+        # use the same text for both answer and explanation rather than
+        # fabricating distinct placeholders.
+        updated_fields = []
         if not question.lock_answer:
-            question.ai_answer = f"Regenerated answer for question #{question.id}"
+            question.ai_answer = analysis
+            updated_fields.append('ai_answer')
         if not question.lock_explanation:
-            question.ai_explanation = question.explanation or 'Regenerated AI explanation placeholder.'
-        question.ai_mnemonic = question.mnemonic or f"Regenerated mnemonic for question #{question.id}"
-        question.ai_references = question.textbook_references if isinstance(question.textbook_references, list) else []
-        question.save(update_fields=['ai_answer', 'ai_explanation', 'ai_mnemonic', 'ai_references'])
+            question.ai_explanation = analysis
+            updated_fields.append('ai_explanation')
+
+        # ai_mnemonic stays untouched — AIService has no mnemonic entry
+        # point, and silently overwriting it with placeholder text
+        # previously destroyed verified content. Admins use ai_override
+        # for that.
+        if not question.lock_explanation and isinstance(question.textbook_references, list):
+            question.ai_references = question.textbook_references
+            updated_fields.append('ai_references')
+
+        if updated_fields:
+            question.save(update_fields=updated_fields)
 
         active_prompt = AdminAIPromptVersion.objects.filter(is_active=True).first()
-        response_excerpt = (question.ai_explanation or question.explanation or question.ai_answer or '')[:500]
-        token_basis = len((question.question_text or '') + (question.ai_answer or '') + (question.ai_explanation or ''))
+        response_excerpt = (question.ai_explanation or question.ai_answer or '')[:500]
         QuestionAIOperationLog.objects.create(
             question=question,
             operation_type='regenerate',
-            provider='simulated-provider',
+            provider='aiservice',
             prompt_version=active_prompt,
-            tokens_used=max(1, token_basis // 4),
+            tokens_used=max(1, len(analysis) // 4),
             response_excerpt=response_excerpt,
             created_by=request.user,
         )
 
-        return Response({'message': 'AI regeneration completed', 'id': question.id, 'lock_answer': question.lock_answer, 'lock_explanation': question.lock_explanation})
+        return Response({
+            'message': 'AI regeneration completed',
+            'id': question.id,
+            'lock_answer': question.lock_answer,
+            'lock_explanation': question.lock_explanation,
+            'updated_fields': updated_fields,
+        })
 
     @action(detail=False, methods=['get', 'post'], url_path='ai-prompt-versions')
     def ai_prompt_versions(self, request):
