@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Tailwind v4: bind the `dark:` utility variant to a `.dark` class on any
+   ancestor (ThemeSync flips this on <html> when next-themes resolves to
+   dark). Without this declaration the 314 `dark:` utilities across 29
+   files compile to nothing — the variant defaults to `prefers-color-scheme`
+   only. The `&:where(...)` wrapper keeps specificity at 0 so component
+   classes can still override. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ==========================================
    CrackCMS Design System
    Professional UPSC CMS Preparation Platform
