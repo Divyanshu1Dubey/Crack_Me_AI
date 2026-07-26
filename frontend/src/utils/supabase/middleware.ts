@@ -39,8 +39,7 @@ const parseAdminEmailAllowlist = () => {
       .filter(Boolean)
       .flatMap((raw) => String(raw).split(','))
       .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-      .concat(['meduraa.web@gmail.com', 'parulmaterial@gmail.com']),
+      .filter(Boolean),
   );
 };
 
