@@ -331,7 +331,10 @@ export const questionsAPI = {
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
   create: (data: Record<string, unknown>) => api.post('/questions/', data),
-  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/`, data),
+  update: (id: number, data: Record<string, unknown>, opts?: { ifMatch?: string }) => {
+    const headers = opts?.ifMatch ? { 'If-Match': opts.ifMatch } : undefined;
+    return api.patch(`/questions/${id}/`, data, { headers });
+  },
   remove: (id: number) => api.delete(`/questions/${id}/`),
   submitFeedback: (data: { question: number; category: string; comment: string }) =>
     api.post('/questions/feedback/', data),
@@ -371,6 +374,19 @@ export const questionsAPI = {
   setConceptId: (id: number, conceptId: string) => api.patch(`/questions/${id}/concept-id/`, { concept_id: conceptId }),
   updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
   formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
+  uploadImage: (data: { questionId: number; file: File }) => {
+    const form = new FormData();
+    form.append('question_id', String(data.questionId));
+    form.append('file', data.file);
+    return api.post('/questions/images/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  updateImage: (id: number, data: Record<string, unknown>) =>
+    api.patch(`/questions/images/${id}/`, data),
+  deleteImage: (id: number) => api.delete(`/questions/images/${id}/`),
+  reorderImage: (id: number, newIndex: number) =>
+    api.post(`/questions/images/${id}/reorder/`, { new_index_in_page: newIndex }),
 };
 
 // Tests API
