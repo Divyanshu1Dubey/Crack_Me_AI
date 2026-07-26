@@ -367,43 +367,73 @@ class AIService:
 
 
     def _call_cerebras(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Call Cerebras (ultra-fast inference, Gemma 4 31B).
-        Free tier: 30 RPM, ~1M tokens/day."""
+        """Call Cerebras (ultra-fast inference).
+        Free tier: 30 RPM, ~1M tokens/day.
+
+        Cerebras has rotated their hosted model lineup multiple times;
+        rather than hardcoding a single model id (which permanently
+        disables this provider on a 404 — see Bug #8), we try a small
+        candidate list per call and only disable the provider on auth
+        errors, not model-not-found.
+        """
         if not self.cerebras:
             return None
-        try:
-            messages = []
-            if system:
-                messages.append({"role": "system", "content": system})
-            messages.append({"role": "user", "content": prompt})
+        # Per-call candidate order; the first id that returns a 200 wins
+        # for this call. Order matches the file header docstring first.
+        candidate_models = ("llama-3.1-8b", "llama3.1-8b", "gemma-4-31b")
+        last_err = None
+        for model_id in candidate_models:
+            try:
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
 
-            def _cerebras_call():
-                return self.cerebras.chat.completions.create(
-                    model="gemma-4-31b",
-                    messages=messages,
-                    temperature=temperature,
-                    max_completion_tokens=max_tokens,
-                )
+                def _cerebras_call(mid=model_id):
+                    return self.cerebras.chat.completions.create(
+                        model=mid,
+                        messages=messages,
+                        temperature=temperature,
+                        max_completion_tokens=max_tokens,
+                    )
 
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_cerebras_call)
-                response = future.result(timeout=15)
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_cerebras_call)
+                    response = future.result(timeout=15)
 
-            text = response.choices[0].message.content
-            if text:
-                logger.info("Cerebras OK")
-                return text
-        except FuturesTimeout:
-            logger.warning("Cerebras timed out (15s)")
-        except Exception as e:
-            err = str(e)
-            if '401' in err or 'invalid_api_key' in err or '404' in err or 'model_not_found' in err:
-                logger.warning("Cerebras API key invalid or model unavailable — skipping")
-                self.cerebras = None
-            elif '429' in err:
-                logger.info("Cerebras rate limit hit")
-            else:
-                logger.warning(f"Cerebras error: {e}")
+                text = response.choices[0].message.content
+                if text:
+                    logger.info(f"Cerebras OK ({model_id})")
+                    return text
+                # Empty body — try next candidate.
+                continue
+            except FuturesTimeout:
+                logger.warning("Cerebras timed out (15s)")
+                return None
+            except Exception as e:
+                err = str(e)
+                last_err = e
+                # Auth errors are fatal — kill the provider, don't waste
+                # the rest of the candidate list.
+                if '401' in err or 'invalid_api_key' in err:
+                    logger.warning("Cerebras API key invalid — disabling")
+                    self.cerebras = None
+                    return None
+                # 404 / model_not_found — try the next candidate instead
+                # of disabling the provider entirely.
+                if '404' in err or 'model_not_found' in err:
+                    logger.info(f"Cerebras model '{model_id}' not available, trying next candidate")
+                    continue
+                if '429' in err:
+                    logger.info("Cerebras rate limit hit")
+                    return None
+                # Unknown error — log once and move on to the next
+                # candidate so a transient glitch on one model id doesn't
+                # drop the whole provider.
+                logger.warning(f"Cerebras error with '{model_id}': {e}")
+                continue
+        if last_err is not None:
+            logger.warning(f"Cerebras: all candidates exhausted (last error: {last_err})")
         return None
 
     def _call_cohere(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
