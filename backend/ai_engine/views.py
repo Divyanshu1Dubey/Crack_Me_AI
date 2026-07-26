@@ -9,6 +9,7 @@ Token System Integration:
 """
 import json
 import logging
+import os
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -698,9 +699,21 @@ class AIStatusView(APIView):
     def get(self, request):
         try:
             service = AIService()
+            # Mirror the providers list in _call_ai() so admin dashboards
+            # reflect all 10 clients, not just the 2 the previous version
+            # reported. Keeps the operator's "is the AI healthy?" view
+            # in sync with the round-robin code path.
             providers = {
                 'gemini': service.gemini_client is not None,
                 'groq': service.groq is not None,
+                'cerebras': service.cerebras is not None,
+                'cohere': service.cohere is not None,
+                'openrouter': service.openrouter is not None,
+                'openrouter2': service.openrouter2 is not None,
+                'github_models': service.github_models is not None,
+                'huggingface': service.huggingface is not None,
+                'mistral': service.mistral is not None,
+                'nvidia_mistral': service.nvidia_mistral is not None,
             }
         except Exception as e:
             logger.error(f"AIService init failed: {e}")
@@ -708,12 +721,25 @@ class AIStatusView(APIView):
         keys_present = {
             'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
             'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
+            'CEREBRAS_API_KEY': bool(getattr(django_settings, 'CEREBRAS_API_KEY', '')),
+            'COHERE_API_KEY': bool(getattr(django_settings, 'COHERE_API_KEY', '')),
+            'OPENROUTER_API_KEY': bool(getattr(django_settings, 'OPENROUTER_API_KEY', '')),
+            'OPENROUTER_API_KEY2': bool(os.getenv('OPENROUTER_API_KEY2', '')),
+            'GITHUB_TOKEN': bool(getattr(django_settings, 'GITHUB_TOKEN', '')),
+            'HUGGINGFACE_API_KEY': bool(getattr(django_settings, 'HUGGINGFACE_API_KEY', '')),
+            'MISTRAL_API_KEY': bool(getattr(django_settings, 'MISTRAL_API_KEY', '')),
+            'NVIDIA_MISTRAL_API_KEY': bool(getattr(django_settings, 'NVIDIA_MISTRAL_API_KEY', '')),
         }
+        any_available = (
+            any(v is True for v in providers.values())
+            if providers and isinstance(next(iter(providers.values())), bool)
+            else False
+        )
         logger.info(f"AI Status check — providers: {providers}, keys_present: {keys_present}")
         return Response({
             'providers_initialized': providers,
             'keys_present': keys_present,
-            'any_available': any(v is True for v in providers.values()) if isinstance(list(providers.values())[0], bool) else False,
+            'any_available': any_available,
         })
 
 
