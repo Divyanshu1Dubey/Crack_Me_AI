@@ -201,16 +201,16 @@ export default function AdminQuestionsEditorPage() {
   };
 
   return (
-    <div className="p-6 mx-auto space-y-6">
+    <div className="p-6 mx-auto space-y-6 text-gray-900">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Questions Editor</h1>
-        <div className="text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900">Questions Editor</h1>
+        <div className="text-sm text-gray-700">
           {examCounts[examType ?? ''] !== undefined && (
             <span>
-              Showing <span className="font-semibold text-gray-800">{examCounts[examType ?? '']}</span>{' '}
+              Showing <span className="font-semibold text-gray-900">{examCounts[examType ?? '']}</span>{' '}
               {examType ? examType.toUpperCase().replace('_', ' ') : 'total'} questions
               {activeFiltersCount > 0 && (
-                <span className="ml-2 text-indigo-600">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
+                <span className="ml-2 text-indigo-600 font-medium">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
               )}
             </span>
           )}
@@ -220,7 +220,7 @@ export default function AdminQuestionsEditorPage() {
       {/* PRIMARY FILTER: exam-type chips — the most visible thing on the page */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 sticky top-0 z-10">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-2">Exam:</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-800 mr-2">Exam:</span>
           {examChips.map((chip) => {
             const count = examCounts[chip.key] ?? null;
             const isActive = examType === chip.key;
@@ -241,7 +241,7 @@ export default function AdminQuestionsEditorPage() {
                   <span
                     className={
                       'inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-full text-xs font-semibold ' +
-                      (isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600')
+                      (isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-800')
                     }
                   >
                     {count.toLocaleString()}
@@ -265,14 +265,14 @@ export default function AdminQuestionsEditorPage() {
           <input
             type="text"
             placeholder="Search questions..."
-            className="border p-2 rounded w-64"
+            className="border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (resetPage(), fetchQuestions())}
           />
 
           <select
-            className="border p-2 rounded min-w-[10rem]"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-[10rem]"
             value={subjectId}
             onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); resetPage(); }}
           >
@@ -283,7 +283,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border p-2 rounded min-w-[10rem]"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-[10rem] disabled:bg-gray-100 disabled:text-gray-500"
             value={topicId}
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
             disabled={!subjectId}
@@ -297,7 +297,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border p-2 rounded"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded"
             value={year}
             onChange={(e) => { setYear(e.target.value); resetPage(); }}
           >
@@ -308,7 +308,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border p-2 rounded"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded"
             value={difficulty}
             onChange={(e) => { setDifficulty(e.target.value); resetPage(); }}
           >
@@ -319,33 +319,37 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <div className="flex flex-wrap items-center gap-3 ml-2">
-            <label className="flex items-center gap-1 text-sm">
+            <label className="flex items-center gap-1 text-sm text-gray-900">
               <input
                 type="checkbox"
+                className="accent-indigo-600"
                 checked={needsReview}
                 onChange={(e) => { setNeedsReview(e.target.checked); resetPage(); }}
               />
               Needs Review
             </label>
-            <label className="flex items-center gap-1 text-sm">
+            <label className="flex items-center gap-1 text-sm text-gray-900">
               <input
                 type="checkbox"
+                className="accent-indigo-600"
                 checked={isDropped}
                 onChange={(e) => { setIsDropped(e.target.checked); resetPage(); }}
               />
               Dropped
             </label>
-            <label className="flex items-center gap-1 text-sm">
+            <label className="flex items-center gap-1 text-sm text-gray-900">
               <input
                 type="checkbox"
+                className="accent-indigo-600"
                 checked={isControversial}
                 onChange={(e) => { setIsControversial(e.target.checked); resetPage(); }}
               />
               Controversial
             </label>
-            <label className="flex items-center gap-1 text-sm">
+            <label className="flex items-center gap-1 text-sm text-gray-900">
               <input
                 type="checkbox"
+                className="accent-indigo-600"
                 checked={isImageBased}
                 onChange={(e) => { setIsImageBased(e.target.checked); resetPage(); }}
               />
@@ -366,19 +370,19 @@ export default function AdminQuestionsEditorPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID / UUID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disp # (Drag)</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject & Topic</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Text</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flags</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">ID / UUID</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Disp # (Drag)</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Subject & Topic</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Text</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Flags</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-4">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-4 text-gray-900">Loading...</td></tr>
             ) : questions.map((q, idx) => (
-              <tr 
+              <tr
                 key={q.id}
                 draggable
                 onDragStart={() => setDraggedIdx(idx)}
@@ -386,16 +390,16 @@ export default function AdminQuestionsEditorPage() {
                 onDrop={() => handleDrop(idx)}
                 className={draggedIdx === idx ? "opacity-50 bg-gray-100" : "hover:bg-gray-50 cursor-move transition-colors"}
               >
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {q.id}<br/>
-                  <span className="text-xs text-gray-400">{q.uuid ? q.uuid.substring(0,8)+'...' : 'N/A'}</span>
+                  <span className="text-xs text-gray-500">{q.uuid ? q.uuid.substring(0,8)+'...' : 'N/A'}</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400 cursor-grab">⣿</span>
-                    <input 
-                      type="number" 
-                      className="border p-1 w-16 text-center rounded bg-white" 
+                    <span className="text-gray-500 cursor-grab">⣿</span>
+                    <input
+                      type="number"
+                      className="border border-gray-300 bg-white text-gray-900 p-1 w-16 text-center rounded"
                       defaultValue={q.display_number || ''}
                       onBlur={(e) => {
                         if (e.target.value !== String(q.display_number)) {
@@ -407,16 +411,16 @@ export default function AdminQuestionsEditorPage() {
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900 min-w-[200px]">
                   <div className="space-y-2">
-                    <select 
-                      className="border p-1 w-full rounded text-xs"
+                    <select
+                      className="border border-gray-300 bg-white text-gray-900 p-1 w-full rounded text-xs"
                       value={q.subject || ''}
                       onChange={(e) => handleUpdate(q.id, 'subject', parseInt(e.target.value))}
                     >
                       <option value="">No Subject</option>
                       {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
-                    <select 
-                      className="border p-1 w-full rounded text-xs"
+                    <select
+                      className="border border-gray-300 bg-white text-gray-900 p-1 w-full rounded text-xs"
                       value={q.topic || ''}
                       onChange={(e) => handleUpdate(q.id, 'topic', parseInt(e.target.value))}
                     >
@@ -429,26 +433,26 @@ export default function AdminQuestionsEditorPage() {
                   <div className="line-clamp-3">{q.question_text}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 space-y-2">
-                  <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={q.needs_review || false} onChange={(e) => handleUpdate(q.id, 'needs_review', e.target.checked)} />
+                  <label className="flex items-center gap-2 text-xs text-gray-900">
+                    <input type="checkbox" className="accent-emerald-600" checked={q.needs_review || false} onChange={(e) => handleUpdate(q.id, 'needs_review', e.target.checked)} />
                     Needs Review
                   </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={q.is_dropped || false} onChange={(e) => handleUpdate(q.id, 'is_dropped', e.target.checked)} />
+                  <label className="flex items-center gap-2 text-xs text-gray-900">
+                    <input type="checkbox" className="accent-emerald-600" checked={q.is_dropped || false} onChange={(e) => handleUpdate(q.id, 'is_dropped', e.target.checked)} />
                     Dropped
                   </label>
-                  <div className="text-xs mt-1">
-                    Edited: {q.admin_edited ? <span className="text-green-600 font-bold">Yes</span> : <span className="text-gray-400">No</span>}
+                  <div className="text-xs mt-1 text-gray-900">
+                    Edited: {q.admin_edited ? <span className="text-green-700 font-bold">Yes</span> : <span className="text-gray-500">No</span>}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <button
                     onClick={() => onEdit(q)}
-                    className="text-emerald-600 hover:text-emerald-900 bg-emerald-50 px-3 py-1 rounded"
+                    className="text-emerald-700 hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded"
                   >
                     Edit
                   </button>
-                  <button onClick={() => alert('Merge/Split feature coming soon!')} className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">
+                  <button onClick={() => alert('Merge/Split feature coming soon!')} className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded">
                     Merge / Split
                   </button>
                 </td>
@@ -462,15 +466,15 @@ export default function AdminQuestionsEditorPage() {
         <button
           disabled={page === 1}
           onClick={() => setPage(p => Math.max(1, p - 1))}
-          className="px-4 py-2 border rounded disabled:opacity-50"
+          className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded disabled:opacity-50 disabled:text-gray-400"
         >
           Previous
         </button>
-        <span>Page {page} of {totalPages}</span>
+        <span className="text-gray-900">Page {page} of {totalPages}</span>
         <button
           disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 border rounded disabled:opacity-50"
+          className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded disabled:opacity-50 disabled:text-gray-400"
         >
           Next
         </button>
