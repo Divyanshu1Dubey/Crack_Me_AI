@@ -292,7 +292,7 @@ export default function IniCetPlayer({
         // The global `.main-content` rule already applies a 260px desktop
         // margin-left to clear the fixed sidebar; on mobile the sidebar is a
         // drawer so no offset is needed.
-        <div className="main-content min-h-screen bg-gradient-to-br from-indigo-50/40 via-white to-sky-50/40 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+        <div className="main-content min-h-screen bg-linear-to-br from-indigo-50/40 via-white to-sky-50/40 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
             {/* Header */}
             <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 dark:bg-slate-900/85 border-b border-indigo-100 dark:border-slate-800 shadow-sm">
                 <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-3">
@@ -300,7 +300,7 @@ export default function IniCetPlayer({
                         <ArrowLeft className="w-5 h-5 text-indigo-700" />
                     </button>
                     <div className="flex items-center gap-2 min-w-0">
-                        <BookOpen className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                        <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
                         <h1 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 truncate">{title}</h1>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
@@ -320,7 +320,7 @@ export default function IniCetPlayer({
                 {/* Left: Question + Options + Explanation */}
                 <section className="col-span-12 lg:col-span-8 order-1">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-indigo-900/5 dark:shadow-black/30 border border-indigo-100/60 dark:border-slate-800 overflow-hidden">
-                        <div className="px-6 py-3 bg-gradient-to-r from-indigo-50/40 via-sky-50/30 to-white border-b border-indigo-100 flex flex-wrap items-center gap-2 text-xs">
+                        <div className="px-6 py-3 bg-linear-to-r from-indigo-50/40 via-sky-50/30 to-white border-b border-indigo-100 flex flex-wrap items-center gap-2 text-xs">
                             {current.subject && (
                                 <Badge className="bg-indigo-600 text-white font-semibold border-indigo-700">
                                     <Pill className="w-3 h-3 mr-1" />
@@ -403,7 +403,7 @@ export default function IniCetPlayer({
                                                     <ImageIcon className="w-10 h-10" />
                                                 </div>
                                             )}
-                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-linear-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
                                                 <span className="text-white text-xs flex items-center gap-1">
                                                     <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
                                                 </span>
@@ -445,7 +445,7 @@ export default function IniCetPlayer({
                                             )}
                                         >
                                             <span className={cn(
-                                                'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 transition-all',
+                                                'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-all',
                                                 isCorrect ? 'bg-emerald-600 text-white' :
                                                     isWrong ? 'bg-rose-500 text-white' :
                                                         isSelected ? 'bg-indigo-600 text-white' :
@@ -486,7 +486,7 @@ export default function IniCetPlayer({
                             <div
                                 role="region"
                                 aria-label="Detailed explanation"
-                                className="border-t border-indigo-200 bg-gradient-to-br from-indigo-50/60 via-white to-sky-50/40 px-6 py-5 space-y-4"
+                                className="border-t border-indigo-200 bg-linear-to-br from-indigo-50/60 via-white to-sky-50/40 px-6 py-5 space-y-4"
                             >
                                 {/* Why correct answer */}
                                 {(() => {
@@ -722,12 +722,12 @@ export default function IniCetPlayer({
                         >
                             {loadingMore ? (
                                 <>
-                                    <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                                     <span>Loading more questions…</span>
                                 </>
                             ) : rateLimited ? (
                                 <>
-                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                    <AlertTriangle className="w-4 h-4 shrink-0" />
                                     <span className="flex-1">
                                         Server rate-limited our requests. Click Retry to continue with a fresh batch.
                                     </span>
@@ -743,7 +743,7 @@ export default function IniCetPlayer({
                                 </>
                             ) : (
                                 <>
-                                    <Activity className="w-4 h-4 flex-shrink-0" />
+                                    <Activity className="w-4 h-4 shrink-0" />
                                     <span className="flex-1">
                                         {total} loaded. Click Next to fetch more.
                                     </span>
