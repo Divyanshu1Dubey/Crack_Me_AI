@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import DiscussionThread from '@/components/DiscussionThread';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
+import ImageViewer, { type ViewerImage } from '@/components/image/ImageViewer';
 import { useDock } from '@/context/DockContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -188,6 +189,10 @@ function ExamQuestionBankInner({
     const [flagError, setFlagError] = useState<string | null>(null);
     const [showAiDeepDive, setShowAiDeepDive] = useState(false);
     const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(initialBookmarkOnly ?? false);
+    // Image viewer modal state — null when closed. Clicking a thumbnail
+    // in the question image carousel opens ImageViewer at the right index,
+    // matching the standalone NEET-PG / INI-CET player UX.
+    const [viewImageIdx, setViewImageIdx] = useState<number | null>(null);
 
     const [yearModalOpen, setYearModalOpen] = useState(false);
     const [modalYear, setModalYear] = useState<string | null>(null);
@@ -981,13 +986,17 @@ function ExamQuestionBankInner({
                                         {/* Image carousel — image-based questions */}
                                         {Array.isArray(detail.images) && detail.images.length > 0 && (
                                             <div className="mb-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {detail.images.map((img: any) => (
-                                                    <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer"
-                                                        className="block rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors">
-                                                        <img src={img.url} alt={img.caption || 'Question image'}
+                                                {detail.images.map((img: any, idx: number) => (
+                                                    <button
+                                                        key={img.id}
+                                                        type="button"
+                                                        onClick={() => setViewImageIdx(idx)}
+                                                        className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in"
+                                                    >
+                                                        <img src={img.url || img.file_url} alt={img.caption || 'Question image'}
                                                             className="w-full h-auto object-contain bg-muted/30" loading="lazy" />
                                                         {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
-                                                    </a>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -1614,6 +1623,33 @@ function ExamQuestionBankInner({
                         </CardContent>
                     </Card>
                 </div>
+            )}
+
+            {/* Image viewer modal — opens when the user clicks a thumbnail
+                in the image carousel above. Reuses the same ImageViewer
+                component the standalone NEET-PG / INI-CET players use, so
+                pinch-zoom, side-by-side, and fullscreen all work. Previously
+                the carousel used <a target="_blank"> which would leak
+                potentially-short-lived presigned S3 URLs into a new tab. */}
+            {viewImageIdx !== null && Array.isArray(detail?.images) && detail.images.length > 0 && (
+                <ImageViewer
+                    open
+                    onClose={() => setViewImageIdx(null)}
+                    startIndex={viewImageIdx}
+                    images={(detail.images as ViewerImage[]).map((img: ViewerImage | any) => ({
+                        id: img.id,
+                        file_url: img.file_url || img.url || null,
+                        caption: img.caption,
+                        modality: img.modality,
+                        modality_subtype: img.modality_subtype,
+                        page_number: img.page_number,
+                        image_index_in_page: img.image_index_in_page,
+                        has_diagram: img.has_diagram,
+                        has_table: img.has_table,
+                        width: img.width,
+                        height: img.height,
+                    }))}
+                />
             )}
         </div>
     );
