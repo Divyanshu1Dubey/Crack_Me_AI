@@ -2,17 +2,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { questionsAPI } from '@/lib/api';
+import QuestionEditModal from './QuestionEditModal';
 
 export default function AdminQuestionsEditorPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  
+
   // Filters
   const [needsReview, setNeedsReview] = useState(false);
   const [isDropped, setIsDropped] = useState(false);
   const [search, setSearch] = useState('');
+  const [examType, setExamType] = useState<string>('');
+  const [year, setYear] = useState<string>('');
+
+  // Edit modal state
+  const [editing, setEditing] = useState<any | null>(null);
+  const onEdit = (q: any) => setEditing(q);
   
   // Drag and drop state
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
@@ -45,6 +52,8 @@ export default function AdminQuestionsEditorPage() {
       const params: any = { page, page_size: 20, ordering: 'display_number' };
       if (needsReview) params.needs_review = true;
       if (isDropped) params.is_dropped = true;
+      if (examType) params.exam_type = examType;
+      if (year) params.year = year;
       if (search) params.search = search;
       
       const res = await questionsAPI.list(params);
@@ -61,7 +70,7 @@ export default function AdminQuestionsEditorPage() {
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, needsReview, isDropped]);
+  }, [page, needsReview, isDropped, examType, year]);
 
   const handleUpdate = async (id: number, field: string, value: any) => {
     try {
@@ -132,13 +141,33 @@ export default function AdminQuestionsEditorPage() {
           Needs Review
         </label>
         <label className="flex items-center gap-2">
-          <input 
-            type="checkbox" 
+          <input
+            type="checkbox"
             checked={isDropped}
             onChange={(e) => { setIsDropped(e.target.checked); setPage(1); }}
           />
           Is Dropped
         </label>
+        <select
+          className="border p-2 rounded"
+          value={examType}
+          onChange={(e) => { setExamType(e.target.value); setPage(1); }}
+        >
+          <option value="">All Exams</option>
+          <option value="cms">UPSC CMS</option>
+          <option value="neet_pg">NEET PG</option>
+          <option value="ini_cet">INI-CET</option>
+          <option value="usmle">USMLE</option>
+          <option value="fmge">FMGE</option>
+        </select>
+        <input
+          type="number"
+          placeholder="Year"
+          className="border p-2 rounded w-24"
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && fetchQuestions()}
+        />
         <button onClick={fetchQuestions} className="bg-indigo-600 text-white px-4 py-2 rounded">
           Search
         </button>
@@ -223,7 +252,13 @@ export default function AdminQuestionsEditorPage() {
                     Edited: {q.admin_edited ? <span className="text-green-600 font-bold">Yes</span> : <span className="text-gray-400">No</span>}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                  <button
+                    onClick={() => onEdit(q)}
+                    className="text-emerald-600 hover:text-emerald-900 bg-emerald-50 px-3 py-1 rounded"
+                  >
+                    Edit
+                  </button>
                   <button onClick={() => alert('Merge/Split feature coming soon!')} className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">
                     Merge / Split
                   </button>
@@ -235,22 +270,34 @@ export default function AdminQuestionsEditorPage() {
       </div>
 
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <button 
-          disabled={page === 1} 
+        <button
+          disabled={page === 1}
           onClick={() => setPage(p => Math.max(1, p - 1))}
           className="px-4 py-2 border rounded disabled:opacity-50"
         >
           Previous
         </button>
         <span>Page {page} of {totalPages}</span>
-        <button 
-          disabled={page >= totalPages} 
+        <button
+          disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
           className="px-4 py-2 border rounded disabled:opacity-50"
         >
           Next
         </button>
       </div>
+
+      {editing && (
+        <QuestionEditModal
+          question={editing}
+          images={editing.images ?? []}
+          onClose={() => setEditing(null)}
+          onSaved={(updated: any) => {
+            setQuestions(questions.map((q) => (q.id === updated.id ? updated : q)));
+            setEditing(null);
+          }}
+        />
+      )}
     </div>
   );
 }
