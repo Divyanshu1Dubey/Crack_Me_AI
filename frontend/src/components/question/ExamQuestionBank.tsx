@@ -975,7 +975,7 @@ function ExamQuestionBankInner({
                         ) : selectedQuestion && detail ? (
                             <div className="animate-fadeInUp space-y-4 px-1 py-0.5">
                                 <div className="glass-card rounded-2xl border border-primary/40 shadow-[0_18px_40px_rgba(14,116,144,0.16)]">
-                                    <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-900/50">
+                                    <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-800/40">
                                         <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
                                         <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
                                         {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
