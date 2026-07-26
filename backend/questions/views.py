@@ -11,6 +11,7 @@ from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from django.db import transaction
+from django.db.utils import IntegrityError
 from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
@@ -1988,7 +1989,39 @@ class DiscussionVoteView(generics.GenericAPIView):
                 discussion.refresh_from_db(fields=['upvotes', 'downvotes'])
                 return Response({'status': 'vote_switched', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
 
-            DiscussionVote.objects.create(user=request.user, discussion=discussion, vote_type=vote_type)
+            # No existing vote — create one. On Postgres the discussion
+            # row lock above doesn't cover DiscussionVote, so two rapid
+            # POSTs from the same user can both reach this line. The
+            # unique_together (user, discussion) constraint on the model
+            # will reject the second one; catch the IntegrityError and
+            # re-enter the "existing" branch so the second request is
+            # idempotent (toggle off / switch) instead of 500-ing.
+            try:
+                DiscussionVote.objects.create(user=request.user, discussion=discussion, vote_type=vote_type)
+            except IntegrityError:
+                existing = DiscussionVote.objects.get(user=request.user, discussion=discussion)
+                # Recurse via the toggle/switch paths. We re-evaluate
+                # vote_type against the row that just got committed; if
+                # it matches, treat as a no-op so the second request
+                # doesn't double-count.
+                if existing.vote_type == vote_type:
+                    discussion.refresh_from_db(fields=['upvotes', 'downvotes'])
+                    return Response({'status': 'already_voted', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
+                if vote_type == 'up':
+                    Discussion.objects.filter(pk=discussion.pk).update(
+                        upvotes=F('upvotes') + 1,
+                        downvotes=Greatest(F('downvotes') - 1, Value(0)),
+                    )
+                else:
+                    Discussion.objects.filter(pk=discussion.pk).update(
+                        downvotes=F('downvotes') + 1,
+                        upvotes=Greatest(F('upvotes') - 1, Value(0)),
+                    )
+                existing.vote_type = vote_type
+                existing.save(update_fields=['vote_type'])
+                discussion.refresh_from_db(fields=['upvotes', 'downvotes'])
+                return Response({'status': 'vote_switched', 'upvotes': discussion.upvotes, 'downvotes': discussion.downvotes})
+
             if vote_type == 'up':
                 Discussion.objects.filter(pk=discussion.pk).update(upvotes=F('upvotes') + 1)
             else:
