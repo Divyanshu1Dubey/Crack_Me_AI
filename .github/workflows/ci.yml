@@ -121,3 +121,57 @@ jobs:
           name: playwright-visual-report
           path: frontend/playwright-report/
           retention-days: 14
+
+  # Live audit — runs the production-incident suite from the 2026-07-26
+  # audit. Walks 30 questions each on /questions/neet-pg/practice and
+  # /questions/inicet/practice (15 desktop + 5 mobile each), records
+  # console errors, failed network requests, and missing UI affordances
+  # (option buttons, "Why correct" cards, next-question buttons) into
+  # frontend/tests/e2e/.audit/bug-report.json.
+  #
+  # The spec itself never throws on bugs — it just records them. We
+  # surface the report as a build artifact so a human can review.
+  # WARNING-ONLY on first run (|| true + continue-on-error). Flip the
+  # gate once the report's bug count is consistently zero.
+  live-audit:
+    name: Live Audit (Playwright)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install npm dependencies
+        run: npm ci
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+      - name: Run live audit against cracklabs.app
+        env:
+          LIVE_AUDIT_BASE_URL: https://cracklabs.app
+          BASE_URL: https://cracklabs.app
+          PLAYWRIGHT_SKIP_WEBSERVER: '1'
+          LIVE_AUDIT_EMAIL: ${{ secrets.LIVE_AUDIT_EMAIL }}
+          LIVE_AUDIT_PASSWORD: ${{ secrets.LIVE_AUDIT_PASSWORD }}
+        run: npx playwright test live-audit.spec.ts --reporter=line,html --timeout=600000 || true
+        continue-on-error: true
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-audit-report
+          path: frontend/tests/e2e/.audit/bug-report.json
+          retention-days: 30
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-audit-html
+          path: frontend/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
