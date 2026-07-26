@@ -28,12 +28,22 @@ export default function AdminQuestionsEditorPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
 
+  // Per-exam counts so the user can see which exam has what before filtering
+  const [examCounts, setExamCounts] = useState<Record<string, number>>({});
+
+  // Senior secondary filters (separate row so the exam chips are uncluttered)
+  const [subjectId, setSubjectId] = useState<string>('');
+  const [topicId, setTopicId] = useState<string>('');
+  const [difficulty, setDifficulty] = useState<string>('');
+  const [isControversial, setIsControversial] = useState(false);
+  const [isImageBased, setIsImageBased] = useState(false);
+
   const fetchTaxonomy = async () => {
     try {
       const resSub = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/subjects/`);
       const dataSub = await resSub.json();
       setSubjects(dataSub.results || dataSub || []);
-      
+
       const resTop = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/topics/`);
       const dataTop = await resTop.json();
       setTopics(dataTop.results || dataTop || []);
@@ -42,8 +52,35 @@ export default function AdminQuestionsEditorPage() {
     }
   };
 
+  // Count how many questions match each exam track so the user can see
+  // at-a-glance how much content lives in each track. Cached until the page is reloaded.
+  const fetchExamCounts = async () => {
+    const tracks: Array<{ key: string; label: string; color: string }> = [
+      { key: '', label: 'All Exams', color: 'gray' },
+      { key: 'cms', label: 'UPSC CMS', color: 'blue' },
+      { key: 'neet_pg', label: 'NEET PG', color: 'emerald' },
+      { key: 'ini_cet', label: 'INI-CET', color: 'purple' },
+      { key: 'usmle', label: 'USMLE', color: 'amber' },
+      { key: 'fmge', label: 'FMGE', color: 'rose' },
+    ];
+    try {
+      const results = await Promise.all(
+        tracks.map(async (t) => {
+          const params: any = { page: 1, page_size: 1 };
+          if (t.key) params.exam_type = t.key;
+          const res = await questionsAPI.list(params);
+          return [t.key, Number(res.data.count ?? 0)] as const;
+        })
+      );
+      setExamCounts(Object.fromEntries(results));
+    } catch (e) {
+      console.error('Failed to fetch exam counts', e);
+    }
+  };
+
   useEffect(() => {
     fetchTaxonomy();
+    fetchExamCounts();
   }, []);
 
   const fetchQuestions = async () => {
@@ -54,12 +91,17 @@ export default function AdminQuestionsEditorPage() {
       if (isDropped) params.is_dropped = true;
       if (examType) params.exam_type = examType;
       if (year) params.year = year;
+      if (subjectId) params.subject = subjectId;
+      if (topicId) params.topic = topicId;
+      if (difficulty) params.difficulty = difficulty;
+      if (isControversial) params.is_controversial = true;
+      if (isImageBased) params.is_image_based = true;
       if (search) params.search = search;
-      
+
       const res = await questionsAPI.list(params);
       setQuestions(res.data.results || res.data); // Handle both paginated and non-paginated responses
-      if (res.data.count) {
-        setTotalPages(Math.ceil(res.data.count / 20));
+      if (res.data.count !== undefined) {
+        setTotalPages(Math.max(1, Math.ceil(res.data.count / 20)));
       }
     } catch (error) {
       console.error(error);
@@ -70,7 +112,48 @@ export default function AdminQuestionsEditorPage() {
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, needsReview, isDropped, examType, year]);
+  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased]);
+
+  // Reset page whenever filters change so the user doesn't sit on an empty page
+  const resetPage = () => setPage(1);
+
+  const clearAllFilters = () => {
+    setExamType('');
+    setYear('');
+    setSubjectId('');
+    setTopicId('');
+    setDifficulty('');
+    setNeedsReview(false);
+    setIsDropped(false);
+    setIsControversial(false);
+    setIsImageBased(false);
+    setSearch('');
+    resetPage();
+  };
+
+  // Exam-type chips — the primary way the user narrows the question bank.
+  // Each chip shows the live count for that exam so the user can see at-a-glance
+  // which track has the most content.
+  const examChips: Array<{ key: string; label: string; ring: string; activeBg: string; activeText: string }> = [
+    { key: '', label: 'All Exams', ring: 'ring-gray-300', activeBg: 'bg-gray-900', activeText: 'text-white' },
+    { key: 'cms', label: 'UPSC CMS', ring: 'ring-blue-300', activeBg: 'bg-blue-600', activeText: 'text-white' },
+    { key: 'neet_pg', label: 'NEET PG', ring: 'ring-emerald-300', activeBg: 'bg-emerald-600', activeText: 'text-white' },
+    { key: 'ini_cet', label: 'INI-CET', ring: 'ring-purple-300', activeBg: 'bg-purple-600', activeText: 'text-white' },
+    { key: 'usmle', label: 'USMLE', ring: 'ring-amber-300', activeBg: 'bg-amber-600', activeText: 'text-white' },
+    { key: 'fmge', label: 'FMGE', ring: 'ring-rose-300', activeBg: 'bg-rose-600', activeText: 'text-white' },
+  ];
+
+  const activeFiltersCount =
+    (examType ? 1 : 0) +
+    (year ? 1 : 0) +
+    (subjectId ? 1 : 0) +
+    (topicId ? 1 : 0) +
+    (difficulty ? 1 : 0) +
+    (needsReview ? 1 : 0) +
+    (isDropped ? 1 : 0) +
+    (isControversial ? 1 : 0) +
+    (isImageBased ? 1 : 0) +
+    (search ? 1 : 0);
 
   const handleUpdate = async (id: number, field: string, value: any) => {
     try {
@@ -121,56 +204,162 @@ export default function AdminQuestionsEditorPage() {
     <div className="p-6 mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Questions Editor</h1>
+        <div className="text-sm text-gray-500">
+          {examCounts[examType ?? ''] !== undefined && (
+            <span>
+              Showing <span className="font-semibold text-gray-800">{examCounts[examType ?? '']}</span>{' '}
+              {examType ? examType.toUpperCase().replace('_', ' ') : 'total'} questions
+              {activeFiltersCount > 0 && (
+                <span className="ml-2 text-indigo-600">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
+              )}
+            </span>
+          )}
+        </div>
       </div>
-      
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex gap-4 items-center">
-        <input 
-          type="text" 
-          placeholder="Search questions..." 
-          className="border p-2 rounded w-64"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && fetchQuestions()}
-        />
-        <label className="flex items-center gap-2">
-          <input 
-            type="checkbox" 
-            checked={needsReview}
-            onChange={(e) => { setNeedsReview(e.target.checked); setPage(1); }}
-          />
-          Needs Review
-        </label>
-        <label className="flex items-center gap-2">
+
+      {/* PRIMARY FILTER: exam-type chips — the most visible thing on the page */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 sticky top-0 z-10">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-2">Exam:</span>
+          {examChips.map((chip) => {
+            const count = examCounts[chip.key] ?? null;
+            const isActive = examType === chip.key;
+            return (
+              <button
+                key={chip.key}
+                onClick={() => { setExamType(chip.key); resetPage(); }}
+                className={
+                  'inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition ' +
+                  (isActive
+                    ? `${chip.activeBg} ${chip.activeText} border-transparent shadow-sm`
+                    : `bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50`)
+                }
+                aria-pressed={isActive}
+              >
+                <span>{chip.label}</span>
+                {count !== null && (
+                  <span
+                    className={
+                      'inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-full text-xs font-semibold ' +
+                      (isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600')
+                    }
+                  >
+                    {count.toLocaleString()}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="ml-auto text-xs text-red-600 hover:text-red-800 underline"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
+
+        {/* SECONDARY FILTERS row — collapsed-ish so exam chips dominate visually */}
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
           <input
-            type="checkbox"
-            checked={isDropped}
-            onChange={(e) => { setIsDropped(e.target.checked); setPage(1); }}
+            type="text"
+            placeholder="Search questions..."
+            className="border p-2 rounded w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (resetPage(), fetchQuestions())}
           />
-          Is Dropped
-        </label>
-        <select
-          className="border p-2 rounded"
-          value={examType}
-          onChange={(e) => { setExamType(e.target.value); setPage(1); }}
-        >
-          <option value="">All Exams</option>
-          <option value="cms">UPSC CMS</option>
-          <option value="neet_pg">NEET PG</option>
-          <option value="ini_cet">INI-CET</option>
-          <option value="usmle">USMLE</option>
-          <option value="fmge">FMGE</option>
-        </select>
-        <input
-          type="number"
-          placeholder="Year"
-          className="border p-2 rounded w-24"
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && fetchQuestions()}
-        />
-        <button onClick={fetchQuestions} className="bg-indigo-600 text-white px-4 py-2 rounded">
-          Search
-        </button>
+
+          <select
+            className="border p-2 rounded min-w-[10rem]"
+            value={subjectId}
+            onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); resetPage(); }}
+          >
+            <option value="">All Subjects</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+
+          <select
+            className="border p-2 rounded min-w-[10rem]"
+            value={topicId}
+            onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
+            disabled={!subjectId}
+          >
+            <option value="">All Topics</option>
+            {topics
+              .filter((t) => !subjectId || String(t.subject) === String(subjectId))
+              .map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+          </select>
+
+          <select
+            className="border p-2 rounded"
+            value={year}
+            onChange={(e) => { setYear(e.target.value); resetPage(); }}
+          >
+            <option value="">All Years</option>
+            {Array.from({ length: 30 }, (_, i) => 2025 - i).map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+
+          <select
+            className="border p-2 rounded"
+            value={difficulty}
+            onChange={(e) => { setDifficulty(e.target.value); resetPage(); }}
+          >
+            <option value="">Any Difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+
+          <div className="flex flex-wrap items-center gap-3 ml-2">
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={needsReview}
+                onChange={(e) => { setNeedsReview(e.target.checked); resetPage(); }}
+              />
+              Needs Review
+            </label>
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={isDropped}
+                onChange={(e) => { setIsDropped(e.target.checked); resetPage(); }}
+              />
+              Dropped
+            </label>
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={isControversial}
+                onChange={(e) => { setIsControversial(e.target.checked); resetPage(); }}
+              />
+              Controversial
+            </label>
+            <label className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={isImageBased}
+                onChange={(e) => { setIsImageBased(e.target.checked); resetPage(); }}
+              />
+              Image-based
+            </label>
+          </div>
+
+          <button
+            onClick={() => { resetPage(); fetchQuestions(); }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          >
+            Search
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
