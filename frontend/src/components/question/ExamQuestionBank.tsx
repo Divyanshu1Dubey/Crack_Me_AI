@@ -1217,6 +1217,33 @@ function ExamQuestionBankInner({
                                                     <div className="flex-1 h-px bg-border ml-2"></div>
                                                 </div>
 
+                                                {/* BUG FIX (2026-07-26): defence-in-depth fallback. If the
+                                                    backend returns the ExplainQuestionView shape
+                                                    (`{analysis, context, is_correct}`) instead of the
+                                                    ExplainAfterAnswerView rich shape, every rich
+                                                    panel collapses — the user sees only the header
+                                                    above with nothing under it. Render `analysis`
+                                                    markdown so the user always sees content. Only
+                                                    fires when no rich fields are present so it
+                                                    doesn't duplicate a normal rich response. */}
+                                                {aiExplanation.analysis && !(
+                                                    aiExplanation.mnemonic ||
+                                                    aiExplanation.why_correct ||
+                                                    aiExplanation.core_concept ||
+                                                    aiExplanation.topic_deep_dive ||
+                                                    aiExplanation.clinical_pearl ||
+                                                    aiExplanation.exam_tip
+                                                ) && (
+                                                    <div className="glass-card p-4 space-y-2">
+                                                        <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                                                            <Brain className="w-3.5 h-3.5" /> AI Analysis
+                                                        </h5>
+                                                        <div className="text-sm leading-relaxed text-foreground prose prose-sm max-w-none">
+                                                            <FormattedText text={cleanAiText(aiExplanation.analysis)} />
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {aiExplanation.mnemonic && (
                                                     <div className="mnemonic-card">
                                                         <div className="flex items-start gap-3">

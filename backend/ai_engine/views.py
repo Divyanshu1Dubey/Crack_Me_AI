@@ -224,6 +224,21 @@ class ExplainAfterAnswerView(APIView):
             is_correct = request.data.get('selected_answer') == request.data.get('correct_answer')
             try:
                 cached_json = json.loads(db_question.ai_explanation)
+                # BUG FIX (2026-07-26): ExplainQuestionView stores its
+                # result as `{"analysis": "<markdown>", "context": {...}}`
+                # while ExplainAfterAnswerView returns the rich shape with
+                # `core_concept`, `why_correct`, `mnemonic`, etc. If we
+                # hand the ExplainQuestionView shape back to a client
+                # expecting the rich keys, every Deep-Analysis panel
+                # disappears (only the header renders) — the user sees
+                # an empty "AI-Powered Deep Analysis" block and reports
+                # the button is broken.
+                # Detect the wrong-shape cache and fall through to
+                # regenerate the rich payload.
+                if not isinstance(cached_json, dict):
+                    raise ValueError("cached ai_explanation is not a JSON object")
+                if 'analysis' in cached_json and 'context' in cached_json and 'core_concept' not in cached_json:
+                    raise ValueError("cached ai_explanation is ExplainQuestionView shape, regenerating as rich")
                 cached_json['is_correct'] = is_correct
                 return Response(cached_json)
             except Exception:
