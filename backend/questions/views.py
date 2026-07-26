@@ -778,7 +778,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='bulk-delete')
     def bulk_delete(self, request):
-        """Soft delete selected questions with explicit confirmation token."""
+        """Soft delete selected questions with explicit confirmation token.
+
+        Guards against accidental / malicious mass-archive:
+        - Each id must parse to a positive integer (no strings, no dicts,
+          no None).
+        - List length is capped at 500 per request so a compromised
+          admin token cannot archive the entire 8,000+ question bank in
+          a single call.
+        - Forensic audit log entry is written for every invocation, with
+          a count and stable hash of the requested ids.
+        """
         ids = request.data.get('ids', [])
         confirmation = str(request.data.get('confirm', '')).upper()
         if confirmation != 'DELETE':
@@ -786,8 +796,57 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list) or not ids:
             return Response({'error': 'ids is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        updated = Question.objects.filter(id__in=ids).update(is_active=False)
-        return Response({'message': 'Bulk delete complete (soft archived)', 'updated': updated})
+        # Cap batch size — soft-archiving >500 questions in a single
+        # request is almost certainly an error or an attack.
+        BULK_DELETE_MAX = 500
+        if len(ids) > BULK_DELETE_MAX:
+            return Response(
+                {'error': f'Cannot bulk-delete more than {BULK_DELETE_MAX} questions per request. Split into smaller batches.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate each id is a positive integer.
+        try:
+            parsed_ids = [int(qid) for qid in ids]
+        except (TypeError, ValueError):
+            return Response({'error': 'ids must be a list of integers'}, status=status.HTTP_400_BAD_REQUEST)
+        if any(qid <= 0 for qid in parsed_ids):
+            return Response({'error': 'ids must be positive integers'}, status=status.HTTP_400_BAD_REQUEST)
+        # Dedupe so audit log reflects the actual work performed.
+        parsed_ids = sorted(set(parsed_ids))
+
+        updated = Question.objects.filter(id__in=parsed_ids).update(is_active=False)
+
+        # Best-effort audit log — same pattern as the dispute-resolve
+        # action above. We log a stable hash of the requested ids so a
+        # later DB restore can be cross-referenced without storing every
+        # id in plaintext (which could leak the entire bank id
+        # space).
+        import hashlib
+        ids_hash = hashlib.sha256(','.join(str(qid) for qid in parsed_ids).encode('utf-8')).hexdigest()[:16]
+        try:
+            from accounts.views import create_admin_audit_log
+            create_admin_audit_log(
+                actor=request.user,
+                action='BULK_SOFT_DELETE',
+                resource_type='Question',
+                resource_id='bulk',
+                detail=f'Soft-archived {updated} of {len(parsed_ids)} requested questions',
+                metadata={
+                    'requested_count': len(parsed_ids),
+                    'updated_count': updated,
+                    'ids_hash': ids_hash,
+                },
+            )
+        except Exception as e:
+            logger.error(f'Failed to log bulk soft-delete: {e}')
+
+        return Response({
+            'message': 'Bulk delete complete (soft archived)',
+            'updated': updated,
+            'requested': len(parsed_ids),
+            'ids_hash': ids_hash,
+        })
 
     @action(detail=False, methods=['post'], url_path='extraction/upload')
     def extraction_upload(self, request):
