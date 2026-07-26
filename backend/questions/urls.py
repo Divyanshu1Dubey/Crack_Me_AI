@@ -8,6 +8,7 @@ router.register(r'topics', views.TopicViewSet)
 router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
 router.register(r'exam-tracks', views.ExamTrackViewSet, basename='examtrack')
+router.register(r'images', views.QuestionImageViewSet, basename='question-image')
 router.register(r'', views.QuestionViewSet, basename='question')
 
 # NOTE: Explicit paths must come BEFORE router.urls because the router's

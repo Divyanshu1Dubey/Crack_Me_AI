@@ -12,6 +12,7 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import viewsets, generics, permissions, status, filters
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -1728,6 +1729,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_update(self, serializer):
+        match = self.request.headers.get("If-Match")
+        if match:
+            current = self.get_object().updated_at.isoformat()
+            if match != current:
+                return Response(
+                    {"detail": "Question was modified by another user", "current": QuestionDetailSerializer(self.get_object()).data},
+                    status=status.HTTP_409_CONFLICT,
+                )
         self._normalize_question_payload(serializer.validated_data)
         if 'correct_answer' in serializer.validated_data:
             serializer.validated_data['lock_answer'] = True
@@ -2189,3 +2198,71 @@ class QuestionImageServeView(APIView):
         resp["Cache-Control"] = "private, max-age=3600"
         return resp
 
+
+from .image_upload import upload_image_to_supabase
+from .serializers_question_image import QuestionImageSerializer
+
+
+class QuestionImageViewSet(viewsets.ModelViewSet):
+    """Admin-only CRUD for `QuestionImage`. Supports direct upload via
+    `POST /questions/images/` with multipart `question_id` + `file`.
+
+    **Auth**: `IsAdminUser`. Non-admins get 403.
+    **Optimistic lock**: PATCH / DELETE accept `If-Match: <updated_at>`
+    on the parent Question to prevent concurrent overwrites — but since
+    images live on their own resource, image PATCH uses image
+    `updated_at` via the same `If-Match` header.
+    """
+    queryset = QuestionImage.objects.all().order_by("-id")
+    serializer_class = QuestionImageSerializer
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def create(self, request, *args, **kwargs):
+        question_id = request.data.get("question_id")
+        file_obj = request.FILES.get("file")
+        if not question_id or not file_obj:
+            return Response(
+                {"detail": "question_id and file are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            question_id_int = int(question_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "question_id must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            uploaded = upload_image_to_supabase(
+                file_obj=file_obj,
+                question_id=question_id_int,
+                content_type=file_obj.content_type or "application/octet-stream",
+                original_filename=file_obj.name or "image.png",
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            logger.error("Image upload failed: %s", exc)
+            return Response(
+                {"detail": "Upload failed", "hint": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        row = QuestionImage.objects.get(id=uploaded.id)
+        return Response(
+            QuestionImageSerializer(row).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def reorder(self, request, pk=None):
+        """Reorder images within a question. Body: `{question_id, new_index_in_page}`."""
+        image = self.get_object()
+        new_index = request.data.get("new_index_in_page")
+        try:
+            new_index = int(new_index)
+        except (TypeError, ValueError):
+            return Response({"detail": "new_index_in_page must be an integer"}, status=400)
+        image.image_index_in_page = new_index
+        image.save(update_fields=["image_index_in_page"])
+        return Response(QuestionImageSerializer(image).data)
