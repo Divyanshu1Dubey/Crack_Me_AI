@@ -318,7 +318,7 @@ export default function IniCetPlayer({
 
             <main className="max-w-[1600px] mx-auto px-4 py-6 grid grid-cols-12 gap-4">
                 {/* Left: Question + Options + Explanation */}
-                <section className="col-span-12 lg:col-span-8 order-2 lg:order-1">
+                <section className="col-span-12 lg:col-span-8 order-1">
                     <div className="bg-white rounded-2xl shadow-xl shadow-indigo-900/5 border border-indigo-100/60 overflow-hidden">
                         <div className="px-6 py-3 bg-gradient-to-r from-indigo-50/40 via-sky-50/30 to-white border-b border-indigo-100 flex flex-wrap items-center gap-2 text-xs">
                             {current.subject && (
