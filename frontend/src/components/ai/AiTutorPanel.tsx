@@ -179,18 +179,18 @@ export default function AiTutorPanel({
     );
 
     return (
-        <div className="bg-linear-to-br from-violet-50 via-white to-fuchsia-50 rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 flex items-center justify-between border-b border-violet-100/60">
+        <div className="bg-linear-to-br from-violet-50 dark:from-violet-950/40 via-white dark:via-slate-900 to-fuchsia-50 dark:to-fuchsia-950/30 rounded-2xl border border-violet-100 dark:border-violet-900/50 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 flex items-center justify-between border-b border-violet-100/60 dark:border-violet-900/50">
                 <span className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-violet-600" />
-                    <span className="text-sm font-bold text-slate-800">AI Tutor</span>
+                    <Brain className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">AI Tutor</span>
                     {cached ? (
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-emerald-300 text-emerald-700 bg-emerald-50">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
                             <Clock className="w-3 h-3 mr-1" /> Cached{aiGeneratedAt ? ` · ${relativeAge(aiGeneratedAt)}` : ""}
                         </Badge>
                     ) : null}
                     {aiModel ? (
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-slate-200 text-slate-600 bg-white/60">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white/60 dark:bg-slate-800/60">
                             {aiModel}
                         </Badge>
                     ) : null}
@@ -209,7 +209,7 @@ export default function AiTutorPanel({
                             className={`text-[11px] px-2 py-1 rounded-full border transition-colors
                                         ${activeChip === c.id
                                             ? "bg-violet-600 text-white border-violet-600"
-                                            : "bg-white text-slate-700 border-slate-200 hover:border-violet-300"}`}
+                                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-500"}`}
                         >
                             {c.label}
                         </button>
@@ -223,7 +223,7 @@ export default function AiTutorPanel({
                     rows={2}
                     placeholder="Optional: ask anything — 'What's the second-line agent?', 'Why is B wrong?'…"
                     disabled={loading}
-                    className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none"
+                    className="w-full resize-none rounded-lg border border-violet-200 dark:border-violet-800/60 bg-white dark:bg-slate-800 px-3 py-2 text-xs leading-relaxed text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-violet-400 focus:outline-none"
                 />
 
                 {/* Action row */}
@@ -264,7 +264,7 @@ export default function AiTutorPanel({
                 </div>
 
                 {error ? (
-                    <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 flex items-start gap-2" role="alert">
+                    <div className="rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 p-3 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2" role="alert">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
                         <div className="flex-1">
                             <p>{error}</p>
@@ -281,7 +281,7 @@ export default function AiTutorPanel({
 
                 {explanation ? (
                     <div
-                        className="rounded-lg border border-violet-100 bg-white/70 p-3 prose prose-sm max-w-none text-slate-700 text-[13px] leading-relaxed"
+                        className="rounded-lg border border-violet-100 dark:border-violet-900/50 bg-white/70 dark:bg-slate-800/70 p-3 prose prose-sm max-w-none text-slate-700 dark:text-slate-200 text-[13px] leading-relaxed"
                         data-testid="ai-tutor-output"
                     >
                         <FormattedText text={visible} />
@@ -290,7 +290,7 @@ export default function AiTutorPanel({
                         ) : null}
                     </div>
                 ) : !loading && !error ? (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                         Pick a quick prompt or write your own, then hit <span className="font-semibold">Explain with AI</span>.
                     </p>
                 ) : null}
