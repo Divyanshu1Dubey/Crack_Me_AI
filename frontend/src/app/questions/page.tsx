@@ -75,7 +75,11 @@ function QuestionsContent() {
     const searchParams = useSearchParams();
     const urlExam = searchParams.get('exam');
     const examType = (urlExam && SLUG_TO_EXAM_TYPE[urlExam]) || 'cms';
-    const examSource = SLUG_TO_EXAM_SOURCE[urlExam || 'cms'] || 'UPSC CMS';
+    // Look up the source for the requested exam first; fall back to
+    // 'cms'/'UPSC CMS' only when the slug is unknown. Previously the
+    // fallback short-circuited valid slugs like 'medical-officer' and
+    // showed 'UPSC CMS' as the source label.
+    const examSource = (urlExam && SLUG_TO_EXAM_SOURCE[urlExam]) || SLUG_TO_EXAM_SOURCE.cms;
     return (
         <ExamQuestionBank
             examType={examType}

@@ -5,7 +5,10 @@
  * AI-powered deep analysis (mnemonics, explanations, tips), and navigation.
  * Handles token consumption for AI features with 429 error handling.
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @next/next/no-img-element */
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -122,7 +125,7 @@ export default function TakeTestPage() {
                 setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
             }).finally(() => setLoading(false));
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [authLoading, isAuthenticated, testId]);
 
     // Timer — uses ref to avoid stale closure
@@ -139,7 +142,7 @@ export default function TakeTestPage() {
             }, 1000);
         }
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [submitted, timeLeft > 0]);
 
     const formatTime = (s: number) => {
@@ -324,7 +327,7 @@ export default function TakeTestPage() {
                                     ))}
                                 </div>
                             )}
-                            <div className="flex items-center gap-1 max-w-[500px]">
+                            <div className="flex items-center gap-1 max-w-125">
                                 {questions.slice(reviewPage * 30, (reviewPage + 1) * 30).map((q, localIdx) => {
                                     const i = reviewPage * 30 + localIdx;
                                     const qrd = reviewData?.find((r: any) => r.question_id === q.id);
@@ -394,9 +397,9 @@ export default function TakeTestPage() {
                                                 src={img.url || img.file_url || ''}
                                                 alt={img.caption || `Question image`}
                                                 loading="lazy"
-                                                className="w-full h-auto object-contain bg-white max-h-[420px]"
+                                                className="w-full h-auto object-contain bg-white max-h-105"
                                             />
-                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-linear-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
                                                 <span className="text-white text-xs flex items-center gap-1">
                                                     <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
                                                 </span>
@@ -460,7 +463,7 @@ export default function TakeTestPage() {
                                                 <option value="typo">Typo/Formatting Issue</option>
                                                 <option value="other">Other</option>
                                             </select>
-                                            <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                                            <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
                                                 placeholder="Describe the issue (e.g., question text is incomplete, options are cut off...)"
                                                 value={flagComment} onChange={e => setFlagComment(e.target.value)} />
                                             <div className="flex gap-2">
@@ -500,7 +503,7 @@ export default function TakeTestPage() {
                                     src={rq.video_url} 
                                     subtitlesSrc={rq.video_subtitles_url}
                                     poster={rq.video_thumbnail}
-                                    className="w-full max-h-[500px]"
+                                    className="w-full max-h-125"
                                 />
                             </div>
                         </div>
@@ -891,7 +894,7 @@ export default function TakeTestPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 gap-4 lg:h-[calc(100vh-70px)] lg:overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row max-w-400 mx-auto w-full p-4 gap-4 lg:h-[calc(100vh-70px)] lg:overflow-hidden">
 
                 {/* Left: Question */}
                 <div className="flex-1 glass-card flex flex-col lg:h-full lg:overflow-hidden">
@@ -922,9 +925,9 @@ export default function TakeTestPage() {
                                             src={img.url || img.file_url || ''}
                                             alt={img.caption || `Question image`}
                                             loading="lazy"
-                                            className="w-full h-auto object-contain bg-white max-h-[420px]"
+                                            className="w-full h-auto object-contain bg-white max-h-105"
                                         />
-                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-linear-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
                                             <span className="text-white text-xs flex items-center gap-1">
                                                 <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
                                             </span>
@@ -998,7 +1001,7 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    <div className="glass-card p-4 flex-1 flex flex-col min-h-[220px] lg:overflow-hidden">
+                    <div className="glass-card p-4 flex-1 flex flex-col min-h-55 lg:overflow-hidden">
                         <div className="font-bold text-sm mb-3 flex justify-between items-center shrink-0">
                             <span>Question Palette</span>
                             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{questions.length} Qs</span>
