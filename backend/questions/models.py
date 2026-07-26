@@ -864,6 +864,17 @@ class QuestionImage(models.Model):
     is_watermarked = models.BooleanField(default=False)
     role = models.CharField(max_length=16, choices=ROLE_CHOICES, default='illustration')
     is_active = models.BooleanField(default=True)
+    uploaded_by_admin = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='True if uploaded via the admin manual-fix editor (vs recall importer)',
+    )
+    url = models.URLField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text='Supabase public URL for admin-uploaded images (empty for recall imports)',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
