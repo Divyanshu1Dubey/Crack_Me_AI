@@ -71,7 +71,7 @@ def consume_ai_token(request):
         return True, None
 
     balance, _ = TokenBalance.objects.get_or_create(user=user)
-    if balance.consume_token(amount=10):
+    if balance.consume_token(amount=1):
         return True, None
 
     return False, Response({
@@ -88,8 +88,8 @@ def refund_ai_token(request):
         return
     try:
         balance = TokenBalance.objects.get(user=user)
-        balance.refund_token(amount=10)
-        logger.info(f"Refunded 10 AI tokens for user {user.username}")
+        balance.refund_token(amount=1)
+        logger.info(f"Refunded 1 AI token for user {user.username}")
     except TokenBalance.DoesNotExist:
         pass
 
