@@ -470,8 +470,19 @@ export default function IniCetPlayer({
                             mnemonic, ai_explanation, ai_mnemonic, ai_references,
                             learning_technique, textbook_references, book/chapter/
                             page/reference_text, concept_keywords, is_verified_by_admin)
-                            + the existing explanation-image grid for INI-CET. */}
-                        {state.showAnswer && (current.explanation || current.concept_explanation || current.mnemonic || (current as any).ai_explanation || (current as any).ai_mnemonic || explanationImages.length > 0) && (
+                            + the existing explanation-image grid for INI-CET.
+
+                            The gate used to require at least one explanation
+                            field to be non-empty, but after the
+                            nonPlaceholderExplanation() filter wiped the admin
+                            placeholder strings a large fraction of INI-CET
+                            questions returned empty for ALL of those fields,
+                            hiding the entire panel — including the inline
+                            'Generate AI Analysis' button that was the whole
+                            reason the panel exists. The panel now renders
+                            whenever an answer is shown; inner sub-sections
+                            self-guard via their own conditional renders. */}
+                        {state.showAnswer && (
                             <div
                                 role="region"
                                 aria-label="Detailed explanation"
