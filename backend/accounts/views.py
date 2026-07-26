@@ -172,33 +172,29 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 
 class SubscribeView(APIView):
-    """Activate ₹199 premium subscription for the user."""
-    permission_classes = [permissions.IsAuthenticated]
+    """Deprecated free-tier subscription activation.
+
+    This view previously activated is_subscribed=True without payment
+    verification, which let any authenticated user POST {} and unlock
+    the entire premium paywall. It is now a 410 GONE stub that matches
+    the disabled `/auth/login/` and `/auth/register/` endpoints. All
+    subscription activation must go through SubscribeOrderView +
+    SubscribeVerifyView (Razorpay-signed payment required).
+    """
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        user = request.user
-        if user.is_subscribed:
-            return Response(
-                {"error": "You are already subscribed to the Premium plan."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        user.is_subscribed = True
-        user.save(update_fields=['is_subscribed'])
-        
-        # Log a purchase transaction
-        TokenTransaction.objects.create(
-            user=user,
-            transaction_type="purchase",
-            amount=0,
-            price_paid=199.00,
-            note="Purchased ₹199 Early Bird Premium Subscription"
+        return Response(
+            {
+                'detail': 'This subscription endpoint has been disabled. '
+                          'Use /api/auth/subscribe/order/ and '
+                          '/api/auth/subscribe/verify/ to complete a Razorpay '
+                          'payment, or contact support if you believe this '
+                          'is in error.',
+                'error': 'endpoint_gone',
+            },
+            status=status.HTTP_410_GONE,
         )
-        
-        return Response({
-            "message": "Premium Subscription activated successfully!",
-            "is_subscribed": True
-        })
 
 
 class VerifyScholarshipView(APIView):

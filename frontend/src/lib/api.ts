@@ -142,7 +142,7 @@ api.interceptors.response.use(
     if (errorCode === 'session_invalid') {
       if (typeof window !== 'undefined') {
         await clearSupabaseLocalSession();
-        window.location.href = '/login?authError=' + encodeURIComponent('ur logged in another device');
+        window.location.href = '/login?authError=' + encodeURIComponent("You're logged in on another device");
         return new Promise(() => {}); // Stop request chain
       }
     }
@@ -169,7 +169,7 @@ export const authAPI = {
   login: (data: { username: string; password: string }) => api.post('/auth/login/', data),
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
-  subscribe: () => api.post('/auth/subscribe/'),
+  subscribe: () => api.post('/auth/subscribe/order/'),
   subscribeOrder: (plan?: string) => api.post('/auth/subscribe/order/', { plan }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
@@ -379,7 +379,7 @@ export const questionsAPI = {
     form.append('question_id', String(data.questionId));
     form.append('file', data.file);
     return api.post('/questions/images/', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     });
   },
   updateImage: (id: number, data: Record<string, unknown>) =>
