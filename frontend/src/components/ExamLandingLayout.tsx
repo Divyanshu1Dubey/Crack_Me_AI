@@ -140,7 +140,7 @@ export function ExamLandingLayout(c: ExamLandingContent) {
 
             <div className="min-h-screen bg-background text-foreground">
                 {/* ─── HERO ─── */}
-                <section className={`relative overflow-hidden border-b border-border bg-gradient-to-br ${c.accentFrom} ${c.accentTo}`}>
+                <section className={`relative overflow-hidden border-b border-border bg-linear-to-br ${c.accentFrom} ${c.accentTo}`}>
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_55%)] pointer-events-none" />
                     <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 sm:py-16 md:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24">
                         <div>
@@ -375,7 +375,7 @@ export function ExamLandingLayout(c: ExamLandingContent) {
 
                 {/* ─── CTA ─── */}
                 <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-                    <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
+                    <div className="rounded-3xl border border-primary/30 bg-linear-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
                         <Sparkles className="mx-auto h-10 w-10 text-primary" />
                         <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl">
                             Ready to crack {c.name}?

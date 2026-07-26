@@ -92,7 +92,7 @@ export default function AdminAnnouncementsPage() {
                 const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
                 setFormData({ ...formData, exam_tracks: selected });
               }}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-[100px]"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-25"
             >
               {tracks.map(t => (
                 <option key={t.id} value={t.id}>{t.name}</option>

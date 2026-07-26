@@ -110,7 +110,7 @@ export default function AboutPage() {
                 <div className="not-prose grid gap-4 sm:grid-cols-2 my-6">
                     {team.map(member => (
                         <div key={member.role} className="rounded-2xl border border-border bg-card p-5">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-teal-500 text-base font-black text-white">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-linear-to-br from-primary to-teal-500 text-base font-black text-white">
                                 {member.name.split(' ').map(s => s[0]).slice(0, 2).join('')}
                             </div>
                             <p className="mt-3 text-sm font-bold text-foreground">{member.name}</p>

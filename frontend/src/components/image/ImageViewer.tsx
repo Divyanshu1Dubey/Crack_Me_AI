@@ -169,7 +169,7 @@ export default function ImageViewer({ images, startIndex = 0, open, onClose }: I
             ref={containerRef}
         >
             {/* Top bar */}
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-linear-to-b from-black/70 to-transparent">
                 <div className="flex items-center gap-2 text-white text-sm font-medium">
                     <ImageIcon className="w-4 h-4" />
                     <span>
@@ -297,7 +297,7 @@ export default function ImageViewer({ images, startIndex = 0, open, onClose }: I
                             {images.map((img, i) => (
                                 <figure
                                     key={img.id}
-                                    className="relative flex-shrink-0 flex flex-col items-center"
+                                    className="relative shrink-0 flex flex-col items-center"
                                     data-testid="iv-tile"
                                 >
                                     {img.file_url ? (

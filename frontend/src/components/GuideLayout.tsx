@@ -115,7 +115,7 @@ export function GuideLayout({
 
             <div className="min-h-screen bg-background text-foreground">
                 {/* Hero */}
-                <section className="border-b border-border bg-gradient-to-br from-primary/8 via-background to-accent/10">
+                <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">
                     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
                         <Link href="/guides" className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground mb-5">
                             <ArrowLeft className="h-3.5 w-3.5" /> All guides
@@ -164,7 +164,7 @@ export function GuideLayout({
                     )}
 
                     {/* CTA */}
-                    <Card className="mt-12 border-primary/30 bg-gradient-to-br from-primary/10 via-accent/20 to-teal-500/10">
+                    <Card className="mt-12 border-primary/30 bg-linear-to-br from-primary/10 via-accent/20 to-teal-500/10">
                         <CardContent className="p-6 sm:p-8 text-center">
                             <h3 className="text-lg font-bold">Ready to start practising?</h3>
                             <p className="mt-2 text-sm text-muted-foreground">

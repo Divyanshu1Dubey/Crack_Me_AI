@@ -125,7 +125,7 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
                 </div>
 
                 {/* Hero */}
-                <section className={`bg-gradient-to-br ${accent.from} ${accent.to} text-white`}>
+                <section className={`bg-linear-to-br ${accent.from} ${accent.to} text-white`}>
                     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
                         <Badge className="bg-white/15 text-white border-white/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider">
                             <GraduationCap className="mr-1 inline h-3 w-3" /> {c.examName} Subject Hub
@@ -254,7 +254,7 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
 
                 {/* CTA + reviewer */}
                 <section className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
-                    <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
+                    <div className="rounded-3xl border border-primary/30 bg-linear-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
                         <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
                             Practise {c.subjectShort} PYQs now
                         </h2>

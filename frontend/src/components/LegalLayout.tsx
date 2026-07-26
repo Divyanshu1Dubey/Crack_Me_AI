@@ -102,7 +102,7 @@ export function LegalLayout({
             />
 
             {/* Hero */}
-            <section className="border-b border-border bg-gradient-to-br from-primary/8 via-background to-accent/10">
+            <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">
                 <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
                     <Link
                         href="/"

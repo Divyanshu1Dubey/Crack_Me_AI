@@ -24,7 +24,7 @@ export function ExamMicrosite({ cfg }: Props) {
   return (
     <main className="min-h-screen bg-background">
       {/* ── HERO ───────────────────────────────────────────── */}
-      <section className={`relative overflow-hidden bg-gradient-to-br ${cfg.theme.heroGradient} text-white`}>
+      <section className={`relative overflow-hidden bg-linear-to-br ${cfg.theme.heroGradient} text-white`}>
         <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none"
              style={{
                backgroundImage:

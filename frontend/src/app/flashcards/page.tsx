@@ -354,7 +354,7 @@ export default function FlashcardsPage() {
                                 <div>
                                     <label className="text-sm font-medium mb-1.5 block">Front (Question / Term)</label>
                                     <textarea
-                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-25 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                                         placeholder="What do you want to remember?"
                                         value={form.front}
                                         onChange={e => { setForm({ ...form, front: e.target.value }); setCreateError(null); }}
@@ -379,7 +379,7 @@ export default function FlashcardsPage() {
                                         </Button>
                                     </div>
                                     <textarea
-                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-30 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                                         placeholder="The answer or explanation (AI can generate a mnemonic for you!)"
                                         value={form.back}
                                         onChange={e => { setForm({ ...form, back: e.target.value }); setCreateError(null); }}
@@ -389,7 +389,7 @@ export default function FlashcardsPage() {
                                 <div>
                                     <label className="text-sm font-medium mb-1.5 block">Personal Note (Optional)</label>
                                     <textarea
-                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-[60px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-md border bg-background px-3 py-2.5 text-sm min-h-15 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Add your own tips, connections, or study notes..."
                                         value={form.note}
                                         onChange={e => setForm({ ...form, note: e.target.value })}
@@ -430,10 +430,10 @@ export default function FlashcardsPage() {
 
                             {/* Card */}
                             <div
-                                className="min-h-[280px] cursor-pointer"
+                                className="min-h-70 cursor-pointer"
                                 onClick={() => setFlipped(!flipped)}
                             >
-                                <Card className="min-h-[280px] flex flex-col justify-center transition-all">
+                                <Card className="min-h-70 flex flex-col justify-center transition-all">
                                     <CardContent className="p-8 text-center">
                                         <Badge className={`mb-4 ${difficultyColors[currentCard.difficulty] || ''}`}>
                                             {currentCard.difficulty}
@@ -569,7 +569,7 @@ export default function FlashcardsPage() {
                                                     {isEditing ? (
                                                         <div className="mt-3 space-y-2">
                                                             <textarea
-                                                                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs min-h-[60px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs min-h-15 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                                 placeholder="Add your personal study notes..."
                                                                 value={noteText}
                                                                 onChange={e => setNoteText(e.target.value)}

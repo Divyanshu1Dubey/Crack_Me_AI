@@ -42,7 +42,7 @@ export default function AuthShell({
         <div className={`absolute left-1/2 top-24 h-80 w-80 -translate-x-1/2 rounded-full ${orbColor} blur-3xl p-1`} />
       </div>
 
-      <div className="relative w-full max-w-[440px] z-10">
+      <div className="relative w-full max-w-110 z-10">
         <div className="mb-8 flex justify-center">
             <BrandMark href="/" priority className="scale-110" />
         </div>

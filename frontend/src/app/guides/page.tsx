@@ -56,7 +56,7 @@ export default function GuidesIndexPage() {
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
             <div className="min-h-screen bg-background">
-                <section className="border-b border-border bg-gradient-to-br from-primary/8 via-background to-accent/10">
+                <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">
                     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
                         <Badge className="bg-primary/10 text-primary border-primary/30 text-xs font-bold uppercase tracking-wider">
                             <BookOpen className="h-3 w-3 mr-1" /> Guides

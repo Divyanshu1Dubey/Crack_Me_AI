@@ -632,7 +632,7 @@ export default function LandingPage() {
                       ))}
                     </div>
 
-                    <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-70 overflow-y-auto pr-1">
                       {/* User Prompt */}
                       <div className="flex items-start gap-2.5 justify-end">
                         <div className="rounded-2xl rounded-tr-sm bg-blue-500 text-white px-4 py-2.5 max-w-[85%] text-xs font-semibold shadow-sm">
@@ -1560,7 +1560,7 @@ export default function LandingPage() {
             ].map((c) => (
               <Link key={c.href} href={c.href}
                 className="group rounded-3xl border border-border/60 bg-card/80 overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1">
-                <div className={`bg-gradient-to-br ${c.gradient} text-white p-6`}>
+                <div className={`bg-linear-to-br ${c.gradient} text-white p-6`}>
                   <div className="flex items-center justify-between mb-3">
                     <Badge className="bg-white/15 text-white border border-white/20 backdrop-blur-sm">{c.badge}</Badge>
                     <span className="text-3xl">{c.icon}</span>

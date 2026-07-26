@@ -179,7 +179,7 @@ export default function AiTutorPanel({
     );
 
     return (
-        <div className="bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
+        <div className="bg-linear-to-br from-violet-50 via-white to-fuchsia-50 rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 flex items-center justify-between border-b border-violet-100/60">
                 <span className="flex items-center gap-2">
                     <Brain className="w-4 h-4 text-violet-600" />
@@ -232,7 +232,7 @@ export default function AiTutorPanel({
                         onClick={() => requestExplanation()}
                         disabled={loading}
                         size="sm"
-                        className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold"
+                        className="flex-1 bg-linear-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-semibold"
                         data-testid="ai-tutor-submit"
                     >
                         {loading ? (
@@ -265,7 +265,7 @@ export default function AiTutorPanel({
 
                 {error ? (
                     <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 flex items-start gap-2" role="alert">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
                         <div className="flex-1">
                             <p>{error}</p>
                             <button

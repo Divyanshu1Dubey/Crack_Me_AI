@@ -124,7 +124,7 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
 
                 {/* Results */}
                 {results.length > 0 && (
-                    <div className="max-h-[320px] overflow-y-auto p-2">
+                    <div className="max-h-80 overflow-y-auto p-2">
                         {results.map((r, i) => (
                             <button
                                 key={r.id}

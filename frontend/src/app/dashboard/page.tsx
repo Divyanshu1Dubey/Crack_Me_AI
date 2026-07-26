@@ -801,7 +801,7 @@ export default function DashboardPage() {
                                             return (
                                                 <div key={idx} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2.5 rounded-xl border border-border/40">
                                                     <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-foreground font-semibold truncate max-w-[140px]">{item.name}</span>
+                                                        <span className="text-foreground font-semibold truncate max-w-35">{item.name}</span>
                                                         <span className="text-muted-foreground text-[10px] shrink-0 font-bold">{item.solved}/{item.count} ({pct}%)</span>
                                                     </div>
                                                     <Progress value={pct} className="h-1.5 bg-slate-200/50" />

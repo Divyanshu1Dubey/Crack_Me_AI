@@ -100,7 +100,7 @@ export default function ComparisonLayout(c: ComparisonContent) {
                     <Breadcrumbs items={[{ name: c.examAName, path: c.examALandingPath }, { name: `vs ${c.examBName}`, path }]} />
                 </div>
 
-                <section className="bg-gradient-to-br from-indigo-600 to-violet-700 text-white">
+                <section className="bg-linear-to-br from-indigo-600 to-violet-700 text-white">
                     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
                         <Badge className="bg-white/15 text-white border-white/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider">
                             <Trophy className="mr-1 inline h-3 w-3" /> Exam comparison
@@ -184,7 +184,7 @@ export default function ComparisonLayout(c: ComparisonContent) {
 
                 {/* CTA */}
                 <section className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
-                    <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 text-center">
+                    <div className="rounded-3xl border border-primary/30 bg-linear-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 text-center">
                         <h2 className="text-2xl font-black tracking-tight">Practise both with CrackCMS</h2>
                         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
                             PYQs from both exams, AI tutor, and exam-mode simulator in one free account.

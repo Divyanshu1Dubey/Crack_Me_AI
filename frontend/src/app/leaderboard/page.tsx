@@ -183,7 +183,7 @@ export default function LeaderboardPage() {
                         <div className="text-center py-12 text-muted-foreground animate-pulse">Loading rankings...</div>
                     ) : entries.length === 0 ? (
                         <Card>
-                            <CardContent className="relative p-12 text-center flex flex-col items-center justify-center min-h-[320px]">
+                            <CardContent className="relative p-12 text-center flex flex-col items-center justify-center min-h-80">
                                 <Trophy className="w-14 h-14 mx-auto text-yellow-400/40 mb-3" />
                                 <p className="text-lg font-bold text-foreground mb-2">No rankings yet</p>
                                 <p className="text-muted-foreground mb-4">Start studying and practicing to appear on the leaderboard and earn XP!</p>

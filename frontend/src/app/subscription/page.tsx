@@ -660,7 +660,7 @@ export default function SubscriptionPage() {
                                                     <p className="text-xs text-muted-foreground">AI is generating your detailed skill diagnostics...</p>
                                                 </div>
                                             ) : aiAnalysis ? (
-                                                <div className="p-6 rounded-3xl border border-border bg-card shadow-sm space-y-6 text-sm leading-relaxed text-foreground overflow-y-auto max-h-[400px] custom-scrollbar">
+                                                <div className="p-6 rounded-3xl border border-border bg-card shadow-sm space-y-6 text-sm leading-relaxed text-foreground overflow-y-auto max-h-100 custom-scrollbar">
                                                     <div className="flex items-center gap-3 border-b border-border pb-4">
                                                         <Brain className="w-6 h-6 text-purple-500" />
                                                         <h3 className="text-lg font-bold text-foreground">AI Clinical Skill Diagnosis Report</h3>

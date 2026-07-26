@@ -114,7 +114,7 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
                     <Breadcrumbs items={breadcrumbItems} />
                 </div>
 
-                <section className={`bg-gradient-to-br ${accent.from} ${accent.to} text-white`}>
+                <section className={`bg-linear-to-br ${accent.from} ${accent.to} text-white`}>
                     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-2">
                         <div>
                             <Badge className="bg-white/15 text-white border-white/30 backdrop-blur-sm text-xs font-bold uppercase tracking-wider">
@@ -202,7 +202,7 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
                                     <p className="text-sm font-bold text-foreground">{s.name}</p>
                                     <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
                                         <div
-                                            className="h-full bg-gradient-to-r from-primary to-teal-500"
+                                            className="h-full bg-linear-to-r from-primary to-teal-500"
                                             style={{ width: `${Math.min(100, (s.count / c.totalQuestions) * 100)}%` }}
                                         />
                                     </div>
@@ -260,7 +260,7 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
 
                 {/* CTA */}
                 <section className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
-                    <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
+                    <div className="rounded-3xl border border-primary/30 bg-linear-to-br from-primary/10 via-accent/30 to-teal-500/10 p-8 sm:p-12 text-center">
                         <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
                             Practise {c.examName} {c.year} PYQs now
                         </h2>

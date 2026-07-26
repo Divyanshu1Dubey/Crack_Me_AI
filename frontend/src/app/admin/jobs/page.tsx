@@ -108,7 +108,7 @@ export default function AdminJobsPage() {
                 const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
                 setFormData({ ...formData, exam_tracks: selected });
               }}
-              className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-[100px] text-slate-900"
+              className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-25 text-slate-900"
             >
               {tracks.map(t => (
                 <option key={t.id} value={t.id} className="p-1">{t.name}</option>

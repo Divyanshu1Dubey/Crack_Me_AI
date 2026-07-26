@@ -156,7 +156,7 @@ export default function IniCetLanding() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       {/* ════════════════ HERO ════════════════ */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
+      <section className="relative overflow-hidden bg-linear-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
         <div className="absolute inset-0 pointer-events-none opacity-30"
              style={{
                backgroundImage:
@@ -233,7 +233,7 @@ export default function IniCetLanding() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {INSTITUTES.map((inst) => (
-              <div key={inst.name} className="rounded-xl bg-gradient-to-br from-indigo-50/70 to-white dark:from-indigo-950/40 dark:to-slate-900 border border-indigo-200/60 dark:border-indigo-900/40 p-3 text-center">
+              <div key={inst.name} className="rounded-xl bg-linear-to-br from-indigo-50/70 to-white dark:from-indigo-950/40 dark:to-slate-900 border border-indigo-200/60 dark:border-indigo-900/40 p-3 text-center">
                 <div className="font-extrabold text-base text-indigo-800 dark:text-indigo-300">{inst.name}</div>
                 <div className="text-[10px] text-muted-foreground mt-1 leading-tight">{inst.subspecialty}</div>
               </div>
@@ -291,7 +291,7 @@ export default function IniCetLanding() {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
             {stats?.by_year.map((y) => (
               <Link key={y.year} href={`/questions/inicet/practice?year=${y.year}`} className="group">
-                <div className="aspect-square rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 bg-gradient-to-br from-indigo-50/60 via-white to-sky-50/60 dark:from-indigo-950/40 dark:via-slate-900 dark:to-sky-950/30 hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/10 transition-all flex flex-col items-center justify-center text-center p-2 group-hover:scale-[1.03]">
+                <div className="aspect-square rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 bg-linear-to-br from-indigo-50/60 via-white to-sky-50/60 dark:from-indigo-950/40 dark:via-slate-900 dark:to-sky-950/30 hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/10 transition-all flex flex-col items-center justify-center text-center p-2 group-hover:scale-[1.03]">
                   <div className="text-2xl md:text-3xl font-extrabold text-indigo-800 dark:text-indigo-300 group-hover:text-indigo-600">
                     {y.year}
                   </div>
@@ -313,7 +313,7 @@ export default function IniCetLanding() {
       </section>
 
       {/* ════════════════ SUBJECT GRID ════════════════ */}
-      <section id="subjects" className="bg-gradient-to-br from-indigo-50/40 via-background to-sky-50/40 border-y border-border/60">
+      <section id="subjects" className="bg-linear-to-br from-indigo-50/40 via-background to-sky-50/40 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
           <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
             <div>
@@ -351,11 +351,11 @@ export default function IniCetLanding() {
                       'h-full border-border/60 bg-card/90 hover:border-indigo-400/60 transition-all group-hover:shadow-xl group-hover:-translate-y-0.5 overflow-hidden',
                       'dark:bg-slate-900/70 dark:border-slate-800'
                     )}>
-                      <div className={cn('h-1.5 w-full bg-gradient-to-r', v.gradient)} />
+                      <div className={cn('h-1.5 w-full bg-linear-to-r', v.gradient)} />
                       <CardContent className="p-5 space-y-3">
                         <div className="flex items-start justify-between">
                           <div className={cn(
-                            'w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-md ring-2',
+                            'w-11 h-11 rounded-xl flex items-center justify-center bg-linear-to-br shadow-md ring-2',
                             v.gradient, v.ring,
                           )}>
                             <Icon className="w-5 h-5 text-white" />
@@ -408,7 +408,7 @@ export default function IniCetLanding() {
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className={cn(
-                      'w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-sm',
+                      'w-10 h-10 rounded-xl flex items-center justify-center bg-linear-to-br shadow-sm',
                       v.gradient,
                     )}>
                       <Icon className="w-5 h-5 text-white" />
@@ -441,7 +441,7 @@ export default function IniCetLanding() {
                 <Card key={step.n} className="border-indigo-200/60 dark:border-indigo-900/40 bg-card/95 dark:bg-slate-900/70">
                   <CardContent className="p-6 space-y-4">
                     <div className="flex items-center justify-between">
-                      <div className="text-5xl font-extrabold bg-gradient-to-br from-indigo-500 to-sky-700 bg-clip-text text-transparent">
+                      <div className="text-5xl font-extrabold bg-linear-to-br from-indigo-500 to-sky-700 bg-clip-text text-transparent">
                         {step.n}
                       </div>
                       <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center">
@@ -480,7 +480,7 @@ export default function IniCetLanding() {
       </section>
 
       {/* CTA strip */}
-      <section className="bg-gradient-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
+      <section className="bg-linear-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 text-center">
           <Award className="w-12 h-12 mx-auto mb-4 text-indigo-200" />
           <h2 className="text-3xl md:text-5xl font-extrabold max-w-3xl mx-auto">

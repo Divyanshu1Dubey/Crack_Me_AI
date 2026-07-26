@@ -133,7 +133,7 @@ export default function DiscussionThread({ questionId }: { questionId: number })
                     ) : discussions.length === 0 ? (
                         <p className="text-xs text-muted-foreground text-center py-3">No comments yet. Be the first!</p>
                     ) : (
-                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                        <div className="space-y-2 max-h-100 overflow-y-auto pr-1">
                             {discussions.map(d => (
                                 <div key={d.id} className={`rounded-lg border p-3 ${d.is_pinned ? 'border-primary/30 bg-primary/5' : ''}`}>
                                     <div className="flex items-center gap-2 mb-1">
