@@ -182,7 +182,10 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     setConflict(null);
     try {
       const payload = { ...form, admin_edited: true };
-      const opts = force ? undefined : { ifMatch: updatedAt };
+      // Only send If-Match when we have a real updated_at. List-serialised rows
+      // don't include updated_at, so updatedAt may be '' on first edit — in that
+      // case skip the optimistic lock and let the server accept the save.
+      const opts = force || !updatedAt ? undefined : { ifMatch: updatedAt };
       const res = await questionsAPI.update(question.id, payload, opts);
       setUpdatedAt(res.data.updated_at ?? updatedAt);
       onSaved(res.data);
@@ -190,7 +193,15 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       if (e?.response?.status === 409) {
         setConflict(e.response.data.current);
       } else {
-        setError('Save failed: ' + (e?.response?.data?.detail || e?.message || 'unknown'));
+        // Surface full server response so we can see field-level validation errors
+        const detail = e?.response?.data?.detail;
+        const data = e?.response?.data;
+        const msg = detail
+          ? `Save failed: ${detail}`
+          : data && typeof data === 'object'
+          ? `Save failed (${e?.response?.status ?? '?'}): ${JSON.stringify(data).slice(0, 400)}`
+          : `Save failed: ${e?.message ?? 'unknown error'}`;
+        setError(msg);
       }
     } finally {
       setSaving(false);

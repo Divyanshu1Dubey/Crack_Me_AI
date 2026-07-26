@@ -652,12 +652,18 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         with transaction.atomic():
             instance = self.get_object()
+            conflict = self._check_if_match_or_conflict(instance)
+            if conflict is not None:
+                return conflict
             self._capture_revision_snapshot(instance, request.user, reason='Before full update')
             return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         with transaction.atomic():
             instance = self.get_object()
+            conflict = self._check_if_match_or_conflict(instance)
+            if conflict is not None:
+                return conflict
             self._capture_revision_snapshot(instance, request.user, reason='Before partial update')
             return super().partial_update(request, *args, **kwargs)
 
@@ -1849,20 +1855,31 @@ class QuestionViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_update(self, serializer):
-        match = self.request.headers.get("If-Match")
-        if match:
-            current = self.get_object().updated_at.isoformat()
-            if match != current:
-                return Response(
-                    {"detail": "Question was modified by another user", "current": QuestionDetailSerializer(self.get_object()).data},
-                    status=status.HTTP_409_CONFLICT,
-                )
+        # If-Match optimistic-lock check: handled in update()/partial_update() so
+        # we can return a 409 Response directly. (Returning a Response from
+        # perform_update is silently discarded by DRF and the save is lost.)
         self._normalize_question_payload(serializer.validated_data)
         if 'correct_answer' in serializer.validated_data:
             serializer.validated_data['lock_answer'] = True
         if 'explanation' in serializer.validated_data:
             serializer.validated_data['lock_explanation'] = True
         serializer.save()
+
+    def _check_if_match_or_conflict(self, instance):
+        """Return a 409 Response if If-Match header doesn't match instance.updated_at,
+        else None. Caller is responsible for returning this Response from update()/
+        partial_update() if not None."""
+        match = self.request.headers.get("If-Match")
+        if not match:
+            return None
+        current = instance.updated_at.isoformat()
+        if match == current:
+            return None
+        return Response(
+            {"detail": "Question was modified by another user",
+             "current": QuestionDetailSerializer(instance, context={'request': self.request}).data},
+            status=status.HTTP_409_CONFLICT,
+        )
 
 
 class QuestionFeedbackViewSet(viewsets.ModelViewSet):
