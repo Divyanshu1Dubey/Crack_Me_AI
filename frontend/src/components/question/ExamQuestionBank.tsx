@@ -274,7 +274,7 @@ function ExamQuestionBankInner({
             setListError(null);
             Promise.all([
                 questionsAPI.list({ page: 1, page_size: PAGE_SIZE, exam_type: selectedExam }),
-                questionsAPI.getSubjects(),
+                questionsAPI.getSubjects({ exam_type: selectedExam }),
                 questionsAPI.getYears(),
                 questionsAPI.getStats({ exam_source: examSource }),
             ]).then(([qRes, sRes, yRes, statsRes]) => {
