@@ -46,4 +46,25 @@ if [ "${KB_INGEST_NETWORK:-0}" = "1" ]; then
     python manage.py ingest_source openstax-psychology --max 20 || true
 fi
 
+# AI backfill — re-run the explanation pipeline for every Question whose
+# ai_explanation is empty. There are ~8k of these (production-incident
+# 2026-07-26). The command has its own retry + per-row backoff.
+#
+# Off by default because every deploy would burn ~8k tokens against the
+# 11-provider round-robin. Set BACKFILL_AI_ON_DEPLOY=1 on the deploy
+# environment (Render → Environment → Secret Files) to enable.
+# Also gated by SKIP_BACKFILL=1 to manually disable without removing
+# the env flag. Wrapped in `|| true` so a transient provider outage
+# cannot fail the deploy — failed rows stay empty and the next run
+# retries them.
+if [ "${SKIP_BACKFILL:-0}" = "1" ]; then
+    echo "==> Skipping AI backfill (SKIP_BACKFILL=1)"
+elif [ "${BACKFILL_AI_ON_DEPLOY:-0}" = "1" ]; then
+    echo "==> Running AI backfill (BACKFILL_AI_ON_DEPLOY=1)..."
+    python manage.py backfill_empty_ai --batch-size 25 --batch-pause 2 --max-retries 2 || true
+    echo "==> AI backfill complete."
+else
+    echo "==> AI backfill skipped (BACKFILL_AI_ON_DEPLOY!=1; set it to enable)"
+fi
+
 # build.sh is complete
