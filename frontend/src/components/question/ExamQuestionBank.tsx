@@ -813,7 +813,7 @@ function ExamQuestionBankInner({
                                 >
                                     <option value="">Year</option>
                                     {years.map(y => (
-                                        <option key={y} value={y}>{y}</option>
+                                        <option key={y} value={y}>{y === 0 ? 'Expert Curated' : y}</option>
                                     ))}
                                 </select>
                                 <Button
@@ -874,7 +874,11 @@ function ExamQuestionBankInner({
                                             <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(sanitizeQuestionText(q.question_text)).slice(0, 150)}{stripMarkdown(sanitizeQuestionText(q.question_text)).length > 150 ? '...' : ''}</p>
                                             <div className="mt-2 flex flex-wrap gap-1.5">
                                                 <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name || 'Topic unavailable'}</Badge>
-                                                {q.year && <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>}
+                                                {q.year ? (
+                                                    <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-300/40">Expert Curated</Badge>
+                                                )}
                                                 {q.concept_tags?.includes('high_yield') && (
                                                     <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
                                                 )}

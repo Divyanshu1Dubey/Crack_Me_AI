@@ -277,8 +277,13 @@ ANS_LC_RE = re.compile(r"^\s*Ans(?:wer)?\s*[:\-]\s*\(?([A-Da-d])\)?\b", re.I | r
 EXPLANATION_RE = re.compile(r"^\s*(?:Explanation|Why|Reason)\s*[:\-]\s*(.*)$", re.I | re.S)
 # Statement list: "I.", "II.", "III.", "IV.", or arabic 1., 2., 3., 4.
 STATEMENT_RE = re.compile(r"^\s*((?:I{1,3}V?|IV|VI{0,3}|[1-4])\s*[\.\)])\s*(.+?)\s*$", re.S)
-# "Select the correct answer using the code" preamble — sets up B3 mode
-CODE_PROMPT_RE = re.compile(r"(?i)^\s*Select\s+(?:the\s+)?correct\s+answer\s+(?:using\s+)?(?:the\s+)?code")
+# "Select the correct answer using the code" preamble — sets up B3 mode.
+# Some files use "Select the correctly matched pairs" / "Select the correctly
+# classified" — accept any "Select ... using the code" / "code given below".
+CODE_PROMPT_RE = re.compile(
+    r"(?i)^\s*Select\s+(?:the\s+)?(?:correct(?:ly)?\s+)?(?:\w+\s+){0,3}"
+    r"(?:using\s+)?(?:the\s+)?code(?:\s+given\s+below)?"
+)
 # Code-style option: "A. 1, 2 and 3 only" / "A. 1 and 2" / "A. All of the above"
 CODE_OPT_RE = re.compile(r"^\s*([A-D])\s*[\.\)]\s*(.+?)\s*$", re.S)
 # Assertion / Reason headers inside a single question
@@ -814,12 +819,12 @@ class Command(BaseCommand):
                     "option_c": pq.option_c,
                     "option_d": pq.option_d,
                     "correct_answer": pq.correct_answer or "A",  # placeholder if missing
-                    "year": 2026,
+                    "year": 0,  # mocktest questions have no real PYQ year — bucket into Expert Curated
                     "subject": subject,
                     "difficulty": DEFAULT_DIFFICULTY,
                     "explanation": pq.explanation,
                     "source": f.name,
-                    "exam_source": "UPSC CMS",
+                    "exam_source": "Expert Curated",  # mocktests are not PYQs
                     "needs_review": bool(pq.errors or not pq.correct_answer),
                     "is_active": True,
                 }
