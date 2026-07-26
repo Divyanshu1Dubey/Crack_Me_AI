@@ -560,8 +560,17 @@ function ExamQuestionBankInner({
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
     // ── Render ────────────────────────────────────────────
+    // NOTE: do NOT add the shell's `main-content` class here. The page
+    // shell (Sidebar + Header + <div class="main-content">) already
+    // owns that class and its `margin-left: 260px` (sidebar offset).
+    // Re-applying it inside <ExamQuestionBank> doubled the offset, so
+    // the bank content landed at x≈540 instead of x≈280 with a huge
+    // white gap on the left. The CMS `<QuestionsPage>` had this same
+    // wrapper historically and never stripped the class — keep the
+    // inner `lg:h-screen lg:overflow-hidden flex flex-col` to preserve
+    // the question list scroll layout, just drop the redundant class.
     return (
-        <div className="main-content lg:h-screen lg:overflow-hidden flex flex-col">
+        <div className="bank-shell lg:h-screen lg:overflow-hidden flex flex-col">
             <div className="page-container space-y-4 pb-0 flex-1 flex flex-col min-h-0">
                 <p className="text-sm text-muted-foreground">
                     Master {examSource} PYQs with AI-powered explanations, mnemonics, and clinical pearls
@@ -679,7 +688,7 @@ function ExamQuestionBankInner({
                                         {(qbankStats.by_year || []).length} years
                                     </p>
                                 </div>
-                                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-[260px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-65 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
                                     {(qbankStats.by_year || []).map((item: any) => {
                                         const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
                                         const isSelected = selectedYear === String(item.year);
@@ -1076,7 +1085,7 @@ function ExamQuestionBankInner({
                                                         src={detail.video_url}
                                                         subtitlesSrc={detail.video_subtitles_url}
                                                         poster={detail.video_thumbnail}
-                                                        className="w-full max-h-[500px]"
+                                                        className="w-full max-h-125"
                                                     />
                                                 </div>
                                             </div>
