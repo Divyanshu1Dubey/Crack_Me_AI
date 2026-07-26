@@ -3,13 +3,15 @@ fix_mojibake.py — One-shot cleanup of UTF-8-as-Latin-1 mojibake.
 
 Walks every Question row and runs fix_mojibake() + NFC-normalize over its
 text fields. Writes the cleaned text back to the DB and, when run with
---fixture, also rewrites backend/questions_fixture.json so the production
+--fixture, also rewrites backend/fixtures/cms_fixture.json so the production
 deploy stays consistent.
 
 Usage:
-    python manage.py fix_mojibake                  # dry-run, prints counts
-    python manage.py fix_mojibake --apply          # write to DB
-    python manage.py fix_mojibake --apply --fixture questions_fixture.json
+    python manage.py fix_mojibake                          # dry-run, prints counts
+    python manage.py fix_mojibake --apply                  # write to DB
+    python manage.py fix_mojibake --apply --fixture        # rewrite fixtures/cms_fixture.json (legacy path still accepted)
+    python manage.py fix_mojibake --apply --fixture fixtures/cms_fixture.json
+    python manage.py fix_mojibake --apply --fixture fixtures/neet_pg_fixture.json
 """
 from __future__ import annotations
 
@@ -107,6 +109,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(
                 "Fixture path provided but --apply not set — fixture untouched."
             ))
+        elif apply and not fixture:
+            # If --apply is set without --fixture, default to fixtures/cms_fixture.json
+            default_fixture = Path(__file__).resolve().parents[4] / 'fixtures' / 'cms_fixture.json'
+            if default_fixture.exists():
+                self.stdout.write(f"No --fixture given; defaulting to {default_fixture.relative_to(Path.cwd())}")
+                self._rewrite_fixture(default_fixture, updated_fields)
 
     def _rewrite_fixture(self, fixture_path: Path, fields_changed: dict[str, int]) -> None:
         """Rewrite the fixture so the next deploy ships clean text.

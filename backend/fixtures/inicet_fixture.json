@@ -1,0 +1,134 @@
+[
+  {
+    "_doc": "═══════════════════════════════════════════════════════════════════",
+    "_section": "EXAM TRACK + SUBJECTS + TOPICS + QUESTIONS",
+    "_note": "INI-CET focuses on pre/para-clinical + clinical essentials. Subjects intentionally overlap NEET PG but get their own exam_type='ini_cet' so analytics stay clean."
+  },
+  {
+    "model": "questions.examtrack",
+    "pk": 1002,
+    "fields": {
+      "code": "ini_cet",
+      "name": "INI-CET",
+      "conducting_body": "AIIMS",
+      "exam_pattern_summary": "Online MCQ + MSQ. AIIMS, PGIMER, JIPMER, NIMHANS institutes.",
+      "eligibility_summary": "MBBS + internship completion."
+    }
+  },
+
+  { "model": "questions.subject", "pk": 201, "fields": { "name": "Anatomy (INI-CET)",               "code": "ANAI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 202, "fields": { "name": "Physiology (INI-CET)",            "code": "PHYI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 203, "fields": { "name": "Biochemistry (INI-CET)",          "code": "BCHI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 204, "fields": { "name": "Pathology (INI-CET)",             "code": "PTHI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 205, "fields": { "name": "Microbiology (INI-CET)",          "code": "MICI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 206, "fields": { "name": "Pharmacology (INI-CET)",          "code": "PHMI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 207, "fields": { "name": "Forensic Medicine (INI-CET)",     "code": "FMTI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 208, "fields": { "name": "Community Medicine (INI-CET)",    "code": "PSMI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 209, "fields": { "name": "General Medicine (INI-CET)",      "code": "MEDI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 210, "fields": { "name": "General Surgery (INI-CET)",       "code": "SURI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 211, "fields": { "name": "Obstetrics & Gynaecology (INI-CET)","code": "OBGI","exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 212, "fields": { "name": "Paediatrics (INI-CET)",           "code": "PEDI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 213, "fields": { "name": "Ophthalmology (INI-CET)",         "code": "OPHI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 214, "fields": { "name": "ENT (INI-CET)",                   "code": "ENTI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 215, "fields": { "name": "Anaesthesia (INI-CET)",           "code": "ANSI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+  { "model": "questions.subject", "pk": 216, "fields": { "name": "Orthopaedics (INI-CET)",          "code": "ORTI",  "exam_type": "ini_cet", "exam_track": 1002 } },
+
+  { "model": "questions.topic", "fields": { "subject": "ANAI",  "name": "Embryology",             "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ANAI",  "name": "Histology",              "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "PHYI",  "name": "Endocrine",               "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "BCHI",  "name": "Metabolism",              "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "PTHI",  "name": "Haematology",             "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "MICI",  "name": "Immunology",              "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "PHMI",  "name": "Chemotherapy",            "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "FMTI",  "name": "Identification",          "importance": 6 } },
+  { "model": "questions.topic", "fields": { "subject": "MEDI",  "name": "Cardiology",              "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "MEDI",  "name": "Neurology",               "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "SURI",  "name": "Trauma",                  "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "OBGI",  "name": "Obstetrics",              "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "PEDI",  "name": "Growth & Development",    "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "OPHI",  "name": "Glaucoma",                "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ANSI",  "name": "Critical Care",           "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ORTI",  "name": "Fractures",               "importance": 7 } },
+
+  {
+    "_example": "TEXT-only INI-CET question. Note the *I-suffix codes* — same exam, distinct Subject rows from NEET PG."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "ini_cet",
+      "exam_track": 1002,
+      "year": 2024,
+      "subject": "MEDI",
+      "topic": "Cardiology",
+      "question_text": "A 45-year-old presents with paroxysmal palpitations. ECG shows a narrow-complex tachycardia at 180/min, regular, with no discernible P waves. Vagal manoeuvres terminate the arrhythmia. The most likely mechanism is:",
+      "option_a": "Increased automaticity in the SA node",
+      "option_b": "Re-entry within the AV node",
+      "option_c": "Triggered activity due to after-depolarisations",
+      "option_d": "Re-entry involving an accessory pathway",
+      "correct_answer": "B",
+      "difficulty": "medium",
+      "explanation": "AVNRT — AV nodal re-entrant tachycardia — is the commonest paroxysmal SVT, terminated by vagal tone (which slows AV node conduction enough to break the re-entry loop).",
+      "concept_explanation": "AVNRT involves dual AV-nodal pathways (fast + slow). A premature beat blocks the fast pathway, conducts down the slow pathway, then re-enters retrogradely up the fast pathway → circus movement within the AV node.",
+      "mnemonic": "AVNRT = AV Node Re-entry Tachycardia; Valsalva terminates because vagal tone slows the slow pathway.",
+      "exam_source": "INICET",
+      "is_active": true,
+      "concept_tags": ["cardiology", "arrhythmia", "svt", "avnrt"]
+    }
+  },
+
+  {
+    "_example": "IMAGE-based with screenshot in stem — drop fundus.png into backend/fixtures/images/inicet/."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "ini_cet",
+      "exam_track": 1002,
+      "year": 2024,
+      "subject": "OPHI",
+      "topic": "Glaucoma",
+      "question_text": "The fundus photograph shown belongs to a 62-year-old with gradually decreasing peripheral vision.\n[[img:glaucomatous_cup_91.png]]\nWhich finding on the disc supports a diagnosis of primary open-angle glaucoma?",
+      "option_a": "Increased cup-to-disc ratio with notching of the neuroretinal rim",
+      "option_b": "Macular oedema with star-shaped exudates",
+      "option_c": "Drusen deposits at the macula",
+      "option_d": "Choroidal neovascular membrane",
+      "correct_answer": "A",
+      "difficulty": "hard",
+      "is_image_based": true,
+      "explanation": "Glaucomatous optic neuropathy: increased cup-to-disc ratio (>0.6), focal notching of the neuroretinal rim, bayoneting of vessels, disc haemorrhages, RNFL defects on perimetry.",
+      "concept_explanation": "POAG is an asymmetric, slowly progressive optic neuropathy with characteristic cup enlargement. Unlike angle-closure glaucoma, the angle is open on gonioscopy.",
+      "mnemonic": "POAG = Pressure-Optic-Atrophy-Glaucoma",
+      "exam_source": "INICET",
+      "is_active": true,
+      "concept_tags": ["ophthalmology", "glaucoma", "fundus", "optic-disc"]
+    }
+  },
+
+  {
+    "_example": "Mixed — image in explanation, multiple inline image references allowed."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "ini_cet",
+      "exam_track": 1002,
+      "year": 2023,
+      "subject": "PTHI",
+      "topic": "Haematology",
+      "question_text": "A 5-year-old child presents with pallor and splenomegaly. Peripheral smear shows target cells and nucleated red blood cells. HPLC shows HbF = 90%, HbA2 = 3%, HbA absent. The condition is:",
+      "option_a": "Sickle cell disease",
+      "option_b": "Beta-thalassemia major",
+      "option_c": "Hereditary spherocytosis",
+      "option_d": "Iron deficiency anaemia",
+      "correct_answer": "B",
+      "difficulty": "medium",
+      "explanation": "β-thalassemia major: β-globin chains are absent → HbA (β2γ2 = α2β2) is absent; γ-chains rise compensatorily → HbF (α2γ2) dominates.\n\nReference diagram [[img:globin_chain_synthesis.png]]: comparison of β-thal major vs trait vs silent carrier on HPLC.",
+      "concept_explanation": "Defect lies in HBB gene on chromosome 11. In β-thal major, both β-globin alleles are affected (β0/β0 or β+/β+ severe). Marrow expansion gives 'crew-cut' skull X-ray; iron overload from repeated transfusions causes secondary haemochromatosis.",
+      "mnemonic": "β-thal major = Marrow Markedly Expands = 'Crew cut' skull.",
+      "exam_source": "INICET",
+      "is_active": true,
+      "concept_tags": ["pathology", "haematology", "thalassemia"]
+    }
+  }
+]

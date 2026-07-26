@@ -59,7 +59,11 @@ def _ensure_question_bank_loaded():
     if Question.objects.filter(is_active=True).count() >= 1800:
         return
 
-    fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
+    # Back-compat: try fixtures/cms_fixture.json first, then legacy
+    # backend/questions_fixture.json at repo root.
+    fixture_path = Path(settings.BASE_DIR) / 'fixtures' / 'cms_fixture.json'
+    if not fixture_path.exists():
+        fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
     if not fixture_path.exists():
         return
 

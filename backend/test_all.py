@@ -99,7 +99,7 @@ def test_database():
         elif count > 0:
             fail("Question count", f"Only {count} active questions (expected 1900+)")
         else:
-            fail("Question count", "0 questions — run: python manage.py loaddata questions_fixture.json")
+            fail("Question count", "0 questions — run: python manage.py loaddata fixtures/cms_fixture.json")
     except Exception as e:
         fail("Question count", str(e))
 
@@ -161,11 +161,13 @@ def test_database():
 def test_fixture():
     section("2. FIXTURE INTEGRITY")
 
-    fixture_path = Path(__file__).parent / 'questions_fixture.json'
+    fixture_path = Path(__file__).parent / 'fixtures' / 'cms_fixture.json'
+    if not fixture_path.exists():
+        fixture_path = Path(__file__).parent / 'questions_fixture.json'
 
     # 2.1 File exists
     if not fixture_path.exists():
-        fail("Fixture file exists", "questions_fixture.json not found")
+        fail("Fixture file exists", "fixtures/cms_fixture.json not found")
         return
     ok("Fixture file exists", f"{fixture_path.stat().st_size / 1e6:.1f} MB")
 
@@ -605,7 +607,9 @@ def test_config():
         fail("WhiteNoise middleware", "Missing — needed for deployment")
 
     # 6.4 Fixture file
-    fixture = Path(__file__).parent / 'questions_fixture.json'
+    fixture = Path(__file__).parent / 'fixtures' / 'cms_fixture.json'
+    if not fixture.exists():
+        fixture = Path(__file__).parent / 'questions_fixture.json'
     if fixture.exists():
         ok("Fixture file", f"Present ({fixture.stat().st_size / 1e6:.1f} MB)")
     else:

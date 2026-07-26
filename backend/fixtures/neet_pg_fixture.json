@@ -1,0 +1,161 @@
+[
+  {
+    "_doc": "═══════════════════════════════════════════════════════════════════",
+    "_section": "EXAM TRACK",
+    "_note": "Defines NEET PG as an exam. One row per exam_type. Adding more Exams? Duplicate and change 'code' + 'name'."
+  },
+  {
+    "model": "questions.examtrack",
+    "pk": 1001,
+    "fields": {
+      "code": "neet_pg",
+      "name": "NEET PG",
+      "conducting_body": "NBE",
+      "exam_pattern_summary": "Computer-based MCQ. Pre/Para/Clinical subjects.",
+      "eligibility_summary": "MBBS graduates + internship completion."
+    }
+  },
+
+  {
+    "_doc": "═══════════════════════════════════════════════════════════════════",
+    "_section": "SUBJECTS",
+    "_note": "One row per subject. exam_type MUST be 'neet_pg'. Add Topics below. The 'code' is the FK that Questions reference."
+  },
+  { "model": "questions.subject", "pk": 101, "fields": { "name": "Anatomy",               "code": "ANA", "exam_type": "neet_pg", "exam_track": 1001, "description": "Gross + histology + embryology + neuroanatomy" } },
+  { "model": "questions.subject", "pk": 102, "fields": { "name": "Physiology",            "code": "PHY", "exam_type": "neet_pg", "exam_track": 1001, "description": "General + systemic + neurophysiology" } },
+  { "model": "questions.subject", "pk": 103, "fields": { "name": "Biochemistry",          "code": "BCH", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 104, "fields": { "name": "Pathology",             "code": "PTH", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 105, "fields": { "name": "Microbiology",          "code": "MIC", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 106, "fields": { "name": "Pharmacology",          "code": "PHM", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 107, "fields": { "name": "Forensic Medicine",     "code": "FMT", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 108, "fields": { "name": "ENT",                   "code": "ENT", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 109, "fields": { "name": "Ophthalmology",         "code": "OPH", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 110, "fields": { "name": "Orthopaedics",          "code": "ORT", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 111, "fields": { "name": "Anaesthesia",           "code": "ANS", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 112, "fields": { "name": "Dermatology",           "code": "DER", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 113, "fields": { "name": "Psychiatry",            "code": "PSY", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 114, "fields": { "name": "Radiodiagnosis",        "code": "RAD", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 115, "fields": { "name": "General Medicine",      "code": "MED", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 116, "fields": { "name": "General Surgery",       "code": "SUR", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 117, "fields": { "name": "Obstetrics & Gynaecology","code": "OBG", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 118, "fields": { "name": "Paediatrics",           "code": "PED", "exam_type": "neet_pg", "exam_track": 1001 } },
+  { "model": "questions.subject", "pk": 119, "fields": { "name": "Community Medicine",    "code": "PSM", "exam_type": "neet_pg", "exam_track": 1001 } },
+
+  {
+    "_doc": "═══════════════════════════════════════════════════════════════════",
+    "_section": "TOPICS",
+    "_note": "Topics under a Subject. 'subject' is the SUBJECT CODE (string), not the pk. Leave 'importance' 1-10."
+  },
+  { "model": "questions.topic", "fields": { "subject": "ANA", "name": "Upper Limb",                "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ANA", "name": "Lower Limb",                "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ANA", "name": "Thorax",                    "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "PHY", "name": "General Physiology",        "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "PHY", "name": "Cardiovascular",            "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "BCH", "name": "Enzymes",                   "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "PTH", "name": "General Pathology",         "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "MIC", "name": "Bacteriology",              "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "PHM", "name": "General Pharmacology",       "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "PHM", "name": "ANS",                       "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "PHM", "name": "CNS",                       "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "FMT", "name": "Forensic Toxicology",        "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "ENT", "name": "Ear",                       "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "OPH", "name": "Anterior Segment",          "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "OPH", "name": "Posterior Segment / Retina","importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "ORT", "name": "Trauma",                    "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "ANS", "name": "Local Anaesthesia",         "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "DER", "name": "Infections",                "importance": 7 } },
+  { "model": "questions.topic", "fields": { "subject": "PSY", "name": "Mood Disorders",            "importance": 8 } },
+  { "model": "questions.topic", "fields": { "subject": "RAD", "name": "Chest X-ray",               "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "RAD", "name": "CT",                        "importance": 9 } },
+  { "model": "questions.topic", "fields": { "subject": "RAD", "name": "MRI",                       "importance": 9 } },
+
+  {
+    "_doc": "═══════════════════════════════════════════════════════════════════",
+    "_section": "QUESTIONS",
+    "_note": "DROP SCREENSHOTS INTO backend/fixtures/images/neet_pg/ AND REFERENCE THEM AS [[img:filename.png]]."
+  },
+
+  {
+    "_example": "TEXT-ONLY Question (no image). question_text can include markdown."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "neet_pg",
+      "exam_track": 1001,
+      "year": 2024,
+      "subject": "PHM",
+      "topic": "ANS",
+      "question_text": "A 55-year-old hypertensive patient on regular medication is posted for elective cataract surgery. Which autonomic receptor blockade is most responsible for the fall in blood pressure following intravenous timolol infusion?",
+      "option_a": "β1 receptors in the heart",
+      "option_b": "α1 receptors in vascular smooth muscle",
+      "option_c": "β2 receptors in vascular smooth muscle",
+      "option_d": "Muscarinic receptors in the SA node",
+      "correct_answer": "A",
+      "difficulty": "medium",
+      "explanation": "Timolol is a non-selective β-blocker; its dominant cardiovascular effect is β1 blockade in the heart → decreased HR and contractility → reduced cardiac output → fall in BP.",
+      "concept_explanation": "β1 receptors dominate in cardiac tissue. Blockade reduces HR (chronotropy), contractility (inotropy), and conduction (dromotropy). β2 blockade affects vascular and bronchial smooth muscle but the *dominant* hypotensive mechanism is reduced cardiac output.",
+      "mnemonic": "β1 = B1g heart (B-1 = Block the pump)",
+      "exam_source": "NEET PG",
+      "is_active": true,
+      "concept_tags": ["pharmacology", "autonomic", "beta-blockers", "timolol"]
+    }
+  },
+
+  {
+    "_example": "IMAGE-BASED Question. Drop the PNG into backend/fixtures/images/neet_pg/ then use [[img:filename.png]]."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "neet_pg",
+      "exam_track": 1001,
+      "year": 2024,
+      "subject": "RAD",
+      "topic": "Chest X-ray",
+      "question_text": "Identify the radiological sign shown:\n[[img:radiograph_sign_287.png]]\nThe patient is a 30-year-old with sudden onset chest pain and dyspnoea. The sign is most consistent with:",
+      "option_a": "Hydropneumothorax",
+      "option_b": "Deep sulcus sign of pneumothorax",
+      "option_c": "Tension pneumothorax",
+      "option_d": "Lobar collapse",
+      "correct_answer": "B",
+      "difficulty": "hard",
+      "is_image_based": true,
+      "explanation": "Supine film of a supine patient — air rises to the most non-dependent area, which is the lateral costophrenic angle in supine position. The deep sulcus sign is the earliest sign of pneumothorax on supine chest film.",
+      "concept_explanation": "On upright CXR, pleural air collects apically. On supine CXR (trauma / ICU), air migrates to the lateral costophrenic sulcus → 'deep sulcus sign'. Search for: abnormally deep, lucent costophrenic angle + sharp delineation of the diaphragm.",
+      "mnemonic": "Deep sulcus = supine pneumothorax.",
+      "exam_source": "NEET PG",
+      "is_active": true,
+      "is_verified_by_admin": true,
+      "concept_tags": ["radiology", "chest-x-ray", "pneumothorax", "deep-sulcus-sign"],
+      "shortcut_tip": "Whenever you see 'supine film + chest trauma' = think deep sulcus sign."
+    }
+  },
+
+  {
+    "_example": "MIXED Question — image appears in explanation, not in stem (instructor's annotated solution)."
+  },
+  {
+    "model": "questions.question",
+    "fields": {
+      "exam_type": "neet_pg",
+      "exam_track": 1001,
+      "year": 2023,
+      "subject": "ANA",
+      "topic": "Upper Limb",
+      "question_text": "A medical student lacerates his forearm while dissecting. On examination he cannot abduct his thumb and has loss of sensation over the dorsum of the hand. Which nerve is most likely injured?",
+      "option_a": "Median nerve",
+      "option_b": "Ulnar nerve",
+      "option_c": "Radial nerve",
+      "option_d": "Musculocutaneous nerve",
+      "correct_answer": "C",
+      "difficulty": "easy",
+      "explanation": "Loss of thumb abduction + dorsal hand sensation is the textbook radial nerve picture (specifically the posterior cutaneous branch in the forearm, here the superficial branch of radial nerve supplying the dorsal lateral hand).\n\nCourse of radial nerve in the forearm ([[img:radial_nerve_course.png]]): branches in the cubital fossa into superficial (sensory) and deep (motor — posterior interosseous) divisions.",
+      "concept_explanation": "Radial nerve = C5-C8 + T1. In the axilla it gives the posterior cutaneous nerve of arm + triceps branch. In the spiral groove it gives the posterior cutaneous nerve of forearm + branch to brachioradialis/extensors. In the cubital fossa it bifurcates. The *superficial* branch is pure sensory to the dorsolateral hand; injury at the distal forearm spares the wrist extensors but denervates dorsal hand sensation.",
+      "mnemonic": "RADIAL = Reaches All Dorsum In Arm Laterally.",
+      "exam_source": "NEET PG",
+      "is_active": true,
+      "concept_tags": ["anatomy", "upper-limb", "radial-nerve"]
+    }
+  }
+]
