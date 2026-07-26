@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright visual snapshots — baselines are tracked; diff/actual
+# artifacts generated on regression are not.
+tests/e2e/visual-snapshots/**/*-actual.png
+tests/e2e/visual-snapshots/**/*-diff.png
+
