@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
-import { FormattedText } from '@/components/FormattedText';
+import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
@@ -115,16 +115,20 @@ function PracticeContent() {
     // Resolve `[[img:N]]` tokens in the question text against the question's
     // image list so public practice pages render real `<img>` tags instead of
     // the raw token. Cached per `(id, imageCount)` for cheap re-renders.
+    const qId = currentQ?.id ?? null;
+    const qText = currentQ?.question_text ?? '';
+    const qImages = currentQ?.images ?? null;
     const resolvedQuestionText = useMemo(() => {
         if (!currentQ) return '';
-        const cleaned = sanitizeQuestionText(currentQ.question_text);
-        const imgs: QuestionImageLike[] = (currentQ.images as QuestionImageLike[] | undefined) ?? [];
+        const cleaned = sanitizeQuestionText(qText);
+        const imgs: QuestionImageLike[] = (qImages as QuestionImageLike[] | undefined) ?? [];
         return resolveImageTokens(
             cleaned,
             imgs,
             `q${currentQ.id}:v${imgs.length}`,
         );
-    }, [currentQ?.id, currentQ?.question_text, (currentQ?.images as any)?.length]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [qId, qText, qImages, currentQ]);
     // Track correct answers internally so future "session summary" UI can use it,
     // even though it's not displayed today. Avoids TS6133 dead-code warnings.
     void Object.values(answers).filter((a, i) => {
@@ -338,7 +342,12 @@ function PracticeContent() {
                                                 ? (isCorrectOpt ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground')
                                                 : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')
                                         }`}>{opt}</div>
-                                        <span className="flex-1 text-sm font-medium">{cleanOptionText(String(optionText))}</span>
+                                        <span className="flex-1 text-sm font-medium">
+                                            <FormattedOptionText
+                                                text={cleanOptionText(String(optionText))}
+                                                images={currentQ.images}
+                                            />
+                                        </span>
                                         {showAnswer && isCorrectOpt && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓ Correct</span>}
                                         {isWrong && <span className="text-xs font-bold text-red-600 dark:text-red-400 shrink-0">✗ Wrong</span>}
                                     </button>
@@ -369,7 +378,7 @@ function PracticeContent() {
                                         </h4>
                                         {currentQ.explanation && (
                                             <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground prose prose-sm max-w-none">
-                                                <FormattedText text={extractAnalysisFromJson(String(currentQ.explanation))} />
+                                                <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(currentQ.explanation ?? '')), currentQ.images)} />
                                             </div>
                                         )}
                                     </CardContent>
@@ -381,7 +390,7 @@ function PracticeContent() {
                                         <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                         <div>
                                             <h5 className="text-sm font-bold text-amber-700 dark:text-amber-400">🧠 Memory Trick</h5>
-                                            <p className="text-sm leading-relaxed mt-1"><FormattedText text={String(currentQ.mnemonic)} /></p>
+                                            <p className="text-sm leading-relaxed mt-1"><FormattedText text={resolveImageTokensForMarkdown(String(currentQ.mnemonic ?? ''), currentQ.images)} /></p>
                                         </div>
                                     </div>
                                 )}

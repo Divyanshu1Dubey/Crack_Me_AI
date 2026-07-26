@@ -33,36 +33,112 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<any | null>(null);
-  const questionTextRef = useRef<HTMLTextAreaElement>(null);
-  const explanationRef = useRef<HTMLTextAreaElement>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const fieldRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
-  const previewHtml = useMemo(
-    () => resolveImageTokens(form.question_text, images, `${question.id}:${images.map((i) => i.id).join('|')}`),
-    [form.question_text, images, question.id],
+  // Pre-compute resolved image HTML for every field that supports images.
+  // The public practice page mirrors this same pattern.
+  const fieldsWithImages = [
+    { key: 'question_text', label: 'Question Text' },
+    { key: 'option_a', label: 'Option A' },
+    { key: 'option_b', label: 'Option B' },
+    { key: 'option_c', label: 'Option C' },
+    { key: 'option_d', label: 'Option D' },
+    { key: 'explanation', label: 'Explanation' },
+    { key: 'mnemonic', label: 'Mnemonic' },
+    { key: 'concept_explanation', label: 'Concept Explanation' },
+  ] as const;
+
+  const cacheKey = useMemo(
+    () => `${question.id}:${images.map((i) => i.id).join('|')}`,
+    [question.id, images],
   );
 
-  async function insertImage(target: 'question' | 'explanation') {
+  const previewHtml = useMemo(
+    () => resolveImageTokens(form.question_text, images, cacheKey),
+    [form.question_text, images, cacheKey],
+  );
+
+  // Returns insert-image button — used across every text field so the
+  // affordance is consistent and discoverable.
+  function renderInsertImageButton(fieldKey: string) {
+    const isUploading = uploadingField === fieldKey;
+    return (
+      <button
+        type="button"
+        onClick={() => insertImage(fieldKey)}
+        disabled={isUploading}
+        title="Upload an image and insert a token at the cursor position"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+      >
+        <span aria-hidden>📷</span>
+        {isUploading ? 'Uploading…' : 'Insert image'}
+      </button>
+    );
+  }
+
+  // Renders a small inline preview of any images referenced from `text`.
+  // Helps the admin confirm what the public page will see.
+  function renderInlinePreview(text: string) {
+    const matches = text.matchAll(/\[\[img:(\d+)\]\]/g);
+    const ids = new Set<number>();
+    for (const m of matches) ids.add(parseInt(m[1], 10));
+    if (ids.size === 0) return null;
+    const referenced = images.filter((img) => ids.has(img.id));
+    if (referenced.length === 0) return null;
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {referenced.map((img) => (
+          <a
+            key={img.id}
+            href={img.url || img.file || '#'}
+            target="_blank"
+            rel="noreferrer"
+            className="block w-20 h-20 border rounded overflow-hidden bg-gray-50"
+            title={`Image #${img.id}${img.caption ? ` — ${img.caption}` : ''}`}
+          >
+            <img
+              src={img.url || img.file || ''}
+              alt={img.caption || `image #${img.id}`}
+              className="w-full h-full object-cover"
+            />
+          </a>
+        ))}
+      </div>
+    );
+  }
+
+  async function insertImage(fieldKey: string) {
+    const ref = fieldRefs.current[fieldKey];
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    setUploadingField(fieldKey);
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) return;
+      if (!file) {
+        setUploadingField(null);
+        return;
+      }
       try {
         const res = await questionsAPI.uploadImage({ questionId: question.id, file });
         const img = res.data as QuestionImageLike;
         const newImages = [...images, img];
         setImages(newImages);
         const token = `[[img:${img.id}]]`;
-        const ref = target === 'question' ? questionTextRef.current : explanationRef.current;
         if (ref) {
           const start = ref.selectionStart ?? ref.value.length;
           const end = ref.selectionEnd ?? ref.value.length;
-          const fieldKey = target === 'question' ? 'question_text' : 'explanation';
-          setForm({ ...form, [fieldKey]: ref.value.slice(0, start) + token + ref.value.slice(end) });
+          const currentValue = (form as any)[fieldKey] ?? '';
+          setForm({ ...form, [fieldKey]: currentValue.slice(0, start) + token + currentValue.slice(end) });
+        } else {
+          // No ref available — append to the end of the field.
+          setForm({ ...form, [fieldKey]: ((form as any)[fieldKey] ?? '') + token });
         }
       } catch (e: any) {
         setError('Failed to upload image: ' + (e?.response?.data?.detail || e?.message || 'unknown'));
+      } finally {
+        setUploadingField(null);
       }
     };
     input.click();
@@ -74,11 +150,12 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       await questionsAPI.deleteImage(id);
       setImages(images.filter((i) => i.id !== id));
       const tokenRe = new RegExp(`\\[\\[img:${id}\\]\\]`, 'g');
-      setForm({
-        ...form,
-        question_text: form.question_text.replace(tokenRe, ''),
-        explanation: form.explanation.replace(tokenRe, ''),
-      });
+      const updated: any = { ...form };
+      for (const k of fieldsWithImages.map((f) => f.key)) {
+        const v = (form as any)[k];
+        if (typeof v === 'string') updated[k] = v.replace(tokenRe, '');
+      }
+      setForm(updated);
     } catch (e: any) {
       setError('Failed to delete image: ' + (e?.response?.data?.detail || e?.message || 'unknown'));
     }
@@ -160,20 +237,23 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         )}
 
         <label className="block">
-          <span className="text-sm font-medium">Question Text</span>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Question Text</span>
+            <div className="flex items-center gap-2">
+              {renderInsertImageButton('question_text')}
+            </div>
+          </div>
           <textarea
-            ref={questionTextRef}
+            ref={(el) => { fieldRefs.current['question_text'] = el; }}
             className="w-full border p-2 rounded mt-1 font-mono text-sm"
             rows={6}
             value={form.question_text}
             onChange={(e) => setForm({ ...form, question_text: e.target.value })}
           />
-          <button onClick={() => insertImage('question')} className="mt-1 text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded">
-            + Insert image
-          </button>
+          {renderInlinePreview(form.question_text)}
         </label>
 
-        <details className="border rounded p-2">
+        <details className="border rounded p-2" open>
           <summary className="cursor-pointer text-sm font-medium">Preview (rendered)</summary>
           <div className="prose max-w-none mt-2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
         </details>
@@ -181,13 +261,18 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         <div className="grid grid-cols-2 gap-3">
           {(['option_a', 'option_b', 'option_c', 'option_d'] as const).map((k) => (
             <label key={k} className="block">
-              <span className="text-sm font-medium uppercase">{k}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium uppercase">{k.replace('_', ' ')}</span>
+                {renderInsertImageButton(k)}
+              </div>
               <textarea
+                ref={(el) => { fieldRefs.current[k] = el; }}
                 className="w-full border p-2 rounded mt-1 text-sm"
                 rows={2}
                 value={form[k]}
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               />
+              {renderInlinePreview(form[k])}
             </label>
           ))}
         </div>
@@ -204,28 +289,34 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium">Explanation</span>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Explanation</span>
+            {renderInsertImageButton('explanation')}
+          </div>
           <textarea
-            ref={explanationRef}
+            ref={(el) => { fieldRefs.current['explanation'] = el; }}
             className="w-full border p-2 rounded mt-1 text-sm"
             rows={4}
             value={form.explanation}
             onChange={(e) => setForm({ ...form, explanation: e.target.value })}
           />
-          <button onClick={() => insertImage('explanation')} className="mt-1 text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded">
-            + Insert image
-          </button>
+          {renderInlinePreview(form.explanation)}
         </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-sm font-medium">Mnemonic</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Mnemonic</span>
+              {renderInsertImageButton('mnemonic')}
+            </div>
             <textarea
+              ref={(el) => { fieldRefs.current['mnemonic'] = el; }}
               className="w-full border p-2 rounded mt-1 text-sm"
               rows={2}
               value={form.mnemonic}
               onChange={(e) => setForm({ ...form, mnemonic: e.target.value })}
             />
+            {renderInlinePreview(form.mnemonic)}
           </label>
           <label className="block">
             <span className="text-sm font-medium">Difficulty</span>
@@ -240,6 +331,21 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             </select>
           </label>
         </div>
+
+        <label className="block">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Concept Explanation</span>
+            {renderInsertImageButton('concept_explanation')}
+          </div>
+          <textarea
+            ref={(el) => { fieldRefs.current['concept_explanation'] = el; }}
+            className="w-full border p-2 rounded mt-1 text-sm"
+            rows={3}
+            value={form.concept_explanation}
+            onChange={(e) => setForm({ ...form, concept_explanation: e.target.value })}
+          />
+          {renderInlinePreview(form.concept_explanation)}
+        </label>
 
         <div className="flex gap-4 text-sm">
           {(['needs_review', 'is_dropped', 'is_controversial'] as const).map((k) => (
