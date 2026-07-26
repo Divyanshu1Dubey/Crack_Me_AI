@@ -121,18 +121,20 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
     const email = String(supabaseUser.email || '').trim().toLowerCase();
 
-    // Client-side and build-time admin email allowlist matching
+    // Client-side and build-time admin email allowlist matching.
+    // Admin emails must be supplied via NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS
+    // (comma-separated). We previously hard-coded two personal Gmail addresses
+    // here so the admin portal worked during local development; that hard-coded
+    // list was removed for the public release — admins are now declared via
+    // the environment variable and Supabase user_metadata (`is_admin` or
+    // `role: admin`).
     const envEmails = (
         process.env.NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS ||
         process.env.CONTROL_TOWER_ADMIN_EMAILS ||
         ''
     ).toLowerCase().split(',').map(e => e.trim()).filter(Boolean);
 
-    const adminEmails = new Set([
-        'meduraa.web@gmail.com',
-        'parulmaterial@gmail.com',
-        ...envEmails
-    ]);
+    const adminEmails = new Set(envEmails);
 
     const isAdmin =
         adminEmails.has(email) ||

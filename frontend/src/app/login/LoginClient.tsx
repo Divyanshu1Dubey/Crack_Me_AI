@@ -19,7 +19,7 @@ export default function LoginClient() {
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | ''>('');
     const [magicLoading, setMagicLoading] = useState(false);
-    const { login, magicLinkLogin, oauthLogin, user } = useAuth();
+    const { login, magicLinkLogin, oauthLogin } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const authErrorFromCallback = (searchParams.get('authError') || '').trim();
@@ -29,14 +29,16 @@ export default function LoginClient() {
         setError('');
         setLoading(true);
         try {
-            await login(identifier, password);
+            // login() resolves with the freshly-fetched profile (see
+            // lib/auth.tsx#login), so we MUST use that value instead of
+            // the `user` captured at render time — the render-time
+            // snapshot is still the pre-login (often stale or null) value.
+            const signedIn = await login(identifier, password);
             // Send admins to the control tower, students to their dashboard.
-            // Previously this hard-coded /admin for everyone, which meant
-            // students landed on an admin-only page after every login.
             const next = searchParams.get('next');
             const isAdmin =
-                String((user as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
-                ((user as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
+                String((signedIn as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
+                ((signedIn as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
             router.push(next || (isAdmin ? '/admin' : '/dashboard'));
         } catch (err: unknown) {
             const error = err as { response?: { data?: unknown } };
