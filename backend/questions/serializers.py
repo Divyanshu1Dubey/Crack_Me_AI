@@ -179,7 +179,35 @@ class QuestionListSerializer(serializers.ModelSerializer):
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
 
+    def _is_admin(self):
+        """True when the requesting user is staff / admin.
+
+        Used to gate the answer / explanation getters so the list
+        endpoint (and the mock-test start_attempt endpoint, which
+        re-uses this serializer) does not leak the correct answer
+        to non-admin users via DevTools.
+        """
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if not request or not getattr(request, 'user', None):
+            return False
+        user = request.user
+        return bool(
+            getattr(user, 'is_authenticated', False)
+            and (
+                getattr(user, 'is_admin', False)
+                or getattr(user, 'is_superuser', False)
+                or getattr(user, 'is_staff', False)
+            )
+        )
+
     def get_effective_answer(self, obj):
+        # Bug #3 (question-bank sweep, 2026-07-27): the list endpoint
+        # previously returned the correct answer text to every
+        # non-admin user. The detail endpoint (QuestionDetailSerializer)
+        # is the right place to surface it, since the user has
+        # explicitly opened that question to study it.
+        if not self._is_admin():
+            return None
         if obj.lock_answer:
             return obj.admin_answer_override or obj.get_correct_option_text()
         if obj.admin_answer_override:
@@ -187,6 +215,11 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return obj.ai_answer or obj.get_correct_option_text()
 
     def get_effective_explanation(self, obj):
+        # Same leak as effective_answer — the full explanation text was
+        # being returned in every list payload, defeating the
+        # assessment for any student willing to open DevTools.
+        if not self._is_admin():
+            return None
         if obj.lock_explanation:
             return obj.admin_explanation_override or obj.explanation
         if obj.admin_explanation_override:
