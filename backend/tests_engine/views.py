@@ -297,16 +297,57 @@ class TestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='start')
     def start_attempt(self, request, pk=None):
-        """Start a test attempt."""
+        """Start (or resume) a test attempt.
+
+        Previously this endpoint created a fresh TestAttempt and
+        re-shuffled the question pool on every call. Two side effects
+        that hurt students:
+
+        1. Reloading the page (or a network blip that triggered a
+           re-fetch from the frontend's useEffect) destroyed the
+           student's current answers and current question index, then
+           showed them a completely different paper.
+        2. The unique_together on QuestionResponse(attempt, question)
+           was fine in isolation, but the lack of a one-active-attempt
+           constraint let two attempts target the same question pool
+           from different devices, double-charging analytics and
+           double-counting XP on submit.
+
+        Fix: if an in-flight attempt already exists for this
+        (user, test), resume it (return the same attempt_id, same
+        question order, same started_at). Otherwise create a new
+        attempt and randomize. The one_active_test_attempt_per_user
+        partial unique constraint on TestAttempt enforces the
+        "at most one active attempt" invariant at the DB level.
+        """
         test = self.get_object()
-        attempt = TestAttempt.objects.create(user=request.user, test=test)
-        questions = test.questions.all().order_by('?')  # Randomize order
         from questions.serializers import QuestionListSerializer
+        with transaction.atomic():
+            attempt = (
+                TestAttempt.objects
+                .select_for_update()
+                .filter(user=request.user, test=test, is_completed=False)
+                .order_by('-started_at')
+                .first()
+            )
+            created = False
+            if attempt is None:
+                attempt = TestAttempt.objects.create(user=request.user, test=test)
+                created = True
+            questions = test.questions.all()
+            if created:
+                # Only randomize on first start. Subsequent resumes
+                # preserve the order from when the attempt began (which
+                # is itself stable since the question set doesn't change
+                # mid-attempt — see Bug #6).
+                questions = questions.order_by('?')
+
         return Response({
             'attempt_id': attempt.id,
             'test': TestSerializer(test, context={'request': request}).data,
             'questions': QuestionListSerializer(questions, many=True, context={'request': request}).data,
             'started_at': attempt.started_at,
+            'resumed': not created,
         })
 
     @action(detail=True, methods=['post'], url_path='submit')

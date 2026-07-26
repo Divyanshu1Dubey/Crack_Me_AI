@@ -71,6 +71,23 @@ class TestAttempt(models.Model):
 
     class Meta:
         ordering = ['-started_at']
+        # Bug #3 (mock-test sweep, 2026-07-27): a user could previously
+        # have multiple in-flight (is_completed=False) attempts on the
+        # same Test from different devices / tabs, leading to double
+        # analytics credit, inconsistent scoring, and a 500 on
+        # QuestionResponse bulk_create due to the (attempt, question)
+        # unique_together when both attempts target the same question
+        # pool. The partial unique constraint (Postgres + SQLite ≥ 3.8)
+        # enforces at most one active attempt per (user, test) at the
+        # database level. Completed attempts are exempt so a user can
+        # re-take a test after submitting.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'test'],
+                condition=models.Q(is_completed=False),
+                name='one_active_test_attempt_per_user',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username} — {self.test.title} ({self.started_at.date()})"
