@@ -308,7 +308,7 @@ export default function ImageViewer({ images, startIndex = 0, open, onClose }: I
                                             style={{ transform: `rotate(${rotate}deg)` }}
                                         />
                                     ) : (
-                                        <div className="w-64 h-40 flex items-center justify-center text-slate-400">
+                                        <div className="w-64 h-40 flex items-center justify-center text-white/70">
                                             <ImageIcon className="w-10 h-10" />
                                         </div>
                                     )}
@@ -339,7 +339,7 @@ export default function ImageViewer({ images, startIndex = 0, open, onClose }: I
                         data-testid="iv-image"
                     />
                 ) : (
-                    <div className="flex flex-col items-center text-slate-300">
+                    <div className="flex flex-col items-center text-white/80">
                         <ImageIcon className="w-16 h-16 mb-3" />
                         <p>Image not available</p>
                     </div>
