@@ -91,3 +91,4 @@ backend/_run_benchmark.py
 # Local Tesseract / OCR tool installations (large binaries)
 tools/
 
+.superpowers/
