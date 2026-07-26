@@ -6,12 +6,13 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
+import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
@@ -111,6 +112,19 @@ function PracticeContent() {
     const currentQ = questions[currentIdx];
     const totalQ = questions.length;
     const answeredCount = Object.keys(answers).length;
+    // Resolve `[[img:N]]` tokens in the question text against the question's
+    // image list so public practice pages render real `<img>` tags instead of
+    // the raw token. Cached per `(id, imageCount)` for cheap re-renders.
+    const resolvedQuestionText = useMemo(() => {
+        if (!currentQ) return '';
+        const cleaned = sanitizeQuestionText(currentQ.question_text);
+        const imgs: QuestionImageLike[] = (currentQ.images as QuestionImageLike[] | undefined) ?? [];
+        return resolveImageTokens(
+            cleaned,
+            imgs,
+            `q${currentQ.id}:v${imgs.length}`,
+        );
+    }, [currentQ?.id, currentQ?.question_text, (currentQ?.images as any)?.length]);
     // Track correct answers internally so future "session summary" UI can use it,
     // even though it's not displayed today. Avoids TS6133 dead-code warnings.
     void Object.values(answers).filter((a, i) => {
@@ -294,7 +308,7 @@ function PracticeContent() {
                         {/* Question Text */}
                         <div className="glass-card rounded-2xl border border-primary/30 shadow-lg p-6">
                             <div className="text-base font-medium leading-relaxed">
-                                <FormattedText text={sanitizeQuestionText(currentQ.question_text)} />
+                                <FormattedText text={resolvedQuestionText} />
                             </div>
                         </div>
 

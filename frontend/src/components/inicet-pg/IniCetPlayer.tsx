@@ -28,6 +28,7 @@ import {
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText } from '@/components/FormattedText';
 import { cleanOptionText, extractAnalysisFromJson, nonPlaceholderExplanation } from '@/lib/textCleanup';
+import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -63,6 +64,7 @@ interface Question {
     year?: number;
     difficulty?: string;
     is_image_based?: boolean;
+    images?: QuestionImageLike[];  // Optional inline image list (resolved via `resolveImageTokens`)
     explanation?: string;
     subject?: { id?: number; name?: string } | string | null;
     topic?: string;
@@ -176,6 +178,18 @@ export default function IniCetPlayer({
         () => images.filter(i => (i.role || 'stem') === 'stem'),
         [images],
     );
+    // Resolve `[[img:N]]` tokens in the question text against the current
+    // image list so the INI-CET player renders real `<img>` tags instead
+    // of the raw token. Cached per `(id, imageCount)` for cheap re-renders.
+    const resolvedQuestionText = useMemo(() => {
+        if (!current) return '';
+        const imgs: QuestionImageLike[] = (current.images as QuestionImageLike[] | undefined) ?? images;
+        return resolveImageTokens(
+            current.question_text || '',
+            imgs,
+            `q${current.id}:v${imgs.length}`,
+        );
+    }, [current?.id, current?.question_text, current?.images?.length, images.length]);
     const explanationImages = useMemo(
         () => images.filter(i => i.role === 'explanation'),
         [images],
@@ -416,7 +430,7 @@ export default function IniCetPlayer({
 
                         <div className="px-6 py-6">
                             <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-100 leading-relaxed text-[15px]">
-                                <FormattedText text={current.question_text || ''} />
+                                <FormattedText text={resolvedQuestionText} />
                             </div>
                         </div>
 
