@@ -1,0 +1,35 @@
+# .github/actions/playwright-setup/action.yml
+#
+# Composite action that prepares a clean Playwright environment for the
+# visual-snapshots and live-audit jobs. Centralises the steps so a
+# future CI tweak (e.g. switching to the firefox project) is a
+# one-file change rather than an N-job change.
+#
+# Inputs: none.
+# Outputs: none.
+name: Playwright setup
+description: Checkout, install npm deps, install Playwright chromium. Idempotent; safe to call from any job.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install npm dependencies
+      shell: bash
+      working-directory: frontend
+      run: npm ci
+
+    - name: Install Playwright chromium
+      # Both visual-snapshots (chromium, chromium-mobile) and live-audit
+      # (chromium) reuse the same browser binary. Mobile is a viewport
+      # config inside playwright.config.ts, not a separate engine.
+      shell: bash
+      working-directory: frontend
+      run: npx playwright install --with-deps chromium
