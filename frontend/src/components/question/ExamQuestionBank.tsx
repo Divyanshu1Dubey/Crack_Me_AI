@@ -419,16 +419,17 @@ function ExamQuestionBankInner({
             const detailData = qRes.data;
             detailData.similar = sRes.data;
             setQuestionDetail(detailData);
+            // Track the prior attempt for the Resume banner (line 998 area)
+            // but DO NOT auto-reveal the explanation — that defeats practice
+            // mode. Students must pick an option again to see the answer.
             if (detailData.user_selected_answer) {
                 setSelectedAnswer(detailData.user_selected_answer);
-                setShowAnswer(true);
             }
         }).catch(() => {
             questionsAPI.get(id).then(res => {
                 setQuestionDetail(res.data);
                 if (res.data.user_selected_answer) {
                     setSelectedAnswer(res.data.user_selected_answer);
-                    setShowAnswer(true);
                 }
             });
         });
@@ -996,6 +997,33 @@ function ExamQuestionBankInner({
                                     </div>
 
                                     <div className="p-5">
+                                        {/* Resume banner — appears only when the student has a prior attempt
+                                            for this question and hasn't picked a fresh option this session.
+                                            Replaces the previous behaviour of silently flipping showAnswer=true
+                                            on open, which was leaking the admin's explanation image (and the
+                                            correct-answer card) before the student even read the stem. */}
+                                        {detail.user_selected_answer && !showAnswer && (
+                                            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                                                <span>
+                                                    You answered{' '}
+                                                    <span className="font-bold">
+                                                        {detail.user_selected_answer}
+                                                    </span>{' '}
+                                                    last time
+                                                    {detail.user_is_correct === false && ' (incorrect)'}
+                                                    {detail.user_is_correct === true && ' (correct)'} — re-attempt
+                                                    to see the explanation.
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowAnswer(true)}
+                                                    className="shrink-0 px-2.5 py-1 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700"
+                                                >
+                                                    Show answer
+                                                </button>
+                                            </div>
+                                        )}
+
                                         <div className="text-base font-medium leading-relaxed mb-5">
                                             <FormattedText
                                                 text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}

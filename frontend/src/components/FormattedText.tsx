@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import rehypeRaw from 'rehype-raw';
 import { decodeMojiB } from '@/lib/textCleanup';
 
 interface FormattedTextProps {
@@ -14,17 +15,52 @@ interface FormattedTextProps {
  *
  * Also decodes UTF-8 mojibake so text originally stored with double-encoded
  * punctuation ("ΓÇÿ", "ΓÇÖ", etc.) renders correctly.
+ *
+ * Custom admin tokens resolved before markdown:
+ *   `[[red]]foo[[/red]]`  → `<span style="color:#dc2626">foo</span>`
+ *   `[[u]]foo[[/u]]`      → `<span style="text-decoration:underline">foo</span>`
+ * `rehype-raw` lets the inline `<span style="…">` survive into the DOM so
+ * the colour / underline actually renders (react-markdown v10 strips raw
+ * HTML by default).
  */
 export function FormattedText({ text, className = '' }: FormattedTextProps) {
     if (!text) return null;
 
-    const clean = decodeMojiB(text);
+    const clean = decodeMojiB(applyColorTokens(text));
 
     return (
         <div className={`formatted-text ${className}`}>
-            <ReactMarkdown remarkPlugins={[remarkBreaks]}>{clean}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkBreaks]} rehypePlugins={[rehypeRaw]}>
+                {clean}
+            </ReactMarkdown>
         </div>
     );
+}
+
+/**
+ * Rewrites the admin's `[[red]]…[[/red]]` and `[[u]]…[[/u]]` tokens into
+ * inline `<span style="…">…</span>` so `react-markdown` + `rehype-raw`
+ * render them as styled DOM elements.
+ *
+ * Note: we emit *inline* HTML inside a string that flows into markdown.
+ * `[[red]]` is paired with the matching `[[/red]]` on the same line / block;
+ * nesting is not supported (would need a parser, not a regex) but admin
+ * usage is flat.
+ */
+export function applyColorTokens(text: string): string {
+    if (!text) return '';
+    return text
+        // Red highlight. Style matches Tailwind's text-red-600 so it survives
+        // both the markdown preview and the student-side render.
+        .replace(/\[\[red\]\]([\s\S]*?)\[\[\/red\]\]/g, (_m, inner: string) => {
+            const safe = String(inner).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<span style="color:#dc2626;font-weight:600">${safe}</span>`;
+        })
+        // Underline.
+        .replace(/\[\[u\]\]([\s\S]*?)\[\[\/u\]\]/g, (_m, inner: string) => {
+            const safe = String(inner).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<span style="text-decoration:underline">${safe}</span>`;
+        });
 }
 
 /**
@@ -47,10 +83,14 @@ export function resolveImageTokensForMarkdown(
     images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }>,
 ): string {
     if (!text) return '';
+    // Apply color tokens first so they flow through to react-markdown.
+    // Order matters: if we ran image resolution first, the inner-text of an
+    // `![alt](src)` could swallow a stray `[[red]]` and confuse the regex.
+    const withColors = applyColorTokens(text);
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
     // Match either an integer ID or a URL inside the brackets. Order: try ID
     // first (most common) — the regex alternation handles both in one pass.
-    return text.replace(/\[\[img:([^\]]+)\]\]/g, (match, payload: string) => {
+    return withColors.replace(/\[\[img:([^\]]+)\]\]/g, (match, payload: string) => {
         // Integer ID — canonical form, looks up QuestionImage row.
         if (/^\d+$/.test(payload)) {
             const id = parseInt(payload, 10);

@@ -146,6 +146,95 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     );
   }
 
+  // Generic cursor-position text inserter. Reused by the markdown toolbar
+  // and (via insertImage below) by image upload. `snippet` is the raw text
+  // to drop in; if `wrap` is provided and the textarea has a selection,
+  // the selection is wrapped and the cursor lands between the open/close
+  // markers — same UX as a Notion-style formatting toolbar.
+  function insertAtCursor(fieldKey: string, snippet: string, wrap?: { open: string; close: string; placeholder?: string }) {
+    const ref = fieldRefs.current[fieldKey];
+    const currentValue = (form as any)[fieldKey] ?? '';
+    if (!ref) {
+      const appended = wrap
+        ? `${wrap.open}${wrap.placeholder ?? ''}${wrap.close}`
+        : snippet;
+      setForm({ ...form, [fieldKey]: currentValue + appended });
+      return;
+    }
+    const start = ref.selectionStart ?? currentValue.length;
+    const end = ref.selectionEnd ?? currentValue.length;
+    const before = currentValue.slice(0, start);
+    const after = currentValue.slice(end);
+    if (wrap) {
+      const selected = currentValue.slice(start, end);
+      const inner = selected || wrap.placeholder || snippet;
+      setForm({ ...form, [fieldKey]: `${before}${wrap.open}${inner}${wrap.close}${after}` });
+      return;
+    }
+    setForm({ ...form, [fieldKey]: `${before}${snippet}${after}` });
+  }
+
+  /**
+   * MarkdownToolbar — small strip of formatting buttons for image-aware text
+   * fields. Uses `[[red]]…[[/red]]` and `[[u]]…[[/u]]` custom tokens which
+   * `FormattedText.applyColorTokens` resolves at render time; the rest is
+   * standard markdown already supported by `react-markdown@10`.
+   *
+   * Buttons:
+   *   B / I    — wraps selection in ** / *
+   *   H1 / H2  — prepends "# " / "## " at the cursor (line-start)
+   *   list     — prepends "- " at the cursor (line-start)
+   *   quote    — prepends "> " at the cursor (line-start)
+   *   red      — wraps selection in [[red]]…[[/red]]
+   *   underline— wraps selection in [[u]]…[[/u]]
+   *   code     — wraps selection in `…`
+   */
+  function renderMarkdownToolbar(fieldKey: string) {
+    const btnBase =
+      'inline-flex items-center justify-center min-w-7 h-7 px-2 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 hover:border-gray-400 text-xs font-semibold transition';
+    return (
+      <div className="flex flex-wrap gap-1 items-center" role="toolbar" aria-label={`Formatting toolbar for ${fieldKey}`}>
+        <button type="button" title="Bold (**)" onClick={() => insertAtCursor(fieldKey, '', { open: '**', close: '**', placeholder: 'bold' })} className={btnBase}>B</button>
+        <button type="button" title="Italic (*)" onClick={() => insertAtCursor(fieldKey, '', { open: '*', close: '*', placeholder: 'italic' })} className={btnBase}><span className="italic">I</span></button>
+        <span className="w-px h-5 bg-gray-200 mx-1" aria-hidden />
+        <button type="button" title="Heading 1 (#)" onClick={() => insertLineStart(fieldKey, '# ')} className={btnBase}>H1</button>
+        <button type="button" title="Heading 2 (##)" onClick={() => insertLineStart(fieldKey, '## ')} className={btnBase}>H2</button>
+        <button type="button" title="Bullet list (-)" onClick={() => insertLineStart(fieldKey, '- ')} className={btnBase}>•</button>
+        <button type="button" title="Quote (>)" onClick={() => insertLineStart(fieldKey, '> ')} className={btnBase}>&ldquo;</button>
+        <span className="w-px h-5 bg-gray-200 mx-1" aria-hidden />
+        <button type="button" title="Code (`)" onClick={() => insertAtCursor(fieldKey, '', { open: '`', close: '`', placeholder: 'code' })} className={btnBase}>{`</>`}</button>
+        <button type="button" title="Red highlight ([[red]])" onClick={() => insertAtCursor(fieldKey, '', { open: '[[red]]', close: '[[/red]]', placeholder: 'important' })} className={btnBase + ' text-red-700'}>red</button>
+        <button type="button" title="Underline ([[u]])" onClick={() => insertAtCursor(fieldKey, '', { open: '[[u]]', close: '[[/u]]', placeholder: 'underline' })} className={btnBase + ' underline'}>U</button>
+      </div>
+    );
+  }
+
+  // Prepend `prefix` at the start of the current line where the cursor sits.
+  // If the line already starts with the prefix (case-sensitive), do nothing
+  // — keeps a second click from doubling up.
+  function insertLineStart(fieldKey: string, prefix: string) {
+    const ref = fieldRefs.current[fieldKey];
+    const currentValue = (form as any)[fieldKey] ?? '';
+    if (!ref) {
+      setForm({ ...form, [fieldKey]: `${currentValue}\n${prefix}` });
+      return;
+    }
+    const cursor = ref.selectionStart ?? currentValue.length;
+    // Walk backwards to find the last `\n` (or start of string) before cursor.
+    const before = currentValue.slice(0, cursor);
+    const lastNl = before.lastIndexOf('\n');
+    const lineStart = lastNl + 1;
+    const lineRest = currentValue.slice(lineStart, currentValue.length);
+    if (lineRest.startsWith(prefix)) {
+      // Toggle off (remove prefix) if already prefixed — feels right for a toolbar.
+      const newValue = currentValue.slice(0, lineStart) + lineRest.slice(prefix.length);
+      setForm({ ...form, [fieldKey]: newValue });
+      return;
+    }
+    const newValue = currentValue.slice(0, lineStart) + prefix + currentValue.slice(lineStart);
+    setForm({ ...form, [fieldKey]: newValue });
+  }
+
   async function insertImage(fieldKey: string) {
     const ref = fieldRefs.current[fieldKey];
     const input = document.createElement('input');
@@ -292,6 +381,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
               {renderInsertImageButton('question_text')}
             </div>
           </div>
+          <div className="mt-1">{renderMarkdownToolbar('question_text')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['question_text'] = el; }}
             className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 font-mono text-sm"
@@ -342,6 +432,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             <span className="text-sm font-medium text-gray-900">Explanation</span>
             {renderInsertImageButton('explanation')}
           </div>
+          <div className="mt-1">{renderMarkdownToolbar('explanation')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['explanation'] = el; }}
             className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
@@ -358,6 +449,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
               <span className="text-sm font-medium text-gray-900">Mnemonic</span>
               {renderInsertImageButton('mnemonic')}
             </div>
+            <div className="mt-1">{renderMarkdownToolbar('mnemonic')}</div>
             <textarea
               ref={(el) => { fieldRefs.current['mnemonic'] = el; }}
               className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
@@ -386,6 +478,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             <span className="text-sm font-medium text-gray-900">Concept Explanation</span>
             {renderInsertImageButton('concept_explanation')}
           </div>
+          <div className="mt-1">{renderMarkdownToolbar('concept_explanation')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['concept_explanation'] = el; }}
             className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
