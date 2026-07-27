@@ -980,7 +980,11 @@ function ExamQuestionBankInner({
                             <div className="animate-fadeInUp space-y-4 px-1 py-0.5">
                                 <div className="glass-card rounded-2xl border border-primary/40 shadow-[0_18px_40px_rgba(14,116,144,0.16)]">
                                     <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-800/40">
-                                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
+                                        {detail.year ? (
+                                            <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 pointer-events-none">Expert Curated</Badge>
+                                        )}
                                         <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
                                         {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
                                         {detail.difficulty && <Badge variant="outline" className="pointer-events-none capitalize">{detail.difficulty}</Badge>}
@@ -1026,7 +1030,7 @@ function ExamQuestionBankInner({
 
                                                 return (
                                                     <div key={opt}
-                                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                                        className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                                                             showAnswer
                                                                 ? (isCorrect
                                                                     ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 text-foreground'
@@ -1039,9 +1043,9 @@ function ExamQuestionBankInner({
                                                         }`}
                                                         onClick={() => handleSelectOption(opt)}>
                                                         <div className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${showAnswer ? (isCorrect ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground') : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}`}>{opt}</div>
-                                                        <div className="flex-1 text-sm font-medium">{cleanOptionText(String(optionText))}</div>
-                                                        {showAnswer && isCorrect && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✓ Correct</span>}
-                                                        {isWrong && <span className="text-xs font-bold text-red-600 dark:text-red-400">✗ Wrong</span>}
+                                                        <div className="flex-1 min-w-0 text-sm font-medium break-words whitespace-pre-wrap leading-relaxed">{cleanOptionText(String(optionText))}</div>
+                                                        {showAnswer && isCorrect && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0 self-center">✓ Correct</span>}
+                                                        {isWrong && <span className="text-xs font-bold text-red-600 dark:text-red-400 shrink-0 self-center">✗ Wrong</span>}
                                                     </div>
                                                 );
                                             })}
@@ -1181,7 +1185,11 @@ function ExamQuestionBankInner({
                                                     {(detail.similar as Array<{ id: number; year: number; question_text: string }>).map((sq) => (
                                                         <div key={sq.id} className="flex gap-2 items-start cursor-pointer p-2 rounded-lg transition-colors hover:bg-[rgba(6,182,212,0.05)]"
                                                             onClick={() => { openQuestion(sq.id); }}>
-                                                            <span className="text-xs font-bold px-1.5 py-0.5 rounded whitespace-nowrap" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>PYQ {sq.year}</span>
+                                                            {sq.year ? (
+                                                                <span className="text-xs font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>PYQ {sq.year}</span>
+                                                            ) : (
+                                                                <span className="text-xs font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Expert Curated</span>
+                                                            )}
                                                             <span className="text-xs line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{sq.question_text}</span>
                                                         </div>
                                                     ))}
