@@ -77,6 +77,16 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     );
   }
 
+  // Resolve the best-available src for an image. The upload endpoint returns
+  // either `url` (Supabase public URL for admin uploads) or `file` (Django
+  // media path for recall imports). The question-list serializer rewrites
+  // both to the auth-gated `/api/questions/images/<id>/serve/` proxy, so
+  // callers sometimes see only that relative path — prefer the absolute
+  // URL when present.
+  function imageSrc(img: QuestionImageLike): string {
+    return img.url || (img.file as string) || '';
+  }
+
   // Renders a small inline preview of any images referenced from `text`.
   // Helps the admin confirm what the public page will see.
   function renderInlinePreview(text: string) {
@@ -91,17 +101,31 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         {referenced.map((img) => (
           <a
             key={img.id}
-            href={img.url || img.file || '#'}
+            href={imageSrc(img) || '#'}
             target="_blank"
             rel="noreferrer"
             className="block w-20 h-20 border rounded overflow-hidden bg-gray-50"
             title={`Image #${img.id}${img.caption ? ` — ${img.caption}` : ''}`}
           >
-            <img
-              src={img.url || img.file || ''}
-              alt={img.caption || `image #${img.id}`}
-              className="w-full h-full object-cover"
-            />
+            {imageSrc(img) ? (
+              <img
+                src={imageSrc(img)}
+                alt={img.caption || `image #${img.id}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Replace broken thumbnails with a labelled placeholder so
+                  // the admin notices that the URL is unreachable instead of
+                  // silently staring at a blank box.
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  const parent = (e.currentTarget as HTMLImageElement).parentElement;
+                  if (parent) parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-[10px] text-gray-500 text-center p-1">broken img #${img.id}</div>`;
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500 text-center p-1">
+                no url for #{img.id}
+              </div>
+            )}
           </a>
         ))}
       </div>
@@ -374,17 +398,50 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         <div className="border-t border-gray-200 pt-3">
           <p className="text-sm font-medium mb-2 text-gray-900">Images attached ({images.length})</p>
           <div className="grid grid-cols-3 gap-2">
-            {images.map((img, idx) => (
-              <div key={img.id} className="border border-gray-300 rounded p-2 text-xs text-gray-900">
-                <div className="font-mono">#{img.id}</div>
-                <div className="truncate">{img.caption || img.mime}</div>
-                <div className="flex gap-1 mt-1">
-                  <button onClick={() => moveImage(img.id, -1)} disabled={idx === 0} className="px-1 text-gray-900">↑</button>
-                  <button onClick={() => moveImage(img.id, 1)} disabled={idx === images.length - 1} className="px-1 text-gray-900">↓</button>
-                  <button onClick={() => deleteImage(img.id)} className="px-1 text-red-500">×</button>
+            {images.map((img, idx) => {
+              const src = imageSrc(img);
+              return (
+                <div key={img.id} className="border border-gray-300 rounded p-2 text-xs text-gray-900 space-y-1">
+                  <div className="relative w-full aspect-square bg-gray-50 rounded overflow-hidden flex items-center justify-center">
+                    {src ? (
+                      <img
+                        src={src}
+                        alt={img.caption || `image #${img.id}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          const fallback = (e.currentTarget as HTMLImageElement).nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="absolute inset-0 hidden flex-col items-center justify-center text-center text-[10px] text-gray-500 p-1"
+                      style={src ? { display: 'none' } : { display: 'flex' }}
+                    >
+                      <span className="font-mono">#{img.id}</span>
+                      <span>{src ? 'broken link' : 'no url yet'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono">#{img.id}</span>
+                    <span className="text-gray-500 truncate max-w-[8rem]" title={img.mime || ''}>{img.mime}</span>
+                  </div>
+                  {img.caption && (
+                    <div className="truncate text-gray-700" title={img.caption}>{img.caption}</div>
+                  )}
+                  <div className="flex gap-1 mt-1">
+                    <button onClick={() => moveImage(img.id, -1)} disabled={idx === 0} className="px-1 text-gray-900" title="Move up">↑</button>
+                    <button onClick={() => moveImage(img.id, 1)} disabled={idx === images.length - 1} className="px-1 text-gray-900" title="Move down">↓</button>
+                    {src && (
+                      <a href={src} target="_blank" rel="noreferrer" className="px-1 text-indigo-600" title="Open in new tab">↗</a>
+                    )}
+                    <button onClick={() => deleteImage(img.id)} className="px-1 text-red-500 ml-auto" title="Delete">×</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

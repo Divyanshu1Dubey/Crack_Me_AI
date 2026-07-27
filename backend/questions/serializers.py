@@ -260,13 +260,19 @@ class QuestionListSerializer(serializers.ModelSerializer):
             # container doesn't ship the local PNGs. Emit the
             # auth-gated /api/questions/images/<id>/serve/ proxy URL
             # instead so the player always has a reachable target.
+            #
+            # 2026-07-27: even when the ImageField is empty (e.g. the
+            # material_importer publish path failed to re-load bytes
+            # into `qi.file`), the row still has a usable URL in
+            # `img.url` (the public Supabase / /media/ path recorded
+            # at ingest time). Without this fallback, the frontend
+            # renders a broken image box. See `image_url` below.
             try:
-                if img.file:
-                    url = self._build_image_serve_url(img)
-                else:
-                    url = ''
+                url = self._build_image_serve_url(img)
+                if not url:
+                    url = self._resolve_image_url(img)
             except Exception:
-                url = ''
+                url = self._resolve_image_url(img) or ''
             out.append({
                 'id': img.id,
                 'page_number': img.page_number,
@@ -297,6 +303,18 @@ class QuestionListSerializer(serializers.ModelSerializer):
             except Exception:  # noqa: BLE001
                 return path
         return path
+
+    def _resolve_image_url(self, img):
+        """Pick the best URL for a QuestionImage — proxy or stored public URL."""
+        # Local MEDIA / Supabase URL recorded at ingest time. These are
+        # already absolute or already rooted paths. Return as-is so the
+        # frontend can hit them directly without going through the proxy.
+        url = (getattr(img, 'url', '') or '').strip()
+        if not url:
+            return ''
+        if url.startswith(('http://', 'https://', '/')):
+            return url
+        return f"/{url.lstrip('/')}"
 
 
 class QuestionAdminListSerializer(QuestionListSerializer):
@@ -358,13 +376,17 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             # container doesn't ship the local PNGs. Emit the
             # auth-gated /api/questions/images/<id>/serve/ proxy URL
             # instead so the player always has a reachable target.
+            #
+            # 2026-07-27: fallback to img.url when the ImageField is
+            # empty (publish path failed to write bytes — happens for
+            # every docx-imported QuestionImage today). Without this,
+            # the player shows a broken image box.
             try:
-                if img.file:
-                    url = self._build_image_serve_url(img)
-                else:
-                    url = ''
+                url = self._build_image_serve_url(img)
+                if not url:
+                    url = self._resolve_image_url(img)
             except Exception:
-                url = ''
+                url = self._resolve_image_url(img) or ''
             out.append({
                 'id': img.id,
                 'page_number': img.page_number,
@@ -378,6 +400,15 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
                 'sha256_short': img.sha256_short,
             })
         return out
+
+    def _resolve_image_url(self, img):
+        """Pick the best URL for a QuestionImage — proxy or stored public URL."""
+        url = (getattr(img, 'url', '') or '').strip()
+        if not url:
+            return ''
+        if url.startswith(('http://', 'https://', '/')):
+            return url
+        return f"/{url.lstrip('/')}"
 
     def _build_image_serve_url(self, img):
         """Return the prod-safe proxy URL for a QuestionImage.

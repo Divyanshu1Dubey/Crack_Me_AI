@@ -550,4 +550,50 @@ export const flashcardsAPI = {
   analytics: () => api.get('/questions/flashcards/analytics/'),
 };
 
+// Admin Import Center API (Phase 1)
+export const importCenterAPI = {
+  // Dashboard / health
+  dashboard: () => api.get('/admin/import/dashboard/'),
+  health: () => api.get('/admin/import/health/'),
+  lookups: () => api.get('/admin/import/lookups/'),
+  search: (q: string) => api.get('/admin/import/search/', { params: { q } }),
+
+  // Batches
+  listBatches: (params?: Record<string, string | number>) => api.get('/admin/import/batches/', { params }),
+  getBatch: (id: number) => api.get(`/admin/import/batches/${id}/`),
+  getBatchMaterials: (id: number) => api.get(`/admin/import/batches/${id}/materials/`),
+  getBatchAudit: (id: number, page = 1, pageSize = 50) =>
+    api.get(`/admin/import/batches/${id}/audit/`, { params: { page, page_size: pageSize } }),
+  getBatchReport: (id: number) => api.get(`/admin/import/batches/${id}/report/`),
+
+  upload: (formData: FormData, onProgress?: (p: number) => void) =>
+    api.post('/admin/import/upload/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress
+        ? (e: { loaded: number; total?: number }) =>
+            onProgress(e.total ? Math.round((e.loaded / e.total) * 100) : 0)
+        : undefined,
+    }),
+  cancelBatch: (id: number) => api.post(`/admin/import/batches/${id}/cancel/`),
+  publishBatch: (id: number, data: { max_per_test?: number; only_publish?: boolean; build_tests?: boolean }) =>
+    api.post(`/admin/import/batches/${id}/publish/`, data),
+  rollbackBatch: (id: number, delete_published = false) =>
+    api.post(`/admin/import/batches/${id}/rollback/`, { delete_published, confirm: true }),
+  republishBatch: (id: number) => api.post(`/admin/import/batches/${id}/republish/`),
+  generateMock: (id: number, data: {
+    strategy: string; question_count?: number; difficulty?: string;
+    subject_id?: number | null; topic_id?: number | null;
+  }) => api.post(`/admin/import/batches/${id}/generate-mock/`, data),
+
+  // Questions / review queue
+  listQuestions: (params?: Record<string, string | number>) => api.get('/admin/import/questions/', { params }),
+  getQuestion: (id: number) => api.get(`/admin/import/questions/${id}/`),
+  decideQuestion: (id: number, decision: 'approve' | 'reject' | 'reset', note = '') =>
+    api.post(`/admin/import/questions/${id}/decision/`, { decision, note }),
+  classifyQuestion: (id: number, use_ai = true) =>
+    api.post(`/admin/import/questions/${id}/classify-ai/`, { use_ai }),
+  bulkDecide: (ids: number[], decision: 'approve' | 'reject' | 'reset', note = '') =>
+    api.post('/admin/import/questions/bulk-decision/', { ids, decision, note }),
+};
+
 export default api;

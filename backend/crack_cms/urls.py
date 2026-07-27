@@ -87,6 +87,8 @@ urlpatterns = [
     path("api/imports/neetpg/", include("importers.neetpg.urls")),
     # Production Content Ingestion Platform (Phase 1, additive).
     path("api/ingestion/", include("ingestion.urls")),
+    # Admin Import Center (Phase 1) — staff-only ingestion UI backend.
+    path("api/admin/import/", include("material_importer.urls")),
 ]
 
 if settings.DEBUG:

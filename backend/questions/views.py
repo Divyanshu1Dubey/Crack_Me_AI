@@ -1,5 +1,6 @@
 import logging
 import csv
+import os
 import re
 from pathlib import Path
 from threading import Lock
@@ -2298,14 +2299,33 @@ class QuestionImageServeView(APIView):
     def get(self, request, image_id: int):
         img = (
             QuestionImage.objects.filter(id=image_id, is_active=True)
-            .only("id", "question_id", "file", "mime", "width", "height")
+            .only("id", "question_id", "file", "url", "mime", "width", "height")
             .first()
         )
-        if not img or not img.file:
+        if not img:
+            raise Http404("Question image not found")
+        # 2026-07-27 fallback: when the ImageField was never populated (the
+        # material_importer publish path failed to re-load bytes from
+        # `ImportedImage.stored_path` because the column was empty), the row
+        # still carries a usable /media/... URL. Resolve it against
+        # MEDIA_ROOT so the file can be served from disk.
+        serve_path = None
+        if img.file:
+            try:
+                serve_path = img.file.path
+            except (ValueError, NotImplementedError):
+                serve_path = None
+        if not serve_path and img.url and img.url.startswith("/media/"):
+            from django.conf import settings as _dj_settings
+            rel = img.url[len("/media/"):]
+            candidate = os.path.join(_dj_settings.MEDIA_ROOT, rel)
+            if os.path.isfile(candidate):
+                serve_path = candidate
+        if not serve_path:
             raise Http404("Question image not found")
 
         try:
-            f = img.file.open("rb")
+            f = open(serve_path, "rb")
         except (FileNotFoundError, OSError, ValueError):
             logger.warning("QuestionImage #%s file missing on disk", image_id)
             return Response(
