@@ -245,6 +245,21 @@ def parse_schema_a(doc, table) -> ParsedQuestion | None:
 
     pq.explanation = col1(6)
 
+    # Some cms_exclusive_material docx files wrote the answer key inside the
+    # Solution cell as ") 1, 2 and 3 only" / ") Octreotide scanning ...". The
+    # leading ")" is a leaked answer-key fragment — strip it (and any further
+    # leading "X) " / "] " tokens) so the explanation field stores real prose.
+    # Defence-in-depth: this used to land in production for 761 Expert Curated
+    # rows (fix_paren_prefix_explanations.py cleaned those up post-hoc).
+    _LEADING_DELIM_RE = re.compile(r"^\s*(?:[\)\]\.\,\:\;]|[\(\[]?\d{1,3}[\.\)]|\(?[A-Da-d]\))\s+")
+    for _ in range(8):
+        if not pq.explanation or pq.explanation.lstrip()[:1].isalpha():
+            break
+        new = _LEADING_DELIM_RE.sub("", pq.explanation, count=1)
+        if new == pq.explanation:
+            break
+        pq.explanation = new
+
     # Marks row: col1 = total marks, col2 = negative marks
     try:
         m_total = col1(7)
