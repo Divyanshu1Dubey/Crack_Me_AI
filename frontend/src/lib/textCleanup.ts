@@ -167,6 +167,56 @@ export function cleanPreview(text: string): string {
 // leaked "Answer: X" / "Explanation:" stuffer so the user only sees the
 // actual question stem. The split-off options are dropped on the floor in
 // the frontend (the backend already has them in dedicated columns).
+//
+// `stripRawHtml()` handles the related "docx → HTML serialization leaked
+// into a text column" case — `<p>`, `&nbsp;`, `<ul><li>`, `<span style=…>`
+// etc. were stored verbatim by an older mocktest parser; ReactMarkdown
+// expects markdown, so those tags would otherwise leak into the UI as
+// literal characters. Backend `strip_html_from_text.py` cleans existing
+// rows; this helper covers any future import until it lands.
+
+// Tag-only check — fast guard so we don't pay the regex cost on clean text.
+const RAW_HTML_RE = /<[a-zA-Z][^>]*>|&(?:nbsp|amp|lt|gt|quot|#\d+);/i;
+const LIST_ITEM_RE = /<li[^>]*>/gi;
+const LIST_END_RE = /<\/li>/gi;
+const BLOCK_TAG_RE = /<\/?(?:p|div|h[1-6]|ul|ol|li|br)[^>]*>/gi;
+const ANY_TAG_RE = /<[^>]+>/g;
+const ENTITY_MAP: Record<string, string> = {
+    '&nbsp;': ' ',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&hellip;': '…',
+    '&mdash;': '—',
+    '&ndash;': '–',
+    '&rsquo;': "'",
+    '&lsquo;': "'",
+    '&rdquo;': '"',
+    '&ldquo;': '"',
+};
+
+/**
+ * Strip raw HTML tags from a text field so it can be safely passed to
+ * ReactMarkdown. Also converts `<li>` to markdown bullets, `<p>/<br>/<div>`
+ * closers to newlines, and decodes common HTML entities. Used as a
+ * defence-in-depth against any docx parser that ever serializes rich text
+ * into a text column.
+ */
+export function stripRawHtml(text: string): string {
+    if (!text || !RAW_HTML_RE.test(text)) return text || '';
+    let s = text;
+    s = s.replace(LIST_ITEM_RE, '\n- ');
+    s = s.replace(LIST_END_RE, '\n');
+    s = s.replace(BLOCK_TAG_RE, '\n');
+    s = s.replace(ANY_TAG_RE, '');
+    s = s.replace(/&[a-z]+;|&#\d+;/gi, (m) => ENTITY_MAP[m.toLowerCase()] ?? ' ');
+    s = s.replace(/[ \t]+/g, ' ');
+    s = s.replace(/\n[ \t]+/g, '\n');
+    s = s.replace(/\n{3,}/g, '\n\n');
+    return s.trim();
+}
 // ---------------------------------------------------------------------------
 
 // NOTE: TS 5.9's parser misreads `(?im)` regex flag-groups as a ternary
@@ -213,7 +263,7 @@ const EXPL_INLINE_LINE = /^\s*Explan?ation\s*[\-:]?\s*.+$/i;
  */
 export function sanitizeQuestionText(text: string | null | undefined): string {
     if (!text) return '';
-    let t = decodeMojiB(String(text));
+    let t = stripRawHtml(decodeMojiB(String(text)));
 
     // Strip trailer / promo lines.
     for (const [pattern, replacement] of TRAILER_PATTERNS) {
@@ -269,6 +319,7 @@ export function sanitizeOptionText(text: string | null | undefined): string {
     for (const [pattern, replacement] of TRAILER_PATTERNS) {
         t = t.replace(pattern, replacement);
     }
+    t = stripRawHtml(t);
     return t.trim();
 }
 

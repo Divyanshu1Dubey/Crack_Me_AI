@@ -127,6 +127,42 @@ class FileReport:
 # ---------------------------------------------------------------------------
 
 
+# Lightweight HTML→plaintext fallback. Some cms_exclusive_material docx
+# files round-trip their rich text through a serialization that stores
+# <p>, <strong>, &nbsp; etc. as plain text in the docx paragraph runs.
+# python-docx gives us the raw string — if it contains HTML tags or
+# entities we strip them so they don't leak into the rendered question.
+_HTML_BLOCK_RE = re.compile(r"<\/?(?:p|div|h[1-6]|ul|ol|li|br)[^>]*>", re.I)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_HTML_ENTITY_RE = re.compile(r"&[a-z]+;|&#\d+;", re.I)
+_HTML_LI_OPEN_RE = re.compile(r"<li[^>]*>", re.I)
+
+
+def strip_imported_html(text: str) -> str:
+    """Strip raw HTML from an imported docx text fragment. Mirrors the
+    `stripRawHtml()` helper in `frontend/src/lib/textCleanup.ts`."""
+    if not text or ("<" not in text and "&" not in text):
+        return text
+    s = text
+    s = _HTML_LI_OPEN_RE.sub("\n- ", s)
+    s = re.sub(r"</li>", "\n", s, flags=re.I)
+    s = _HTML_BLOCK_RE.sub("\n", s)
+    s = _HTML_TAG_RE.sub("", s)
+    # Minimal entity decoding — covers the cases the docx parser produces.
+    s = (
+        s.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&apos;", "'")
+    )
+    s = re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"\n[ \t]+", "\n", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
 def extract_cell_images(doc, cell) -> list[tuple[bytes, str, str]]:
     """Return list of (blob_bytes, ext, mime) for every image embedded in a cell."""
     from docx.oxml.ns import qn
@@ -231,19 +267,19 @@ def parse_schema_a(doc, table) -> ParsedQuestion | None:
         except IndexError:
             return ""
 
-    pq.question_text = col1(0)
+    pq.question_text = strip_imported_html(col1(0))
     if not pq.question_text:
         pq.errors.append("empty question_text")
         return None
 
-    options = [col1(i) for i in range(2, 6)]
+    options = [strip_imported_html(col1(i)) for i in range(2, 6)]
     flags = [col2(i) for i in range(2, 6)]
     for letter, text, flag in zip(OPTION_LETTERS, options, flags):
         setattr(pq, f"option_{letter.lower()}", text)
         if flag.lower() == "correct":
             pq.correct_answer = letter
 
-    pq.explanation = col1(6)
+    pq.explanation = strip_imported_html(col1(6))
 
     # Some cms_exclusive_material docx files wrote the answer key inside the
     # Solution cell as ") 1, 2 and 3 only" / ") Octreotide scanning ...". The
@@ -362,6 +398,15 @@ def parse_schema_b(paragraphs) -> list[ParsedQuestion]:
                 cur.question_text = (cur.question_text + "\n\n" + "\n".join(statement_lines)).strip()
             if explanation_lines and not cur.explanation:
                 cur.explanation = " ".join(explanation_lines).strip()
+            # Defence-in-depth: strip any raw HTML that the docx round-trip
+            # leaked into the parsed fields. Matches the front-end
+            # `stripRawHtml()` helper so QA tools see the same string the
+            # user sees.
+            cur.question_text = strip_imported_html(cur.question_text)
+            for letter in OPTION_LETTERS:
+                setattr(cur, f"option_{letter.lower()}",
+                        strip_imported_html(getattr(cur, f"option_{letter.lower()}", "")))
+            cur.explanation = strip_imported_html(cur.explanation)
             if cur.question_text or cur.correct_answer:
                 out.append(cur)
         cur = None
