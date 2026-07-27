@@ -19,12 +19,8 @@ import hashlib
 import io
 import logging
 import os
-import uuid
 from dataclasses import dataclass
 from typing import BinaryIO
-
-from django.conf import settings
-from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +103,8 @@ def upload_image_to_supabase(
     ).first()
     if existing:
         logger.info("Re-using existing QuestionImage #%s (sha256 short=%s)", existing.id, sha256_short)
-        existing.updated_at = timezone.now()
-        existing.save(update_fields=["updated_at"])
+        # No mutable bookkeeping to update — the bytes, mime, and url are
+        # byte-for-byte identical (sha256 dedup), so just return the row.
         return UploadedImage(
             id=existing.id,
             url=existing.url,

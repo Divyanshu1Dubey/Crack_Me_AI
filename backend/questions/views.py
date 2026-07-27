@@ -2304,11 +2304,14 @@ class QuestionImageServeView(APIView):
         )
         if not img:
             raise Http404("Question image not found")
-        # 2026-07-27 fallback: when the ImageField was never populated (the
-        # material_importer publish path failed to re-load bytes from
-        # `ImportedImage.stored_path` because the column was empty), the row
-        # still carries a usable /media/... URL. Resolve it against
-        # MEDIA_ROOT so the file can be served from disk.
+        # 2026-07-27 fallback chain:
+        #   1. `img.file` (ImageField) — recall imports ship bytes here.
+        #   2. `img.url` starting with /media/ — recall path failed to
+        #      hydrate the ImageField but the row still points at MEDIA_ROOT.
+        #   3. `img.url` is an absolute http(s) URL (Supabase public URL for
+        #      admin uploads) — proxy the request as a 302 redirect so the
+        #      browser fetches directly from Supabase instead of round-tripping
+        #      through Django. Saves bandwidth and avoids needing to re-stream.
         serve_path = None
         if img.file:
             try:
@@ -2321,6 +2324,9 @@ class QuestionImageServeView(APIView):
             candidate = os.path.join(_dj_settings.MEDIA_ROOT, rel)
             if os.path.isfile(candidate):
                 serve_path = candidate
+        if not serve_path and img.url and img.url.startswith(("http://", "https://")):
+            from django.http import HttpResponseRedirect
+            return HttpResponseRedirect(img.url)
         if not serve_path:
             raise Http404("Question image not found")
 

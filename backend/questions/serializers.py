@@ -377,14 +377,17 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             # auth-gated /api/questions/images/<id>/serve/ proxy URL
             # instead so the player always has a reachable target.
             #
-            # 2026-07-27: fallback to img.url when the ImageField is
-            # empty (publish path failed to write bytes — happens for
-            # every docx-imported QuestionImage today). Without this,
-            # the player shows a broken image box.
+            # 2026-07-27: prefer `img.url` (Supabase public URL for admin
+            # uploads) when present — the proxy can redirect there, but
+            # handing the browser the absolute URL avoids the redirect hop
+            # entirely. Falls back to proxy for recall-imported images.
+            url = ''
             try:
-                url = self._build_image_serve_url(img)
-                if not url:
-                    url = self._resolve_image_url(img)
+                stored = (getattr(img, 'url', '') or '').strip()
+                if stored.startswith(('http://', 'https://')):
+                    url = stored
+                else:
+                    url = self._build_image_serve_url(img) or self._resolve_image_url(img)
             except Exception:
                 url = self._resolve_image_url(img) or ''
             out.append({

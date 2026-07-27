@@ -876,6 +876,7 @@ class QuestionImage(models.Model):
         help_text='Supabase public URL for admin-uploaded images (empty for recall imports)',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['question', 'page_number', 'image_index_in_page']
