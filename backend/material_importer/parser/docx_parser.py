@@ -49,7 +49,7 @@ _ANSWER_RE = re.compile(r"^\s*Answer\s*[:\-]\s*([A-Da-d])\b", re.IGNORECASE)
 _EXPLANATION_RE = re.compile(r"^\s*Explanation\s*[:\-]\s*(.*)", re.IGNORECASE)
 _SELECT_CODE_RE = re.compile(r"select using the code", re.IGNORECASE)
 _ROMAN_HEAD_RE = re.compile(r"^\s*[IVX]{1,4}\.\s+[A-Z]", re.IGNORECASE)
-_OPTION_LABEL_RE = re.compile(r"^\s*\(?([A-D])\)?[\.\):]\s+")
+_OPTION_LABEL_RE = re.compile(r"^\s*\(?([A-Da-d])\)?[\.\):]\s+")
 
 
 def _looks_classic_mcq(paragraphs: Sequence[str]) -> bool:
