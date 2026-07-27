@@ -518,14 +518,39 @@ class BoxedMCQExtractorFidelity:
 
     @staticmethod
     def _row_value_html(row: TableRow, image_url_for: dict | None) -> str:
-        """Render the *value* cells (everything except column 0) as HTML."""
+        """Render the *value* cells as HTML.
+
+        Skips column 0 (the row label like ``Option`` / ``Solution``).
+        When the row has three or more cells and the trailing cell
+        is a single ``correct`` or ``incorrect`` word, that cell is
+        the answer-flag column and is **not** rendered into the value
+        — mirroring ``BoxedMCQExtractor`` which reads it as a flag
+        instead of part of the text. Without this skip, the flag leaks
+        into ``option_*`` as a trailing ``<p>correct</p>`` paragraph.
+        """
         if not row.cells:
             return ""
-        parts: List[str] = []
-        for idx, cell in enumerate(row.cells):
+        # Decide which cells to render.
+        # If the last cell is just `correct`/`incorrect` it's a flag —
+        # never content. This is the same structural rule used by the
+        # string-based `BoxedMCQExtractor`.
+        render_indexes: list[int] = []
+        cells = row.cells
+        last_text = "".join(
+            r.text for p in cells[-1].paragraphs for r in p.runs
+        ).strip().lower() if cells else ""
+        skip_last = last_text in ("correct", "incorrect")
+        last_idx = len(cells) - 1 if skip_last else len(cells)
+        for idx, cell in enumerate(cells):
             if idx == 0:
                 continue
-            parts.append(render_blocks([__import__("material_importer.parser.docx_fidelity", fromlist=["DocumentBlock"]).DocumentBlock(paragraph=p) for p in cell.paragraphs], image_url_for=image_url_for) if False else render_blocks(
+            if idx >= last_idx:
+                continue
+            render_indexes.append(idx)
+        parts: List[str] = []
+        for idx in render_indexes:
+            cell = cells[idx]
+            parts.append(render_blocks(
                 [
                     __import__("material_importer.parser.docx_fidelity", fromlist=["DocumentBlock"]).DocumentBlock(paragraph=p)
                     for p in cell.paragraphs
