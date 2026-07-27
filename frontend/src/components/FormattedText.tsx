@@ -32,6 +32,15 @@ export function FormattedText({ text, className = '' }: FormattedTextProps) {
  * (`![alt](src)`) so `react-markdown` picks them up. Use this for any text
  * field that is run through `FormattedText` (explanations, mnemonics, etc.)
  * so admin-uploaded images render inline.
+ *
+ * Two token shapes are accepted:
+ *   - `[[img:42]]` — looks up QuestionImage id=42 in `images`
+ *   - `[[img:https://…/foo.png]]` — legacy/supabase-url form (older mocktest
+ *     imports stored the full URL as the token value). Falls through to
+ *     `![alt](url)` so the image still renders even when no QuestionImage row
+ *     was joined. Defence-in-depth: the proper fix is the
+ *     `rewrite_url_image_tokens.py` one-shot cleanup that converts these to
+ *     integer IDs.
  */
 export function resolveImageTokensForMarkdown(
     text: string,
@@ -39,13 +48,21 @@ export function resolveImageTokensForMarkdown(
 ): string {
     if (!text) return '';
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
-    return text.replace(/\[\[img:(\d+)\]\]/g, (_match, idStr: string) => {
-        const id = parseInt(idStr, 10);
-        const img = byId.get(id);
-        if (!img) return `*[missing image #${id}]*`;
-        const src = (img.url || img.file || '').replace(/"/g, '%22');
-        const alt = (img.caption || `image #${id}`).replace(/\]/g, '');
-        return `![${alt}](${src})`;
+    // Match either an integer ID or a URL inside the brackets. Order: try ID
+    // first (most common) — the regex alternation handles both in one pass.
+    return text.replace(/\[\[img:(\d+|https?:\/\/[^\]]+)\]\]/g, (match, payload: string) => {
+        if (/^\d+$/.test(payload)) {
+            const id = parseInt(payload, 10);
+            const img = byId.get(id);
+            if (!img) return `*[missing image #${id}]*`;
+            const src = (img.url || img.file || '').replace(/"/g, '%22');
+            const alt = (img.caption || `image #${id}`).replace(/\]/g, '');
+            return `![${alt}](${src})`;
+        }
+        // URL payload — render directly. Re-encode embedded quotes so the
+        // markdown parser doesn't choke on URLs containing spaces / quotes.
+        const src = payload.replace(/"/g, '%22');
+        return `![image](${src})`;
     });
 }
 
@@ -71,7 +88,8 @@ export function FormattedOptionText({
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
-    const tokenRe = /\[\[img:(\d+)\]\]/g;
+    // Match integer ID OR URL payload — same shape as resolveImageTokensForMarkdown.
+    const tokenRe = /\[\[img:(\d+|https?:\/\/[^\]]+)\]\]/g;
     let match: RegExpExecArray | null;
     let key = 0;
     while ((match = tokenRe.exec(clean)) !== null) {
@@ -80,24 +98,39 @@ export function FormattedOptionText({
                 <span key={key++} className="whitespace-pre-wrap">{clean.slice(lastIndex, match.index)}</span>
             );
         }
-        const id = parseInt(match[1], 10);
-        const img = byId.get(id);
-        if (img) {
-            const src = img.url || img.file || '';
+        const payload = match[1];
+        if (/^\d+$/.test(payload)) {
+            const id = parseInt(payload, 10);
+            const img = byId.get(id);
+            if (img) {
+                const src = img.url || img.file || '';
+                parts.push(
+                    <img
+                        key={key++}
+                        src={src}
+                        alt={img.caption || `image #${id}`}
+                        loading="lazy"
+                        className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
+                    />
+                );
+            } else {
+                parts.push(
+                    <span key={key++} className="missing-image-placeholder italic text-amber-700">
+                        [missing image #{id}]
+                    </span>
+                );
+            }
+        } else {
+            // URL payload — render directly so legacy [[img:https://…]] tokens
+            // still produce an <img> instead of leaking raw text.
             parts.push(
                 <img
                     key={key++}
-                    src={src}
-                    alt={img.caption || `image #${id}`}
+                    src={payload}
+                    alt="Question image"
                     loading="lazy"
                     className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
                 />
-            );
-        } else {
-            parts.push(
-                <span key={key++} className="missing-image-placeholder italic text-amber-700">
-                    [missing image #{id}]
-                </span>
             );
         }
         lastIndex = match.index + match[0].length;

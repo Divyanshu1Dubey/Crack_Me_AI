@@ -45,7 +45,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
-import { FormattedText, stripMarkdown } from '@/components/FormattedText';
+import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
 
@@ -997,7 +997,9 @@ function ExamQuestionBankInner({
 
                                     <div className="p-5">
                                         <div className="text-base font-medium leading-relaxed mb-5">
-                                            <FormattedText text={sanitizeQuestionText(detail.question_text)} />
+                                            <FormattedText
+                                                text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}
+                                            />
                                         </div>
 
                                         {/* Image carousel — image-based questions */}
@@ -1079,7 +1081,7 @@ function ExamQuestionBankInner({
                                                 </h4>
                                                 {detail.explanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                        <FormattedText text={extractAnalysisFromJson(String(detail.explanation))} />
+                                                        <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(detail.explanation)), detail.images)} />
                                                     </div>
                                                 )}
                                             </CardContent>

@@ -858,11 +858,26 @@ class Command(BaseCommand):
                     pending = (pq.question_images or []) + (pq.solution_images or [])
                     if pending:
                         uploaded = upload_pending_images(pending, q.id)
-                        q_urls = [u["url"] for u in uploaded if u["index"] < q_n]
-                        s_urls = [u["url"] for u in uploaded if u["index"] >= q_n]
-                        if q_urls or s_urls:
-                            tokens = [f"[[img:{u}]]" for u in q_urls + s_urls]
-                            q.question_text = (q.question_text + "\n\n" + "\n".join(tokens)).strip()
+                        from questions.models import QuestionImage as _QI
+                        id_tokens: list[str] = []
+                        for u in uploaded:
+                            # Persist a QuestionImage row keyed by URL so the
+                            # frontend can resolve [[img:N]] tokens by ID.
+                            img_row, _ = _QI.objects.get_or_create(
+                                question=q,
+                                url=u["url"],
+                                defaults={
+                                    "page_number": 0,
+                                    "image_index_in_page": u["index"],
+                                    "mime": "image/png",
+                                    "sha256_short": u.get("sha256_short", "")[:16],
+                                    "role": "primary" if u["index"] < q_n else "explanation",
+                                    "is_active": True,
+                                },
+                            )
+                            id_tokens.append(f"[[img:{img_row.id}]]")
+                        if id_tokens:
+                            q.question_text = (q.question_text + "\n\n" + "\n".join(id_tokens)).strip()
                             q.save(update_fields=["question_text"])
                             self.stdout.write(self.style.SUCCESS(f"  ✓ Q{q.id} + {len(uploaded)} image(s)"))
                 except Exception as exc:
