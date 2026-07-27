@@ -240,7 +240,7 @@ export default function AdminQuestionsEditorPage() {
                 {count !== null && (
                   <span
                     className={
-                      'inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-full text-xs font-semibold ' +
+                      'inline-flex items-center justify-center min-w-7 px-1.5 py-0.5 rounded-full text-xs font-semibold ' +
                       (isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-800')
                     }
                   >
@@ -272,7 +272,7 @@ export default function AdminQuestionsEditorPage() {
           />
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-[10rem]"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-40"
             value={subjectId}
             onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); resetPage(); }}
           >
@@ -283,7 +283,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-[10rem] disabled:bg-gray-100 disabled:text-gray-500"
+            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-40 disabled:bg-gray-100 disabled:text-gray-500"
             value={topicId}
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
             disabled={!subjectId}
@@ -409,7 +409,7 @@ export default function AdminQuestionsEditorPage() {
                     />
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 min-w-[200px]">
+                <td className="px-6 py-4 text-sm text-gray-900 min-w-50">
                   <div className="space-y-2">
                     <select
                       className="border border-gray-300 bg-white text-gray-900 p-1 w-full rounded text-xs"
@@ -429,7 +429,7 @@ export default function AdminQuestionsEditorPage() {
                     </select>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 min-w-[300px] whitespace-normal break-words max-h-32 overflow-hidden">
+                <td className="px-6 py-4 text-sm text-gray-900 min-w-75 whitespace-normal wrap-break-word max-h-32 overflow-hidden">
                   <div className="line-clamp-3">{q.question_text}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 space-y-2">

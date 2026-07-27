@@ -55,6 +55,26 @@ IMG_TOKEN_RE = re.compile(r"\[\[img:([\w\-./\\]+\.[A-Za-z]{2,5})\]\]")
 FIXTURES_DIR = Path(settings.BASE_DIR) / "fixtures"
 
 
+def _is_fixture_row(row: dict) -> bool:
+    """True iff `row` looks like a valid Django fixture row.
+
+    Filters out doc-comment objects that use the documented
+    `_doc` / `_note` / `_section` / `_example` keys. Those keys are
+    useful for human authors but break `manage.py loaddata` if passed
+    directly. The loader itself only inspects rows where
+    `row.get("model")` matches an expected app/model pair, so it was
+    already safe, but a future contributor might call `loaddata`
+    directly on these JSON files — they should not crash.
+    """
+    if not isinstance(row, dict):
+        return False
+    model = row.get("model")
+    if not isinstance(model, str) or "." not in model:
+        return False
+    fields = row.get("fields")
+    return isinstance(fields, dict)
+
+
 class Command(BaseCommand):
     help = "Load backend/fixtures/<exam>_fixture.json with image-token rewriting."
 
@@ -95,6 +115,10 @@ class Command(BaseCommand):
         raw = json.loads(fixture_path.read_text(encoding="utf-8"))
         if not isinstance(raw, list):
             raise CommandError(f"{fixture_path} must be a JSON array of fixture rows.")
+        # Sanitize: drop rows that don't look like Django fixture rows
+        # (doc-comment objects, junk entries). `manage.py loaddata` would
+        # crash on these, and they carry no data anyway.
+        raw = [r for r in raw if _is_fixture_row(r)] if isinstance(raw, list) else raw
         # Resolve image directory
         images_dir = (
             Path(options["images_dir"]).expanduser().resolve()

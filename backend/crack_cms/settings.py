@@ -97,6 +97,8 @@ INSTALLED_APPS = [
     # Production Content Ingestion Platform (Phase 1, additive only).
     # Isolated from UPSC CMS — see backend/ingestion/.
     'ingestion',
+    # Generic material importer (DOCX/PDF/PPT) for cms_exclusive_material.
+    'material_importer',
     # Security
     'axes',
 ]

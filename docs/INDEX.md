@@ -66,6 +66,11 @@ For hands-on work:
 | [KNOWN_GAPS.md](./KNOWN_GAPS.md) | Verification status (now 100% verified — historical log) |
 | [audit/DOCS_AUDIT.md](./audit/DOCS_AUDIT.md) | Audit of pre-consolidation docs/ — what existed, what was duplicated, what was deleted |
 | [audit/FINAL_REPORT.md](./audit/FINAL_REPORT.md) | Final consolidation report: 100/100 quality score, 12+ critical corrections applied |
+| **[AUDIT_2026_07_27.md](./AUDIT_2026_07_27.md)** | Master audit of `material_importer`, fixture migration, and recent diffs (this session) |
+| **[MATERIAL_IMPORTER_AUDIT.md](./MATERIAL_IMPORTER_AUDIT.md)** | Deep dive on the new DOCX/PDF/PPTX ingestion app + bug list |
+| **[HIGH_PRIORITY_FIXES.md](./HIGH_PRIORITY_FIXES.md)** | Top 10 ranked fixes ready to ship |
+| **[LOW_PRIORITY_FIXES.md](./LOW_PRIORITY_FIXES.md)** | Backlog of low-priority / future-work items |
+| **[NEXT_STEPS.md](../NEXT_STEPS.md)** | Session handoff for the next Claude |
 
 ---
 

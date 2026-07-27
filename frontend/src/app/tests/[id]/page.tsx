@@ -391,7 +391,7 @@ export default function TakeTestPage() {
                                             key={img.id}
                                             type="button"
                                             onClick={() => setZoomImg(img)}
-                                            className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-[var(--accent-primary)] focus:outline-none"
+                                            className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none"
                                         >
                                             <img
                                                 src={img.url || img.file_url || ''}
@@ -919,7 +919,7 @@ export default function TakeTestPage() {
                                         key={img.id}
                                         type="button"
                                         onClick={() => setZoomImg(img)}
-                                        className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-[var(--accent-primary)] focus:outline-none"
+                                        className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none"
                                     >
                                         <img
                                             src={img.url || img.file_url || ''}

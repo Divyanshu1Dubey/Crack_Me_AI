@@ -9,8 +9,10 @@ that the AI enrichment command kicks off.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
+from django.core.files.base import ContentFile
 from django.db import transaction
 
 log = logging.getLogger(__name__)
@@ -77,4 +79,50 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
     eq.published_question = q
     eq.status = "published"
     eq.save(update_fields=["published_question", "status"])
+
+    # P1 — propagate per-question images from staging to the live Question.
+    # ImportedImage.linked_questions is the M2M that already wired staging rows
+    # during ingest; iterate it and create QuestionImage rows on the new Q.
+    # QuestionImage.file is an ImageField — we feed it the bytes read back from
+    # the stored_path on disk so the live Question is fully self-contained.
+    try:
+        from questions.models import QuestionImage as _QI
+        from .models import ImportedImage as _II
+        linked = _II.objects.filter(linked_questions=eq)
+        for imp in linked:
+            qi = _QI(
+                question=q,
+                page_number=1,  # DOCX images don't carry page numbers — default 1
+                image_index_in_page=0,
+                url=imp.public_url or "",
+                caption=imp.original_filename or "",
+                mime=imp.mime_type or "image/png",
+                width=imp.width or 0,
+                height=imp.height or 0,
+                bytes=imp.size_bytes or 0,
+                sha256=imp.sha256 or "",
+                sha256_short=(imp.sha256 or "")[:16],
+                role="inline",
+            )
+            # Re-load bytes from stored_path and save to the ImageField. The
+            # stored_path is an absolute file path under MEDIA_ROOT.
+            if imp.stored_path and os.path.isfile(imp.stored_path):
+                with open(imp.stored_path, "rb") as fh:
+                    qi.file.save(imp.original_filename or f"img_{imp.id}.png",
+                                 ContentFile(fh.read()), save=False)
+            qi.save()
+    except Exception as exc:  # pragma: no cover
+        log.warning("Image propagation failed for EQ %s -> Q %s: %s", eq.id, q.id, exc)
     return True
+
+
+def _nullify_published_links(extracted_question_ids) -> int:
+    """P12 helper — unlink ExtractedQuestion rows from their published Question rows.
+
+    Used by ``delete_batch(delete_published=True)`` so the published Question
+    rows can be deleted without violating FK constraints.
+
+    Returns the number of rows updated.
+    """
+    from .models import ExtractedQuestion
+    return ExtractedQuestion.objects.filter(id__in=extracted_question_ids).update(published_question=None)

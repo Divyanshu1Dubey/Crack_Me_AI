@@ -309,7 +309,7 @@ export default function IniCetPlayer({
         <div className="main-content min-h-screen bg-linear-to-br from-indigo-50/40 via-white to-sky-50/40 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
             {/* Header */}
             <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/85 dark:bg-slate-900/85 border-b border-indigo-100 dark:border-slate-800 shadow-sm">
-                <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-3">
+                <div className="max-w-400 mx-auto px-4 py-3 flex items-center gap-3">
                     <button onClick={handleExit} aria-label="Exit practice" className="p-2 rounded-lg hover:bg-indigo-50 transition-colors">
                         <ArrowLeft className="w-5 h-5 text-indigo-700" />
                     </button>
@@ -330,7 +330,7 @@ export default function IniCetPlayer({
                 <Progress value={progress} className="h-1 rounded-none bg-indigo-100 dark:bg-slate-800" />
             </header>
 
-            <main className="max-w-[1600px] mx-auto px-4 py-6 grid grid-cols-12 gap-4">
+            <main className="max-w-400 mx-auto px-4 py-6 grid grid-cols-12 gap-4">
                 {/* Left: Question + Options + Explanation */}
                 <section className="col-span-12 lg:col-span-8 order-1">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-indigo-900/5 dark:shadow-black/30 border border-indigo-100/60 dark:border-slate-800 overflow-hidden">
@@ -410,7 +410,7 @@ export default function IniCetPlayer({
                                                     src={img.file_url}
                                                     alt={img.caption || `Question ${current.id} image`}
                                                     loading="lazy"
-                                                    className="w-full h-auto object-contain bg-white dark:bg-slate-800 max-h-[420px]"
+                                                    className="w-full h-auto object-contain bg-white dark:bg-slate-800 max-h-105"
                                                 />
                                             ) : (
                                                 <div className="aspect-video flex items-center justify-center text-slate-400">
@@ -694,7 +694,7 @@ export default function IniCetPlayer({
                                                             src={img.file_url}
                                                             alt={img.caption || 'Explanation image'}
                                                             loading="lazy"
-                                                            className="w-full h-auto object-contain bg-white max-h-[480px]"
+                                                            className="w-full h-auto object-contain bg-white max-h-120"
                                                         />
                                                     )}
                                                     {img.caption && (
@@ -718,7 +718,7 @@ export default function IniCetPlayer({
                                 value={state.notes}
                                 onChange={(e) => setState(s => ({ ...s, notes: e.target.value }))}
                                 placeholder="High-yield takeaway, image-description mnemonic, revision priority…"
-                                className="mt-3 w-full min-h-[80px] p-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="mt-3 w-full min-h-20 p-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </details>
                     </div>
