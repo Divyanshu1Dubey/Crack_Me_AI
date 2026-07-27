@@ -94,7 +94,31 @@ _MOJIBAKE_TABLE: dict[str, str] = {
     # Latin-1 double-encoded — 'Ã©' is é, etc.
     "Ã©": "é", "Ã¨": "è", "Ã¢": "â",
     "Ã®": "î", "Ã´": "ô", "Ã¹": "ù",
-    "Ã\x83Â©": "é",  # double-encoded é
+    "Ã§": "ç", "Ã«": "ë", "Ã¯": "ï",
+    "Ã±": "ñ", "Ã¼": "ü", "Ã¶": "ö",
+    "Ã¤": "ä", "Ã\x83Â©": "é",  # double-encoded é
+
+    # Triple-encoded (3 rounds of UTF-8-as-Latin-1) — seen in audit
+    # 2026-07-28 on Similar-PYQs sidebar where text like
+    # "iÃ©iÃiÃ©iÃiÃ©" was stored. Each `Ã©` is actually `é` round-tripped
+    # 3 times — i.e. `Ã\x83Â©` in the DB. Repair to the bare vowel so
+    # strings like "iridocyclitis" stay readable.
+    "Ã\x83Â©": "é",
+    "Ã\x83Â¨": "è",
+    "Ã\x83Â¢": "â",
+    "Ã\x83Â®": "î",
+    "Ã\x83Â´": "ô",
+    "Ã\x83Â¹": "ù",
+    # Triple-encoded WITHOUT the trailing Â (some rows survived a
+    # different byte path). The 2-char sequence `Ã\x83` is the Latin-1
+    # encoding of the UTF-8 bytes 0xC3 0x83 that represent U+00C3
+    # ("Ã") — so `Ã\x83` decoded as Latin-1-of-Latin-1-of-UTF-8 becomes
+    # the original vowel. These are best-effort fallbacks.
+    "Ã\x83i": "í",
+    "Ã\x83a": "á",
+    "Ã\x83e": "é",
+    "Ã\x83o": "ó",
+    "Ã\x83u": "ú",
 
     # Right-single-quote double-encoded as â€™
     "â€™": "’",

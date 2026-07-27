@@ -46,7 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
-import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
+import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
 
 /** Color-swatch chip used inside the exam-mode palette legend. */
@@ -872,7 +872,18 @@ function ExamQuestionBankInner({
                                                     </button>
                                                 </div>
                                             </div>
-                                            <p className="text-sm leading-relaxed text-foreground">{stripMarkdown(sanitizeQuestionText(q.question_text)).slice(0, 150)}{stripMarkdown(sanitizeQuestionText(q.question_text)).length > 150 ? '...' : ''}</p>
+                                            <p className="text-sm leading-relaxed text-foreground">{(() => {
+                                                // Decode mojibake (e.g. "iÃ©iÃiÃ©") before display so list
+                                                // cards on the bank show readable text. Falls back to a
+                                                // generic placeholder when the row is still unreadable
+                                                // after repair — matches the Similar-PYQs sidebar guard.
+                                                const cleaned = decodeMojiB(sanitizeQuestionText(q.question_text));
+                                                if (isLikelyGarbled(cleaned)) {
+                                                    return <em className="italic text-muted-foreground">Question #{q.id}{q.year ? ` (${q.year})` : ''}</em>;
+                                                }
+                                                const preview = stripMarkdown(cleaned).slice(0, 150);
+                                                return preview + (stripMarkdown(cleaned).length > 150 ? '...' : '');
+                                            })()}</p>
                                             <div className="mt-2 flex flex-wrap gap-1.5">
                                                 <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name || 'Topic unavailable'}</Badge>
                                                 {q.year ? (
@@ -1212,7 +1223,16 @@ function ExamQuestionBankInner({
                                                     <Target className="w-3.5 h-3.5" /> Similar PYQs from Database
                                                 </h5>
                                                 <div className="space-y-1.5">
-                                                    {(detail.similar as Array<{ id: number; year: number; question_text: string }>).map((sq) => (
+                                                    {(detail.similar as Array<{ id: number; year: number; question_text: string }>).map((sq) => {
+                                                        // Defence-in-depth: strip double-encoded UTF-8 mojibake
+                                                        // (e.g. iÃ©iÃiÃ©) before rendering, and fall back to a
+                                                        // generic "Question #N" placeholder when the text is
+                                                        // still unreadable after cleanup. Mirrors the
+                                                        // NeetPgPlayer guard (line ~977) so the same DB
+                                                        // content renders cleanly across both surfaces.
+                                                        const cleaned = decodeMojiB(sq.question_text || '');
+                                                        const garbled = isLikelyGarbled(cleaned);
+                                                        return (
                                                         <div key={sq.id} className="flex gap-2 items-start cursor-pointer p-2 rounded-lg transition-colors hover:bg-[rgba(6,182,212,0.05)]"
                                                             onClick={() => { openQuestion(sq.id); }}>
                                                             {sq.year ? (
@@ -1220,9 +1240,14 @@ function ExamQuestionBankInner({
                                                             ) : (
                                                                 <span className="text-xs font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Expert Curated</span>
                                                             )}
-                                                            <span className="text-xs line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{sq.question_text}</span>
+                                                            <span className="text-xs line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                                                                {garbled
+                                                                    ? <em className="italic">Question #{sq.id}{sq.year ? ` (${sq.year})` : ''}</em>
+                                                                    : cleaned}
+                                                            </span>
                                                         </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}

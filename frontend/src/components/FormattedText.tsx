@@ -69,7 +69,7 @@ export function applyColorTokens(text: string): string {
  * field that is run through `FormattedText` (explanations, mnemonics, etc.)
  * so admin-uploaded images render inline.
  *
- * Two token shapes are accepted:
+ * Three token shapes are accepted:
  *   - `[[img:42]]` — looks up QuestionImage id=42 in `images`
  *   - `[[img:https://…/foo.png]]` — legacy/supabase-url form (older mocktest
  *     imports stored the full URL as the token value). Falls through to
@@ -77,6 +77,15 @@ export function applyColorTokens(text: string): string {
  *     was joined. Defence-in-depth: the proper fix is the
  *     `rewrite_url_image_tokens.py` one-shot cleanup that converts these to
  *     integer IDs.
+ *
+ * Also recognises a *bare* `/media/fixtures/images/<exam>/<file>.png` URL
+ * that the legacy `load_exam_fixture` loader rewrote into question_text.
+ * This is the canonical mojibake-adjacent bug: the URL renders as plain
+ * text instead of an `<img>`. We convert it to a markdown image so the
+ * student sees the figure, preferring the canonical `serve_url` when we
+ * can match the file basename to a QuestionImage row. The proper fix is
+ * a one-shot backend migration (`rewrite_url_image_tokens.py` /
+ * `relink_fixture_images.py`) that converts these to integer IDs.
  */
 export function resolveImageTokensForMarkdown(
     text: string,
@@ -88,9 +97,19 @@ export function resolveImageTokensForMarkdown(
     // `![alt](src)` could swallow a stray `[[red]]` and confuse the regex.
     const withColors = applyColorTokens(text);
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
-    // Match either an integer ID or a URL inside the brackets. Order: try ID
-    // first (most common) — the regex alternation handles both in one pass.
-    return withColors.replace(/\[\[img:([^\]]+)\]\]/g, (match, payload: string) => {
+    // Build a basename → image lookup so we can resolve a bare
+    // `/media/fixtures/images/<exam>/<file>.png` URL to a QuestionImage
+    // row when one exists.
+    const byBasename = new Map<string, { id: number; url?: string | null; file?: string | null; caption?: string | null }>();
+    for (const img of images ?? []) {
+        const ref = (img.file || img.url || '').toString();
+        if (!ref) continue;
+        const base = ref.split('?')[0].split('#')[0].split('/').pop() || '';
+        if (base) byBasename.set(base.toLowerCase(), img);
+    }
+
+    // First pass: token-form `[[img:…]]`.
+    let resolved = withColors.replace(/\[\[img:([^\]]+)\]\]/g, (match, payload: string) => {
         // Integer ID — canonical form, looks up QuestionImage row.
         if (/^\d+$/.test(payload)) {
             const id = parseInt(payload, 10);
@@ -113,6 +132,27 @@ export function resolveImageTokensForMarkdown(
         // matched QuestionImage rows.
         return `*[image: ${payload} unavailable]*`;
     });
+
+    // Second pass: bare `/media/fixtures/images/...` URLs (legacy
+    // load_exam_fixture output). We still match the alternation above so
+    // tokens inside attribute strings get handled — but bare URLs sit
+    // outside any bracket syntax, so we do a separate pass.
+    resolved = resolved.replace(
+        /(\/media\/fixtures\/images\/[^\s)\]]+|https?:\/\/[^\s)\]]*\/fixtures\/images\/[^\s)\]]+)/g,
+        (rawUrl) => {
+            const stripped = rawUrl.split('?')[0].split('#')[0];
+            const base = stripped.split('/').pop() || '';
+            const found = byBasename.get(base.toLowerCase());
+            const served = found
+                ? ((found.url && found.url.length > 0 ? found.url : null) ||
+                   `/api/questions/images/${found.id}/serve/`)
+                : rawUrl;
+            const alt = (found?.caption || `Question image ${base}`).replace(/[\[\]"]/g, '');
+            return `![${alt}](${served.replace(/"/g, '%22')})`;
+        },
+    );
+
+    return resolved;
 }
 
 /**
@@ -135,60 +175,80 @@ export function FormattedOptionText({
     if (!text) return null;
     const clean = decodeMojiB(text);
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
+    const byBasename = new Map<string, { id: number; url?: string | null; file?: string | null; caption?: string | null }>();
+    for (const img of images ?? []) {
+        const ref = (img.file || img.url || '').toString();
+        if (!ref) continue;
+        const base = ref.split('?')[0].split('#')[0].split('/').pop() || '';
+        if (base) byBasename.set(base.toLowerCase(), img);
+    }
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
-    // Match integer ID OR URL payload — same shape as resolveImageTokensForMarkdown.
-    const tokenRe = /\[\[img:(\d+|https?:\/\/[^\]]+)\]\]/g;
+    // Match: 1) integer-ID / URL inside `[[img:…]]` brackets, or 2) a
+    // bare `/media/fixtures/images/<exam>/<file>` URL left behind by the
+    // legacy loader.
+    const tokenRe = /\[\[img:(\d+|https?:\/\/[^\]]+)\]\]|(\/media\/fixtures\/images\/[^\s)\]]+|https?:\/\/[^\s)\]]*\/fixtures\/images\/[^\s)\]]+)/g;
     let match: RegExpExecArray | null;
     let key = 0;
+    const pushImg = (src: string, alt: string, missing?: string) => {
+        if (missing) {
+            parts.push(
+                <span key={key++} className="missing-image-placeholder italic text-amber-700">
+                    {missing}
+                </span>,
+            );
+        } else {
+            parts.push(
+                <img
+                    key={key++}
+                    src={src}
+                    alt={alt}
+                    loading="lazy"
+                    className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
+                />,
+            );
+        }
+    };
     while ((match = tokenRe.exec(clean)) !== null) {
         if (match.index > lastIndex) {
             parts.push(
                 <span key={key++} className="whitespace-pre-wrap">{clean.slice(lastIndex, match.index)}</span>
             );
         }
-        const payload = match[1];
-        if (/^\d+$/.test(payload)) {
-            const id = parseInt(payload, 10);
-            const img = byId.get(id);
-            if (img) {
-                const src = img.url || img.file || '';
-                parts.push(
-                    <img
-                        key={key++}
-                        src={src}
-                        alt={img.caption || `image #${id}`}
-                        loading="lazy"
-                        className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
-                    />
-                );
+        // Branch 1: `[[img:…]]` token.
+        if (match[1] !== undefined) {
+            const payload = match[1];
+            if (/^\d+$/.test(payload)) {
+                const id = parseInt(payload, 10);
+                const img = byId.get(id);
+                if (img) {
+                    pushImg(img.url || img.file || '', img.caption || `image #${id}`);
+                } else {
+                    pushImg('', '', `[missing image #${id}]`);
+                }
+            } else if (/^https?:\/\//i.test(payload)) {
+                pushImg(payload, 'Question image');
             } else {
-                parts.push(
-                    <span key={key++} className="missing-image-placeholder italic text-amber-700">
-                        [missing image #{id}]
-                    </span>
+                pushImg('', '', `[image: ${payload} unavailable]`);
+            }
+        } else {
+            // Branch 2: bare `/media/fixtures/images/...` URL. Resolve via
+            // basename → QuestionImage lookup when possible; otherwise
+            // render the raw URL with an onerror fallback so the user
+            // sees a placeholder instead of a broken image icon.
+            const rawUrl = match[2];
+            const base = (rawUrl.split('?')[0].split('#')[0].split('/').pop() || '').toLowerCase();
+            const found = byBasename.get(base);
+            if (found) {
+                const served = (found.url && found.url.length > 0 ? found.url : null) ||
+                               `/api/questions/images/${found.id}/serve/`;
+                pushImg(served, found.caption || `Question image ${base}`);
+            } else {
+                pushImg(
+                    rawUrl,
+                    `Question image ${base}`,
                 );
             }
-        } else if (/^https?:\/\//i.test(payload)) {
-            // URL payload — render directly so legacy [[img:https://…]] tokens
-            // still produce an <img> instead of leaking raw text.
-            parts.push(
-                <img
-                    key={key++}
-                    src={payload}
-                    alt="Question image"
-                    loading="lazy"
-                    className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
-                />
-            );
-        } else {
-            // Alphanumeric / arbitrary token — render as a placeholder so the
-            // user sees an explanatory marker instead of raw `[[img:foo]]`.
-            parts.push(
-                <span key={key++} className="missing-image-placeholder italic text-amber-700">
-                    [image: {payload} unavailable]
-                </span>
-            );
         }
         lastIndex = match.index + match[0].length;
     }

@@ -2,12 +2,41 @@ from urllib.parse import urlsplit, urlunsplit
 
 from rest_framework import serializers
 from .models import (
-    Subject, Topic, Question, QuestionBookmark, QuestionFeedback, 
-    Discussion, Note, Flashcard, QuestionImportJob, 
-    QuestionExtractionItem, AdminAIPromptVersion, 
+    Subject, Topic, Question, QuestionBookmark, QuestionFeedback,
+    Discussion, Note, Flashcard, QuestionImportJob,
+    QuestionExtractionItem, AdminAIPromptVersion,
     QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
 )
+from .text_encoding import normalize_text
 import json as _json
+
+
+# Fields that may contain user-visible text. Every serializer that emits
+# one of these MUST pass the value through `_clean_text()` so legacy
+# mojibake (`iÃ©`, `â€™`, `ΓÇÿ`) and stray whitespace is repaired at the
+# API boundary. This is defence-in-depth alongside the
+# `manage.py fix_mojibake` one-shot — new / mid-import rows can still
+# carry a few bad rows, and the frontend's `decodeMojiB()` is the second
+# safety net.
+_TEXT_FIELDS = (
+    "question_text",
+    "option_a", "option_b", "option_c", "option_d",
+    "explanation", "concept_explanation", "mnemonic",
+    "ai_explanation", "ai_mnemonic", "ai_clinical_pearl",
+    "learning_technique", "shortcut_tip", "concept_keywords",
+)
+
+
+def _clean_text(value):
+    """Repair mojibake + normalize NFC + collapse whitespace at the API boundary.
+
+    Returns the input unchanged when it isn't a string (None stays None,
+    ints stay ints) so serializers that pass through non-string values
+    don't crash.
+    """
+    if not isinstance(value, str):
+        return value
+    return normalize_text(value)
 
 
 def _parse_ai_explanation_to_markdown(ai_exp: str) -> str | None:
@@ -162,6 +191,22 @@ class QuestionListSerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
     duplicate_count = serializers.SerializerMethodField()
     duplicate_cluster_id = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        """Repair mojibake on every text field at the API boundary.
+
+        Without this pass, a Question row imported with a Windows-1252 /
+        Latin-1 locale (the legacy fixture path) leaves `iÃ©iÃiÃ©` in the
+        JSON payload — the frontend is then forced to call
+        `decodeMojiB()` on every render. Normalizing here means the API
+        ships clean text and the frontend guard becomes a true
+        defence-in-depth (instead of the *only* line of defence).
+        """
+        data = super().to_representation(instance)
+        for field in _TEXT_FIELDS:
+            if field in data and isinstance(data[field], str):
+                data[field] = _clean_text(data[field])
+        return data
 
     class Meta:
         model = Question
@@ -374,6 +419,20 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     user_is_correct = serializers.SerializerMethodField()
     video_subtitles_url = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        """Repair mojibake on every text field at the API boundary.
+
+        Mirror of QuestionListSerializer.to_representation — the detail
+        endpoint is what powers the modal in ExamQuestionBank, so the
+        Similar-PYQs sidebar (the one that was rendering
+        `iÃ©iÃiÃ©iÃiÃ©`) gets clean text without a frontend pass.
+        """
+        data = super().to_representation(instance)
+        for field in _TEXT_FIELDS:
+            if field in data and isinstance(data[field], str):
+                data[field] = _clean_text(data[field])
+        return data
 
     class Meta:
         model = Question

@@ -18,7 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
-import { extractAnalysisFromJson } from '@/lib/textCleanup';
+import { decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import ImageViewer from '@/components/image/ImageViewer';
 
 interface QuestionImage {
@@ -734,8 +734,8 @@ export default function TakeTestPage() {
                                     <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
                                         <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
                                     </h5>
-                                    {aiExp.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {aiExp.pyq_frequency}</p>}
-                                    {aiExp.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {aiExp.similar_pyq}</p>}
+                                    {aiExp.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {decodeMojiB(aiExp.pyq_frequency)}</p>}
+                                    {aiExp.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {decodeMojiB(aiExp.similar_pyq)}</p>}
                                 </div>
                             )}
 
