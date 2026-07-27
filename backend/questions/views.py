@@ -272,6 +272,26 @@ class QuestionViewSet(viewsets.ModelViewSet):
             ).annotate(
                 accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
             )
+            # Annotate each row with its DuplicateCluster info so the admin
+            # list can flag rows that have duplicate siblings. Single
+            # subquery + a correlated count keeps this O(1) per row.
+            from django.db.models import Subquery, IntegerField, OuterRef
+            _cluster_id_subq = Subquery(
+                DuplicateMember.objects.filter(question_id=OuterRef('pk'))
+                .values('cluster_id')[:1],
+                output_field=IntegerField(),
+            )
+            _cluster_member_count_subq = Subquery(
+                DuplicateMember.objects.filter(cluster_id=OuterRef('_cluster_id'))
+                .values('cluster_id')
+                .annotate(c=Count('id'))
+                .values('c')[:1],
+                output_field=IntegerField(),
+            )
+            queryset = queryset.annotate(
+                _cluster_id=_cluster_id_subq,
+                _cluster_member_count=_cluster_member_count_subq,
+            )
             if user and getattr(user, 'is_authenticated', False):
                 from django.db.models import Subquery
                 from questions.models import QuestionAttempt
@@ -430,6 +450,170 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def duplicate_clusters(self, request):
         qs = DuplicateCluster.objects.all().order_by("-created_at")[:100]
         return Response(DuplicateClusterSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=True, methods=['get'], url_path='duplicates',
+            permission_classes=[permissions.IsAuthenticated])
+    def list_duplicates(self, request, pk=None):
+        """Return every Question row that shares a DuplicateCluster with pk.
+
+        Falls back to live text-similarity matching when no cluster exists
+        yet (e.g. for questions ingested after the last detection pass).
+        """
+        question = self.get_object()
+        membership = (
+            DuplicateMember.objects.filter(question_id=question.id)
+            .select_related('cluster')
+            .first()
+        )
+        members_qs = []
+        cluster_id = None
+        canonical_id = question.id
+        if membership:
+            cluster_id = membership.cluster_id
+            canonical_id = membership.cluster.canonical_question_id
+            members_qs = (
+                DuplicateMember.objects.filter(cluster_id=cluster_id)
+                .select_related('question', 'question__subject', 'question__topic')
+                .order_by('-similarity_score', 'question_id')
+            )
+
+        members = []
+        if members_qs:
+            for m in members_qs:
+                q = m.question
+                members.append({
+                    'id': q.id,
+                    'is_canonical': q.id == canonical_id,
+                    'is_active': q.is_active,
+                    'is_dropped': q.is_dropped,
+                    'admin_edited': bool(getattr(q, 'admin_edited', False)),
+                    'subject_name': q.subject.name if q.subject_id else '',
+                    'topic_name': q.topic.name if q.topic_id else '',
+                    'year': q.year,
+                    'exam_source': q.exam_source or '',
+                    'question_text_preview': (q.question_text or '')[:120],
+                })
+        else:
+            # Live fallback: find active rows with the same normalized text
+            # + year + exam_source, even if no cluster exists.
+            import re as _re
+            def _normalize(s: str) -> str:
+                s = (s or '').lower()
+                s = _re.sub(r'[^a-z0-9\s]+', ' ', s)
+                return _re.sub(r'\s+', ' ', s).strip()
+            norm = _normalize(question.question_text)
+            fallback = Question.objects.filter(
+                is_active=True,
+                year=question.year,
+                exam_source=question.exam_source or '',
+            ).only('id', 'question_text', 'is_active', 'is_dropped', 'admin_edited',
+                   'subject', 'topic', 'year', 'exam_source')[:200]
+            for q in fallback:
+                if _normalize(q.question_text) != norm:
+                    continue
+                members.append({
+                    'id': q.id,
+                    'is_canonical': q.id == question.id,
+                    'is_active': q.is_active,
+                    'is_dropped': q.is_dropped,
+                    'admin_edited': bool(getattr(q, 'admin_edited', False)),
+                    'subject_name': q.subject.name if q.subject_id else '',
+                    'topic_name': q.topic.name if q.topic_id else '',
+                    'year': q.year,
+                    'exam_source': q.exam_source or '',
+                    'question_text_preview': (q.question_text or '')[:120],
+                })
+            canonical_id = question.id
+
+        return Response({
+            'question_id': question.id,
+            'cluster_id': cluster_id,
+            'canonical_id': canonical_id,
+            'member_count': len(members),
+            'members': members,
+        })
+
+    @action(detail=True, methods=['post'], url_path='merge-duplicates',
+            permission_classes=[IsControlTowerAdmin])
+    def merge_duplicates(self, request, pk=None):
+        """Mark a list of duplicate ids as soft-dropped (is_dropped=True,
+        is_active=False) and point the cluster's canonical at `pk`.
+
+        Body: { "duplicate_ids": [<int>, ...] }
+
+        Behaviour:
+          - Returns 400 if any duplicate_id == canonical_id (the question
+            itself).
+          - Returns 400 if any duplicate_id is in a DIFFERENT cluster
+            than `pk` (so admin doesn't accidentally drop unrelated rows).
+          - All drops are recorded with `is_active=False` so the row is
+            invisible to the public list but still queryable for audits.
+        """
+        question = self.get_object()
+        body = request.data or {}
+        dup_ids = body.get('duplicate_ids') or []
+        if not isinstance(dup_ids, list) or not dup_ids:
+            return Response({'detail': 'duplicate_ids must be a non-empty list'}, status=400)
+        try:
+            dup_ids = [int(x) for x in dup_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': 'duplicate_ids must be integers'}, status=400)
+        if question.id in dup_ids:
+            return Response({'detail': 'canonical id cannot appear in duplicate_ids'}, status=400)
+
+        membership = (
+            DuplicateMember.objects.filter(question_id=question.id)
+            .select_related('cluster')
+            .first()
+        )
+        cluster = membership.cluster if membership else None
+        if cluster is None:
+            cluster = DuplicateCluster.objects.create(
+                canonical_question=question,
+                similarity_threshold='1.000',
+                detection_method='manual-merge',
+            )
+            DuplicateMember.objects.get_or_create(
+                cluster=cluster,
+                question=question,
+                defaults={'similarity_score': 1.0},
+            )
+
+        # Validate: every requested duplicate_id must currently be in the
+        # same cluster (or be the canonical itself).
+        valid_cluster_ids = set(
+            DuplicateMember.objects.filter(cluster_id=cluster.id)
+            .values_list('question_id', flat=True)
+        )
+        valid_cluster_ids.add(cluster.canonical_question_id)
+        bad = [d for d in dup_ids if d not in valid_cluster_ids]
+        if bad:
+            return Response(
+                {'detail': f'these ids are not in the same cluster: {bad}'},
+                status=400,
+            )
+
+        # Apply: soft-drop and ensure each row is in the cluster as a member.
+        dropped = 0
+        for d in dup_ids:
+            if d == question.id:
+                continue
+            DuplicateMember.objects.get_or_create(
+                cluster=cluster,
+                question_id=d,
+                defaults={'similarity_score': 1.0},
+            )
+            updated = Question.objects.filter(id=d).update(
+                is_dropped=True,
+                is_active=False,
+            )
+            dropped += updated
+
+        return Response({
+            'canonical_id': question.id,
+            'cluster_id': cluster.id,
+            'dropped': dropped,
+        })
 
     # ── Phase 3: image facets + practice queues + AI per question ───────
 

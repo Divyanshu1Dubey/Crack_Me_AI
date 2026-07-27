@@ -84,7 +84,21 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   // callers sometimes see only that relative path — prefer the absolute
   // URL when present.
   function imageSrc(img: QuestionImageLike): string {
-    return img.url || (img.file as string) || '';
+    // Preference order (Bug #2026-07-27 admin editor "broken link" fix):
+    //   1. `serve_url` (added by QuestionImageSerializer) — admin
+    //      uploads use the public Supabase URL directly, recall
+    //      imports use the auth-gated proxy. Either way it's reachable
+    //      in production where `/media/` 404s.
+    //   2. `img.url` — public URL stashed at upload/import time.
+    //   3. `img.file` — raw ImageField URL. Mostly the same as
+    //      `/media/recall_images/...`, kept as a last-ditch fallback.
+    const extended = img as QuestionImageLike & { serve_url?: string };
+    return (
+      extended.serve_url ||
+      img.url ||
+      (typeof img.file === 'string' ? img.file : '') ||
+      ''
+    );
   }
 
   // Renders a small inline preview of any images referenced from `text`.

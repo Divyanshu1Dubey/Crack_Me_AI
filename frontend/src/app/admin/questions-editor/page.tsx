@@ -20,7 +20,15 @@ export default function AdminQuestionsEditorPage() {
   // Edit modal state
   const [editing, setEditing] = useState<any | null>(null);
   const onEdit = (q: any) => setEditing(q);
-  
+
+  // Merge-duplicates modal state (Bug 4 — surface duplicate questions in the list).
+  const [mergeFor, setMergeFor] = useState<any | null>(null);
+  const [mergeCluster, setMergeCluster] = useState<any | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeSubmitting, setMergeSubmitting] = useState(false);
+  const [mergeDropIds, setMergeDropIds] = useState<number[]>([]);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+
   // Drag and drop state
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
@@ -173,30 +181,101 @@ export default function AdminQuestionsEditorPage() {
 
   const handleDrop = async (dropIdx: number) => {
     if (draggedIdx === null || draggedIdx === dropIdx) return;
-    
+
     const newQuestions = [...questions];
     const draggedItem = newQuestions[draggedIdx];
     newQuestions.splice(draggedIdx, 1);
     newQuestions.splice(dropIdx, 0, draggedItem);
-    
+
     // Re-assign display numbers based on new order (simplistic approach for current page)
     const updatedQuestions = newQuestions.map((q, idx) => ({
       ...q,
       display_number: (page - 1) * 20 + idx + 1
     }));
-    
+
     setQuestions(updatedQuestions);
     setDraggedIdx(null);
-    
+
     // Bulk update metadata on backend
     try {
-      await Promise.all(updatedQuestions.map(q => 
+      await Promise.all(updatedQuestions.map(q =>
         questionsAPI.update(q.id, { display_number: q.display_number, admin_edited: true })
       ));
     } catch (e) {
       console.error(e);
       alert('Error updating display numbers');
       fetchQuestions();
+    }
+  };
+
+  // Open the merge-duplicates dialog: fetch the cluster members so the admin
+  // can confirm which siblings to soft-drop. The canonical row (lowest id, or
+  // the one the script picked) stays; everything else in the cluster gets
+  // is_dropped=True + is_active=False on confirm.
+  const openMergeDuplicates = async (q: any) => {
+    setMergeFor(q);
+    setMergeCluster(null);
+    setMergeDropIds([]);
+    setMergeError(null);
+    setMergeLoading(true);
+    try {
+      const res = await questionsAPI.listDuplicates(q.id);
+      setMergeCluster(res.data);
+      // Pre-select every member except the canonical — admin can untick if needed.
+      const canonicalId: number = res.data?.canonical_id ?? q.id;
+      const memberIds: number[] = (res.data?.members || [])
+        .map((m: any) => m.id)
+        .filter((id: number) => id !== canonicalId);
+      setMergeDropIds(memberIds);
+    } catch (e: any) {
+      console.error('Failed to load duplicates', e);
+      setMergeError(
+        e?.response?.data?.detail ||
+          'Could not load duplicate cluster (question may not be in any cluster).'
+      );
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const closeMergeDuplicates = () => {
+    setMergeFor(null);
+    setMergeCluster(null);
+    setMergeDropIds([]);
+    setMergeError(null);
+  };
+
+  const toggleMergeDrop = (id: number) => {
+    setMergeDropIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const submitMergeDuplicates = async () => {
+    if (!mergeFor) return;
+    if (mergeDropIds.length === 0) {
+      alert('Select at least one duplicate to drop.');
+      return;
+    }
+    const confirmMsg =
+      `Soft-drop ${mergeDropIds.length} duplicate question(s)? They will be hidden from ` +
+      `the student app but kept in the database for audit.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setMergeSubmitting(true);
+    try {
+      await questionsAPI.mergeDuplicates(mergeFor.id, { duplicate_ids: mergeDropIds });
+      // Refresh the list — soft-dropped rows won't show by default; if the
+      // admin had "Dropped" filter on they'll still appear with is_dropped=true.
+      await fetchQuestions();
+      closeMergeDuplicates();
+    } catch (e: any) {
+      console.error('Failed to merge duplicates', e);
+      setMergeError(
+        e?.response?.data?.detail || 'Merge failed — check the server logs.'
+      );
+    } finally {
+      setMergeSubmitting(false);
     }
   };
 
@@ -393,6 +472,17 @@ export default function AdminQuestionsEditorPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {q.id}<br/>
                   <span className="text-xs text-gray-500">{q.uuid ? q.uuid.substring(0,8)+'...' : 'N/A'}</span>
+                  {q.duplicate_count > 1 && (
+                    <div className="mt-1">
+                      <button
+                        onClick={() => openMergeDuplicates(q)}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-300 px-1.5 py-0.5 rounded hover:bg-orange-200 hover:border-orange-400"
+                        title={`This question has ${q.duplicate_count} identical rows in the database. Click to review & merge.`}
+                      >
+                        ⚠ Duplicate ×{q.duplicate_count}
+                      </button>
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex items-center gap-2">
@@ -452,9 +542,22 @@ export default function AdminQuestionsEditorPage() {
                   >
                     Edit
                   </button>
-                  <button onClick={() => alert('Merge/Split feature coming soon!')} className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded">
-                    Merge / Split
-                  </button>
+                  {q.duplicate_count > 1 ? (
+                    <button
+                      onClick={() => openMergeDuplicates(q)}
+                      className="text-orange-800 hover:text-orange-900 bg-orange-100 border border-orange-300 px-3 py-1 rounded font-semibold"
+                      title={`${q.duplicate_count} identical copies detected — review & merge`}
+                    >
+                      Merge Duplicates
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => alert('Merge/Split feature coming soon!')}
+                      className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded"
+                    >
+                      Merge / Split
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -490,6 +593,143 @@ export default function AdminQuestionsEditorPage() {
             setEditing(null);
           }}
         />
+      )}
+
+      {/* Merge Duplicates modal (Bug 4) — list sibling questions and confirm
+          which ones to soft-drop (is_dropped=True, is_active=False). */}
+      {mergeFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">
+                Merge Duplicates — Q{mergeFor.id}
+              </h2>
+              <button
+                onClick={closeMergeDuplicates}
+                className="text-gray-500 hover:text-gray-900 text-2xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-4 overflow-y-auto flex-1">
+              {mergeLoading ? (
+                <div className="text-gray-700 py-6 text-center">Loading cluster…</div>
+              ) : mergeError ? (
+                <div className="text-red-700 bg-red-50 border border-red-200 rounded p-3">
+                  {mergeError}
+                </div>
+              ) : !mergeCluster || !(mergeCluster.members || []).length ? (
+                <div className="text-gray-700 py-6 text-center">
+                  Q{mergeFor.id} is not part of any duplicate cluster.
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700 mb-3">
+                    Canonical (will be kept):{' '}
+                    <span className="font-semibold">
+                      Q{mergeCluster.canonical_id ?? mergeFor.id}
+                    </span>
+                    . Other members below will be{' '}
+                    <span className="font-semibold text-orange-800">
+                      soft-dropped
+                    </span>{' '}
+                    (hidden from students, kept in DB for audit). Untick any you
+                    want to keep.
+                  </p>
+                  <div className="space-y-2">
+                    {(mergeCluster.members || []).map((m: any) => {
+                      const qid: number = m.id;
+                      const isCanonical: boolean =
+                        m.is_canonical ?? (mergeCluster.canonical_id ?? mergeFor.id) === qid;
+                      return (
+                        <label
+                          key={qid}
+                          className={
+                            'flex items-start gap-3 p-3 rounded border ' +
+                            (isCanonical
+                              ? 'border-emerald-200 bg-emerald-50'
+                              : 'border-gray-200 hover:bg-gray-50 cursor-pointer')
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-orange-600 mt-1"
+                            checked={isCanonical ? true : mergeDropIds.includes(qid)}
+                            disabled={isCanonical}
+                            onChange={() => toggleMergeDrop(qid)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-sm font-semibold">
+                                Q{qid}
+                              </span>
+                              {isCanonical && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
+                                  Canonical (keep)
+                                </span>
+                              )}
+                              {m.subject_name && (
+                                <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {m.subject_name}
+                                </span>
+                              )}
+                              {m.year && (
+                                <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {m.year}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-700 mt-1 line-clamp-2">
+                              {m.question_text_preview ?? '(no preview)'}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700">
+                {mergeDropIds.length > 0 ? (
+                  <>
+                    Will soft-drop{' '}
+                    <span className="font-semibold text-orange-800">
+                      {mergeDropIds.length}
+                    </span>{' '}
+                    duplicate(s).
+                  </>
+                ) : (
+                  'No duplicates selected.'
+                )}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={closeMergeDuplicates}
+                  className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded hover:bg-gray-50"
+                  disabled={mergeSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitMergeDuplicates}
+                  disabled={
+                    mergeSubmitting ||
+                    mergeLoading ||
+                    mergeDropIds.length === 0
+                  }
+                  className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {mergeSubmitting ? 'Merging…' : 'Soft-drop selected'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

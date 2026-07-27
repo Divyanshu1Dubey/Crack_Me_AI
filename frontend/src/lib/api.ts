@@ -387,6 +387,13 @@ export const questionsAPI = {
   deleteImage: (id: number) => api.delete(`/questions/images/${id}/`),
   reorderImage: (id: number, newIndex: number) =>
     api.post(`/questions/images/${id}/reorder/`, { new_index_in_page: newIndex }),
+
+  // Duplicate-question detection / merging (Bug 4).
+  // GET /questions/<id>/duplicates/                — { cluster_id, canonical_id, members: [...] }
+  // POST /questions/<id>/merge-duplicates/         — { duplicate_ids: [...] } soft-drops siblings.
+  listDuplicates: (id: number) => api.get(`/questions/${id}/duplicates/`),
+  mergeDuplicates: (id: number, data: { duplicate_ids: number[] }) =>
+    api.post(`/questions/${id}/merge-duplicates/`, data),
 };
 
 // Tests API

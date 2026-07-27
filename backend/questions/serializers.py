@@ -160,6 +160,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
     user_is_correct = serializers.BooleanField(read_only=True, required=False)
     video_subtitles_url = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    duplicate_count = serializers.SerializerMethodField()
+    duplicate_cluster_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
@@ -174,7 +176,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
                   'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
                   'video_thumbnail', 'video_duration', 'video_subtitles_url',
-                  'is_image_based', 'page_screenshot', 'images']
+                  'is_image_based', 'page_screenshot', 'images',
+                  'duplicate_count', 'duplicate_cluster_id']
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
@@ -286,6 +289,32 @@ class QuestionListSerializer(serializers.ModelSerializer):
                 'sha256_short': img.sha256_short,
             })
         return out
+
+    def get_duplicate_count(self, obj):
+        """Number of OTHER active Question rows in the same DuplicateCluster.
+
+        Reads from a prefetched `_cluster_member_count` annotation when the
+        queryset was annotated (admin list view does this for O(1) reads),
+        otherwise falls back to a single query.
+        """
+        cached = getattr(obj, '_cluster_member_count', None)
+        if cached is not None:
+            return max(0, int(cached) - 1)
+        from .models import DuplicateMember
+        cluster_id = getattr(obj, '_cluster_id', None)
+        if cluster_id is None:
+            m = DuplicateMember.objects.filter(question_id=obj.id).values_list('cluster_id', flat=True).first()
+            if m is None:
+                return 0
+            cluster_id = m
+        return DuplicateMember.objects.filter(cluster_id=cluster_id).exclude(question_id=obj.id).count()
+
+    def get_duplicate_cluster_id(self, obj):
+        cached = getattr(obj, '_cluster_id', None)
+        if cached is not None:
+            return cached
+        from .models import DuplicateMember
+        return DuplicateMember.objects.filter(question_id=obj.id).values_list('cluster_id', flat=True).first()
 
     def _build_image_serve_url(self, img):
         """Return the prod-safe proxy URL for a QuestionImage.
