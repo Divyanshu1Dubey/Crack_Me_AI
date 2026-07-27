@@ -71,6 +71,12 @@ For hands-on work:
 | **[HIGH_PRIORITY_FIXES.md](./HIGH_PRIORITY_FIXES.md)** | Top 10 ranked fixes ready to ship |
 | **[LOW_PRIORITY_FIXES.md](./LOW_PRIORITY_FIXES.md)** | Backlog of low-priority / future-work items |
 | **[NEXT_STEPS.md](../NEXT_STEPS.md)** | Session handoff for the next Claude |
+| **[ADMIN_IMPORT_GUIDE.md](./ADMIN_IMPORT_GUIDE.md)** | Admin Import Center end-user guide (upload, preview, batch, mock, review, search) |
+| **[IMPORT_API.md](./IMPORT_API.md)** | Admin Import Center REST API reference |
+| **[IMPORT_ARCHITECTURE.md](./IMPORT_ARCHITECTURE.md)** | Admin Import Center architecture diagrams + module layout |
+| **[BATCH_SYSTEM.md](./BATCH_SYSTEM.md)** | Import batch lifecycle, data model, and operations |
+| **[MOCK_GENERATION.md](./MOCK_GENERATION.md)** | Auto mock test generation (bulk build + one-off strategies) |
+| **[REVIEW_QUEUE.md](./REVIEW_QUEUE.md)** | Review queue workflow + AI re-classification |
 
 ---
 
