@@ -50,7 +50,8 @@ export function resolveImageTokensForMarkdown(
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
     // Match either an integer ID or a URL inside the brackets. Order: try ID
     // first (most common) — the regex alternation handles both in one pass.
-    return text.replace(/\[\[img:(\d+|https?:\/\/[^\]]+)\]\]/g, (match, payload: string) => {
+    return text.replace(/\[\[img:([^\]]+)\]\]/g, (match, payload: string) => {
+        // Integer ID — canonical form, looks up QuestionImage row.
         if (/^\d+$/.test(payload)) {
             const id = parseInt(payload, 10);
             const img = byId.get(id);
@@ -61,8 +62,16 @@ export function resolveImageTokensForMarkdown(
         }
         // URL payload — render directly. Re-encode embedded quotes so the
         // markdown parser doesn't choke on URLs containing spaces / quotes.
-        const src = payload.replace(/"/g, '%22');
-        return `![image](${src})`;
+        if (/^https?:\/\//i.test(payload)) {
+            const src = payload.replace(/"/g, '%22');
+            return `![image](${src})`;
+        }
+        // Alphanumeric / arbitrary token — defence-in-depth fallback: render
+        // as a broken-link placeholder so the user sees an icon instead of
+        // raw `[[img:foo]]` text. This handles older cms_exclusive_material
+        // imports where the docx used short IDs (e.g. "r1d35") that never
+        // matched QuestionImage rows.
+        return `*[image: ${payload} unavailable]*`;
     });
 }
 
@@ -120,7 +129,7 @@ export function FormattedOptionText({
                     </span>
                 );
             }
-        } else {
+        } else if (/^https?:\/\//i.test(payload)) {
             // URL payload — render directly so legacy [[img:https://…]] tokens
             // still produce an <img> instead of leaking raw text.
             parts.push(
@@ -131,6 +140,14 @@ export function FormattedOptionText({
                     loading="lazy"
                     className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
                 />
+            );
+        } else {
+            // Alphanumeric / arbitrary token — render as a placeholder so the
+            // user sees an explanatory marker instead of raw `[[img:foo]]`.
+            parts.push(
+                <span key={key++} className="missing-image-placeholder italic text-amber-700">
+                    [image: {payload} unavailable]
+                </span>
             );
         }
         lastIndex = match.index + match[0].length;
