@@ -368,6 +368,14 @@ export default function AdminDashboardPage() {
     };
 
     const handleTabChange = (tab: AdminTabKey) => {
+        // The Jobs tile is intentionally a deep link to the dedicated
+        // `/admin/jobs` page — the full create/edit/delete UI lives
+        // there. Showing an in-place placeholder would be misleading
+        // (the route is shipped, just split out for cleaner state).
+        if (tab === 'jobs') {
+            router.push('/admin/jobs');
+            return;
+        }
         setActiveTab(tab);
         if (tab === 'users' && userList.length === 0) fetchUsers();
         if (tab === 'feedback' && feedbackList.length === 0) fetchFeedback();
@@ -3492,13 +3500,16 @@ export default function AdminDashboardPage() {
                                 <CardHeader>
                                     <CardTitle>Jobs Management</CardTitle>
                                     <CardDescription>
-                                        View, edit, or remove medical job postings on the platform. (Coming soon)
+                                        View, edit, or remove medical job postings on the platform.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                                        <Briefcase className="mb-4 h-12 w-12 opacity-50" />
-                                        <p>Full Job Management UI is in development.</p>
+                                    <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground space-y-3">
+                                        <Briefcase className="h-10 w-10 opacity-50" />
+                                        <p>The full Jobs Management UI lives at its own page.</p>
+                                        <Button onClick={() => router.push('/admin/jobs')} className="mt-1">
+                                            Open Jobs Management
+                                        </Button>
                                     </div>
                                 </CardContent>
                             </Card>

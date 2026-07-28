@@ -853,7 +853,13 @@ function ExamQuestionBankInner({
                                             onClick={() => openQuestion(q.id)}>
                                             <div className="flex justify-between items-start mb-2">
                                                 <Badge variant="secondary" className="text-xs">
-                                                    {q.year} &bull; {q.subject_name}
+                                                    {/* Backend uses year=0 as a sentinel for "Expert Curated"
+                                                        (no PYQ year). Hide it so we don't render "0 • Subject". */}
+                                                    {q.year && q.year > 0 ? (
+                                                        <>{q.year} &bull; {q.subject_name}</>
+                                                    ) : (
+                                                        <>{q.subject_name || 'General Medicine'}</>
+                                                    )}
                                                 </Badge>
                                                 <div className="flex items-center gap-2">
                                                     {q.user_selected_answer && (
@@ -885,7 +891,13 @@ function ExamQuestionBankInner({
                                                 return preview + (stripMarkdown(cleaned).length > 150 ? '...' : '');
                                             })()}</p>
                                             <div className="mt-2 flex flex-wrap gap-1.5">
-                                                <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name || 'Topic unavailable'}</Badge>
+                                                {q.topic_name ? (
+                                                    <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name}</Badge>
+                                                ) : (
+                                                    // Don't show a useless literal placeholder; fall back to a
+                                                    // descriptive generic so the card still reads correctly.
+                                                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">General {q.subject_name || 'Medicine'}</Badge>
+                                                )}
                                                 {q.year ? (
                                                     <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>
                                                 ) : (
