@@ -71,12 +71,52 @@ TEXT_FIELDS = (
 
 
 def _images_dir_for(exam: str) -> Path:
-    """Resolve the on-disk directory the legacy loader wrote to."""
-    # The legacy loader used subdirs: cms / neet_pg / inicet / fmge / usmle.
-    # Backend MEDIA_ROOT defaults to `backend/media/` (per settings).
+    """Return the canonical on-disk images directory for `exam`.
+
+    Two candidate locations exist in this codebase:
+
+      1. ``<MEDIA_ROOT>/fixtures/images/<exam>/`` — the path the
+         QuestionImage.file ImageField expects (Django-managed
+         MEDIA_ROOT). The relink command historically pointed here
+         only, which silently failed when legacy import paths wrote
+         to the second location instead.
+      2. ``<BASE_DIR>/fixtures/images/<exam>/`` — the directory the
+         legacy ``load_exam_fixture`` loader wrote to. Files live
+         here for any image shipped with the bundled fixtures
+         (``backend/fixtures/images/...``), and Django's
+         collectstatic never copies them into MEDIA_ROOT because
+         they're tracked in git LFS / fixture data, not user
+         uploads.
+
+    Returned as a Path for compatibility with the existing
+    ``exists()`` checks. Callers that need to *search* both should
+    use ``find_image_on_disk()`` instead of just reading this.
+    """
     from django.conf import settings
-    base = Path(settings.MEDIA_ROOT) / "fixtures" / "images" / exam
-    return base
+    return Path(settings.MEDIA_ROOT) / "fixtures" / "images" / exam
+
+
+def find_image_on_disk(exam: str, rel_path: str) -> Path | None:
+    """Search every plausible on-disk location for `rel_path` under
+    `exam`. Returns the first hit, or None if the file is missing
+    everywhere.
+
+    Bug 2026-07-28 — the audit surfaced ``radiograph_sign_287.png``
+    and other recall images whose ``question_text`` contained a bare
+    ``/media/...`` URL but whose file existed only at
+    ``<BASE_DIR>/fixtures/images/<exam>/...`` (not MEDIA_ROOT). The
+    legacy loader wrote the file there; the relink command looked
+    in MEDIA_ROOT only and gave up silently. We now probe both
+    locations so the QuestionImage row + ``[[img:N]]`` rewrite
+    succeeds.
+    """
+    from django.conf import settings
+    rel_path = rel_path.replace("\\", "/")
+    for base in (Path(settings.MEDIA_ROOT), Path(settings.BASE_DIR)):
+        candidate = base / "fixtures" / "images" / exam / rel_path
+        if candidate.exists():
+            return candidate
+    return None
 
 
 class Command(BaseCommand):
@@ -192,7 +232,23 @@ class Command(BaseCommand):
             # If this is already `[[img:N]]`, leave it alone.
             img = self._resolve_or_create_image(question, exam, rel_path, apply=apply)
             if img is None:
-                return match.group(0)  # leave the URL as-is if we can't resolve
+                # Bug 2026-07-28 — instead of leaving the bare
+                # `/media/...` URL in place (which 404s in
+                # production and renders as a broken-image icon for
+                # students), rewrite it to a visible "image
+                # unavailable" placeholder. The frontend's
+                # FormattedText components.img onError fallback
+                # renders an explanatory placeholder for any
+                # markdown image that 404s, but a bare URL that
+                # survives the markdown parse produces the same
+                # broken-image icon as before — so we replace it
+                # with an explicit text marker that:
+                #   1. Tells the student the image is missing
+                #      (instead of a silent broken icon).
+                #   2. Is greppable by admins / QA scripts to find
+                #      rows that still need a real image upload.
+                basename = rel_path.split("/")[-1] or "image"
+                return f"[image unavailable: {basename}]"
             n_created += 1
             return f"[[img:{img.id}]]"
 
@@ -225,12 +281,29 @@ class Command(BaseCommand):
                 return img
 
         # 2. Look on disk — if the file is missing we can't create a
-        #    QuestionImage row that resolves to a real image, so we give
-        #    up and leave the URL as-is so the admin can see it.
-        media_dir = _images_dir_for(exam)
-        on_disk = media_dir / rel_path
-        if not on_disk.exists():
-            logger.info(f"Missing on disk: {on_disk}")
+        #    QuestionImage row that resolves to a real image, so we
+        #    fall back to leaving a visible "image unavailable"
+        #    marker in the text rather than the silent bare-URL
+        #    fallback that 404s in production. This is the
+        #    frontend's `onerror` placeholder's data source: the
+        #    admin can grep for these markers to find rows that
+        #    still need a real image uploaded.
+        on_disk = find_image_on_disk(exam, rel_path)
+        if on_disk is None:
+            logger.info(f"Missing on disk (no candidate found): "
+                        f"<BASE_DIR or MEDIA_ROOT>/fixtures/images/"
+                        f"{exam}/{rel_path}")
+            # Bug 2026-07-28 — even when the file is missing we
+            # rewrite the URL to a visible "image unavailable"
+            # placeholder. The frontend's components.img onError
+            # renders an explanatory placeholder for any
+            # `[[img:N]]` whose image_id row 404s, but a bare
+            # `/media/...` URL survives react-markdown unchanged
+            # because there's no QuestionImage to resolve it to.
+            # Emitting an explicit text marker here lets the
+            # admin/grep pipeline find broken rows, and the
+            # student sees a meaningful message instead of the
+            # legacy `/media/...` raw URL.
             return None
 
         # 3. Build the row (only if apply=True).

@@ -308,7 +308,42 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     setError(null);
     setConflict(null);
     try {
-      const payload = { ...form, admin_edited: true };
+      // Bug 2026-07-28: scrub bare `/media/fixtures/images/...` URLs
+      // from every text field before sending. The legacy form of
+      // these URLs is unreachable in production (Django refuses to
+      // serve `/media/` when DEBUG=False) and the frontend's
+      // resolver only upgrades bare URLs to `[[img:N]]` when an
+      // attached QuestionImage row exists. If the admin pastes a
+      // bare URL into the textarea by mistake, we instead:
+      //   - replace it with the canonical `[[img:N]]` token if a
+      //     row already exists for this question+basename, OR
+      //   - replace it with a visible "[image unavailable: …]"
+      //     marker so the student doesn't see a broken-image icon
+      //     with no explanation.
+      const cleanedForm: typeof form = { ...form };
+      const fields = [
+        'question_text', 'option_a', 'option_b', 'option_c',
+        'option_d', 'explanation', 'mnemonic', 'concept_explanation',
+      ] as const;
+      for (const k of fields) {
+        const v = (cleanedForm as any)[k];
+        if (typeof v !== 'string') continue;
+        (cleanedForm as any)[k] = v.replace(
+          /\/media\/fixtures\/images\/([^/\s)\]]+)\/([^\s)\]]+)/g,
+          (_match: string, exam: string, relPath: string) => {
+              const base = relPath.split('/').pop() || relPath;
+              const match = images.find(
+                (img) => {
+                    const f = (img.file || img.url || '').toString();
+                    return f.split('/').pop()?.toLowerCase() === base.toLowerCase();
+                },
+              );
+              if (match) return `[[img:${match.id}]]`;
+              return `[image unavailable: ${base}]`;
+          },
+        );
+      }
+      const payload = { ...cleanedForm, admin_edited: true };
       // Only send If-Match when we have a real updated_at. List-serialised rows
       // don't include updated_at, so updatedAt may be '' on first edit — in that
       // case skip the optimistic lock and let the server accept the save.

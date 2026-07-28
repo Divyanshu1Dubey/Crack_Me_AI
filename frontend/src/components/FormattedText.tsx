@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
@@ -7,6 +7,39 @@ import { decodeMojiB } from '@/lib/textCleanup';
 interface FormattedTextProps {
     text: string;
     className?: string;
+}
+
+/**
+ * `<img>` component used by `<FormattedText>` that swaps a broken image
+ * for an explanatory placeholder the moment the load fails. Replaces
+ * the browser's silent broken-icon behaviour with a meaningful
+ * "image unavailable: <alt>" message so the student immediately sees
+ * what went wrong (vs. an unexplained blank rectangle or icon).
+ *
+ * The fallback is rendered via React state — not by mutating the DOM
+ * imperatively from inside `onError` — so React's reconciler stays in
+ * the loop and re-renders cleanly without undoing our swap.
+ */
+function ImgWithFallback({ src, alt, ...rest }: any) {
+    const [failed, setFailed] = useState(false);
+    if (failed) {
+        const base = (alt && typeof alt === 'string') ? alt : 'image';
+        return (
+            <span className="missing-image-placeholder italic text-amber-700">
+                [image unavailable: {base}]
+            </span>
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt={alt ?? ''}
+            loading="lazy"
+            className="question-inline-image"
+            onError={() => setFailed(true)}
+            {...rest}
+        />
+    );
 }
 
 /**
@@ -38,7 +71,20 @@ export function FormattedText({ text, className = '' }: FormattedTextProps) {
 
     return (
         <div className={`formatted-text ${className}`}>
-            <ReactMarkdown remarkPlugins={[remarkBreaks]} rehypePlugins={[rehypeRaw]}>
+            <ReactMarkdown
+                remarkPlugins={[remarkBreaks]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                    // Bug 2026-07-28: wire an `onError` on every `<img>`
+                    // emitted by react-markdown so a missing/broken
+                    // image renders an explanatory placeholder span
+                    // instead of the browser's silent broken-image
+                    // icon. Recurring image-not-rendering audit bug —
+                    // closed at the UI layer even when the backend
+                    // relink pass can't find the file on disk.
+                    img: ImgWithFallback,
+                }}
+            >
                 {clean}
             </ReactMarkdown>
         </div>
@@ -149,6 +195,15 @@ export function resolveImageTokensForMarkdown(
     // load_exam_fixture output). We still match the alternation above so
     // tokens inside attribute strings get handled — but bare URLs sit
     // outside any bracket syntax, so we do a separate pass.
+    //
+    // When no matching QuestionImage row exists for the basename, we
+    // still emit a markdown image so the `<FormattedText>` `onerror`
+    // handler (registered via `components.img` above) fires and shows
+    // a visible "image unavailable" placeholder instead of the raw
+    // URL leaking through. This is the recurrence-mode fix for the
+    // screenshot bug — even when the auto-heal hasn't run, or when
+    // the file is genuinely missing from disk, the student sees a
+    // meaningful message instead of a broken image icon.
     resolved = resolved.replace(
         /(\/media\/fixtures\/images\/[^\s)\]]+|https?:\/\/[^\s)\]]*\/fixtures\/images\/[^\s)\]]+)/g,
         (rawUrl) => {
@@ -211,12 +266,10 @@ export function FormattedOptionText({
             );
         } else {
             parts.push(
-                <img
+                <OptionImgWithFallback
                     key={key++}
                     src={src}
                     alt={alt}
-                    loading="lazy"
-                    className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
                 />,
             );
         }
@@ -270,6 +323,31 @@ export function FormattedOptionText({
         );
     }
     return <span className={`formatted-option-text ${className}`}>{parts}</span>;
+}
+
+/**
+ * `<img>` component used by `<FormattedOptionText>` — same fallback
+ * shape as `ImgWithFallback` but inlined here so the option-card
+ * styling (rounded border, `inline-block`) survives intact.
+ */
+function OptionImgWithFallback({ src, alt }: { src: string; alt: string }) {
+    const [failed, setFailed] = useState(false);
+    if (failed) {
+        return (
+            <span className="missing-image-placeholder italic text-amber-700">
+                [image unavailable: {alt || 'image'}]
+            </span>
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt={alt || ''}
+            loading="lazy"
+            className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
+            onError={() => setFailed(true)}
+        />
+    );
 }
 
 /**
