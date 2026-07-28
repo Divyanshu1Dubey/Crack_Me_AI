@@ -219,6 +219,25 @@ export function resolveImageTokensForMarkdown(
         },
     );
 
+    // Third pass: `[image unavailable: <basename>]` markers written by the
+    // backend's `relink_fixture_images` command when no on-disk file was
+    // found for a bare URL. We rewrite these into styled HTML spans so
+    // they read as an amber-tinted chip (matching `.missing-image-placeholder`
+    // in globals.css) instead of plain text leaking through.
+    //
+    // Bug 2026-07-28 (recurrence): the first round of this fix left these
+    // markers as raw text — `react-markdown` doesn't interpret the square
+    // brackets as markdown link syntax (needs `[]()`), so the placeholder
+    // rendered as a literal string in the question stem. Converting to a
+    // styled `<span>` here closes that loop.
+    resolved = resolved.replace(
+        /\[image unavailable:\s*([^\]]+)\]/g,
+        (_m, basename: string) => {
+            const safe = String(basename).trim().replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return `<span class="missing-image-placeholder" data-image-basename="${safe}">[image unavailable: ${safe}]</span>`;
+        },
+    );
+
     return resolved;
 }
 
@@ -254,13 +273,20 @@ export function FormattedOptionText({
     // Match: 1) integer-ID / URL inside `[[img:…]]` brackets, or 2) a
     // bare `/media/fixtures/images/<exam>/<file>` URL left behind by the
     // legacy loader.
-    const tokenRe = /\[\[img:(\d+|https?:\/\/[^\]]+)\]\]|(\/media\/fixtures\/images\/[^\s)\]]+|https?:\/\/[^\s)\]]*\/fixtures\/images\/[^\s)\]]+)/g;
+    //
+    // We also handle the backend's `[image unavailable: <basename>]`
+    // marker here so the placeholder renders as a styled amber chip
+    // (matching `.missing-image-placeholder` in globals.css) rather than
+    // as literal text in the option card. Bug 2026-07-28 (recurrence):
+    // the first round of this fix left these markers as plain text,
+    // which is what the screenshot showed.
+    const tokenRe = /\[\[img:(\d+|https?:\/\/[^\]]+)\]\]|(\/media\/fixtures\/images\/[^\s)\]]+|https?:\/\/[^\s)\]]*\/fixtures\/images\/[^\s)\]]+)|(\[image unavailable:\s*[^\]]+\])/g;
     let match: RegExpExecArray | null;
     let key = 0;
     const pushImg = (src: string, alt: string, missing?: string) => {
         if (missing) {
             parts.push(
-                <span key={key++} className="missing-image-placeholder italic text-amber-700">
+                <span key={key++} className="missing-image-placeholder italic text-amber-700" data-image-basename={alt}>
                     {missing}
                 </span>,
             );
@@ -273,6 +299,16 @@ export function FormattedOptionText({
                 />,
             );
         }
+    };
+    const pushMissingMarker = (marker: string) => {
+        // Extract basename from `[image unavailable: <basename>]`.
+        const m = marker.match(/\[image unavailable:\s*([^\]]+)\]/);
+        const base = m ? m[1].trim() : 'image';
+        parts.push(
+            <span key={key++} className="missing-image-placeholder italic text-amber-700" data-image-basename={base}>
+                [image unavailable: {base}]
+            </span>,
+        );
     };
     while ((match = tokenRe.exec(clean)) !== null) {
         if (match.index > lastIndex) {
@@ -296,6 +332,11 @@ export function FormattedOptionText({
             } else {
                 pushImg('', '', `[image: ${payload} unavailable]`);
             }
+        } else if (match[3] !== undefined) {
+            // Branch 3: `[image unavailable: <basename>]` marker left by
+            // the backend's relink pass. Render as a styled placeholder
+            // (matches `.missing-image-placeholder` in globals.css).
+            pushMissingMarker(match[3]);
         } else {
             // Branch 2: bare `/media/fixtures/images/...` URL. Resolve via
             // basename → QuestionImage lookup when possible; otherwise
@@ -362,6 +403,7 @@ export function stripMarkdown(text: string): string {
         .replace(/`(.+?)`/g, '$1')
         .replace(/!\[.*?\]\(.*?\)/g, '')
         .replace(/\[(.+?)\]\(.*?\)/g, '$1')
+        .replace(/\[image unavailable:[^\]]+\]/g, '[image]')
         .replace(/#/g, '')
         .trim();
 }
