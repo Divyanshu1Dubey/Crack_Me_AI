@@ -1257,12 +1257,17 @@ body.sidebar-hidden .main-content {
 }
 
 /* ═══ Formatted Question Text (Markdown Rendering) ═══ */
+/* Body text inherits from the parent container (typically `text-foreground`
+   on the wrapper), so it follows light/dark mode automatically. Headings
+   and links use --accent-primary so the NEET PG emerald, UPSC blue, and
+   INI-CET purple all flow through via the existing per-track theming
+   (see [data-track="…"] blocks above). */
 .formatted-text p {
   margin: 0 0 4px 0;
   line-height: 1.7;
 }
 .formatted-text strong {
-  color: inherit;
+  color: var(--accent-primary);
   font-weight: 700;
 }
 .formatted-text ul, .formatted-text ol {
@@ -1291,19 +1296,135 @@ body.sidebar-hidden .main-content {
 }
 .formatted-text em {
   font-style: italic;
-  color: inherit;
+  color: var(--text-secondary);
 }
 .formatted-text code {
-  background: rgba(6, 182, 212, 0.1);
-  color: #06b6d4;
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  color: var(--accent-primary);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.9em;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 .formatted-text hr {
   border: none;
   border-top: 1px solid var(--glass-border);
   margin: 8px 0;
+}
+
+/* Headings — these fell through to browser defaults (huge near-black text)
+   on the explanation card, making them invisible on the emerald-50/950
+   background. Now they pick up the per-track accent and stay visible in
+   both light and dark mode. Sized like the AI tutor's headings (same
+   pattern as .ai-h1 … .ai-h4 below) so visual hierarchy matches. */
+.formatted-text h1 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  margin: 14px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.formatted-text h2 {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.formatted-text h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-secondary);
+  margin: 12px 0 4px;
+  line-height: 1.3;
+}
+.formatted-text h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-secondary);
+  margin: 10px 0 4px;
+  line-height: 1.3;
+}
+.formatted-text h5,
+.formatted-text h6 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 10px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Links — default browser color (dark navy + underlined) is unreadable on
+   the emerald-50 explanation card. Use accent so it stays visible and
+   matches the theme. */
+.formatted-text a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  text-underline-offset: 2px;
+  font-weight: 600;
+  transition: color 120ms ease;
+}
+.formatted-text a:hover {
+  color: var(--accent-secondary);
+  text-decoration-color: var(--accent-secondary);
+}
+
+/* Blockquote — used for admin-attributed caveats like "> From Harrison
+   Ch. 23". Amber left-border + tinted background echo the AI tutor style. */
+.formatted-text blockquote {
+  border-left: 3px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 6%, transparent);
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 0 8px 8px 0;
+  color: var(--text-primary);
+}
+
+/* Tables — if the admin pastes a markdown table (rare but possible). */
+.formatted-text table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+  width: 100%;
+}
+.formatted-text th,
+.formatted-text td {
+  border: 1px solid var(--glass-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.formatted-text th {
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+/* On colored "explanation" cards the body text needs a slightly darker
+   shade in light mode so it doesn't disappear against emerald-50/indigo-50
+   background — admin's screenshot showed the navy-text-on-emerald-50 was
+   fine but the dark navy outer wrapped it on dark theme, breaking contrast.
+   The layered rules below handle the dark-theme override cleanly under
+   either triggering mechanism (next-themes adds .dark to <html>; older
+   code paths use [data-theme="dark"]). */
+[data-theme="dark"] .formatted-text h1,
+[data-theme="dark"] .formatted-text h2,
+[data-theme="dark"] .formatted-text h3,
+[data-theme="dark"] .formatted-text h4,
+.dark .formatted-text h1,
+.dark .formatted-text h2,
+.dark .formatted-text h3,
+.dark .formatted-text h4 {
+  /* Bump saturation slightly on dark mode — the muted accent from
+     --accent-primary reads too low against emerald-950/indigo-950 cards. */
+  text-shadow: 0 0 1px color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 /* Formatted text inside option cards — keep inline */
