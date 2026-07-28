@@ -26,7 +26,15 @@ interface FormattedTextProps {
 export function FormattedText({ text, className = '' }: FormattedTextProps) {
     if (!text) return null;
 
-    const clean = decodeMojiB(applyColorTokens(text));
+    // Collapse horizontal whitespace (tabs, runs of spaces) to a single space
+    // so CommonMark inline-emphasis rules (`**Foo\tbar**` is invalid, since
+    // the `**` must abut non-whitespace) actually parse. The recall importer
+    // and docx copy-pastes leave literal `\t` characters in the DB which
+    // silently disable bold/italic/links. We do NOT touch newlines — those
+    // carry paragraph + list semantics that `react-markdown` + remark-breaks
+    // need.
+    const normalized = text.replace(/[ \t\f\v]+/g, ' ');
+    const clean = decodeMojiB(applyColorTokens(normalized));
 
     return (
         <div className={`formatted-text ${className}`}>
@@ -92,10 +100,14 @@ export function resolveImageTokensForMarkdown(
     images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }>,
 ): string {
     if (!text) return '';
+    // Normalise horizontal whitespace so `**Foo<TAB>bar**` parses as bold.
+    // Same reason as in `<FormattedText>` — CommonMark requires non-whitespace
+    // immediately after the opening `**` and before the closing `**`.
+    const normalized = text.replace(/[ \t\f\v]+/g, ' ');
     // Apply color tokens first so they flow through to react-markdown.
     // Order matters: if we ran image resolution first, the inner-text of an
     // `![alt](src)` could swallow a stray `[[red]]` and confuse the regex.
-    const withColors = applyColorTokens(text);
+    const withColors = applyColorTokens(normalized);
     const byId = new Map((images ?? []).map((i) => [i.id, i]));
     // Build a basename → image lookup so we can resolve a bare
     // `/media/fixtures/images/<exam>/<file>.png` URL to a QuestionImage

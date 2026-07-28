@@ -336,7 +336,12 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return out
 
     def get_duplicate_count(self, obj):
-        """Number of OTHER active Question rows in the same DuplicateCluster.
+        """Total rows in the same DuplicateCluster (including self).
+
+        Semantically "how many copies of this question exist in the bank" —
+        the admin UI uses this to show "⚠ Duplicate ×N" and the merge
+        modal derives the sibling list separately. Returns 0 when the row
+        is not part of any cluster (the common case for unique questions).
 
         Reads from a prefetched `_cluster_member_count` annotation when the
         queryset was annotated (admin list view does this for O(1) reads),
@@ -344,7 +349,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
         """
         cached = getattr(obj, '_cluster_member_count', None)
         if cached is not None:
-            return max(0, int(cached) - 1)
+            return max(0, int(cached))
         from .models import DuplicateMember
         cluster_id = getattr(obj, '_cluster_id', None)
         if cluster_id is None:
@@ -352,7 +357,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
             if m is None:
                 return 0
             cluster_id = m
-        return DuplicateMember.objects.filter(cluster_id=cluster_id).exclude(question_id=obj.id).count()
+        return DuplicateMember.objects.filter(cluster_id=cluster_id).count()
 
     def get_duplicate_cluster_id(self, obj):
         cached = getattr(obj, '_cluster_id', None)
