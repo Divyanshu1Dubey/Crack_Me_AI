@@ -67,4 +67,12 @@ else
     echo "==> AI backfill skipped (BACKFILL_AI_ON_DEPLOY!=1; set it to enable)"
 fi
 
+# Self-heal: rewrite any legacy bare /media/fixtures/images/ URLs left in
+# Question text back to canonical [[img:N]] tokens. Idempotent — only
+# rewrites rows that still contain a bare URL. Wrapped in `|| true` so
+# a transient DB blip on deploy can't fail the build. The 2026-07-28
+# live audit surfaced the original bare-URL bug (Production incident);
+# this command keeps fresh deploys from inheriting the same data.
+python manage.py relink_fixture_images --apply --fixture backend/questions_fixture.json || true
+
 # build.sh is complete

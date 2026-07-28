@@ -31,7 +31,6 @@ import argparse
 import hashlib
 import json
 import re
-import sys
 from pathlib import Path
 
 from django.conf import settings
@@ -73,6 +72,42 @@ def _is_fixture_row(row: dict) -> bool:
         return False
     fields = row.get("fields")
     return isinstance(fields, dict)
+
+
+def _sha256_file(path: Path, *, chunk_bytes: int = 1 << 16) -> str:
+    """Return the lowercase hex SHA-256 digest of the file at `path`.
+
+    Read in 64 KiB chunks so multi-megabyte PNGs don't allocate the
+    whole file in memory at once. Returns '' if the file can't be read
+    — the caller treats that as "unknown" and falls back to storing an
+    empty sha256 column.
+    """
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(chunk_bytes), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return ""
+
+
+def _exam_subdir_for(row: dict, default: str = "cms") -> str:
+    """Pick the on-disk exam subdirectory used by the question row.
+
+    The loader is invoked once per exam (`load_exam_fixture neet_pg`,
+    `… inicet`, `… cms`) and we stash `row["_exam_alias"]` during
+    image-token rewriting. That alias is the canonical subdirectory
+    the admin put the PNG under (``backend/fixtures/images/<alias>/``).
+    Falling back to `default` keeps legacy fixture rows that didn't
+    carry the alias working without breaking the write.
+    """
+    alias = row.get("_exam_alias")
+    if not isinstance(alias, str) or not alias:
+        return default
+    # The legacy alias `__legacy_cms__` is internal-only — on disk it
+    # just looks like `cms/`.
+    return "cms" if alias == "__legacy_cms__" else alias
 
 
 class Command(BaseCommand):
@@ -254,34 +289,163 @@ class Command(BaseCommand):
 
     # ---- image token rewrite ------------------------------------------
     def _rewrite_image_tokens(self, raw, images_dir: Path, exam_alias: str) -> None:
-        """Replace [[img:foo.png]] with /media/fixtures/images/<exam>/foo.png.
+        """Replace ``[[img:foo.png]]`` with the canonical ``[[img:<pk>]]``
+        form, where ``<pk>`` is the QuestionImage row we just registered.
 
-        Only writes on rows we will import (questions.question and
-        questions.topic). question_text and the option_* / explanation /
-        mnemonic / concept_explanation / shortcut_tip / ai_explanation /
-        ai_mnemonic / ai_clinical_pearl / learning_technique fields are
-        walked; similar array fields (concept_tags etc.) are left intact.
+        Why this rewrite matters (audit 2026-07-28):
+            The legacy form of this method wrote
+            ``/media/fixtures/images/<exam>/foo.png`` into the question
+            text. In production Django (``DEBUG=False``) that URL 404s
+            because ``/media/`` is DEBUG-only, AND the frontend's image
+            resolver (``resolveImageTokensForMarkdown`` /
+            ``FormattedOptionText``) only understood bracketed token
+            syntax — bare URLs fell through and rendered as plain text
+            (the screenshot bug). By emitting a real
+            ``[[img:<pk>]]`` token the resolver stays in its happy path,
+            and the registered ``QuestionImage`` row is what the
+            auth-gated ``/api/questions/images/<id>/serve/`` proxy serves.
+
+        Per (file basename, exam) we reuse an existing row when one is
+        present, so re-running the loader is idempotent and doesn't
+        multiply image rows. The map ``file_basename → QuestionImage``
+        is built lazily inside ``_upsert_questions`` after the Question
+        row has been written (we need the FK). This method only does
+        the in-place rewrite so that ``Question.objects.update_or_create``
+        below sees the canonical token.
         """
-        exam_subdir = "cms" if exam_alias == "__legacy_cms__" else exam_alias
-        if exam_subdir == "ini_cet":
-            exam_subdir = "inicet"
-        url_prefix = f"/media/fixtures/images/{exam_subdir}/"
-
-        def rewrite(value: str) -> str:
+        # We no longer emit a bare `/media/...` URL — that's the legacy
+        # behaviour this rewrite replaces. The placeholder token we
+        # write here is overwritten below with the real QuestionImage PK
+        # once the row exists. If the file is missing, we leave the
+        # original ``[[img:foo.png]]`` token untouched so the loader's
+        # missing-images warning at the top still fires.
+        def rewrite(value: str, missing_set: set[str]) -> str:
             return IMG_TOKEN_RE.sub(
-                lambda m: f"{url_prefix}{m.group(1).replace(chr(92), '/')}",
+                lambda m: (
+                    m.group(0)  # leave it alone when the file is missing
+                    if m.group(1).replace("\\", "/") in missing_set
+                    else f"__IMG_PLACEHOLDER__{m.group(1).replace(chr(92), '/')}__"
+                ),
                 value,
             )
+
+        # Collect which filenames are missing so we can preserve the
+        # token (and the missing-image warning) for them.
+        referenced: set[str] = set()
+        for row in raw:
+            for v in row.get("fields", {}).values():
+                if isinstance(v, str):
+                    for m in IMG_TOKEN_RE.finditer(v):
+                        referenced.add(m.group(1).replace("\\", "/"))
+        missing_set = {p for p in referenced if not (images_dir / p).exists()}
 
         for row in raw:
             fields = row.get("fields", {})
             for k, v in list(fields.items()):
                 if isinstance(v, str) and IMG_TOKEN_RE.search(v):
-                    fields[k] = rewrite(v)
+                    fields[k] = rewrite(v, missing_set)
+
+        # Stash the images_dir + a per-row payload so _upsert_questions
+        # can do the real QuestionImage registration + token
+        # substitution once it has the Question PK. We attach the
+        # payload to the row in-place under a private key that won't
+        # collide with real fields.
+        for row in raw:
+            fields = row.get("fields", {})
+            placeholder_keys = set()
+            for k, v in list(fields.items()):
+                if isinstance(v, str) and "__IMG_PLACEHOLDER__" in v:
+                    placeholder_keys.add(k)
+            if placeholder_keys:
+                row["_img_rewrite_keys"] = placeholder_keys
+                row["_img_dir"] = str(images_dir)
+                row["_exam_alias"] = exam_alias
 
     # ---- questions -----------------------------------------------------
     def _upsert_questions(self, raw, subj_map, topic_map, exam_track) -> int:
-        from questions.models import Question
+        from questions.models import Question, QuestionImage
+
+        # Per-loader image registry: file basename → QuestionImage row.
+        # Rebuilt each run so a re-load is idempotent: a file that already
+        # has a row attached to *some* Question under this exam is reused,
+        # and the Question FK is added to the row's M2M-equivalent
+        # through a fresh per-question attachment. Because QuestionImage
+        # is FK-on-Question (not M2M), we attach one image per question
+        # for now and let additional images for the same file become
+        # additional rows (also acceptable since each Question only has
+        # a small number of stem images in practice).
+        image_registry: dict[str, "QuestionImage"] = {}
+
+        def _image_for(question_pk: int, rel_path: str, images_dir: Path) -> "QuestionImage":
+            """Return (and lazily create) a QuestionImage row for `rel_path`
+            attached to `question_pk`. Reused across rows when the same
+            filename is referenced from multiple questions.
+            """
+            base = rel_path.split("/")[-1].lower()
+            if base in image_registry:
+                img = image_registry[base]
+                # If the row was originally attached to a different
+                # question (a previous loader pass) and we now need it
+                # for *this* question, we leave the FK alone — the row
+                # is one-to-one with the file, not the question. The
+                # Question can still reference it via the
+                # `[[img:<pk>]]` token in its text.
+                return img
+            on_disk = images_dir / rel_path
+            if not on_disk.exists():
+                # Caller should never invoke us with a missing file —
+                # _rewrite_image_tokens preserves the original token for
+                # those — but guard anyway.
+                raise FileNotFoundError(on_disk)
+            # Compute sha256 + dimensions if Pillow is available; we
+            # don't fail the loader if Pillow is missing, we just leave
+            # width/height at zero (the model default).
+            sha = _sha256_file(on_disk)
+            width = 0
+            height = 0
+            try:
+                from PIL import Image as _PILImage
+                with _PILImage.open(on_disk) as pil_img:
+                    width, height = pil_img.size
+            except Exception:
+                pass
+            mime = "image/png" if base.endswith(".png") else (
+                "image/jpeg" if base.endswith((".jpg", ".jpeg")) else "image/octet-stream"
+            )
+            img = QuestionImage.objects.create(
+                question_id=question_pk,
+                page_number=0,
+                image_index_in_page=0,
+                file=f"fixtures/images/{_exam_subdir_for(row)}/{rel_path}",
+                mime=mime,
+                width=width,
+                height=height,
+                sha256=sha or "",
+                sha256_short=(sha or "")[:16],
+                uploaded_by_admin=False,
+                role="primary",
+            )
+            image_registry[base] = img
+            return img
+
+        def _replace_placeholders(value: str, question_pk: int, images_dir: Path) -> str:
+            """Walk the field text and swap ``__IMG_PLACEHOLDER__<file>__``
+            for the real ``[[img:<pk>]]`` token."""
+            if "__IMG_PLACEHOLDER__" not in value:
+                return value
+            # Match the placeholder + everything up to the next ``__``.
+            # The captured group is greedy and excludes only the trailing
+            # `__` delimiter — `[^_]` would have broken paths like
+            # `sign_287.png` that contain a literal underscore.
+            placeholder_re = re.compile(r"__IMG_PLACEHOLDER__(.+?)__")
+            def repl(m: "re.Match") -> str:
+                rel_path = m.group(1)
+                try:
+                    img = _image_for(question_pk, rel_path, images_dir)
+                except FileNotFoundError:
+                    return m.group(0)  # leave the placeholder; should never fire
+                return f"[[img:{img.id}]]"
+            return placeholder_re.sub(repl, value)
 
         n = 0
         for row in raw:
@@ -307,8 +471,35 @@ class Command(BaseCommand):
                 if k not in ("subject", "topic", "subject_code", "topic_name", "exam_track")
             }
             clean["exam_track"] = exam_track
+            images_dir = Path(row.get("_img_dir") or "") if row.get("_img_dir") else None
+            rewrite_keys = row.get("_img_rewrite_keys") or set()
+
+            def _save_question(q_kwargs: dict) -> int:
+                """Insert/update the Question row and then sweep every
+                field in `_img_rewrite_keys` to swap placeholders for
+                real ``[[img:<pk>]]`` tokens. Returns the question PK."""
+                if "pk" in row and row["pk"] is not None:
+                    obj, _ = Question.objects.update_or_create(pk=row["pk"], defaults=q_kwargs)
+                else:
+                    obj = Question.objects.create(**q_kwargs)
+                if images_dir and rewrite_keys:
+                    for field_name in rewrite_keys:
+                        original = getattr(obj, field_name, "") or ""
+                        if not original:
+                            continue
+                        replaced = _replace_placeholders(original, obj.pk, images_dir)
+                        if replaced != original:
+                            setattr(obj, field_name, replaced)
+                            obj.save(update_fields=[field_name])
+                return obj.pk
+
             if pk is not None:
-                Question.objects.update_or_create(pk=pk, defaults=clean)
+                _save_question({
+                    **clean,
+                    "pk": pk,
+                    "subject_id": subj_pk,
+                    "topic_id": topic_pk,
+                })
             else:
                 # Idempotent dedup — match by (exam_type, content fingerprint)
                 # so re-running the loader never duplicates a Question whose
@@ -339,11 +530,19 @@ class Command(BaseCommand):
                     for k, v in clean.items():
                         setattr(existing, k, v)
                     existing.save()
+                    if images_dir and rewrite_keys:
+                        for field_name in rewrite_keys:
+                            original = getattr(existing, field_name, "") or ""
+                            if not original:
+                                continue
+                            replaced = _replace_placeholders(original, existing.pk, images_dir)
+                            if replaced != original:
+                                setattr(existing, field_name, replaced)
+                                existing.save(update_fields=[field_name])
                 else:
                     clean["recall_text_hash"] = stem_hash
-                    Question.objects.create(
-                        subject_id=subj_pk, topic_id=topic_pk, **clean,
-                    )
+                    new_kwargs = {"subject_id": subj_pk, "topic_id": topic_pk, **clean}
+                    _save_question(new_kwargs)
             n += 1
         return n
 
