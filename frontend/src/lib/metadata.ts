@@ -109,7 +109,7 @@ export function orgSchema() {
             height: 512,
         },
         description:
-            "AI-powered medical exam preparation platform for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and Medical Officer recruitment.",
+            "CrackCMS is a free study desk for MBBS graduates preparing for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE or Medical Officer recruitment exams. Built by clinicians, organised around 3,300+ previous-year questions.",
         sameAs: [
             "https://github.com/Divyanshu1Dubey/Crack_Me_AI",
             "https://twitter.com/cracklabs",
@@ -118,7 +118,8 @@ export function orgSchema() {
         contactPoint: {
             "@type": "ContactPoint",
             contactType: "customer support",
-            email: "hello@cracklabs.app",
+            email: "crackwith.ai@gmail.com",
+            telephone: "+91-9601981524",
             availableLanguage: ["English", "Hindi"],
         },
     };
@@ -177,6 +178,12 @@ export function articleSchema({
     dateModified,
     authorName,
     image,
+    authorUrl,
+    reviewedByName,
+    reviewedByCredential,
+    citations,
+    speakable,
+    medicalPageType = false,
 }: {
     headline: string;
     description: string;
@@ -185,17 +192,32 @@ export function articleSchema({
     dateModified: string;
     authorName: string;
     image?: string;
+    authorUrl?: string;
+    reviewedByName?: string;
+    reviewedByCredential?: string;
+    citations?: { label: string; url?: string; published?: string }[];
+    speakable?: string[];
+    /** If true, emits @type `MedicalWebPage` (extends `WebPage` with
+     *  medical-specialty metadata) instead of plain `Article`. Use for
+     *  clinically-reviewed medical content. */
+    medicalPageType?: boolean;
 }) {
-    return {
+    const baseAuthor = {
+        "@type": "Person",
+        name: authorName,
+        ...(authorUrl ? { url: authorUrl } : {}),
+    };
+
+    const schema: Record<string, unknown> = {
         "@context": "https://schema.org",
-        "@type": "Article",
+        "@type": medicalPageType ? "MedicalWebPage" : "Article",
         headline,
         description,
         image: buildOgImage(image),
         datePublished,
         dateModified,
         inLanguage: "en-IN",
-        author: { "@type": "Person", name: authorName },
+        author: baseAuthor,
         publisher: {
             "@type": "Organization",
             name: siteName,
@@ -206,6 +228,67 @@ export function articleSchema({
             "@type": "WebPage",
             "@id": buildCanonical(path),
         },
+    };
+
+    if (reviewedByName) {
+        schema.reviewedBy = {
+            "@type": "Person",
+            name: reviewedByName,
+            ...(reviewedByCredential ? { hasCredential: reviewedByCredential } : {}),
+        };
+    }
+
+    if (citations && citations.length > 0) {
+        schema.citation = citations.map((c) => ({
+            "@type": "CreativeWork",
+            name: c.label,
+            ...(c.url ? { url: c.url } : {}),
+            ...(c.published ? { datePublished: c.published } : {}),
+        }));
+    }
+
+    if (speakable && speakable.length > 0) {
+        schema.speakable = {
+            "@type": "SpeakableSpecification",
+            xpath: speakable,
+        };
+    }
+
+    return schema;
+}
+
+/**
+ * `Person` JSON-LD for an author / reviewer profile. Reused by the
+ * Article schema's `author` / `reviewedBy` blocks and emitted
+ * independently on author archive pages.
+ */
+export function personSchema({
+    name,
+    credential,
+    role,
+    bio,
+    expertise,
+    sameAs,
+    url,
+}: {
+    name: string;
+    credential?: string;
+    role?: string;
+    bio?: string;
+    expertise?: string[];
+    sameAs?: string[];
+    url?: string;
+}) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        name,
+        ...(credential ? { hasCredential: credential } : {}),
+        ...(role ? { jobTitle: role } : {}),
+        ...(bio ? { description: bio } : {}),
+        ...(expertise && expertise.length > 0 ? { knowsAbout: expertise } : {}),
+        ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
+        ...(url ? { url } : {}),
     };
 }
 

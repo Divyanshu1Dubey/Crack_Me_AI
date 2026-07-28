@@ -69,7 +69,7 @@ export default function RefundPolicyPage() {
 
             <h2>3. How to Request a Refund</h2>
             <ol>
-                <li>Email <a href="mailto:billing@cracklabs.app">billing@cracklabs.app</a> from the address linked to your CrackCMS account.</li>
+                <li>Email <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a> from the address linked to your CrackCMS account.</li>
                 <li>Include your registered email, transaction ID, and a brief reason.</li>
                 <li>We respond within <strong>2 business days</strong>.</li>
             </ol>
@@ -104,7 +104,7 @@ export default function RefundPolicyPage() {
             <h2>8. Contact</h2>
             <p>
                 <strong>Billing Team</strong><br />
-                Email: <a href="mailto:billing@cracklabs.app">billing@cracklabs.app</a>
+                Email: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>
             </p>
         </LegalLayout>
     );

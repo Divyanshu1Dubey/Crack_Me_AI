@@ -5,6 +5,7 @@ import { getAllCmsSubjects } from '@/lib/subjectHubData';
 import { getAllCmsCutoffYears } from '@/lib/cutoffData';
 import { getAllCmsBookSlugs } from '@/lib/bookDeepDiveData';
 import { getAllCmsStrategySlugs } from '@/lib/strategyData';
+import { getAllPosts, getAllCategories, getAllTags } from '@/lib/blog';
 
 export default function sitemap(): MetadataRoute.Sitemap {
     const now = new Date();
@@ -74,6 +75,51 @@ export default function sitemap(): MetadataRoute.Sitemap {
         changeFrequency: 'weekly' as const,
         priority: r.priority,
     }));
+
+    // Blog hub + every post + category + author archive + RSS feed
+    const blogRoutes = [
+        {
+            url: `${siteUrl}/blog`,
+            lastModified: now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.85,
+        },
+        {
+            url: `${siteUrl}/blog/feed.xml`,
+            lastModified: now,
+            changeFrequency: 'daily' as const,
+            priority: 0.5,
+        },
+        ...getAllPosts().map((p) => ({
+            url: `${siteUrl}/blog/${p.slug}`,
+            lastModified: new Date(p.dateModified),
+            changeFrequency: 'weekly' as const,
+            priority: 0.85,
+        })),
+        ...getAllCategories().map((c) => ({
+            url: `${siteUrl}/blog/category/${c.slug}`,
+            lastModified: now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.7,
+        })),
+        ...getAllTags().map((t) => ({
+            url: `${siteUrl}/blog/tag/${t.slug}`,
+            lastModified: now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.6,
+        })),
+        // Author archive pages — crawlable author profile nodes
+        ...Array.from(
+            new Set(
+                getAllPosts().flatMap((p) => [p.authorId, p.reviewedBy].filter(Boolean) as string[]),
+            ),
+        ).map((slug) => ({
+            url: `${siteUrl}/blog/author/${slug}`,
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            priority: 0.65,
+        })),
+    ];
 
     // Priority policy:
     //   1.0  landing (root) — never overwrite
@@ -148,5 +194,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         ...strategyRoutes,
         ...comparisonRoutes,
         ...hubRoutes,
+        ...blogRoutes,
     ];
 }

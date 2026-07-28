@@ -22,8 +22,10 @@ export default function PrivacyPolicyPage() {
                 CrackCMS ("we", "our", "us") is operated by <strong>CrackLabs AI</strong>. This Privacy
                 Policy explains how we collect, use, disclose, and safeguard your information when you
                 visit our website, use the CrackCMS mobile or web app, or purchase a premium subscription.
-                CrackCMS is an AI-powered medical exam preparation platform designed for UPSC CMS, NEET PG,
-                INI-CET, FMGE, USMLE and other medical entrance exams.
+                CrackCMS is a free study desk for MBBS graduates preparing for UPSC CMS, NEET PG, INI-CET,
+                FMGE, USMLE and other medical entrance exams. We offer question banks, mock tests, AI tutor
+                explanations, flashcards and progress analytics — supported by an optional paid tier for
+                candidates who want unlimited AI tutoring.
             </p>
             <p>
                 By accessing CrackCMS you agree to the practices described in this policy. If you do not
@@ -103,7 +105,7 @@ export default function PrivacyPolicyPage() {
 
             <h2>8. How to Exercise Your Rights</h2>
             <p>
-                Email <a href="mailto:privacy@cracklabs.app">privacy@cracklabs.app</a> from the address
+                Email <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a> from the address
                 registered with your account. We respond within 30 days. For deletion, we will anonymise
                 your account and remove personal identifiers within 7 days.
             </p>
@@ -140,7 +142,7 @@ export default function PrivacyPolicyPage() {
             <p>
                 <strong>Data Protection Officer</strong><br />
                 CrackLabs AI<br />
-                Email: <a href="mailto:privacy@cracklabs.app">privacy@cracklabs.app</a><br />
+                Email: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a><br />
                 Postal: B-12, Sector 62, Noida, Uttar Pradesh 201301, India
             </p>
         </LegalLayout>

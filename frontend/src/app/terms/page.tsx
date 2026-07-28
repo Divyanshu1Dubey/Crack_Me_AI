@@ -112,8 +112,8 @@ export default function TermsPage() {
             <h2>11. Contact</h2>
             <p>
                 <strong>CrackLabs AI</strong><br />
-                Email: <a href="mailto:legal@cracklabs.app">legal@cracklabs.app</a><br />
-                Phone: +91 98765 43210
+                Email: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a><br />
+                Phone: 9601981524
             </p>
         </LegalLayout>
     );

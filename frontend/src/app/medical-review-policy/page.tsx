@@ -65,7 +65,7 @@ export default function MedicalReviewPage() {
             <p>
                 If you believe a clinical statement on CrackCMS is incorrect or unsafe, please flag it
                 using the in-app report button or email
-                <a href="mailto:medical-safety@cracklabs.app">medical-safety@cracklabs.app</a>. We respond
+                <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>. We respond
                 within 24 hours for safety-critical issues.
             </p>
         </LegalLayout>

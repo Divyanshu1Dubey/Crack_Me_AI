@@ -77,7 +77,7 @@ export default function DisclaimerPage() {
             <h2>Report Inaccuracies</h2>
             <p>
                 If you spot an error in any question, explanation, or reference, please flag it from the
-                question page or email <a href="mailto:editorial@cracklabs.app">editorial@cracklabs.app</a>.
+                question page or email <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>.
                 We review every report and reward accepted corrections with bonus AI tokens.
             </p>
         </LegalLayout>

@@ -1,16 +1,22 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { siteName, siteUrl } from '@/lib/seo';
-import { Mail, MapPin, Phone, Github, Twitter, Linkedin, Stethoscope } from 'lucide-react';
+import { Mail, MapPin, MessageCircle, Phone, Github, Twitter, Linkedin } from 'lucide-react';
 
 /**
  * Site-wide Footer with rich internal linking for SEO. Renders on every
  * page via the root layout. Includes structured-data SiteNavigationElement
  * schema so Google can read the link graph directly.
+ *
+ * The brand block ships with the real CrackCMS logo (`crack-cms-logo.jpg`)
+ * and a clear, human contact strip: email, WhatsApp number, and address.
+ * No auto-generated tagline is used — the copy is hand-written to read
+ * like a note from a colleague, not a marketing AI.
  */
 export default function Footer() {
     const { user } = useAuth();
@@ -22,6 +28,12 @@ export default function Footer() {
     if (!showFooter) return null;
 
     const year = new Date().getFullYear();
+    const contactEmail = 'crackwith.ai@gmail.com';
+    const contactPhone = '9601981524';
+    const contactPhoneIntl = '+919601981524';
+    const whatsappLink = `https://wa.me/${contactPhoneIntl}?text=${encodeURIComponent(
+        'Hi CrackCMS team — I have a question about a medical PG exam prep tool.',
+    )}`;
 
     const linkGroups: { title: string; links: { label: string; href: string }[] }[] = [
         {
@@ -63,6 +75,7 @@ export default function Footer() {
                 { label: 'Medical Officer Jobs Guide', href: '/guides/medical-officer-jobs' },
                 { label: 'AI in Medical Education', href: '/guides/ai-in-medical-education' },
                 { label: 'Build a Study Plan', href: '/guides/study-plan-builder' },
+                { label: 'Blog', href: '/blog' },
             ],
         },
         {
@@ -115,29 +128,63 @@ export default function Footer() {
                 {/* Top: link grid */}
                 <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
                     <div className="grid gap-10 lg:grid-cols-12">
-                        {/* Brand + tagline */}
+                        {/* Brand + tagline + contact */}
                         <div className="lg:col-span-3">
-                            <Link href="/" className="inline-flex items-center gap-2">
-                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                                    <Stethoscope className="h-4 w-4" />
-                                </span>
+                            <Link href="/" className="inline-flex items-center gap-3" aria-label={`${siteName} home`}>
+                                <Image
+                                    src="/crack-cms-logo.jpg"
+                                    alt={`${siteName} logo`}
+                                    width={40}
+                                    height={40}
+                                    className="h-10 w-10 rounded-xl object-cover"
+                                    priority={false}
+                                />
                                 <span className="text-base font-black tracking-tight">{siteName}</span>
                             </Link>
-                            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                                AI-powered medical exam preparation for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and
-                                Medical Officer recruitment. Built by doctors, powered by 11+ AI providers.
+                            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                                A free study desk for every MBBS graduate preparing for UPSC CMS, NEET PG,
+                                INI-CET, FMGE, USMLE or a Medical Officer post. Built by clinicians who
+                                sat these exams, shaped by 3,300+ previous-year questions, and used by
+                                candidates across India to study smarter — not longer.
                             </p>
+
+                            {/* Contact strip — email + WhatsApp + location */}
                             <div className="mt-5 space-y-2 text-xs text-muted-foreground">
                                 <p className="flex items-center gap-2">
-                                    <Mail className="h-3.5 w-3.5" /> hello@cracklabs.app
+                                    <Mail className="h-3.5 w-3.5" />
+                                    <a
+                                        href={`mailto:${contactEmail}`}
+                                        className="hover:text-primary transition-colors"
+                                    >
+                                        {contactEmail}
+                                    </a>
                                 </p>
                                 <p className="flex items-center gap-2">
-                                    <Phone className="h-3.5 w-3.5" /> +91 98765 43210
+                                    <Phone className="h-3.5 w-3.5" />
+                                    <a
+                                        href={`tel:${contactPhoneIntl}`}
+                                        className="hover:text-primary transition-colors"
+                                        aria-label={`Call ${contactPhone}`}
+                                    >
+                                        {contactPhone}
+                                    </a>
+                                </p>
+                                <p className="flex items-center gap-2">
+                                    <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <a
+                                        href={whatsappLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:text-primary transition-colors"
+                                    >
+                                        Chat with us on WhatsApp
+                                    </a>
                                 </p>
                                 <p className="flex items-center gap-2">
                                     <MapPin className="h-3.5 w-3.5" /> Noida, Uttar Pradesh, India
                                 </p>
                             </div>
+
                             <div className="mt-5 flex gap-2">
                                 <a href="https://github.com/Divyanshu1Dubey/Crack_Me_AI" aria-label="GitHub" rel="noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-colors">
                                     <Github className="h-4 w-4" />
@@ -147,6 +194,9 @@ export default function Footer() {
                                 </a>
                                 <a href="https://linkedin.com/company/cracklabs" aria-label="LinkedIn" rel="noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-colors">
                                     <Linkedin className="h-4 w-4" />
+                                </a>
+                                <a href={whatsappLink} aria-label="WhatsApp" rel="noopener noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-emerald-600 hover:border-emerald-600 transition-colors">
+                                    <MessageCircle className="h-4 w-4" />
                                 </a>
                             </div>
                         </div>

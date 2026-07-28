@@ -90,7 +90,7 @@ export default function EditorialPolicyPage() {
             <h2>9. Contact Editorial Team</h2>
             <p>
                 Editorial lead: Dr. (editorial lead name)<br />
-                Email: <a href="mailto:editorial@cracklabs.app">editorial@cracklabs.app</a>
+                Email: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>
             </p>
         </LegalLayout>
     );

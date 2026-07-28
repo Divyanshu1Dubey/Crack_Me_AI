@@ -133,7 +133,7 @@ export default function AboutPage() {
 
                 <h2>Get in touch</h2>
                 <p>
-                    Questions, partnerships, or press inquiries: <a href="mailto:hello@cracklabs.app">hello@cracklabs.app</a>.
+                    Questions, partnerships, or press inquiries: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>.
                     For learner support, see our <Link href="/contact" className="text-primary underline">Contact page</Link>.
                 </p>
 
