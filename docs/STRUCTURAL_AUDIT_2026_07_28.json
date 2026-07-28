@@ -1,0 +1,422 @@
+{
+  "total_rows": 13788,
+  "shape_counts": {
+    "long_prose": 6885,
+    "short_prose": 4262,
+    "numbered_list": 1019,
+    "roman_numeral_list": 548,
+    "image_token_question": 450,
+    "code_table_prompt": 319,
+    "assertion_reason": 223,
+    "bulleted_list": 50,
+    "mojibake": 32
+  },
+  "by_exam": {
+    "neet_pg": {
+      "long_prose": 3513,
+      "short_prose": 2795,
+      "mojibake": 32,
+      "numbered_list": 65,
+      "assertion_reason": 14,
+      "roman_numeral_list": 21,
+      "image_token_question": 1,
+      "code_table_prompt": 12,
+      "bulleted_list": 7
+    },
+    "cms": {
+      "numbered_list": 954,
+      "short_prose": 1432,
+      "roman_numeral_list": 527,
+      "long_prose": 3307,
+      "code_table_prompt": 307,
+      "assertion_reason": 209,
+      "image_token_question": 448,
+      "bulleted_list": 43
+    },
+    "ini_cet": {
+      "long_prose": 65,
+      "short_prose": 35,
+      "image_token_question": 1
+    }
+  },
+  "samples": {
+    "long_prose": [
+      {
+        "id": 12383,
+        "exam_type": "neet_pg",
+        "text": "A 40 year old female with burns over her abdomen, both limbs and back and presented after\n8 hours. Which of the following is the formula for calculation of fluid infusion?"
+      },
+      {
+        "id": 12384,
+        "exam_type": "neet_pg",
+        "text": "A 35-year-old woman was brought to the casualty ward with a history of road traffic accident\n(RTA) and head trauma. Her eye opens to pain, moans, can localize limb towards the pain\nstimulus on the left hand and away from the pain stimulus on the right hand and both the\nlegs in extended posture. Calc"
+      },
+      {
+        "id": 12385,
+        "exam_type": "neet_pg",
+        "text": "A patient who was on ventilator and being ventilated for past few days suddenly pulls out of\nthe endotracheal tube. What is the next step of management?"
+      },
+      {
+        "id": 11024,
+        "exam_type": "neet_pg",
+        "text": "A boy with a history of a fall from a tree presents with a lurching gait and dragging of his feet.\nWhich of the following structures are involved?"
+      },
+      {
+        "id": 11025,
+        "exam_type": "neet_pg",
+        "text": "Fibers from the marked structure end in which of the following areas of the thalamus?"
+      },
+      {
+        "id": 12389,
+        "exam_type": "neet_pg",
+        "text": "A patient is undergoing modified radical neck dissection (MRND) for laryngeal malignancy.\nWhile ligating the internal jugular vein, his etCO2 dropped from 40 mmHg to 14 mmHg, and\nthe patient developed hypotension along with cardiac arrhythmia. Which of the following is\nthe most likely cause?"
+      },
+      {
+        "id": 2167,
+        "exam_type": "cms",
+        "text": "Which of the following hematological findings are seen in pregnant women with thalassemia trait?"
+      },
+      {
+        "id": 2168,
+        "exam_type": "cms",
+        "text": "The best drug for maintenance therapy of Systemic Lupus Erythematosus (SLE) during pregnancy is:"
+      }
+    ],
+    "numbered_list": [
+      {
+        "id": 6635,
+        "exam_type": "cms",
+        "text": "Which of the following statements regarding Ankylosing spondylitis (AS) are true? \n1. AS occurs in about 10 % of Inflammatory Bowel Disease(IBD) patients   \n2. The AS activity is related to Bowel activity in IBD patients  \n3. The AS activity does remit with glucocorticoids or colectomy in IBD patien"
+      },
+      {
+        "id": 6632,
+        "exam_type": "cms",
+        "text": "Coeliac disease is associated with which of the following medical conditions? \n1. Dermatitis herpetiformis \n2. Diabetes mellitus type II  \n3. Turner syndrome  \n4. IgA deficiency  \nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 6631,
+        "exam_type": "cms",
+        "text": "Presence of gastrinoma tumor should be suspected in which of the following conditions? \n1. Ulcers in unusual location  \n2. Ulcers in the presence of H. pylori \n3. Ulcers with frank complication like perforation  \nSelect the correct answer using the code given below:  \n11"
+      },
+      {
+        "id": 6673,
+        "exam_type": "cms",
+        "text": "A 76-year old male categorized as frail is likely to have overt changes in:  \n1. Body composition  \n2. Homeostatic dysregulation  \n3. Energetic failure \n4. Neurodegeneration  \nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 6594,
+        "exam_type": "cms",
+        "text": "Consider the following statements regarding Weight Loss: \n1. 4.5 kg over 6-12 months \n2. 10 kg over 6-12 months \n3. More than 5 % over 6-12 months  \n4. More than 10 % over 6-12 months \nWhich of the above constitute significant or clinically important weight loss? \n3"
+      },
+      {
+        "id": 6608,
+        "exam_type": "cms",
+        "text": "Match the List I with List II and select the correct answer using the code given below the \nlists: \n   List I  \nList II \n(disease) \n(signs) \nA. Conn syndrome  \n1. Anosmia  \nB. Turner syndrome  \n2. Tetany  \nC. Kallman syndrome  \n3. Lymphoedema  \nD. Cushing syndrome  \n4. Avascular necrosis of hip  \nCo"
+      },
+      {
+        "id": 6613,
+        "exam_type": "cms",
+        "text": "Which of the following statements are true about management of acute pulmonary oedema?  \n1. Put the patient in relaxed, supine position   \n2. Give high flow, high concentration oxygen  \n3. Administer Furosemide intravenously  \n4. No role of Nitrates  \nSelect the correct answer using the code given b"
+      },
+      {
+        "id": 5935,
+        "exam_type": "cms",
+        "text": "Consider the following:\n1. Intravenous tubes\n2. Catheters\n3. Gloves\n4. Blood bags\nWhich of the above-mentioned biomedical wastes will be segregated in Red bag as per the Biomedical Waste Management Rules, 2016?"
+      }
+    ],
+    "short_prose": [
+      {
+        "id": 10956,
+        "exam_type": "neet_pg",
+        "text": "Which of the following structures of brachial plexus do not give branches?"
+      },
+      {
+        "id": 10958,
+        "exam_type": "neet_pg",
+        "text": "The blood supply to the structure marked in the image is by:"
+      },
+      {
+        "id": 10959,
+        "exam_type": "neet_pg",
+        "text": "All of the following supply the marked structure except:"
+      },
+      {
+        "id": 11027,
+        "exam_type": "neet_pg",
+        "text": "Inferior thyroid artery supplies which of the following structures?"
+      },
+      {
+        "id": 11029,
+        "exam_type": "neet_pg",
+        "text": "Identify the incorrect match."
+      },
+      {
+        "id": 12386,
+        "exam_type": "neet_pg",
+        "text": "Nerve fibre least susceptible to local anesthetic is:"
+      },
+      {
+        "id": 12387,
+        "exam_type": "neet_pg",
+        "text": "Which of the following can be used as an intravenous induction agent?"
+      },
+      {
+        "id": 12388,
+        "exam_type": "neet_pg",
+        "text": "Which of the following is the correct sequence?"
+      }
+    ],
+    "roman_numeral_list": [
+      {
+        "id": 2165,
+        "exam_type": "cms",
+        "text": "Which of the following treatments are recommended for a pregnant woman suffering from sickle cell disease?\nI. Folic acid 1 mg daily\nII. Azathioprine\nIII. Penicillin prophylaxis\nIV. Thromboprophylaxis with low molecular weight heparin\nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 2166,
+        "exam_type": "cms",
+        "text": "Which of the following are contraindications to External Cephalic Version (ECV) in breech?\nI. Pregnancy less than 36 weeks\nII. Multiple pregnancy\nIII. Previous cesarean delivery\nIV. Rhesus isoimmunization\nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 2169,
+        "exam_type": "cms",
+        "text": "Which of the following maternal complications can be seen in hyperemesis gravidarum?\nI. Wernicke's encephalopathy\nII. Hepatic failure\nIII. Hypoprothrombinemia\nIV. Convulsions\nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 2171,
+        "exam_type": "cms",
+        "text": "Which of the following statements are correct regarding shoulder dystocia?\nI. It can be predicted during early labour.\nII. Anencephaly is a risk factor.\nIII. Turtle neck sign is present.\nIV. Episiotomy should always be given.\nSelect the answer using the code given below:"
+      },
+      {
+        "id": 2173,
+        "exam_type": "cms",
+        "text": "Which of the following factors favour posterior position of the vertex?\nI. Anthropoid pelvis\nII. Low inclination pelvis\nIII. Attachment of placenta on the anterior wall\nIV. Primary brachycephaly\nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 2175,
+        "exam_type": "cms",
+        "text": "Detection of magnesium toxicity in a patient receiving magnesium sulphate is noticed by which of the following?\nI. Loss of tendon reflexes\nII. Increased respiratory rate\nIII. Chest pain, heart block\nIV. Cardiac arrest\nSelect the correct answer using the code given below:"
+      },
+      {
+        "id": 2177,
+        "exam_type": "cms",
+        "text": "Which of the following are correct in the treatment of cracked nipple?\nI. Correct attachment (Latch on) will provide immediate relief from pain and rapid healing.\nII. If pain, mother should use breast pump and the infant is fed with the expressed milk.\nIII. Miconazole lotion is applied over the nipp"
+      },
+      {
+        "id": 2178,
+        "exam_type": "cms",
+        "text": "Which of the following are correct regarding puerperal blues?\nI. Its incidence is around 50%.\nII. There is no specific metabolic or endocrine derangement.\nIII. Treatment is reassurance and psychological support.\nSelect the answer using the code given below:"
+      }
+    ],
+    "code_table_prompt": [
+      {
+        "id": 5684,
+        "exam_type": "cms",
+        "text": "Pulmonary stage is seen in which of the following infections?\nAscaris lumbricoides\nStrongyloides stercoralis\nOnchocerca volvulus\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5747,
+        "exam_type": "cms",
+        "text": "Which of the following statements with regard to Enteric perforation are correct?\nSalmonella typhi is the causative organism for Enteric fever\nEnteric perforation characteristically occurs during third week of illness\nTyphoid ulcers are placed transversely to the long axis of the gut\nTerminal ileum "
+      },
+      {
+        "id": 5637,
+        "exam_type": "cms",
+        "text": "Which of the following diseases may be associated with Coeliac Disease?\nType-2 Diabetes mellitus\nIgA deficiency\nDown syndrome\nTurner's syndrome\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5751,
+        "exam_type": "cms",
+        "text": "Which of the following are probable sites for Ectopic pancreas?\nSubmucosa of the stomach and duodenum\nLiver\nSmall bowel mesentery\nSplenic hilum\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5753,
+        "exam_type": "cms",
+        "text": "Which of the following are indications of splenectomy?\nPseudomyxoma peritonei\nTrauma\nIdiopathic thrombocytopenic purpura (ITP)\nHypersplenism\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5770,
+        "exam_type": "cms",
+        "text": "Which of the following are contraindications to external cephalic version in antenatal management of breech presentation?\nAntepartum haemorrhage\nMultiple pregnancy\nReactive Non Stress Test\nSevere oligohydramnios\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5782,
+        "exam_type": "cms",
+        "text": "Which of the following are the pre-requisites of outlet forceps delivery?\nBladder should be empty\nMembranes should be intact\nCervix should be fully dilated\nFetal skull has reached level of pelvic floor\nSelect the correct answer using the code given below."
+      },
+      {
+        "id": 5685,
+        "exam_type": "cms",
+        "text": "Consider the following statements with regard to Amphotericin B:\nIt is a narrow spectrum antifungal agent.\nIt can cause nephrotoxicity.\nIt lacks an oral preparation.\nIts lipid formulations are less toxic.\n\nSelect the correct answer using the code given below."
+      }
+    ],
+    "assertion_reason": [
+      {
+        "id": 22074,
+        "exam_type": "cms",
+        "text": "Assertion (A): The Finkelstein's test is used to diagnose De Quervain's disease.\nReason (R): Finkelstein's test causes pain over the first extensor compartment when the wrist is ulnar deviated with thumb clasped in the palm.\n\nSelect the correct answer using the code below:\nA. Both A and R are true, "
+      },
+      {
+        "id": 18867,
+        "exam_type": "cms",
+        "text": "Assertion (A): Levator ani is described as a strong, fatigue-resistant striated muscle. Reason (R): Unlike most skeletal muscles, the levator ani must maintain sustained tonic contraction to support pelvic organs against gravitational and intra-abdominal pressure. Select the correct answer using the"
+      },
+      {
+        "id": 19516,
+        "exam_type": "cms",
+        "text": "Assertion (A): In septic abortion, hypothermia (<36°C) is a recognized clinical feature. Reason (R): Hypothermia in septic abortion indicates endotoxic shock rather than the usual febrile response, and is associated with a more severe systemic infection. Select the correct answer using the code belo"
+      },
+      {
+        "id": 22078,
+        "exam_type": "cms",
+        "text": "Assertion (A): Parosteal osteosarcoma has mild and longstanding symptoms.\nReason (R): Parosteal osteosarcoma is a high-grade aggressive variant arising from the intramedullary canal.\n\nSelect the correct answer using the code below:\nA. Both A and R are true, and R is the correct explanation of A\nB. B"
+      },
+      {
+        "id": 20160,
+        "exam_type": "cms",
+        "text": "Assertion (A): Laparoscopy is considered the \"gold standard\" for the diagnosis of Acute Pelvic Inflammatory Disease. Reason (R): It allows for direct visualization of the pelvic organs and collection of peritoneal fluid for culture. Select the correct answer using the code below:"
+      },
+      {
+        "id": 19879,
+        "exam_type": "cms",
+        "text": "Assertion (A): Maternal diabetes frequently results in fetal macrosomia with birth weights exceeding 4 kg. Reason (R): Excess levels of fetal cortisol block the action of insulin, leading to extreme fat deposition. Select the correct answer using the code below:"
+      },
+      {
+        "id": 22350,
+        "exam_type": "cms",
+        "text": "Assertion (A): Whole-body CT from head to pelvis with IV contrast is the gold standard investigation in the severely injured adult blunt trauma patient. Reason (R): It provides simultaneous comprehensive assessment of all body regions, detecting injuries that may be missed by clinical examination or"
+      },
+      {
+        "id": 19235,
+        "exam_type": "cms",
+        "text": "Assertion (A): The hypercoagulable state of pregnancy persists for 48 hours postpartum. Reason (R): Fibrinolytic activity is enhanced in the first 4 days of puerperium. Select the correct answer using the code below:"
+      }
+    ],
+    "mojibake": [
+      {
+        "id": 9587,
+        "exam_type": "neet_pg",
+        "text": "A farmer is having âÂÂ skin rash which increase on sun exposure. There is also redness of\ntongue. Maize in his staple diet. Which of the following vitamin deficiency can cause this\ntype of feature\n\nA. Niacin deficiency\nB. Folic acid deficiency\nC. Vit C deficiency\nD. Vit K deficiency\n\nAnswer < A: N"
+      },
+      {
+        "id": 7614,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ¡ îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂ îÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂî"
+      },
+      {
+        "id": 6973,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ´îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ ________\na) îÂÂ«îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ, îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ, îÂÂîÂÂîÂÂîÂÂîÂ"
+      },
+      {
+        "id": 7529,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ·îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂ?\na) îÂÂ¯îÂÂîÂÂîÂÂ îÂ"
+      },
+      {
+        "id": 6909,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ©îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ.\na) îÂÂ¡îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂî"
+      },
+      {
+        "id": 6918,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ·îÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ?\na) îÂÂ¬îÂÂ,îÂÂ¬îÂÂ\nb) îÂÂ¬îÂÂ,îÂÂ¬îÂÂ\nc) îÂÂ³îÂÂ,îÂÂ³îÂÂ\nd) îÂÂ´îÂÂ,îÂÂ´îÂÂ\nAnsw"
+      },
+      {
+        "id": 7341,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ·îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂ¤?\na) îÂÂ«îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ\nb) îÂÂ­îÂÂîÂÂîÂÂîÂÂîÂÂ"
+      },
+      {
+        "id": 6844,
+        "exam_type": "neet_pg",
+        "text": ":\nîÂÂ·îÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂ îÂÂîÂÂîÂÂîÂÂîÂÂîÂÂîÂÂî"
+      }
+    ],
+    "image_token_question": [
+      {
+        "id": 25180,
+        "exam_type": "cms",
+        "text": "The diameter of engagement of foetal skull in incomplete flexion is:\n\n[[img:6937]]"
+      },
+      {
+        "id": 25183,
+        "exam_type": "cms",
+        "text": "Consider the following hemodynamic changes during pregnancy:\nIncrease in cardiac output\nDecrease in stroke volume\nIncrease in heart rate\nIncrease in systemic vascular resistance\nWhich of the statements given above are correct?\n\n[[img:6938]]"
+      },
+      {
+        "id": 25196,
+        "exam_type": "cms",
+        "text": "In three-swab test, middle swab stained with dye while upper and lower remain dry suggests?\n\n[[img:6942]]"
+      },
+      {
+        "id": 25432,
+        "exam_type": "cms",
+        "text": "Endemic ascitis occurs due to: (2021 PYQ)\n\n[[img:6977]]"
+      },
+      {
+        "id": 25836,
+        "exam_type": "cms",
+        "text": "Which of the following are included in Grade II acute cholecystitis as per \"Tokyo Consensus Guidelines For Severity\"?\n\n1. Elevated white cell count (> 18000/mm3)\n2. Renal dysfunction\n3. Duration > 72 hours\n4. Marked local inflammation\n\nSelect the correct answer using the code given below\n\n[[img:7039"
+      },
+      {
+        "id": 26294,
+        "exam_type": "cms",
+        "text": "A patient develops retrobulbar neuritis with decreased red-green color discrimination while on antitubercular therapy. Which drug should be stopped immediately?\n\n[[img:7266]]"
+      },
+      {
+        "id": 26451,
+        "exam_type": "neet_pg",
+        "text": "Identify the radiological sign shown:\n/media/fixtures/images/neet_pg/radiograph_sign_287.png\nThe patient is a 30-year-old with sudden onset chest pain and dyspnoea. The sign is most consistent with:"
+      },
+      {
+        "id": 26454,
+        "exam_type": "ini_cet",
+        "text": "The fundus photograph shown belongs to a 62-year-old with gradually decreasing peripheral vision.\n/media/fixtures/images/inicet/glaucomatous_cup_91.png\nWhich finding on the disc supports a diagnosis of primary open-angle glaucoma?"
+      }
+    ],
+    "bulleted_list": [
+      {
+        "id": 26481,
+        "exam_type": "cms",
+        "text": "Which of the statements regarding Calot’s triangle are correct?\n\n- Common hepatic duct forms the medial boundary of the Calot’s triangle\n\n- Inferior surface of the right lobe of the liver forms the superior boundary of Calot’s triangle\n\n- Right hepatic artery is usually found as a content of the Cal"
+      },
+      {
+        "id": 26482,
+        "exam_type": "cms",
+        "text": "Consider the following statements regarding Opportunistic post-splenectomy infections (OPSI):\n\n- Haemophilus influenzae, Neisseria meningitidis and Streptococcus pneumonae are the most common causative agents\n\n- Risk is greatest in the patients who have undergone splenectomy for trauma\n\n- Risk is gr"
+      },
+      {
+        "id": 26489,
+        "exam_type": "cms",
+        "text": ". Which of the following are correct regarding splenic artery aneurysm?\n\n- Main arterial trunk is the common site\n\n- Palpable thrill can be felt\n\n- It is symptomless unless it ruptures\n\nSelect the correct answer using the code given below"
+      },
+      {
+        "id": 24682,
+        "exam_type": "cms",
+        "text": "A 29-year-old female with 3 months amenorrhoea presents to gynaecology OPD with complaints of something coming out of her vagina. On clinical evaluation, she was found to have a single live pregnancy with second-degree uterine prolapse. Which one of the following is the best management plan for her?"
+      },
+      {
+        "id": 26690,
+        "exam_type": "cms",
+        "text": "Consider the following statements regarding Opportunistic post-splenectomy infections (OPSI): \n\n- Haemophilus influenzae, Neisseria meningitidis and Streptococcus pneumonae are the most common causative agents \n\n- Risk is greatest in the patients who have undergone splenectomy for trauma \n\n- Risk is"
+      },
+      {
+        "id": 26689,
+        "exam_type": "cms",
+        "text": "Which of the statements regarding Calot’s triangle are correct? \n\n- Common hepatic duct forms the medial boundary of the Calot’s triangle \n\n- Inferior surface of the right lobe of the liver forms the superior boundary of Calot’s triangle \n\n- Right hepatic artery is usually found as a content of the "
+      },
+      {
+        "id": 26700,
+        "exam_type": "cms",
+        "text": ". Which of the following are correct regarding splenic artery aneurysm? \n\n- Main arterial trunk is the common site \n\n- Palpable thrill can be felt \n\n- It is symptomless unless it ruptures \n\nSelect the correct answer using the code given below"
+      },
+      {
+        "id": 26581,
+        "exam_type": "cms",
+        "text": "Consider the following statements regarding Opportunistic post-splenectomy infections (OPSI): \n\n- Haemophilus influenzae, Neisseria meningitidis and Streptococcus pneumonae are the most common causative agents \n\n- Risk is greatest in the patients who have undergone splenectomy for trauma \n\n- Risk is"
+      }
+    ]
+  }
+}
