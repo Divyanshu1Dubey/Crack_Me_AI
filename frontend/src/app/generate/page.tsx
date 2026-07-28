@@ -1,16 +1,33 @@
 /**
- * generate/page.tsx — AI Question Generator page.
- * Generates custom MCQ questions using AI based on subject/topic/difficulty.
- * Features: subject/topic selector, difficulty toggle, question preview,
- * answer reveal with AI explanation. Token consumption with 429 handling.
+ * generate/page.tsx — AI Question Generator.
+ *
+ * Track-aware (NEET PG / INI-CET / CMS) unlimited AI MCQ generator.
+ * Polished UI:
+ *  * Cards, Buttons, Badges, Progress, Skeletons from `@/components/ui`
+ *  * Real subjects fetched per active exam track (NEET PG → 19 PG
+ *    subjects; INI-CET → super-specialty; CMS → UPSC subjects)
+ *  * Token-cost preview (1 token/question per platform rules)
+ *  * Per-question deep explanation card via reveal-on-answer
+ *  * Score summary, regenerate, answer-state styling
  */
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useExamTrack } from '@/components/ExamTrackProvider';
 import Sidebar from '@/components/Sidebar';
 import { aiAPI, questionsAPI } from '@/lib/api';
-import { Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw, Brain, BookMarked, Target } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import {
+    Sparkles, Loader2, CheckCircle, XCircle, ChevronDown, RefreshCw,
+    Brain, BookMarked, Target, Zap, Award, AlertTriangle, Coins,
+} from 'lucide-react';
 
 interface AIExplanation {
     category?: string;
@@ -19,12 +36,7 @@ interface AIExplanation {
     core_concept?: string;
     why_correct?: string;
     why_wrong?: Record<string, string>;
-    textbook_reference?: {
-        book?: string;
-        chapter?: string;
-        page?: string;
-        section?: string;
-    };
+    textbook_reference?: { book?: string; chapter?: string; page?: string; section?: string };
     mnemonic?: string;
     high_yield_points?: string[];
     around_concepts?: string[];
@@ -49,45 +61,115 @@ interface GeneratedQuestion {
     error?: string;
 }
 
-interface Subject {
-    id: number;
-    name: string;
-    code: string;
-}
+interface Subject { id: number; name: string; code: string; exam_type?: string; }
+
+const TRACK_META: Record<string, { label: string; tagline: string; defaultSubject: string }> = {
+    cms:     { label: 'UPSC CMS',  tagline: 'Generate AI-powered MCQs across UPSC CMS subjects', defaultSubject: 'General Medicine' },
+    neet_pg: { label: 'NEET PG',    tagline: 'Image-rich, clinical AI MCQs on 19 PG subjects',     defaultSubject: 'General Medicine' },
+    ini_cet: { label: 'INI-CET',    tagline: 'AIIMS / PGIMER style super-specialty practice MCQs',  defaultSubject: 'General Medicine' },
+    usmle:   { label: 'USMLE',      tagline: 'USMLE-style MCQs grounded in First Aid + UWorld',     defaultSubject: 'General Medicine' },
+    fmge:    { label: 'FMGE',       tagline: 'NMC-screening style MCQs across MBBS subjects',       defaultSubject: 'General Medicine' },
+};
+
+const FALLBACK_SUBJECTS_BY_TRACK: Record<string, string[]> = {
+    cms: [
+        'General Medicine', 'General Surgery', 'Paediatrics',
+        'Obstetrics & Gynaecology', 'Preventive & Social Medicine', 'ENT',
+        'Ophthalmology', 'Orthopaedics', 'Dermatology', 'Psychiatry', 'Anaesthesia',
+    ],
+    neet_pg: [
+        'General Medicine', 'General Surgery', 'Paediatrics',
+        'Obstetrics & Gynaecology', 'Orthopaedics', 'ENT', 'Ophthalmology',
+        'Dermatology', 'Psychiatry', 'Anaesthesia', 'Radiodiagnosis',
+    ],
+    ini_cet: ['General Medicine', 'General Surgery', 'Paediatrics'],
+    usmle:   ['Internal Medicine', 'Surgery', 'Paediatrics', 'OB-GYN', 'Psychiatry'],
+    fmge:    ['General Medicine', 'General Surgery', 'Paediatrics', 'OB-GYN'],
+};
 
 export default function GeneratePage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const { activeTrack, hydrated } = useExamTrack();
     const router = useRouter();
     const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [selectedSubject, setSelectedSubject] = useState('Medicine');
+    const [selectedSubject, setSelectedSubject] = useState('General Medicine');
     const [topic, setTopic] = useState('');
     const [difficulty, setDifficulty] = useState('medium');
     const [count, setCount] = useState(5);
     const [generating, setGenerating] = useState(false);
+    const [progressPct, setProgressPct] = useState(0);
     const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [showExplanations, setShowExplanations] = useState<Record<number, boolean>>({});
     const [aiExplanations, setAiExplanations] = useState<Record<number, AIExplanation>>({});
     const [aiLoadingIdx, setAiLoadingIdx] = useState<number | null>(null);
+    const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
+    // Auth gate
     useEffect(() => {
         if (!authLoading && !isAuthenticated) router.push('/login');
     }, [authLoading, isAuthenticated, router]);
 
+    // Track-aware subject fetch — re-run when active track changes.
     useEffect(() => {
-        if (isAuthenticated) {
-            questionsAPI.getSubjects().then(res => {
+        if (!isAuthenticated || !hydrated) return;
+        questionsAPI.getSubjects({ exam_type: activeTrack })
+            .then(res => {
                 const list = res.data?.results || res.data;
-                if (list?.length) setSubjects(list);
-            }).catch(() => { });
-        }
-    }, [isAuthenticated]);
+                if (Array.isArray(list) && list.length > 0) {
+                    setSubjects(list);
+                    const meta = TRACK_META[activeTrack] || TRACK_META.cms;
+                    // Pick first subject matching defaultSubject, else first.
+                    const target = list.find(s => s.name === meta.defaultSubject) || list[0];
+                    if (target && !list.find(s => s.name === selectedSubject)) {
+                        setSelectedSubject(target.name);
+                    }
+                }
+            })
+            .catch(() => { /* keep fallback list */ });
+        // Reset user-visible selections when switching tracks so the
+        // user doesn't see a stale "Medicine" when they're now on USMLE.
+        setSubjectListFiller(activeTrack);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated, hydrated, activeTrack]);
+
+    function setSubjectListFiller(track: string) {
+        const meta = TRACK_META[track] || TRACK_META.cms;
+        setSelectedSubject(prev => {
+            if (prev && (prev === meta.defaultSubject || subjects.find(s => s.name === prev))) {
+                return prev;
+            }
+            return meta.defaultSubject;
+        });
+    }
+
+    // Progress-bar animation while generating.
+    useEffect(() => {
+        if (!generating) { setProgressPct(0); return; }
+        let pct = 0;
+        const tick = () => {
+            pct = Math.min(pct + Math.random() * 7 + 3, 92);
+            setProgressPct(pct);
+            if (pct < 92) setTimeout(tick, 350);
+        };
+        const t = setTimeout(tick, 200);
+        return () => clearTimeout(t);
+    }, [generating]);
+
+    const subjectOptions = useMemo(() => {
+        if (subjects.length > 0) return subjects.map(s => s.name);
+        return FALLBACK_SUBJECTS_BY_TRACK[activeTrack] || FALLBACK_SUBJECTS_BY_TRACK.cms;
+    }, [subjects, activeTrack]);
+
+    const trackMeta = TRACK_META[activeTrack] || TRACK_META.cms;
 
     const handleGenerate = async () => {
         setGenerating(true);
+        setErrorBanner(null);
         setQuestions([]);
         setSelectedAnswers({});
         setShowExplanations({});
+        setAiExplanations({});
         try {
             const res = await aiAPI.generateQuestions({
                 subject: selectedSubject,
@@ -96,428 +178,532 @@ export default function GeneratePage() {
                 count,
             });
             if (res.data?.questions) {
-                setQuestions(res.data.questions.filter((q: GeneratedQuestion) => !q.error));
+                const filtered = res.data.questions.filter(
+                    (q: GeneratedQuestion) => !q.error,
+                );
+                setQuestions(filtered);
             }
         } catch (err: unknown) {
-            const error = err as { response?: { status?: number; data?: { error?: string } }; message?: string };
+            const error = err as {
+                response?: { status?: number; data?: { error?: string } };
+                message?: string;
+            };
             if (error?.response?.status === 429) {
-                setQuestions([{ question_text: 'AI Tokens Exhausted — Your daily/weekly tokens are used up. Visit /tokens to buy more.', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
+                setErrorBanner(
+                    'AI tokens exhausted — your daily/weekly free quota is used up. ' +
+                    'Visit /subscription or /tokens to top up.',
+                );
             } else {
                 const msg = error?.response?.data?.error || error?.message || 'AI service unavailable';
-                setQuestions([{ question_text: `⚠️ ${msg}. Please try again.`, option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' } as GeneratedQuestion]);
+                setErrorBanner(`${msg}. Please try again.`);
             }
         }
         setGenerating(false);
+        setProgressPct(100);
     };
 
     const selectAnswer = (qIdx: number, option: string) => {
-        if (selectedAnswers[qIdx]) return; // Already answered
+        if (selectedAnswers[qIdx]) return;
         setSelectedAnswers(prev => ({ ...prev, [qIdx]: option }));
         setShowExplanations(prev => ({ ...prev, [qIdx]: true }));
-        // Call AI for deep explanation
         const q = questions[qIdx];
-        if (q) {
-            setAiLoadingIdx(qIdx);
-            aiAPI.explainAfterAnswer({
-                question_text: q.question_text,
-                options: { A: q.option_a, B: q.option_b, C: q.option_c, D: q.option_d },
-                correct_answer: q.correct_answer,
-                selected_answer: option,
-                subject: q.subject || '',
-                topic: q.topic || '',
-            }).then(res => {
-                setAiExplanations(prev => ({ ...prev, [qIdx]: res.data }));
-            }).catch((err) => {
-                const errMsg = err?.response?.data?.error || 'AI unavailable';
-                setAiExplanations(prev => ({ ...prev, [qIdx]: { why_correct: errMsg, error: true } }));
-            }).finally(() => {
-                setAiLoadingIdx(null);
-            });
-        }
+        if (!q) return;
+        setAiLoadingIdx(qIdx);
+        aiAPI.explainAfterAnswer({
+            question_text: q.question_text,
+            options: { A: q.option_a, B: q.option_b, C: q.option_c, D: q.option_d },
+            correct_answer: q.correct_answer,
+            selected_answer: option,
+            subject: q.subject || '',
+            topic: q.topic || '',
+        }).then(res => setAiExplanations(prev => ({ ...prev, [qIdx]: res.data })))
+            .catch(err => setAiExplanations(prev => ({
+                ...prev,
+                [qIdx]: { why_correct: err?.response?.data?.error || 'AI unavailable', error: true },
+            })))
+            .finally(() => setAiLoadingIdx(null));
     };
 
     const getOptionClass = (qIdx: number, optKey: string) => {
         const selected = selectedAnswers[qIdx];
         const correct = questions[qIdx]?.correct_answer;
-        if (!selected) return 'glass-card hover:scale-[1.01] cursor-pointer';
-        if (optKey === correct) return 'border-2 border-green-500 bg-green-500/10';
-        if (optKey === selected && optKey !== correct) return 'border-2 border-red-500 bg-red-500/10';
-        return 'opacity-50';
+        if (!selected) {
+            return 'border-border bg-card hover:bg-accent/40 hover:border-primary/40 cursor-pointer transition-all';
+        }
+        if (optKey === correct) {
+            return 'border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/30';
+        }
+        if (optKey === selected) {
+            return 'border-red-500 bg-red-500/10 ring-1 ring-red-500/30';
+        }
+        return 'border-border bg-card/40 opacity-50';
     };
 
-    if (authLoading) return null;
+    if (authLoading || !hydrated) return null;
 
-    const subjectOptions = subjects.length > 0
-        ? subjects.map(s => s.name)
-        : ['Medicine', 'Surgery', 'Pediatrics', 'Obstetrics & Gynaecology', 'Preventive & Social Medicine'];
+    // Score derived state.
+    const answeredCount = Object.keys(selectedAnswers).length;
+    const correctCount = Object.entries(selectedAnswers).filter(
+        ([idx, ans]) => ans === questions[Number(idx)]?.correct_answer,
+    ).length;
+    const quizComplete = questions.length > 0 && answeredCount === questions.length;
 
     return (
         <>
             <Sidebar />
             <div className="main-content">
-                <main className="page-container p-8">
-                    <div className="max-w-4xl mx-auto">
-                    {/* Header */}
-                    <div className="flex items-center gap-3 mb-2">
-                        <Sparkles className="w-8 h-8" style={{ color: 'var(--accent-primary)' }} />
-                        <h1 className="text-2xl font-bold">Question Generator</h1>
-                    </div>
-                    <p className="mb-8" style={{ color: 'var(--text-secondary)' }}>
-                        Generate unlimited AI-powered practice MCQs on any CMS topic
-                    </p>
-
-                    {/* Controls */}
-                    <div className="glass-card p-6 mb-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                            {/* Subject */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Subject</label>
-                                <div className="relative">
-                                    <select
-                                        value={selectedSubject}
-                                        onChange={e => setSelectedSubject(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-lg border text-sm appearance-none pr-8"
-                                        style={{
-                                            background: 'var(--bg-secondary)',
-                                            borderColor: 'var(--border-color)',
-                                            color: 'var(--text-primary)'
-                                        }}
-                                    >
-                                        {subjectOptions.map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="w-4 h-4 absolute right-2 top-3 pointer-events-none" style={{ color: 'var(--text-secondary)' }} />
+                <main className="page-container p-6 md:p-8">
+                    <div className="max-w-5xl mx-auto space-y-6">
+                        {/* Hero */}
+                        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-primary/5 p-6 md:p-8">
+                            <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+                            <div className="relative flex items-start gap-4">
+                                <div className="rounded-xl bg-primary/15 p-3 text-primary shrink-0">
+                                    <Sparkles className="h-7 w-7" />
                                 </div>
-                            </div>
-
-                            {/* Topic */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Topic (optional)</label>
-                                <input
-                                    type="text"
-                                    value={topic}
-                                    onChange={e => setTopic(e.target.value)}
-                                    placeholder="e.g., Cardiology, Vaccines"
-                                    className="w-full px-3 py-2 rounded-lg border text-sm"
-                                    style={{
-                                        background: 'var(--bg-secondary)',
-                                        borderColor: 'var(--border-color)',
-                                        color: 'var(--text-primary)'
-                                    }}
-                                />
-                            </div>
-
-                            {/* Difficulty */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Difficulty</label>
-                                <div className="relative">
-                                    <select
-                                        value={difficulty}
-                                        onChange={e => setDifficulty(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-lg border text-sm appearance-none pr-8"
-                                        style={{
-                                            background: 'var(--bg-secondary)',
-                                            borderColor: 'var(--border-color)',
-                                            color: 'var(--text-primary)'
-                                        }}
-                                    >
-                                        <option value="easy">Easy</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="hard">Hard</option>
-                                    </select>
-                                    <ChevronDown className="w-4 h-4 absolute right-2 top-3 pointer-events-none" style={{ color: 'var(--text-secondary)' }} />
-                                </div>
-                            </div>
-
-                            {/* Count */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Questions</label>
-                                <div className="relative">
-                                    <select
-                                        value={count}
-                                        onChange={e => setCount(Number(e.target.value))}
-                                        className="w-full px-3 py-2 rounded-lg border text-sm appearance-none pr-8"
-                                        style={{
-                                            background: 'var(--bg-secondary)',
-                                            borderColor: 'var(--border-color)',
-                                            color: 'var(--text-primary)'
-                                        }}
-                                    >
-                                        {[3, 5, 10, 15, 20].map(n => (
-                                            <option key={n} value={n}>{n}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="w-4 h-4 absolute right-2 top-3 pointer-events-none" style={{ color: 'var(--text-secondary)' }} />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                                            AI Question Generator
+                                        </h1>
+                                        <Badge variant="secondary" className="gap-1">
+                                            <Zap className="h-3 w-3" /> AI
+                                        </Badge>
+                                        <Badge variant="outline" className="gap-1 text-xs">
+                                            {trackMeta.label}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-sm md:text-base text-muted-foreground">
+                                        {trackMeta.tagline}. Every question costs 1 token — first 10 are free every day.
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        <button
-                            onClick={handleGenerate}
-                            disabled={generating}
-                            className="btn-primary gap-2"
-                        >
-                            {generating ? (
-                                <><Loader2 className="w-4 h-4 animate-spin" /> Generating {count} Questions...</>
-                            ) : (
-                                <><Sparkles className="w-4 h-4" /> Generate Questions</>
-                            )}
-                        </button>
-                    </div>
-
-                    {/* Results */}
-                    {questions.length > 0 && (
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-bold">{questions.length} Questions Generated</h2>
-                                <button onClick={handleGenerate} className="text-sm flex items-center gap-1" style={{ color: 'var(--accent-primary)' }}>
-                                    <RefreshCw className="w-4 h-4" /> Regenerate
-                                </button>
-                            </div>
-
-                            {/* Score Summary */}
-                            {Object.keys(selectedAnswers).length === questions.length && (
-                                <div className="glass-card p-5 text-center">
-                                    <div className="text-3xl font-bold gradient-text">
-                                        {Object.entries(selectedAnswers).filter(([idx, ans]) =>
-                                            ans === questions[Number(idx)]?.correct_answer
-                                        ).length} / {questions.length}
+                        {/* Controls */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Target className="h-5 w-5 text-primary" />
+                                    Configure your quiz
+                                </CardTitle>
+                                <CardDescription>
+                                    Pick a subject and (optionally) a sub-topic. We&apos;ll generate {count}{' '}
+                                    fresh MCQs calibrated to {difficulty} difficulty.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* Subject */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Subject
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedSubject}
+                                                onChange={e => setSelectedSubject(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-md border bg-background text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-ring"
+                                            >
+                                                {subjectOptions.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                                        </div>
                                     </div>
-                                    <div className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                        Score — {Math.round(Object.entries(selectedAnswers).filter(([idx, ans]) =>
-                                            ans === questions[Number(idx)]?.correct_answer
-                                        ).length / questions.length * 100)}%
+
+                                    {/* Topic */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Topic (optional)
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            value={topic}
+                                            onChange={e => setTopic(e.target.value)}
+                                            placeholder="e.g., Cardiology, Vaccines"
+                                        />
+                                    </div>
+
+                                    {/* Difficulty */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Difficulty
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={difficulty}
+                                                onChange={e => setDifficulty(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-md border bg-background text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-ring"
+                                            >
+                                                <option value="easy">Easy — recall</option>
+                                                <option value="medium">Medium — applied</option>
+                                                <option value="hard">Hard — clinical reasoning</option>
+                                            </select>
+                                            <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                                        </div>
+                                    </div>
+
+                                    {/* Count */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Questions
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={count}
+                                                onChange={e => setCount(Number(e.target.value))}
+                                                className="w-full px-3 py-2 rounded-md border bg-background text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-ring"
+                                            >
+                                                {[3, 5, 10, 15, 20].map(n => (
+                                                    <option key={n} value={n}>{n}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                                        </div>
                                     </div>
                                 </div>
-                            )}
 
-                            {questions.map((q, idx) => (
-                                <div key={idx} className="glass-card p-6">
-                                    {/* Question Number & Header */}
-                                    <div className="flex items-start gap-3 mb-4">
-                                        <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                                            style={{ background: 'var(--accent-primary)', color: 'white' }}>
-                                            {idx + 1}
+                                {/* Cost preview + CTA */}
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Coins className="h-3.5 w-3.5 text-amber-500" />
+                                        <span>
+                                            Estimated cost:&nbsp;
+                                            <span className="font-semibold text-foreground">{count}</span>
+                                            &nbsp;token{count > 1 ? 's' : ''} (1 per question + 1 per AI explanation)
                                         </span>
-                                        <div className="flex-1">
-                                            <p className="font-medium leading-relaxed">{q.question_text}</p>
-                                            <div className="flex gap-2 mt-2">
-                                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                                                    {q.subject}
-                                                </span>
-                                                {q.topic && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                                                        {q.topic}
-                                                    </span>
-                                                )}
-                                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                                                    {q.difficulty}
-                                                </span>
-                                            </div>
-                                        </div>
                                     </div>
-
-                                    {/* Options */}
-                                    <div className="space-y-2 ml-11">
-                                        {['A', 'B', 'C', 'D'].map(opt => {
-                                            const optKey = `option_${opt.toLowerCase()}` as keyof GeneratedQuestion;
-                                            const optValue = q[optKey] as string;
-                                            if (!optValue) return null;
-                                            return (
-                                                <div
-                                                    key={opt}
-                                                    onClick={() => selectAnswer(idx, opt)}
-                                                    className={`p-3 rounded-lg transition-all flex items-center gap-3 ${getOptionClass(idx, opt)}`}
-                                                    style={{ background: selectedAnswers[idx] ? undefined : 'var(--bg-secondary)' }}
-                                                >
-                                                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                                                        style={{
-                                                            border: '2px solid var(--border-color)',
-                                                            color: 'var(--text-secondary)'
-                                                        }}>
-                                                        {opt}
-                                                    </span>
-                                                    <span className="text-sm">{optValue}</span>
-                                                    {selectedAnswers[idx] && opt === q.correct_answer && (
-                                                        <CheckCircle className="w-5 h-5 text-green-400 ml-auto shrink-0" />
-                                                    )}
-                                                    {selectedAnswers[idx] === opt && opt !== q.correct_answer && (
-                                                        <XCircle className="w-5 h-5 text-red-400 ml-auto shrink-0" />
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Explanation */}
-                                    {showExplanations[idx] && q.explanation && (
-                                        <div className="mt-4 ml-11 p-4 rounded-lg border"
-                                            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-                                            <div className="text-sm font-semibold mb-2" style={{ color: 'var(--accent-primary)' }}>
-                                                Explanation
-                                            </div>
-                                            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                                {q.explanation}
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* AI Loading */}
-                                    {aiLoadingIdx === idx && (
-                                        <div className="mt-3 ml-11 p-4 rounded-lg flex items-center gap-3 animate-pulse" style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.2)' }}>
-                                            <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent-primary)' }} />
-                                            <span className="text-xs font-medium" style={{ color: 'var(--accent-primary)' }}>AI generating deep analysis...</span>
-                                        </div>
-                                    )}
-
-                                    {/* AI Deep Explanation */}
-                                    {aiExplanations[idx] && (
-                                        <div className="mt-3 ml-11 space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <Brain className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
-                                                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--accent-primary)' }}>🧠 AI Deep Explanation</span>
-                                            </div>
-
-                                            {/* Category & Question Type Tags */}
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {aiExplanations[idx].category && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(6,182,212,0.1)', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.2)' }}>
-                                                        📂 {aiExplanations[idx].category}
-                                                    </span>
-                                                )}
-                                                {aiExplanations[idx].sub_category && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                        📁 {aiExplanations[idx].sub_category}
-                                                    </span>
-                                                )}
-                                                {aiExplanations[idx].question_type && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
-                                                        🏷️ {aiExplanations[idx].question_type}
-                                                    </span>
-                                                )}
-                                                {aiExplanations[idx].core_concept && (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                                        🎯 {aiExplanations[idx].core_concept}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {aiExplanations[idx].why_correct && (
-                                                <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                                    <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>✅ Why Correct</h6>
-                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].why_correct}</p>
-                                                </div>
-                                            )}
-
-                                            {aiExplanations[idx].why_wrong && Object.keys(aiExplanations[idx].why_wrong).length > 0 && (
-                                                <div className="p-3 rounded-lg" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
-                                                    <h6 className="text-xs font-bold mb-1" style={{ color: '#ef4444' }}>❌ Why Others Wrong</h6>
-                                                    <div className="space-y-1">
-                                                        {Object.entries(aiExplanations[idx].why_wrong).map(([k, v]) => (
-                                                            <p key={k} className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                                                <strong className="font-bold" style={{ color: '#ef4444' }}>{k}:</strong> {String(v)}
-                                                            </p>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {aiExplanations[idx].textbook_reference?.book && (
-                                                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                                                    <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
-                                                    <div>
-                                                        <h6 className="text-xs font-bold" style={{ color: '#8b5cf6' }}>📚 Textbook Reference</h6>
-                                                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].textbook_reference.book}</p>
-                                                        {aiExplanations[idx].textbook_reference.chapter && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Chapter: {aiExplanations[idx].textbook_reference.chapter}</p>}
-                                                        {aiExplanations[idx].textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Page: {aiExplanations[idx].textbook_reference.page}</p>}
-                                                        {aiExplanations[idx].textbook_reference.section && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Section: {aiExplanations[idx].textbook_reference.section}</p>}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {aiExplanations[idx].mnemonic && (
-                                                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
-                                                    <Sparkles className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
-                                                    <div>
-                                                        <h6 className="text-xs font-bold" style={{ color: '#f59e0b' }}>💡 Mnemonic</h6>
-                                                        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{aiExplanations[idx].mnemonic}</p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {aiExplanations[idx].high_yield_points && aiExplanations[idx].high_yield_points.length > 0 && (
-                                                <div className="p-3 rounded-lg" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
-                                                    <h6 className="text-xs font-bold mb-1" style={{ color: '#ec4899' }}>🔥 High Yield Points</h6>
-                                                    <ul className="space-y-0.5">
-                                                        {aiExplanations[idx].high_yield_points.map((p: string, i: number) => (
-                                                            <li key={i} className="text-xs flex gap-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}><span style={{ color: '#ec4899' }}>•</span>{p}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                            {aiExplanations[idx].around_concepts && aiExplanations[idx].around_concepts.length > 0 && (
-                                                <div>
-                                                    <h6 className="text-xs font-bold mb-1.5" style={{ color: '#6366f1' }}>🔗 Related Concepts</h6>
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {aiExplanations[idx].around_concepts.map((c: string, i: number) => (
-                                                            <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)' }}>{c}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {aiExplanations[idx].clinical_pearl && (
-                                                    <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                                                        <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].clinical_pearl}</p>
-                                                    </div>
-                                                )}
-                                                {aiExplanations[idx].exam_tip && (
-                                                    <div className="p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
-                                                        <h6 className="text-xs font-bold mb-1" style={{ color: '#f59e0b' }}>🎓 Exam Tip</h6>
-                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanations[idx].exam_tip}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* PYQ Frequency & Similar Questions */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                {aiExplanations[idx].pyq_frequency && (
-                                                    <div className="p-2.5 rounded-lg flex items-center gap-2" style={{ background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
-                                                        <Target className="w-3.5 h-3.5 shrink-0" style={{ color: '#ec4899' }} />
-                                                        <span className="text-xs font-medium" style={{ color: '#ec4899' }}>PYQ: {aiExplanations[idx].pyq_frequency}</span>
-                                                    </div>
-                                                )}
-                                                {aiExplanations[idx].similar_pyq && (
-                                                    <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
-                                                        <Target className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#6366f1' }} />
-                                                        <span className="text-xs font-medium" style={{ color: '#6366f1' }}>📋 {aiExplanations[idx].similar_pyq}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                                    <Button
+                                        onClick={handleGenerate}
+                                        disabled={generating}
+                                        size="lg"
+                                        className="gap-2"
+                                    >
+                                        {generating ? (
+                                            <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+                                        ) : (
+                                            <><Sparkles className="h-4 w-4" /> Generate Questions</>
+                                        )}
+                                    </Button>
                                 </div>
+
+                                {generating && (
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                            <span>AI is composing questions…</span>
+                                            <span>{Math.round(progressPct)}%</span>
+                                        </div>
+                                        <Progress value={progressPct} />
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Error banner */}
+                        {errorBanner && (
+                            <div className="flex items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4">
+                                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                                <div className="text-sm text-red-700 dark:text-red-300">{errorBanner}</div>
+                            </div>
+                        )}
+
+                        {/* Results header + score */}
+                        {questions.length > 0 && (
+                            <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <div>
+                                    <h2 className="text-lg font-bold flex items-center gap-2">
+                                        <Award className="h-5 w-5 text-primary" />
+                                        {questions.length} Questions generated
+                                    </h2>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {answeredCount === 0
+                                            ? 'Pick an option on each card to reveal the AI explanation.'
+                                            : `Answered ${answeredCount} of ${questions.length}.`}
+                                    </p>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1">
+                                    <RefreshCw className="h-3.5 w-3.5" /> Regenerate
+                                </Button>
+                            </div>
+                        )}
+
+                        {quizComplete && (
+                            <Card>
+                                <CardContent className="p-6 text-center">
+                                    <div className="text-4xl font-bold text-primary">
+                                        {correctCount} / {questions.length}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground mt-1">
+                                        Score —{' '}
+                                        <span className="font-semibold text-foreground">
+                                            {Math.round((correctCount / questions.length) * 100)}%
+                                        </span>
+                                        {' · '}
+                                        {correctCount >= Math.ceil(questions.length * 0.7)
+                                            ? 'Strong performance on this topic'
+                                            : 'Re-read the explanations and try Regenerate'}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Question cards */}
+                        <div className="space-y-4">
+                            {questions.map((q, idx) => (
+                                <Card key={idx}>
+                                    <CardContent className="p-5 md:p-6 space-y-4">
+                                        <div className="flex items-start gap-3">
+                                            <span className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold bg-primary text-primary-foreground">
+                                                {idx + 1}
+                                            </span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium leading-relaxed">{q.question_text}</p>
+                                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                                    <Badge variant="secondary">{q.subject}</Badge>
+                                                    {q.topic && <Badge variant="outline">{q.topic}</Badge>}
+                                                    <Badge variant="outline" className="text-[10px] uppercase">
+                                                        {q.difficulty}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Options */}
+                                        <div className="space-y-2 ml-0 md:ml-12">
+                                            {(['A', 'B', 'C', 'D'] as const).map(opt => {
+                                                const optValue = q[`option_${opt.toLowerCase()}` as keyof GeneratedQuestion] as string;
+                                                if (!optValue) return null;
+                                                const selected = selectedAnswers[idx];
+                                                const correct = q.correct_answer;
+                                                return (
+                                                    <div
+                                                        key={opt}
+                                                        onClick={() => selectAnswer(idx, opt)}
+                                                        className={`p-3 rounded-lg border flex items-center gap-3 ${getOptionClass(idx, opt)}`}
+                                                    >
+                                                        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border shrink-0">
+                                                            {opt}
+                                                        </span>
+                                                        <span className="text-sm flex-1">{optValue}</span>
+                                                        {selected && opt === correct && (
+                                                            <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
+                                                        )}
+                                                        {selected === opt && opt !== correct && (
+                                                            <XCircle className="h-5 w-5 text-red-500 shrink-0" />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Inline explanation */}
+                                        {showExplanations[idx] && q.explanation && (
+                                            <div className="ml-0 md:ml-12 rounded-lg border bg-muted/40 p-4">
+                                                <div className="text-xs font-bold uppercase tracking-wide text-primary mb-1">
+                                                    Why this answer
+                                                </div>
+                                                <p className="text-sm leading-relaxed text-muted-foreground">
+                                                    {q.explanation}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* AI deep explanation loader */}
+                                        {aiLoadingIdx === idx && (
+                                            <div className="ml-0 md:ml-12 flex items-center gap-2 text-xs text-primary animate-pulse">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                AI is preparing a deep analysis…
+                                            </div>
+                                        )}
+
+                                        {/* AI deep explanation */}
+                                        {aiExplanations[idx] && (
+                                            <div className="ml-0 md:ml-12 space-y-3 pt-2 border-t">
+                                                <div className="flex items-center gap-2 pt-2">
+                                                    <Brain className="h-4 w-4 text-primary" />
+                                                    <span className="text-xs font-bold uppercase tracking-wide text-primary">
+                                                        AI Deep Explanation
+                                                    </span>
+                                                    {aiExplanations[idx].error && (
+                                                        <Badge variant="destructive" className="ml-auto">
+                                                            AI unavailable
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                <Separator />
+
+                                                {/* Tags row */}
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {aiExplanations[idx].category && (
+                                                        <Badge variant="secondary">{aiExplanations[idx].category}</Badge>
+                                                    )}
+                                                    {aiExplanations[idx].question_type && (
+                                                        <Badge variant="outline">{aiExplanations[idx].question_type}</Badge>
+                                                    )}
+                                                    {aiExplanations[idx].core_concept && (
+                                                        <Badge variant="outline" className="border-primary/30 text-primary">
+                                                            {aiExplanations[idx].core_concept}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                {aiExplanations[idx].why_correct && (
+                                                    <ExplanationBlock
+                                                        title="Why the correct answer is right"
+                                                        accent="emerald"
+                                                    >
+                                                        {aiExplanations[idx].why_correct!}
+                                                    </ExplanationBlock>
+                                                )}
+
+                                                {aiExplanations[idx].why_wrong && Object.keys(aiExplanations[idx].why_wrong!).length > 0 && (
+                                                    <ExplanationBlock title="Why the other options are wrong" accent="red">
+                                                        <div className="space-y-1">
+                                                            {Object.entries(aiExplanations[idx].why_wrong!).map(([k, v]) => (
+                                                                <p key={k}>
+                                                                    <span className="font-semibold">{k}:</span>{' '}
+                                                                    <span className="text-muted-foreground">{String(v)}</span>
+                                                                </p>
+                                                            ))}
+                                                        </div>
+                                                    </ExplanationBlock>
+                                                )}
+
+                                                {aiExplanations[idx].mnemonic && (
+                                                    <ExplanationBlock
+                                                        title="Mnemonic"
+                                                        accent="amber"
+                                                        icon={<Sparkles className="h-3.5 w-3.5" />}
+                                                    >
+                                                        <span className="font-medium">{aiExplanations[idx].mnemonic}</span>
+                                                    </ExplanationBlock>
+                                                )}
+
+                                                {aiExplanations[idx].textbook_reference?.book && (
+                                                    <ExplanationBlock title="Textbook reference" accent="violet" icon={<BookMarked className="h-3.5 w-3.5" />}>
+                                                        <p className="font-semibold">{aiExplanations[idx].textbook_reference!.book}</p>
+                                                        {aiExplanations[idx].textbook_reference!.chapter && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Chapter: {aiExplanations[idx].textbook_reference!.chapter}
+                                                            </p>
+                                                        )}
+                                                        {aiExplanations[idx].textbook_reference!.page && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Page: {aiExplanations[idx].textbook_reference!.page}
+                                                            </p>
+                                                        )}
+                                                    </ExplanationBlock>
+                                                )}
+
+                                                {aiExplanations[idx].high_yield_points && aiExplanations[idx].high_yield_points!.length > 0 && (
+                                                    <ExplanationBlock title="High-yield points" accent="pink">
+                                                        <ul className="list-disc pl-5 space-y-0.5">
+                                                            {aiExplanations[idx].high_yield_points!.map((p, i) => (
+                                                                <li key={i}>{p}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </ExplanationBlock>
+                                                )}
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {aiExplanations[idx].clinical_pearl && (
+                                                        <ExplanationBlock title="Clinical pearl" accent="emerald">
+                                                            {aiExplanations[idx].clinical_pearl!}
+                                                        </ExplanationBlock>
+                                                    )}
+                                                    {aiExplanations[idx].exam_tip && (
+                                                        <ExplanationBlock title="Exam tip" accent="amber">
+                                                            {aiExplanations[idx].exam_tip!}
+                                                        </ExplanationBlock>
+                                                    )}
+                                                </div>
+
+                                                {(aiExplanations[idx].pyq_frequency || aiExplanations[idx].similar_pyq) && (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                                                        {aiExplanations[idx].pyq_frequency && (
+                                                            <div className="text-xs p-2.5 rounded-md bg-pink-500/10 border border-pink-500/20">
+                                                                <span className="font-semibold text-pink-600 dark:text-pink-400">
+                                                                    PYQ frequency:{' '}
+                                                                </span>
+                                                                {aiExplanations[idx].pyq_frequency}
+                                                            </div>
+                                                        )}
+                                                        {aiExplanations[idx].similar_pyq && (
+                                                            <div className="text-xs p-2.5 rounded-md bg-indigo-500/10 border border-indigo-500/20">
+                                                                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                                                    Similar PYQs:{' '}
+                                                                </span>
+                                                                {aiExplanations[idx].similar_pyq}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             ))}
                         </div>
-                    )}
 
-                    {/* Empty state */}
-                    {!generating && questions.length === 0 && (
-                        <div className="glass-card p-12 text-center">
-                            <Sparkles className="w-12 h-12 mx-auto mb-4" style={{ color: 'var(--text-secondary)', opacity: 0.4 }} />
-                            <h3 className="text-lg font-bold mb-2">No Questions Yet</h3>
-                            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                Select a subject and click &quot;Generate Questions&quot; to create AI-powered practice MCQs
-                            </p>
-                        </div>
-                    )}
+                        {/* Empty state */}
+                        {!generating && questions.length === 0 && !errorBanner && (
+                            <Card>
+                                <CardContent className="p-12 text-center">
+                                    <div className="mx-auto mb-4 rounded-full bg-primary/10 p-4 w-fit">
+                                        <Sparkles className="h-10 w-10 text-primary" />
+                                    </div>
+                                    <h3 className="text-lg font-bold mb-2">No questions yet</h3>
+                                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                                        Pick a subject above and click{' '}
+                                        <span className="font-medium text-foreground">Generate Questions</span>{' '}
+                                        to create {count} AI-powered practice MCQs for{' '}
+                                        <span className="font-medium text-foreground">{trackMeta.label}</span>.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 </main>
             </div>
         </>
+    );
+}
+
+/**
+ * ExplanationBlock — colour-coded card for a single AI explanation
+ * field. Avoids prop-drilling `style={{ background: 'rgba(…)' }}` —
+ * the rest of the codebase reads cleaner with explicit classes.
+ */
+type ExplanationAccent = 'emerald' | 'red' | 'amber' | 'violet' | 'pink';
+
+function ExplanationBlock({
+    title,
+    accent,
+    icon,
+    children,
+}: {
+    title: string;
+    accent: ExplanationAccent;
+    icon?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    const accentClass: Record<ExplanationAccent, string> = {
+        emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+        red:     'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
+        amber:   'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+        violet:  'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+        pink:    'border-pink-500/30 bg-pink-500/10 text-pink-700 dark:text-pink-300',
+    };
+    return (
+        <div className={`rounded-md border p-3 text-sm leading-relaxed ${accentClass[accent]}`}>
+            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide mb-1.5">
+                {icon}
+                <span>{title}</span>
+            </div>
+            <div>{children}</div>
+        </div>
     );
 }
