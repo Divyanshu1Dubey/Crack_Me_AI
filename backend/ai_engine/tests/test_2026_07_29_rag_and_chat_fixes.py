@@ -120,15 +120,20 @@ class RagApiEndpointTests(TestCase):
         a 503 with a message the frontend can render — not the legacy
         operator-only string.
         """
-        from rest_framework.test import APIRequestFactory
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        from django.contrib.auth import get_user_model
         from ai_engine.views import RAGSearchView
 
+        User = get_user_model()
         factory = APIRequestFactory()
         request = factory.post(
             "/api/ai/rag-search/",
             {"query": "test"},
             format="json",
         )
+        user, _ = User.objects.get_or_create(username="rag-search-503-test")
+        force_authenticate(request, user=user)
+
         with patch("ai_engine.services.AIService.rag_search") as mock_search:
             mock_search.return_value = {
                 "results": [],
