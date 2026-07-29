@@ -446,7 +446,8 @@ export const analyticsAPI = {
   // Gamification
   getStreak: () => api.get('/analytics/streak/'),
   getBadges: () => api.get('/analytics/badges/'),
-  getLeaderboard: (period?: string) => api.get('/analytics/leaderboard/', { params: { period } }),
+  getLeaderboard: (params?: { period?: string; mode?: string }) =>
+    api.get('/analytics/leaderboard/', { params }),
   // Admin
   getAdminDashboard: () => api.get('/analytics/admin-dashboard/'),
   getWeakAreaControl: (params?: Record<string, string | number>) => api.get('/analytics/admin/weak-area-control/', { params }),
