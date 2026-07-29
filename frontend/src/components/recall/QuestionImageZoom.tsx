@@ -43,10 +43,12 @@ export default function QuestionImageZoom({ src, alt = "Recall image", priority 
   const [ty, setTy] = useState(0);
   const [showOcr, setShowOcr] = useState(false);
 
+  // useCallback must be called unconditionally — declare it before any
+  // early return so React Hook order stays stable across renders.
+  const reset = useCallback(() => { setZoom(1); setTx(0); setTy(0); }, []);
+
   const url = src.file_url || "";
   if (!url) return null;
-
-  const reset = useCallback(() => { setZoom(1); setTx(0); setTy(0); }, []);
 
   return (
     <figure className="relative inline-block w-full max-w-2xl">

@@ -13,11 +13,15 @@ interface Props {
 }
 
 export default function QuestionTimer({ questionId }: Props) {
-  const start = useRef<number>(Date.now());
+  // Initialise the ref lazily so the impure Date.now() call only runs
+  // once per mount, not on every render. This satisfies the
+  // react-hooks/purity rule without changing behaviour.
+  const start = useRef<number | null>(null);
 
   useEffect(() => {
     start.current = Date.now();
     const flush = () => {
+      if (start.current === null) return;
       const elapsed = Math.max(0, Date.now() - start.current);
       start.current = Date.now();
       const ms = Math.min(60_000, elapsed); // 60s cap per flush
