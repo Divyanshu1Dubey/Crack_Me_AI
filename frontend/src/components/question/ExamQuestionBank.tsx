@@ -792,7 +792,11 @@ function ExamQuestionBankInner({
                                 >
                                     <option value="">All Subjects</option>
                                     {subjects.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name} ({s.question_count})</option>
+                                        // The loader-created "Imported" Subject row is renamed in the UI
+                                        // so users never see the raw loader literal in the filter dropdown.
+                                        <option key={s.id} value={s.id}>
+                                            {s.name === 'Imported' ? 'Expert Curated' : s.name} ({s.question_count})
+                                        </option>
                                     ))}
                                 </select>
                                 <select
@@ -854,11 +858,13 @@ function ExamQuestionBankInner({
                                             <div className="flex justify-between items-start mb-2">
                                                 <Badge variant="secondary" className="text-xs">
                                                     {/* Backend uses year=0 as a sentinel for "Expert Curated"
-                                                        (no PYQ year). Hide it so we don't render "0 • Subject". */}
+                                                        (no PYQ year). Hide it so we don't render "0 • Subject".
+                                                        The "Imported" Subject row is renamed to "Expert Curated"
+                                                        in the UI so users never see the raw loader literal. */}
                                                     {q.year && q.year > 0 ? (
                                                         <>{q.year} &bull; {q.subject_name}</>
                                                     ) : (
-                                                        <>{q.subject_name || 'General Medicine'}</>
+                                                        <>Expert Curated</>
                                                     )}
                                                 </Badge>
                                                 <div className="flex items-center gap-2">
@@ -894,9 +900,12 @@ function ExamQuestionBankInner({
                                                 {q.topic_name ? (
                                                     <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name}</Badge>
                                                 ) : (
-                                                    // Don't show a useless literal placeholder; fall back to a
-                                                    // descriptive generic so the card still reads correctly.
-                                                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">General {q.subject_name || 'Medicine'}</Badge>
+                                                    // Don't show a useless literal placeholder; the "Imported"
+                                                    // Subject row renders as "General" so the card never surfaces
+                                                    // the raw loader label "General Imported".
+                                                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">
+                                                        {q.subject_name === 'Imported' ? 'General' : `General ${q.subject_name || 'Medicine'}`}
+                                                    </Badge>
                                                 )}
                                                 {q.year ? (
                                                     <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>
@@ -1009,7 +1018,11 @@ function ExamQuestionBankInner({
                                         ) : (
                                             <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 pointer-events-none">Expert Curated</Badge>
                                         )}
-                                        <Badge variant="secondary" className="pointer-events-none">{String(detail.subject_name)}</Badge>
+                                        {/* The loader-created "Imported" Subject row is renamed in the UI so
+                                            the detail panel never surfaces the raw loader literal. */}
+                                        <Badge variant="secondary" className="pointer-events-none">
+                                            {String(detail.subject_name) === 'Imported' ? 'Expert Curated' : String(detail.subject_name)}
+                                        </Badge>
                                         {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
                                         {detail.difficulty && <Badge variant="outline" className="pointer-events-none capitalize">{detail.difficulty}</Badge>}
                                         {detail.is_verified_by_admin && (
