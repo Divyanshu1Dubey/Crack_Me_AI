@@ -53,8 +53,24 @@ def _drop_field_if_present(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # NOTE: This migration originally declared
+    # `("questions", "0032_split_space_joined_stems")` as its parent.
+    # That migration is a one-off data cleanup (RunPython only — no
+    # schema change) which was never committed to the deploy branch.
+    # Pointing at it from a committed migration broke `manage.py
+    # migrate` on Render with `NodeNotFoundError: Migration
+    # questions.0033_..._dependencies reference nonexistent parent
+    # node ('questions', '0032_split_space_joined_stems')`.
+    #
+    # `0033` is purely schema (idempotent ADD COLUMN for
+    # `QuestionImage.updated_at` + CreateModel for `RemovedQuestion`).
+    # It has zero semantic dependency on `0032`'s data cleanup, so we
+    # chain onto the last *committed* sibling (`0030`) instead. If
+    # `0032` is ever reinstated, its author must rebase it onto `0030`
+    # (the parent it originally had) — it does not belong between
+    # `0030` and `0033`.
     dependencies = [
-        ("questions", "0032_split_space_joined_stems"),
+        ("questions", "0030_split_inlined_statements"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

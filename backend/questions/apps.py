@@ -39,7 +39,7 @@ import os
 import threading
 
 from django.apps import AppConfig
-from django.db.utils import OperationalError, ProgrammingError
+from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,18 @@ def _run_relink_passive() -> None:
         # migrations have run. The build.sh relink pass covers that
         # path, so this branch is normal during local first-boot.
         logger.info("questions auto-heal: skipping (%s)", exc)
+    except DatabaseError as exc:
+        # `sqlite3.DatabaseError: file is not a database` (and the
+        # django.db.utils.DatabaseError wrapper) can fire on Render
+        # when the persistent disk hasn't been mounted yet, the DB
+        # file is empty/truncated, or another process is mid-write.
+        # NEVER let the heal task crash the worker process — the
+        # frontend's bare-URL resolver keeps the UI graceful even
+        # without the rewrite pass, and build.sh's explicit relink
+        # invocation will retry on the next deploy.
+        logger.warning(
+            "questions auto-heal: database not ready, skipping (%s)", exc
+        )
     except Exception as exc:
         # Never fail boot for the heal. Log and move on — the
         # frontend's bare-URL resolver keeps the UI graceful.
