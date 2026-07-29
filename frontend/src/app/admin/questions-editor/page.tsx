@@ -29,6 +29,13 @@ export default function AdminQuestionsEditorPage() {
   const [mergeDropIds, setMergeDropIds] = useState<number[]>([]);
   const [mergeError, setMergeError] = useState<string | null>(null);
 
+  // Remove-from-bank modal state (durable soft-delete).
+  const [removeFor, setRemoveFor] = useState<any | null>(null);
+  const [removeReason, setRemoveReason] = useState('');
+  const [removeConfirmId, setRemoveConfirmId] = useState('');
+  const [removeSubmitting, setRemoveSubmitting] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
   // Drag and drop state
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
@@ -226,7 +233,14 @@ export default function AdminQuestionsEditorPage() {
       const memberIds: number[] = (res.data?.members || [])
         .map((m: any) => m.id)
         .filter((id: number) => id !== canonicalId);
-      setMergeDropIds(memberIds);
+      // Belt-and-suspenders: also drop any row the backend marked canonical,
+      // in case canonical_id and is_canonical diverge (asymmetric cluster).
+      const finalDropIds = memberIds.filter(
+        (id) => !(res.data?.members || []).some(
+          (m: any) => m.id === id && m.is_canonical === true,
+        ),
+      );
+      setMergeDropIds(finalDropIds);
     } catch (e: any) {
       console.error('Failed to load duplicates', e);
       setMergeError(
@@ -276,6 +290,41 @@ export default function AdminQuestionsEditorPage() {
       );
     } finally {
       setMergeSubmitting(false);
+    }
+  };
+
+  const openRemoveForBank = (q: any) => {
+    setRemoveFor(q);
+    setRemoveReason('');
+    setRemoveConfirmId('');
+    setRemoveError(null);
+  };
+
+  const closeRemoveForBank = () => {
+    setRemoveFor(null);
+    setRemoveReason('');
+    setRemoveConfirmId('');
+    setRemoveError(null);
+  };
+
+  const submitRemoveForBank = async () => {
+    if (!removeFor) return;
+    if (removeConfirmId.trim() !== String(removeFor.id)) {
+      setRemoveError(`Type Q${removeFor.id} exactly to confirm.`);
+      return;
+    }
+    setRemoveSubmitting(true);
+    try {
+      await questionsAPI.removeFromBank(removeFor.id, { reason: removeReason });
+      await fetchQuestions();
+      closeRemoveForBank();
+    } catch (e: any) {
+      console.error('Failed to remove from bank', e);
+      setRemoveError(
+        e?.response?.data?.detail || 'Remove failed — check the server logs.'
+      );
+    } finally {
+      setRemoveSubmitting(false);
     }
   };
 
@@ -542,6 +591,13 @@ export default function AdminQuestionsEditorPage() {
                   >
                     Edit
                   </button>
+                  <button
+                    onClick={() => openRemoveForBank(q)}
+                    className="text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1 rounded font-semibold"
+                    title="Remove from question bank (soft-delete; survives deploys via RemovedQuestion skip-list)"
+                  >
+                    Remove
+                  </button>
                   {q.duplicate_count > 1 ? (
                     <button
                       onClick={() => openMergeDuplicates(q)}
@@ -727,6 +783,105 @@ export default function AdminQuestionsEditorPage() {
                   {mergeSubmitting ? 'Merging…' : 'Soft-drop selected'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove from bank modal (durable soft-delete). Captures the row's
+          stem hash in RemovedQuestion so the next import_neet_pg /
+          load_exam_fixture deploy won't re-create it. */}
+      {removeFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-lg shadow-xl border border-red-200 w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-red-200">
+              <h2 className="text-lg font-bold text-red-900">
+                Remove from bank — Q{removeFor.id}
+              </h2>
+              <button
+                onClick={closeRemoveForBank}
+                className="text-gray-500 hover:text-gray-900 text-2xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
+              <p className="text-sm text-gray-700">
+                You are about to remove the following question from the bank.
+                It will be hidden from the student app immediately, and the
+                next <code>import_neet_pg</code> / <code>load_exam_fixture</code>
+                {' '}deploy will skip re-creating it.
+              </p>
+
+              <div className="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-gray-800 max-h-32 overflow-y-auto">
+                {(removeFor.question_text || removeFor.text || '').slice(0, 320) || (
+                  <span className="italic text-gray-500">
+                    (no preview available)
+                  </span>
+                )}
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800">
+                <strong>Destructive.</strong> Existing user history
+                (bookmarks, attempts, notes, discussions) keeps referencing
+                this row, but the question will no longer appear in any
+                practice or test view. Use the matching "Restore" endpoint
+                if you change your mind.
+              </div>
+
+              {removeError && (
+                <div className="text-red-700 bg-red-50 border border-red-200 rounded p-3 text-sm">
+                  {removeError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Reason (optional)
+                </label>
+                <textarea
+                  className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  rows={2}
+                  value={removeReason}
+                  onChange={(e) => setRemoveReason(e.target.value)}
+                  placeholder="e.g. duplicate of Q9713, wrong answer key"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Type <code className="bg-gray-100 px-1 rounded">Q{removeFor.id}</code> to confirm
+                </label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={removeConfirmId}
+                  onChange={(e) => setRemoveConfirmId(e.target.value)}
+                  placeholder={`Q${removeFor.id}`}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-red-200 bg-red-50">
+              <button
+                onClick={closeRemoveForBank}
+                className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded hover:bg-gray-50"
+                disabled={removeSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRemoveForBank}
+                disabled={
+                  removeSubmitting || removeConfirmId.trim() !== String(removeFor.id)
+                }
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {removeSubmitting ? 'Removing…' : 'Remove from bank'}
+              </button>
             </div>
           </div>
         </div>

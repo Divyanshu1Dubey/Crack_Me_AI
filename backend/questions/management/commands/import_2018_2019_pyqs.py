@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 from ai_engine.services import AIService
 from questions.text_encoding import normalize_text, read_text_file
 
@@ -130,6 +131,14 @@ class Command(BaseCommand):
                             subject=subject,
                             defaults={"importance": 5, "description": f"General topic for {subject.name}"}
                         )
+
+                        # Honor admin "Remove from bank" tombstones — if this
+                        # stem was previously removed, skip it on re-import.
+                        if is_removed(q_data["question_text"]):
+                            self.stdout.write(self.style.WARNING(
+                                f"  → Skipping PYQ {year} P{q_data['paper']} Q{q_data.get('number','?')}: admin-removed"
+                            ))
+                            continue
 
                         new_q = Question.objects.create(
                             question_text=normalize_text(q_data["question_text"]),

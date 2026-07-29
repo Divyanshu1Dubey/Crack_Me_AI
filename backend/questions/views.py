@@ -23,7 +23,7 @@ from django.db.models import Count, F, Max, Q, Value
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, compute_stem_hash
 from .serializers import (
     SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
@@ -45,6 +45,7 @@ from . import recall_images as _recall_images  # Phase 3 image facets
 from . import practice_modes as _practice_modes  # Phase 3 practice queues
 from . import ai_per_question as _ai_per_question  # Phase 3 AI endpoints
 from . import practice_experience as _practice_experience  # Phase 3 flag/confidence/time
+from .import_protection import pre_check_create as _pre_check_remove
 
 
 logger = logging.getLogger(__name__)
@@ -460,6 +461,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
         yet (e.g. for questions ingested after the last detection pass).
         """
         question = self.get_object()
+
+        def _serialize(q, canonical_id_for_member: int) -> dict:
+            return {
+                'id': q.id,
+                'is_canonical': q.id == canonical_id_for_member,
+                'is_active': q.is_active,
+                'is_dropped': q.is_dropped,
+                'admin_edited': bool(getattr(q, 'admin_edited', False)),
+                'subject_name': q.subject.name if q.subject_id else '',
+                'topic_name': q.topic.name if q.topic_id else '',
+                'year': q.year,
+                'exam_source': q.exam_source or '',
+                'question_text_preview': (q.question_text or '')[:120],
+            }
+
         membership = (
             DuplicateMember.objects.filter(question_id=question.id)
             .select_related('cluster')
@@ -480,19 +496,22 @@ class QuestionViewSet(viewsets.ModelViewSet):
         members = []
         if members_qs:
             for m in members_qs:
-                q = m.question
-                members.append({
-                    'id': q.id,
-                    'is_canonical': q.id == canonical_id,
-                    'is_active': q.is_active,
-                    'is_dropped': q.is_dropped,
-                    'admin_edited': bool(getattr(q, 'admin_edited', False)),
-                    'subject_name': q.subject.name if q.subject_id else '',
-                    'topic_name': q.topic.name if q.topic_id else '',
-                    'year': q.year,
-                    'exam_source': q.exam_source or '',
-                    'question_text_preview': (q.question_text or '')[:120],
-                })
+                members.append(_serialize(m.question, canonical_id))
+
+            # Bug fix: ensure the cluster's canonical row is always present
+            # in `members`, even if it has no DuplicateMember row. Without
+            # this, the admin's "Soft-drop selected" click sends the
+            # canonical id back as a duplicate_id and trips `merge_duplicates`
+            # with 400 "canonical id cannot appear in duplicate_ids".
+            if not any(m['id'] == canonical_id for m in members):
+                canonical_q = (
+                    Question.objects
+                    .select_related('subject', 'topic')
+                    .filter(pk=canonical_id)
+                    .first()
+                )
+                if canonical_q is not None:
+                    members.insert(0, _serialize(canonical_q, canonical_id))
         else:
             # Live fallback: find active rows with the same normalized text
             # + year + exam_source, even if no cluster exists.
@@ -511,18 +530,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             for q in fallback:
                 if _normalize(q.question_text) != norm:
                     continue
-                members.append({
-                    'id': q.id,
-                    'is_canonical': q.id == question.id,
-                    'is_active': q.is_active,
-                    'is_dropped': q.is_dropped,
-                    'admin_edited': bool(getattr(q, 'admin_edited', False)),
-                    'subject_name': q.subject.name if q.subject_id else '',
-                    'topic_name': q.topic.name if q.topic_id else '',
-                    'year': q.year,
-                    'exam_source': q.exam_source or '',
-                    'question_text_preview': (q.question_text or '')[:120],
-                })
+                members.append(_serialize(q, question.id))
             canonical_id = question.id
 
         return Response({
@@ -613,6 +621,121 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'canonical_id': question.id,
             'cluster_id': cluster.id,
             'dropped': dropped,
+        })
+
+    @action(detail=True, methods=['post'], url_path='remove-from-bank',
+            permission_classes=[IsControlTowerAdmin])
+    def remove_from_bank(self, request, pk=None):
+        """Soft-delete a question and record its identity in `RemovedQuestion`
+        so the next `import_neet_pg` / `load_exam_fixture` deploy won't
+        re-create it.
+
+        Body: { "reason": "<optional free text>" }
+
+        The Question row stays in the DB (`is_active=False`,
+        `is_dropped=True`, `admin_edited=True`) so user history
+        (bookmarks, attempts, notes, flashcards, discussions) keeps a
+        stable reference and no FK cascade fires (some Question FKs use
+        `on_delete=PROTECT`, so a true hard-delete would fail). Use
+        `unremove_from_bank` to undo a removal.
+        """
+        question = self.get_object()
+        reason = (request.data or {}).get('reason', '') or ''
+        stem_hash = compute_stem_hash(question.question_text or '')
+
+        with transaction.atomic():
+            removed, _created = RemovedQuestion.objects.get_or_create(
+                exam_source=question.exam_source or '',
+                year=question.year,
+                source_number=getattr(question, 'display_number', None),
+                question_text_hash=stem_hash,
+                defaults={
+                    'original_question_id': question.id,
+                    'reason': reason[:1000],
+                    'removed_by': request.user if getattr(request.user, 'is_authenticated', False) else None,
+                },
+            )
+            # Capture a pre-removal revision snapshot so the admin can
+            # diff before/after. Idempotent w.r.t. flags because the row
+            # is only soft-mutated once.
+            self._capture_revision_snapshot(
+                question, request.user,
+                reason=f'Before remove-from-bank (reason={reason!r})',
+            )
+            question.is_active = False
+            question.is_dropped = True
+            question.admin_edited = True
+            question.save(update_fields=['is_active', 'is_dropped', 'admin_edited'])
+
+        # Best-effort audit log via the existing helper.
+        try:
+            from accounts.views import create_admin_audit_log
+            create_admin_audit_log(
+                actor=request.user,
+                action='REMOVE_FROM_BANK',
+                resource_type='Question',
+                resource_id=str(question.id),
+                detail=f'Removed Q{question.id} ({question.exam_source}, year={question.year})',
+                metadata={'reason': reason, 'stem_hash': stem_hash[:16]},
+            )
+        except Exception as e:
+            logger.error(f'Failed to log remove_from_bank: {e}')
+
+        return Response({
+            'id': question.id,
+            'is_active': False,
+            'is_dropped': True,
+            'removed_question_id': removed.id,
+            'was_already_removed': not _created,
+        })
+
+    @action(detail=True, methods=['post'], url_path='unremove-from-bank',
+            permission_classes=[IsControlTowerAdmin])
+    def unremove_from_bank(self, request, pk=None):
+        """Restore a previously removed question by deleting its
+        `RemovedQuestion` tombstone and un-soft-deleting the row.
+
+        Body: {}
+
+        Idempotent: if no `RemovedQuestion` matches, returns 200 with
+        `was_already_removed=False` instead of 404.
+        """
+        question = self.get_object()
+        deleted_count, _ = RemovedQuestion.objects.filter(
+            original_question_id=question.id,
+        ).delete()
+        # Also clear any hash-based tombstones that match this row's stem,
+        # so a future re-import of the same stem won't be blocked by an
+        # earlier removal from a different deployment id.
+        stem_hash = compute_stem_hash(question.question_text or '')
+        if stem_hash:
+            RemovedQuestion.objects.filter(
+                question_text_hash=stem_hash,
+            ).delete()
+
+        question.is_active = True
+        question.is_dropped = False
+        question.admin_edited = False
+        question.save(update_fields=['is_active', 'is_dropped', 'admin_edited'])
+
+        try:
+            from accounts.views import create_admin_audit_log
+            create_admin_audit_log(
+                actor=request.user,
+                action='UNREMOVE_FROM_BANK',
+                resource_type='Question',
+                resource_id=str(question.id),
+                detail=f'Restored Q{question.id} from removed-question tombstones ({deleted_count} deleted)',
+                metadata={},
+            )
+        except Exception as e:
+            logger.error(f'Failed to log unremove_from_bank: {e}')
+
+        return Response({
+            'id': question.id,
+            'is_active': True,
+            'is_dropped': False,
+            'tombstones_deleted': deleted_count,
         })
 
     # ── Phase 3: image facets + practice queues + AI per question ───────
@@ -1214,6 +1337,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
             if not item.subject or not item.question_text:
                 return Response({'error': 'Subject and question_text are required before publish'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Honor admin "Remove from bank" tombstones — if this stem was
+            # previously removed, refuse to publish it back into the bank.
+            if _pre_check_remove(item.question_text, "questions.views.publish_question"):
+                return Response(
+                    {'error': 'Stem matches a previously-removed question; un-remove first.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             question = Question.objects.create(
                 question_text=item.question_text,

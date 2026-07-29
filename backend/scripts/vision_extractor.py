@@ -18,6 +18,7 @@ django.setup()
 
 from django.conf import settings
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -109,6 +110,11 @@ def save_questions(questions, source_file, year, paper_num):
                 continue
 
             if Question.objects.filter(year=year, question_text__icontains=q_text[:50]).exists():
+                continue
+
+            # Honor admin "Remove from bank" tombstones.
+            if is_removed(q_text):
+                logger.warning(f"  → Skipping {year} vision-extract Q: admin-removed")
                 continue
 
             Question.objects.create(

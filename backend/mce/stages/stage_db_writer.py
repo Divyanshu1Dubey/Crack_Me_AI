@@ -127,7 +127,7 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
         django.setup()
         from questions.models import (  # type: ignore
             Question, QuestionImage, QuestionSource, RecallSource,
-            Subject, Topic, QuestionImportJob,
+            Subject, Topic, QuestionImportJob, RemovedQuestion, compute_stem_hash,
         )
         from questions.text_encoding import normalize_text  # type: ignore
         from django.db import transaction, IntegrityError
@@ -202,6 +202,15 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
                 text_hash = _text_sha256(q.get("stem", ""))
                 stem_text = normalize_text(q.get("stem", "") or "")
                 if not stem_text:
+                    continue
+                # Honor admin "Remove from bank" tombstones — skip on hash match.
+                if RemovedQuestion.objects.filter(
+                    question_text_hash=text_hash,
+                ).exists():
+                    LOG.info(
+                        "MCE pipeline skipping Q (hash=%s) — admin-removed tombstone",
+                        text_hash[:12],
+                    )
                     continue
                 # Try to find an existing row by (text_hash, exam_type).
                 try:

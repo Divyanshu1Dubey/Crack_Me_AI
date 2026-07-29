@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from django.core.management.base import BaseCommand
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 import logging
 
 logger = logging.getLogger(__name__)
@@ -93,9 +94,15 @@ class Command(BaseCommand):
                 if not q.get("text"): continue
 
                 text_snippet = q["text"][:50]
-                
+
                 # Check if it already exists
                 if not Question.objects.filter(year=year, question_text__icontains=text_snippet).exists():
+                    # Honor admin "Remove from bank" tombstones.
+                    if is_removed(q["text"]):
+                        self.stdout.write(self.style.WARNING(
+                            f"  → Skipping {exam_source} {year} text-import Q: admin-removed"
+                        ))
+                        continue
                     Question.objects.create(
                         question_text=q["text"],
                         option_a=str(q.get("options", {}).get("A", "")),

@@ -49,6 +49,7 @@ except ImportError:  # pragma: no cover
     Document = None
 
 from questions.models import Question, Subject, Topic
+from questions.import_protection import is_removed
 from tests_engine.models import Test
 
 logger = logging.getLogger("mocktests.importer")
@@ -869,6 +870,14 @@ class Command(BaseCommand):
                 existing, ratio = find_existing_similar(pq.question_text, subj_code)
                 if existing and ratio >= 0.99:
                     self.stdout.write(self.style.NOTICE(f"  skip dup Q{existing.id}"))
+                    continue
+
+                # Honor admin "Remove from bank" tombstones — if this mocktest
+                # stem was previously removed, skip it on re-import.
+                if is_removed(pq.question_text):
+                    self.stdout.write(self.style.WARNING(
+                        f"  → Skipping mocktest Q in {f.name}: admin-removed"
+                    ))
                     continue
 
                 flags = {

@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Q
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 from ai_engine.services import AIService
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,13 @@ class Command(BaseCommand):
                     duplicate_count += 1
                     db_questions.append(existing_q)
                 else:
+                    # Honor admin "Remove from bank" tombstones — if this stem
+                    # was previously removed, skip it on re-import.
+                    if is_removed(q_data["question_text"]):
+                        self.stdout.write(self.style.WARNING(
+                            f"  → Skipping PYQ 2025 P{q_data['paper']} Q{q_data.get('number','?')}: admin-removed"
+                        ))
+                        continue
                     new_q = Question.objects.create(
                         question_text=q_data["question_text"],
                         option_a=q_data["option_a"],

@@ -394,6 +394,17 @@ export const questionsAPI = {
   listDuplicates: (id: number) => api.get(`/questions/${id}/duplicates/`),
   mergeDuplicates: (id: number, data: { duplicate_ids: number[] }) =>
     api.post(`/questions/${id}/merge-duplicates/`, data),
+
+  // Durable soft-delete (the "Remove from bank" admin action).
+  // POST /questions/<id>/remove-from-bank/         — { reason?: string }
+  //   Soft-deletes the row (is_active=False, is_dropped=True) AND
+  //   records its stem hash in `RemovedQuestion` so the next
+  //   import_neet_pg / load_exam_fixture deploy won't re-create it.
+  // POST /questions/<id>/unremove-from-bank/       — restores the row.
+  removeFromBank: (id: number, data?: { reason?: string }) =>
+    api.post(`/questions/${id}/remove-from-bank/`, data || {}),
+  unremoveFromBank: (id: number) =>
+    api.post(`/questions/${id}/unremove-from-bank/`, {}),
 };
 
 // Tests API

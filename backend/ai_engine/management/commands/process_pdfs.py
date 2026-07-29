@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from django.core.management.base import BaseCommand
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 from ai_engine.rag_pipeline import RAGPipeline
 from ai_engine.pyq_extractor import PYQExtractor
 import logging
@@ -77,6 +78,12 @@ class Command(BaseCommand):
                 
                 # Deduplication logic
                 if not Question.objects.filter(year=year, question_text__icontains=text_snippet).exists():
+                    # Honor admin "Remove from bank" tombstones.
+                    if is_removed(q["question_text"]):
+                        self.stdout.write(self.style.WARNING(
+                            f"  → Skipping {year} PDF-process Q{q.get('number','?')}: admin-removed"
+                        ))
+                        continue
                     Question.objects.create(
                         question_text=q["question_text"],
                         option_a=str(q.get("option_a", "")),

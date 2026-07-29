@@ -37,7 +37,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from questions.models import ExamTrack, Subject, Topic
+from questions.models import ExamTrack, Subject, Topic, RemovedQuestion, compute_stem_hash
 
 # Maps public exam alias → (fixture filename, exam_type value, ExamTrack.code).
 EXAM_MAP = {
@@ -365,6 +365,19 @@ class Command(BaseCommand):
     def _upsert_questions(self, raw, subj_map, topic_map, exam_track) -> int:
         from questions.models import Question, QuestionImage
 
+        # Admin-removed tombstones — skip any fixture row whose stem
+        # matches one of these hashes. Loaded once per run so we don't
+        # re-query on every row.
+        removed_hashes: set[str] = set(
+            RemovedQuestion.objects
+            .exclude(question_text_hash='')
+            .values_list('question_text_hash', flat=True)
+        )
+        if removed_hashes:
+            self.stdout.write(
+                f"  • Honoring {len(removed_hashes)} admin-removed question(s) by stem hash"
+            )
+
         # Per-loader image registry: file basename → QuestionImage row.
         # Rebuilt each run so a re-load is idempotent: a file that already
         # has a row attached to *some* Question under this exam is reused,
@@ -465,6 +478,18 @@ class Command(BaseCommand):
             if topic_name:
                 topic_pk = topic_map.get((subj_code, topic_name))
             pk = row.get("pk")
+            # Skip if an admin previously removed this question's stem via
+            # the "Remove from bank" action. The stem hash is the durable
+            # identity for fixture-loaded rows. Apply the guard before
+            # touching Subject/Topic or running image rewrites.
+            stem_for_skip = (clean.get("question_text") or "").strip()
+            stem_hash_for_skip = compute_stem_hash(stem_for_skip) if stem_for_skip else ""
+            if stem_hash_for_skip and stem_hash_for_skip in removed_hashes:
+                self.stdout.write(self.style.WARNING(
+                    f"  → Skipping fixture row (pk={pk}, hash={stem_hash_for_skip[:12]}): admin-removed"
+                ))
+                n += 1  # count it as a seen row so the dry-run summary is honest
+                continue
             # Strip any *_code aliases from fields and FK pks (resolved below)
             clean = {
                 k: v for k, v in f.items()
@@ -507,7 +532,7 @@ class Command(BaseCommand):
                 # because the model's recall_text_hash field is empty for
                 # non-recall rows.
                 stem = (clean.get("question_text") or "").strip()
-                stem_hash = hashlib.sha256(stem.encode("utf-8")).hexdigest()
+                stem_hash = compute_stem_hash(stem)
                 # Search for an existing row with same exam_type and a
                 # matching recall_text_hash, or one whose question_text
                 # hashes to the same value. To avoid scanning every row,
@@ -521,9 +546,7 @@ class Command(BaseCommand):
                     if sib.recall_text_hash == stem_hash:
                         existing = sib
                         break
-                    if hashlib.sha256(
-                        (sib.question_text or "").strip().encode("utf-8")
-                    ).hexdigest() == stem_hash:
+                    if compute_stem_hash(sib.question_text or "") == stem_hash:
                         existing = sib
                         break
                 if existing is not None:

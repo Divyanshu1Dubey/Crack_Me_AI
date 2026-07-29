@@ -1,7 +1,62 @@
+import hashlib
 import re
 import uuid
 from django.db import models
 from django.conf import settings
+
+
+# ---------------------------------------------------------------------------
+# Canonical stem normalization for the RemovedQuestion tombstone hashtable.
+#
+# This is the *same* lowercase + noise-strip + whitespace-collapse pipeline
+# that recall importers use (`importers/neetpg/deduplicator.normalise` and
+# `importers/inicet/deduplicator.normalise`). It MUST stay in sync — if the
+# admin endpoint computes a hash with a different normalization, then
+# `import_neet_pg` / `importers/*/db_writer.py` will hash the same stem
+# differently and the tombstone won't match, silently re-creating an
+# admin-removed question on the next deploy.
+#
+# Implemented locally (not imported from importers/*) to avoid a circular
+# import: `importers/neetpg/deduplicator.py` instantiates the ParsedQuestion
+# dataclass that lives inside the importers package, so importing it from
+# models.py would create a dependency cycle the other way around. The
+# two regex objects must remain byte-identical.
+# ---------------------------------------------------------------------------
+_STEM_NORMALISE_RE = re.compile(r"\s+")
+_STEM_NOISE_RE = re.compile(
+    r"\[(?:image|fig|figure)[^\]]*\]|\b(?:q|question|ans|answer|exp|explanation)\s*[:\-\.]?\s*",
+    re.IGNORECASE,
+)
+
+
+def normalise_stem(text: str) -> str:
+    """Canonical stem normalization for tombstone hashing.
+
+    Mirrors `importers/neetpg/deduplicator.normalise` and
+    `importers/inicet/deduplicator.normalise` exactly. Lower-case, strip
+    [image|fig|figure|q|question|ans|answer|...] noise tokens, collapse
+    whitespace, strip.
+    """
+    text = (text or "").lower()
+    text = _STEM_NOISE_RE.sub(" ", text)
+    text = _STEM_NORMALISE_RE.sub(" ", text)
+    return text.strip()
+
+
+def compute_stem_hash(text: str) -> str:
+    """SHA-256 of the canonical-normalized stem.
+
+    Returns the 64-char hex digest. Used by:
+      - `remove_from_bank` / `unremove_from_bank` admin endpoints
+      - `import_neet_pg._save_questions` (skip on hash match)
+      - `load_exam_fixture._upsert_questions` (skip on hash match)
+      - `importers/neetpg/db_writer.py` and `importers/inicet/db_writer.py`
+        (skip on hash match)
+
+    Keep this in sync with `importers/neetpg/deduplicator.text_sha256` —
+    the only acceptable difference is the name/location, not the bytes.
+    """
+    return hashlib.sha256(normalise_stem(text).encode("utf-8")).hexdigest()
 
 
 class ExamTrack(models.Model):
@@ -940,4 +995,47 @@ class DuplicateMember(models.Model):
 
     def __str__(self):
         return f"Cluster{self.cluster_id} <- Q{self.question_id} ({self.similarity_score})"
+
+
+class RemovedQuestion(models.Model):
+    """Durable soft-delete tombstone.
+
+    When an admin removes a question via the admin "Remove from bank"
+    action, we record its identity here so the import pipelines
+    (`import_neet_pg`, `load_exam_fixture`) skip re-creating it on
+    subsequent deploys. The Question row itself stays in the DB (with
+    `is_active=False, is_dropped=True, admin_edited=True`) so user
+    history (bookmarks, attempts, notes, flashcards, discussions) keeps a
+    stable reference and the FK cascade behaviour does not fire.
+
+    Identity is captured two ways so each import path can match cheaply:
+      - `question_text_hash` (sha256 of normalized stem) — the actual
+        primary lookup key. Both import pipelines match by this.
+      - `(exam_source, year, source_number)` — kept for future use; the
+        admin endpoint always writes `source_number=None` because
+        `Question` does not store a PDF question number (it's a parse
+        artifact inside `import_neet_pg._save_questions`).
+    """
+    exam_source = models.CharField(max_length=80, db_index=True)
+    year = models.IntegerField(null=True, blank=True, db_index=True)
+    source_number = models.IntegerField(null=True, blank=True)
+    question_text_hash = models.CharField(max_length=64, db_index=True)
+    original_question_id = models.IntegerField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    removed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='removed_questions',
+    )
+    removed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['exam_source', 'year', 'source_number']),
+            models.Index(fields=['question_text_hash']),
+        ]
+        ordering = ['-removed_at']
+
+    def __str__(self):
+        return f"RemovedQ#{self.id} ({self.exam_source}, year={self.year})"
 

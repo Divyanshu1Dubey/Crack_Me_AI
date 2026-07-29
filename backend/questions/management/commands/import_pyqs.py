@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 
 from questions.models import Subject, Topic, Question
+from questions.import_protection import is_removed
 from ai_engine.pyq_extractor import PYQExtractor
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,13 @@ class Command(BaseCommand):
                     year=year,
                     question_text__icontains=q_text[:50]
                 ).exists():
+                    continue
+
+                # Honor admin "Remove from bank" tombstones.
+                if is_removed(q_text):
+                    self.stdout.write(self.style.WARNING(
+                        f"  → Skipping {year} PYQ (icontains dedup) Q{q.get('number','?')}: admin-removed"
+                    ))
                     continue
 
                 # Create question

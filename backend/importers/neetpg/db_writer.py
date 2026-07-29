@@ -39,6 +39,7 @@ from questions.models import (
     QuestionImportJob,
     QuestionSource,
     RecallSource,
+    RemovedQuestion,
     Subject,
     Topic,
 )
@@ -121,6 +122,19 @@ class DjangoWriter:
         queue (empty stem / missing options).
         """
         text_hash = deduplicator.text_sha256(q.stem or q.stem_raw)
+
+        # Honor admin "Remove from bank" tombstones — the canonical stem
+        # hash (lowercase + noise-stripped + whitespace-collapsed) matches
+        # what `compute_stem_hash` produces in the admin endpoint, so a
+        # previously removed question will be silently skipped here.
+        if text_hash and RemovedQuestion.objects.filter(
+            question_text_hash=text_hash,
+        ).exists():
+            LOG.info(
+                "Skipping NEET PG (recall) Q hash=%s — admin-removed tombstone",
+                text_hash[:12],
+            )
+            return None
 
         if not (q.stem or "").strip():
             self._emit_extraction_item(q, recall_source, status="pending",

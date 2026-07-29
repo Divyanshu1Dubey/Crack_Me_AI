@@ -6,7 +6,7 @@ import logging
 import fitz  # PyMuPDF
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from questions.models import Subject, Topic, Question
+from questions.models import Subject, Topic, Question, RemovedQuestion, compute_stem_hash
 from ai_engine.services import AIService
 from questions.text_encoding import normalize_text, read_text_file
 
@@ -177,6 +177,19 @@ class Command(BaseCommand):
     def _save_questions(self, parsed_questions, year, answer_map, ai_service, enrich_limit):
         saved = 0
         enriched_count = 0
+        skipped_removed = 0
+
+        # Load admin-removed tombstones for this exam_source once.
+        # We match by question_text_hash because Question does not store a
+        # PDF question number — the admin endpoint can only record
+        # source_number=None. Hash match is the durable hook.
+        removed_hashes_by_year: dict[int, set[str]] = {}
+        for row in RemovedQuestion.objects.filter(
+            exam_source='NEET PG',
+        ).values('year', 'question_text_hash'):
+            removed_hashes_by_year.setdefault(row['year'], set()).add(
+                row['question_text_hash'],
+            )
 
         for idx, q in enumerate(parsed_questions):
             subject_name = self._classify_subject(q["question_text"])
@@ -189,6 +202,17 @@ class Command(BaseCommand):
                 subject=subject,
                 defaults={"importance": 5, "description": f"General topic for {subject.name}"}
             )
+
+            # Skip if this question's stem was previously removed by an admin.
+            # Use the canonical `compute_stem_hash` so the hash matches what
+            # the admin endpoint recorded in `remove_from_bank`.
+            stem_hash = compute_stem_hash(q["question_text"])
+            if stem_hash in removed_hashes_by_year.get(year, set()):
+                self.stdout.write(self.style.WARNING(
+                    f"  → Skipping NEET PG {year} Q{q['number']} (admin-removed; stem hash matches)"
+                ))
+                skipped_removed += 1
+                continue
 
             # Determine correct answer
             correct_ans = answer_map.get(q["number"], "A")  # Default to A or mapped answer
@@ -207,7 +231,7 @@ class Command(BaseCommand):
                 if ai_ans:
                     correct_ans = ai_ans
                     self.stdout.write(f"     ✅ AI determined correct option: {ai_ans}")
-                
+
                 # Get explanation from AI
                 ai_exp = ai_service.explain_after_answer(
                     q["question_text"],
@@ -216,7 +240,7 @@ class Command(BaseCommand):
                 )
                 if ai_exp:
                     explanation = ai_exp
-                
+
                 enriched_count += 1
                 time.sleep(0.5)
 
@@ -239,4 +263,8 @@ class Command(BaseCommand):
             )
             saved += 1
 
+        if skipped_removed:
+            self.stdout.write(self.style.WARNING(
+                f"  • Skipped {skipped_removed} admin-removed NEET PG row(s) for {year}."
+            ))
         return saved
