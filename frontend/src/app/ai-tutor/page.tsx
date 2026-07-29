@@ -5,6 +5,7 @@
  * chat history sidebar, auto-scroll to AI answer top, token consumption with 429 handling.
  */
 'use client';
+import React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
@@ -13,7 +14,7 @@ import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
 import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { decodeMojiB } from '@/lib/textCleanup';
+import { decodeMojiB, coerceToText } from '@/lib/textCleanup';
 
 interface Message {
     role: 'user' | 'ai';
@@ -42,6 +43,150 @@ const looksLikeProviderErrorResponse = (text: string) => {
         normalized.includes('upstream request failed')
     );
 };
+
+/**
+ * Defensive message renderer — ensures one bad message never crashes the
+ * entire chat thread. Chat history is a long-lived store: a malformed
+ * message from an older schema (e.g. an object where a string was
+ * expected) used to bubble up and trigger the global "Something went
+ * wrong" error boundary, blanking the whole page. The class component
+ * catches any render-time exception and falls back to a safe plain-text
+ * view, so the rest of the conversation stays usable.
+ */
+class SafeMessageBoundary extends React.Component<
+    { children: React.ReactNode; fallback: string },
+    { hasError: boolean }
+> {
+    state = { hasError: false };
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: Error) {
+        if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.error('SafeMessageBoundary caught:', error);
+        }
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <p className="ai-p" style={{ whiteSpace: 'pre-wrap' }}>
+                    {this.props.fallback}
+                </p>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+function SafeMarkdown({ content }: { content: unknown }) {
+    const safeText = decodeMojiB(content);
+    return (
+        <SafeMessageBoundary fallback={safeText || '[message unavailable]'}>
+            <ReactMarkdown
+                components={{
+                    h1: ({ children }) => <h1 className="ai-h1">{children}</h1>,
+                    h2: ({ children }) => <h2 className="ai-h2">{children}</h2>,
+                    h3: ({ children }) => <h3 className="ai-h3">{children}</h3>,
+                    h4: ({ children }) => <h4 className="ai-h4">{children}</h4>,
+                    p: ({ children }) => {
+                        // Defensive: chat history may contain non-string nodes
+                        // (e.g. citation objects) saved as message content.
+                        // Coerce to text so .includes/.split never throw.
+                        const text = coerceToText(children);
+                        if (
+                            text.includes('[PYQ') ||
+                            text.includes('[High Yield]') ||
+                            text.includes('Textbook Reference')
+                        ) {
+                            const parts = text.split(
+                                /(\[PYQ \d{4}\]|\[High Yield\]|\*\*Textbook Reference.*?\*\*)/g
+                            );
+                            return (
+                                <p className="ai-p">
+                                    {parts.map((part, index) => {
+                                        if (part.startsWith('[PYQ')) {
+                                            return (
+                                                <span key={index} className="ai-tag ai-tag-pink">
+                                                    📋 {part.replace('[', '').replace(']', '')}
+                                                </span>
+                                            );
+                                        } else if (part === '[High Yield]') {
+                                            return (
+                                                <span key={index} className="ai-tag ai-tag-amber">
+                                                    🔥 HIGH YIELD
+                                                </span>
+                                            );
+                                        } else if (part.startsWith('**Textbook Reference')) {
+                                            return (
+                                                <span key={index} className="ai-tag ai-tag-green">
+                                                    📚 {part.replace(/\*\*/g, '')}
+                                                </span>
+                                            );
+                                        }
+                                        return <span key={index}>{part}</span>;
+                                    })}
+                                </p>
+                            );
+                        }
+                        return <p className="ai-p">{children}</p>;
+                    },
+                    strong: ({ children }) => (
+                        <strong className="ai-strong">{children}</strong>
+                    ),
+                    em: ({ children }) => <em className="ai-em">{children}</em>,
+                    ul: ({ children }) => <ul className="ai-ul">{children}</ul>,
+                    ol: ({ children }) => <ol className="ai-ol">{children}</ol>,
+                    li: ({ children }) => (
+                        <li className="ai-li">
+                            <span className="ai-li-dot" />
+                            <span>{children}</span>
+                        </li>
+                    ),
+                    code: ({ children, className }) => {
+                        if (className?.includes('language-')) {
+                            return (
+                                <pre className="ai-pre">
+                                    <code>{children}</code>
+                                </pre>
+                            );
+                        }
+                        return <code className="ai-code">{children}</code>;
+                    },
+                    blockquote: ({ children }) => (
+                        <blockquote className="ai-blockquote">{children}</blockquote>
+                    ),
+                    hr: () => <hr className="ai-hr" />,
+                    table: ({ children }) => (
+                        <div className="ai-table-wrap">
+                            <table className="ai-table">{children}</table>
+                        </div>
+                    ),
+                    th: ({ children }) => <th className="ai-th">{children}</th>,
+                    td: ({ children }) => <td className="ai-td">{children}</td>,
+                    a: ({ href, children }) => (
+                        <a
+                            href={href}
+                            className="ai-link"
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            {children}
+                        </a>
+                    ),
+                }}
+            >
+                {safeText}
+            </ReactMarkdown>
+        </SafeMessageBoundary>
+    );
+}
+
+function SafeUserText({ content }: { content: unknown }) {
+    // Render user messages with the same defensive coercion so a stray
+    // object can't crash the thread either.
+    return <p style={{ whiteSpace: 'pre-wrap' }}>{decodeMojiB(content)}</p>;
+}
 
 export default function AITutorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -84,7 +229,20 @@ export default function AITutorPage() {
     const loadSession = async (sessionId: number) => {
         try {
             const res = await aiAPI.getChatSession(sessionId);
-            setMessages(res.data.messages || []);
+            // Defensive: filter out messages whose content is missing or
+            // not a string. Long-lived chat history may contain legacy
+            // rows (e.g. citation arrays stored as content) that would
+            // otherwise crash the renderer. SafeMarkdown already guards
+            // against this, but skipping here too keeps the timeline clean.
+            const safeMessages = (res.data.messages || []).filter((m: Message) => {
+                if (!m || typeof m !== 'object') return false;
+                if (m.role !== 'user' && m.role !== 'ai') return false;
+                if (m.content === null || m.content === undefined) return false;
+                if (typeof m.content === 'string') return m.content.trim().length > 0;
+                // Non-string content — SafeMarkdown will coerce, so keep it.
+                return true;
+            });
+            setMessages(safeMessages);
             setCurrentSessionId(sessionId);
             setMode(res.data.mode || 'tutor');
             setShowHistory(false);
@@ -434,68 +592,10 @@ export default function AITutorPage() {
                                                   globals.css so headers/lists/quotes render
                                                   with proper hierarchy in light & dark.
                                                 */}
-                                                <ReactMarkdown
-                                                    components={{
-                                                        h1: ({ children }) => <h1 className="ai-h1">{children}</h1>,
-                                                        h2: ({ children }) => <h2 className="ai-h2">{children}</h2>,
-                                                        h3: ({ children }) => <h3 className="ai-h3">{children}</h3>,
-                                                        h4: ({ children }) => <h4 className="ai-h4">{children}</h4>,
-                                                        p: ({ children }) => {
-                                                            const text = String(children);
-                                                            if (text.includes('[PYQ') || text.includes('[High Yield]') || text.includes('Textbook Reference')) {
-                                                                const parts = text.split(/(\[PYQ \d{4}\]|\[High Yield\]|\*\*Textbook Reference.*?\*\*)/g);
-                                                                return (
-                                                                    <p className="ai-p">
-                                                                        {parts.map((part, index) => {
-                                                                            if (part.startsWith('[PYQ')) {
-                                                                                return <span key={index} className="ai-tag ai-tag-pink">📋 {part.replace('[', '').replace(']', '')}</span>;
-                                                                            } else if (part === '[High Yield]') {
-                                                                                return <span key={index} className="ai-tag ai-tag-amber">🔥 HIGH YIELD</span>;
-                                                                            } else if (part.startsWith('**Textbook Reference')) {
-                                                                                return <span key={index} className="ai-tag ai-tag-green">📚 {part.replace(/\*\*/g, '')}</span>;
-                                                                            }
-                                                                            return <span key={index}>{part}</span>;
-                                                                        })}
-                                                                    </p>
-                                                                );
-                                                            }
-                                                            return <p className="ai-p">{children}</p>;
-                                                        },
-                                                        strong: ({ children }) => <strong className="ai-strong">{children}</strong>,
-                                                        em: ({ children }) => <em className="ai-em">{children}</em>,
-                                                        ul: ({ children }) => <ul className="ai-ul">{children}</ul>,
-                                                        ol: ({ children }) => <ol className="ai-ol">{children}</ol>,
-                                                        li: ({ children }) => (
-                                                            <li className="ai-li">
-                                                                <span className="ai-li-dot" />
-                                                                <span>{children}</span>
-                                                            </li>
-                                                        ),
-                                                        code: ({ children, className }) => {
-                                                            if (className?.includes('language-')) {
-                                                                return <pre className="ai-pre"><code>{children}</code></pre>;
-                                                            }
-                                                            return <code className="ai-code">{children}</code>;
-                                                        },
-                                                        blockquote: ({ children }) => (
-                                                            <blockquote className="ai-blockquote">{children}</blockquote>
-                                                        ),
-                                                        hr: () => <hr className="ai-hr" />,
-                                                        table: ({ children }) => (
-                                                            <div className="ai-table-wrap">
-                                                                <table className="ai-table">{children}</table>
-                                                            </div>
-                                                        ),
-                                                        th: ({ children }) => <th className="ai-th">{children}</th>,
-                                                        td: ({ children }) => <td className="ai-td">{children}</td>,
-                                                        a: ({ href, children }) => <a href={href} className="ai-link" target="_blank" rel="noreferrer">{children}</a>,
-                                                    }}
-                                                >
-                                                    {decodeMojiB(msg.content)}
-                                                </ReactMarkdown>
+                                                <SafeMarkdown content={msg.content} />
                                             </div>
                                         ) : (
-                                            <p>{msg.content}</p>
+                                            <SafeUserText content={msg.content} />
                                         )}
                                     </div>
                                     {/* Textbook Citations */}

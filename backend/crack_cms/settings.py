@@ -447,6 +447,14 @@ RAG_CHUNK_SIZE = 500
 RAG_CHUNK_OVERLAP = 50
 TEXTBOOK_SCREENSHOT_DIR = str(MEDIA_ROOT / 'textbook_screenshots')
 
+# Cap the number of chunks scanned per RAG query to keep memory bounded
+# on small Render instances (free tier 512MB RAM). Reduce further via
+# `RAG_MAX_SEARCH_CHUNKS=500` if you see OOM kills under heavy load.
+try:
+    RAG_MAX_SEARCH_CHUNKS = int(os.getenv('RAG_MAX_SEARCH_CHUNKS', '2000'))
+except (TypeError, ValueError):
+    RAG_MAX_SEARCH_CHUNKS = 2000
+
 # ── Cache Configuration ─────────────────────────────────────────────
 # Uses Redis if REDIS_URL is set AND valid, otherwise falls back to
 # local memory cache. The redis:// / rediss:// check prevents a crash

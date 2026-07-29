@@ -79,13 +79,63 @@ const MOJIBAKE_MAP: Array<[RegExp, string]> = [
 ];
 
 /**
+ * Coerce any value into a plain string for display. Defensive against
+ * objects (e.g. a stray citation array stored as message content)
+ * that would otherwise render as `[object Object]` and crash callers
+ * like `.replace()` / `.split()` downstream.
+ */
+export function coerceToText(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        return String(value);
+    }
+    if (Array.isArray(value)) {
+        // Common shape: an array of citations. Render a readable summary
+        // instead of crashing the chat thread.
+        return value
+            .map((item) => {
+                if (item === null || item === undefined) return '';
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object') {
+                    const obj = item as Record<string, unknown>;
+                    const book = obj.book ?? obj.name ?? obj.title ?? '';
+                    const page = obj.page ?? obj.page_number;
+                    const excerpt = obj.excerpt ?? obj.text ?? obj.snippet ?? '';
+                    if (book && page) return `${book} p.${page}: ${excerpt}`;
+                    if (book && excerpt) return `${book}: ${excerpt}`;
+                    if (excerpt) return String(excerpt);
+                    if (book) return String(book);
+                }
+                return String(item);
+            })
+            .filter(Boolean)
+            .join('\n');
+    }
+    if (typeof value === 'object') {
+        // Last resort: stringify objects (mostly citations/dict payloads
+        // that were saved into a text column by mistake).
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return '[unrenderable content]';
+        }
+    }
+    return String(value);
+}
+
+/**
  * Decode double-encoded UTF-8 mojibake so the user sees real
  * punctuation characters (`'`, `'`, `"`, `"`, `—`, `…`) instead of
  * the "ΓÇÿ" garbled sequences. Idempotent — safe to call multiple times.
+ *
+ * Accepts any value: non-string inputs are coerced so a stray object
+ * never crashes the chat thread via `.replace()`.
  */
-export function decodeMojiB(text: string): string {
-    if (!text) return text;
-    let out = text;
+export function decodeMojiB(text: unknown): string {
+    const safe = coerceToText(text);
+    if (!safe) return '';
+    let out = safe;
     for (const [pattern, replacement] of MOJIBAKE_MAP) {
         out = out.replace(pattern, replacement);
     }

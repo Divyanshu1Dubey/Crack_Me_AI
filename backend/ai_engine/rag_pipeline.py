@@ -30,8 +30,9 @@ class RAGPipeline:
     """
 
     COLLECTION_NAME = "crackcms_textbooks"
-    # Max chunks to score per query (prevents OOM on low-memory hosts)
-    MAX_SEARCH_CHUNKS = 2000
+    # Max chunks to score per query (prevents OOM on low-memory hosts).
+    # Tunable per-deploy via the `RAG_MAX_SEARCH_CHUNKS` env var.
+    MAX_SEARCH_CHUNKS = int(getattr(settings, 'RAG_MAX_SEARCH_CHUNKS', 2000))
 
     def __init__(self):
         # Abort early on memory-constrained environments
@@ -293,8 +294,15 @@ class RAGPipeline:
         """Answer using RAG with textbook context and citations."""
         context_chunks = self.search(question, n_results=n_context)
         if not context_chunks:
+            # Friendly fallback surfaced to the student — the previous
+            # message leaked the operator-only `python manage.py train_ai`
+            # command which made it look like the platform was broken.
             return {
-                "answer": "No relevant textbook content found. Please run: python manage.py train_ai",
+                "answer": (
+                    "No matching textbook content was found for this query. "
+                    "Please try a different search term, or use AI Tutor mode "
+                    "for a general answer."
+                ),
                 "citations": [],
                 "confidence": "low",
             }

@@ -28,6 +28,21 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# RAG opt-out: RAG is *enabled by default*. Operators can turn it off via:
+#   - DISABLE_RAG=1 (env var) — kills RAG entirely (e.g. low-memory host).
+#   - DISABLE_RAG_IN_PRODUCTION=1 (env var) — fallback for hosts that
+#     cannot run even a single instance. The default is ENABLED because
+#     the textbook store is indexed, the indexed SQLite files
+#     (chroma_db/rag_store.sqlite3) are committed to git for deployment,
+#     and the textbook search mode is a flagship feature for CMS exam
+#     preparation. Disabling by default in production caused every
+#     textbook-search query to surface "RAG pipeline not initialized"
+#     to paying users — see 2026-07-29 live-audit fix.
+_RAG_DISABLED = (
+    os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes') or
+    os.getenv('DISABLE_RAG_IN_PRODUCTION', '').lower() in ('1', 'true', 'yes')
+)
+
 # ─── LOAD BALANCING CONFIG ──────────────────────────────
 #
 # Strategy: Round-robin across 6 providers. Each call picks the next
@@ -277,11 +292,17 @@ class AIService:
 
     @property
     def rag(self):
-        """Lazy-load RAG pipeline. Disabled in production (causes OOM on free tier)."""
-        # Disable RAG in production unless explicitly enabled
-        if not getattr(settings, 'DEBUG', False):
-            return None
-        if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
+        """Lazy-load the RAG pipeline.
+
+        RAG is ENABLED by default in production. Operators may opt out via
+        the `DISABLE_RAG=1` (always) or `DISABLE_RAG_IN_PRODUCTION=1`
+        (production-only) environment variables.
+
+        The pipeline is instantiated on first use, cached for the
+        process lifetime, and falls back to None on init failure so
+        the rest of the AI service stays usable for non-RAG endpoints.
+        """
+        if _RAG_DISABLED:
             return None
         if self._rag is None:
             try:

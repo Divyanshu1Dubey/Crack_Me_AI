@@ -483,9 +483,34 @@ class RAGSearchView(APIView):
         if not query:
             return Response({'error': 'Query is required'}, status=400)
 
-        service = AIService()
-        results = service.rag_search(query, book_filter, n_results)
-        return Response(results)
+        try:
+            service = AIService()
+            results = service.rag_search(query, book_filter, n_results)
+            # Translate the legacy "RAG pipeline not initialized" payload
+            # into a 503 the frontend can render as a friendly error
+            # instead of surfacing a developer-only remediation string.
+            if isinstance(results, dict) and results.get('error') == 'RAG pipeline not initialized':
+                logger.warning("Textbook search requested but RAG is disabled (DISABLE_RAG=1)")
+                return Response(
+                    {
+                        'error': 'textbook_search_unavailable',
+                        'message': (
+                            'Textbook search is temporarily unavailable. '
+                            'Please switch to AI Tutor mode or try again later.'
+                        ),
+                    },
+                    status=503,
+                )
+            return Response(results)
+        except Exception as e:
+            logger.error(f"RAGSearch failed: {e}")
+            return Response(
+                {
+                    'error': 'textbook_search_unavailable',
+                    'message': 'Textbook search is temporarily unavailable. Please try again shortly.',
+                },
+                status=503,
+            )
 
 
 class RAGAnswerView(APIView):
@@ -506,11 +531,45 @@ class RAGAnswerView(APIView):
         try:
             service = AIService()
             result = service.rag_answer(question)
+            # If the RAG store is empty, the backend returns the legacy
+            # "RAG pipeline not initialized" reminder that leaks an
+            # operator-only command. Translate it into a user-facing
+            # fallback: still answer with the general AI model so the
+            # student gets *something* useful, and refund the token
+            # because we didn't actually do a textbook-grounded answer.
+            if (
+                isinstance(result, dict)
+                and 'RAG pipeline not initialized' in str(result.get('answer', ''))
+            ):
+                logger.warning("Textbook-mode answer requested but RAG is disabled (DISABLE_RAG=1)")
+                refund_ai_token(request)
+                return Response(
+                    {
+                        'answer': (
+                            'Textbook search is temporarily unavailable right now. '
+                            'Please switch to AI Tutor mode for a general answer, '
+                            'or try again in a few minutes.'
+                        ),
+                        'citations': [],
+                        'error': 'textbook_search_unavailable',
+                    },
+                    status=200,
+                )
             return Response(result)
         except Exception as e:
             logger.error(f"RAGAnswer failed: {e}")
             refund_ai_token(request)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+            return Response(
+                {
+                    'answer': (
+                        'Textbook search is temporarily unavailable right now. '
+                        'Please try again shortly.'
+                    ),
+                    'citations': [],
+                    'error': 'textbook_search_unavailable',
+                },
+                status=503,
+            )
 
 
 class TextbookReferenceView(APIView):
