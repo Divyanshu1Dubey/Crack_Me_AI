@@ -395,6 +395,164 @@ Answer in a structured, student-friendly format."""
             "books": book_stats,
         }
 
+    @staticmethod
+    def health_check_static() -> dict:
+        """Read-only health probe that bypasses the DISABLE_RAG guard.
+
+        Phase 2 (2026-07-29). Used by:
+          * `manage.py verify_rag_index` (operator / CI runs).
+          * The startup health check in `apps.py` (Phase 4).
+          * The admin dashboard endpoint (Phase 5).
+
+        Never instantiates the full pipeline (no Gemini/Groq client
+        init, no model downloads). Opens the SQLite DB in read-only
+        mode (mode='ro' via URI) and runs only the integrity check +
+        COUNT queries. Cannot write to the file even if a bug
+        tries to.
+        """
+        import os as _os
+        import sqlite3 as _sqlite3
+        result = {
+            "backend": "legacy_sqlite_tfidf",
+            "status": "unknown",
+            "chunks": 0,
+            "distinct_books": 0,
+            "distinct_source_files": 0,
+            "idf_cache_terms": 0,
+            "db_size_bytes": 0,
+            "integrity": "unknown",
+            "book_distribution": {},
+            "last_indexed_at": None,
+            "error": None,
+        }
+
+        db_dir = getattr(settings, 'CHROMA_DB_DIR',
+                         _os.path.join(settings.BASE_DIR, 'chroma_db'))
+        db_path = _os.path.join(db_dir, 'rag_store.sqlite3')
+        result["db_path"] = db_path
+
+        try:
+            if not _os.path.exists(db_path):
+                result["status"] = "missing"
+                result["error"] = f"DB file not found at {db_path}"
+                return result
+
+            result["db_size_bytes"] = _os.path.getsize(db_path)
+            result["last_indexed_at"] = _os.path.getmtime(db_path)
+
+            # Open read-only via URI to prevent any accidental write.
+            ro_uri = f"file:{db_path}?mode=ro"
+            conn = _sqlite3.connect(ro_uri, uri=True)
+            try:
+                result["chunks"] = conn.execute(
+                    "SELECT COUNT(*) FROM chunks"
+                ).fetchone()[0]
+                result["distinct_books"] = conn.execute(
+                    "SELECT COUNT(DISTINCT book) FROM chunks"
+                ).fetchone()[0]
+                result["distinct_source_files"] = conn.execute(
+                    "SELECT COUNT(DISTINCT source_file) FROM chunks"
+                ).fetchone()[0]
+                result["idf_cache_terms"] = conn.execute(
+                    "SELECT COUNT(*) FROM idf_cache"
+                ).fetchone()[0]
+
+                top_books = conn.execute(
+                    "SELECT book, COUNT(*) c FROM chunks "
+                    "GROUP BY book ORDER BY c DESC LIMIT 20"
+                ).fetchall()
+                for book, c in top_books:
+                    result["book_distribution"][book] = c
+
+                integrity = conn.execute("PRAGMA integrity_check").fetchone()
+                result["integrity"] = (integrity[0] if integrity else "unknown")
+
+                if result["integrity"] == "ok" and result["chunks"] > 0:
+                    result["status"] = "healthy"
+                elif result["chunks"] == 0:
+                    result["status"] = "empty"
+                elif result["integrity"] != "ok":
+                    result["status"] = "corrupt"
+                else:
+                    result["status"] = "degraded"
+            finally:
+                conn.close()
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+
+        return result
+
+    def health(self) -> dict:
+        """Read-only health probe used by startup check + admin dashboard.
+
+        Phase 2 (2026-07-29). Pure reads; no writes; safe to call any
+        number of times. Returns a dict shaped for JSON serialization.
+        """
+        import os as _os
+        result = {
+            "backend": "legacy_sqlite_tfidf",
+            "db_path": self._db_path,
+            "status": "unknown",
+            "chunks": 0,
+            "distinct_books": 0,
+            "distinct_source_files": 0,
+            "idf_cache_terms": 0,
+            "db_size_bytes": 0,
+            "integrity": "unknown",
+            "book_distribution": {},
+            "last_indexed_at": None,
+            "error": None,
+        }
+        try:
+            # File-system stats
+            if self._db_path and _os.path.exists(self._db_path):
+                result["db_size_bytes"] = _os.path.getsize(self._db_path)
+                result["last_indexed_at"] = _os.path.getmtime(self._db_path)
+
+            # Core counts
+            result["chunks"] = self._conn.execute(
+                "SELECT COUNT(*) FROM chunks"
+            ).fetchone()[0]
+            result["distinct_books"] = self._conn.execute(
+                "SELECT COUNT(DISTINCT book) FROM chunks"
+            ).fetchone()[0]
+            result["distinct_source_files"] = self._conn.execute(
+                "SELECT COUNT(DISTINCT source_file) FROM chunks"
+            ).fetchone()[0]
+            result["idf_cache_terms"] = self._conn.execute(
+                "SELECT COUNT(*) FROM idf_cache"
+            ).fetchone()[0]
+
+            # Top books (for the dashboard)
+            top_books = self._conn.execute(
+                "SELECT book, COUNT(*) c FROM chunks "
+                "GROUP BY book ORDER BY c DESC LIMIT 20"
+            ).fetchall()
+            for book, c in top_books:
+                result["book_distribution"][book] = c
+
+            # SQLite integrity check (fast, read-only)
+            integrity = self._conn.execute("PRAGMA integrity_check").fetchone()
+            result["integrity"] = (integrity[0] if integrity else "unknown")
+
+            # Status classification
+            if result["integrity"] == "ok" and result["chunks"] > 0:
+                result["status"] = "healthy"
+            elif result["chunks"] == 0:
+                result["status"] = "empty"
+            elif result["integrity"] != "ok":
+                result["status"] = "corrupt"
+            else:
+                result["status"] = "degraded"
+
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+            logger.error(f"RAGPipeline.health() failed: {e}", exc_info=True)
+
+        return result
+
     def close(self):
         if self._conn:
             self._conn.close()
