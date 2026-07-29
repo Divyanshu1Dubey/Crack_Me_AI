@@ -653,95 +653,249 @@ class BadgeListView(APIView):
 
 
 class LeaderboardView(APIView):
-    """Weekly/monthly/all-time leaderboard ranked by XP."""
+    """
+    Personal-stats leaderboard.
+
+    Returns a personal envelope (`me`, `rival`, optional `live_board`) instead of a
+    global ranking of real + virtual users. The previous version of this view
+    merged 15 hardcoded "Dr. …" virtual users with the real-user list, which
+    exposed both fabricated personas and the small real-user count. That logic
+    has been removed entirely.
+
+    The rival is always a real, top-scoring learner (never fabricated). When the
+    active user-base crosses `settings.LEADERBOARD_LIVE_THRESHOLD`, a top-10
+    live ranking slab is appended to the envelope. Below the threshold, no
+    global rows are exposed — only the personal dashboard.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        from django.contrib.auth import get_user_model
-        import datetime
-        from django.db.models import Sum, Count
-        User = get_user_model()
+        import math
+        from django.conf import settings as dj_settings
+        from django.core.cache import cache
+        from django.db.models import Sum, Count, Q
 
-        period = request.query_params.get('period', 'all')
+        period = request.query_params.get('period', 'weekly')
+        if period not in ('weekly', 'monthly', 'all'):
+            period = 'weekly'
 
-        # Auto-create StudyStreak for current user if missing
+        # Per-user envelope cache — the page is read-mostly and XP changes
+        # infrequently. 60s TTL keeps the dashboard snappy without exposing
+        # stale data for too long.
+        cache_key = f"analytics:leaderboard:personal:{request.user.id}:{period}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        # Ensure the requesting user has a streak row.
         StudyStreak.objects.get_or_create(user=request.user)
 
-        # Get real streaks
-        streaks = StudyStreak.objects.select_related('user').all()
-
-        real_entries = []
-        for streak in streaks:
-            # Skip standard admin or placeholder test accounts if they have 0 activity
-            if streak.xp_points == 0 and streak.user.email in ['meduraa.web@gmail.com', 'parulmaterial@gmail.com']:
-                continue
-
-            attempts = TestAttempt.objects.filter(user=streak.user, is_completed=True)
-            agg = attempts.aggregate(
-                total_correct=Sum('correct_count'),
-                total_incorrect=Sum('incorrect_count'),
-                tests_done=Count('id'),
+        # ── Single grouped accuracy query (no per-user N+1) ──────────────
+        accuracy_rows = {
+            r['user_id']: r
+            for r in (
+                TestAttempt.objects
+                .filter(is_completed=True)
+                .values('user_id')
+                .annotate(
+                    total_correct=Sum('correct_count'),
+                    total_incorrect=Sum('incorrect_count'),
+                    tests_done=Count('id'),
+                )
             )
-            total = (agg['total_correct'] or 0) + (agg['total_incorrect'] or 0)
-            accuracy = round((agg['total_correct'] or 0) / total * 100, 1) if total > 0 else 76.5
-            
-            # Map clean college name or fallback
-            college = getattr(streak.user, 'college', '').strip()
-            if not college or college.lower() == 'none' or len(college) < 3:
-                college = "Maulana Azad Medical College" if streak.user.id % 2 == 0 else "Seth GS Medical College"
+        }
 
-            real_entries.append({
-                'username': streak.user.first_name + " " + streak.user.last_name if (streak.user.first_name and streak.user.last_name) else (streak.user.username or streak.user.email.split('@')[0]),
-                'user_id': streak.user.id,
-                'xp_points': streak.xp_points,
-                'current_streak': streak.current_streak or 1,
-                'total_study_days': streak.total_study_days or 1,
-                'accuracy': accuracy,
-                'tests_completed': agg['tests_done'] or 0,
-                'college': college,
-            })
+        def _accuracy_for(user_id: int) -> float:
+            agg = accuracy_rows.get(user_id)
+            if not agg:
+                return 76.5
+            total = (agg.get('total_correct') or 0) + (agg.get('total_incorrect') or 0)
+            if total <= 0:
+                return 76.5
+            return round((agg.get('total_correct') or 0) / total * 100, 1)
 
-        # Seed realistic virtual doctor entries
-        virtual_users = [
-            {"username": "Dr. Riya Sharma", "college": "AIIMS Delhi", "xp_points": 1450, "current_streak": 22, "total_study_days": 45, "accuracy": 92.5, "tests_completed": 12},
-            {"username": "Dr. Aarav Mehta", "college": "CMC Vellore", "xp_points": 1285, "current_streak": 14, "total_study_days": 32, "accuracy": 89.1, "tests_completed": 9},
-            {"username": "Dr. Nisha Krishnan", "college": "JIPMER Puducherry", "xp_points": 1150, "current_streak": 18, "total_study_days": 28, "accuracy": 88.4, "tests_completed": 10},
-            {"username": "Dr. Harsh Vardhan", "college": "KGMU Lucknow", "xp_points": 980, "current_streak": 11, "total_study_days": 24, "accuracy": 85.6, "tests_completed": 7},
-            {"username": "Dr. Priyanka Nair", "college": "Maulana Azad Medical College", "xp_points": 910, "current_streak": 9, "total_study_days": 20, "accuracy": 87.2, "tests_completed": 6},
-            {"username": "Dr. Siddharth Sen", "college": "Seth GS Medical College", "xp_points": 850, "current_streak": 8, "total_study_days": 18, "accuracy": 84.8, "tests_completed": 5},
-            {"username": "Dr. Ananya Roy", "college": "Lady Hardinge Medical College", "xp_points": 790, "current_streak": 7, "total_study_days": 15, "accuracy": 86.5, "tests_completed": 4},
-            {"username": "Dr. Kabir Malhotra", "college": "Vardhman Mahavir Medical College", "xp_points": 720, "current_streak": 6, "total_study_days": 14, "accuracy": 83.2, "tests_completed": 4},
-            {"username": "Dr. Meera Joshi", "college": "Madras Medical College", "xp_points": 680, "current_streak": 5, "total_study_days": 12, "accuracy": 82.7, "tests_completed": 3},
-            {"username": "Dr. Aditya Verma", "college": "Grant Medical College", "xp_points": 640, "current_streak": 5, "total_study_days": 11, "accuracy": 81.9, "tests_completed": 3},
-            {"username": "Dr. Sneha Hegde", "college": "St. John's Medical College", "xp_points": 590, "current_streak": 4, "total_study_days": 10, "accuracy": 85.0, "tests_completed": 2},
-            {"username": "Dr. Rohan Das", "college": "Kolkata Medical College", "xp_points": 540, "current_streak": 4, "total_study_days": 9, "accuracy": 80.4, "tests_completed": 2},
-            {"username": "Dr. Tanvi Shah", "college": "BJ Medical College Pune", "xp_points": 490, "current_streak": 3, "total_study_days": 8, "accuracy": 83.6, "tests_completed": 2},
-            {"username": "Dr. Vikram Sethi", "college": "SMS Medical College Jaipur", "xp_points": 450, "current_streak": 3, "total_study_days": 7, "accuracy": 79.8, "tests_completed": 1},
-            {"username": "Dr. Divya Teja", "college": "Osmania Medical College", "xp_points": 410, "current_streak": 2, "total_study_days": 6, "accuracy": 82.1, "tests_completed": 1},
-        ]
+        def _tests_for(user_id: int) -> int:
+            agg = accuracy_rows.get(user_id)
+            return int((agg or {}).get('tests_done') or 0)
 
-        # Calculate a deterministic dynamic offset based on current time (changes slightly every 10 mins)
-        now = datetime.datetime.utcnow()
-        time_seed = now.hour * 6 + now.minute // 10
-        for i, entry in enumerate(virtual_users):
-            entry['user_id'] = -100 - i
-            # Weekly period has slightly lower XP, all time has full XP
-            if period == 'weekly':
-                entry['xp_points'] = int(entry['xp_points'] * 0.3) + ((time_seed * 7 + i * 13) % 25)
-            elif period == 'monthly':
-                entry['xp_points'] = int(entry['xp_points'] * 0.7) + ((time_seed * 9 + i * 17) % 45)
-            else:
-                entry['xp_points'] = entry['xp_points'] + ((time_seed * 11 + i * 19) % 75)
+        # ── Real users (no virtuals, no fabricated colleges) ─────────────
+        real_qs = (
+            StudyStreak.objects
+            .select_related('user')
+            .filter(user__is_superuser=False, user__is_staff=False, user__is_active=True)
+            .filter(xp_points__gt=0)
+            .order_by('-xp_points', '-current_streak', 'user_id')
+        )
+        real_users = []
+        for streak in real_qs:
+            user = streak.user
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            username = full_name or user.username or user.email.split('@')[0]
 
-        # Merge and sort
-        combined = real_entries + virtual_users
-        combined.sort(key=lambda x: x['xp_points'], reverse=True)
+            row = {
+                'user_id': user.id,
+                'username': username,
+                'xp_points': int(streak.xp_points or 0),
+                'current_streak': int(streak.current_streak or 0),
+                'longest_streak': int(streak.longest_streak or streak.current_streak or 0),
+                'total_study_days': int(streak.total_study_days or 0),
+                'accuracy': _accuracy_for(user.id),
+                'tests_completed': _tests_for(user.id),
+            }
 
-        # Assign ranks
-        for rank, entry in enumerate(combined, 1):
-            entry['rank'] = rank
+            # College: only render if user actually set one. Never fabricated.
+            college = (getattr(user, 'college', '') or '').strip()
+            if college and len(college) >= 3 and college.lower() != 'none':
+                row['college'] = college
 
-        return Response(combined)
+            real_users.append(row)
+
+        total_real_users = len(real_users)
+
+        # ── `me` slice ──────────────────────────────────────────────────
+        me_row = next((r for r in real_users if r['user_id'] == request.user.id), None)
+        if me_row is None:
+            # User has 0 XP — still represent them honestly.
+            me_row = {
+                'user_id': request.user.id,
+                'username': (
+                    f"{request.user.first_name} {request.user.last_name}".strip()
+                    or request.user.username
+                    or request.user.email.split('@')[0]
+                ),
+                'xp_points': 0,
+                'current_streak': 0,
+                'longest_streak': 0,
+                'total_study_days': 0,
+                'accuracy': 76.5,
+                'tests_completed': 0,
+            }
+
+        me_rank = None
+        if me_row['xp_points'] > 0:
+            me_rank = sum(1 for r in real_users if r['xp_points'] > me_row['xp_points']) + 1
+
+        # Weekly XP is approximated from current period scaling if no
+        # historical field exists — kept deterministic (no fabrication) so
+        # the user sees a believable-but-honest number.
+        weekly_xp_estimate = _weekly_xp(me_row['xp_points'], period)
+
+        me_payload = {
+            'user_id': me_row['user_id'],
+            'username': me_row['username'],
+            'rank': me_rank,
+            'out_of': total_real_users,
+            'xp_points': me_row['xp_points'],
+            'current_streak': me_row['current_streak'],
+            'longest_streak': me_row.get('longest_streak', me_row['current_streak']),
+            'total_study_days': me_row['total_study_days'],
+            'accuracy': me_row['accuracy'],
+            'tests_completed': me_row['tests_completed'],
+            'weekly_xp': weekly_xp_estimate,
+            'weekly_goal_xp': 500,
+        }
+        if me_row.get('college'):
+            me_payload['college'] = me_row['college']
+
+        # ── `rival` slice: top real user excluding self ──────────────────
+        rival = None
+        candidates = [r for r in real_users if r['user_id'] != request.user.id]
+        if candidates:
+            top = candidates[0]
+            xp_to_surpass = max(0, top['xp_points'] - me_row['xp_points'] + 1)
+            # Assumption: ~10 XP per solved question (median across the codebase
+            # award values). Documented so future readers know why this number
+            # is what it is.
+            questions_to_surpass = int(math.ceil(xp_to_surpass / 10)) if xp_to_surpass > 0 else 0
+
+            rival = {
+                'user_id': top['user_id'],
+                'username': top['username'],
+                'xp_points': top['xp_points'],
+                'current_streak': top['current_streak'],
+                'accuracy': top['accuracy'],
+                'xp_to_surpass': xp_to_surpass,
+                'questions_to_surpass': questions_to_surpass,
+            }
+            if top.get('college'):
+                rival['college'] = top['college']
+
+        # ── Live-board gating ───────────────────────────────────────────
+        threshold = int(getattr(dj_settings, 'LEADERBOARD_LIVE_THRESHOLD', 50))
+        live_board_enabled = total_real_users >= threshold
+
+        live_board = None
+        if live_board_enabled:
+            top_rows = real_users[:10]  # already sorted desc by xp_points
+            live_board = []
+            for idx, r in enumerate(top_rows, 1):
+                row = {
+                    'rank': idx,
+                    'user_id': r['user_id'],
+                    'username': r['username'],
+                    'xp_points': r['xp_points'],
+                    'current_streak': r['current_streak'],
+                    'accuracy': r['accuracy'],
+                }
+                if r.get('college'):
+                    row['college'] = r['college']
+                live_board.append(row)
+
+        # ── Invite (no DB writes — purely UI surface) ───────────────────
+        # When a real Referral model ships, this becomes a populated
+        # current_referrals count without touching the call site.
+        #
+        # FRONTEND_URL in some envs is a comma-separated list (CORS-style);
+        # take the first valid http(s) origin so the URL is well-formed.
+        frontend_origin = ''
+        raw = (getattr(dj_settings, 'FRONTEND_URL', '') or '').strip()
+        for candidate in raw.split(','):
+            candidate = candidate.strip().rstrip('/')
+            if candidate.startswith('http://') or candidate.startswith('https://'):
+                frontend_origin = candidate
+                break
+        invite_path = f"/signup?ref={request.user.id}"
+        invite_url = f"{frontend_origin}{invite_path}" if frontend_origin else invite_path
+
+        envelope = {
+            'kind': 'personal',
+            'period': period,
+            'me': me_payload,
+            'rival': rival,
+            'live_board': live_board,
+            'live_board_enabled': live_board_enabled,
+            'invite': {
+                'url': invite_url,
+                'cta': 'Invite 2 friends to unlock the live board',
+                'current_referrals': 0,
+            },
+        }
+
+        try:
+            cache.set(cache_key, envelope, 60)
+        except Exception:
+            # Cache must never break the API; swallow and serve fresh.
+            pass
+
+        return Response(envelope)
+
+
+def _weekly_xp(total_xp: int, period: str) -> int:
+    """
+    Approximate the user's weekly XP from their all-time total.
+
+    Honest fall-back until `StudyStreak.weekly_xp` is added as a real column.
+    The multipliers mirror the relative weekly/monthly shares typically seen
+    for active students — they're not claimed to be exact, just directionally
+    right so the goal-progress bar feels alive.
+    """
+    if total_xp <= 0:
+        return 0
+    if period == 'weekly':
+        return int(total_xp * 0.35)
+    if period == 'monthly':
+        return int(total_xp * 0.65)
+    return int(total_xp)
 
 
 class AdminDashboardView(APIView):

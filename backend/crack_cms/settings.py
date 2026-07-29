@@ -390,6 +390,13 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USE
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+# ── Leaderboard gating ──────────────────────────────────────────────
+# Number of real (non-admin) users with weekly activity before the global
+# /leaderboard exposes a top-10 ranking slab. Below the threshold the page
+# renders a personal-stats dashboard instead (no global rows are shown).
+# Tune via env var without code change.
+LEADERBOARD_LIVE_THRESHOLD = int(os.getenv('LEADERBOARD_LIVE_THRESHOLD', '50'))
+
 # Logging — ensures API hits and AI errors show up in production logs
 LOGGING = {
     'version': 1,
