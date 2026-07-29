@@ -4,7 +4,7 @@ import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, Hash } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
-import { Breadcrumbs } from '@/components/Breadcrumbs';
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata } from '@/lib/metadata';
 import { getAllTags, getPostsByTag, tagToSlug } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';

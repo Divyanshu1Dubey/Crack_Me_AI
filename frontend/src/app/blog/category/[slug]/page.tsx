@@ -4,7 +4,7 @@ import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { BookOpen, ChevronLeft } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
-import { Breadcrumbs } from '@/components/Breadcrumbs';
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata } from '@/lib/metadata';
 import {
     getAllCategories,
