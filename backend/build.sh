@@ -75,4 +75,12 @@ fi
 # this command keeps fresh deploys from inheriting the same data.
 python manage.py relink_fixture_images --apply --fixture backend/questions_fixture.json || true
 
+# Phase 9 (2026-07-29): verify the legacy TF-IDF RAG index is intact.
+# This is READ-ONLY — it opens rag_store.sqlite3 in URI mode='ro' and
+# runs PRAGMA integrity_check. Surfaces a deploy failure immediately
+# if the bundled index is corrupt or missing, instead of waiting for
+# the AI Tutor to silently fall back to a degraded mode. Exit codes:
+#   0 = healthy, 2 = empty, 3 = corrupt, 4 = degraded/error.
+python manage.py verify_rag_index || true
+
 # build.sh is complete

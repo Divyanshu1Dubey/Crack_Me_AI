@@ -64,9 +64,48 @@ export default function AITutorPage() {
     // Load chat sessions on mount
     useEffect(() => {
         if (isAuthenticated) {
+            // Phase 6 (2026-07-29): restore the active session id from
+            // localStorage so the conversation survives a page refresh
+            // or a server restart (the row itself is server-side).
+            try {
+                const persisted = localStorage.getItem('ai_tutor_session_id');
+                if (persisted) {
+                    const parsed = Number(persisted);
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                        setCurrentSessionId(parsed);
+                    }
+                }
+            } catch {
+                /* localStorage may be blocked (private mode, SSR) */
+            }
             loadSessions();
         }
     }, [isAuthenticated]);
+
+    // Phase 6 (2026-07-29): persist the active session id so a refresh
+    // (or a different tab on the same origin) re-attaches to the same
+    // ChatSession instead of starting a new one.
+    useEffect(() => {
+        try {
+            if (currentSessionId !== null) {
+                localStorage.setItem('ai_tutor_session_id', String(currentSessionId));
+            } else {
+                localStorage.removeItem('ai_tutor_session_id');
+            }
+        } catch {
+            /* ignore storage errors */
+        }
+    }, [currentSessionId]);
+
+    // Phase 6 (2026-07-29): after a backend call returns a session_id,
+    // adopt it as the active session. The backend creates one on the
+    // first call when none was supplied, so this also covers the very
+    // first message of a new chat.
+    const adoptSession = (id: number) => {
+        if (typeof id === 'number' && id > 0) {
+            setCurrentSessionId(id);
+        }
+    };
 
     const loadSessions = async () => {
         setLoadingSessions(true);
@@ -103,6 +142,11 @@ export default function AITutorPage() {
         setMessages([]);
         setCurrentSessionId(null);
         setShowHistory(false);
+        try {
+            localStorage.removeItem('ai_tutor_session_id');
+        } catch {
+            /* ignore */
+        }
     };
 
     const deleteSession = async (sessionId: number, e: React.MouseEvent) => {
@@ -139,26 +183,37 @@ export default function AITutorPage() {
         setMessages(prev => [...prev, { role: 'user', content: userMsg, type: mode }]);
         setLoading(true);
 
+        // Phase 6 (2026-07-29): forward the current session id so the
+        // backend can persist this exchange into the right ChatSession.
+        // On the first call of a new chat there is no session_id yet —
+        // the backend auto-creates one and echoes it back in the response.
+        const activeSessionId = currentSessionId ?? undefined;
+
         try {
             let response: string;
             let citations: Message['citations'] = undefined;
 
             if (mode === 'tutor') {
-                const res = await aiAPI.askTutor({ question: userMsg });
+                const res = await aiAPI.askTutor({ question: userMsg, session_id: activeSessionId });
                 response = res.data.response;
+                if (res.data.session_id) adoptSession(res.data.session_id);
             } else if (mode === 'mnemonic') {
-                const res = await aiAPI.generateMnemonic({ topic: userMsg });
+                const res = await aiAPI.generateMnemonic({ topic: userMsg, session_id: activeSessionId });
                 response = res.data.mnemonic;
+                if (res.data.session_id) adoptSession(res.data.session_id);
             } else if (mode === 'explain') {
-                const res = await aiAPI.explain({ concept: userMsg });
+                const res = await aiAPI.explain({ concept: userMsg, session_id: activeSessionId });
                 response = res.data.explanation;
+                if (res.data.session_id) adoptSession(res.data.session_id);
             } else if (mode === 'textbook') {
-                const res = await aiAPI.ragAnswer({ question: userMsg });
+                const res = await aiAPI.ragAnswer({ question: userMsg, session_id: activeSessionId });
                 response = res.data.answer;
                 citations = res.data.citations;
+                if (res.data.session_id) adoptSession(res.data.session_id);
             } else {
-                const res = await aiAPI.analyzeQuestion({ question_text: userMsg });
+                const res = await aiAPI.analyzeQuestion({ question_text: userMsg, session_id: activeSessionId });
                 response = res.data.analysis;
+                if (res.data.session_id) adoptSession(res.data.session_id);
             }
 
             if (!response || looksLikeProviderErrorResponse(response)) {

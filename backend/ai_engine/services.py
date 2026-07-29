@@ -17,10 +17,12 @@ Providers (all free-tier capable unless noted):
  10. NVIDIA Mistral    — Mistral 7B      (via NVIDIA API platform)
  11. DeepSeek          — pay-as-you-go   (LAST — paid, needs balance)
 """
+import collections
 import json
 import logging
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Optional
 
@@ -123,7 +125,58 @@ class AIService:
     """
     Enhanced AI service with round-robin load balancing across 6 providers
     (Groq, Cerebras, Gemini, Cohere, OpenRouter, DeepSeek) and RAG pipeline integration.
+
+    Phase 8 (2026-07-29):
+      * `FederatedRetrieval` is shared across all `AIService()` instances
+        in the same process via the class-level `_rag_singleton`. Each
+        new instance used to instantiate a fresh legacy `RAGPipeline`
+        (which builds the IDF cache in memory) — that ate ~80 MB per
+        worker. Now one shared instance, lazy-init on first access.
+      * `rag_search` is wrapped in a TTL cache keyed by `(query, n,
+        book_filter)`. Identical queries within `RAG_RESULT_CACHE_TTL`
+        seconds are served from memory, no SQLite hit. Cache is
+        bounded to 256 entries; eviction is FIFO.
     """
+
+    # Phase 8 — process-wide singletons (per-worker).
+    _rag_singleton = None
+    _rag_singleton_lock = None  # threading.Lock, lazy-initialized
+    _rag_search_cache: "collections.OrderedDict" = None  # TTL LRU
+    _rag_search_cache_max = 256
+
+    @classmethod
+    def _get_rag_singleton(cls):
+        """Return the process-shared FederatedRetrieval (or None).
+
+        Thread-safe via `threading.Lock`. Constructed exactly once
+        per worker, even under gunicorn `--workers > 1` each worker
+        has its own singleton (which is correct — they don't share
+        the SQLite cache anyway).
+        """
+        if cls._rag_singleton is not None:
+            return cls._rag_singleton
+        if cls._rag_singleton_lock is None:
+            import threading as _t
+            cls._rag_singleton_lock = _t.Lock()
+        with cls._rag_singleton_lock:
+            if cls._rag_singleton is None:
+                try:
+                    from ai_engine.retrieval.federated import FederatedRetrieval
+                    cls._rag_singleton = FederatedRetrieval()
+                except Exception as fed_exc:
+                    logger.warning(
+                        f"FederatedRetrieval unavailable ({fed_exc}); "
+                        f"falling back to legacy RAGPipeline"
+                    )
+                    try:
+                        from ai_engine.rag_pipeline import RAGPipeline
+                        cls._rag_singleton = RAGPipeline()
+                    except Exception as legacy_exc:
+                        logger.error(
+                            f"RAGPipeline also unavailable: {legacy_exc}"
+                        )
+                        cls._rag_singleton = None
+        return cls._rag_singleton
 
     def __init__(self):
         self.gemini_client = None
@@ -284,6 +337,10 @@ class AIService:
         Returns None when disabled or when init fails; callers must
         use the user-facing `RAG_FALLBACK_USER_MESSAGE` and log the
         real cause server-side. Never expose internal commands.
+
+        Phase 8 (2026-07-29): every `AIService()` shares one
+        `FederatedRetrieval` instance per worker. No more rebuilding
+        the 70K-term IDF cache for every request.
         """
         # Explicit operator override (escape hatch for OOM hosts).
         if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
@@ -296,23 +353,7 @@ class AIService:
             return None
 
         if self._rag is None:
-            try:
-                # Prefer the federated retriever (legacy + modern stores).
-                # Falls back to the bare legacy pipeline if the modern
-                # KB app is unavailable.
-                try:
-                    from ai_engine.retrieval.federated import FederatedRetrieval
-                    self._rag = FederatedRetrieval()
-                except Exception as fed_exc:
-                    logger.warning(
-                        f"FederatedRetrieval unavailable ({fed_exc}); "
-                        f"falling back to legacy RAGPipeline"
-                    )
-                    from ai_engine.rag_pipeline import RAGPipeline
-                    self._rag = RAGPipeline()
-            except Exception as e:
-                logger.error(f"RAG init failed: {e}", exc_info=True)
-                return None
+            self._rag = self._get_rag_singleton()
         return self._rag
 
     # ─── PROVIDER CALL METHODS ─────────────────────────────
@@ -941,8 +982,36 @@ Provide:
                                  "AI Tutor is temporarily unavailable."),
             }
         try:
+            # Phase 8 (2026-07-29): TTL LRU cache, keyed by
+            # (query, n_results, book_filter). The TF-IDF score is
+            # deterministic over a read-only index, so caching is safe.
+            ttl = getattr(settings, 'RAG_RESULT_CACHE_TTL', 300)
+            if ttl > 0:
+                cache_key = (query.strip().lower(), int(n_results), (book_filter or '').strip().lower())
+                now = time.time()
+                cache = AIService._rag_search_cache
+                if cache is None:
+                    cache = collections.OrderedDict()
+                    AIService._rag_search_cache = cache
+                hit = cache.get(cache_key)
+                if hit and (now - hit[0]) < ttl:
+                    # Move to end so the LRU eviction is correct.
+                    cache.move_to_end(cache_key)
+                    return {"results": hit[1], "cached": True}
+
             results = self.rag.search(query, n_results=n_results,
                                       book_filter=book_filter if book_filter else None)
+
+            if ttl > 0 and results:
+                cache = AIService._rag_search_cache
+                if cache is None:
+                    cache = collections.OrderedDict()
+                    AIService._rag_search_cache = cache
+                cache[cache_key] = (time.time(), results)
+                # Bounded FIFO/LRU eviction.
+                while len(cache) > AIService._rag_search_cache_max:
+                    cache.popitem(last=False)
+
             return {"results": results}
         except Exception as e:
             logger.warning(f"RAG search failed: {e}", exc_info=True)

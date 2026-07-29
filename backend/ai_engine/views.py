@@ -35,6 +35,82 @@ class IsAdminUser(BasePermission):
         )
 
 
+def _save_chat_exchange(
+    request,
+    *,
+    mode: str,
+    user_content: str,
+    ai_content: str,
+    citations=None,
+    session_id: int | None = None,
+    title: str | None = None,
+) -> int | None:
+    """Persist a user→AI exchange to ChatSession+ChatMessage.
+
+    Phase 6 (2026-07-29). Returns the session_id used (or created).
+
+    Rules:
+      * Only persists for authenticated users. DEBUG-mode anonymous
+        requests do NOT pollute the DB.
+      * If `session_id` is provided AND it belongs to the requesting
+        user, append to it. Otherwise, auto-create a new session.
+      * Auto-title from first user message (handled by
+        ChatSession.save() override at models.py:46).
+      * Never raises — DB errors are logged, the caller still returns
+        its normal response.
+    """
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        return None  # anonymous: no persistence
+
+    try:
+        from .models import ChatSession, ChatMessage
+
+        session = None
+        if session_id:
+            try:
+                session = ChatSession.objects.get(id=session_id, user=user)
+            except ChatSession.DoesNotExist:
+                session = None
+
+        if session is None:
+            session = ChatSession.objects.create(
+                user=user,
+                mode=mode,
+                title=title or user_content[:100],
+            )
+
+        # Write the user message first (ChatSession.save() will
+        # refresh the title from the first user message).
+        ChatMessage.objects.create(
+            session=session,
+            role='user',
+            content=user_content,
+            mode=mode,
+            citations=[],
+        )
+        # Then the AI response.
+        ChatMessage.objects.create(
+            session=session,
+            role='ai',
+            content=ai_content,
+            mode=mode,
+            citations=citations or [],
+        )
+        # Bump updated_at for the list ordering.
+        session.save()
+        return session.id
+    except Exception as e:
+        logger.warning(
+            "_save_chat_exchange failed (user=%s mode=%s): %s",
+            getattr(user, 'id', '?'),
+            mode,
+            e,
+            exc_info=True,
+        )
+        return None
+
+
 def _get_permission():
     """Allow unauthenticated access in DEBUG mode for development."""
     if getattr(django_settings, 'DEBUG', False):
@@ -104,6 +180,7 @@ class AskTutorView(APIView):
     def post(self, request):
         question = request.data.get('question', '')
         context = request.data.get('context', '')
+        session_id = request.data.get('session_id')
         if not question:
             return Response({'error': 'Question is required'}, status=400)
 
@@ -115,7 +192,17 @@ class AskTutorView(APIView):
         try:
             service = AIService()
             response = service.ask_tutor(question, context)
-            return Response({'response': response})
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='tutor',
+                user_content=question,
+                ai_content=response,
+                session_id=session_id,
+            )
+            payload = {'response': response}
+            if saved_session_id is not None:
+                payload['session_id'] = saved_session_id
+            return Response(payload)
         except Exception as e:
             logger.error(f"AskTutor failed: {e}")
             refund_ai_token(request)
@@ -131,6 +218,7 @@ class GenerateMnemonicView(APIView):
     def post(self, request):
         topic = request.data.get('topic', '')
         concept = request.data.get('concept', '')
+        session_id = request.data.get('session_id')
         if not topic:
             return Response({'error': 'Topic is required'}, status=400)
 
@@ -141,7 +229,18 @@ class GenerateMnemonicView(APIView):
         try:
             service = AIService()
             mnemonic = service.generate_mnemonic(topic, concept)
-            return Response({'mnemonic': mnemonic})
+            user_msg = f"Mnemonic for {topic}" + (f" — {concept}" if concept else "")
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='mnemonic',
+                user_content=user_msg,
+                ai_content=mnemonic,
+                session_id=session_id,
+            )
+            payload = {'mnemonic': mnemonic}
+            if saved_session_id is not None:
+                payload['session_id'] = saved_session_id
+            return Response(payload)
         except Exception as e:
             logger.error(f"GenerateMnemonic failed: {e}")
             refund_ai_token(request)
@@ -157,6 +256,7 @@ class ExplainConceptView(APIView):
     def post(self, request):
         concept = request.data.get('concept', '')
         level = request.data.get('level', 'basic')
+        session_id = request.data.get('session_id')
         if not concept:
             return Response({'error': 'Concept is required'}, status=400)
 
@@ -167,7 +267,18 @@ class ExplainConceptView(APIView):
         try:
             service = AIService()
             explanation = service.explain_concept(concept, level)
-            return Response({'explanation': explanation})
+            user_msg = f"Explain {concept} (level: {level})"
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='explain',
+                user_content=user_msg,
+                ai_content=explanation,
+                session_id=session_id,
+            )
+            payload = {'explanation': explanation}
+            if saved_session_id is not None:
+                payload['session_id'] = saved_session_id
+            return Response(payload)
         except Exception as e:
             logger.error(f"ExplainConcept failed: {e}")
             refund_ai_token(request)
@@ -184,6 +295,7 @@ class AnalyzeQuestionView(APIView):
         question_text = request.data.get('question_text', '')
         options = request.data.get('options', {})
         correct_answer = request.data.get('correct_answer', '')
+        session_id = request.data.get('session_id')
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
 
@@ -194,7 +306,18 @@ class AnalyzeQuestionView(APIView):
         try:
             service = AIService()
             analysis = service.analyze_question(question_text, options, correct_answer)
-            return Response({'analysis': analysis})
+            user_msg = f"Analyze question: {question_text[:200]}"
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='analyze',
+                user_content=user_msg,
+                ai_content=analysis,
+                session_id=session_id,
+            )
+            payload = {'analysis': analysis}
+            if saved_session_id is not None:
+                payload['session_id'] = saved_session_id
+            return Response(payload)
         except Exception as e:
             logger.error(f"AnalyzeQuestion failed: {e}")
             refund_ai_token(request)
@@ -260,13 +383,14 @@ class ExplainAfterAnswerView(APIView):
         selected_answer = request.data.get('selected_answer', '')
         subject = request.data.get('subject', '')
         topic = request.data.get('topic', '')
+        session_id = request.data.get('session_id')
 
         try:
             service = AIService()
             result = service.explain_after_answer(
                 question_text, options, correct_answer, selected_answer, subject, topic
             )
-            
+
             if db_question:
                 db_question.ai_explanation = json.dumps(result)
                 db_question.ai_mnemonic = result.get('mnemonic', '')
@@ -290,7 +414,32 @@ class ExplainAfterAnswerView(APIView):
                     )
                 
                 db_question.save()
-                
+
+            # Auto-save chat history (Phase 6). Persist a compact
+            # markdown summary so the History panel shows a usable
+            # preview without dumping the whole rich payload.
+            if isinstance(result, dict):
+                summary = (
+                    f"**{result.get('core_concept', topic or 'Concept')}**\n\n"
+                    f"{result.get('why_correct', '')}\n\n"
+                    f"{result.get('clinical_pearl', '')}"
+                ).strip()
+                user_msg = f"Explain after answer: {question_text[:200]}"
+                citations = []
+                ref = result.get('textbook_reference')
+                if isinstance(ref, dict):
+                    citations = [ref]
+                saved_session_id = _save_chat_exchange(
+                    request,
+                    mode='explain_after',
+                    user_content=user_msg,
+                    ai_content=summary or str(result)[:1000],
+                    citations=citations,
+                    session_id=session_id,
+                )
+                if saved_session_id is not None:
+                    result = {**result, 'session_id': saved_session_id}
+
             return Response(result)
         except Exception as e:
             logger.error(f"ExplainAfterAnswer failed: {e}")
@@ -396,12 +545,26 @@ class ExplainQuestionView(APIView):
             except Exception as save_exc:  # noqa: BLE001
                 logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
 
-            return Response({
+            response_payload = {
                 'explanation': analysis,
                 'cached': False,
                 'question_id': q.id,
                 'ai_model': 'RoundRobin-11',
-            })
+            }
+            # Persist chat history (Phase 6). Only on fresh AI calls —
+            # cache hits at the top of this view don't represent a
+            # new exchange, so they're deliberately not saved.
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='explain_question',
+                user_content=f"Explain Q{q.id}: {q.question_text[:160]}",
+                ai_content=analysis,
+                citations=[],
+                session_id=request.data.get('session_id'),
+            )
+            if saved_session_id is not None:
+                response_payload['session_id'] = saved_session_id
+            return Response(response_payload)
         except Exception as e:
             logger.error(f"ExplainQuestion failed for Q{question_id}: {e}")
             refund_ai_token(request)
@@ -496,6 +659,7 @@ class RAGAnswerView(APIView):
 
     def post(self, request):
         question = request.data.get('question', '')
+        session_id = request.data.get('session_id')
         if not question:
             return Response({'error': 'Question is required'}, status=400)
 
@@ -506,6 +670,18 @@ class RAGAnswerView(APIView):
         try:
             service = AIService()
             result = service.rag_answer(question)
+            ai_text = result.get('answer', '') if isinstance(result, dict) else str(result)
+            citations = result.get('citations', []) if isinstance(result, dict) else []
+            saved_session_id = _save_chat_exchange(
+                request,
+                mode='rag',
+                user_content=question,
+                ai_content=ai_text or '',
+                citations=citations,
+                session_id=session_id,
+            )
+            if isinstance(result, dict) and saved_session_id is not None:
+                result = {**result, 'session_id': saved_session_id}
             return Response(result)
         except Exception as e:
             logger.error(f"RAGAnswer failed: {e}")
@@ -928,6 +1104,18 @@ class ChatMessageCreateView(APIView):
 
         if not content:
             return Response({'error': 'Content is required'}, status=400)
+
+        # Validate role against the model's ROLE_CHOICES. The DB column
+        # is `CharField(max_length=4, choices=...)` but Django only
+        # enforces choices at the form/admin layer — without this
+        # check, a typo'd role ("assistant", "USER", etc.) silently
+        # stores garbage.
+        valid_roles = {choice[0] for choice in ChatMessage.ROLE_CHOICES}
+        if role not in valid_roles:
+            return Response(
+                {'error': f'Invalid role "{role}". Must be one of {sorted(valid_roles)}.'},
+                status=400,
+            )
 
         message = ChatMessage.objects.create(
             session=session,

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -57,6 +58,8 @@ class FederatedResult:
     source_slug: str = ""
     attribution: str = ""
     locator: str = ""
+    source_file: str = ""
+    chapter: str = ""
     excerpt: str = ""
     score: float = 0.0
     bm25_score: float = 0.0
@@ -67,14 +70,28 @@ class FederatedResult:
     citation: dict = field(default_factory=dict)
 
     def to_citation(self) -> dict:
-        """Shape consumed by the AI Tutor frontend (Message['citations'])."""
+        """Shape consumed by the AI Tutor frontend (Message['citations']).
+
+        Phase 7 (2026-07-29): every citation now carries a stable
+        `attribution` line, a `locator` suitable for a frontend link,
+        and the raw `source_file` for deep-linking to a textbook PDF
+        page when the frontend wants to render a thumbnail.
+        """
+        # Defensive attribution — never empty.
+        attr = self.attribution.strip()
+        if not attr:
+            page_part = f", p.{self.page}" if self.page else ""
+            attr = f"{self.book}{page_part}".strip() or "Unknown source"
+
         return {
             "book": self.book,
             "page": self.page,
             "license": self.license,
             "source_slug": self.source_slug,
-            "attribution": self.attribution,
-            "locator": self.locator,
+            "attribution": attr,
+            "locator": self.locator or (f"p.{self.page}" if self.page else ""),
+            "source_file": self.source_file,
+            "chapter": self.chapter,
             "excerpt": self.excerpt or self.text[:300],
             "relevance": round(self.score, 4),
             "score": round(self.score, 4),
@@ -323,22 +340,35 @@ class FederatedRetrieval:
 
     @staticmethod
     def _legacy_to_federated(r: dict) -> FederatedResult:
-        """Convert a legacy RAGPipeline.search() result dict to FederatedResult."""
+        """Convert a legacy RAGPipeline.search() result dict to FederatedResult.
+
+        Phase 7 (2026-07-29): propagate `source_file` so the frontend
+        can deep-link to a textbook PDF page, and build a stable
+        `source_slug` (slugified book name + page) that the frontend
+        can use as a React key.
+        """
         # Legacy book name cleanup (matches _clean_book_name behavior)
-        raw_book = r.get("book", "")
+        raw_book = r.get("book", "") or ""
         book = raw_book.split(" (")[0] if " (" in raw_book else raw_book
+        book = book.strip()
         page = int(r.get("page") or 0)
-        text = r.get("text", "")
-        score = float(r.get("score", 0.0))
+        text = r.get("text", "") or ""
+        score = float(r.get("score") or 0.0)
+        source_file = r.get("source_file", "") or ""
+
+        # Stable slug: kebab-case book + page, used as React key.
+        slug_base = re.sub(r"[^a-zA-Z0-9]+", "-", book).strip("-").lower()
+        source_slug = f"legacy:{slug_base}" + (f"-p{page}" if page else "")
 
         return FederatedResult(
             text=text,
             book=book,
             page=page,
-            license="internal",  # legacy = legacy copyrighted sources
-            source_slug=f"legacy:{book}",
+            license="internal",  # legacy = license-fenced copyrighted sources
+            source_slug=source_slug,
             attribution=f"{book}" + (f", p.{page}" if page else ""),
             locator=f"p.{page}" if page else "",
+            source_file=source_file,
             excerpt=text[:300],
             score=score,
             backend="legacy",
@@ -446,7 +476,6 @@ class FederatedRetrieval:
 
 def _try_int(s: str) -> int:
     """Best-effort page number extraction from a locator string."""
-    import re
     if not s:
         return 0
     m = re.search(r"\b(\d{1,5})\b", str(s))

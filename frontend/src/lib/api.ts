@@ -461,15 +461,25 @@ export const analyticsAPI = {
 const AI_TIMEOUT = 120000;
 
 export const aiAPI = {
-  askTutor: (data: { question: string; context?: string }) => api.post('/ai/tutor/', data, { timeout: AI_TIMEOUT }),
-  generateMnemonic: (data: { topic: string; concept?: string }) => api.post('/ai/mnemonic/', data, { timeout: AI_TIMEOUT }),
-  explain: (data: { concept: string; level?: string }) => api.post('/ai/explain/', data, { timeout: AI_TIMEOUT }),
-  analyzeQuestion: (data: Record<string, string>) => api.post('/ai/analyze/', data, { timeout: AI_TIMEOUT }),
+  // Phase 6 (2026-07-29): every AI call now accepts an optional
+  // `session_id` so the backend can auto-persist the exchange into
+  // a ChatSession. The backend returns `{ ..., session_id }` which the
+  // AI Tutor page stores in localStorage and sends back on the next
+  // call — keeping a single conversation across refreshes + reloads.
+  askTutor: (data: { question: string; context?: string; session_id?: number }) =>
+    api.post('/ai/tutor/', data, { timeout: AI_TIMEOUT }),
+  generateMnemonic: (data: { topic: string; concept?: string; session_id?: number }) =>
+    api.post('/ai/mnemonic/', data, { timeout: AI_TIMEOUT }),
+  explain: (data: { concept: string; level?: string; session_id?: number }) =>
+    api.post('/ai/explain/', data, { timeout: AI_TIMEOUT }),
+  analyzeQuestion: (data: Record<string, string> & { session_id?: number }) =>
+    api.post('/ai/analyze/', data, { timeout: AI_TIMEOUT }),
   explainAfterAnswer: (data: {
     question_text: string;
     options?: Record<string, string>;
     correct_answer?: string;
     selected_answer?: string;
+    session_id?: number;
     subject?: string;
     topic?: string;
   }) => api.post('/ai/explain-answer/', data, { timeout: AI_TIMEOUT }),
@@ -477,7 +487,8 @@ export const aiAPI = {
     api.post(`/ai/explain-question/${questionId}/`, data, { timeout: AI_TIMEOUT, ...config }),
   // RAG endpoints
   ragSearch: (data: { query: string; book?: string; n_results?: number }) => api.post('/ai/rag-search/', data, { timeout: AI_TIMEOUT }),
-  ragAnswer: (data: { question: string }) => api.post('/ai/rag-answer/', data, { timeout: AI_TIMEOUT }),
+  ragAnswer: (data: { question: string; session_id?: number }) =>
+    api.post('/ai/rag-answer/', data, { timeout: AI_TIMEOUT }),
   textbookReference: (data: { question_text: string }) => api.post('/ai/textbook-reference/', data, { timeout: AI_TIMEOUT }),
   getScreenshot: (questionId: number) => api.get(`/ai/screenshot/${questionId}/`),
   // Study planning
