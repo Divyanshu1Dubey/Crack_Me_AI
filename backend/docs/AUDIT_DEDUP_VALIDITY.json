@@ -1,0 +1,335 @@
+{
+  "total_clusters": 2858,
+  "total_members": 6478,
+  "total_questions": 13788,
+  "currently_public_questions": 13670,
+  "clusters_with_no_canonical": [],
+  "clusters_with_invalid_canonical_id": [],
+  "clusters_with_dropped_canonical": [],
+  "clusters_with_inactive_canonical": [],
+  "clusters_with_no_members": [
+    {
+      "id": 4083
+    },
+    {
+      "id": 4055
+    },
+    {
+      "id": 4028
+    },
+    {
+      "id": 4105
+    },
+    {
+      "id": 4056
+    },
+    {
+      "id": 3979
+    },
+    {
+      "id": 4075
+    },
+    {
+      "id": 4090
+    },
+    {
+      "id": 4005
+    },
+    {
+      "id": 4077
+    },
+    {
+      "id": 4050
+    },
+    {
+      "id": 4079
+    },
+    {
+      "id": 4110
+    },
+    {
+      "id": 4071
+    },
+    {
+      "id": 4095
+    },
+    {
+      "id": 4061
+    },
+    {
+      "id": 4062
+    },
+    {
+      "id": 4045
+    },
+    {
+      "id": 4013
+    },
+    {
+      "id": 2186
+    },
+    {
+      "id": 2374
+    },
+    {
+      "id": 2289
+    },
+    {
+      "id": 1565
+    },
+    {
+      "id": 4080
+    },
+    {
+      "id": 4078
+    },
+    {
+      "id": 4101
+    },
+    {
+      "id": 4051
+    },
+    {
+      "id": 4092
+    },
+    {
+      "id": 4046
+    },
+    {
+      "id": 1833
+    },
+    {
+      "id": 4009
+    },
+    {
+      "id": 4022
+    },
+    {
+      "id": 1998
+    },
+    {
+      "id": 1644
+    },
+    {
+      "id": 4070
+    },
+    {
+      "id": 4058
+    },
+    {
+      "id": 4036
+    },
+    {
+      "id": 4012
+    },
+    {
+      "id": 4072
+    }
+  ],
+  "orphan_member_rows": [],
+  "canonical_is_member_count": 2819,
+  "canonical_not_a_member_count": 39,
+  "lost_drops_sample": [
+    {
+      "id": 6584,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which amongst the following should be considered in a patient with acute chest pain and ST \nsegment elevation in the precordial leads? \n1. Acute myocardial infarction  \n2. Acute hyperkalemia"
+    },
+    {
+      "id": 6577,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "MondorΓÇÖs disease is:"
+    },
+    {
+      "id": 6450,
+      "year": 2018,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which of the following statements regarding HPV (Human Papilloma Virus) vaccine is NOT \ntrue? \nnot sexually active"
+    },
+    {
+      "id": 6496,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "India is in which stage of the demographic cycle?"
+    },
+    {
+      "id": 6586,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Hypocalcemia"
+    },
+    {
+      "id": 6587,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Oesophagitis"
+    },
+    {
+      "id": 6469,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which one of the following experiments/ trials is NOT a part of non-randomized trial?"
+    },
+    {
+      "id": 6479,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "The villages A and B have the following age compositions: \nAge (years) \nMid-year \npopulation \n(Village A) \nMid-year \npopulation \n(Village B) \n0ΓÇô4 \n8000 \n4000 \n5ΓÇô9 \n4000 \n2000 \n10ΓÇô19 \n5000 \n3000 "
+    },
+    {
+      "id": 6487,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "CaissonΓÇÖs disease is usually seen in which group of workers?"
+    },
+    {
+      "id": 6559,
+      "year": 2018,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Antro-chonal polyp always arises from:"
+    },
+    {
+      "id": 6621,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which one of the following is the minimum spirometry criterion for diagnosis of bronchial \nasthma?"
+    },
+    {
+      "id": 6585,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Pericarditis"
+    },
+    {
+      "id": 6684,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which of the following manifestations is/are NOT seen in breath holding spells?"
+    },
+    {
+      "id": 6605,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "All of the following are clinical features of Polycystic ovarian syndrome EXCEPT: \n5"
+    },
+    {
+      "id": 6650,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which of the following does NOT causes polyuria?"
+    },
+    {
+      "id": 6757,
+      "year": 2019,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which of the following are the vaccines for prevention of cervical cancer? \n1. Cervarix  \n2. Gardasil \n3. T-dap \n4. Influenza  \nSelect the correct answer using the code given below:"
+    },
+    {
+      "id": 6695,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "All of the following statements are true about the BCG vaccine EXCEPT: \n25"
+    },
+    {
+      "id": 6729,
+      "year": 2019,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Regarding ΓÇ£QuinsyΓÇ¥ all of the following are correct EXCEPT:"
+    },
+    {
+      "id": 6821,
+      "year": 2019,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "A village ΓÇÿXΓÇÖ has a population of 5000 with a birth rate of 25 per thousand. In any given month, \nhow many pregnancies should be registered with the ANM of this village?"
+    },
+    {
+      "id": 6731,
+      "year": 2019,
+      "paper": 2,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "A 50 year old male presented with pain along the left arm and ptosis. His chest X-ray showed \nsoft tissue opacity at the apex of the left lung along with the erosion of the adjacent rib. The \nprobable"
+    },
+    {
+      "id": 6379,
+      "year": 2018,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "A ΓÇÿslapped cheek rashΓÇÖ is characteristic of infection with:"
+    },
+    {
+      "id": 6388,
+      "year": 2018,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Differential diagnosis of dysenteric syndrome includes which of the following? \n1. Salmonella infection \n2. Campylobacter infection \n3. Shigella infection \n4. Clostridium infection \nSelect the correct"
+    },
+    {
+      "id": 6604,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "All of the following are true regarding acute leukaemias, EXCEPT:"
+    },
+    {
+      "id": 6640,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "The commonest cause for new-onset seizures in patients older than 65 years is:"
+    },
+    {
+      "id": 6649,
+      "year": 2019,
+      "paper": 1,
+      "is_active": false,
+      "is_dropped": true,
+      "qt": "Which of the following test has maximum sensitivity for diagnosing Pheochromocytoma?"
+    }
+  ],
+  "lost_drops_count": 27
+}

@@ -1,0 +1,993 @@
+{
+  "chain_overlap_count": 0,
+  "chain_overlap_samples": [],
+  "mismatch_clusters": [
+    {
+      "cluster_id": 1299,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1301,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        8,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1302,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1303,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1313,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        11,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1317,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        12,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1318,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1322,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1324,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1327,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1328,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1329,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1333,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1338,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        11,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1341,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        14,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1347,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        6,
+        11
+      ]
+    },
+    {
+      "cluster_id": 1349,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        11,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1350,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        11,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1356,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        3,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1357,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        6,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1359,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1363,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        14,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1364,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        3,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1365,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1369,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1370,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        14,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1371,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        10,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1372,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1374,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1375,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        8,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1376,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1377,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1378,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1380,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        10,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1385,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1386,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1390,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1392,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1394,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1395,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        8,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1396,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1397,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        6,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1398,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2021
+      ],
+      "subjects": [
+        14,
+        19
+      ]
+    },
+    {
+      "cluster_id": 1401,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        14,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1402,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        6,
+        17
+      ]
+    },
+    {
+      "cluster_id": 1403,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1404,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        17,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1406,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        6,
+        18
+      ]
+    },
+    {
+      "cluster_id": 1407,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        6,
+        11
+      ]
+    },
+    {
+      "cluster_id": 1408,
+      "n_year": 1,
+      "n_subject": 2,
+      "n_topic": 0,
+      "n_paper": 1,
+      "years": [
+        2018
+      ],
+      "subjects": [
+        7,
+        17
+      ]
+    }
+  ],
+  "year_mismatch_count": 0,
+  "subject_mismatch_count": 50,
+  "topic_mismatch_count": 0,
+  "format_diff_clusters_count": 0,
+  "format_diff_clusters_samples": [],
+  "image_variant_count": 112,
+  "image_variant_samples": [
+    {
+      "id": 9590,
+      "question_text": "In a 10 year school child under school health program, which vaccine has to be given?",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 2,
+      "cluster_id": 1331
+    },
+    {
+      "id": 13251,
+      "question_text": "A 25-year-old woman presented with hearing loss that developed shortly after her first\npregnancy. Her audiometry report is given below. What is the diagnosis?",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 182,
+      "cluster_id": 4116
+    },
+    {
+      "id": 9567,
+      "question_text": "A child admitted with fever, rash begins behind ears, conjunctivitis, coryza, cough and koplik\nspot. Based on the clinical manifestations, choose the correct description of the pathogen?",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 2,
+      "cluster_id": 1319
+    },
+    {
+      "id": 9624,
+      "question_text": "False about pheochromocytoma",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 2,
+      "cluster_id": 1349
+    },
+    {
+      "id": 26676,
+      "question_text": "Paralytic ileus is a type of:",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4140
+    },
+    {
+      "id": 26687,
+      "question_text": "A 40-year-old female patient presents with colicky abdominal pain associated with episodes of mild diarrhoea for last 6 months accompanied with intermittent fever and weight loss. There are multiple discharging sinuses on perineal examination. The most likely clinical diagnosis in this patient is:",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4147
+    },
+    {
+      "id": 26742,
+      "question_text": "When the hernia extends between the layers of abdominal wall muscles and not directly through them, it is called",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4133
+    },
+    {
+      "id": 26751,
+      "question_text": "Which one of the following statements regarding Inflammatory Bowel Disease is correct?",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4150
+    },
+    {
+      "id": 9711,
+      "question_text": "A 50 year old male suddenly stopped alcohol consumption for 3 days in hospital with\nagitation, altered sensorium, paranoid delusions and hallucinations. The most likely\ndiagnosis is",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 3,
+      "cluster_id": 1398
+    },
+    {
+      "id": 9598,
+      "question_text": "A male presented with urethral discharge as shown in figure? What can be the cause?",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 4,
+      "cluster_id": 1336
+    },
+    {
+      "id": 26696,
+      "question_text": "The Child-Turcotte-Pugh (CTP) score for quantifying the severity of chronic liver disease includes all variables EXCEPT:",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4148
+    },
+    {
+      "id": 9595,
+      "question_text": "A researcher wants to know whether there is an association of CRP values with risk of\nMI/Cancer. They started to take CRP readings. 4 Values of RR was plotted (0.5, 1.5,1.7,1.8)\nwith respect to CRP",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 1334
+    },
+    {
+      "id": 26739,
+      "question_text": "Which of the following are included in Ranson scoring system to predict the severity of acute pancreatitis at the time of admission?\n\n1. WBC count > 15x108/L\n\n2. Blood glucose > 200 mg/dL\n\n3. LDH 350 units/L\n\n4. AST 250 units/L\n\nSelect the correct answer using the code given below.",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4143
+    },
+    {
+      "id": 9633,
+      "question_text": "What surgery is shown here in the image",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 4,
+      "cluster_id": 1354
+    },
+    {
+      "id": 26777,
+      "question_text": "Which of the following are considered aetiological factors for Adenocarcinoma oesophagus?\n\nI. Barrett's oesophagus\nII. Gastro-oesophageal reflux\nIII. Obesity\nIV. Alcohol intake\n\nSelect the correct answer using the code given below:",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 4151
+    },
+    {
+      "id": 13159,
+      "question_text": "The histopathological slide given below is suggestive of:",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 228,
+      "cluster_id": 4114
+    },
+    {
+      "id": 9709,
+      "question_text": "Identify the muscle marked causes flexion of hip",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 3,
+      "cluster_id": 1397
+    },
+    {
+      "id": 9561,
+      "question_text": "Identify the injury",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 4,
+      "cluster_id": 1316
+    },
+    {
+      "id": 9669,
+      "question_text": "What does umbilical artery do",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 3,
+      "cluster_id": 1374
+    },
+    {
+      "id": 9550,
+      "question_text": "HNPCC has defect in",
+      "is_active": true,
+      "is_dropped": false,
+      "img_count": 1,
+      "cluster_id": 1309
+    }
+  ],
+  "option_letter_reassignment_count": 8,
+  "option_letter_reassignment_samples": [
+    {
+      "cluster_id": 1827,
+      "c": 1
+    },
+    {
+      "cluster_id": 3181,
+      "c": 1
+    },
+    {
+      "cluster_id": 3524,
+      "c": 1
+    },
+    {
+      "cluster_id": 3728,
+      "c": 2
+    },
+    {
+      "cluster_id": 3751,
+      "c": 2
+    },
+    {
+      "cluster_id": 3999,
+      "c": 1
+    },
+    {
+      "cluster_id": 4001,
+      "c": 1
+    },
+    {
+      "cluster_id": 4003,
+      "c": 1
+    }
+  ],
+  "cluster_size_distribution": {
+    "2": 2056,
+    "3": 719,
+    "4": 31,
+    "5": 9,
+    "6": 2,
+    "10": 1,
+    "18": 1
+  },
+  "unclustered_text_duplicates_triples": 91,
+  "unclustered_text_duplicates_samples": [
+    {
+      "question_text": "All of the following are causes of acute red eye EXCEPT:",
+      "ids": [
+        24552,
+        6734,
+        26779
+      ]
+    },
+    {
+      "question_text": "Normal anatomical narrowing of ureter are present in all EXCEPT:",
+      "ids": [
+        25499,
+        27000,
+        6562
+      ]
+    },
+    {
+      "question_text": "A 45-year-old man on antitubercular therapy develops tingling and numbness in his feet. Which drug is most likely responsible?",
+      "ids": [
+        22233,
+        27015
+      ]
+    },
+    {
+      "question_text": "A neonate born at 36 weeks of gestation, weighing 2.6 kg, should be classified as:",
+      "ids": [
+        26821,
+        21681
+      ]
+    },
+    {
+      "question_text": "A newborn presents with eyes completely covered by fused eyelids and no visible globe. The diagnosis is:",
+      "ids": [
+        26875,
+        21673
+      ]
+    },
+    {
+      "question_text": "A newborn remains apneic even after tactile stimulation, has flaccid tone, HR of 40/min, and falling BP. The baby is most likely in:",
+      "ids": [
+        26824,
+        21693
+      ]
+    },
+    {
+      "question_text": "A vital layer, also known as Schmutzdecke is seen in which one of the following? (2021 PYQ)",
+      "ids": [
+        22621,
+        25452
+      ]
+    },
+    {
+      "question_text": "A patient develops retrobulbar neuritis with decreased red-green color discrimination while on antitubercular therapy. Which drug should be stopped immediately?",
+      "ids": [
+        27016,
+        22234
+      ]
+    },
+    {
+      "question_text": "According to the End TB Strategy, TB incidence by 2030 should be reduced to:",
+      "ids": [
+        26849,
+        21763
+      ]
+    },
+    {
+      "question_text": "A baby with no heartbeat, pale color, no response to stimulation, limp tone, and no respiration gets an APGAR score of:",
+      "ids": [
+        26825,
+        21695
+      ]
+    }
+  ]
+}

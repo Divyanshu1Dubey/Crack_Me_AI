@@ -1,0 +1,1017 @@
+{
+  "total_sampled": 104,
+  "cluster_size_distribution": {
+    "2": 2056,
+    "3": 719,
+    "4-5": 40,
+    "6-10": 3,
+    "11+": 1
+  },
+  "verdicts": {
+    "CANONICAL_IS_BEST": 99,
+    "AMBIGUOUS": 0,
+    "DROPPED_HAS_BETTER": 5,
+    "TIE": 0
+  },
+  "dropped_better_subtypes": {
+    "longer_explanation": 3,
+    "more_images": 2,
+    "more_images_and_longer_expl": 0,
+    "both_longer_expl_and_more_images": 0
+  },
+  "worst_examples": [
+    {
+      "cluster_id": 2940,
+      "canonical_id": 19910,
+      "canon_text": "In Grade 1 abruptio placentae, the maternal blood pressure and fibrinogen levels are typically:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "worst_dup_id": 23360,
+      "worst_dup_expl_len": 147,
+      "worst_dup_img_count": 0,
+      "worst_dup_text": "In Grade 1 abruptio placentae, the maternal blood pressure and fibrinogen levels are typically:"
+    },
+    {
+      "cluster_id": 2914,
+      "canonical_id": 19826,
+      "canon_text": "Which of the following is NOT a known side effect of Ergot derivatives (Ergometrine and Methergine)?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "worst_dup_id": 23324,
+      "worst_dup_expl_len": 210,
+      "worst_dup_img_count": 0,
+      "worst_dup_text": "Which of the following is NOT a known side effect of Ergot derivatives (Ergometrine and Methergine)?"
+    },
+    {
+      "cluster_id": 4136,
+      "canonical_id": 26519,
+      "canon_text": "Which of the following are the intraoperative features of viable small bowel?\n\n1. Visible peristalsis\n\n2. Flabby intestinal musculature\n\n3. Shiny appearance of small bowel wall\n\n4.Visible pulsation in the mesenteric artery\n\nSelect the correct answer ",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "worst_dup_id": 26736,
+      "worst_dup_expl_len": 12,
+      "worst_dup_img_count": 1,
+      "worst_dup_text": "Which of the following are the intraoperative features of viable small bowel?\n\n1. Visible peristalsis\n\n2. Flabby intestinal musculature\n\n3. Shiny appearance of small bowel wall\n\n4.Visible pulsation in the mesenteric artery\n\nSelect the correct answer "
+    },
+    {
+      "cluster_id": 4114,
+      "canonical_id": 10732,
+      "canon_text": ":\nThe histopathological slide given below is suggestive of:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "worst_dup_id": 13159,
+      "worst_dup_expl_len": 0,
+      "worst_dup_img_count": 228,
+      "worst_dup_text": "The histopathological slide given below is suggestive of:"
+    },
+    {
+      "cluster_id": 3427,
+      "canonical_id": 22091,
+      "canon_text": "A 30-year-old carpenter presents with night-time tingling and pain in the thumb, index and middle fingers, relieved by shaking the hand. Tinel's sign is positive over the wrist. The nerve involved is:",
+      "canon_expl_len": 147,
+      "canon_img_count": 0,
+      "worst_dup_id": 24584,
+      "worst_dup_expl_len": 250,
+      "worst_dup_img_count": 0,
+      "worst_dup_text": "A 30-year-old carpenter presents with night-time tingling and pain in the thumb, index and middle fingers, relieved by shaking the hand. Tinel's sign is positive over the wrist. The nerve involved is:"
+    }
+  ],
+  "clusters_sample_summary": [
+    {
+      "cluster_id": 2087,
+      "cluster_size": 2,
+      "canonical_id": 10924,
+      "canon_text": "The image below shows the insertion of transversus abdominis muscle. Identify the conjoint\ntendon:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2107,
+      "cluster_size": 2,
+      "canonical_id": 11139,
+      "canon_text": "Glucosamines are used in which of the following conditions:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2573,
+      "cluster_size": 2,
+      "canonical_id": 11869,
+      "canon_text": "All are true regarding heart failure except:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2350,
+      "cluster_size": 2,
+      "canonical_id": 11639,
+      "canon_text": "Rigor mortis occurs first in:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3878,
+      "cluster_size": 2,
+      "canonical_id": 24193,
+      "canon_text": "Which one of the following is the most sensitive indicator of availability and effectiveness of health services?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1513,
+      "cluster_size": 2,
+      "canonical_id": 10057,
+      "canon_text": "DOC for Onychomycosis?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3168,
+      "cluster_size": 2,
+      "canonical_id": 20894,
+      "canon_text": "In the staging of carcinoma cervix, which procedure is specifically used to detect rectal involvement?",
+      "canon_expl_len": 107,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2274,
+      "cluster_size": 2,
+      "canonical_id": 11559,
+      "canon_text": "Identify the type of hearing loss.",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2940,
+      "cluster_size": 2,
+      "canonical_id": 19910,
+      "canon_text": "In Grade 1 abruptio placentae, the maternal blood pressure and fibrinogen levels are typically:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2944,
+      "cluster_size": 2,
+      "canonical_id": 19917,
+      "canon_text": "Mutation in all four genes governing alpha globin chain synthesis results in Alpha Thalassemia Major. What is the usual clinical outcome of this condition?",
+      "canon_expl_len": 171,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2914,
+      "cluster_size": 2,
+      "canonical_id": 19826,
+      "canon_text": "Which of the following is NOT a known side effect of Ergot derivatives (Ergometrine and Methergine)?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3674,
+      "cluster_size": 2,
+      "canonical_id": 22502,
+      "canon_text": "Which of the following antidepressants is classified as a noradrenaline and specific serotonergic inhibitor (NaSSA)?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1506,
+      "cluster_size": 2,
+      "canonical_id": 10049,
+      "canon_text": "Which of the following factors play a\nmajor role in the initiation of thrombus\nformation?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1346,
+      "cluster_size": 2,
+      "canonical_id": 9619,
+      "canon_text": "Pt. has h/o vomiting & doctor gave antiemetic. Patient developed abnormal movements.\nWhat would be given",
+      "canon_expl_len": 234,
+      "canon_img_count": 2,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2102,
+      "cluster_size": 2,
+      "canonical_id": 11111,
+      "canon_text": "A 15-year-old boy underwent splenectomy for immune thrombocytopenic purpura. During the\nprocedure, the surgeon noticed bleeding while separating the spleen from the stomach.\nWhich vessels are most likely implicated in this bleeding?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2655,
+      "cluster_size": 2,
+      "canonical_id": 15718,
+      "canon_text": "A new drug combination of chemotherapy and immunotherapy for metastatic melanoma was\nprescribed by a radiotherapist. It prolongs the survival. Which of the following is true in this\nsituation?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2242,
+      "cluster_size": 2,
+      "canonical_id": 11526,
+      "canon_text": "A 35-year-old female patient presents with complaints of nasal obstruction and post-nasal\ndrip. There is a past history of FESS for failed conservative management 5 years ago.\nUncinectomy and maxillary ostium dilation was done during the previous FES",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 4108,
+      "cluster_size": 2,
+      "canonical_id": 26600,
+      "canon_text": "A 50 year old male patient presents to the emergency with sudden onset of upper abdominal pain, nausea, vomiting and haematemesis. On examination, PR =106/min, BP = 100/70 mm Hg and pallor is present. CECT abdomen reveals a large exophytic tumor of s",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1543,
+      "cluster_size": 2,
+      "canonical_id": 10137,
+      "canon_text": ". A male patient with recent history of RTA was brought to hospital. His CT scan was\nnormal, but he died within three hours of admission. His autopsy revealed retraction ball\nappearance and petechial hemorrhages in the corpus callosum. What is the mo",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3075,
+      "cluster_size": 2,
+      "canonical_id": 20477,
+      "canon_text": "Which of the following is the most common route of infection for Urinary Tract Infections (UTI) in females?",
+      "canon_expl_len": 79,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3915,
+      "cluster_size": 2,
+      "canonical_id": 24230,
+      "canon_text": "Among the following types of milk, which one contains the highest concentration of calcium per 100 g?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2571,
+      "cluster_size": 2,
+      "canonical_id": 11867,
+      "canon_text": "A patient came with hypoxemia and a normal alveolar-arterial oxygen gradient. What can be\nthe cause?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3192,
+      "cluster_size": 2,
+      "canonical_id": 21026,
+      "canon_text": "According to FIGO anatomic staging for GTT, \"Stage III\" involves metastasis to the:",
+      "canon_expl_len": 55,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2599,
+      "cluster_size": 2,
+      "canonical_id": 11895,
+      "canon_text": "A diabetic patient's fasting blood glucose level is found to be 160 mg/dL. What will you advise\nthe patient regarding non-pharmacological management?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3119,
+      "cluster_size": 2,
+      "canonical_id": 20694,
+      "canon_text": "\"Polymenorrhea\" is defined as cyclic bleeding where the cycle interval is reduced to less than:",
+      "canon_expl_len": 63,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2830,
+      "cluster_size": 2,
+      "canonical_id": 19543,
+      "canon_text": "The principle in the management of ACUTE ectopic pregnancy is:",
+      "canon_expl_len": 125,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2552,
+      "cluster_size": 2,
+      "canonical_id": 11848,
+      "canon_text": "Which of the following is not a radiological finding in a patient with left heart failure?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3735,
+      "cluster_size": 2,
+      "canonical_id": 22585,
+      "canon_text": "Which of the following factors favour posterior position of the vertex?\n\nI. Gynecoid pelvis\nII. High inclination pelvis\nIII. Attachment of placenta on the posterior wall\nIV. Abnormal uterine contraction\n\nSelect the correct answer using the code given",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2706,
+      "cluster_size": 2,
+      "canonical_id": 19067,
+      "canon_text": "During the secretory phase, progesterone can only act on the endometrium that has been previously primed by which hormone?",
+      "canon_expl_len": 68,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2302,
+      "cluster_size": 2,
+      "canonical_id": 11587,
+      "canon_text": "First-hand knowledge rule is applicable to:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3339,
+      "cluster_size": 2,
+      "canonical_id": 21783,
+      "canon_text": "With reference to objective consider the following statement:\n1. It is precise- either achieved or not achieved.\n2. It is a planned endpoint of all activities\n3. It is concerned directly with problem itself\n4. It is not constrained by time.\nWhich of ",
+      "canon_expl_len": 207,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2745,
+      "cluster_size": 2,
+      "canonical_id": 19135,
+      "canon_text": "Consider the following about Doppler ultrasound changes in a compromised fetus: 1. Umbilical artery — reduced, absent or reversed end-diastolic flow — indicates increased fetoplacental resistance.\n2. Middle cerebral artery — increased diastolic veloc",
+      "canon_expl_len": 100,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3308,
+      "cluster_size": 2,
+      "canonical_id": 21421,
+      "canon_text": "In pregnancy with Down syndrome consider the following biomarkers:\nβ HCG is raised\nα FP is raised\nInhibin is decreased\nWhich of the above statements is/are correct? (2019 PYQ)",
+      "canon_expl_len": 151,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3463,
+      "cluster_size": 2,
+      "canonical_id": 22142,
+      "canon_text": "Which of the following publications is/are brought out by the World Health Organization?\n\n1. CD Alert\n2. Morbidity and Mortality Weekly Report\n3. Weekly Epidemiological Record\n\nSelect the correct answer using the code given below. (2024 PYQ)",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3327,
+      "cluster_size": 2,
+      "canonical_id": 21733,
+      "canon_text": "Blindness under NPCBVI is defined as visual acuity:",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3412,
+      "cluster_size": 2,
+      "canonical_id": 22062,
+      "canon_text": "Consider the following about eosinophilic granuloma:\n1. It is a rare neoplasm of Langerhans cells\n2. Predilection for skull and diaphysis of long bones\n3. Multifocal form is Letterer-Siwe disease\n4. Spinal involvement causes vertebra plana\nWhich are ",
+      "canon_expl_len": 218,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3490,
+      "cluster_size": 2,
+      "canonical_id": 22180,
+      "canon_text": "A three year old girl is brought with complaint of not being able to ever stand or walk. She achieved head control at one year of age. Examination reveals generalised hypotonia, brisk knee jerk, and ankle clonus. What is the likely diagnosis?",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2878,
+      "cluster_size": 2,
+      "canonical_id": 19650,
+      "canon_text": "A uterine perforation is caused by a suction cannula during MTP. The next step in management should be:",
+      "canon_expl_len": 134,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2654,
+      "cluster_size": 2,
+      "canonical_id": 15614,
+      "canon_text": "Match the following molecules with their carriers in plasma:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2719,
+      "cluster_size": 2,
+      "canonical_id": 19083,
+      "canon_text": "Which one of the following correctly states the maturation index during the POSTPARTUM period?",
+      "canon_expl_len": 90,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1504,
+      "cluster_size": 2,
+      "canonical_id": 10047,
+      "canon_text": "Which of the following will be seen on\ncardiac biopsy of a patient who had a post\nMI reperfusion injury?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3032,
+      "cluster_size": 2,
+      "canonical_id": 20236,
+      "canon_text": "A couple presents for counseling regarding vasectomy. Which of the following is an accurate instruction regarding post-operative contraceptive precautions?",
+      "canon_expl_len": 152,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2981,
+      "cluster_size": 2,
+      "canonical_id": 20123,
+      "canon_text": "Intrauterine Fetal Death (IUFD) is defined as fetal deaths weighing how much or more occurring during pregnancy or during labor?",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2553,
+      "cluster_size": 2,
+      "canonical_id": 11849,
+      "canon_text": "A 60-year-old man presented with an episode of acute onset dizziness and loss of\nconsciousness which lasted for a few seconds followed by a regain of full consciousness. There\nwere no similar episodes in the past. Which of the following is a true sta",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2201,
+      "cluster_size": 2,
+      "canonical_id": 11485,
+      "canon_text": "Which of the following is not an etiological factor for head and neck malignancies?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3209,
+      "cluster_size": 2,
+      "canonical_id": 21073,
+      "canon_text": "Assertion (A): Radical hysterectomy is the preferred treatment for Placental Site Trophoblastic Tumor (PSTT). Reason (R): PSTT is highly responsive to standard EMA-CO chemotherapy.",
+      "canon_expl_len": 104,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2192,
+      "cluster_size": 2,
+      "canonical_id": 11476,
+      "canon_text": "While performing a caloric test, what type of nystagmus would you expect on cold water\nirrigation?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2198,
+      "cluster_size": 2,
+      "canonical_id": 11482,
+      "canon_text": "A teenager has a mass in his nasopharynx that has minimally spread into the sphenoid sinus\nwith no lateral extension. Which stage of nasopharyngeal angiofibroma could this be?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 2378,
+      "cluster_size": 2,
+      "canonical_id": 11671,
+      "canon_text": "A 22-year-old female patient came with complaints of vomiting and a decrease in movement\nof the right leg. In the past, she has had episodes of violent and aggressive behavior and\nabdominal pain. Which of the following is the most probable diagnosis?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 3848,
+      "cluster_size": 2,
+      "canonical_id": 24163,
+      "canon_text": "Cytotoxic drug-contaminated items such as vials and ampoules are disposed in:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 1
+    },
+    {
+      "cluster_id": 1622,
+      "cluster_size": 3,
+      "canonical_id": 10336,
+      "canon_text": ":\nA 70 kg patient who presented to the emergency with acute pancreatitis was shifted to the\nICU and intubated. His ventilatory settings are: FiO2 90%, PEEP 12 mmHg, respiratory rate\n16/min, and tidal volume 420 ml. The results of the ABG analysis are",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1977,
+      "cluster_size": 3,
+      "canonical_id": 10710,
+      "canon_text": ":\nRefsum disease is due to:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 4136,
+      "cluster_size": 3,
+      "canonical_id": 26519,
+      "canon_text": "Which of the following are the intraoperative features of viable small bowel?\n\n1. Visible peristalsis\n\n2. Flabby intestinal musculature\n\n3. Shiny appearance of small bowel wall\n\n4.Visible pulsation in the mesenteric artery\n\nSelect the correct answer ",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1840,
+      "cluster_size": 3,
+      "canonical_id": 10567,
+      "canon_text": ":\nIdentify the marked bond:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 3471,
+      "cluster_size": 3,
+      "canonical_id": 22153,
+      "canon_text": "Consider the following statements with reference to 'trans fatty acids':\n\n1. They are geometrical isomers of cis-unsaturated fatty acids.\n2. Though atherogenic, being unsaturated they are less so than saturated fatty acids.\n3. It takes years for tran",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1756,
+      "cluster_size": 3,
+      "canonical_id": 10475,
+      "canon_text": ":\nA patient presented with jaw swelling and weight loss. Suspecting a malignancy, the\nsubmandibular gland was resected. Which is the most likely nerve to be damaged during\nsubmandibular gland resection?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1969,
+      "cluster_size": 3,
+      "canonical_id": 10702,
+      "canon_text": ":\nDeamination of methylated cytosine forms which of the following?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 2208,
+      "cluster_size": 3,
+      "canonical_id": 11492,
+      "canon_text": "Which of the following are the objective tests for the hearing?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 3727,
+      "cluster_size": 3,
+      "canonical_id": 22573,
+      "canon_text": "Which of the following statements regarding red degeneration of fibroid are correct?\n\nI. Red degeneration is seen commonly in pregnancy and puerperium.\nII. Infection is the principal cause of red degeneration.\nIII. Raw-beef appearance may be seen on ",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 4039,
+      "cluster_size": 3,
+      "canonical_id": 26503,
+      "canon_text": "Which of the following are indications of splenectomy?\n\n1. Pseudomyxoma peritonei\n\n2. Trauma\n\n3. Idiopathic thrombocytopenic purpura (ITP)\n\n4. Hypersplenism\n\nSelect the correct answer using the code given below:",
+      "canon_expl_len": 128,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1848,
+      "cluster_size": 3,
+      "canonical_id": 10576,
+      "canon_text": ":\nWhich of the following types of collagens is involved in wound healing?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1641,
+      "cluster_size": 3,
+      "canonical_id": 10355,
+      "canon_text": ":\nWhat is true about the following position?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1920,
+      "cluster_size": 3,
+      "canonical_id": 10653,
+      "canon_text": ":\nA patient presents with a clinical scenario of obstructive jaundice. Which of the following\nresults can be seen on Van den bergh's reaction?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1913,
+      "cluster_size": 3,
+      "canonical_id": 10646,
+      "canon_text": ":\nIn a patient with lipoprotein lipase deficiency, which of the following is increased following a\nfatty meal?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1965,
+      "cluster_size": 3,
+      "canonical_id": 10698,
+      "canon_text": ":\nBanding technique used for dicentric chromosomes is:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 2002,
+      "cluster_size": 3,
+      "canonical_id": 10736,
+      "canon_text": ":\nA patient presented with hair loss and itching of the scalp along with mild discharge. Which\nof the following is useful for diagnosis?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1696,
+      "cluster_size": 3,
+      "canonical_id": 10412,
+      "canon_text": ":\nIdentify the foramen marked in the image below.",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1386,
+      "cluster_size": 3,
+      "canonical_id": 9697,
+      "canon_text": "A 10 year old child presents with limb pain. Bone mineral density is normal. Diagnosis",
+      "canon_expl_len": 31,
+      "canon_img_count": 4,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 4094,
+      "cluster_size": 3,
+      "canonical_id": 26558,
+      "canon_text": "Which one of the following is considered the gold standard for the diagnosis of oesophageal motility disorders?",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1889,
+      "cluster_size": 3,
+      "canonical_id": 10620,
+      "canon_text": ":\nDNA methylation is not involved in?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1844,
+      "cluster_size": 3,
+      "canonical_id": 10572,
+      "canon_text": ":\nWhich of the following is the reason for using phenylbutyrate in urea cycle disorders?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1658,
+      "cluster_size": 3,
+      "canonical_id": 10372,
+      "canon_text": ":\nThe structure marked with the asterisk in the electron micrograph indicates _____________.",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1739,
+      "cluster_size": 3,
+      "canonical_id": 10458,
+      "canon_text": ":\nA 6-month-old boy was brought to the casualty with seizures. The pediatrician tries to do CSF\nsampling. What are the structures punctured by the pediatrician while piercing through the\nmarked structure?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 2033,
+      "cluster_size": 3,
+      "canonical_id": 10769,
+      "canon_text": ":\nWhat is correct regarding the diagnosis based on the given image?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 2105,
+      "cluster_size": 3,
+      "canonical_id": 11132,
+      "canon_text": "Klenow fragment lacks the activity of",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1649,
+      "cluster_size": 3,
+      "canonical_id": 10363,
+      "canon_text": ":\nThe talocalcaneonavicular joint is a ________type of joint.",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1783,
+      "cluster_size": 3,
+      "canonical_id": 10502,
+      "canon_text": ":\nIdentify the liver segment marked in the image below:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1972,
+      "cluster_size": 3,
+      "canonical_id": 10705,
+      "canon_text": ":\nMutation of the gene of cystic fibrosis occurs with:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1734,
+      "cluster_size": 3,
+      "canonical_id": 10453,
+      "canon_text": ":\nThe long left recurrent laryngeal nerve is due to the persistence of which arch artery?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 1877,
+      "cluster_size": 3,
+      "canonical_id": 10608,
+      "canon_text": ":\nWhat is true about the Hayflick limit?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 2
+    },
+    {
+      "cluster_id": 3462,
+      "cluster_size": 4,
+      "canonical_id": 22139,
+      "canon_text": "The cost of implementation of 'Ayushman Bharat Pradhan Mantri Jan Arogya Yojana' is borne by: (2023 PYQ)",
+      "canon_expl_len": 249,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 4114,
+      "cluster_size": 5,
+      "canonical_id": 10732,
+      "canon_text": ":\nThe histopathological slide given below is suggestive of:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 4
+    },
+    {
+      "cluster_id": 3871,
+      "cluster_size": 4,
+      "canonical_id": 24186,
+      "canon_text": "UNFPA is mainly concerned with: The lowest point health disease spectrum is death and highest point corresponds to WHO definition of positive health. The transition from optimum health to ill-health is often gradual, and where one state ends and the ",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 1780,
+      "cluster_size": 4,
+      "canonical_id": 10499,
+      "canon_text": ":\nWhich of the following muscles form the pelvic diaphragm?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3794,
+      "cluster_size": 4,
+      "canonical_id": 22679,
+      "canon_text": "Which of the following statements is correct regarding the blood supply of the liver?",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3345,
+      "cluster_size": 5,
+      "canonical_id": 21801,
+      "canon_text": "The most common cause for non-traumatic subarachnoid haemorrhage:",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 4
+    },
+    {
+      "cluster_id": 3801,
+      "cluster_size": 4,
+      "canonical_id": 22689,
+      "canon_text": "A 20-month-old male child is brought with complaints of sudden onset painless dark red rectal bleeding and pallor. There is no preceding history of diarrhoea or fever. On examination, the abdomen is soft with no palpable mass. The most likely diagnos",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3856,
+      "cluster_size": 4,
+      "canonical_id": 24171,
+      "canon_text": "The correct color coding for soiled linen contaminated with blood is: It is a specialized, non-political health agency of united nations Headquarters at Geneva, Switzerland. Objective: Attainment by all people of the highest level of health. Preventi",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 2025,
+      "cluster_size": 4,
+      "canonical_id": 10761,
+      "canon_text": ":\nA 15-year-old girl presents with itchy lesions on her arm as shown. Her family history is\npositive for asthma. What could be the most probable diagnosis?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3973,
+      "cluster_size": 4,
+      "canonical_id": 25650,
+      "canon_text": "Which of the following are true about epidermal cyst?\n\n1. It is lined by stratified squamous epithelium.\n2.It is derived from hair follicle.\n3.It is also called sebaceous cyst.\n4. It is not fixed to the skin.\nEpidermal cysts\nLined by true stratified ",
+      "canon_expl_len": 25,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3796,
+      "cluster_size": 4,
+      "canonical_id": 22683,
+      "canon_text": "Which one of the following statements regarding a Pancreatic Pseudocyst is NOT correct?",
+      "canon_expl_len": 249,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 2227,
+      "cluster_size": 4,
+      "canonical_id": 11511,
+      "canon_text": "Identify the condition shown in the image.",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3805,
+      "cluster_size": 4,
+      "canonical_id": 22695,
+      "canon_text": "A 25-year-old male with cystic fibrosis presents for evaluation. Which of the following features regarding his condition is NOT correct?",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3789,
+      "cluster_size": 4,
+      "canonical_id": 22671,
+      "canon_text": "A 26-year-old male with a known history of asthma and atopic dermatitis presents with a long history of solid food dysphagia. Endoscopy reveals a ‘crepe paper mucosa’, multiple rings, and furrows in the esophagus. Esophageal biopsy demonstrates 22 eo",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 1583,
+      "cluster_size": 4,
+      "canonical_id": 10297,
+      "canon_text": ":\nWhat is the mechanism of action of the curare group of muscle relaxants?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3349,
+      "cluster_size": 5,
+      "canonical_id": 21811,
+      "canon_text": "Consider the following statements regarding cluster headache:\n1. The headaches are periodic, beginning at the same time for weeks at a stretch.\n2. Patients experience severe, unilateral periorbital pain which typically lasts from 30-90 minutes.\n3. Th",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 4
+    },
+    {
+      "cluster_id": 3802,
+      "cluster_size": 4,
+      "canonical_id": 22690,
+      "canon_text": "A neonate with Down syndrome presents with bilious vomiting on day 2 of life. Plain X-ray abdomen shows a double bubble sign. The most appropriate surgical treatment is:",
+      "canon_expl_len": 250,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 1685,
+      "cluster_size": 5,
+      "canonical_id": 10401,
+      "canon_text": ":\nWhat is the nerve supply of the structure marked in the image below?",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 4
+    },
+    {
+      "cluster_id": 3886,
+      "cluster_size": 4,
+      "canonical_id": 24201,
+      "canon_text": "Handicap refers to: Body building Repair and maintenance of body tissues Maintenance of osmotic pressure Synthesis of certain substances like antibodies, plasma proteins, haemoglobin, enzymes, hormones and coagulation factors. Proteins are connected ",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 3427,
+      "cluster_size": 4,
+      "canonical_id": 22091,
+      "canon_text": "A 30-year-old carpenter presents with night-time tingling and pain in the thumb, index and middle fingers, relieved by shaking the hand. Tinel's sign is positive over the wrist. The nerve involved is:",
+      "canon_expl_len": 147,
+      "canon_img_count": 0,
+      "members_count": 3
+    },
+    {
+      "cluster_id": 1823,
+      "cluster_size": 10,
+      "canonical_id": 10545,
+      "canon_text": ":\nIdentify the marked structure",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 9
+    },
+    {
+      "cluster_id": 3936,
+      "cluster_size": 6,
+      "canonical_id": 24464,
+      "canon_text": "Which of the following are the features of post-lumbar puncture headache?\n\n1. Dull aching occipitofrontal headache\n2. Worse on waking but improves during the day\n3. Recumbency usually improves the headache within minutes\nEssential tremor\nDisplay a do",
+      "canon_expl_len": 155,
+      "canon_img_count": 0,
+      "members_count": 5
+    },
+    {
+      "cluster_id": 3944,
+      "cluster_size": 6,
+      "canonical_id": 24636,
+      "canon_text": "First stage of labour starts from:\n\n1. Rh incompatibility\n2. Baby born to a diabetic mother\n3. Maternal anemia\n4. Birth asphyxia\nEarly cord clamping\nEarly clamping reduces the need of phototherapy due to hyperbilirubinemia.\nDone in:\nRh-incompatibilit",
+      "canon_expl_len": 74,
+      "canon_img_count": 0,
+      "members_count": 5
+    },
+    {
+      "cluster_id": 1796,
+      "cluster_size": 18,
+      "canonical_id": 10515,
+      "canon_text": ":\nMatch the following:",
+      "canon_expl_len": 0,
+      "canon_img_count": 0,
+      "members_count": 17
+    }
+  ]
+}
