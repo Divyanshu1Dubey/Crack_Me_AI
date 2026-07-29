@@ -108,11 +108,11 @@ const post: BlogPost = {
     faqs: [
         {
             q: 'How much syllabus do UPSC CMS and NEET PG actually share?',
-            a: 'Roughly 60–70% of high-yield Medicine (Cardiology, Endocrinology, Nephrology, Neurology, GI, Hepatology, Hematology, Infectious disease, Respiratory and Rheumatology) is identical in stem style. PSM, OBG and Paeds have ~40% overlap. Surgery, Anatomy, ENT, Ophthalmology, Orthopaedics and Forensic Medicine have <20% overlap and must be prepped separately. See the [official UPSC CMS scheme](https://upsc.gov.in/examinations/combined-medical-services-examination) and the [NBE NEET-PG bulletin](https://natboard.edu.in/nbe-exam/neet-pg) for confirmed paper patterns.',
+            a: 'Roughly 60–70% of high-yield Medicine (Cardiology, Endocrinology, Nephrology, Neurology, GI, Hepatology, Hematology, Infectious disease, Respiratory and Rheumatology) is identical in clinical-reasoning style. PSM, OBG and Paeds have ~40% overlap. Surgery, Anatomy, ENT, Ophthalmology, Orthopaedics and Forensic Medicine have <20% overlap and must be prepped separately. See the [official UPSC CMS scheme](https://upsc.gov.in/examinations/combined-medical-services-examination) and the [NBE NEET-PG bulletin](https://natboard.edu.in/nbe-exam/neet-pg) for confirmed paper patterns.',
         },
         {
             q: 'Should I attempt both exams in the same week, or pick one?',
-            a: 'If both exams fall within 14 days of each other (the typical UPSC CMS July + NEET PG August pattern), attempt both. The shared ~60% of medicine means your effective prep doubles for one exam after you prep the other. Only skip NEET PG if you are >50% confident of a top-100 CMS rank OR if your NEET PG baseline prep is at <40%. Don’t let indecision cost you two attempts.',
+            a: 'If both exams fall within 14 days of each other, attempt both. The shared ~60% of medicine means your effective prep doubles for one exam after you prep the other. Only skip NEET PG if you are highly confident of a top-100 CMS rank OR if your NEET PG baseline prep is well under the qualifying mark. Don’t let indecision cost you two attempts.',
         },
         {
             q: 'How do I split my 7 days between the two exams?',
@@ -120,7 +120,7 @@ const post: BlogPost = {
         },
         {
             q: 'How many NEET PG mocks should I sit before the exam?',
-            a: 'A minimum of 4 full mocks + 6 subject-wise mocks in the last 7 days is mandatory. NEET PG scoring is brutal — candidates who skip mocks underperform by ~70–90 ranks on average. Use the [NEET PG simulator](/neet-pg) or a CrackCMS Test Series mock to track your improving/declining trend.',
+            a: 'A minimum of 4 full mocks + 6 subject-wise mocks in the last 7 days is a reasonable benchmark. NEET PG scoring is competitive and regular timed-mock practice is the standard way to calibrate pacing. Use the [NEET PG simulator](/neet-pg) or a CrackCMS Test Series mock to track your improving/declining trend.',
         },
         {
             q: 'Which AI tool is most useful for a dual aspirant in the last 7 days?',
@@ -132,10 +132,10 @@ const post: BlogPost = {
         },
         {
             q: 'What if I panic-mock the night before either exam?',
-            a: 'Don’t. Candidates who panic-mock the night before drop 15–25 marks the next morning due to adrenaline exhaustion. The 2 hours before sleep should be family time + 30 minutes of cheat-sheet only. If anxiety is overwhelming, the [AI tutor](/ai-tutor) is on 24×7 during exam week — paste one Q, ask for a 30-second teach-back, and walk away.',
+            a: 'Don’t. Panic-mocking the night before is widely recognised to hurt recall the next morning through adrenaline exhaustion and retrieval interference. The 2 hours before sleep should be family time + 30 minutes of cheat-sheet only. If anxiety is overwhelming, the [AI tutor](/ai-tutor) is on 24×7 during exam week — paste one Q, ask for a 30-second teach-back, and walk away.',
         },
     ],
-    body: `If you are one of the several thousand Indian MBBS graduates attempting **both UPSC CMS and NEET PG** in the same 3-month window, the last 7 days are *not* a question of “which exam to focus on”. They are a question of **how to hit the 60% overlap first, then split the remaining days by marks-weight**. This guide is built from analysis of 1,920 + 1,400 PYQs across both exams (the CrackCMS question banks) and 11+ AI tutors running on real dual-aspirant data from the 2024–2025 cycle.
+    body: `If you are one of the several thousand Indian MBBS graduates attempting **both UPSC CMS and NEET PG** in the same 3-month window, the last 7 days are *not* a question of “which exam to focus on”. They are a question of **how to hit the 60% overlap first, then split the remaining days by marks-weight**. This guide is built from analysis of [CrackCMS question banks](/questions) and the standard published syllabi for both exams.
 
 > **The shared-revision rule:** *spend 60% of your last week on the 60% you share*. The 40% that doesn’t overlap goes last, in 90-minute focused blocks, never in marathon reads.
 
@@ -147,45 +147,45 @@ You’ll see specific drugs, doses and stems throughout. Every clinical claim is
 
 Most “last-week” articles give you a generic day-by-day timetable. That fails dual aspirants because it ignores the central fact: **the two exams have overlapping material in inverse proportions of depth and breadth**. UPSC CMS tests breadth across departments with fewer stems per topic; NEET PG tests depth within a single subject with more stems per topic. So the same hour spent on “ECG interpretation” lands differently on each exam paper.
 
-We have spent the last 24 months watching how dual aspirants actually score — and the pattern is striking. The candidates who crack both exams in the same season are not the ones who study the most hours. They are the ones who study the *right* 60% first, and treat the remaining 40% like a triage patient in casualty: stabilise, do no harm, move on.
+The pattern consistently reported by dual aspirants is that the candidates who crack both exams in the same season are not the ones who study the most hours. They are the ones who study the *right* 60% first, and treat the remaining 40% like a triage patient in casualty: stabilise, do no harm, move on.
 
-This post is the playbook we wish someone had given us before the 2024 cycle.
+This post is the playbook we recommend at CrackCMS for dual aspirants.
 
 ---
 
 ## The 60% overlap map
 
-Both exams test the same *clinical reasoning* for high-yield medicine. NEET PG tests *depth* in the same topic; UPSC CMS tests *breadth across departments*. Common to **both**:
+Both exams test the same *clinical reasoning* for high-yield medicine. NEET PG tests *depth* in the same topic; UPSC CMS tests *breadth across departments*. The 25 topics below are commonly tested by **both** exams. We do not assign specific marks-per-topic numbers because the exact marks-per-topic breakdown varies year-to-year and is not pre-published; treat the table as a priority list, not a marks-promise.
 
-| # | Topic | CMS Marks (approx.) | NEET PG Marks (approx.) | Why both test it |
-|---|---|---|---|---|
-| 1 | ECG + ACS management | 4–6 | 5–7 | Universal emergency |
-| 2 | Acid-base + electrolyte disorders | 4–5 | 4–5 | Everywhere in medicine |
-| 3 | Diabetes + acute complications | 4–5 | 5–6 | India’s #1 comorbidity |
-| 4 | Sepsis + septic shock (SSC 2021 bundles) | 3–4 | 4–5 | Both exams expect 1-hour bundles |
-| 5 | Pneumonia + antibiotic choice | 3–4 | 3–4 | High-yield ID |
-| 6 | Preeclampsia / eclampsia | 3–4 | 3–5 | OBG shared topic |
-| 7 | Neonatal resuscitation (NSSK) | 2–3 | 3–4 | OBG + Paeds shared |
-| 8 | Hypo + hyperthyroidism | 3–4 | 3–4 | Endocrine shared |
-| 9 | TB diagnosis + DOTS regimen (NTEP) | 3–4 | 2–3 | India-centric |
-| 10 | CKD + ARF management | 3–4 | 4–5 | Nephro shared |
-| 11 | Cirrhosis + portal HT | 3–4 | 3–4 | GI + Hepatology |
-| 12 | Stroke + TIA (thrombolysis window) | 3–4 | 3–4 | Neuro shared |
-| 13 | Asthma + COPD exacerbation | 3 | 3 | Respiratory |
-| 14 | Anaphylaxis + adrenaline dose | 2–3 | 2–3 | Emergency |
-| 15 | Upper GI bleed + banding | 3 | 3 | GI |
-| 16 | HIV + opportunistic infections | 3 | 3 | ID |
-| 17 | Malaria (vivax + falciparum) | 2–3 | 2–3 | India-centric |
-| 18 | Rheumatoid arthritis + DMARDs | 2–3 | 3–4 | Rheum shared |
-| 19 | Anaemia classification | 2 | 3–4 | Hem + Paeds |
-| 20 | Pleural effusion + Light’s criteria | 2 | 3 | Respiratory |
-| 21 | Pancreatitis (Atlanta criteria) | 2–3 | 3 | GI |
-| 22 | UTI + asymptomatic bacteriuria | 2 | 2–3 | Nephro + OBG |
-| 23 | DVT prophylaxis + LMWH dosing | 2–3 | 2–3 | Surgery + Medicine |
-| 24 | Snake-bite + ASV protocol | 1–2 | 2–3 | India-specific |
-| 25 | Dengue + chikungunya triage | 2 | 2 | ID shared |
+| # | Topic | Why both test it |
+|---|---|---|
+| 1 | ECG + ACS management | Universal emergency |
+| 2 | Acid-base + electrolyte disorders | Everywhere in medicine |
+| 3 | Diabetes + acute complications | India’s #1 comorbidity |
+| 4 | Sepsis + septic shock (SSC 2021 bundles) | Both exams expect 1-hour bundles |
+| 5 | Pneumonia + antibiotic choice | High-yield ID |
+| 6 | Preeclampsia / eclampsia | OBG shared topic |
+| 7 | Neonatal resuscitation (NSSK) | OBG + Paeds shared |
+| 8 | Hypo + hyperthyroidism | Endocrine shared |
+| 9 | TB diagnosis + DOTS regimen (NTEP) | India-centric |
+| 10 | CKD + ARF management | Nephro shared |
+| 11 | Cirrhosis + portal HT | GI + Hepatology |
+| 12 | Stroke + TIA (thrombolysis window) | Neuro shared |
+| 13 | Asthma + COPD exacerbation | Respiratory |
+| 14 | Anaphylaxis + adrenaline dose | Emergency |
+| 15 | Upper GI bleed + banding | GI |
+| 16 | HIV + opportunistic infections | ID |
+| 17 | Malaria (vivax + falciparum) | India-centric |
+| 18 | Rheumatoid arthritis + DMARDs | Rheum shared |
+| 19 | Anaemia classification | Hem + Paeds |
+| 20 | Pleural effusion + Light’s criteria | Respiratory |
+| 21 | Pancreatitis (Atlanta criteria) | GI |
+| 22 | UTI + asymptomatic bacteriuria | Nephro + OBG |
+| 23 | DVT prophylaxis + LMWH dosing | Surgery + Medicine |
+| 24 | Snake-bite + ASV protocol | India-specific |
+| 25 | Dengue + chikungunya triage | ID shared |
 
-**Master these 25 and you win ~25–30% of both exams in 4 focused days.** Even if you memorise nothing else, this is your floor.
+Mastering these 25 topics is a strong foundation for both exams. Verify the current per-topic weight on the official UPSC CMS and NBE NEET-PG syllabi for your year.
 
 > **Try this on the AI tutor:** [Ask CrackCMS AI](/ai-tutor) — *“Drill me 5 Qs on ECG + ACS management mixed UPSC CMS and NEET PG style, and grade me.”* It picks questions from both banks and switches stem format mid-session — the closest you can get to a real mixed exam.
 
@@ -211,27 +211,27 @@ Notice how Day-1 is identical for both exams: a recovery day, not a study day. T
 
 ## Common-mistake autopsy
 
-Our analysis of 100+ dual-aspirant attempts in 2025 surfaced **five predictable mistakes** costing 30–60 marks each. Each is preventable with a 10-minute protocol.
+Working with dual aspirants over several CMS / NEET PG cycles has surfaced **five predictable mistakes** that are consistently costly. Each is preventable with a 10-minute protocol.
 
 ### Mistake #1: Forgetting CMS = breadth, NEET PG = depth
 
-CMS gives you 120 stems in 120 minutes. NEET PG gives you 200 stems in 210 minutes. *Twice as many stems in the same window.* If you prepare for both with the same pacing you will fail one of them. Plan CMS as “breadth — encounter every topic once” and NEET PG as “depth — see 8–10 variations of the same topic”. This pacing gap is what the day-by-day table above encodes.
+CMS gives you 120 stems per paper. NEET PG gives you 200 stems in 210 minutes. *Twice as many stems per unit time.* If you prepare for both with the same pacing you will fail one of them. Plan CMS as “breadth — encounter every topic once” and NEET PG as “depth — see 8–10 variations of the same topic”. This pacing gap is what the day-by-day table above encodes.
 
 ### Mistake #2: Reading textbooks in the last week
 
 Passive reading collapses under exam stress. Every late-week hour must be **recall + quiz + autopsy**. CrackCMS [AI tutor](/ai-tutor) + [flashcards](/flashcards) + mocks are your three tools. Textbooks close after Day-7. The exception: one 20-minute skim of a standard reference if the mock exposed a topic you genuinely blanked on (Williams for OBG, Harrison for Medicine, Bailey for Surgery). No more.
 
-### Mistake #3: Ignoring the OMR sheet (CMS) vs online-only (NEET PG)
+### Mistake #3: Ignoring the exam interface (CBT vs OMR)
 
-CMS is still pen-and-paper OMR. Practise **transferring answers within 10 minutes** at the end of every CMS mock. NEET PG is online-only — no transfer step, but you get a 5-minute tutorial first; use it. Most candidates lose 3–6 marks every year to misaligned bubbles on the OMR; the tutorial screen on NEET PG is free marks if you bother to read it.
+Per the official UPSC CMS 2026 notification, the exam is **Computer-Based Test (CBT)**, not pen-and-paper OMR. Practise the CBT interface in the [CMS simulator](/simulator) — get familiar with the question palette, marking-for-review, and time-left indicator. NEET PG is also CBT — practise the same interface. Use the tutorial screen on NEET PG for free marks.
 
 ### Mistake #4: Not triaging by marks-weight
 
-Dual aspirants often treat both exams equally. But: NEET PG Medicine = ~30 marks vs CMS Medicine = ~50 marks. CMS Surgery = ~35 marks vs NEET PG Surgery = ~20 marks. **The shape of weight is different.** Allocate accordingly — see the *Time-Block Calculator* below.
+Dual aspirants often treat both exams equally. But the **shape of marks-weight is different** between CMS and NEET PG (the official syllabus and past-paper breakdown for each exam is the best source of truth for your year). Allocate accordingly — see the *Time-Block Calculator* below.
 
 ### Mistake #5: “One more mock” the night before
 
-This is the panic behaviour. The night before each exam must be rest, not mocks. **Period.** Take this from someone who has counselled 200+ aspirants in 2025: panic mocks before an exam drop your score by 15–25 marks due to adrenaline exhaustion. The mechanism is cortisol-mediated retrieval interference, well documented in the sports-psychology literature. Trust the plan.
+This is the panic behaviour. The night before each exam must be rest, not mocks. **Period.** Panic mocks before an exam are documented to cost marks due to adrenaline exhaustion and cortisol-mediated retrieval interference (well documented in sports-psychology literature on taper). Trust the plan.
 
 ---
 

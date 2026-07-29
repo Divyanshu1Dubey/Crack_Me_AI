@@ -18,7 +18,7 @@ export interface CutoffContent {
     candidatesAppeared?: number;
     /** Total candidates recommended (approx) */
     candidatesRecommended?: number;
-    /** Category-wise cutoff out of 960 (CMS) or 800 (NEET PG) */
+    /** Category-wise cutoff. The total written marks for UPSC CMS is 500. */
     cutoffs: { category: string; cutoff: number; seats?: number }[];
     /** Top 5 topper scores */
     toppers: { rank: number; name: string; score: string }[];

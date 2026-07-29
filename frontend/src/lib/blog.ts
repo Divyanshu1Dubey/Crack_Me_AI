@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import cmsLast5Days from '@/content/blog/upsc-cms-last-5-days-strategy';
 import cmsNeetPgLastWeek from '@/content/blog/cms-and-neet-pg-last-week-shared-revision';
+import cms2026Notification from '@/content/blog/upsc-cms-2026-official-notification-guide';
 import neetPgVsUpscCms from '@/content/blog/neet-pg-vs-upsc-cms';
 
 /**
@@ -105,7 +106,7 @@ export interface BlogPost {
 }
 
 /** The single source of truth for blog posts. */
-const posts: BlogPost[] = [cmsLast5Days, cmsNeetPgLastWeek, neetPgVsUpscCms];
+const posts: BlogPost[] = [cms2026Notification, cmsLast5Days, cmsNeetPgLastWeek, neetPgVsUpscCms];
 
 // Newest first.
 posts.sort((a, b) => (a.datePublished < b.datePublished ? 1 : -1));

@@ -393,7 +393,7 @@ export default function DashboardPage() {
                                         <Calendar className="w-5 h-5 text-sky-300 shrink-0 mt-0.5" />
                                         <div>
                                             <h4 className="text-sm font-semibold text-sky-100">UPSC CMS 2026 Cycle Dates</h4>
-                                            <p className="text-xs text-sky-300">Notification: Apr 10, 2026 | Exam: Jul 19, 2026</p>
+                                            <p className="text-xs text-sky-300">Notification: Mar 11, 2026 | Exam: Aug 2, 2026</p>
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-3">

@@ -97,7 +97,7 @@ const post: BlogPost = {
     faqs: [
         {
             q: 'Is 5 days really enough to revise for UPSC CMS?',
-            a: 'For revision — not first-time learning — yes. Five days of focused triage-revision on high-yield topics plus 4–6 timed mock tests reliably adds 30–50 marks over unfocused study, in our 2025 candidate cohort. The mechanism is not "cramming more facts" — it is protecting sleep, recall consolidation, and pattern-matching speed.',
+            a: 'For revision — not first-time learning — yes. Five days of focused triage-revision on high-yield topics plus 4–6 timed mock tests gives you the standard, evidence-based spaced-repetition advantage. The mechanism is not "cramming more facts" — it is protecting sleep, recall consolidation, and pattern-matching speed.',
         },
         {
             q: 'Should I attempt a full mock the day before UPSC CMS?',
@@ -113,7 +113,7 @@ const post: BlogPost = {
         },
         {
             q: 'What is the realistic cutoff and target score for UPSC CMS?',
-            a: 'General-category cutoff has hovered around 250–280 / 500 (≈50–56%) the last 5 years. OBC 230–260, SC/ST 200–230. Aim for 280+ to be safe. With 120 Qs, even 70 net-correct (≈58%) is enough. Stop chasing 350 — over-confidence is the bigger risk.',
+            a: 'Recent published UPSC CMS qualifying cutoffs (out of 500 written marks) have typically ranged: General ~270–310, OBC ~235–280, SC ~200–245, ST ~185–220. Always verify the exact current-year cutoff on the official UPSC press release on upsc.gov.in. Aim for 300+ to be safe in General. With 120 questions per paper and negative marking (~-0.33 per wrong), a net-correct target of 70/120 (≈58%) is typically around the qualifying margin.',
         },
         {
             q: 'Should I read standard textbooks in the last 5 days?',
@@ -124,9 +124,9 @@ const post: BlogPost = {
             a: 'That is normal. Stop, sleep, and trust the 5-pass method described below. Blank-out in the final week is rarely a memory problem — it is an anxiety signal. Box-breathe, take a 30-minute walk, and re-attempt 20 PYQs you got right three days ago. They will come back.',
         },
     ],
-    body: `If you are reading this five days before the UPSC CMS exam, you are in good company — and in good danger. The good news is that the vast majority of rankers do not study more in the last week. They study less, but they triage harder. The bad news is that most candidates panic-crash at this exact point and burn two days doing nothing productive.
+    body: `If you are reading this five days before the UPSC CMS exam, you are in good company — and in good danger. The good news is that the vast majority of rankers do not study more in the last week. They study less, but they triage harder. The bad news is that many candidates panic-crash at this exact point and burn two days doing nothing productive.
 
-This plan is what we recommend after watching hundreds of candidates move from "I have read everything and remember nothing" to a calm, score-positive exam day. It is not glamorous. There is no secret source. There is a clinician-grade schedule, a sleep contract, and a list of MCQ patterns we have observed across the last 5 years of [UPSC CMS previous-year papers](/questions?exam=CMS).
+This plan is what we recommend at CrackCMS for the final-week routine. It is not glamorous. There is no secret source. It is a structured schedule, a sleep contract, and a list of MCQ patterns drawn from analysis of [UPSC CMS previous-year papers](/questions?exam=CMS).
 
 > **The single rule of the last 5 days:** every hour is *high-yield recall*, *mock-test scoring*, or *body-clock tuning*. Nothing else.
 
@@ -134,7 +134,7 @@ This plan is what we recommend after watching hundreds of candidates move from "
 
 ## What toppers do differently
 
-Between 2018 and 2025, the consistent pattern among UPSC CMS rank-holders is not "I studied 14 hours a day in the last week" — it is the opposite. Toppers <em>reduce</em> study hours from 10–12 to 6–8 per day, sharply increase sleep to 8 hours, and allocate their limited remaining time to a strict rotation of mock tests + pattern recognition. We distilled this into the schedule below.
+A consistent pattern reported across UPSC CMS rank-holders in publicly available topper interviews is not "I studied 14 hours a day in the last week" — it is the opposite. Toppers <em>reduce</em> study hours from 10–12 to 6–8 per day, sharply increase sleep to 8 hours, and allocate their limited remaining time to a strict rotation of mock tests + pattern recognition. We distilled this into the schedule below.
 
 You will notice three things:
 
@@ -207,7 +207,7 @@ For each subject-triage block, use the **5-pass method** instead of re-reading t
 4. **Pass 4 — Quiz yourself** with 20 PYQs from that topic only (30 min).
 5. **Pass 5 — Card creation**: every wrong answer → flashcard (rest of the time).
 
-This is dramatically more effective than passive reading. Candidates who switched from "read 50 pages" to "5-pass on 1 topic" scored **+22 marks** on average in our 2025 cohort.
+This is dramatically more effective than passive reading. It is the recall-practice pattern recommended by spaced-repetition research (SM-2 algorithm), and is the same pattern used by SM-2-based flashcard systems.
 
 > **Pro tip:** between every revision block, walk 5–10 minutes outside. Hydrate. Your recall after a 5-minute walk is ~30% better than sitting glued to the desk.
 
@@ -294,19 +294,16 @@ A landmark 2008 Sleep journal study (Walker et al.) showed memory consolidation 
 
 ## What the cutoffs actually look like
 
-We compiled UPSC CMS cutoff trends from 2018–2024 to anchor your target:
+> **Important note on cutoff numbers.** The exact UPSC CMS cutoff for each year is published in the official UPSC press release on upsc.gov.in, *after* the result is announced. We do not reproduce exact cutoff numbers because they are easy to mis-cite and because we are not the official source. The ranges below are the broad ranges observed across recent published UPSC CMS press releases (verify against the official source before relying on them):
 
-| Year | General | OBC | SC | ST |
-|---|---|---|---|---|
-| 2018 | 271 | 235 | 199 | 188 |
-| 2019 | 261 | 227 | 195 | 184 |
-| 2020 | 256 | 222 | 189 | 178 |
-| 2021 | 263 | 230 | 196 | 184 |
-| 2022 | 274 | 240 | 205 | 192 |
-| 2023 | 281 | 245 | 210 | 196 |
-| 2024 | 287 | 250 | 215 | 200 |
+| Category | Recent qualifying cutoff range (out of 500 written marks) |
+|---|---|
+| General | ~270–310 |
+| OBC | ~235–280 |
+| SC | ~200–245 |
+| ST | ~185–220 |
 
-A safe target is **280+** for General, **245+** for OBC, **210+** for SC, **200+** for ST. The General-category cutoff has crept up steadily — likely because the question bank is more available, so candidates are better prepared. Push for 300+ to be rank-safe, especially for the in-service preference seats.
+**As a working target:** aim for **300+** in General, **260+** in OBC, **225+** in SC, **205+** in ST — and always cross-check the exact current-year cutoff on the official UPSC press release on upsc.gov.in before you finalise your rank targets.
 
 ---
 
