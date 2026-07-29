@@ -368,12 +368,17 @@ export default function AdminDashboardPage() {
     };
 
     const handleTabChange = (tab: AdminTabKey) => {
-        // The Jobs tile is intentionally a deep link to the dedicated
-        // `/admin/jobs` page — the full create/edit/delete UI lives
-        // there. Showing an in-place placeholder would be misleading
-        // (the route is shipped, just split out for cleaner state).
+        // Some tiles are intentionally deep links to dedicated routes —
+        // the full create/edit/delete UI lives there. Showing an
+        // in-place placeholder would be misleading (the routes are
+        // shipped, just split out for cleaner state).
         if (tab === 'jobs') {
             router.push('/admin/jobs');
+            return;
+        }
+        if (tab === 'analytics') {
+            // Realtime KPIs, funnels, geo/devices/campaign breakdowns.
+            router.push('/admin/analytics-dashboard');
             return;
         }
         setActiveTab(tab);
@@ -396,9 +401,9 @@ export default function AdminDashboardPage() {
             fetchReferenceOverrides();
             if (questionSubjects.length === 0) fetchQuestionSubjects();
         }
-        if (tab === 'analytics') {
-            fetchWeakAreaControl();
-        }
+        // Note: the `analytics` tab is intercepted above and deep-linked
+        // to /admin/analytics-dashboard. The legacy weak-area panel
+        // remains reachable from the dashboard page itself.
         if (tab === 'moderation') {
             fetchIssueQueue();
         }

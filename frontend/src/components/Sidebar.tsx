@@ -17,7 +17,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, Sparkles, ChevronRight } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, Sparkles, ChevronRight, BarChart3 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
@@ -299,6 +299,10 @@ export default function Sidebar() {
                                     <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin' ? 'active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}>
                                         <ShieldAlert className="w-5 h-5 shrink-0" />
                                         <span className="sidebar-label text-sm">Admin Dashboard</span>
+                                    </Link>
+                                    <Link href="/admin/analytics-dashboard" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/analytics-dashboard' ? 'active' : ''}`}>
+                                        <BarChart3 className="w-5 h-5 shrink-0" />
+                                        <span className="sidebar-label text-sm">Analytics Dashboard</span>
                                     </Link>
                                     <Link href="/admin/questions-editor" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/questions-editor' ? 'active' : ''}`}>
                                         <FileQuestion className="w-5 h-5 shrink-0" />
