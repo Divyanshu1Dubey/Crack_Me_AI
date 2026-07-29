@@ -1,0 +1,313 @@
+{
+  "migration_version": "2026_07_30_apply_stem_normalization_v1",
+  "created_at": "2026-07-29T22:17:57.340499+00:00",
+  "bucket": "auto_rewrite",
+  "rows": [
+    {
+      "id": 5824,
+      "original_question_text": "Which of the following are correct in respect of Diphtheria?\nThe incubation period is 14 to 28 days\nDiphtheria antitoxin is used in treatment of cases\nIt is one of the diseases protected from, by the Pentavalent vaccine given in National Program\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are correct in respect of Diphtheria?\n\n1. The incubation period is 14 to 28 days.\n2. Diphtheria antitoxin is used in treatment of cases.\n3. It is one of the diseases protected from, by the Pentavalent vaccine given in National Program.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5819,
+      "original_question_text": "Which of the following are true about measles?\nIt is highly infectious in the phase following the appearance of rash\nInfection usually confers lifelong immunity\nIt has a low secondary attack rate\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are true about measles?\n\n1. It is highly infectious in the phase following the appearance of rash.\n2. Infection usually confers lifelong immunity.\n3. It has a low secondary attack rate.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5847,
+      "original_question_text": "Which of the following agencies are playing a key role in running of the \"COVAX\" initiative against COVID-19?\nGAVI, the Vaccine Alliance\nWorld Health Organisation (WHO)\nFord Foundation\nCoalition for Epidemic Preparedness Innovations (CEPI)\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following agencies are playing a key role in running of the \"COVAX\" initiative against COVID-19?\n\n1. GAVI, the Vaccine Alliance.\n2. World Health Organisation (WHO).\n3. Ford Foundation.\n4. Coalition for Epidemic Preparedness Innovations (CEPI).\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5695,
+      "original_question_text": "Which of the following conditions are parts of inherited cancer syndrome?\nRetinoblastoma\nLi-Fraumeni syndrome\nXeroderma pigmentosum\nPeutz-Jeghers syndrome\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following conditions are parts of inherited cancer syndrome?\n\n1. Retinoblastoma.\n2. Li-Fraumeni syndrome.\n3. Xeroderma pigmentosum.\n4. Peutz-Jeghers syndrome.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5659,
+      "original_question_text": "Which of the following investigations indicate active hemolysis?\nIncreased reticulocyte count\nIncreased conjugated bilirubin\nIncreased urinary urobilinogen\nDecreased haptoglobin\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following investigations indicate active hemolysis?\n\n1. Increased reticulocyte count.\n2. Increased conjugated bilirubin.\n3. Increased urinary urobilinogen.\n4. Decreased haptoglobin.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5624,
+      "original_question_text": "Which of the following are the non-metastatic extra-pulmonary manifestations of lung cancer?\nCarcinoid syndrome\nNephrotic syndrome\nHorner's syndrome\nLambert-Eaton syndrome\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are the non-metastatic extra-pulmonary manifestations of lung cancer?\n\n1. Carcinoid syndrome.\n2. Nephrotic syndrome.\n3. Horner's syndrome.\n4. Lambert-Eaton syndrome.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5696,
+      "original_question_text": "Which of the following are the diseases associated with DNA repeat sequences?\nHuntington's disease\nMyotonic dystrophy\nFriedreich's ataxia\nKlinefelter syndrome\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are the diseases associated with DNA repeat sequences?\n\n1. Huntington's disease.\n2. Myotonic dystrophy.\n3. Friedreich's ataxia.\n4. Klinefelter syndrome.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5641,
+      "original_question_text": "Which of the following are the mechanisms for anemia in Chronic Kidney Disease?\nDeficiency of erythropoietin\nFolate and Vitamin B12 deficiency\nToxic effects of uraemia on bone marrow\nReduced utilization of dietary iron\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are the mechanisms for anemia in Chronic Kidney Disease?\n\n1. Deficiency of erythropoietin.\n2. Folate and Vitamin B12 deficiency.\n3. Toxic effects of uraemia on bone marrow.\n4. Reduced utilization of dietary iron.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5613,
+      "original_question_text": "Which of the following electro-cardio-graphic findings are manifestations of digitalis intoxication?\nVentricular bigeminy\nVentricular tachycardia\nAtrial flutter\nAtrial tachycardia with variable block\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following electro-cardio-graphic findings are manifestations of digitalis intoxication?\n\n1. Ventricular bigeminy.\n2. Ventricular tachycardia.\n3. Atrial flutter.\n4. Atrial tachycardia with variable block.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5753,
+      "original_question_text": "Which of the following are indications of splenectomy?\nPseudomyxoma peritonei\nTrauma\nIdiopathic thrombocytopenic purpura (ITP)\nHypersplenism\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are indications of splenectomy?\n\n1. Pseudomyxoma peritonei.\n2. Trauma.\n3. Idiopathic thrombocytopenic purpura (ITP).\n4. Hypersplenism.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5740,
+      "original_question_text": "Which of the following statements regarding Ogilvie's syndrome are correct?\nIt presents as acute large bowel mechanical obstruction\nMarked caecal dilatation is a common feature on X-ray abdomen\nCaecal perforation is a well recognized complication of this condition\nIntravenous Neostigmine is used for the treatment of this condition\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following statements regarding Ogilvie's syndrome are correct?\n\n1. It presents as acute large bowel mechanical obstruction.\n2. Marked caecal dilatation is a common feature on X-ray abdomen.\n3. Caecal perforation is a well recognized complication of this condition.\n4. Intravenous Neostigmine is used for the treatment of this condition.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5741,
+      "original_question_text": "Which of the following statements regarding Carcinoid tumour are correct?\nTerminal ileum is the most common site for these tumours in the gastrointestinal tract\nThese tumors arise from Kulchitsky cells situated at the base of intestinal crypts\n5-Hydroxytryptamine is the most common vasoactive peptide produced by these tumors\nSerum chromogranin A is a useful marker for disease recurrence\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following statements regarding Carcinoid tumour are correct?\n\n1. Terminal ileum is the most common site for these tumours in the gastrointestinal tract.\n2. These tumors arise from Kulchitsky cells situated at the base of intestinal crypts.\n3. 5-Hydroxytryptamine is the most common vasoactive peptide produced by these tumors.\n4. Serum chromogranin A is a useful marker for disease recurrence.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5728,
+      "original_question_text": "Which of the following are types of wound healing?\nPrimary Intention\nSecondary Intention\nTertiary Intention\nQuaternary Intention\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are types of wound healing?\n\n1. Primary Intention.\n2. Secondary Intention.\n3. Tertiary Intention.\n4. Quaternary Intention.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5747,
+      "original_question_text": "Which of the following statements with regard to Enteric perforation are correct?\nSalmonella typhi is the causative organism for Enteric fever\nEnteric perforation characteristically occurs during third week of illness\nTyphoid ulcers are placed transversely to the long axis of the gut\nTerminal ileum is the most common site for enteric perforation\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following statements with regard to Enteric perforation are correct?\n\n1. Salmonella typhi is the causative organism for Enteric fever.\n2. Enteric perforation characteristically occurs during third week of illness.\n3. Typhoid ulcers are placed transversely to the long axis of the gut.\n4. Terminal ileum is the most common site for enteric perforation.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5789,
+      "original_question_text": "Which of the following are causes of GnRH dependent precocious puberty?\nConstitutional\nTubercular Encephalitis\nMcCune-Albright syndrome\nPrimary hypothyroidism\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are causes of GnRH dependent precocious puberty?\n\n1. Constitutional.\n2. Tubercular Encephalitis.\n3. McCune-Albright syndrome.\n4. Primary hypothyroidism.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5792,
+      "original_question_text": "Which of the following are risk factors for developing pelvic inflammatory disease in females?\nUse of oral contraception pills\nMultiple sexual partners\nLower socioeconomic status\nGenetic predisposition\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are risk factors for developing pelvic inflammatory disease in females?\n\n1. Use of oral contraception pills.\n2. Multiple sexual partners.\n3. Lower socioeconomic status.\n4. Genetic predisposition.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5770,
+      "original_question_text": "Which of the following are contraindications to external cephalic version in antenatal management of breech presentation?\nAntepartum haemorrhage\nMultiple pregnancy\nReactive Non Stress Test\nSevere oligohydramnios\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are contraindications to external cephalic version in antenatal management of breech presentation?\n\n1. Antepartum haemorrhage.\n2. Multiple pregnancy.\n3. Reactive Non Stress Test.\n4. Severe oligohydramnios.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5801,
+      "original_question_text": "Which of the following are the clinical features of septic abortion?\nPersistent tachycardia ΓëÑ 90 bpm\nImpaired mental status\nHypothermia\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are the clinical features of septic abortion?\n\n1. Persistent tachycardia ΓëÑ 90 bpm.\n2. Impaired mental status.\n3. Hypothermia.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5775,
+      "original_question_text": "Which of the following statements are correct with respect to antenatal USG examination?\nIt helps in detecting gross fetal anomalies\nIt helps in identifying multiple pregnancies\nIt helps in identifying viable pregnancy\nBest dating is possible with third trimester ultrasound scan\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following statements are correct with respect to antenatal USG examination?\n\n1. It helps in detecting gross fetal anomalies.\n2. It helps in identifying multiple pregnancies.\n3. It helps in identifying viable pregnancy.\n4. Best dating is possible with third trimester ultrasound scan.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5803,
+      "original_question_text": "Which of the following are correct regarding failure rate of contraceptive methods?\nDepot medroxyprogesterone acetate 0 to 1 per HWY\nNorplant 0.1 per HWY\nLNG-IUS 0.02 per HWY\nLevonorgestrel 3 per HWY\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are correct regarding failure rate of contraceptive methods?\n\n1. Depot medroxyprogesterone acetate 0 to 1 per HWY.\n2. Norplant 0.1 per HWY.\n3. LNG-IUS 0.02 per HWY.\n4. Levonorgestrel 3 per HWY.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5782,
+      "original_question_text": "Which of the following are the pre-requisites of outlet forceps delivery?\nBladder should be empty\nMembranes should be intact\nCervix should be fully dilated\nFetal skull has reached level of pelvic floor\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are the pre-requisites of outlet forceps delivery?\n\n1. Bladder should be empty.\n2. Membranes should be intact.\n3. Cervix should be fully dilated.\n4. Fetal skull has reached level of pelvic floor.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5798,
+      "original_question_text": "Which of the following are indications of vaginal examinations during labour?\nTo stretch the vagina intermittently\nAt the onset of labour\nTo monitor progress of labour\nFollowing rupture of membranes\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are indications of vaginal examinations during labour?\n\n1. To stretch the vagina intermittently.\n2. At the onset of labour.\n3. To monitor progress of labour.\n4. Following rupture of membranes.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5806,
+      "original_question_text": "Which of the following are absolute contraindications of Combined Oral Contraceptive (COCs)?\nArterial or venous thrombosis history\nSevere hypertension\nGestational trophoblastic neoplasia\nDiabetes with vascular complications\nSelect the correct answer using the code given below.",
+      "rewritten_question_text": "Which of the following are absolute contraindications of Combined Oral Contraceptive (COCs)?\n\n1. Arterial or venous thrombosis history.\n2. Severe hypertension.\n3. Gestational trophoblastic neoplasia.\n4. Diabetes with vascular complications.\nSelect the correct answer using the code given below.",
+      "score": 1.0
+    },
+    {
+      "id": 5598,
+      "original_question_text": "Which of the following key action areas are incorporated in the Ottawa Charter?\nBuilding healthy public policy\nStrengthening community action for health\nReorienting health services\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following key action areas are incorporated in the Ottawa Charter?\n\n1. Building healthy public policy.\n2. Strengthening community action for health.\n3. Reorienting health services.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5597,
+      "original_question_text": "Which of the following are health care delivery indicators?\nPopulation per trained birth attendant\nPopulation per health/sub centre\nDoctor-nurse ratio\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are health care delivery indicators?\n\n1. Population per trained birth attendant.\n2. Population per health/sub centre.\n3. Doctor-nurse ratio.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5568,
+      "original_question_text": "Which of the following represent the properties of an ideal disinfectant?\nIt is broad spectrum\nIt is fast acting\nIt is non-toxic\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following represent the properties of an ideal disinfectant?\n\n1. It is broad spectrum.\n2. It is fast acting.\n3. It is non-toxic.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5569,
+      "original_question_text": "Which of the following measures can help reduce the risk of systemic hypertension?\nReduction in dietary intake of common salt\nControlling weight for age\nIncreasing potassium rich foods in the diet\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following measures can help reduce the risk of systemic hypertension?\n\n1. Reduction in dietary intake of common salt.\n2. Controlling weight for age.\n3. Increasing potassium rich foods in the diet.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5595,
+      "original_question_text": "Which of the following statements regarding Physical Quality of Life Index (PQLI) are correct?\nIt consolidates infant mortality, life expectancy at age one, and literacy\nIt does not measure economic growth but measures the result of economic policies\nFor each component, the performance of individual countries is placed on a scale of 0-100\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements regarding Physical Quality of Life Index (PQLI) are correct?\n\n1. It consolidates infant mortality, life expectancy at age one, and literacy.\n2. It does not measure economic growth but measures the result of economic policies.\n3. For each component, the performance of individual countries is placed on a scale of 0-100.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5454,
+      "original_question_text": "Which of the following features are associated with poor prognosis in Diffuse Cutaneous Systemic Sclerosis?\nOlder age\nA high gas transfer factor for carbon monoxide (TLCO)\nProteinuria\nDiffuse skin disease\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following features are associated with poor prognosis in Diffuse Cutaneous Systemic Sclerosis?\n\n1. Older age.\n2. A high gas transfer factor for carbon monoxide (TLCO).\n3. Proteinuria.\n4. Diffuse skin disease.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5455,
+      "original_question_text": "Which of the following statements regarding pegloticase are correct?\nIt is enzyme conjugate\nIt is useful in chronic Gout management\nThe main adverse effects are infusion reactions and development of antibodies\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements regarding pegloticase are correct?\n\n1. It is enzyme conjugate.\n2. It is useful in chronic Gout management.\n3. The main adverse effects are infusion reactions and development of antibodies.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5504,
+      "original_question_text": "Which of the following are correct regarding splenic artery aneurysm?\nMain arterial trunk is the common site\nPalpable thrill can be felt\nIt is symptomless unless it ruptures\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are correct regarding splenic artery aneurysm?\n\n1. Main arterial trunk is the common site.\n2. Palpable thrill can be felt.\n3. It is symptomless unless it ruptures.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5517,
+      "original_question_text": "Which of the following statements regarding lymphoedema following breast cancer treatment are correct?\nIncidence has decreased due to rarely combined therapy of axillary LN dissection and radiotherapy\nPrecipitating cause like LN metastasis is a major determinant\nThe condition is often painful\nOedematous limb is susceptible to bacterial infection\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements regarding lymphoedema following breast cancer treatment are correct?\n\n1. Incidence has decreased due to rarely combined therapy of axillary LN dissection and radiotherapy.\n2. Precipitating cause like LN metastasis is a major determinant.\n3. The condition is often painful.\n4. Oedematous limb is susceptible to bacterial infection.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5537,
+      "original_question_text": "Which of the following is/are required for a registered medical practitioner to qualify for performing Medical Termination of Pregnancy (MTP), as per revised rules of MTP Act?\nCertified for assisting at least 15 MTP in an authorized centre\nDiploma or degree in Obstetrics and Gynaecology\nHouse surgeon training for 3 months in Obstetrics and Gynaecology\nCertified training for 6 months in laparoscopic surgeries\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following is/are required for a registered medical practitioner to qualify for performing Medical Termination of Pregnancy (MTP), as per revised rules of MTP Act?\n\n1. Certified for assisting at least 15 MTP in an authorized centre.\n2. Diploma or degree in Obstetrics and Gynaecology.\n3. House surgeon training for 3 months in Obstetrics and Gynaecology.\n4. Certified training for 6 months in laparoscopic surgeries.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5552,
+      "original_question_text": "Which of the following are characteristics of Trichomonas vaginitis?\nPresence of greenish frothy discharge\nVaginal pH > 4.5\nPresence of clue cells in microscopic examination\nStrawberry spots on the vaginal mucosa\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are characteristics of Trichomonas vaginitis?\n\n1. Presence of greenish frothy discharge.\n2. Vaginal pH > 4.5.\n3. Presence of clue cells in microscopic examination.\n4. Strawberry spots on the vaginal mucosa.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5563,
+      "original_question_text": "Which of the following symptoms can be associated with pelvic organ prolapse?\nDifficulty in passing urine\nIncomplete evacuation of urine\nUrgency and frequency\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following symptoms can be associated with pelvic organ prolapse?\n\n1. Difficulty in passing urine.\n2. Incomplete evacuation of urine.\n3. Urgency and frequency.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 5549,
+      "original_question_text": "Which of the following information are provided by partograph?\nColour of liquor\nUterine contractions with duration and frequency\nDilatation of cervix\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following information are provided by partograph?\n\n1. Colour of liquor.\n2. Uterine contractions with duration and frequency.\n3. Dilatation of cervix.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22691,
+      "original_question_text": "Which of the following statements are correct regarding Peutz-Jeghers syndrome?\nIt is an autosomal dominant condition\nMutation occurs in the STK11 gene on chromosome 19\nMelanin spots characteristically occur on the mouth, lips, digits and perianal skin\nPolyps are adenomatous in nature and confined to the colon\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements are correct regarding Peutz-Jeghers syndrome?\n\n1. It is an autosomal dominant condition.\n2. Mutation occurs in the STK11 gene on chromosome 19.\n3. Melanin spots characteristically occur on the mouth, lips, digits and perianal skin.\n4. Polyps are adenomatous in nature and confined to the colon.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22665,
+      "original_question_text": "Which of the following statements are correct regarding indirect inguinal hernia?\nIt lies lateral to the inferior epigastric vessels\nIt can descend into the scrotum\nRing invagination test impulse is felt at the pulp of the examining finger\nIt is more common in premature infants and low birth weight babies\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements are correct regarding indirect inguinal hernia?\n\n1. It lies lateral to the inferior epigastric vessels.\n2. It can descend into the scrotum.\n3. Ring invagination test impulse is felt at the pulp of the examining finger.\n4. It is more common in premature infants and low birth weight babies.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22693,
+      "original_question_text": "Which of the following statements are correct regarding Amsterdam II criteria for Lynch syndrome?\nRequires three or more family members with a Lynch syndrome-related cancer\nTwo or more successive affected generations must be involved\nAt least one tumour must be diagnosed before age 50 years\nFAP must be confirmed in at least one family member\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements are correct regarding Amsterdam II criteria for Lynch syndrome?\n\n1. Requires three or more family members with a Lynch syndrome-related cancer.\n2. Two or more successive affected generations must be involved.\n3. At least one tumour must be diagnosed before age 50 years.\n4. FAP must be confirmed in at least one family member.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22687,
+      "original_question_text": "Which of the following are macroscopic features characteristic of Crohn's disease?\nContinuous mucosal involvement\nSkip lesions\nCobblestone appearance of the mucosa\nCreeping fat over the serosa\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are macroscopic features characteristic of Crohn's disease?\n\n1. Continuous mucosal involvement.\n2. Skip lesions.\n3. Cobblestone appearance of the mucosa.\n4. Creeping fat over the serosa.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22676,
+      "original_question_text": "Which of the following criteria define Acute Liver Failure?\nCoagulation abnormality (usually INR above 1.5)\nAny degree of mental alteration (encephalopathy)\nAbsence of pre-existing liver disease\nIllness duration of more than 26 weeks\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following criteria define Acute Liver Failure?\n\n1. Coagulation abnormality (usually INR above 1.5).\n2. Any degree of mental alteration (encephalopathy).\n3. Absence of pre-existing liver disease.\n4. Illness duration of more than 26 weeks.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22603,
+      "original_question_text": "Which of the following statements regarding puerperal blues are correct?\nIt usually occurs within the first week after delivery\nIt is associated with specific endocrine abnormalities\nManagement includes reassurance and emotional support\nIt affects nearly half of postpartum women\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements regarding puerperal blues are correct?\n\n1. It usually occurs within the first week after delivery.\n2. It is associated with specific endocrine abnormalities.\n3. Management includes reassurance and emotional support.\n4. It affects nearly half of postpartum women.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22595,
+      "original_question_text": "Which of the following statements have obstetric significance at the level of the plane of least pelvic dimensions?\nIt is the narrowest plane of the pelvis\nIt is at this plane that external rotation of the fetal head occurs during labour\nIt marks the beginning of the forward curve of the pelvic axis\nIt is a landmark used for pudendal nerve block analgesia.\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements have obstetric significance at the level of the plane of least pelvic dimensions?\n\n1. It is the narrowest plane of the pelvis.\n2. It is at this plane that external rotation of the fetal head occurs during labour.\n3. It marks the beginning of the forward curve of the pelvic axis.\n4. It is a landmark used for pudendal nerve block analgesia.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22574,
+      "original_question_text": "Which of the following are features of primary dysmenorrhea?\nMostly confined to adolescents\nConfined to ovulatory cycles\nPain cured following pregnancy and vaginal delivery\nAssociated with pelvic pathology\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are features of primary dysmenorrhea?\n\n1. Mostly confined to adolescents.\n2. Confined to ovulatory cycles.\n3. Pain cured following pregnancy and vaginal delivery.\n4. Associated with pelvic pathology.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22222,
+      "original_question_text": "Which of the following are considered established risk factors for the development of Ovarian Hyperstimulation Syndrome (OHSS)?\nAdvanced maternal age (>40 years)\nPolycystic Ovarian Syndrome (PCOS)\nRapidly rising serum E2 levels (>75% rise from previous day)\nPresence of an ovarian ‘necklace sign’ on USG\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are considered established risk factors for the development of Ovarian Hyperstimulation Syndrome (OHSS)?\n\n1. Advanced maternal age (>40 years).\n2. Polycystic Ovarian Syndrome (PCOS).\n3. Rapidly rising serum E2 levels (>75% rise from previous day).\n4. Presence of an ovarian ‘necklace sign’ on USG.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22221,
+      "original_question_text": "Which of the following conditions is considered a CONTRAINDICATION for performing Hysterosalpingography (HSG)?\nUnexplained infertility\nAcute Pelvic Inflammatory Disease (PID)\nSuspected pelvic tuberculosis\nAbnormal uterine bleeding\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following conditions is considered a CONTRAINDICATION for performing Hysterosalpingography (HSG)?\n\n1. Unexplained infertility.\n2. Acute Pelvic Inflammatory Disease (PID).\n3. Suspected pelvic tuberculosis.\n4. Abnormal uterine bleeding.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22213,
+      "original_question_text": "Which of the following statements about Klinefelter’s syndrome are correct?\nIt is the most common cause of testicular failure\nKaryotype is 47, XXY\nClinical features include eunuchoid appearance, azoospermia, and gynecomastia\nSerum testosterone is low and serum gonadotropins are elevated Select the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following statements about Klinefelter’s syndrome are correct?\n\n1. It is the most common cause of testicular failure.\n2. Karyotype is 47, XXY.\n3. Clinical features include eunuchoid appearance, azoospermia, and gynecomastia.\n4. Serum testosterone is low and serum gonadotropins are elevated.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 21895,
+      "original_question_text": "Which of the following are causes of recurrent miscarriage?\nPoorly controlled diabetes\nAntiphospholipid antibody syndrome\nHyperhomocystinemia\nEndometriosis\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following are causes of recurrent miscarriage?\n\n1. Poorly controlled diabetes.\n2. Antiphospholipid antibody syndrome.\n3. Hyperhomocystinemia.\n4. Endometriosis.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22592,
+      "original_question_text": "Which of the following endocrine changes are seen in normal pregnancy?\nIncrease in maternal serum iodine levels\nIncrease in serum Corticotropin-Releasing Hormone (CRH)\nIncrease in serum aldosterone levels\nDecrease in serum ACTH levels\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following endocrine changes are seen in normal pregnancy?\n\n1. Increase in maternal serum iodine levels.\n2. Increase in serum Corticotropin-Releasing Hormone (CRH).\n3. Increase in serum aldosterone levels.\n4. Decrease in serum ACTH levels.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22684,
+      "original_question_text": "Which of the following variables are included in the Ranson criteria for assessing acute pancreatitis at the time of admission?\nBlood glucose > 200 mg/dL\nAge > 55 years\nSerum Calcium 16,000/mm3\nSelect the correct answer using the code given below:",
+      "rewritten_question_text": "Which of the following variables are included in the Ranson criteria for assessing acute pancreatitis at the time of admission?\n\n1. Blood glucose > 200 mg/dL.\n2. Age > 55 years.\n3. Serum Calcium 16,000/mm3.\nSelect the correct answer using the code given below:",
+      "score": 1.0
+    },
+    {
+      "id": 22598,
+      "original_question_text": "Which of the following statements regarding human chorionic gonadotropin (hCG) are correct?\nIt is a glycoprotein hormone\nIts levels are decreased in multiple pregnancy\nThe α-subunit is common to LH, FSH and TSH\nIt is produced by the maternal pituitary gland\nSelect the correct answer using the codes given below:",
+      "rewritten_question_text": "Which of the following statements regarding human chorionic gonadotropin (hCG) are correct?\n\n1. It is a glycoprotein hormone.\n2. Its levels are decreased in multiple pregnancy.\n3. The α-subunit is common to LH, FSH and TSH.\n4. It is produced by the maternal pituitary gland.\nSelect the correct answer using the codes given below:",
+      "score": 1.0
+    }
+  ]
+}
