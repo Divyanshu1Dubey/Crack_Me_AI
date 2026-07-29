@@ -16,7 +16,7 @@
 7. **[FEATURES.md](./FEATURES.md)** — *per-feature drilldown*
 
 For audits / improvements:
-- **[SECURITY_AUDIT.md](./SECURITY_AUDIT.md)** · **[PERFORMANCE.md](./PERFORMANCE.md)** · **[SEO.md](./SEO.md)** · **[CODE_QUALITY.md](./CODE_QUALITY.md)**
+- **[SECURITY_AUDIT.md](./SECURITY_AUDIT.md)** · **[PERFORMANCE.md](./PERFORMANCE.md)** · **[SEO.md](./SEO.md)** · **[CODE_QUALITY.md](./CODE_QUALITY.md)** · **[ANALYTICS.md](./ANALYTICS.md)**
 - **[SCALING_ROADMAP.md](./SCALING_ROADMAP.md)** · **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** · **[AI_ASSISTANT_RULES.md](./AI_ASSISTANT_RULES.md)**
 
 For hands-on work:
@@ -78,6 +78,7 @@ For hands-on work:
 | **[BATCH_SYSTEM.md](./BATCH_SYSTEM.md)** | Import batch lifecycle, data model, and operations |
 | **[MOCK_GENERATION.md](./MOCK_GENERATION.md)** | Auto mock test generation (bulk build + one-off strategies) |
 | **[REVIEW_QUEUE.md](./REVIEW_QUEUE.md)** | Review queue workflow + AI re-classification |
+| **[ANALYTICS.md](./ANALYTICS.md)** | GA4 + Microsoft Clarity + PostHog + Datadog + internal admin dashboard (shipped in `57f4dfb`) |
 
 ---
 
