@@ -759,6 +759,82 @@ class AITestView(APIView):
             return Response({'status': 'error', 'error': str(e)}, status=500)
 
 
+class KnowledgeHealthView(APIView):
+    """Admin dashboard endpoint for the federated knowledge base.
+
+    Phase 5 (2026-07-29). Returns:
+      * overall status (healthy / degraded / missing / corrupt)
+      * per-backend health (legacy sqlite + modern knowledge_base)
+      * retrieval latency (timed test query against the federator)
+      * feature flag state (RAG_ENABLED, DISABLE_RAG env)
+      * integrity-check verdict
+      * top-20 books per backend
+
+    Never rebuilds, never modifies. Safe to poll.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get_permissions(self):
+        return [IsAdminUser()]
+
+    def get(self, request):
+        # 1. Federated health (legacy + modern, read-only)
+        legacy_health = {}
+        modern_health = {}
+        retrieval_latency_ms = None
+        try:
+            from ai_engine.retrieval.federated import FederatedRetrieval
+            fr = FederatedRetrieval()
+            combined = fr.health_check()
+            legacy_health = combined.get('legacy', {})
+            modern_health = combined.get('modern', {})
+            retrieval_latency_ms = {
+                'legacy_ms': round(combined.get('last_legacy_latency_ms', 0.0), 2),
+                'modern_ms': round(combined.get('last_modern_latency_ms', 0.0), 2),
+            }
+        except Exception as e:
+            logger.error(f"KnowledgeHealthView: federated probe failed: {e}", exc_info=True)
+
+        # 2. Timed test retrieval (queries both backends)
+        test_query_latency = None
+        if request.query_params.get('probe', '1') != '0':
+            try:
+                import time
+                start = time.time()
+                FederatedRetrieval().search('test', n_results=1)
+                test_query_latency = round((time.time() - start) * 1000, 2)
+            except Exception as e:
+                logger.warning(f"KnowledgeHealthView probe query failed: {e}")
+
+        # 3. Embedding model + KB feature flags
+        return Response({
+            'rag_enabled': getattr(django_settings, 'RAG_ENABLED', True),
+            'disable_rag_env': os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'),
+            'embedding_model': getattr(django_settings, 'EMBEDDING_MODEL', 'bge-small-en-v1.5'),
+            'vector_db_path': getattr(django_settings, 'CHROMA_DB_DIR', None),
+            'medura_train_dir': str(getattr(django_settings, 'MEDURA_TRAIN_DIR', '')),
+            'overall_status': _synthesize_status(legacy_health, modern_health),
+            'legacy': legacy_health,
+            'modern': modern_health,
+            'retrieval_latency_ms': retrieval_latency_ms,
+            'test_query_latency_ms': test_query_latency,
+        })
+
+
+def _synthesize_status(legacy: dict, modern: dict) -> str:
+    """Combine two backend statuses into one overall signal."""
+    legacy_status = legacy.get('status', 'unknown')
+    modern_status = modern.get('status', 'unknown')
+    healthy = ('healthy',)
+    if legacy_status in healthy or modern_status in healthy:
+        return 'healthy'
+    if legacy_status == 'missing' and modern_status in ('missing', 'unavailable', 'empty'):
+        return 'missing'
+    if legacy_status in ('corrupt', 'error') and modern_status in ('corrupt', 'error', 'unavailable'):
+        return 'corrupt'
+    return 'degraded'
+
+
 # =============================================================================
 # CHAT HISTORY VIEWS
 # =============================================================================

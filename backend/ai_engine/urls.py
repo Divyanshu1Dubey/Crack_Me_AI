@@ -31,6 +31,9 @@ urlpatterns = [
     # Debug / status
     path('status/', views.AIStatusView.as_view(), name='ai-status'),
     path('test/', views.AITestView.as_view(), name='ai-test'),
+    # Phase 5 (2026-07-29): admin health dashboard for the
+    # federated knowledge base (legacy sqlite + modern knowledge_base).
+    path('knowledge/health/', views.KnowledgeHealthView.as_view(), name='ai-knowledge-health'),
 
     # Chat history
     path('chat/sessions/', views.ChatSessionListCreateView.as_view(), name='chat-sessions'),
