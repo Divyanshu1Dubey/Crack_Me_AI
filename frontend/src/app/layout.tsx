@@ -10,6 +10,9 @@ import BackendWarmup from "@/components/BackendWarmup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import DatadogInit from "@/components/DatadogInit";
 import TrafficAnalytics from "@/components/TrafficAnalytics";
+import ClarityInit from "@/components/ClarityInit";
+import PostHogInit from "@/components/PostHogInit";
+import ConsentBanner from "@/components/ConsentBanner";
 import StickyExamCta from "@/components/StickyExamCta";
 import PWAProvider from "@/components/PWAProvider";
 import { ExamTrackProvider } from "@/components/ExamTrackProvider";
@@ -270,6 +273,8 @@ export default function RootLayout({
                 <ExamTrackProvider>
                   <DockProvider>
                     <DatadogInit />
+                    <ClarityInit />
+                    <PostHogInit />
                     <Suspense fallback={null}>
                       <TrafficAnalytics />
                     </Suspense>
@@ -279,6 +284,7 @@ export default function RootLayout({
                     <FloatingDock />
                     <WatermarkOverlay />
                     <StickyExamCta />
+                    <ConsentBanner />
                   </DockProvider>
                 </ExamTrackProvider>
               </AuthProvider>

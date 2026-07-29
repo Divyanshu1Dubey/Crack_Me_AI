@@ -2,6 +2,10 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+# Re-export the new analytics-event model so it lives in this app
+# (kept in a separate module to keep this file readable).
+from .models_events import AnalyticsEvent  # noqa: F401  (re-exported for migrations / admin)
+
 
 class UserTopicPerformance(models.Model):
     """Track user performance per topic for analytics."""

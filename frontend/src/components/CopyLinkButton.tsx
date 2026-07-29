@@ -10,13 +10,14 @@ import { useState } from 'react';
  * component) can render it without having to convert itself to a client
  * component just for the onClick handler.
  */
-export function CopyLinkButton({ url }: { url: string }) {
+export function CopyLinkButton({ url, slug }: { url: string; slug?: string }) {
     const [copied, setCopied] = useState(false);
     return (
         <button
             type="button"
             className="blog-share-btn"
             aria-label="Copy link"
+            data-blog-copy={slug ?? ''}
             onClick={() => {
                 if (typeof navigator !== 'undefined' && navigator.clipboard) {
                     navigator.clipboard.writeText(url).then(() => {

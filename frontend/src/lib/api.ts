@@ -453,6 +453,11 @@ export const analyticsAPI = {
   listCampaigns: (params?: Record<string, string | number>) => api.get('/analytics/admin/campaigns/', { params }),
   createCampaign: (data: Record<string, unknown>) => api.post('/analytics/admin/campaigns/', data),
   sendCampaignNow: (id: number) => api.post(`/analytics/admin/campaigns/${id}/send-now/`),
+  // Internal analytics ingestion + admin dashboard
+  ingestEvent: (data: Record<string, unknown>) =>
+    api.post('/analytics/events/', data, { timeout: 5000 }),
+  getAdminDashboardData: () =>
+    api.get('/analytics/admin/dashboard-data/', { timeout: 15000 }),
 };
 
 

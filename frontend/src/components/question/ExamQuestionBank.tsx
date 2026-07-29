@@ -474,7 +474,7 @@ function ExamQuestionBankInner({
     const fetchAiExplanation = (retryCount: number = 0) => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
-        analytics.aiExplainRequest(selectedExam, d.id, String(d.subject_name || ''));
+        analytics.aiExplanationOpen(d.id, String(d.subject_name || ''));
         setAiLoading(true);
         setAiExplanation(null);
         setTokenError(false);
@@ -596,7 +596,7 @@ function ExamQuestionBankInner({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null);
+                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null, 'banner');
                                         if (studyMode !== 'exam') setStudyMode('exam');
                                     }}
                                     className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors ${
@@ -611,7 +611,7 @@ function ExamQuestionBankInner({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null);
+                                        analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null, 'simulator');
                                         const slug = String(selectedExam).replace('_', '-');
                                         if (slug === 'neet-pg') {
                                             router.push(`/questions/neet-pg/practice?year=${selectedYear}`);

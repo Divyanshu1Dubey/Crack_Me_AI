@@ -1,8 +1,12 @@
 from django.urls import path
 from . import views
 from . import dashboard_v3 as views_v3
+from . import views_internal
 
 urlpatterns = [
+    # Internal analytics ingestion + admin dashboard
+    path('events/', views_internal.AnalyticsIngestView.as_view(), name='analytics-events-ingest'),
+    path('admin/dashboard-data/', views_internal.AnalyticsDashboardDataView.as_view(), name='analytics-admin-dashboard-data'),
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
     path('weak-topics/', views.WeakTopicsView.as_view(), name='weak-topics'),
     path('topic-performance/', views.TopicPerformanceView.as_view(), name='topic-performance'),

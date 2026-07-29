@@ -15,6 +15,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrackedLink } from '@/components/TrackedLink';
+import BlogAnalytics from '@/components/BlogAnalytics';
 import { FormattedText } from '@/components/FormattedText';
 import { CopyLinkButton } from '@/components/CopyLinkButton';
 import FAQSection from '@/components/FAQSection';
@@ -128,6 +129,11 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
     return (
         <>
             <StructuredData id={`blog-schema-${post.slug}`} data={jsonLd} />
+            <BlogAnalytics
+                slug={post.slug}
+                category={post.category}
+                readingTimeMinutes={typeof post.readingTime === 'number' ? post.readingTime : 5}
+            />
 
             <div className="min-h-screen bg-background text-foreground">
                 {/* Hero */}
@@ -242,6 +248,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="blog-share-btn"
+                                    data-blog-share="twitter"
                                     aria-label="Share on Twitter"
                                 >
                                     <Twitter className="h-3.5 w-3.5" /> Twitter / X
@@ -251,11 +258,12 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="blog-share-btn"
+                                    data-blog-share="whatsapp"
                                     aria-label="Share on WhatsApp"
                                 >
                                     <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                                 </a>
-                                <CopyLinkButton url={shareUrl} />
+                                <CopyLinkButton url={shareUrl} slug={post.slug} />
                             </div>
 
                             {/* References */}

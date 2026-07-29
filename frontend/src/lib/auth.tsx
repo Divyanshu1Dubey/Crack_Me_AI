@@ -45,6 +45,8 @@ interface User {
     is_online?: boolean;
 }
 
+export type { User };
+
 interface AuthContextType {
     user: User | null;
     loading: boolean;
