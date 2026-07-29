@@ -4,7 +4,7 @@ import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, GraduationCap, User } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
-import { Breadcrumbs } from '@/components/Breadcrumbs';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { buildPageMetadata, personSchema } from '@/lib/metadata';
 import { getAllPosts } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
