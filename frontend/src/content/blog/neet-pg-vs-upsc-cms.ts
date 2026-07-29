@@ -82,7 +82,7 @@ NEET PG bilkul worth it hai agar aap ek specific branch (jaise Neurosurgery ya R
 
 Lekin agar aapka core goal Respect, Financial Stability, Direct Action (treating patients), aur Work-Life Balance hai—toh apne drop years ko waste mat kariye. UPSC CMS ek backup plan nahi, balki ek far better, upgraded lifestyle choice hai.
 
-**Kya aap apna agla ek saal toxic drops me waste karenge, ya Day-1 Government Medical Officer banenge? The choice is yours.**\`,
+**Kya aap apna agla ek saal toxic drops me waste karenge, ya Day-1 Government Medical Officer banenge? The choice is yours.**`,
 };
 
 export default post;
