@@ -440,6 +440,24 @@ RAG_CHUNK_SIZE = 500
 RAG_CHUNK_OVERLAP = 50
 TEXTBOOK_SCREENSHOT_DIR = str(MEDIA_ROOT / 'textbook_screenshots')
 
+# ── RAG feature flags (Phase 1, 2026-07-29) ────────────────────────
+# Toggle RAG on/off without touching DEBUG. Defaults ON because the
+# existing 7,823-chunk rag_store.sqlite3 ships in the deployed slug
+# and the previous DEBUG=False guard was a hidden kill-switch.
+RAG_ENABLED = os.getenv('RAG_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
+RAG_HEALTHCHECK_ON_STARTUP = os.getenv('RAG_HEALTHCHECK_ON_STARTUP', 'true').lower() in ('1', 'true', 'yes', 'on')
+RAG_HEALTHCHECK_TIMEOUT = int(os.getenv('RAG_HEALTHCHECK_TIMEOUT', '30'))
+RAG_QUERY_TIMEOUT = int(os.getenv('RAG_QUERY_TIMEOUT', '10'))
+RAG_RESULT_CACHE_TTL = int(os.getenv('RAG_RESULT_CACHE_TTL', '300'))  # 5 min
+
+# User-facing strings. NEVER leak developer commands (e.g. "run manage.py
+# index_textbooks") to end-users. These messages are always returned in
+# the chat when the retrieval pipeline is unavailable.
+RAG_FALLBACK_USER_MESSAGE = os.getenv(
+    'RAG_FALLBACK_USER_MESSAGE',
+    'AI Tutor is temporarily unavailable. Please try again shortly.',
+)
+
 # ── Cache Configuration ─────────────────────────────────────────────
 # Uses Redis if REDIS_URL is set AND valid, otherwise falls back to
 # local memory cache. The redis:// / rediss:// check prevents a crash

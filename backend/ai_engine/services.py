@@ -277,18 +277,42 @@ class AIService:
 
     @property
     def rag(self):
-        """Lazy-load RAG pipeline. Disabled in production (causes OOM on free tier)."""
-        # Disable RAG in production unless explicitly enabled
-        if not getattr(settings, 'DEBUG', False):
-            return None
+        """Lazy-load the federated retrieval pipeline.
+
+        Replaces the prior DEBUG=False kill-switch (2026-07-29). Now
+        gated by the explicit `RAG_ENABLED` feature flag (default ON).
+        Returns None when disabled or when init fails; callers must
+        use the user-facing `RAG_FALLBACK_USER_MESSAGE` and log the
+        real cause server-side. Never expose internal commands.
+        """
+        # Explicit operator override (escape hatch for OOM hosts).
         if os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes'):
+            logger.warning("RAG disabled via DISABLE_RAG env var")
             return None
+
+        # Feature flag — default ON. Set RAG_ENABLED=false to disable.
+        if not getattr(settings, 'RAG_ENABLED', True):
+            logger.info("RAG disabled via RAG_ENABLED setting")
+            return None
+
         if self._rag is None:
             try:
-                from ai_engine.rag_pipeline import RAGPipeline
-                self._rag = RAGPipeline()
+                # Prefer the federated retriever (legacy + modern stores).
+                # Falls back to the bare legacy pipeline if the modern
+                # KB app is unavailable.
+                try:
+                    from ai_engine.retrieval.federated import FederatedRetrieval
+                    self._rag = FederatedRetrieval()
+                except Exception as fed_exc:
+                    logger.warning(
+                        f"FederatedRetrieval unavailable ({fed_exc}); "
+                        f"falling back to legacy RAGPipeline"
+                    )
+                    from ai_engine.rag_pipeline import RAGPipeline
+                    self._rag = RAGPipeline()
             except Exception as e:
-                logger.warning(f"RAG init failed: {e}")
+                logger.error(f"RAG init failed: {e}", exc_info=True)
+                return None
         return self._rag
 
     # ─── PROVIDER CALL METHODS ─────────────────────────────
@@ -896,33 +920,66 @@ Provide:
 
     def rag_search(self, query: str, book_filter: str = None,
                    n_results: int = 5) -> dict:
-        """Search textbooks using RAG."""
+        """Search textbooks using RAG.
+
+        Phase 1 (2026-07-29): removed the misleading
+        "Run: python manage.py index_textbooks" developer message.
+        The user-facing API now returns a generic error string and
+        logs the real cause server-side. Admins can see the actual
+        reason via `/api/ai/knowledge/health/`.
+        """
         if not self.rag:
-            return {"results": [], "error": "RAG pipeline not initialized"}
+            logger.warning(
+                "rag_search called but RAG pipeline is unavailable "
+                "(RAG_ENABLED=%s, DISABLE_RAG=%s)",
+                getattr(settings, 'RAG_ENABLED', True),
+                os.getenv('DISABLE_RAG', ''),
+            )
+            return {
+                "results": [],
+                "error": getattr(settings, 'RAG_FALLBACK_USER_MESSAGE',
+                                 "AI Tutor is temporarily unavailable."),
+            }
         try:
             results = self.rag.search(query, n_results=n_results,
                                       book_filter=book_filter if book_filter else None)
             return {"results": results}
         except Exception as e:
-            logger.warning(f"RAG search failed: {e}")
+            logger.warning(f"RAG search failed: {e}", exc_info=True)
             return {"results": [], "error": "RAG search failed"}
 
     def rag_answer(self, question: str) -> dict:
-        """Get a RAG-grounded answer with citations."""
+        """Get a RAG-grounded answer with citations.
+
+        Phase 1 (2026-07-29): removed the misleading
+        "Run: python manage.py index_textbooks" developer hint.
+        """
         if not self.rag:
+            logger.warning(
+                "rag_answer called but RAG pipeline is unavailable "
+                "(RAG_ENABLED=%s, DISABLE_RAG=%s)",
+                getattr(settings, 'RAG_ENABLED', True),
+                os.getenv('DISABLE_RAG', ''),
+            )
             return {
-                "answer": "RAG pipeline not initialized. Run: python manage.py index_textbooks",
+                "answer": getattr(settings, 'RAG_FALLBACK_USER_MESSAGE',
+                                   "AI Tutor is temporarily unavailable."),
                 "citations": [],
             }
         try:
             return self.rag.rag_answer(question)
         except Exception as e:
-            logger.warning(f"RAG answer failed: {e}")
-            return {"answer": "RAG search temporarily unavailable.", "citations": []}
+            logger.warning(f"RAG answer failed: {e}", exc_info=True)
+            return {
+                "answer": getattr(settings, 'RAG_FALLBACK_USER_MESSAGE',
+                                   "AI Tutor is temporarily unavailable."),
+                "citations": [],
+            }
 
     def find_textbook_reference(self, question_text: str) -> list:
         """Find where a topic is discussed in standard textbooks."""
         if not self.rag:
+            logger.warning("find_textbook_reference called but RAG is unavailable")
             return []
         try:
             return self.rag.find_textbook_reference(question_text)
