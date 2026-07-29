@@ -31,7 +31,7 @@ import {
 } from '@/lib/metadata';
 import { siteName, siteUrl } from '@/lib/seo';
 import type { BlogPost } from '@/lib/blog';
-import { formatPostDate, getRelatedPosts } from '@/lib/blog';
+import { formatPostDate, getRelatedPosts, categoryToSlug } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
 
 interface BlogPostLayoutProps {
@@ -142,7 +142,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                         <Breadcrumbs
                             items={[
                                 { name: 'Blog', path: '/blog' },
-                                { name: post.category, path: '/blog' },
+                                { name: post.category, path: `/blog/category/${categoryToSlug(post.category)}` },
                                 { name: post.title, path: canonical },
                             ]}
                         />
