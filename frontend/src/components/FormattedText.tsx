@@ -1,3 +1,4 @@
+"use client";
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
