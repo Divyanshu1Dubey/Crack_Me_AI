@@ -2609,7 +2609,7 @@ class QuestionImageServeView(APIView):
     **What this does**: streams the file from whichever storage backend
     is configured (FileSystemStorage locally; will transparently work
     with S3 / DigitalOcean Spaces once `DEFAULT_FILE_STORAGE` is
-    swapped). Auth-gated because the question bank is paywalled.
+    swapped).
 
     **URL contract**:
         GET /api/questions/images/<int:image_id>/serve/?w=480&q=72
@@ -2622,9 +2622,22 @@ class QuestionImageServeView(APIView):
     binary when the file exists locally. Returns 503 with a clear JSON
     error if the file is missing on disk (the 3,496-row DB has only 257
     files locally; remote prod may have a different mix).
+
+    **Auth model** (2026-07-30): this endpoint is **public** (`AllowAny`).
+    The original commit gated it behind `IsAuthenticated` because the
+    question bank is paywalled, but that broke every image-bearing
+    question on the live site: HTML `<img src>` tags cannot send a
+    custom `Authorization: Bearer ...` header, so even logged-in users
+    were getting 403 from every inline image. The question text and
+    metadata returned by `QuestionViewSet` are themselves public via
+    the same API, so gating only the binary image bytes made the
+    implementation inconsistent with the rest of the contract. Users who
+    want to paywall the bank can wrap this view in middleware or move
+    the storage to Supabase and proxy through a signed URL; until then,
+    `AllowAny` matches the question-text behaviour.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, image_id: int):
         img = (
