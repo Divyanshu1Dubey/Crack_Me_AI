@@ -744,8 +744,19 @@ class TokenBalanceView(APIView):
 
 class TokenPurchaseView(APIView):
     """
-    POST: Purchase tokens. In production, integrate with a payment gateway.
-    For now, the endpoint accepts payment_id and amount and credits tokens directly.
+    POST: Purchase tokens. STUB — payment integration is not yet wired.
+
+    The original implementation accepted an arbitrary `amount` + `payment_id`
+    and credited tokens directly. Without a payment-gateway verification
+    step (Razorpay / Stripe), that path is a free-for-all: any authenticated
+    user could mint unlimited tokens simply by calling the endpoint.
+
+    Until payment integration is finalized, the endpoint is disabled and
+    returns 503 with a `payments_unavailable` error code. The frontend
+    "/tokens" page reads this code and surfaces a clear "temporarily
+    unavailable" notice. The legacy mint code is retained as a private
+    helper for tests and legacy fixtures, but is no longer reachable
+    from the URL.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -753,31 +764,19 @@ class TokenPurchaseView(APIView):
     throttle_scope = 'token_purchase'
 
     def post(self, request):
-        serializer = TokenPurchaseSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        amount = serializer.validated_data["amount"]
-        payment_id = serializer.validated_data.get("payment_id", "")
-        config = TokenConfig.get_config()
-        price = float(config.token_price) * amount
-
-        balance, _ = TokenBalance.objects.get_or_create(user=request.user)
-        balance.add_purchased_tokens(amount)
-
-        TokenTransaction.objects.create(
-            user=request.user,
-            transaction_type="purchase",
-            amount=amount,
-            price_paid=price,
-            payment_id=payment_id,
-            note=f"Purchased {amount} tokens at INR {config.token_price}/token",
-        )
-
+        # Payment integration is not yet wired up. Return 503 so the
+        # frontend can show a clear "temporarily unavailable" state and
+        # we never accidentally mint unlimited tokens from an
+        # authenticated-but-unverified endpoint.
         return Response(
             {
-                "message": f"{amount} tokens added successfully!",
-                "balance": TokenBalanceSerializer(balance).data,
-            }
+                "error": (
+                    "Token purchases are temporarily unavailable while "
+                    "payment integration is being finalized."
+                ),
+                "code": "payments_unavailable",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
 

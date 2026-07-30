@@ -285,3 +285,58 @@ class ProfileAndSubscriptionTests(TestCase):
         response = self.client.post(reverse("subscribe"))
         self.assertEqual(response.status_code, 400)
 
+
+class TokenPurchaseDisabledTestCase(TestCase):
+    """Phase-4 hardening: the standalone tokens/purchase endpoint must
+    never mint tokens directly.
+
+    The current implementation accepts an arbitrary amount + payment_id and
+    credits the user's balance without verifying any payment. Until
+    Razorpay/Stripe integration lands, the endpoint is disabled and
+    returns 503 with a clear "payments_unavailable" error code so the
+    frontend can render a graceful unavailable state.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="purchase_disabled_user",
+            email="purchase-disabled@example.com",
+            password="StrongPass123!",
+            role="student",
+        )
+
+    def test_purchase_endpoint_returns_503(self):
+        self.client.force_login(self.user)
+        res = self.client.post(
+            reverse("token_purchase"),
+            {"amount": 10},
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 503)
+        body = res.json()
+        self.assertEqual(body.get("code"), "payments_unavailable")
+        self.assertIn("temporarily unavailable", body.get("error", "").lower())
+
+    def test_purchase_does_not_credit_balance(self):
+        """Even if 503 lands, no TokenBalance row should be created or
+        mutated by the disabled purchase path. This protects us against
+        accidental reactivation of the legacy mint code.
+        """
+        from .models import TokenBalance, TokenTransaction
+        self.client.force_login(self.user)
+        res = self.client.post(
+            reverse("token_purchase"),
+            {"amount": 50, "payment_id": "fake_pay_123"},
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 503)
+
+        # No TokenBalance and no TokenTransaction of type 'purchase' for
+        # this user — the disabled path must never reach the DB writer.
+        self.assertFalse(TokenBalance.objects.filter(user=self.user).exists())
+        self.assertFalse(
+            TokenTransaction.objects.filter(
+                user=self.user, transaction_type="purchase",
+            ).exists()
+        )
+

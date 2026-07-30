@@ -194,8 +194,20 @@ export default function TokensPage() {
             ]);
             setBalance(balRes.data);
             setTransactions(Array.isArray(histRes.data) ? histRes.data : histRes.data?.results || []);
-        } catch {
-            setMessage({ type: 'error', text: 'Purchase failed. Please try again.' });
+        } catch (err: any) {
+            // Backend returns 503 with code "payments_unavailable" while
+            // Razorpay/Stripe integration is being finalized. Surface the
+            // backend's own copy instead of the generic "Purchase failed".
+            const code = err.response?.data?.code;
+            const detail = err.response?.data?.error;
+            if (err.response?.status === 503 && code === 'payments_unavailable') {
+                setMessage({
+                    type: 'error',
+                    text: detail || 'Token purchases are temporarily unavailable while payment integration is being finalized.',
+                });
+            } else {
+                setMessage({ type: 'error', text: 'Purchase failed. Please try again.' });
+            }
         } finally {
             setPurchasing(false);
         }
@@ -538,6 +550,22 @@ export default function TokensPage() {
                                 {purchasing ? 'Processing...' : `Buy ${selectedPurchase} Tokens for ₹${selectedPurchase}`}
                             </button>
                         )}
+                        {/* Token purchases are temporarily disabled while payment
+                            integration is being finalized. The backend returns 503 +
+                            code "payments_unavailable"; we surface that here so
+                            students are not confused when the click fails silently. */}
+                        <div
+                            className="mt-4 flex items-start gap-2 text-xs p-3 rounded-lg"
+                            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#b45309' }}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                            <span>
+                                <strong>Token purchases are temporarily unavailable.</strong>{' '}
+                                Payment integration is being finalized. Your free daily/weekly tokens still work normally.
+                            </span>
+                        </div>
                         <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-secondary)' }}>
                             Purchased tokens never expire and are used after your free daily/weekly tokens
                         </p>
