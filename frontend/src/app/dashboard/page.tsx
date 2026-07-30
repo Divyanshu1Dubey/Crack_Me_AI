@@ -629,7 +629,7 @@ export default function DashboardPage() {
                                         ))}
                                         <span>More</span>
                                         <span className="ml-4 inline-flex items-center gap-1">
-                                            <span className="h-3.5 w-3.5 rounded-sm ring-2 ring-blue-500" />
+                                            <span className="h-3.5 w-3.5 rounded-sm ring-2 ring-sky-500" />
                                             Today
                                         </span>
                                     </div>
