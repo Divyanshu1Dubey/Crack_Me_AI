@@ -109,6 +109,15 @@ function PracticeContent() {
         }
     }, [authLoading, isAuthenticated, router, year, examParam]);
 
+    // Detect slug-level fallbacks: ini-cet, inicet, medical-officer all map to cms
+    // because those tracks aren't yet populated in our DB. Surface a warning so
+    // students know they're seeing a different exam's questions.
+    const slug = rawExam;
+    const isSlugFallback = slug && (
+        slug === 'ini-cet' || slug === 'inicet' || slug === 'medical-officer'
+    );
+    const examType = slug ? (practiceSlugToExamType(slug) || examParam) : examParam;
+
     const currentQ = questions[currentIdx];
     const totalQ = questions.length;
     const answeredCount = Object.keys(answers).length;
@@ -263,6 +272,14 @@ function PracticeContent() {
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
+            {isSlugFallback && (
+                <Card className="m-4 border-amber-300 bg-amber-50 dark:bg-amber-900/20">
+                    <CardContent className="py-3 text-sm text-amber-900 dark:text-amber-100">
+                        Practice session for <strong>{slug}</strong> isn't yet populated in our bank.
+                        Showing <strong>{examType?.toUpperCase()}</strong> questions as a fallback. INI-CET tracks ship in a future release.
+                    </CardContent>
+                </Card>
+            )}
             {/* Top Bar */}
             <div className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border/60 px-4 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
