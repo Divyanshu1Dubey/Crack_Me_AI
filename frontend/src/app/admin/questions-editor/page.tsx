@@ -346,7 +346,7 @@ export default function AdminQuestionsEditorPage() {
       </div>
 
       {/* PRIMARY FILTER: exam-type chips — the most visible thing on the page */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 sticky top-0 z-10">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-gray-800 mr-2">Exam:</span>
           {examChips.map((chip) => {
@@ -393,14 +393,14 @@ export default function AdminQuestionsEditorPage() {
           <input
             type="text"
             placeholder="Search questions..."
-            className="border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded w-64"
+            className="border border-gray-300 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (resetPage(), fetchQuestions())}
           />
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-40"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40"
             value={subjectId}
             onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); resetPage(); }}
           >
@@ -411,7 +411,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded min-w-40 disabled:bg-gray-100 disabled:text-gray-500"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40 disabled:bg-gray-100 disabled:text-gray-500"
             value={topicId}
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
             disabled={!subjectId}
@@ -425,7 +425,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded"
             value={year}
             onChange={(e) => { setYear(e.target.value); resetPage(); }}
           >
@@ -436,7 +436,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded"
             value={difficulty}
             onChange={(e) => { setDifficulty(e.target.value); resetPage(); }}
           >
@@ -494,7 +494,7 @@ export default function AdminQuestionsEditorPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -538,7 +538,7 @@ export default function AdminQuestionsEditorPage() {
                     <span className="text-gray-500 cursor-grab">⣿</span>
                     <input
                       type="number"
-                      className="border border-gray-300 bg-white text-gray-900 p-1 w-16 text-center rounded"
+                      className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-16 text-center rounded"
                       defaultValue={q.display_number || ''}
                       onBlur={(e) => {
                         if (e.target.value !== String(q.display_number)) {
@@ -551,7 +551,7 @@ export default function AdminQuestionsEditorPage() {
                 <td className="px-6 py-4 text-sm text-gray-900 min-w-50">
                   <div className="space-y-2">
                     <select
-                      className="border border-gray-300 bg-white text-gray-900 p-1 w-full rounded text-xs"
+                      className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-full rounded text-xs"
                       value={q.subject || ''}
                       onChange={(e) => handleUpdate(q.id, 'subject', parseInt(e.target.value))}
                     >
@@ -559,7 +559,7 @@ export default function AdminQuestionsEditorPage() {
                       {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     <select
-                      className="border border-gray-300 bg-white text-gray-900 p-1 w-full rounded text-xs"
+                      className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-full rounded text-xs"
                       value={q.topic || ''}
                       onChange={(e) => handleUpdate(q.id, 'topic', parseInt(e.target.value))}
                     >
@@ -621,19 +621,19 @@ export default function AdminQuestionsEditorPage() {
         </table>
       </div>
 
-      <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
         <button
           disabled={page === 1}
           onClick={() => setPage(p => Math.max(1, p - 1))}
-          className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded disabled:opacity-50 disabled:text-gray-400"
+          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400"
         >
           Previous
         </button>
-        <span className="text-gray-900">Page {page} of {totalPages}</span>
+        <span className="text-gray-900 dark:text-slate-100">Page {page} of {totalPages}</span>
         <button
           disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded disabled:opacity-50 disabled:text-gray-400"
+          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400"
         >
           Next
         </button>
@@ -655,7 +655,7 @@ export default function AdminQuestionsEditorPage() {
           which ones to soft-drop (is_dropped=True, is_active=False). */}
       {mergeFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl max-h-[85vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-bold text-gray-900">
                 Merge Duplicates — Q{mergeFor.id}
@@ -766,7 +766,7 @@ export default function AdminQuestionsEditorPage() {
               <div className="flex gap-2">
                 <button
                   onClick={closeMergeDuplicates}
-                  className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded hover:bg-gray-50"
                   disabled={mergeSubmitting}
                 >
                   Cancel
@@ -793,7 +793,7 @@ export default function AdminQuestionsEditorPage() {
           load_exam_fixture deploy won't re-create it. */}
       {removeFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-red-200 w-full max-w-2xl max-h-[85vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-red-200 dark:border-red-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-red-200">
               <h2 className="text-lg font-bold text-red-900">
                 Remove from bank — Q{removeFor.id}
@@ -842,7 +842,7 @@ export default function AdminQuestionsEditorPage() {
                   Reason (optional)
                 </label>
                 <textarea
-                  className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-gray-300 dark:border-slate-700 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
                   rows={2}
                   value={removeReason}
                   onChange={(e) => setRemoveReason(e.target.value)}
@@ -868,7 +868,7 @@ export default function AdminQuestionsEditorPage() {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-red-200 bg-red-50">
               <button
                 onClick={closeRemoveForBank}
-                className="px-4 py-2 border border-gray-300 bg-white text-gray-900 rounded hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded hover:bg-gray-50"
                 disabled={removeSubmitting}
               >
                 Cancel

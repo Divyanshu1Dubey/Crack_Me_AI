@@ -394,7 +394,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white text-gray-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+      <div className="bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-900">Edit Question #{question.id}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">×</button>
@@ -419,7 +419,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           <div className="mt-1">{renderMarkdownToolbar('question_text')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['question_text'] = el; }}
-            className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 font-mono text-sm"
+            className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded mt-1 font-mono text-sm"
             rows={6}
             value={form.question_text}
             onChange={(e) => setForm({ ...form, question_text: e.target.value })}
@@ -441,7 +441,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
               </div>
               <textarea
                 ref={(el) => { fieldRefs.current[k] = el; }}
-                className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
+                className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded mt-1 text-sm"
                 rows={2}
                 value={form[k]}
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
@@ -454,7 +454,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         <label className="block">
           <span className="text-sm font-medium text-gray-900">Correct Answer</span>
           <select
-            className="border border-gray-300 bg-white text-gray-900 p-2 rounded ml-3"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded ml-3"
             value={form.correct_answer}
             onChange={(e) => setForm({ ...form, correct_answer: e.target.value })}
           >
@@ -470,7 +470,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           <div className="mt-1">{renderMarkdownToolbar('explanation')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['explanation'] = el; }}
-            className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
+            className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded mt-1 text-sm"
             rows={4}
             value={form.explanation}
             onChange={(e) => setForm({ ...form, explanation: e.target.value })}
@@ -487,7 +487,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             <div className="mt-1">{renderMarkdownToolbar('mnemonic')}</div>
             <textarea
               ref={(el) => { fieldRefs.current['mnemonic'] = el; }}
-              className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
+              className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded mt-1 text-sm"
               rows={2}
               value={form.mnemonic}
               onChange={(e) => setForm({ ...form, mnemonic: e.target.value })}
@@ -497,7 +497,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           <label className="block">
             <span className="text-sm font-medium text-gray-900">Difficulty</span>
             <select
-              className="border border-gray-300 bg-white text-gray-900 p-2 rounded mt-1 w-full"
+              className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded mt-1 w-full"
               value={form.difficulty}
               onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
             >
@@ -516,7 +516,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           <div className="mt-1">{renderMarkdownToolbar('concept_explanation')}</div>
           <textarea
             ref={(el) => { fieldRefs.current['concept_explanation'] = el; }}
-            className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 p-2 rounded mt-1 text-sm"
+            className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded mt-1 text-sm"
             rows={3}
             value={form.concept_explanation}
             onChange={(e) => setForm({ ...form, concept_explanation: e.target.value })}
@@ -588,7 +588,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
-          <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded text-gray-900 bg-white">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
           <button onClick={() => save(false)} disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>
