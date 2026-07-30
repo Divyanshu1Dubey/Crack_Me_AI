@@ -277,6 +277,26 @@ function ExamQuestionBankInner({
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
             setListError(null);
+            // Fetch every page of subjects — the DRF default page_size=20 caps the
+            // response at 20 rows, so a single fetch was clipping 'Expert Curated'
+            // (id=291 + id=309, alphabetically last) into page 2 and dropping it
+            // from the dropdown. Subject count is small (~40 rows total) so a
+            // short loop is cheap.
+            const fetchAllSubjects = async () => {
+                const collected: Subject[] = [];
+                let page = 1;
+                // Hard cap protects against a misconfigured backend that returns
+                // an unbounded `next` pointer; in practice there are < 50 subjects.
+                while (page <= 10) {
+                    const res = await questionsAPI.getSubjects({ page, page_size: 100 });
+                    const results = res.data?.results || res.data || [];
+                    if (!Array.isArray(results) || results.length === 0) break;
+                    collected.push(...results);
+                    if (!res.data?.next) break;
+                    page += 1;
+                }
+                return collected;
+            };
             Promise.all([
                 questionsAPI.list({ page: 1, page_size: PAGE_SIZE, exam_type: selectedExam }),
                 // Subjects are NOT filtered by exam_type: the Question → Subject FK
@@ -286,19 +306,14 @@ function ExamQuestionBankInner({
                 // hides every real medical subject (Anatomy, Surgery, etc.) and
                 // leaves only the two "Expert Curated" rows, which is what users
                 // were seeing before this fix.
-                //
-                // page_size=100 is required because the unfiltered subjects list
-                // spans 37 rows; the DRF default page_size is 20 so "Expert
-                // Curated" was getting clipped to page 2 and never reached the
-                // dropdown at all.
-                questionsAPI.getSubjects({ page_size: 100 }),
+                fetchAllSubjects(),
                 questionsAPI.getYears(),
                 questionsAPI.getStats({ exam_source: examSource }),
-            ]).then(([qRes, sRes, yRes, statsRes]) => {
+            ]).then(([qRes, allSubjects, yRes, statsRes]) => {
                 const qData = qRes.data;
                 setQuestions(qData.results || qData || []);
                 setTotalCount(qData.count || (qData.results || qData || []).length);
-                setSubjects(sRes.data.results || sRes.data || []);
+                setSubjects(allSubjects);
                 setYears(yRes.data.results || yRes.data || []);
                 setQbankStats(statsRes.data);
             }).catch((err: unknown) => {
