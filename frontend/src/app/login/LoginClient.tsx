@@ -95,10 +95,11 @@ export default function LoginClient() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">
+                    <label htmlFor="login-email" className="mb-2 block text-sm font-semibold text-foreground">
                         Email
                     </label>
                     <Input
+                        id="login-email"
                         type="email"
                         name="identifier"
                         placeholder="Enter your email"
@@ -110,13 +111,14 @@ export default function LoginClient() {
 
                 <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
-                        <label className="block text-sm font-semibold text-foreground">Password</label>
+                        <label htmlFor="login-password" className="block text-sm font-semibold text-foreground">Password</label>
                         <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
                             Forgot password?
                         </Link>
                     </div>
                     <div className="relative">
                         <Input
+                            id="login-password"
                             type={showPassword ? 'text' : 'password'}
                             name="password"
                             className="pr-12"
