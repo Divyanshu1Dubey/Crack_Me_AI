@@ -206,7 +206,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
     duplicate_cluster_id = serializers.SerializerMethodField()
 
     def to_representation(self, instance):
-        """Repair mojibake on every text field at the API boundary.
+        """Repair mojibake on every text field at the API boundary AND
+        rename the loader-created "Imported" Subject to "Expert Curated".
 
         Without this pass, a Question row imported with a Windows-1252 /
         Latin-1 locale (the legacy fixture path) leaves `iÃ©iÃiÃ©` in the
@@ -214,11 +215,21 @@ class QuestionListSerializer(serializers.ModelSerializer):
         `decodeMojiB()` on every render. Normalizing here means the API
         ships clean text and the frontend guard becomes a true
         defence-in-depth (instead of the *only* line of defence).
+
+        The SubjectSerializer handles the same rename for `/subjects/`,
+        but `subject_name` on Question is a CharField that reads
+        `subject.name` directly through the FK — bypassing the Subject
+        serializer. Apply the same rename here so the question-bank list
+        and detail payloads never leak the loader literal "Imported".
+        See commit a4a96a5 for the original Subject fix and
+        `merge_loader_fallback_subjects` for the underlying DB cleanup.
         """
         data = super().to_representation(instance)
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])
+        if data.get('subject_name') == 'Imported':
+            data['subject_name'] = 'Expert Curated'
         return data
 
     class Meta:
@@ -439,17 +450,24 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
 
     def to_representation(self, instance):
-        """Repair mojibake on every text field at the API boundary.
+        """Repair mojibake on every text field at the API boundary AND
+        rename the loader-created "Imported" Subject to "Expert Curated".
 
         Mirror of QuestionListSerializer.to_representation — the detail
         endpoint is what powers the modal in ExamQuestionBank, so the
         Similar-PYQs sidebar (the one that was rendering
         `iÃ©iÃiÃ©iÃiÃ©`) gets clean text without a frontend pass.
+
+        Also rename the loader's "Imported" Subject name to "Expert Curated"
+        on the way out so the right-panel detail card's chips never leak
+        the loader literal. See the same change in QuestionListSerializer.
         """
         data = super().to_representation(instance)
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])
+        if data.get('subject_name') == 'Imported':
+            data['subject_name'] = 'Expert Curated'
         return data
 
     class Meta:

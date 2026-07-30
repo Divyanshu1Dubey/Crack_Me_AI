@@ -279,7 +279,14 @@ function ExamQuestionBankInner({
             setListError(null);
             Promise.all([
                 questionsAPI.list({ page: 1, page_size: PAGE_SIZE, exam_type: selectedExam }),
-                questionsAPI.getSubjects({ exam_type: selectedExam }),
+                // Subjects are NOT filtered by exam_type: the Question → Subject FK
+                // model uses the same medical subject names across CMS / NEET PG /
+                // INI-CET tracks, and the loader's "Imported" bucket is itself
+                // tagged exam_type='cms'. Filtering by exam_type=cms therefore
+                // hides every real medical subject (Anatomy, Surgery, etc.) and
+                // leaves only the two "Expert Curated" rows, which is what users
+                // were seeing before this fix.
+                questionsAPI.getSubjects(),
                 questionsAPI.getYears(),
                 questionsAPI.getStats({ exam_source: examSource }),
             ]).then(([qRes, sRes, yRes, statsRes]) => {
@@ -806,15 +813,38 @@ function ExamQuestionBankInner({
                                     onChange={e => setSelectedSubject(e.target.value)}
                                 >
                                     <option value="">All Subjects</option>
-                                    {subjects.map(s => (
-                                        // Backend SubjectSerializer now renames the loader-created
-                                        // "Imported" Subject row to "Expert Curated" so users see
-                                        // a clean label here. The frontend keeps a defensive double-check
-                                        // in case the serializer rename is ever reverted.
-                                        <option key={s.id} value={s.id}>
-                                            {s.name === 'Imported' ? 'Expert Curated' : s.name} ({s.question_count})
-                                        </option>
-                                    ))}
+                                    {(() => {
+                                        // The loader's "Expert Curated" Subject row exists in duplicate
+                                        // (id=291 with 1285 questions, id=309 with 541 questions) because
+                                        // the management command to merge them has not been run in
+                                        // production. Collapse display duplicates by name, summing the
+                                        // question_count so users see ONE "Expert Curated (1826)" entry
+                                        // instead of two redundant rows.
+                                        const byName = new Map<string, { id: number; name: string; count: number }>();
+                                        for (const s of subjects) {
+                                            const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
+                                            const existing = byName.get(displayName);
+                                            if (!existing) {
+                                                byName.set(displayName, { id: s.id, name: displayName, count: s.question_count || 0 });
+                                            } else {
+                                                existing.count += s.question_count || 0;
+                                            }
+                                        }
+                                        // Stable sort: real medical subjects first (alphabetical),
+                                        // "Expert Curated" pinned last so the brand-new / practice pool
+                                        // is clearly opt-in.
+                                        return Array.from(byName.values())
+                                            .sort((a, b) => {
+                                                if (a.name === 'Expert Curated') return 1;
+                                                if (b.name === 'Expert Curated') return -1;
+                                                return a.name.localeCompare(b.name);
+                                            })
+                                            .map(s => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.name} ({s.count})
+                                                </option>
+                                            ));
+                                    })()}
                                 </select>
                                 <select
                                     aria-label="Filter by difficulty"
@@ -919,15 +949,22 @@ function ExamQuestionBankInner({
                                                 ) : (
                                                     // Don't show a useless literal placeholder; the "Imported"
                                                     // Subject row renders as "General" so the card never surfaces
-                                                    // the raw loader label "General Imported".
-                                                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">
-                                                        {q.subject_name === 'Imported' ? 'General' : `General ${q.subject_name || 'Medicine'}`}
-                                                    </Badge>
+                                                    // the raw loader label "General Imported". Skip the second
+                                                    // "Expert Curated" sub-badge when the top badge already
+                                                    // shows "Expert Curated" (year=0) — otherwise the card
+                                                    // renders "Expert Curated" twice.
+                                                    q.subject_name !== 'Imported' ? (
+                                                        <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">
+                                                            {`General ${q.subject_name || 'Medicine'}`}
+                                                        </Badge>
+                                                    ) : null
                                                 )}
                                                 {q.year ? (
                                                     <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>
                                                 ) : (
-                                                    <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-300/40">Expert Curated</Badge>
+                                                    // Top badge already shows "Expert Curated" for year=0; the
+                                                    // separate amber sub-badge was redundant.
+                                                    null
                                                 )}
                                                 {q.concept_tags?.includes('high_yield') && (
                                                     <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
