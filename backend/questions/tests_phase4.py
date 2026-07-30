@@ -298,3 +298,99 @@ class DuplicateTombstoneGuardTestCase(TestCase):
         res = self._client.post(f"/api/questions/{q.id}/duplicate/")
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.json().get("message"), "Question duplicated")
+
+
+class PerformCreateUpdateTombstoneGuardTestCase(TestCase):
+    """Phase-4 hardening: QuestionViewSet.perform_create and
+    perform_update must refuse any stem that matches a RemovedQuestion
+    tombstone. Duplicate-of guards the detail action; this guards the
+    collection-level create / update endpoints.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from questions.models import Subject
+        cls.subject = Subject.objects.create(name="PerformGuardSubj", exam_type="neet_pg")
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self._client = APIClient()
+        self.admin = User.objects.create(
+            username="perform_guard_admin",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+    def _create_payload(self, stem):
+        return {
+            "question_text": stem,
+            "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+            "correct_answer": "A",
+            "year": 2024,
+            "exam_type": "neet_pg",
+            "subject": self.subject.id,
+        }
+
+    def test_create_refuses_removed_stem(self):
+        from questions.models import RemovedQuestion, compute_stem_hash
+        stem = "Removed stem, must be refused on create"
+        RemovedQuestion.objects.create(
+            exam_source="admin",
+            year=2024,
+            source_number=None,
+            question_text_hash=compute_stem_hash(stem),
+            original_question_id=None,
+            reason="admin removed",
+            removed_by=self.admin,
+        )
+
+        self._client.force_authenticate(user=self.admin)
+        res = self._client.post(
+            "/api/questions/",
+            data=self._create_payload(stem),
+            format="json",
+        )
+        # PermissionDenied maps to 403 via DRF default exception handler.
+        self.assertIn(res.status_code, (403, 409))
+        body = res.json()
+        joined = (body.get("detail") or body.get("error") or str(body)).lower()
+        self.assertIn("previously-removed", joined)
+
+    def test_create_succeeds_when_no_tombstone(self):
+        self._client.force_authenticate(user=self.admin)
+        res = self._client.post(
+            "/api/questions/",
+            data=self._create_payload("Brand-new stem, no tombstone"),
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+
+    def test_update_refuses_removed_stem(self):
+        from questions.models import Question, RemovedQuestion, compute_stem_hash
+        offender = "Update-target stem, must be refused on update"
+        q = Question.objects.create(
+            question_text=offender,
+            option_a="A", option_b="B", option_c="C", option_d="D",
+            correct_answer="A", year=2024,
+            exam_type="neet_pg", subject=self.subject,
+        )
+        tombstone_stem = "Tombstoned stem, must be refused"
+        RemovedQuestion.objects.create(
+            exam_source="admin",
+            year=2024,
+            source_number=None,
+            question_text_hash=compute_stem_hash(tombstone_stem),
+            original_question_id=None,
+            reason="admin removed",
+            removed_by=self.admin,
+        )
+
+        self._client.force_authenticate(user=self.admin)
+        res = self._client.patch(
+            f"/api/questions/{q.id}/",
+            data={"question_text": tombstone_stem},
+            format="json",
+        )
+        self.assertIn(res.status_code, (403, 409))
+        q.refresh_from_db()
+        self.assertEqual(q.question_text, offender)
