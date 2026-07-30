@@ -286,7 +286,12 @@ function ExamQuestionBankInner({
                 // hides every real medical subject (Anatomy, Surgery, etc.) and
                 // leaves only the two "Expert Curated" rows, which is what users
                 // were seeing before this fix.
-                questionsAPI.getSubjects(),
+                //
+                // page_size=100 is required because the unfiltered subjects list
+                // spans 37 rows; the DRF default page_size is 20 so "Expert
+                // Curated" was getting clipped to page 2 and never reached the
+                // dropdown at all.
+                questionsAPI.getSubjects({ page_size: 100 }),
                 questionsAPI.getYears(),
                 questionsAPI.getStats({ exam_source: examSource }),
             ]).then(([qRes, sRes, yRes, statsRes]) => {
@@ -814,20 +819,37 @@ function ExamQuestionBankInner({
                                 >
                                     <option value="">All Subjects</option>
                                     {(() => {
-                                        // The loader's "Expert Curated" Subject row exists in duplicate
-                                        // (id=291 with 1285 questions, id=309 with 541 questions) because
-                                        // the management command to merge them has not been run in
-                                        // production. Collapse display duplicates by name, summing the
-                                        // question_count so users see ONE "Expert Curated (1826)" entry
-                                        // instead of two redundant rows.
+                                        // Three display-side improvements over the raw API payload:
+                                        //   1. The loader's "Expert Curated" Subject row exists in
+                                        //      duplicate (id=291 with 1285 questions, id=309 with 541
+                                        //      questions) because the management command to merge
+                                        //      them has not been run in production. Collapse display
+                                        //      duplicates by name, summing the question_count so users
+                                        //      see ONE "Expert Curated (1826)" entry instead of two
+                                        //      redundant rows.
+                                        //   2. INI-CET rows that own 0 questions are not useful as
+                                        //      filter chips for the CMS bank — selecting them would
+                                        //      always return an empty result. Hide them.
+                                        //   3. The "(INI-CET)" suffix on rows that actually own
+                                        //      questions would confuse a CMS student, so we hide them
+                                        //      too — the dedicated INI-CET player at
+                                        //      /questions/inicet/practice renders its own subject
+                                        //      filter from the same source.
                                         const byName = new Map<string, { id: number; name: string; count: number }>();
                                         for (const s of subjects) {
+                                            const count = s.question_count || 0;
+                                            // Skip non-CMS tracks entirely on the CMS bank.
+                                            if (s.name.includes('(INI-CET)')) continue;
+                                            if (s.name.includes('(NEET PG)')) continue;
+                                            if (s.name.includes('(USMLE)')) continue;
+                                            if (s.name.includes('(FMGE)')) continue;
+                                            if (count <= 0) continue;
                                             const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
                                             const existing = byName.get(displayName);
                                             if (!existing) {
-                                                byName.set(displayName, { id: s.id, name: displayName, count: s.question_count || 0 });
+                                                byName.set(displayName, { id: s.id, name: displayName, count });
                                             } else {
-                                                existing.count += s.question_count || 0;
+                                                existing.count += count;
                                             }
                                         }
                                         // Stable sort: real medical subjects first (alphabetical),
