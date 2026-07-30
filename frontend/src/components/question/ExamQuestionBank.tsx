@@ -38,6 +38,7 @@ import DiscussionThread from '@/components/DiscussionThread';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
 import ImageViewer, { type ViewerImage } from '@/components/image/ImageViewer';
 import { useDock } from '@/context/DockContext';
+import { useQuestionFocus } from '@/context/QuestionFocusContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,6 +148,10 @@ function ExamQuestionBankInner({
     const { isAuthenticated, loading: authLoading } = useAuth();
     const { activeTrack } = useExamTrack();
     const { setContextQuestionId } = useDock();
+    // Broadcast whether a question is currently being solved so the
+    // SidebarAutoHide controller can keep the sidebar collapsed for the
+    // entire /questions session while a question is open.
+    const { setQuestionFocused } = useQuestionFocus();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -439,6 +444,14 @@ function ExamQuestionBankInner({
         setContextQuestionId(selectedQuestion);
     }, [selectedQuestion, setContextQuestionId]);
 
+    // Broadcast "user is solving a question" to the rest of the app so the
+    // SidebarAutoHide controller can keep the sidebar collapsed while the
+    // question is open (and re-expand it when the user closes the question
+    // by navigating away / picking a different list view).
+    useEffect(() => {
+        setQuestionFocused(selectedQuestion !== null);
+    }, [selectedQuestion, setQuestionFocused]);
+
     const handleSelectOption = (opt: string) => {
         if (!questionDetail) return;
         if (showAnswer) return;
@@ -639,10 +652,10 @@ function ExamQuestionBankInner({
                 {/* Filters Panel */}
                 <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-visible">
                     <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-                    <CardContent className="p-4 space-y-4">
+                    <CardContent className="p-3 space-y-2.5">
                         {qbankStats && (
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-3">
-                                <div className="space-y-2 text-left">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-border/40 pb-2">
+                                <div className="space-y-1 text-left">
                                     <div className="flex items-center gap-3">
                                         <h2 className="text-lg font-bold text-foreground">
                                             🎯 {examSource} Question Bank
@@ -653,15 +666,15 @@ function ExamQuestionBankInner({
                                     </p>
                                 </div>
 
-                                <div className="flex flex-1 max-w-md items-center gap-4">
-                                    <div className="flex-1 space-y-1 min-w-0">
+                                <div className="flex flex-1 max-w-md items-center gap-3">
+                                    <div className="flex-1 space-y-0.5 min-w-0">
                                         <div className="flex justify-between text-xs font-semibold gap-2">
                                             <span className="truncate">Overall Progress</span>
                                             <span className="text-primary font-bold shrink-0">
                                                 {qbankStats.total_solved} / {qbankStats.total} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
                                             </span>
                                         </div>
-                                        <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-2" />
+                                        <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-1.5" />
                                     </div>
                                     <button
                                         type="button"
@@ -758,11 +771,11 @@ function ExamQuestionBankInner({
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-3 pt-1">
-                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                        <div className="flex flex-col gap-2 pt-1">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                 <div className="relative w-full sm:max-w-xs flex-1 min-w-0">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                                    <Input className="pl-10 h-9 text-xs w-full" placeholder="Search questions..."
+                                    <Input className="pl-10 h-8 text-[11px] w-full" placeholder="Search questions..."
                                         value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                                 </div>
@@ -770,23 +783,23 @@ function ExamQuestionBankInner({
                                     <button
                                         type="button"
                                         onClick={() => setStudyMode('practice')}
-                                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                        className={`px-3 py-1 text-[11px] font-semibold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
                                     >
                                         Practice Mode
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setStudyMode('exam')}
-                                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                        className={`px-3 py-1 text-[11px] font-semibold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
                                     >
                                         Exam Mode
                                     </button>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-3 items-center">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-2 items-center">
                                 <select
                                     aria-label="Filter by subject"
-                                    className="input-field h-10 text-xs px-3 w-full min-w-0 truncate"
+                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0 truncate"
                                     value={selectedSubject}
                                     onChange={e => setSelectedSubject(e.target.value)}
                                 >
@@ -803,7 +816,7 @@ function ExamQuestionBankInner({
                                 </select>
                                 <select
                                     aria-label="Filter by difficulty"
-                                    className="input-field h-10 text-xs px-3 w-full min-w-0"
+                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
                                     value={selectedDifficulty}
                                     onChange={e => setSelectedDifficulty(e.target.value)}
                                 >
@@ -814,7 +827,7 @@ function ExamQuestionBankInner({
                                 </select>
                                 <select
                                     aria-label="Filter by year"
-                                    className="input-field h-10 text-xs px-3 w-full min-w-0"
+                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
                                     value={selectedYear}
                                     onChange={e => setSelectedYear(e.target.value)}
                                 >
@@ -827,7 +840,7 @@ function ExamQuestionBankInner({
                                     variant="neon"
                                     onClick={handleSearch}
                                     size="sm"
-                                    className="h-10 px-3 w-full group"
+                                    className="h-9 px-3 w-full group"
                                 >
                                     <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
                                 </Button>
@@ -1062,27 +1075,45 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        <div className="text-base font-medium leading-relaxed mb-5">
-                                            <FormattedText
-                                                text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}
-                                            />
-                                        </div>
-
-                                        {/* Image carousel — image-based questions */}
-                                        {Array.isArray(detail.images) && detail.images.length > 0 && (
-                                            <div className="mb-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {detail.images.map((img: any, idx: number) => (
-                                                    <button
-                                                        key={img.id}
-                                                        type="button"
-                                                        onClick={() => setViewImageIdx(idx)}
-                                                        className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in"
-                                                    >
-                                                        <img src={img.url || img.file_url} alt={img.caption || 'Question image'}
-                                                            className="w-full h-auto object-contain bg-muted/30" loading="lazy" />
-                                                        {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
-                                                    </button>
-                                                ))}
+                                        {/* STEM + IMAGE LAYOUT
+                                            When the question has attached images we render a
+                                            60/40 split on desktop: stem + options on the left
+                                            (60%) and a large sticky image pane on the right
+                                            (40%) so the image takes a good amount of screen
+                                            while solving. On mobile the image pane sits below
+                                            the stem (stacked) so vertical scroll works. The
+                                            options block remains full-width below this row. */}
+                                        {Array.isArray(detail.images) && detail.images.length > 0 ? (
+                                            <div className="qbank-solve-layout flex flex-col lg:flex-row gap-4 mb-5">
+                                                <div className="qbank-stem-pane lg:basis-3/5 lg:min-w-0">
+                                                    <div className="text-base font-medium leading-relaxed">
+                                                        <FormattedText
+                                                            text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="qbank-image-pane lg:basis-2/5 lg:min-w-0 lg:self-start lg:sticky lg:top-4">
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {detail.images.map((img: any, idx: number) => (
+                                                            <button
+                                                                key={img.id}
+                                                                type="button"
+                                                                onClick={() => setViewImageIdx(idx)}
+                                                                className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in bg-muted/20"
+                                                            >
+                                                                <img src={img.url || img.file_url} alt={img.caption || 'Question image'}
+                                                                    className="w-full h-auto max-h-[55vh] object-contain bg-muted/30" loading="lazy" />
+                                                                {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-base font-medium leading-relaxed mb-5">
+                                                <FormattedText
+                                                    text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}
+                                                />
                                             </div>
                                         )}
 

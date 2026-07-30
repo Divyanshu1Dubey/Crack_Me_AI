@@ -1128,6 +1128,23 @@ body.sidebar-hidden .main-content {
   }
 }
 
+/* ═══ Question Bank — 60/40 solve layout (stem | image) ═══ */
+/* Used inside .qbank-detail when a question has attached images.
+   Desktop: stem pane (60%) + sticky image pane (40%) side-by-side.
+   Mobile: stacked (default `flex-col` on .qbank-solve-layout). */
+@media (min-width: 1024px) {
+  .qbank-solve-layout {
+    align-items: flex-start;
+  }
+  .qbank-image-pane {
+    /* Keep the image pane inside the right-column gutter when the parent
+       qbank-grid is the narrow exam-mode 2fr/2fr split. */
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
 /* ═══ Review Mode & Question Bank Shared Styles ═══ */
 
 /* Review Tags */

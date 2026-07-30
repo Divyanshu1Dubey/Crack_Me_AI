@@ -18,6 +18,8 @@ import PWAProvider from "@/components/PWAProvider";
 import { ExamTrackProvider } from "@/components/ExamTrackProvider";
 import { WatermarkOverlay } from "@/components/WatermarkOverlay";
 import { DockProvider } from "@/context/DockContext";
+import { SidebarProvider } from "@/context/SidebarContext";
+import { QuestionFocusProvider } from "@/context/QuestionFocusContext";
 import { FloatingDock } from "@/components/FloatingDock";
 import Footer from "@/components/Footer";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
@@ -271,21 +273,25 @@ export default function RootLayout({
             <TooltipProvider>
               <AuthProvider>
                 <ExamTrackProvider>
-                  <DockProvider>
-                    <DatadogInit />
-                    <ClarityInit />
-                    <PostHogInit />
-                    <Suspense fallback={null}>
-                      <TrafficAnalytics />
-                    </Suspense>
-                    <BackendWarmup />
-                    <main id="main-content">{children}</main>
-                    <Footer />
-                    <FloatingDock />
-                    <WatermarkOverlay />
-                    <StickyExamCta />
-                    <ConsentBanner />
-                  </DockProvider>
+                  <SidebarProvider>
+                    <QuestionFocusProvider>
+                      <DockProvider>
+                        <DatadogInit />
+                        <ClarityInit />
+                        <PostHogInit />
+                        <Suspense fallback={null}>
+                          <TrafficAnalytics />
+                        </Suspense>
+                        <BackendWarmup />
+                        <main id="main-content">{children}</main>
+                        <Footer />
+                        <FloatingDock />
+                        <WatermarkOverlay />
+                        <StickyExamCta />
+                        <ConsentBanner />
+                      </DockProvider>
+                    </QuestionFocusProvider>
+                  </SidebarProvider>
                 </ExamTrackProvider>
               </AuthProvider>
             </TooltipProvider>

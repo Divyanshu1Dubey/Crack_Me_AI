@@ -23,6 +23,7 @@ import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { decodeMojiB } from '@/lib/textCleanup';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface NavItem {
     href: string;
@@ -103,7 +104,10 @@ export default function Sidebar() {
     const [open, setOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
     const SIDEBAR_SCROLL_KEY = 'crackcms_sidebar_scroll_top';
-    const [desktopOpen, setDesktopOpen] = useState(true);
+    // Desktop visibility is now owned by SidebarContext so route-level
+    // controllers (e.g. SidebarAutoHide on /questions) can flip it without
+    // duplicating localStorage / body-class side effects.
+    const { desktopOpen, setDesktopOpen } = useSidebar();
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -111,24 +115,18 @@ export default function Sidebar() {
         return () => window.removeEventListener('keydown', handler);
     }, []);
 
+    // Cleanup the sidebar-hidden body class on unmount so we don't leak
+    // the class when this sidebar instance goes away (e.g. user navigates
+    // to a route that doesn't render Sidebar). The context re-applies the
+    // class on its own desktopOpen effect if another Sidebar instance is
+    // mounted, so this is safe.
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const saved = window.localStorage.getItem('crackcms_sidebar_desktop_open');
-        if (saved !== null) setDesktopOpen(saved === 'true');
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem('crackcms_sidebar_desktop_open', String(desktopOpen));
-        if (desktopOpen) {
-            document.body.classList.remove('sidebar-hidden');
-        } else {
-            document.body.classList.add('sidebar-hidden');
-        }
         return () => {
-            document.body.classList.remove('sidebar-hidden');
+            if (typeof document !== 'undefined') {
+                document.body.classList.remove('sidebar-hidden');
+            }
         };
-    }, [desktopOpen]);
+    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -178,7 +176,7 @@ export default function Sidebar() {
             <button
                 className="desktop-sidebar-toggle-btn"
                 aria-label={desktopOpen ? 'Hide sidebar' : 'Show sidebar'}
-                onClick={() => setDesktopOpen(v => !v)}
+                onClick={() => setDesktopOpen(!desktopOpen)}
             >
                 {desktopOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
             </button>
