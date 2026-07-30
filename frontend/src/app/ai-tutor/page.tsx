@@ -217,7 +217,20 @@ export default function AITutorPage() {
         setLoadingSessions(true);
         try {
             const res = await aiAPI.getChatSessions();
-            setSessions(res.data || []);
+            // Sanitize legacy/malformed session rows so the renderer never
+            // dereferences a missing field (caused the "Something went wrong"
+            // crash on /ai-tutor when session.updated_at was null).
+            const raw: unknown = res.data || [];
+            const list = (Array.isArray(raw) ? raw : []).map((s: any) => ({
+                id: typeof s?.id === 'number' ? s.id : 0,
+                title: typeof s?.title === 'string' ? s.title : '',
+                mode: typeof s?.mode === 'string' ? s.mode : 'tutor',
+                message_count: typeof s?.message_count === 'number' ? s.message_count : 0,
+                created_at: typeof s?.created_at === 'string' ? s.created_at : '',
+                updated_at: typeof s?.updated_at === 'string' ? s.updated_at : null,
+                last_message_preview: typeof s?.last_message_preview === 'string' ? s.last_message_preview : '',
+            })).filter((s: ChatSession) => s.id > 0);
+            setSessions(list);
         } catch {
             // Keep chat usable even if history endpoint is temporarily unavailable.
             setSessions([]);
@@ -312,8 +325,16 @@ export default function AITutorPage() {
                 response = res.data.explanation;
             } else if (mode === 'textbook') {
                 const res = await aiAPI.ragAnswer({ question: userMsg });
-                response = res.data.answer;
-                citations = res.data.citations;
+                // If RAG backend has no indexed textbooks (e.g. fresh host),
+                // fall back to AI Tutor so the student always gets an answer.
+                if (res.data?.error === 'textbook_search_unavailable') {
+                    setMode('tutor');
+                    const tutorRes = await aiAPI.askTutor({ question: userMsg });
+                    response = tutorRes.data.response;
+                } else {
+                    response = res.data.answer;
+                    citations = res.data.citations;
+                }
             } else {
                 const res = await aiAPI.analyzeQuestion({ question_text: userMsg });
                 response = res.data.analysis;
@@ -348,10 +369,15 @@ export default function AITutorPage() {
     };
 
     // Format date for display
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
+    const formatDate = (dateStr: unknown): string => {
+        if (!dateStr || typeof dateStr !== 'string') return '';
+        const ts = Date.parse(dateStr);
+        if (Number.isNaN(ts)) return '';
+        const date = new Date(ts);
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
+        // Guard against future-dated clocks (history saved with a clock skew)
+        if (diffMs < 0) return date.toLocaleDateString();
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
@@ -598,18 +624,27 @@ export default function AITutorPage() {
                                             <SafeUserText content={msg.content} />
                                         )}
                                     </div>
-                                    {/* Textbook Citations */}
-                                    {msg.citations && msg.citations.length > 0 && (
+                                    {/* Textbook Citations — guarded for missing fields */}
+                                    {Array.isArray(msg.citations) && msg.citations.length > 0 && (
                                         <div className="mt-2 space-y-1">
                                             <div className="text-xs font-medium" style={{ color: '#10b981' }}>📚 Textbook References:</div>
-                                            {msg.citations.map((c, j) => (
-                                                <div key={j} className="text-xs p-2 rounded-lg"
-                                                    style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                                                    <span className="font-medium" style={{ color: '#10b981' }}>{c.book}</span>
-                                                    <span style={{ color: 'var(--text-secondary)' }}> — p.{c.page}</span>
-                                                    <span className="ml-2 opacity-60">({Math.round(c.relevance * 100)}% match)</span>
-                                                </div>
-                                            ))}
+                                            {msg.citations.map((c, j) => {
+                                                const book = typeof c?.book === 'string' ? c.book : 'Unknown source';
+                                                const page = c?.page ?? '?';
+                                                const relevance = typeof c?.relevance === 'number' && Number.isFinite(c.relevance)
+                                                    ? Math.round(c.relevance * 100)
+                                                    : null;
+                                                return (
+                                                    <div key={j} className="text-xs p-2 rounded-lg"
+                                                        style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                                                        <span className="font-medium" style={{ color: '#10b981' }}>{book}</span>
+                                                        <span style={{ color: 'var(--text-secondary)' }}> — p.{page}</span>
+                                                        {relevance !== null && (
+                                                            <span className="ml-2 opacity-60">({relevance}% match)</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
