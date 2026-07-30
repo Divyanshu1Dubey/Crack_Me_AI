@@ -1,0 +1,117 @@
+{
+  "option_pollution": {
+    "option_a": {
+      "count": 1,
+      "samples": [
+        {
+          "id": 14213,
+          "question_text": "The following statements are connected with 'because'",
+          "option_a": "Statement 1 and Statement 2 are true and Statement 2 is correct explanation of Statement 1"
+        }
+      ]
+    }
+  },
+  "space_joined_stems": {
+    "total": 14,
+    "samples": [
+      {
+        "id": 5200,
+        "question_text": "Which of the following are correct in respect of scabies? Male mite Sarcoptes scabiei are commonly transferred from an infected person to a non-infected person. Norwegian scabies occur in immunodeficient patients. Permethrin cream (5%) is used for treatment. Pruritus intensifies at night and after hot shower.\n    Select the answer using the code given below:",
+        "longest_line": "Which of the following are correct in respect of scabies? Male mite Sarcoptes scabiei are commonly transferred from an infected person to a non-infected person. Norwegian scabies occur in immunodeficient patients. Permethrin cream (5%) is used for treatment. Pruritus intensifies at night and after hot shower.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 2
+      },
+      {
+        "id": 19707,
+        "question_text": "Which of the following statements regarding the management of sickle cell disease during pregnancy is correct? Folic acid 1 mg tablet should be given daily. Penicillin prophylaxis is strictly contraindicated. Hydroxyurea should be stopped at least 3 months before conception. Vaginal delivery is the preferred method of delivery. Select the correct answer using the code below:",
+        "longest_line": "Which of the following statements regarding the management of sickle cell disease during pregnancy is correct? Folic acid 1 mg tablet should be given daily. Penicillin prophylaxis is strictly contraindicated. Hydroxyurea should be stopped at least 3 months before conception. Vaginal delivery is the preferred method of delivery. Select the correct answer using the code below:",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 24798,
+        "question_text": "Which of the following statements regarding contrast-induced nephropathy (CIN) are correct? Pre-existing renal impairment (eGFR $<45$ mL/min/1.73 m²) and diabetes mellitus are significant risk factors. Intravenous hydration with isotonic saline remains the single most effective prevention strategy. Administration of N-acetylcysteine can fully reverse established renal injury post-exposure. Metformin should be omitted for 48 hours after contrast administration to avoid lactic acidosis.",
+        "longest_line": "Which of the following statements regarding contrast-induced nephropathy (CIN) are correct? Pre-existing renal impairment (eGFR $<45$ mL/min/1.73 m²) and diabetes mellitus are significant risk factors. Intravenous hydration with isotonic saline remains the single most effective prevention strategy. Administration of N-acetylcysteine can fully reverse established renal injury post-exposure. Metform",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 23295,
+        "question_text": "Which of the following statements regarding the management of sickle cell disease during pregnancy is correct? Folic acid 1 mg tablet should be given daily. Penicillin prophylaxis is strictly contraindicated. Hydroxyurea should be stopped at least 3 months before conception. Vaginal delivery is the preferred method of delivery.",
+        "longest_line": "Which of the following statements regarding the management of sickle cell disease during pregnancy is correct? Folic acid 1 mg tablet should be given daily. Penicillin prophylaxis is strictly contraindicated. Hydroxyurea should be stopped at least 3 months before conception. Vaginal delivery is the preferred method of delivery.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 23493,
+        "question_text": "Which of the following are correct regarding cracked nipple? Correct attachment (latch on) provides immediate relief from pain and rapid healing. Miconazole lotion is applied over the nipple and in the baby’s mouth if oral thrush is present. Purified lanolin with mother’s milk is applied three or four times a day.\n\nExplanation: All three measures are part of the standard treatment of cracked nipple.",
+        "longest_line": "Which of the following are correct regarding cracked nipple? Correct attachment (latch on) provides immediate relief from pain and rapid healing. Miconazole lotion is applied over the nipple and in the baby’s mouth if oral thrush is present. Purified lanolin with mother’s milk is applied three or four times a day.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 2
+      },
+      {
+        "id": 24207,
+        "question_text": "Regarding limiting amino acids in common plant proteins, which of the following statements are correct? Lysine is limiting in most cereal proteins. Threonine is often limiting in cereal proteins. Methionine is usually the limiting amino acid in most pulse proteins. Tryptophan is the limiting amino acid in most animal proteins.",
+        "longest_line": "Regarding limiting amino acids in common plant proteins, which of the following statements are correct? Lysine is limiting in most cereal proteins. Threonine is often limiting in cereal proteins. Methionine is usually the limiting amino acid in most pulse proteins. Tryptophan is the limiting amino acid in most animal proteins.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 24317,
+        "question_text": "Regarding limiting amino acids in common plant proteins, which of the following statements are correct? Lysine is limiting in most cereal proteins. Threonine is often limiting in cereal proteins. Methionine is usually the limiting amino acid in most pulse proteins. Tryptophan is the limiting amino acid in most animal proteins.",
+        "longest_line": "Regarding limiting amino acids in common plant proteins, which of the following statements are correct? Lysine is limiting in most cereal proteins. Threonine is often limiting in cereal proteins. Methionine is usually the limiting amino acid in most pulse proteins. Tryptophan is the limiting amino acid in most animal proteins.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 24508,
+        "question_text": "Consider the following statements about Graves' ophthalmopathy: It is the leading cause of proptosis in adults Proptosis is often bilateral and symmetric It is primarily a clinical diagnosis Worsening of symptoms on glucocorticoid withdrawal is common Which of the above statements are correct? It is the leading cause of proptosis in adults. The proptosis is often asymmetric and unilateral. Orbital inflammation and engorgement of the extraocular muscles, like medial rectus and inferior rectus, ac",
+        "longest_line": "Consider the following statements about Graves' ophthalmopathy: It is the leading cause of proptosis in adults Proptosis is often bilateral and symmetric It is primarily a clinical diagnosis Worsening of symptoms on glucocorticoid withdrawal is common Which of the above statements are correct? It is the leading cause of proptosis in adults. The proptosis is often asymmetric and unilateral. Orbital",
+        "n_glued_sentences_on_line": 7,
+        "line_count": 1
+      },
+      {
+        "id": 22254,
+        "question_text": "Which of the following statements regarding the management of tension pneumothorax are correct? It is a clinical diagnosis; treatment should never be delayed by waiting for radiological confirmation. Immediate decompression is performed with a large-bore cannula in the second intercostal space at the mid-clavicular line of the affected side. Definitive chest tube is inserted in the fifth intercostal space at the anterior axillary line. Pericardiocentesis is performed as the first-line interventi",
+        "longest_line": "Which of the following statements regarding the management of tension pneumothorax are correct? It is a clinical diagnosis; treatment should never be delayed by waiting for radiological confirmation. Immediate decompression is performed with a large-bore cannula in the second intercostal space at the mid-clavicular line of the affected side. Definitive chest tube is inserted in the fifth intercost",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 24850,
+        "question_text": "Which of the following statements regarding polyuria are correct? Diabetes mellitus causes osmotic diuresis. Hypercalcemia may impair urinary concentrating ability. Hypokalemia may produce nephrogenic diabetes insipidus. Primary polydipsia is associated with dilute urine.\n\na Which of the following are recognized causes of oliguria in adults?\nHypovolemia\nCardiogenic shock\nAcute glomerulonephritis\nPost-obstructive diuresis\nSelect the correct answer:\n(a) 1 and 2 only\n(b) 1, 2 and 3 only\n(c) 2, 3 an",
+        "longest_line": "Which of the following statements regarding polyuria are correct? Diabetes mellitus causes osmotic diuresis. Hypercalcemia may impair urinary concentrating ability. Hypokalemia may produce nephrogenic diabetes insipidus. Primary polydipsia is associated with dilute urine.",
+        "n_glued_sentences_on_line": 4,
+        "line_count": 47
+      },
+      {
+        "id": 26383,
+        "question_text": "Which of the following statements are correct regarding Helicobacter pylori and gastritis? Infection is mainly acquired in childhood and is inversely associated with socioeconomic status. Eradication can be achieved in up to 90% of patients using a PPI and antibiotics. Reinfection following successful eradication is very common (greater than 10%). Autoimmune gastritis is associated with the development of pernicious anaemia.\n\nTrap Explanation: Statement 3 is incorrect. Once H. pylori is successf",
+        "longest_line": "Which of the following statements are correct regarding Helicobacter pylori and gastritis? Infection is mainly acquired in childhood and is inversely associated with socioeconomic status. Eradication can be achieved in up to 90% of patients using a PPI and antibiotics. Reinfection following successful eradication is very common (greater than 10%). Autoimmune gastritis is associated with the develo",
+        "n_glued_sentences_on_line": 4,
+        "line_count": 2
+      },
+      {
+        "id": 26398,
+        "question_text": "Which of the following statements regarding Pyogenic Liver Abscess are correct? Infection is usually polymicrobial. Klebsiella, Escherichia coli, and Streptococcus milleri are commonly identified. It has an increased incidence in the elderly, diabetics, and the immunosuppressed. Metronidazole and clindamycin are used primarily against gram-negative aerobic organisms.\n\nLiver Abscess Treatment:\nMetronidazole and clindamycin provide wide anaerobic coverage, not aerobic gram-negative coverage (which",
+        "longest_line": "Which of the following statements regarding Pyogenic Liver Abscess are correct? Infection is usually polymicrobial. Klebsiella, Escherichia coli, and Streptococcus milleri are commonly identified. It has an increased incidence in the elderly, diabetics, and the immunosuppressed. Metronidazole and clindamycin are used primarily against gram-negative aerobic organisms.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 3
+      },
+      {
+        "id": 23472,
+        "question_text": "Which of the following are the properties of a normal uterine contraction wave? Intensity of contraction diminishes from top to bottom of the uterus. Contraction wave starts from the pacemaker and propagates towards the lower uterine segment. Duration of contraction increases progressively as the wave moves away from the pacemaker. Normal baseline tonus is between 5 mm Hg and 20 mm Hg.",
+        "longest_line": "Which of the following are the properties of a normal uterine contraction wave? Intensity of contraction diminishes from top to bottom of the uterus. Contraction wave starts from the pacemaker and propagates towards the lower uterine segment. Duration of contraction increases progressively as the wave moves away from the pacemaker. Normal baseline tonus is between 5 mm Hg and 20 mm Hg.",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      },
+      {
+        "id": 25556,
+        "question_text": "Which of the following statements regarding the management of tension pneumothorax are correct? It is a clinical diagnosis; treatment should never be delayed by waiting for radiological confirmation. Immediate decompression is performed with a large-bore cannula in the second intercostal space at the mid-clavicular line of the affected side. Definitive chest tube is inserted in the fifth intercostal space at the anterior axillary line. Pericardiocentesis is performed as the first-line interventi",
+        "longest_line": "Which of the following statements regarding the management of tension pneumothorax are correct? It is a clinical diagnosis; treatment should never be delayed by waiting for radiological confirmation. Immediate decompression is performed with a large-bore cannula in the second intercostal space at the mid-clavicular line of the affected side. Definitive chest tube is inserted in the fifth intercost",
+        "n_glued_sentences_on_line": 3,
+        "line_count": 1
+      }
+    ]
+  }
+}

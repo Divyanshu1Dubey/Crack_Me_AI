@@ -69,6 +69,7 @@ For hands-on work:
 | **[AUDIT_2026_07_27.md](./AUDIT_2026_07_27.md)** | Master audit of `material_importer`, fixture migration, and recent diffs (this session) |
 | **[MATERIAL_IMPORTER_AUDIT.md](./MATERIAL_IMPORTER_AUDIT.md)** | Deep dive on the new DOCX/PDF/PPTX ingestion app + bug list |
 | **[STRUCTURAL_AUDIT_2026_07_28.md](./STRUCTURAL_AUDIT_2026_07_28.md)** | Per-question-text shape taxonomy + remaining migration roadmap (0031–0035) |
+| **[COMPREHENSIVE_AUDIT_2026_07_30.md](./audit/COMPREHENSIVE_AUDIT_2026_07_30.md)** | 12-phase hardening (subscription UX, security throttles, CSP, magic-bytes, third-party setup, repo cleanup, accessibility, SEO additions) |
 | **[HIGH_PRIORITY_FIXES.md](./HIGH_PRIORITY_FIXES.md)** | Top 10 ranked fixes ready to ship |
 | **[LOW_PRIORITY_FIXES.md](./LOW_PRIORITY_FIXES.md)** | Backlog of low-priority / future-work items |
 | **[NEXT_STEPS.md](../NEXT_STEPS.md)** | Session handoff for the next Claude |
@@ -91,6 +92,7 @@ For hands-on work:
 | [setup/DATADOG_SETUP.md](./setup/DATADOG_SETUP.md) | Datadog RUM + backend tracing env vars |
 | [setup/ICONS_SETUP.md](./setup/ICONS_SETUP.md) | Icons8 MCP + bulk icon downloader |
 | [setup/SUPABASE_SETUP.md](./setup/SUPABASE_SETUP.md) | Supabase Postgres + migration checklist |
+| [setup/THIRDPARTY_INTEGRATIONS.md](./setup/THIRDPARTY_INTEGRATIONS.md) | One-stop checklist for Razorpay / Giscus / GA4 / Clarity / PostHog / Datadog / Sentry / Gmail SMTP / Redis |
 
 ## `guides/` — Process Guides
 

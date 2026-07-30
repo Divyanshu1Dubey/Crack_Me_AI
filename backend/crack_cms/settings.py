@@ -276,8 +276,27 @@ REST_FRAMEWORK = {
         'anon': os.getenv('DRF_THROTTLE_ANON', '120/min'),
         'user': os.getenv('DRF_THROTTLE_USER', '600/min'),
         'admin_control_tower': os.getenv('DRF_THROTTLE_ADMIN_CONTROL_TOWER', '180/min'),
+        # Scoped rates for expensive / sensitive endpoints.
+        'ai_tutor': os.getenv('DRF_THROTTLE_AI_TUTOR', '30/min'),
+        'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
+        'token_purchase': os.getenv('DRF_THROTTLE_TOKEN_PURCHASE', '10/min'),
+        'subscription_order': os.getenv('DRF_THROTTLE_SUBSCRIPTION_ORDER', '15/min'),
     },
 }
+
+# SimpleJWT — refresh rotation + blacklist after rotation.
+# These apply to the DRF-issued JWT fallback only (Supabase users go through
+# SupabaseJWTAuthentication which has its own refresh handling).
+SIMPLE_JWT = {
+    'ROTATE_REFRESH_TOKENS': os.getenv('JWT_ROTATE_REFRESH_TOKENS', 'true').lower() == 'true',
+    'BLACKLIST_AFTER_ROTATION': os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true',
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MIN', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7'))),
+}
+
+# Upload hardening — cap body size to 10 MB to prevent DoS via giant payloads.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DATA_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024))
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('FILE_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024))
 
 def _normalize_origin(value: str) -> str:
     """Return canonical origin (scheme://host[:port]) or empty string for invalid inputs."""

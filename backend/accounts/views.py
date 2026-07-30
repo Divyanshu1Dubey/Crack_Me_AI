@@ -16,6 +16,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Avg, Count, Max, Q, Subquery, Sum
@@ -257,6 +258,8 @@ class VerifyScholarshipView(APIView):
 class SubscribeOrderView(APIView):
     """Create a Razorpay order for dynamic pricing plans."""
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'subscription_order'
 
     def post(self, request):
         import os
@@ -509,6 +512,7 @@ def _serialize_subscription(sub):
     if not sub:
         return None
     return {
+        'id': sub.id,
         'plan': sub.plan,
         'plan_display_name': sub.plan_display_name,
         'status': sub.status,
@@ -552,6 +556,75 @@ class SubscriptionStatusView(APIView):
         return Response({
             'is_subscribed': sub.is_active if sub else False,
             'subscription': _serialize_subscription(sub) if sub else None,
+        })
+
+
+class SubscriptionHistoryView(APIView):
+    """
+    Return the authenticated user's full subscription history (all records, newest-first).
+
+    The first entry is the currently-active record (if any), followed by every
+    previous subscription (active/expired/cancelled) so users can see exactly
+    what they bought, when, how long it lasted, and how much they paid.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        subs = Subscription.objects.filter(user=user).order_by('-created_at')
+        return Response({
+            'count': subs.count(),
+            'subscriptions': [_serialize_subscription(s) for s in subs],
+        })
+
+
+class SubscriptionInvoiceView(APIView):
+    """
+    Printable invoice/receipt for a single Subscription row.
+
+    Returns JSON describing the payment so the frontend can render a printable
+    view at `/subscription/invoice/<subscription_id>/`. Returns 404 if the
+    subscription does not belong to the requesting user (security: never leak
+    someone else's order id).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, subscription_id: int):
+        user = request.user
+        try:
+            sub = Subscription.objects.get(id=subscription_id, user=user)
+        except Subscription.DoesNotExist:
+            return Response(
+                {'error': 'Invoice not found for this user.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Best-effort: link to the matching PaymentAttempt for verification trail
+        payment = None
+        if sub.razorpay_order_id:
+            from .models import PaymentAttempt
+            try:
+                payment = PaymentAttempt.objects.get(razorpay_order_id=sub.razorpay_order_id)
+            except PaymentAttempt.DoesNotExist:
+                payment = None
+
+        return Response({
+            'subscription': _serialize_subscription(sub),
+            'payment': {
+                'razorpay_order_id': payment.razorpay_order_id,
+                'razorpay_payment_id': payment.razorpay_payment_id,
+                'amount': float(payment.amount) if payment else float(sub.amount_paid),
+                'plan': payment.plan if payment else sub.plan,
+                'status': payment.status if payment else 'successful',
+                'paid_at': payment.updated_at.isoformat() if payment else sub.created_at.isoformat(),
+            } if (payment or sub.amount_paid > 0) else None,
+            'invoice_no': f'CMS-INV-{sub.id:06d}',
+            'issued_to': {
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            },
         })
 
 
@@ -676,6 +749,8 @@ class TokenPurchaseView(APIView):
     """
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'token_purchase'
 
     def post(self, request):
         serializer = TokenPurchaseSerializer(data=request.data)
@@ -934,6 +1009,8 @@ class PasswordResetRequestView(APIView):
     """Request a password reset email. Sends a link with uid and token."""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset'
 
     def post(self, request):
         email = request.data.get("email", "").strip().lower()

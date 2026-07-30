@@ -6,15 +6,31 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI, questionsAPI } from '@/lib/api';
 import {
-    Crown, BookOpen, FileText, Clock, 
+    Crown, BookOpen, FileText, Clock,
     Sparkles, MessageSquare, ShieldCheck,
     X, Check, AlertTriangle, Brain, RefreshCw,
-    Calendar, Timer, CreditCard
+    Calendar, Timer, CreditCard, Receipt, History,
+    Bell, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+// ── Subscription history row shape (mirrors backend SubscriptionHistoryView) ──
+interface SubscriptionRow {
+    id: number;
+    plan: string;
+    plan_display_name: string;
+    status: 'active' | 'expired' | 'cancelled' | string;
+    is_active: boolean;
+    starts_at: string | null;
+    expires_at: string | null;
+    days_remaining: number;
+    amount_paid: number;
+    razorpay_order_id: string;
+    created_at: string | null;
+}
 
 interface ScholarshipQuestion {
     id: number;
@@ -38,6 +54,13 @@ export default function SubscriptionPage() {
         razorpay_order_id: string;
         razorpay_signature: string;
     } | null>(null);
+
+    // Subscription history & manage modal
+    const [historyRows, setHistoryRows] = useState<SubscriptionRow[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyLoaded, setHistoryLoaded] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+    const [showManageModal, setShowManageModal] = useState(false);
 
     // Subscription state
     const subscriptionInfo = user?.subscription_info;
@@ -67,6 +90,92 @@ export default function SubscriptionPage() {
             router.push('/login');
         }
     }, [authLoading, isAuthenticated, router]);
+
+    // Lazy-load subscription history when the user expands the history panel
+    useEffect(() => {
+        if (showHistory && isSubscribed && !historyLoaded && !historyLoading) {
+            fetchHistory();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showHistory]);
+
+    const fetchHistory = async () => {
+        if (historyLoading || historyLoaded) return;
+        setHistoryLoading(true);
+        try {
+            const res = await authAPI.subscriptionHistory();
+            const list: SubscriptionRow[] = res.data?.subscriptions || [];
+            setHistoryRows(list);
+            setHistoryLoaded(true);
+        } catch (err) {
+            console.error('Failed to load subscription history:', err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const handleViewInvoice = async (subscriptionId: number) => {
+        try {
+            const res = await authAPI.subscriptionInvoice(subscriptionId);
+            const inv = res.data;
+            const sub = inv.subscription;
+            const pay = inv.payment;
+            const issuedTo = inv.issued_to;
+            // Build a small printable HTML window with the invoice details.
+            const win = window.open('', '_blank', 'width=720,height=900');
+            if (!win) {
+                alert('Pop-up blocked. Please allow pop-ups to view the invoice.');
+                return;
+            }
+            const purchaseDate = sub?.starts_at
+                ? new Date(sub.starts_at).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' })
+                : '—';
+            const expiry = sub?.expires_at
+                ? new Date(sub.expires_at).toLocaleDateString('en-IN', { dateStyle: 'long' })
+                : 'Lifetime';
+            win.document.write(`<!doctype html>
+<html><head><title>Invoice ${inv.invoice_no}</title>
+<meta charset="utf-8"/>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:680px;margin:32px auto;color:#0f172a;padding:24px;}
+  h1{margin:0;font-size:24px;}
+  h2{margin:24px 0 8px;font-size:14px;color:#475569;text-transform:uppercase;letter-spacing:.05em;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;}
+  td{padding:8px 0;font-size:14px;border-bottom:1px solid #e2e8f0;}
+  td.k{color:#64748b;width:35%;}
+  .pill{display:inline-block;padding:4px 10px;border-radius:9999px;background:#d1fae5;color:#065f46;font-weight:700;font-size:12px;}
+  .pill.expired{background:#fee2e2;color:#991b1b;}
+  .pill.cancelled{background:#f3f4f6;color:#374151;}
+  footer{margin-top:48px;text-align:center;color:#94a3b8;font-size:12px;}
+  @media print { body { margin: 0; } }
+</style></head>
+<body>
+  <h1>CrackCMS — Premium Receipt</h1>
+  <p style="margin:4px 0 0;color:#64748b;">Invoice # ${inv.invoice_no}</p>
+  <h2>Issued to</h2>
+  <table>
+    <tr><td class="k">Name</td><td>${issuedTo.first_name || ''} ${issuedTo.last_name || ''} (${issuedTo.username})</td></tr>
+    <tr><td class="k">Email</td><td>${issuedTo.email}</td></tr>
+  </table>
+  <h2>Subscription</h2>
+  <table>
+    <tr><td class="k">Plan</td><td>${sub?.plan_display_name}</td></tr>
+    <tr><td class="k">Status</td><td><span class="pill ${sub?.status !== 'active' ? sub?.status : ''}">${sub?.status}</span></td></tr>
+    <tr><td class="k">Purchased</td><td>${purchaseDate}</td></tr>
+    <tr><td class="k">Expires</td><td>${expiry}</td></tr>
+    <tr><td class="k">Amount paid</td><td>₹${pay?.amount ?? sub?.amount_paid}</td></tr>
+    <tr><td class="k">Razorpay order</td><td><code style="font-size:12px;">${pay?.razorpay_order_id || sub?.razorpay_order_id || '—'}</code></td></tr>
+    <tr><td class="k">Razorpay payment</td><td><code style="font-size:12px;">${pay?.razorpay_payment_id || '—'}</code></td></tr>
+  </table>
+  <footer>Thank you for supporting CrackCMS. Questions? Contact support@cracklabs.app</footer>
+  <script>window.onload=()=>window.print();</script>
+</body></html>`);
+            win.document.close();
+        } catch (err) {
+            console.error('Failed to load invoice:', err);
+            setErrorMessage('Unable to fetch the invoice. Please contact support.');
+        }
+    };
 
     const startScholarshipTest = async () => {
         setLoadingQuestions(true);
@@ -454,6 +563,141 @@ export default function SubscriptionPage() {
                                     Amount Paid: ₹{subscriptionInfo.amount_paid}
                                 </div>
                             )}
+
+                            {/* Manage / History actions */}
+                            <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center justify-between gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHistory(s => !s)}
+                                    aria-expanded={showHistory}
+                                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                >
+                                    <History className="w-3.5 h-3.5" />
+                                    {showHistory ? 'Hide' : 'View'} Subscription History
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showHistory ? 'rotate-180' : ''}`} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowManageModal(true)}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25 text-xs font-bold transition-all"
+                                >
+                                    <Bell className="w-3.5 h-3.5" />
+                                    Manage Subscription
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Renewal Countdown Banner ── */}
+                    {isSubscribed && subscriptionInfo && subscriptionInfo.days_remaining >= 0 && subscriptionInfo.days_remaining <= 7 && (
+                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-xl bg-amber-500/15 shrink-0">
+                                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-amber-700 dark:text-amber-300 text-sm">
+                                        {subscriptionInfo.days_remaining === 0
+                                            ? '⚠️ Your subscription expires today'
+                                            : `⏰ Only ${subscriptionInfo.days_remaining} day${subscriptionInfo.days_remaining === 1 ? '' : 's'} left on your plan`}
+                                    </p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-1">
+                                        Renew now to keep your unlimited AI tutor, mock tests, and study materials uninterrupted.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleSubscribe(subscriptionInfo.plan)}
+                                className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-2.5 px-5 rounded-xl transition-all shadow-md shrink-0"
+                            >
+                                Renew Now
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ── Subscription History (expandable) ── */}
+                    {isSubscribed && showHistory && (
+                        <div className="rounded-3xl border border-border bg-card p-6 md:p-8 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-base font-bold flex items-center gap-2">
+                                        <History className="w-4 h-4 text-emerald-500" />
+                                        Subscription History
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Every plan you&apos;ve purchased on this account, newest first.
+                                    </p>
+                                </div>
+                                {historyRows.length > 0 && (
+                                    <Badge variant="outline" className="text-[11px]">
+                                        {historyRows.length} record{historyRows.length === 1 ? '' : 's'}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {historyLoading ? (
+                                <div className="py-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                    Loading history…
+                                </div>
+                            ) : historyRows.length === 0 ? (
+                                <div className="py-8 text-center text-sm text-muted-foreground">
+                                    No subscription records yet.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto -mx-2">
+                                    <table className="w-full text-xs">
+                                        <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                            <tr className="border-b border-border">
+                                                <th className="text-left font-semibold px-2 py-2">Plan</th>
+                                                <th className="text-left font-semibold px-2 py-2">Purchased</th>
+                                                <th className="text-left font-semibold px-2 py-2">Expires</th>
+                                                <th className="text-left font-semibold px-2 py-2">Amount</th>
+                                                <th className="text-left font-semibold px-2 py-2">Status</th>
+                                                <th className="text-right font-semibold px-2 py-2">Receipt</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {historyRows.map((row, idx) => (
+                                                <tr key={idx} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
+                                                    <td className="px-2 py-3 font-bold text-foreground">{row.plan_display_name}</td>
+                                                    <td className="px-2 py-3 text-muted-foreground">
+                                                        {row.starts_at ? new Date(row.starts_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                                                    </td>
+                                                    <td className="px-2 py-3 text-muted-foreground">
+                                                        {row.expires_at ? new Date(row.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '∞ Lifetime'}
+                                                    </td>
+                                                    <td className="px-2 py-3 font-semibold">₹{row.amount_paid}</td>
+                                                    <td className="px-2 py-3">
+                                                        <Badge className={
+                                                            row.status === 'active'
+                                                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                                                                : row.status === 'expired'
+                                                                    ? 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30'
+                                                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                                                        }>
+                                                            {row.status}
+                                                        </Badge>
+                                                    </td>
+                                                    <td className="px-2 py-3 text-right">
+                                                        {row.amount_paid > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleViewInvoice(row.id)}
+                                                                className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline font-bold"
+                                                            >
+                                                                <Receipt className="w-3 h-3" />
+                                                                Invoice
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -593,6 +837,9 @@ export default function SubscriptionPage() {
                         </div>
                     </div>
 
+                    {/* FAQ + structured data (BreadcrumbList + FAQPage JSON-LD) */}
+                    <FAQ />
+
                     {/* Action footer for subscribed members */}
                     {isSubscribed && (
                         <div className="mt-12 p-6 rounded-4xl border border-emerald-500/20 bg-emerald-950/5 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -607,6 +854,119 @@ export default function SubscriptionPage() {
                                 <Button asChild variant="outline" className="rounded-xl text-xs py-2.5 px-5">
                                     <Link href="/ai-tutor">Open Unlimited AI Tutor</Link>
                                 </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ================= MANAGE SUBSCRIPTION MODAL ================= */}
+                    {showManageModal && subscriptionInfo && (
+                        <div
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
+                            onClick={(e) => { if (e.target === e.currentTarget) setShowManageModal(false); }}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="manage-sub-title"
+                        >
+                            <div className="relative w-full max-w-lg bg-card border border-border rounded-3xl overflow-hidden shadow-2xl animate-scaleIn my-8">
+                                <button
+                                    onClick={() => setShowManageModal(false)}
+                                    className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors z-10"
+                                    aria-label="Close manage subscription modal"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+
+                                <div className="p-6 md:p-8 space-y-6 text-left">
+                                    <div className="border-b border-border pb-4">
+                                        <h3 id="manage-sub-title" className="text-xl font-bold flex items-center gap-2">
+                                            <Bell className="w-5 h-5 text-emerald-500" />
+                                            Manage Your Subscription
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground mt-1">Renew, upgrade, or check renewal details.</p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {/* Current plan summary */}
+                                        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Current Plan</p>
+                                            <p className="text-lg font-extrabold">{subscriptionInfo.plan_display_name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {subscriptionInfo.days_remaining === -1
+                                                    ? 'Lifetime access — never expires.'
+                                                    : `Renews/ends in ${subscriptionInfo.days_remaining} day${subscriptionInfo.days_remaining === 1 ? '' : 's'}`}
+                                            </p>
+                                        </div>
+
+                                        {/* Renewal */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowManageModal(false);
+                                                handleSubscribe(subscriptionInfo.plan);
+                                            }}
+                                            className="w-full flex items-center justify-between gap-3 rounded-2xl border border-border hover:border-amber-500/40 hover:bg-amber-500/5 p-4 transition-all"
+                                        >
+                                            <div className="text-left">
+                                                <p className="font-bold text-sm">Renew / Extend</p>
+                                                <p className="text-xs text-muted-foreground">Stack another period on top of your current plan.</p>
+                                            </div>
+                                            <span className="text-amber-500 text-xl">→</span>
+                                        </button>
+
+                                        {/* Upgrade plan options */}
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Switch</p>
+                                            {plans
+                                                .filter(p => p.id !== subscriptionInfo.plan && p.id !== 'scholarship_1_month')
+                                                .map(p => (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowManageModal(false);
+                                                            handleSubscribe(p.id);
+                                                        }}
+                                                        className="w-full flex items-center justify-between gap-3 rounded-2xl border border-border hover:border-emerald-500/40 hover:bg-emerald-500/5 p-4 transition-all"
+                                                    >
+                                                        <div className="text-left">
+                                                            <p className="font-bold text-sm">{p.name}</p>
+                                                            <p className="text-xs text-muted-foreground">₹{p.price} for {p.period}</p>
+                                                        </div>
+                                                        <span className="text-emerald-500 text-xl">→</span>
+                                                    </button>
+                                                ))}
+                                        </div>
+
+                                        {/* Reminder toggle */}
+                                        <div className="rounded-2xl border border-border bg-muted/30 p-4 flex items-start gap-3">
+                                            <Bell className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                            <div className="text-xs space-y-1">
+                                                <p className="font-bold text-foreground">Renewal reminders</p>
+                                                <p className="text-muted-foreground">
+                                                    We&apos;ll email you 7, 3, and 1 day before your plan expires so you never lose access.
+                                                    (Active by default for all paying members.)
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Need help */}
+                                        <div className="rounded-2xl border border-border bg-muted/20 p-4 flex items-start gap-3">
+                                            <MessageSquare className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                                            <div className="text-xs space-y-1">
+                                                <p className="font-bold text-foreground">Need help with cancellation or refund?</p>
+                                                <p className="text-muted-foreground">
+                                                    Email <a href="mailto:support@cracklabs.app" className="text-emerald-500 hover:underline">support@cracklabs.app</a> and our team will assist within 24 hours.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end pt-2 border-t border-border">
+                                        <Button variant="ghost" onClick={() => setShowManageModal(false)} className="rounded-xl text-xs px-5">
+                                            Close
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -830,5 +1190,83 @@ export default function SubscriptionPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+/* ------------------------------------------------------------------
+ * Subscription FAQ — user-visible Q&A plus matching JSON-LD for SEO.
+ * ------------------------------------------------------------------ */
+function FAQ() {
+    const items = [
+        {
+            q: 'How long does each CrackCMS plan last?',
+            a: 'The 1 Month Pass is valid for 30 days from purchase, the 3 Months Pass for 90 days, and the 1 Year Unlimited for 365 days. The Scholarship 1 Month also lasts 30 days. Lifetime (admin-granted) plans never expire.',
+        },
+        {
+            q: 'Will my plan renew automatically?',
+            a: 'No. CrackCMS subscriptions do not auto-renew and we never store your card details. When your plan is close to expiry, you will receive a reminder email 7, 3 and 1 day before expiry with a one-click renewal link to Razorpay.',
+        },
+        {
+            q: 'Can I upgrade from 1 Month to 1 Year mid-cycle?',
+            a: 'Yes. Open /subscription and click "Manage Subscription" on the active plan card. Switch to the new plan via Razorpay and the new duration stacks on top of your remaining days — you never lose what you paid for.',
+        },
+        {
+            q: 'What happens to my data if my plan expires?',
+            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (unlimited AI tutor, full mock simulator, textbook screenshots) re-light automatically.',
+        },
+        {
+            q: 'Do you issue invoices?',
+            a: 'Yes. Every successful payment triggers an automated invoice email. You can also re-download any past receipt from /subscription → Subscription History → Invoice.',
+        },
+    ];
+
+    // JSON-LD payload — emitted in <script type="application/ld+json">.
+    const faqJsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: items.map(f => ({
+            '@type': 'Question',
+            name: f.q,
+            acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+    };
+    const breadcrumbJsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.cracklabs.app' },
+            { '@type': 'ListItem', position: 2, name: 'Subscription', item: 'https://www.cracklabs.app/subscription' },
+        ],
+    };
+
+    return (
+        <section className="space-y-4 pt-6 border-t border-border/40">
+            <div className="text-left">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-emerald-500" />
+                    Subscription FAQ
+                </h2>
+                <p className="text-muted-foreground text-sm mt-1">Everything you need to know before subscribing.</p>
+            </div>
+            <div className="space-y-3">
+                {items.map((f, i) => (
+                    <details
+                        key={i}
+                        className="rounded-2xl border border-border bg-card p-4 group"
+                    >
+                        <summary className="cursor-pointer font-bold text-sm flex items-center justify-between gap-3">
+                            <span>{f.q}</span>
+                            <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180 shrink-0" />
+                        </summary>
+                        <p className="text-sm text-muted-foreground leading-relaxed mt-2">{f.a}</p>
+                    </details>
+                ))}
+            </div>
+            <script
+                type="application/ld+json"
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{ __html: JSON.stringify([faqJsonLd, breadcrumbJsonLd]) }}
+            />
+        </section>
     );
 }

@@ -10,6 +10,8 @@ urlpatterns = [
     path('subscribe/order/', views.SubscribeOrderView.as_view(), name='subscribe_order'),
     path('subscribe/verify/', views.SubscribeVerifyView.as_view(), name='subscribe_verify'),
     path('subscribe/status/', views.SubscriptionStatusView.as_view(), name='subscribe_status'),
+    path('subscribe/history/', views.SubscriptionHistoryView.as_view(), name='subscribe_history'),
+    path('subscribe/invoice/<int:subscription_id>/', views.SubscriptionInvoiceView.as_view(), name='subscribe_invoice'),
     path('subscribe/webhook/', views.RazorpayWebhookView.as_view(), name='razorpay_webhook'),
     path('verify-scholarship/', views.VerifyScholarshipView.as_view(), name='verify_scholarship'),
     # Password reset

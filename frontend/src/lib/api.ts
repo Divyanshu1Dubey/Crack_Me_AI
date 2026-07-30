@@ -174,6 +174,8 @@ export const authAPI = {
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
   subscriptionStatus: () => api.get('/auth/subscribe/status/'),
+  subscriptionHistory: () => api.get('/auth/subscribe/history/'),
+  subscriptionInvoice: (subscriptionId: number) => api.get(`/auth/subscribe/invoice/${subscriptionId}/`),
   verifyScholarship: (answers: Record<string, string>) => api.post('/auth/verify-scholarship/', { answers }),
   // Password reset
   requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),

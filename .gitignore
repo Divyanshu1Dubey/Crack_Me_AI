@@ -92,3 +92,15 @@ backend/_run_benchmark.py
 tools/
 
 .superpowers/
+
+# Private / customer-owned content (NEVER commit — public repo exposure risk)
+backend/postgres/
+cms_exclusive_material/
+
+# Audit session notes (kept locally, not part of codebase)
+_audit_session_notes.md
+
+# Local Postgres dumps (db.sqlite3 already gitignored, but block pg_dumpall output)
+*.dump
+*.sql.gz
+postgres/

@@ -1,5 +1,10 @@
 export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
 
+// Note: buildCanonical() lives in lib/metadata.ts (more comprehensive — strips
+// multi-slash, normalises, returns `${siteUrl}/path`). Re-export here for
+// legacy callers that import from seo.ts.
+export { buildCanonical } from './metadata';
+
 export const siteName = "CrackCMS";
 export const brandName = "CrackLabs AI";
 export const siteTitle =

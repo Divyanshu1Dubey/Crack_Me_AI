@@ -1,0 +1,41 @@
+{
+  "batch_id": 13,
+  "files_total": 103,
+  "files_parsed_ok": 102,
+  "files_failed": 1,
+  "files_with_warnings": 0,
+  "questions": {
+    "total": 1667,
+    "missing_option": 9,
+    "missing_correct_answer": 480,
+    "missing_question_text": 0,
+    "duplicates_caught": 0
+  },
+  "images": {
+    "total": 1208,
+    "missing_mime": 0,
+    "duplicate_in_batch": 544,
+    "byte_size_total": 607768807
+  },
+  "theory_blocks": {
+    "total": 24113,
+    "empty": 0
+  },
+  "audit_errors": [
+    {
+      "id": 109,
+      "code": "parse_error",
+      "message": "Failed to open DOCX: Namespace prefix a on graphicFrameLocks is not defined, line 2, column 1653262 (<string>, line 2)",
+      "material": "merged_notes-document (1).docx"
+    }
+  ],
+  "warnings_by_file": [],
+  "errors_by_file": [
+    {
+      "file": "merged_notes-document (1).docx",
+      "errors": [
+        "Failed to open DOCX: Namespace prefix a on graphicFrameLocks is not defined, line 2, column 1653262 (<string>, line 2)"
+      ]
+    }
+  ]
+}

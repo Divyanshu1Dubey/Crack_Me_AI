@@ -44,30 +44,42 @@ export function FloatingDock() {
   if (activePanel === 'none') {
     return (
       <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
-        <Button variant="default" size="icon" className="rounded-full shadow-lg h-12 w-12 bg-primary hover:bg-primary/90" onClick={() => setActivePanel('ask-ai')}>
-          <MessageSquare className="h-5 w-5" />
+        <Button
+          variant="default"
+          size="icon"
+          aria-label="Open AI Assistant"
+          className="rounded-full shadow-lg h-12 w-12 bg-primary hover:bg-primary/90"
+          onClick={() => setActivePanel('ask-ai')}
+        >
+          <MessageSquare className="h-5 w-5" aria-hidden="true" />
         </Button>
-        <Button variant="secondary" size="icon" className="rounded-full shadow-lg h-12 w-12" onClick={() => {
-          const selection = window.getSelection()?.toString();
-          if (selection) {
-            setSelectedText(selection);
-          }
-          setActivePanel('flashcard');
-        }}>
-          <Layers className="h-5 w-5" />
+        <Button
+          variant="secondary"
+          size="icon"
+          aria-label="Create flashcard from selected text"
+          className="rounded-full shadow-lg h-12 w-12"
+          onClick={() => {
+            const selection = window.getSelection()?.toString();
+            if (selection) {
+              setSelectedText(selection);
+            }
+            setActivePanel('flashcard');
+          }}
+        >
+          <Layers className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-6 right-6 w-80 sm:w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-5">
+    <div role="dialog" aria-modal="true" aria-labelledby="floating-dock-title" className="fixed bottom-6 right-6 w-80 sm:w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-5">
       <div className="flex justify-between items-center p-4 border-b bg-muted/50">
-        <h3 className="font-semibold text-sm">
+        <h3 id="floating-dock-title" className="font-semibold text-sm">
           {activePanel === 'ask-ai' ? 'Ask AI Assistant' : 'Create Flashcard'}
         </h3>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setActivePanel('none')}>
-          <X className="h-4 w-4" />
+        <Button variant="ghost" size="icon" aria-label="Close floating panel" className="h-8 w-8 rounded-full" onClick={() => setActivePanel('none')}>
+          <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 

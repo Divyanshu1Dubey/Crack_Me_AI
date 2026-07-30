@@ -14,6 +14,7 @@ import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework import status
 from django.conf import settings as django_settings
 from django.db.utils import OperationalError, ProgrammingError
@@ -47,6 +48,17 @@ def _get_admin_permission():
     if getattr(django_settings, 'DEBUG', False):
         return [AllowAny()]  # Allow in debug for testing
     return [IsAdminUser()]
+
+
+class AITutorThrottleMixin:
+    """Apply the 'ai_tutor' scoped rate limit (30/min default — see settings.REST_FRAMEWORK).
+
+    Mix in on any AI tutor / RAG / generation endpoint to defend against
+    runaway agent loops or scripts that hammer the LLM round-robin.
+    Admins inherit the auth permission; the throttle layer lives independently.
+    """
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'ai_tutor'
 
 
 def consume_ai_token(request):
@@ -95,7 +107,7 @@ def refund_ai_token(request):
         pass
 
 
-class AskTutorView(APIView):
+class AskTutorView(AITutorThrottleMixin, APIView):
     """AI Tutor — RAG-grounded medical Q&A."""
 
     def get_permissions(self):
@@ -122,7 +134,7 @@ class AskTutorView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class GenerateMnemonicView(APIView):
+class GenerateMnemonicView(AITutorThrottleMixin, APIView):
     """Generate memory tricks for medical topics."""
 
     def get_permissions(self):
@@ -148,7 +160,7 @@ class GenerateMnemonicView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class ExplainConceptView(APIView):
+class ExplainConceptView(AITutorThrottleMixin, APIView):
     """Explain medical concepts from basics."""
 
     def get_permissions(self):
@@ -174,7 +186,7 @@ class ExplainConceptView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class AnalyzeQuestionView(APIView):
+class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
     """Analyze a CMS question — concepts, reasoning, strategy."""
 
     def get_permissions(self):
@@ -201,7 +213,7 @@ class AnalyzeQuestionView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class ExplainAfterAnswerView(APIView):
+class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
     """Rich AI explanation after answering a question — textbook refs, mnemonics, related concepts."""
 
     def get_permissions(self):
@@ -298,7 +310,7 @@ class ExplainAfterAnswerView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class ExplainQuestionView(APIView):
+class ExplainQuestionView(AITutorThrottleMixin, APIView):
     """Get an AI explanation for a question by its DB id.
 
     The frontend player (`NeetPgPlayer.tsx`) calls
@@ -470,7 +482,7 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
     return "\n".join(parts)
 
 
-class RAGSearchView(APIView):
+class RAGSearchView(AITutorThrottleMixin, APIView):
     """Semantic search across indexed textbooks."""
 
     def get_permissions(self):
@@ -513,7 +525,7 @@ class RAGSearchView(APIView):
             )
 
 
-class RAGAnswerView(APIView):
+class RAGAnswerView(AITutorThrottleMixin, APIView):
     """Get a textbook-grounded answer with citations."""
 
     def get_permissions(self):
@@ -572,7 +584,7 @@ class RAGAnswerView(APIView):
             )
 
 
-class TextbookReferenceView(APIView):
+class TextbookReferenceView(AITutorThrottleMixin, APIView):
     """Find textbook references for a question or topic."""
 
     def get_permissions(self):
@@ -588,7 +600,7 @@ class TextbookReferenceView(APIView):
         return Response({'references': references})
 
 
-class StudyPlanView(APIView):
+class StudyPlanView(AITutorThrottleMixin, APIView):
     """Generate personalized study plan."""
 
     def get_permissions(self):
@@ -613,7 +625,7 @@ class StudyPlanView(APIView):
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
-class HighYieldTopicsView(APIView):
+class HighYieldTopicsView(AITutorThrottleMixin, APIView):
     """Get AI-predicted high-yield topics for CMS exam."""
 
     def get_permissions(self):
@@ -672,7 +684,7 @@ class KnowledgeStatsView(APIView):
         return Response(stats)
 
 
-class GenerateQuestionsView(APIView):
+class GenerateQuestionsView(AITutorThrottleMixin, APIView):
     """AI-generated practice MCQs for weak topics."""
 
     def get_permissions(self):
@@ -889,7 +901,7 @@ class ChatMessageListView(generics.ListAPIView):
             return ChatMessage.objects.none()
 
 
-class ChatMessageCreateView(APIView):
+class ChatMessageCreateView(AITutorThrottleMixin, APIView):
     """
     Add a message to a chat session (used when saving AI responses).
     """
