@@ -683,13 +683,16 @@ function ExamQuestionBankInner({
                         {qbankStats && (
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-border/40 pb-2">
                                 <div className="space-y-1 text-left">
+                                    {/* Hero title — deliberately NOT a duplicate of the page heading
+                                        ("Question Bank") at the top of the page. Surface progress
+                                        framing instead so users see momentum at a glance. */}
                                     <div className="flex items-center gap-3">
                                         <h2 className="text-lg font-bold text-foreground">
-                                            🎯 {examSource} Question Bank
+                                            🎯 Your {examSource} Prep
                                         </h2>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Master {qbankStats.total} high-yield {examSource} clinical MCQs and PYQs.
+                                        {qbankStats.total} high-yield clinical MCQs and PYQs across every {examSource} subject.
                                     </p>
                                 </div>
 
