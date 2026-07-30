@@ -585,7 +585,7 @@ function ExamQuestionBankInner({
     // the question list scroll layout, just drop the redundant class.
     return (
         <div className="bank-shell lg:h-screen lg:overflow-hidden flex flex-col">
-            <div className="page-container space-y-4 pb-0 flex-1 flex flex-col min-h-0">
+            <div className="qbank-container space-y-4 pb-0 flex-1 flex flex-col min-h-0">
                 <p className="text-sm text-muted-foreground">
                     Master {examSource} PYQs with AI-powered explanations, mnemonics, and clinical pearls
                 </p>
@@ -779,19 +779,21 @@ function ExamQuestionBankInner({
                                         value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                                 </div>
-                                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border border-border/60 shrink-0">
+                                <div className="flex items-center gap-1 bg-muted/40 p-1.5 rounded-xl border border-border/60 shrink-0">
                                     <button
                                         type="button"
                                         onClick={() => setStudyMode('practice')}
-                                        className={`px-3 py-1 text-[11px] font-semibold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-md ring-1 ring-primary/40' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
                                     >
+                                        <Play className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
                                         Practice Mode
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setStudyMode('exam')}
-                                        className={`px-3 py-1 text-[11px] font-semibold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/80'}`}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-400/60' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
                                     >
+                                        <Target className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
                                         Exam Mode
                                     </button>
                                 </div>
@@ -1025,9 +1027,9 @@ function ExamQuestionBankInner({
                                 <Skeleton className="h-20 w-full rounded-xl" />
                             </div>
                         ) : selectedQuestion && detail ? (
-                            <div className="animate-fadeInUp space-y-4 px-1 py-0.5">
+                            <div className="animate-fadeInUp space-y-3 px-1 py-0.5">
                                 <div className="glass-card rounded-2xl border border-primary/40 shadow-[0_18px_40px_rgba(14,116,144,0.16)]">
-                                    <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 dark:bg-slate-800/40">
+                                    <div className="px-4 py-2 flex flex-wrap items-center gap-1.5 border-b border-border bg-slate-50 dark:bg-slate-800/40">
                                         {detail.year ? (
                                             <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 pointer-events-none">PYQ {String(detail.year)}</Badge>
                                         ) : (
@@ -1047,14 +1049,14 @@ function ExamQuestionBankInner({
                                         )}
                                     </div>
 
-                                    <div className="p-5">
+                                    <div className="p-4">
                                         {/* Resume banner — appears only when the student has a prior attempt
                                             for this question and hasn't picked a fresh option this session.
                                             Replaces the previous behaviour of silently flipping showAnswer=true
                                             on open, which was leaking the admin's explanation image (and the
                                             correct-answer card) before the student even read the stem. */}
                                         {detail.user_selected_answer && !showAnswer && (
-                                            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                                            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
                                                 <span>
                                                     You answered{' '}
                                                     <span className="font-bold">
@@ -1084,7 +1086,7 @@ function ExamQuestionBankInner({
                                             the stem (stacked) so vertical scroll works. The
                                             options block remains full-width below this row. */}
                                         {Array.isArray(detail.images) && detail.images.length > 0 ? (
-                                            <div className="qbank-solve-layout flex flex-col lg:flex-row gap-4 mb-5">
+                                            <div className="qbank-solve-layout flex flex-col lg:flex-row gap-4 mb-3">
                                                 <div className="qbank-stem-pane lg:basis-3/5 lg:min-w-0">
                                                     <div className="text-base font-medium leading-relaxed">
                                                         <FormattedText
@@ -1094,30 +1096,43 @@ function ExamQuestionBankInner({
                                                 </div>
                                                 <div className="qbank-image-pane lg:basis-2/5 lg:min-w-0 lg:self-start lg:sticky lg:top-4">
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {detail.images.map((img: any, idx: number) => (
-                                                            <button
-                                                                key={img.id}
-                                                                type="button"
-                                                                onClick={() => setViewImageIdx(idx)}
-                                                                className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in bg-muted/20"
-                                                            >
-                                                                <img src={img.url || img.file_url} alt={img.caption || 'Question image'}
-                                                                    className="w-full h-auto max-h-[55vh] object-contain bg-muted/30" loading="lazy" />
-                                                                {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
-                                                            </button>
-                                                        ))}
+                                                        {detail.images.map((img: any, idx: number) => {
+                                                            const imgSrc = img.url || img.file_url;
+                                                            return imgSrc ? (
+                                                                <button
+                                                                    key={img.id}
+                                                                    type="button"
+                                                                    onClick={() => setViewImageIdx(idx)}
+                                                                    className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in bg-muted/20"
+                                                                >
+                                                                    <img src={imgSrc} alt={img.caption || 'Question image'}
+                                                                        className="w-full h-auto max-h-[55vh] object-contain bg-muted/30" loading="lazy" />
+                                                                    {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
+                                                                </button>
+                                                            ) : null;
+                                                        })}
+                                                        {/* Show a hint chip when the question declares images but none of them have a resolvable URL.
+                                                           Avoids the confusing "broken-image icon + alt text" that previously rendered for image-questions
+                                                           whose media files are still missing from /media (e.g. NEET PG recall imports). */}
+                                                        {detail.images.every((img: any) => !(img.url || img.file_url)) && (
+                                                            <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 text-center">
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    🖼️ Image unavailable — see question text below for the full stem.
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="text-base font-medium leading-relaxed mb-5">
+                                            <div className="text-base font-medium leading-relaxed mb-3">
                                                 <FormattedText
                                                     text={resolveImageTokensForMarkdown(sanitizeQuestionText(detail.question_text), detail.images)}
                                                 />
                                             </div>
                                         )}
 
-                                        <div className="space-y-2.5 mb-4">
+                                        <div className="space-y-2 mb-3">
                                             {['A', 'B', 'C', 'D'].map(opt => {
                                                 const key = `option_${opt.toLowerCase()}`;
                                                 const rawOption = detail[key] || detail[`option_${opt}`];

@@ -835,6 +835,19 @@ body.sidebar-hidden .main-content {
   margin: 0 auto;
 }
 
+/* Question Bank — full-bleed container that uses all available width
+   inside .main-content. The standard .page-container caps at 1280px
+   which leaves huge empty gutters on ultrawide screens (>1440px). The
+   bank is the most layout-hungry page on the app (it renders a 2-column
+   list/detail grid + 4-column filter bar + image panes) so it deserves
+   the full viewport. We still keep a sensible max so the content
+   doesn't sprawl too far on extreme screens. */
+.qbank-container {
+  width: 100%;
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
 /* Section title */
 .section-title {
   font-size: 11px;
