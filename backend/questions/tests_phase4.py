@@ -225,3 +225,76 @@ class SecurityPostureTestCase(TestCase):
                     is_production=True,
                     is_ci=False,
                 )
+
+
+class DuplicateTombstoneGuardTestCase(TestCase):
+    """Phase-4 hardening: QuestionViewSet.duplicate must refuse to
+    resurrect a question whose stem matches a RemovedQuestion tombstone.
+
+    Without this guard, an admin can `Remove from bank` + `Duplicate` and
+    silently re-introduce removed content. The guard is a single
+    `_pre_check_remove(...)` call at the top of the `duplicate` action.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from questions.models import Subject
+        cls.subject = Subject.objects.create(name="TombStoneSubj", exam_type="neet_pg")
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self._client = APIClient()
+        self.admin = User.objects.create(
+            username="dup_admin",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+    def test_duplicate_skips_removed_question(self):
+        from questions.models import Question, RemovedQuestion, compute_stem_hash
+        stem = "Original stem for tombstone test"
+        q = Question.objects.create(
+            question_text=stem,
+            option_a="A", option_b="B", option_c="C", option_d="D",
+            correct_answer="A", year=2024,
+            exam_type="neet_pg", subject=self.subject,
+        )
+        # Mark a tombstone matching the original stem.
+        RemovedQuestion.objects.create(
+            exam_source="admin",
+            year=2024,
+            source_number=None,
+            question_text_hash=compute_stem_hash(stem),
+            original_question_id=q.id,
+            reason="admin removed",
+            removed_by=self.admin,
+        )
+
+        self._client.force_authenticate(user=self.admin)
+        res = self._client.post(f"/api/questions/{q.id}/duplicate/")
+        self.assertEqual(res.status_code, 409)
+        body = res.json()
+        self.assertIn("error", body)
+        self.assertIn("previously-removed", body["error"])
+
+        # Sanity: no duplicate row was created.
+        from questions.models import Question as Q
+        self.assertEqual(
+            Q.objects.filter(question_text__contains=stem).count(),
+            1,
+        )
+
+    def test_duplicate_succeeds_when_no_tombstone(self):
+        from questions.models import Question
+        stem = "Fresh stem, no tombstone"
+        q = Question.objects.create(
+            question_text=stem,
+            option_a="A", option_b="B", option_c="C", option_d="D",
+            correct_answer="A", year=2024,
+            exam_type="neet_pg", subject=self.subject,
+        )
+
+        self._client.force_authenticate(user=self.admin)
+        res = self._client.post(f"/api/questions/{q.id}/duplicate/")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json().get("message"), "Question duplicated")

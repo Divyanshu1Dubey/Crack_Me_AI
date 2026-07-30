@@ -2014,6 +2014,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def duplicate(self, request, pk=None):
         """Create a duplicate of the selected question."""
         question = self.get_object()
+        # Tombstone guard: an admin can no longer resurrect a previously-removed
+        # question by duplicating it. Restore via unremove_from_bank first.
+        if _pre_check_remove(question.question_text, 'questions.views.duplicate'):
+            return Response(
+                {'error': 'Stem matches a previously-removed question; un-remove first.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         duplicate_stem = f"{question.question_text}\n\n[Duplicate of Q#{question.id}]"
         duplicate_question = Question.objects.create(
             question_text=duplicate_stem,
