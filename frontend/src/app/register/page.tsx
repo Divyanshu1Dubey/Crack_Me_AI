@@ -75,8 +75,9 @@ export default function RegisterPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="mb-2 block text-sm font-semibold text-foreground">First Name</label>
+                        <label htmlFor="register-first-name" className="mb-2 block text-sm font-semibold text-foreground">First Name</label>
                         <Input
+                            id="register-first-name"
                             type="text"
                             name="first_name"
                             placeholder="First name"
@@ -85,8 +86,9 @@ export default function RegisterPage() {
                         />
                     </div>
                     <div>
-                        <label className="mb-2 block text-sm font-semibold text-foreground">Last Name</label>
+                        <label htmlFor="register-last-name" className="mb-2 block text-sm font-semibold text-foreground">Last Name</label>
                         <Input
+                            id="register-last-name"
                             type="text"
                             name="last_name"
                             placeholder="Last name"
@@ -97,8 +99,9 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">Username</label>
+                    <label htmlFor="register-username" className="mb-2 block text-sm font-semibold text-foreground">Username</label>
                     <Input
+                        id="register-username"
                         type="text"
                         name="username"
                         placeholder="Choose a username"
@@ -110,8 +113,9 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">Email</label>
+                    <label htmlFor="register-email" className="mb-2 block text-sm font-semibold text-foreground">Email</label>
                     <Input
+                        id="register-email"
                         type="email"
                         name="email"
                         placeholder="your@email.com"
@@ -122,9 +126,10 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">Password</label>
+                    <label htmlFor="register-password" className="mb-2 block text-sm font-semibold text-foreground">Password</label>
                     <div className="relative">
                         <Input
+                            id="register-password"
                             type={showPassword ? 'text' : 'password'}
                             name="password"
                             className="pr-12"
@@ -146,8 +151,9 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground">Confirm Password</label>
+                    <label htmlFor="register-confirm-password" className="mb-2 block text-sm font-semibold text-foreground">Confirm Password</label>
                     <Input
+                        id="register-confirm-password"
                         type="password"
                         name="password2"
                         placeholder="Retype password"
