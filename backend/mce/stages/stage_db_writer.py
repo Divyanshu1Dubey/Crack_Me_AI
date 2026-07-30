@@ -28,6 +28,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -220,6 +221,13 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
                     question = existing
                     created = False
                 except Question.DoesNotExist:
+                    # Honor admin "Remove from bank" tombstones — if this
+                    # stem was previously removed, skip it on re-import.
+                    if is_removed(stem_text):
+                        logger.warning(
+                            "  → Skipping MCE DB-writer Q: admin-removed stem"
+                        )
+                        continue
                     # Resolve subject.
                     subject = None
                     if q.get("subject"):
