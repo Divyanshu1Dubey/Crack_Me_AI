@@ -159,6 +159,19 @@ class SubjectSerializer(serializers.ModelSerializer):
     def get_question_count(self, obj):
         return obj.questions.count()
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # The material_importer fallback Subject is named "Imported" so DB
+        # integrity is preserved (Subject.name is unique). It is NOT a real
+        # medical subject — it's a bucket for loader-published questions
+        # whose source material had no detectable subject line. Rename it
+        # at serialization time so the question-bank filter dropdown shows
+        # a clean "Expert Curated" label instead of leaking the loader
+        # literal. See: docs/audit/COMPREHENSIVE_AUDIT_2026_07_30.md.
+        if data.get('name') == 'Imported':
+            data['name'] = 'Expert Curated'
+        return data
+
 
 class TopicSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)

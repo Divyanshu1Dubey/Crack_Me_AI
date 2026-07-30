@@ -124,7 +124,22 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         return Announcement.objects.all() # Keep simple for now, filter logic can be expanded
 
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
-    """List and retrieve subjects."""
+    """List and retrieve subjects.
+
+    The loader's "Imported" fallback Subject row has historically been
+    duplicated by exam_type (one row per exam_track the importer ran
+    against). To keep the public Question Bank filter dropdown readable,
+    the serializer (``SubjectSerializer.to_representation``) renames
+    "Imported" → "Expert Curated" so the loader literal never leaks to
+    the UI.
+
+    The underlying Subject rows are NOT merged here — each one is still
+    returned separately with its own ``question_count``. To physically
+    collapse duplicate "Imported" Subject rows in the DB into a single
+    canonical row (so the filter shows ONE "Expert Curated" entry
+    instead of N identical ones), run the
+    ``merge_loader_fallback_subjects`` management command.
+    """
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
     permission_classes = [permissions.AllowAny]

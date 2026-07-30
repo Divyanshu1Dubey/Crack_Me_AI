@@ -792,8 +792,10 @@ function ExamQuestionBankInner({
                                 >
                                     <option value="">All Subjects</option>
                                     {subjects.map(s => (
-                                        // The loader-created "Imported" Subject row is renamed in the UI
-                                        // so users never see the raw loader literal in the filter dropdown.
+                                        // Backend SubjectSerializer now renames the loader-created
+                                        // "Imported" Subject row to "Expert Curated" so users see
+                                        // a clean label here. The frontend keeps a defensive double-check
+                                        // in case the serializer rename is ever reverted.
                                         <option key={s.id} value={s.id}>
                                             {s.name === 'Imported' ? 'Expert Curated' : s.name} ({s.question_count})
                                         </option>

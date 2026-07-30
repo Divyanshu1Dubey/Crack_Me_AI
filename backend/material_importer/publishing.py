@@ -34,12 +34,27 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
     from questions.models import Question, Subject, ExamTrack
 
     # Resolve a subject — fall back to a generic "Imported" subject if none.
+    # Use the question's exam_type (or default to cms) so multiple exam tracks
+    # do not collide on the unique `name = "Imported"` constraint. Combined
+    # with the merge_loader_fallback_subjects migration, the public
+    # Question Bank filter shows a single "Expert Curated" row per exam.
     subject = eq.subject
     if subject is None:
-        subject = Subject.objects.filter(name__iexact="Imported").first()
+        target_exam_type = getattr(eq, "exam_type", None) or "cms"
+        subject = Subject.objects.filter(name__iexact="Imported", exam_type=target_exam_type).first()
     if subject is None:
-        exam_track, _ = ExamTrack.objects.get_or_create(code="cms", defaults={"name": "UPSC CMS"})
-        subject = Subject.objects.create(name="Imported", code="IMPORTED", exam_type="cms", exam_track=exam_track)
+        target_exam_type = getattr(eq, "exam_type", None) or "cms"
+        exam_code_map = {"cms": "cms", "neet_pg": "neet_pg", "ini_cet": "ini_cet"}
+        exam_track_code = exam_code_map.get(target_exam_type, "cms")
+        exam_track, _ = ExamTrack.objects.get_or_create(
+            code=exam_track_code,
+            defaults={"name": target_exam_type.upper().replace("_", " ")},
+        )
+        subject, _ = Subject.objects.get_or_create(
+            name="Imported",
+            exam_type=target_exam_type,
+            defaults={"code": "IMPORTED", "exam_track": exam_track},
+        )
 
     from questions.models import Question as _Q
     paper = 0
