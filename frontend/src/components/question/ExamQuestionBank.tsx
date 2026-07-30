@@ -984,25 +984,25 @@ function ExamQuestionBankInner({
                                                 {q.topic_name ? (
                                                     <Badge variant="outline" className="text-xs bg-muted text-foreground border-border/80">{q.topic_name}</Badge>
                                                 ) : (
-                                                    // Don't show a useless literal placeholder; the "Imported"
-                                                    // Subject row renders as "General" so the card never surfaces
-                                                    // the raw loader label "General Imported". Skip the second
-                                                    // "Expert Curated" sub-badge when the top badge already
-                                                    // shows "Expert Curated" (year=0) — otherwise the card
-                                                    // renders "Expert Curated" twice.
-                                                    q.subject_name !== 'Imported' ? (
+                                                    // Skip the redundant "General <subject>" sub-badge when the
+                                                    // top badge already conveys all the subject info. The legacy
+                                                    // check only compared to the literal string 'Imported', but
+                                                    // the serializer now rewrites that to 'Expert Curated' on the
+                                                    // way out (see backend/questions/serializers.py), which made
+                                                    // the guard useless and surfaced "General Expert Curated"
+                                                    // under every Expert-Curated card.
+                                                    q.subject_name &&
+                                                    q.subject_name !== 'Imported' &&
+                                                    q.subject_name !== 'Expert Curated' &&
+                                                    q.year && q.year > 0 ? (
                                                         <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border/80 italic">
                                                             {`General ${q.subject_name || 'Medicine'}`}
                                                         </Badge>
                                                     ) : null
                                                 )}
-                                                {q.year ? (
+                                                {q.year && q.year > 0 ? (
                                                     <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border/80">PYQ {q.year}</Badge>
-                                                ) : (
-                                                    // Top badge already shows "Expert Curated" for year=0; the
-                                                    // separate amber sub-badge was redundant.
-                                                    null
-                                                )}
+                                                ) : null}
                                                 {q.concept_tags?.includes('high_yield') && (
                                                     <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
                                                 )}
@@ -1109,11 +1109,20 @@ function ExamQuestionBankInner({
                                         ) : (
                                             <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 pointer-events-none">Expert Curated</Badge>
                                         )}
-                                        {/* The loader-created "Imported" Subject row is renamed in the UI so
-                                            the detail panel never surfaces the raw loader literal. */}
-                                        <Badge variant="secondary" className="pointer-events-none">
-                                            {String(detail.subject_name) === 'Imported' ? 'Expert Curated' : String(detail.subject_name)}
-                                        </Badge>
+                                        {/* Subject badge: only render when the value gives the user new
+                                            information. Skip when the API has already returned
+                                            "Expert Curated" (which the serializer renames from "Imported"
+                                            to keep the loader literal off the UI) — otherwise the detail
+                                            header shows "Expert Curated" twice. Also skip empty / falsy
+                                            values defensively. */}
+                                        {detail.subject_name &&
+                                         String(detail.subject_name).trim() !== '' &&
+                                         String(detail.subject_name) !== 'Imported' &&
+                                         String(detail.subject_name) !== 'Expert Curated' ? (
+                                            <Badge variant="secondary" className="pointer-events-none">
+                                                {String(detail.subject_name)}
+                                            </Badge>
+                                        ) : null}
                                         {detail.topic_name && <Badge variant="outline" className="pointer-events-none">{String(detail.topic_name)}</Badge>}
                                         {detail.difficulty && <Badge variant="outline" className="pointer-events-none capitalize">{detail.difficulty}</Badge>}
                                         {detail.is_verified_by_admin && (
