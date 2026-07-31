@@ -90,21 +90,40 @@ export function resolveImageTokens(
         (found.url && found.url.length > 0 ? found.url : null) ||
         `/api/questions/images/${found.id}/serve/`;
       const alt = (found.caption || `Question image ${base}`).replace(/"/g, '&quot;');
-      return `<img src="${served}" alt="${alt}" loading="lazy" class="question-inline-image" />`;
+      return `<img src="${escapeAttr(served)}" alt="${alt}" loading="lazy" class="question-inline-image" />`;
     }
     // No matching QuestionImage row — fall back to the legacy path so
     // the admin can still see something is broken (matches the debug
     // banner in the recall page for unresolved images).
     const alt = `Question image ${base}`.replace(/"/g, '&quot;');
-    return `<img src="${rawUrl}" alt="${alt}" loading="lazy" class="question-inline-image" data-legacy-media-url="1" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'missing-image-placeholder',textContent:'[image missing: ${base}]'}))" />`;
+    return `<img src="${escapeAttr(rawUrl)}" alt="${alt}" loading="lazy" class="question-inline-image" data-legacy-media-url="1" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'missing-image-placeholder',textContent:'[image missing: ${escapeAttr(base)}]'}))" />`;
   });
 
   cache.set(key, resolved);
   return resolved;
 }
 
+/**
+ * Escape a value for safe inclusion inside an HTML attribute (double-quoted).
+ *
+ * The text-resolver path emits `<img src="…">` via `dangerouslySetInnerHTML`,
+ * and the `src`/`onerror` payload ultimately comes from admin-controlled
+ * fields (`QuestionImage.url`, `QuestionImage.file`, or the bare media
+ * URL in the question text). Without escaping, a crafted string like
+ *     x" onerror="alert(1)"
+ * breaks out of the attribute. This helper encodes `"`, `&`, `<`, `>`
+ * so the attribute always terminates at its own closing quote.
+ */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function _imgTag(img: QuestionImageLike, fallbackAlt: string): string {
-  const src = (img.url || img.file) ?? '';
+  const src = escapeAttr((img.url || img.file) ?? '');
   const alt = (img.caption || fallbackAlt).replace(/"/g, '&quot;');
   const widthAttr = img.width ? ` width="${img.width}"` : '';
   const heightAttr = img.height ? ` height="${img.height}"` : '';
