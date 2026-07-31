@@ -130,6 +130,7 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
             Question, QuestionImage, QuestionSource, RecallSource,
             Subject, Topic, QuestionImportJob, RemovedQuestion, compute_stem_hash,
         )
+        from questions.import_protection import is_removed  # type: ignore
         from questions.text_encoding import normalize_text  # type: ignore
         from django.db import transaction, IntegrityError
         from django.utils import timezone
@@ -204,13 +205,13 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
                 stem_text = normalize_text(q.get("stem", "") or "")
                 if not stem_text:
                     continue
-                # Honor admin "Remove from bank" tombstones — skip on hash match.
-                if RemovedQuestion.objects.filter(
-                    question_text_hash=text_hash,
-                ).exists():
-                    LOG.info(
-                        "MCE pipeline skipping Q (hash=%s) — admin-removed tombstone",
-                        text_hash[:12],
+                # Honor admin "Remove from bank" tombstones — skip on canonical
+                # stem hash (matches the hash used by `remove_from_bank` /
+                # `unremove_from_bank`). The check fires once per row, before
+                # any Question.objects.get or .create.
+                if is_removed(stem_text):
+                    LOG.warning(
+                        "  → Skipping MCE DB-writer Q: admin-removed stem"
                     )
                     continue
                 # Try to find an existing row by (text_hash, exam_type).
@@ -221,13 +222,6 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
                     question = existing
                     created = False
                 except Question.DoesNotExist:
-                    # Honor admin "Remove from bank" tombstones — if this
-                    # stem was previously removed, skip it on re-import.
-                    if is_removed(stem_text):
-                        logger.warning(
-                            "  → Skipping MCE DB-writer Q: admin-removed stem"
-                        )
-                        continue
                     # Resolve subject.
                     subject = None
                     if q.get("subject"):
