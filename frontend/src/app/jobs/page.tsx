@@ -175,16 +175,19 @@ function JobsContent() {
                             <p className="text-muted-foreground">Try adjusting your search criteria</p>
                         </div>
                     ) : (
-                        jobs.map(job => (
+                        jobs.map(job => {
+                            const isComingSoon = /coming\s*soon/i.test(job.title);
+                            return (
                             <Card key={job.id} className="group relative border-border/80 bg-card transition-all hover:border-primary/30 hover:shadow-md">
                                 <CardContent className="p-5">
                                     <div className="flex justify-between items-start gap-4 mb-3">
                                         <h3 className="font-semibold text-lg leading-tight text-foreground group-hover:text-primary transition-colors">
                                             {job.title}
                                         </h3>
-                                        <button 
+                                        <button
                                             onClick={() => toggleBookmark(job.id)}
                                             className="shrink-0 p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors"
+                                            aria-label={job.is_bookmarked ? 'Remove bookmark' : 'Bookmark'}
                                         >
                                             <Bookmark className={`h-4 w-4 ${job.is_bookmarked ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
                                         </button>
@@ -211,19 +214,30 @@ function JobsContent() {
                                             <Clock className="h-3.5 w-3.5" />
                                             <span>Posted {new Date(job.posted_at).toLocaleDateString()}</span>
                                         </div>
-                                        <Button 
-                                            asChild 
-                                            size="sm" 
-                                            className="h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
-                                        >
-                                            <a href={job.apply_link} target="_blank" rel="noopener noreferrer">
-                                                Apply <ExternalLink className="ml-1.5 h-3 w-3" />
-                                            </a>
-                                        </Button>
+                                        {isComingSoon ? (
+                                            <span
+                                                className="inline-flex h-8 items-center rounded-lg bg-muted px-3 text-xs font-semibold text-muted-foreground"
+                                                title="This listing is not yet accepting applications"
+                                                aria-label="Coming soon, applications not open"
+                                            >
+                                                Coming Soon
+                                            </span>
+                                        ) : (
+                                            <Button
+                                                asChild
+                                                size="sm"
+                                                className="h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+                                            >
+                                                <a href={job.apply_link} target="_blank" rel="noopener noreferrer">
+                                                    Apply <ExternalLink className="ml-1.5 h-3 w-3" />
+                                                </a>
+                                            </Button>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 

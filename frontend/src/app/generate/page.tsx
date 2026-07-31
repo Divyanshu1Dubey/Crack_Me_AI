@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Coins } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { useAuth } from '@/lib/auth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI } from '@/lib/api';
@@ -121,6 +122,7 @@ export default function GeneratePage() {
         <>
             <Sidebar />
             <div className="main-content">
+                <Header />
                 <main className="page-container p-6 md:p-8">
                     <div className="max-w-5xl mx-auto space-y-6">
                         <GenerateHero trackMeta={trackMeta} />

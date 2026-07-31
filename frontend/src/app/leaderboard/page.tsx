@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Trophy } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
@@ -89,38 +88,33 @@ export default function LeaderboardPage() {
         <>
             <Sidebar />
             <div className="main-content">
-                {/* Sticky header */}
-                <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/60 px-4 md:px-8 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 shadow-sm">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <Trophy className="w-7 h-7 text-amber-500 shrink-0" />
+                <Header />
+                <main className="flex-1 p-4 md:p-6 page-container space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
                         <div className="min-w-0">
                             <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">Your Leaderboard</h1>
                             <p className="text-xs md:text-sm text-muted-foreground truncate">
                                 Personal rank, weekly goal, and one real learner to chase.
                             </p>
                         </div>
+                        <div className="flex gap-1 bg-muted rounded-lg p-1 self-start md:self-auto">
+                            {PERIODS.map((p) => (
+                                <button
+                                    key={p.key}
+                                    type="button"
+                                    onClick={() => handlePeriod(p.key)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                        period === p.key
+                                            ? 'bg-background shadow text-foreground'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                    aria-pressed={period === p.key}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex gap-1 bg-muted rounded-lg p-1 self-start md:self-auto">
-                        {PERIODS.map((p) => (
-                            <button
-                                key={p.key}
-                                type="button"
-                                onClick={() => handlePeriod(p.key)}
-                                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                                    period === p.key
-                                        ? 'bg-background shadow text-foreground'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                aria-pressed={period === p.key}
-                            >
-                                {p.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <Header />
-                <main className="flex-1 p-4 md:p-6 page-container space-y-6">
                     {loading && (
                         <div className="text-center py-12 text-muted-foreground animate-pulse">
                             Loading your stats…

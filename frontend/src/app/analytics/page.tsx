@@ -261,21 +261,22 @@ export default function AnalyticsPage() {
                                 <div className="flex flex-wrap gap-1">
                                     {heatmap.slice(-90).map((d, i) => {
                                         const intensity = d.questions_practiced + (d.tests_taken * 10);
-                                        let bg = 'var(--bg-card)';
-                                        if (intensity > 50) bg = '#10b981';
-                                        else if (intensity > 20) bg = 'rgba(16,185,129,0.6)';
-                                        else if (intensity > 5) bg = 'rgba(16,185,129,0.3)';
-                                        else if (intensity > 0) bg = 'rgba(16,185,129,0.15)';
+                                        let bg = 'rgba(16,185,129,0.06)';
+                                        let border = 'rgba(16,185,129,0.18)';
+                                        if (intensity > 50) { bg = '#10b981'; border = '#10b981'; }
+                                        else if (intensity > 20) { bg = 'rgba(16,185,129,0.6)'; border = 'rgba(16,185,129,0.5)'; }
+                                        else if (intensity > 5)  { bg = 'rgba(16,185,129,0.3)'; border = 'rgba(16,185,129,0.3)'; }
+                                        else if (intensity > 0)  { bg = 'rgba(16,185,129,0.15)'; border = 'rgba(16,185,129,0.2)'; }
                                         return (
-                                            <div key={i} className="w-3 h-3 rounded-sm" style={{ background: bg }}
+                                            <div key={i} className="w-3 h-3 rounded-sm border" style={{ background: bg, borderColor: border }}
                                                 title={`${d.date}: ${d.questions_practiced} Qs, ${d.tests_taken} tests`} />
                                         );
                                     })}
                                 </div>
                                 <div className="flex items-center gap-2 mt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                                     <span>Less</span>
-                                    {['var(--bg-card)', 'rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)', 'rgba(16,185,129,0.6)', '#10b981'].map((c, i) => (
-                                        <div key={i} className="w-3 h-3 rounded-sm" style={{ background: c }} />
+                                    {['rgba(16,185,129,0.06)', 'rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)', 'rgba(16,185,129,0.6)', '#10b981'].map((c, i) => (
+                                        <div key={i} className="w-3 h-3 rounded-sm border border-emerald-500/20" style={{ background: c }} />
                                     ))}
                                     <span>More</span>
                                 </div>

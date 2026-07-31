@@ -1747,10 +1747,10 @@ function ExamQuestionBankInner({
                                 </div>
                             </div>
                         ) : (
-                            <Card className="p-16 text-center h-125 flex flex-col items-center justify-center">
-                                <BookOpen className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
+                            <Card className="p-8 md:p-16 text-center min-h-[260px] md:h-125 flex flex-col items-center justify-center">
+                                <BookOpen className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-4 md:mb-6 text-muted-foreground/30" />
                                 <p className="text-lg font-medium mb-2 text-foreground">Select a Question</p>
-                                <p className="text-sm text-muted-foreground">Click any question from the bank to practice and review detailed AI-powered explanations.</p>
+                                <p className="text-sm text-muted-foreground max-w-md mx-auto">Click any question from the bank to practice and review detailed AI-powered explanations.</p>
                             </Card>
                         )}
                     </div>
