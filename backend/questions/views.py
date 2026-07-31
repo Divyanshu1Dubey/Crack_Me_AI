@@ -1355,7 +1355,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
             # Honor admin "Remove from bank" tombstones — if this stem was
             # previously removed, refuse to publish it back into the bank.
-            if _pre_check_remove(item.question_text, "questions.views.publish_question"):
+            if _pre_check_remove(item.question_text, where="questions.views.publish_question"):
                 return Response(
                     {'error': 'Stem matches a previously-removed question; un-remove first.'},
                     status=status.HTTP_409_CONFLICT,
@@ -2016,7 +2016,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         question = self.get_object()
         # Tombstone guard: an admin can no longer resurrect a previously-removed
         # question by duplicating it. Restore via unremove_from_bank first.
-        if _pre_check_remove(question.question_text, 'questions.views.duplicate'):
+        if _pre_check_remove(question.question_text, where='questions.views.duplicate'):
             return Response(
                 {'error': 'Stem matches a previously-removed question; un-remove first.'},
                 status=status.HTTP_409_CONFLICT,
@@ -2193,10 +2193,27 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Dispute resolved successfully', 'new_answer': corrected_answer})
 
     def perform_create(self, serializer):
+        # Tombstone guard: refuse to recreate an admin-removed question.
+        text = serializer.validated_data.get('question_text', '') or ''
+        if _pre_check_remove(text, where='questions.views.perform_create'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(
+                'Stem matches a previously-removed question; un-remove first.'
+            )
         self._normalize_question_payload(serializer.validated_data)
         serializer.save()
 
     def perform_update(self, serializer):
+        # Tombstone guard: refuse to update a question's stem to one that
+        # matches an admin-removed tombstone. (A non-stem PATCH is allowed.)
+        new_text = serializer.validated_data.get('question_text', None)
+        if new_text is not None and _pre_check_remove(
+            new_text, where='questions.views.perform_update'
+        ):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(
+                'Updated stem matches a previously-removed question; un-remove first.'
+            )
         # If-Match optimistic-lock check: handled in update()/partial_update() so
         # we can return a 409 Response directly. (Returning a Response from
         # perform_update is silently discarded by DRF and the save is lost.)
