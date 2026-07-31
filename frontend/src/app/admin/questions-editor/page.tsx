@@ -329,16 +329,16 @@ export default function AdminQuestionsEditorPage() {
   };
 
   return (
-    <div className="p-6 mx-auto space-y-6 text-gray-900">
+    <div className="p-6 mx-auto space-y-6 text-gray-900 dark:text-slate-100">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Questions Editor</h1>
-        <div className="text-sm text-gray-700">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Questions Editor</h1>
+        <div className="text-sm text-gray-700 dark:text-slate-300">
           {examCounts[examType ?? ''] !== undefined && (
             <span>
-              Showing <span className="font-semibold text-gray-900">{examCounts[examType ?? '']}</span>{' '}
+              Showing <span className="font-semibold text-gray-900 dark:text-slate-100">{examCounts[examType ?? '']}</span>{' '}
               {examType ? examType.toUpperCase().replace('_', ' ') : 'total'} questions
               {activeFiltersCount > 0 && (
-                <span className="ml-2 text-indigo-600 font-medium">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
+                <span className="ml-2 text-indigo-600 dark:text-indigo-400 font-medium">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
               )}
             </span>
           )}
@@ -348,7 +348,7 @@ export default function AdminQuestionsEditorPage() {
       {/* PRIMARY FILTER: exam-type chips — the most visible thing on the page */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 sticky top-0 z-10">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-800 mr-2">Exam:</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-800 dark:text-slate-200 mr-2">Exam:</span>
           {examChips.map((chip) => {
             const count = examCounts[chip.key] ?? null;
             const isActive = examType === chip.key;
@@ -360,7 +360,7 @@ export default function AdminQuestionsEditorPage() {
                   'inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition ' +
                   (isActive
                     ? `${chip.activeBg} ${chip.activeText} border-transparent shadow-sm`
-                    : `bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50`)
+                    : `bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-gray-400 dark:hover:border-slate-500 hover:bg-gray-50 dark:hover:bg-slate-800`)
                 }
                 aria-pressed={isActive}
               >
@@ -369,7 +369,7 @@ export default function AdminQuestionsEditorPage() {
                   <span
                     className={
                       'inline-flex items-center justify-center min-w-7 px-1.5 py-0.5 rounded-full text-xs font-semibold ' +
-                      (isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-800')
+                      (isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200')
                     }
                   >
                     {count.toLocaleString()}
@@ -381,7 +381,7 @@ export default function AdminQuestionsEditorPage() {
           {activeFiltersCount > 0 && (
             <button
               onClick={clearAllFilters}
-              className="ml-auto text-xs text-red-600 hover:text-red-800 underline"
+              className="ml-auto text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
             >
               Clear all filters
             </button>
@@ -389,7 +389,7 @@ export default function AdminQuestionsEditorPage() {
         </div>
 
         {/* SECONDARY FILTERS row — collapsed-ish so exam chips dominate visually */}
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 dark:border-slate-700 pt-3">
           <input
             type="text"
             placeholder="Search questions..."
@@ -411,7 +411,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <select
-            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40 disabled:bg-gray-100 disabled:text-gray-500"
+            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40 disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:text-gray-500 dark:disabled:text-slate-500"
             value={topicId}
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
             disabled={!subjectId}
@@ -447,7 +447,7 @@ export default function AdminQuestionsEditorPage() {
           </select>
 
           <div className="flex flex-wrap items-center gap-3 ml-2">
-            <label className="flex items-center gap-1 text-sm text-gray-900">
+            <label className="flex items-center gap-1 text-sm text-gray-900 dark:text-slate-100">
               <input
                 type="checkbox"
                 className="accent-indigo-600"
@@ -456,7 +456,7 @@ export default function AdminQuestionsEditorPage() {
               />
               Needs Review
             </label>
-            <label className="flex items-center gap-1 text-sm text-gray-900">
+            <label className="flex items-center gap-1 text-sm text-gray-900 dark:text-slate-100">
               <input
                 type="checkbox"
                 className="accent-indigo-600"
@@ -465,7 +465,7 @@ export default function AdminQuestionsEditorPage() {
               />
               Dropped
             </label>
-            <label className="flex items-center gap-1 text-sm text-gray-900">
+            <label className="flex items-center gap-1 text-sm text-gray-900 dark:text-slate-100">
               <input
                 type="checkbox"
                 className="accent-indigo-600"
@@ -474,7 +474,7 @@ export default function AdminQuestionsEditorPage() {
               />
               Controversial
             </label>
-            <label className="flex items-center gap-1 text-sm text-gray-900">
+            <label className="flex items-center gap-1 text-sm text-gray-900 dark:text-slate-100">
               <input
                 type="checkbox"
                 className="accent-indigo-600"
@@ -496,19 +496,19 @@ export default function AdminQuestionsEditorPage() {
 
       <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-slate-800">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">ID / UUID</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Disp # (Drag)</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Subject & Topic</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Text</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Flags</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">ID / UUID</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Disp # (Drag)</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Subject & Topic</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Text</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Flags</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-4 text-gray-900">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-4 text-gray-900 dark:text-slate-100">Loading...</td></tr>
             ) : questions.map((q, idx) => (
               <tr
                 key={q.id}
@@ -516,16 +516,16 @@ export default function AdminQuestionsEditorPage() {
                 onDragStart={() => setDraggedIdx(idx)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => handleDrop(idx)}
-                className={draggedIdx === idx ? "opacity-50 bg-gray-100" : "hover:bg-gray-50 cursor-move transition-colors"}
+                className={draggedIdx === idx ? "opacity-50 bg-gray-100 dark:bg-slate-700" : "hover:bg-gray-50 dark:hover:bg-slate-800 cursor-move transition-colors"}
               >
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                   {q.id}<br/>
-                  <span className="text-xs text-gray-500">{q.uuid ? q.uuid.substring(0,8)+'...' : 'N/A'}</span>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">{q.uuid ? q.uuid.substring(0,8)+'...' : 'N/A'}</span>
                   {q.duplicate_count > 1 && (
                     <div className="mt-1">
                       <button
                         onClick={() => openMergeDuplicates(q)}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-300 px-1.5 py-0.5 rounded hover:bg-orange-200 hover:border-orange-400"
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 border border-orange-300 dark:border-orange-800 px-1.5 py-0.5 rounded hover:bg-orange-200 dark:hover:bg-orange-900/60 hover:border-orange-400"
                         title={`This question has ${q.duplicate_count} identical rows in the database. Click to review & merge.`}
                       >
                         ⚠ Duplicate ×{q.duplicate_count}
@@ -533,9 +533,9 @@ export default function AdminQuestionsEditorPage() {
                     </div>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500 cursor-grab">⣿</span>
+                    <span className="text-gray-500 dark:text-slate-400 cursor-grab">⣿</span>
                     <input
                       type="number"
                       className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-16 text-center rounded"
@@ -548,7 +548,7 @@ export default function AdminQuestionsEditorPage() {
                     />
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 min-w-50">
+                <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-100 min-w-50">
                   <div className="space-y-2">
                     <select
                       className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-full rounded text-xs"
@@ -568,32 +568,32 @@ export default function AdminQuestionsEditorPage() {
                     </select>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 min-w-75 whitespace-normal wrap-break-word max-h-32 overflow-hidden">
+                <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-100 min-w-75 whitespace-normal wrap-break-word max-h-32 overflow-hidden">
                   <div className="line-clamp-3">{q.question_text}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 space-y-2">
-                  <label className="flex items-center gap-2 text-xs text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-900 dark:text-slate-100">
                     <input type="checkbox" className="accent-emerald-600" checked={q.needs_review || false} onChange={(e) => handleUpdate(q.id, 'needs_review', e.target.checked)} />
                     Needs Review
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-gray-900">
+                  <label className="flex items-center gap-2 text-xs text-gray-900 dark:text-slate-100">
                     <input type="checkbox" className="accent-emerald-600" checked={q.is_dropped || false} onChange={(e) => handleUpdate(q.id, 'is_dropped', e.target.checked)} />
                     Dropped
                   </label>
-                  <div className="text-xs mt-1 text-gray-900">
-                    Edited: {q.admin_edited ? <span className="text-green-700 font-bold">Yes</span> : <span className="text-gray-500">No</span>}
+                  <div className="text-xs mt-1 text-gray-900 dark:text-slate-100">
+                    Edited: {q.admin_edited ? <span className="text-green-700 dark:text-green-400 font-bold">Yes</span> : <span className="text-gray-500 dark:text-slate-400">No</span>}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <button
                     onClick={() => onEdit(q)}
-                    className="text-emerald-700 hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded"
+                    className="text-emerald-700 hover:text-emerald-900 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:text-emerald-100 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => openRemoveForBank(q)}
-                    className="text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1 rounded font-semibold"
+                    className="text-red-700 hover:text-red-900 bg-red-50 dark:bg-red-900/30 dark:text-red-300 dark:hover:text-red-100 border border-red-200 dark:border-red-800 px-3 py-1 rounded font-semibold"
                     title="Remove from question bank (soft-delete; survives deploys via RemovedQuestion skip-list)"
                   >
                     Remove
@@ -601,7 +601,7 @@ export default function AdminQuestionsEditorPage() {
                   {q.duplicate_count > 1 ? (
                     <button
                       onClick={() => openMergeDuplicates(q)}
-                      className="text-orange-800 hover:text-orange-900 bg-orange-100 border border-orange-300 px-3 py-1 rounded font-semibold"
+                      className="text-orange-800 hover:text-orange-900 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:text-orange-100 border border-orange-300 dark:border-orange-800 px-3 py-1 rounded font-semibold"
                       title={`${q.duplicate_count} identical copies detected — review & merge`}
                     >
                       Merge Duplicates
@@ -609,7 +609,7 @@ export default function AdminQuestionsEditorPage() {
                   ) : (
                     <button
                       onClick={() => alert('Merge/Split feature coming soon!')}
-                      className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded"
+                      className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:text-indigo-100 border border-indigo-200 dark:border-indigo-800 px-3 py-1 rounded"
                     >
                       Merge / Split
                     </button>
@@ -625,7 +625,7 @@ export default function AdminQuestionsEditorPage() {
         <button
           disabled={page === 1}
           onClick={() => setPage(p => Math.max(1, p - 1))}
-          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400"
+          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-slate-600"
         >
           Previous
         </button>
@@ -633,7 +633,7 @@ export default function AdminQuestionsEditorPage() {
         <button
           disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400"
+          className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-slate-600"
         >
           Next
         </button>
@@ -656,13 +656,13 @@ export default function AdminQuestionsEditorPage() {
       {mergeFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">
                 Merge Duplicates — Q{mergeFor.id}
               </h2>
               <button
                 onClick={closeMergeDuplicates}
-                className="text-gray-500 hover:text-gray-900 text-2xl leading-none"
+                className="text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100 text-2xl leading-none"
                 aria-label="Close"
               >
                 ×
@@ -671,18 +671,18 @@ export default function AdminQuestionsEditorPage() {
 
             <div className="px-6 py-4 overflow-y-auto flex-1">
               {mergeLoading ? (
-                <div className="text-gray-700 py-6 text-center">Loading cluster…</div>
+                <div className="text-gray-700 dark:text-slate-300 py-6 text-center">Loading cluster…</div>
               ) : mergeError ? (
                 <div className="text-red-700 bg-red-50 border border-red-200 rounded p-3">
                   {mergeError}
                 </div>
               ) : !mergeCluster || !(mergeCluster.members || []).length ? (
-                <div className="text-gray-700 py-6 text-center">
+                <div className="text-gray-700 dark:text-slate-300 py-6 text-center">
                   Q{mergeFor.id} is not part of any duplicate cluster.
                 </div>
               ) : (
                 <>
-                  <p className="text-sm text-gray-700 mb-3">
+                  <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                     Canonical (will be kept):{' '}
                     <span className="font-semibold">
                       Q{mergeCluster.canonical_id ?? mergeFor.id}
@@ -705,8 +705,8 @@ export default function AdminQuestionsEditorPage() {
                           className={
                             'flex items-start gap-3 p-3 rounded border ' +
                             (isCanonical
-                              ? 'border-emerald-200 bg-emerald-50'
-                              : 'border-gray-200 hover:bg-gray-50 cursor-pointer')
+                              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30'
+                              : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer')
                           }
                         >
                           <input
@@ -722,22 +722,22 @@ export default function AdminQuestionsEditorPage() {
                                 Q{qid}
                               </span>
                               {isCanonical && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100 px-1.5 py-0.5 rounded">
                                   Canonical (keep)
                                 </span>
                               )}
                               {m.subject_name && (
-                                <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                   {m.subject_name}
                                 </span>
                               )}
                               {m.year && (
-                                <span className="text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                   {m.year}
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-gray-700 mt-1 line-clamp-2">
+                            <div className="text-xs text-gray-700 dark:text-slate-300 mt-1 line-clamp-2">
                               {m.question_text_preview ?? '(no preview)'}
                             </div>
                           </div>
@@ -749,8 +749,8 @@ export default function AdminQuestionsEditorPage() {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-700">
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 dark:text-slate-300">
                 {mergeDropIds.length > 0 ? (
                   <>
                     Will soft-drop{' '}
@@ -794,13 +794,13 @@ export default function AdminQuestionsEditorPage() {
       {removeFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-red-200 dark:border-red-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-red-200">
-              <h2 className="text-lg font-bold text-red-900">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-red-200 dark:border-red-800">
+              <h2 className="text-lg font-bold text-red-900 dark:text-red-300">
                 Remove from bank — Q{removeFor.id}
               </h2>
               <button
                 onClick={closeRemoveForBank}
-                className="text-gray-500 hover:text-gray-900 text-2xl leading-none"
+                className="text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100 text-2xl leading-none"
                 aria-label="Close"
               >
                 ×
@@ -808,22 +808,22 @@ export default function AdminQuestionsEditorPage() {
             </div>
 
             <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-gray-700 dark:text-slate-300">
                 You are about to remove the following question from the bank.
                 It will be hidden from the student app immediately, and the
                 next <code>import_neet_pg</code> / <code>load_exam_fixture</code>
                 {' '}deploy will skip re-creating it.
               </p>
 
-              <div className="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-gray-800 max-h-32 overflow-y-auto">
+              <div className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3 text-sm text-gray-800 dark:text-slate-200 max-h-32 overflow-y-auto">
                 {(removeFor.question_text || removeFor.text || '').slice(0, 320) || (
-                  <span className="italic text-gray-500">
+                  <span className="italic text-gray-500 dark:text-slate-400">
                     (no preview available)
                   </span>
                 )}
               </div>
 
-              <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800">
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-3 text-xs text-red-800 dark:text-red-200">
                 <strong>Destructive.</strong> Existing user history
                 (bookmarks, attempts, notes, discussions) keeps referencing
                 this row, but the question will no longer appear in any
@@ -838,7 +838,7 @@ export default function AdminQuestionsEditorPage() {
               )}
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
                   Reason (optional)
                 </label>
                 <textarea
@@ -851,12 +851,12 @@ export default function AdminQuestionsEditorPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Type <code className="bg-gray-100 px-1 rounded">Q{removeFor.id}</code> to confirm
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                  Type <code className="bg-gray-100 dark:bg-slate-800 px-1 rounded text-gray-900 dark:text-slate-100">Q{removeFor.id}</code> to confirm
                 </label>
                 <input
                   type="text"
-                  className="w-full border border-gray-300 rounded p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-gray-300 dark:border-slate-700 rounded p-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
                   value={removeConfirmId}
                   onChange={(e) => setRemoveConfirmId(e.target.value)}
                   placeholder={`Q${removeFor.id}`}
@@ -865,7 +865,7 @@ export default function AdminQuestionsEditorPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-red-200 bg-red-50">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30">
               <button
                 onClick={closeRemoveForBank}
                 className="px-4 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded hover:bg-gray-50"

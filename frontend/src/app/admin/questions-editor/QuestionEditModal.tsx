@@ -118,7 +118,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             href={imageSrc(img) || '#'}
             target="_blank"
             rel="noreferrer"
-            className="block w-20 h-20 border rounded overflow-hidden bg-gray-50"
+            className="block w-20 h-20 border border-gray-300 dark:border-slate-700 rounded overflow-hidden bg-gray-50 dark:bg-slate-800"
             title={`Image #${img.id}${img.caption ? ` — ${img.caption}` : ''}`}
           >
             {imageSrc(img) ? (
@@ -191,17 +191,17 @@ export default function QuestionEditModal({ question, images: initialImages, onC
    */
   function renderMarkdownToolbar(fieldKey: string) {
     const btnBase =
-      'inline-flex items-center justify-center min-w-7 h-7 px-2 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 hover:border-gray-400 text-xs font-semibold transition';
+      'inline-flex items-center justify-center min-w-7 h-7 px-2 rounded border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 hover:border-gray-400 dark:hover:border-slate-500 text-xs font-semibold transition';
     return (
       <div className="flex flex-wrap gap-1 items-center" role="toolbar" aria-label={`Formatting toolbar for ${fieldKey}`}>
         <button type="button" title="Bold (**)" onClick={() => insertAtCursor(fieldKey, '', { open: '**', close: '**', placeholder: 'bold' })} className={btnBase}>B</button>
         <button type="button" title="Italic (*)" onClick={() => insertAtCursor(fieldKey, '', { open: '*', close: '*', placeholder: 'italic' })} className={btnBase}><span className="italic">I</span></button>
-        <span className="w-px h-5 bg-gray-200 mx-1" aria-hidden />
+        <span className="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-1" aria-hidden />
         <button type="button" title="Heading 1 (#)" onClick={() => insertLineStart(fieldKey, '# ')} className={btnBase}>H1</button>
         <button type="button" title="Heading 2 (##)" onClick={() => insertLineStart(fieldKey, '## ')} className={btnBase}>H2</button>
         <button type="button" title="Bullet list (-)" onClick={() => insertLineStart(fieldKey, '- ')} className={btnBase}>•</button>
         <button type="button" title="Quote (>)" onClick={() => insertLineStart(fieldKey, '> ')} className={btnBase}>&ldquo;</button>
-        <span className="w-px h-5 bg-gray-200 mx-1" aria-hidden />
+        <span className="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-1" aria-hidden />
         <button type="button" title="Code (`)" onClick={() => insertAtCursor(fieldKey, '', { open: '`', close: '`', placeholder: 'code' })} className={btnBase}>{`</>`}</button>
         <button type="button" title="Red highlight ([[red]])" onClick={() => insertAtCursor(fieldKey, '', { open: '[[red]]', close: '[[/red]]', placeholder: 'important' })} className={btnBase + ' text-red-700'}>red</button>
         <button type="button" title="Underline ([[u]])" onClick={() => insertAtCursor(fieldKey, '', { open: '[[u]]', close: '[[/u]]', placeholder: 'underline' })} className={btnBase + ' underline'}>U</button>
@@ -396,22 +396,22 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900">Edit Question #{question.id}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">×</button>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Edit Question #{question.id}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100">×</button>
         </div>
 
-        {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
+        {error && <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 p-3 rounded">{error}</div>}
         {conflict && (
-          <div className="bg-amber-50 border border-amber-300 p-3 rounded space-y-2">
-            <p className="font-semibold">This question was edited by another user.</p>
-            <button onClick={reloadFromConflict} className="bg-amber-200 px-3 py-1 rounded">Reload current values</button>
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 p-3 rounded space-y-2">
+            <p className="font-semibold text-gray-900 dark:text-slate-100">This question was edited by another user.</p>
+            <button onClick={reloadFromConflict} className="bg-amber-200 dark:bg-amber-700 text-gray-900 dark:text-slate-100 px-3 py-1 rounded">Reload current values</button>
             <button onClick={() => save(true)} className="bg-amber-600 text-white px-3 py-1 rounded ml-2">Overwrite with my changes</button>
           </div>
         )}
 
         <label className="block">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-900">Question Text</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Question Text</span>
             <div className="flex items-center gap-2">
               {renderInsertImageButton('question_text')}
             </div>
@@ -427,16 +427,16 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           {renderInlinePreview(form.question_text)}
         </label>
 
-        <details className="border border-gray-300 rounded p-2" open>
-          <summary className="cursor-pointer text-sm font-medium text-gray-900">Preview (rendered)</summary>
-          <div className="prose max-w-none mt-2 text-gray-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        <details className="border border-gray-300 dark:border-slate-700 rounded p-2" open>
+          <summary className="cursor-pointer text-sm font-medium text-gray-900 dark:text-slate-100">Preview (rendered)</summary>
+          <div className="prose max-w-none mt-2 text-gray-900 dark:text-slate-100 dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
         </details>
 
         <div className="grid grid-cols-2 gap-3">
           {(['option_a', 'option_b', 'option_c', 'option_d'] as const).map((k) => (
             <label key={k} className="block">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium uppercase text-gray-900">{k.replace('_', ' ')}</span>
+                <span className="text-sm font-medium uppercase text-gray-900 dark:text-slate-100">{k.replace('_', ' ')}</span>
                 {renderInsertImageButton(k)}
               </div>
               <textarea
@@ -452,7 +452,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         </div>
 
         <label className="block">
-          <span className="text-sm font-medium text-gray-900">Correct Answer</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Correct Answer</span>
           <select
             className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded ml-3"
             value={form.correct_answer}
@@ -464,7 +464,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
 
         <label className="block">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-900">Explanation</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Explanation</span>
             {renderInsertImageButton('explanation')}
           </div>
           <div className="mt-1">{renderMarkdownToolbar('explanation')}</div>
@@ -481,7 +481,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-900">Mnemonic</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Mnemonic</span>
               {renderInsertImageButton('mnemonic')}
             </div>
             <div className="mt-1">{renderMarkdownToolbar('mnemonic')}</div>
@@ -495,7 +495,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             {renderInlinePreview(form.mnemonic)}
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-900">Difficulty</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Difficulty</span>
             <select
               className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded mt-1 w-full"
               value={form.difficulty}
@@ -510,7 +510,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
 
         <label className="block">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-900">Concept Explanation</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Concept Explanation</span>
             {renderInsertImageButton('concept_explanation')}
           </div>
           <div className="mt-1">{renderMarkdownToolbar('concept_explanation')}</div>
@@ -524,9 +524,9 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           {renderInlinePreview(form.concept_explanation)}
         </label>
 
-        <div className="flex gap-4 text-sm text-gray-900">
+        <div className="flex gap-4 text-sm text-gray-900 dark:text-slate-100">
           {(['needs_review', 'is_dropped', 'is_controversial'] as const).map((k) => (
-            <label key={k} className="flex items-center gap-2 text-gray-900">
+            <label key={k} className="flex items-center gap-2 text-gray-900 dark:text-slate-100">
               <input
                 type="checkbox"
                 checked={form[k]}
@@ -537,14 +537,14 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           ))}
         </div>
 
-        <div className="border-t border-gray-200 pt-3">
-          <p className="text-sm font-medium mb-2 text-gray-900">Images attached ({images.length})</p>
+        <div className="border-t border-gray-200 dark:border-slate-700 pt-3">
+          <p className="text-sm font-medium mb-2 text-gray-900 dark:text-slate-100">Images attached ({images.length})</p>
           <div className="grid grid-cols-3 gap-2">
             {images.map((img, idx) => {
               const src = imageSrc(img);
               return (
-                <div key={img.id} className="border border-gray-300 rounded p-2 text-xs text-gray-900 space-y-1">
-                  <div className="relative w-full aspect-square bg-gray-50 rounded overflow-hidden flex items-center justify-center">
+                <div key={img.id} className="border border-gray-300 dark:border-slate-700 rounded p-2 text-xs text-gray-900 dark:text-slate-100 space-y-1">
+                  <div className="relative w-full aspect-square bg-gray-50 dark:bg-slate-800 rounded overflow-hidden flex items-center justify-center">
                     {src ? (
                       <img
                         src={src}
@@ -559,7 +559,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
                       />
                     ) : null}
                     <div
-                      className="absolute inset-0 hidden flex-col items-center justify-center text-center text-[10px] text-gray-500 p-1"
+                      className="absolute inset-0 hidden flex-col items-center justify-center text-center text-[10px] text-gray-500 dark:text-slate-400 p-1"
                       style={src ? { display: 'none' } : { display: 'flex' }}
                     >
                       <span className="font-mono">#{img.id}</span>
@@ -568,18 +568,18 @@ export default function QuestionEditModal({ question, images: initialImages, onC
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="font-mono">#{img.id}</span>
-                    <span className="text-gray-500 truncate max-w-[8rem]" title={img.mime || ''}>{img.mime}</span>
+                    <span className="text-gray-500 dark:text-slate-400 truncate max-w-[8rem]" title={img.mime || ''}>{img.mime}</span>
                   </div>
                   {img.caption && (
-                    <div className="truncate text-gray-700" title={img.caption}>{img.caption}</div>
+                    <div className="truncate text-gray-700 dark:text-slate-300" title={img.caption}>{img.caption}</div>
                   )}
                   <div className="flex gap-1 mt-1">
-                    <button onClick={() => moveImage(img.id, -1)} disabled={idx === 0} className="px-1 text-gray-900" title="Move up">↑</button>
-                    <button onClick={() => moveImage(img.id, 1)} disabled={idx === images.length - 1} className="px-1 text-gray-900" title="Move down">↓</button>
+                    <button onClick={() => moveImage(img.id, -1)} disabled={idx === 0} className="px-1 text-gray-900 dark:text-slate-100" title="Move up">↑</button>
+                    <button onClick={() => moveImage(img.id, 1)} disabled={idx === images.length - 1} className="px-1 text-gray-900 dark:text-slate-100" title="Move down">↓</button>
                     {src && (
-                      <a href={src} target="_blank" rel="noreferrer" className="px-1 text-indigo-600" title="Open in new tab">↗</a>
+                      <a href={src} target="_blank" rel="noreferrer" className="px-1 text-indigo-600 dark:text-indigo-400" title="Open in new tab">↗</a>
                     )}
-                    <button onClick={() => deleteImage(img.id)} className="px-1 text-red-500 ml-auto" title="Delete">×</button>
+                    <button onClick={() => deleteImage(img.id)} className="px-1 text-red-500 dark:text-red-400 ml-auto" title="Delete">×</button>
                   </div>
                 </div>
               );
@@ -587,7 +587,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-700">
           <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
           <button onClick={() => save(false)} disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
