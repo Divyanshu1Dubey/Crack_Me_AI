@@ -4,15 +4,15 @@ from io import StringIO
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
+from rest_framework.throttling import ScopedRateThrottle
 from django.http import HttpResponse
-from django.db.models import Sum, Avg, Count, F, Q, Max
+from django.db.models import Sum, Avg, Count, F, Q
 from django.utils import timezone
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
-                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
-                          UserBadgeSerializer, LeaderboardEntrySerializer)
+                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer)
 from tests_engine.models import TestAttempt
-from questions.models import Subject, Question, QuestionFeedback, Topic
+from questions.models import Subject, Question
 from accounts.permissions import IsControlTowerAdmin
 
 logger = logging.getLogger(__name__)
@@ -166,62 +166,6 @@ class DailyActivityView(APIView):
         return Response(serializer.data)
 
 
-class StudyStreakView(APIView):
-    """Study streaks and gamification milestones."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        streak, _ = StudyStreak.objects.get_or_create(user=request.user)
-        
-        # Award initial badges
-        from django.core.management import call_command
-        try:
-            # Safely check for standard badges
-            if Badge.objects.count() == 0:
-                call_command('seed_data')
-        except Exception:
-            pass
-
-        # Check badges earned
-        user_badges = UserBadge.objects.filter(user=request.user).select_related('badge')
-        badges_data = UserBadgeSerializer(user_badges, many=True).data
-
-        # Auto-award based on streak
-        earned = []
-        if streak.current_streak >= 7:
-            badge, _ = Badge.objects.get_or_create(
-                name="7-Day Warrior",
-                defaults={'code': 'streak_7', 'description': 'Maintained a 7-day study streak', 'xp_reward': 100}
-            )
-            ub, created = UserBadge.objects.get_or_create(user=request.user, badge=badge)
-            if created:
-                earned.append(BadgeSerializer(badge).data)
-                
-        if streak.current_streak >= 30:
-            badge, _ = Badge.objects.get_or_create(
-                name="30-Day Master",
-                defaults={'code': 'streak_30', 'description': 'Maintained a 30-day study streak', 'xp_reward': 500}
-            )
-            ub, created = UserBadge.objects.get_or_create(user=request.user, badge=badge)
-            if created:
-                earned.append(BadgeSerializer(badge).data)
-
-        # Get recent performance to show trend
-        recent_attempts = TestAttempt.objects.filter(user=request.user, is_completed=True).order_by('-completed_at')[:5]
-        trend_data = []
-        for attempt in recent_attempts:
-            trend_data.append({
-                'date': attempt.completed_at.strftime('%Y-%m-%d'),
-                'score': attempt.score,
-                'accuracy': attempt.accuracy,
-            })
-
-        return Response({
-            'trend': trend_data,
-            'total_tests': len(trend_data),
-        })
-
-
 class RecentAttemptsView(APIView):
     """Recent test attempts for the dashboard."""
     permission_classes = [permissions.IsAuthenticated]
@@ -373,6 +317,8 @@ class FeedbackListCreateView(APIView):
 class ContactUsView(APIView):
     """Allows anyone to submit the Contact Us support form."""
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'contact_us'
 
     def post(self, request):
         name = request.data.get('name', 'Anonymous')

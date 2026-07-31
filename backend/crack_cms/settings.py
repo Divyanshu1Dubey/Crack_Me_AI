@@ -281,6 +281,7 @@ REST_FRAMEWORK = {
         'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
         'token_purchase': os.getenv('DRF_THROTTLE_TOKEN_PURCHASE', '10/min'),
         'subscription_order': os.getenv('DRF_THROTTLE_SUBSCRIPTION_ORDER', '15/min'),
+        'contact_us': os.getenv('DRF_THROTTLE_CONTACT_US', '5/min'),
     },
 }
 
