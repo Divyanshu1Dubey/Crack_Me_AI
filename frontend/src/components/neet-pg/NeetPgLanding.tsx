@@ -152,9 +152,10 @@ export default function NeetPgLanding() {
 
   // Featured year (most recent with content)
   const featuredYear = useMemo(() => {
-    if (!stats?.by_year?.length) return 2025;
+    const currentYear = new Date().getFullYear();
+    if (!stats?.by_year?.length) return currentYear;
     const top = [...stats.by_year].sort((a, b) => b.year - a.year)[0];
-    return top?.year ?? 2025;
+    return top?.year ?? currentYear;
   }, [stats]);
 
   return (

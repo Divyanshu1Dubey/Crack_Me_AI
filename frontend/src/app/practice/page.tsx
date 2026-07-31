@@ -74,7 +74,7 @@ const MODES: { k: string; label: string; scopes: Array<"year" | "subject" | "top
 ];
 
 const COUNTS = [10, 20, 30, 50];
-const YEARS = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
+const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
 const DIFFICULTIES = ["", "easy", "medium", "hard"];
 
 function PracticeInner() {
