@@ -219,8 +219,8 @@ export default function FeedbackPage() {
                         <div className="space-y-4">
                             {feedbacks.map(fb => (
                                 <div key={fb.id} className="glass-card p-5">
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="flex items-center gap-3">
+                                    <div className="flex items-start justify-between mb-2 gap-2 flex-wrap">
+                                        <div className="flex items-center gap-3 min-w-0 flex-wrap">
                                             <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
                                                 style={{ background: categoryColor[fb.category] || '#6b7280' }}>
                                                 {CATEGORIES.find(c => c.value === fb.category)?.label || fb.category}
@@ -238,7 +238,7 @@ export default function FeedbackPage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 shrink-0">
                                             {fb.is_read ? (
                                                 <span className="text-xs flex items-center gap-1" style={{ color: '#10b981' }}>
                                                     <CheckCircle className="w-3 h-3" /> Read
@@ -248,7 +248,7 @@ export default function FeedbackPage() {
                                                     <Clock className="w-3 h-3" /> Pending
                                                 </span>
                                             )}
-                                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                            <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                                                 {new Date(fb.created_at).toLocaleDateString()}
                                             </span>
                                         </div>

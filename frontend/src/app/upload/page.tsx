@@ -192,11 +192,11 @@ export default function UploadPage() {
                             <div className="space-y-4">
                                 <div className="p-3 rounded-lg text-sm" style={{ background: 'var(--bg-secondary)' }}>
                                     <div className="font-semibold mb-2">📁 Where to put files:</div>
-                                    <ul className="space-y-1" style={{ color: 'var(--text-secondary)' }}>
-                                        <li>• <code>Medura_Train/textbooks/</code> — Textbook PDFs</li>
-                                        <li>• <code>Medura_Train/PYQ/</code> — PYQ papers</li>
-                                        <li>• <code>Medura_Train/web_knowledge/</code> — Notes, guides</li>
-                                        <li>• <code>Medura_Train/uploads/</code> — Your uploads</li>
+                                    <ul className="space-y-1 wrap-break-word" style={{ color: 'var(--text-secondary)' }}>
+                                        <li className="wrap-break-word">• <code className="break-all">Medura_Train/textbooks/</code> — Textbook PDFs</li>
+                                        <li className="wrap-break-word">• <code className="break-all">Medura_Train/PYQ/</code> — PYQ papers</li>
+                                        <li className="wrap-break-word">• <code className="break-all">Medura_Train/web_knowledge/</code> — Notes, guides</li>
+                                        <li className="wrap-break-word">• <code className="break-all">Medura_Train/uploads/</code> — Your uploads</li>
                                     </ul>
                                 </div>
                                 <button

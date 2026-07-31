@@ -151,9 +151,9 @@ export default function TestsPage() {
                             {tests.map(test => (
                                 <Card key={test.id}>
                                     <CardContent className="p-5">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <h3 className="font-semibold text-sm text-foreground">{test.title}</h3>
-                                            <Badge variant="secondary">{test.test_type}</Badge>
+                                        <div className="flex justify-between items-start mb-3 gap-2">
+                                            <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
+                                            <Badge variant="secondary" className="shrink-0 whitespace-nowrap">{test.test_type}</Badge>
                                         </div>
                                         <div className="flex items-center gap-4 text-xs mb-4 text-muted-foreground">
                                             <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {test.num_questions} Qs</span>
