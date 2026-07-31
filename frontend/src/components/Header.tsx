@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone, Smartphone } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
@@ -221,9 +222,14 @@ export default function Header() {
   return (
       <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl md:gap-3 md:px-6">
       {/* Left: Page title */}
-      <div className="flex min-w-0 items-center gap-3 pl-12 md:pl-0">
-        <div className="md:hidden">
+      <div className="flex min-w-0 items-center gap-2 pl-12 md:gap-3 md:pl-0">
+        <div className="hidden sm:block md:hidden">
           <BrandMark href="/dashboard" compact showTagline={false} />
+        </div>
+        <div className="sm:hidden">
+          <Link href="/dashboard" aria-label="Home" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card/90 overflow-hidden shadow-sm">
+            <Image src="/cms-circle-logo.png" alt="CrackCMS logo" width={28} height={28} className="object-cover" />
+          </Link>
         </div>
         <div className="hidden h-9 w-1 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 md:block" />
         <div className="hidden md:block">
