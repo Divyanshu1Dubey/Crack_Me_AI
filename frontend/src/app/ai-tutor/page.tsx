@@ -544,8 +544,8 @@ export default function AITutorPage() {
                     </div>
                 )}
 
-                {/* Mode Selector */}
-                <div className="flex gap-2 mb-4 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-thin">
+                {/* Mode Selector — wrap on mobile so all tabs are reachable without horizontal scroll */}
+                <div className="flex flex-wrap gap-2 mb-4">
                     {modes.map(m => (
                         <button key={m.key} onClick={() => setMode(m.key)}
                             className={`shrink-0 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all whitespace-nowrap ${mode === m.key ? 'scale-[1.02]' : ''}`}
