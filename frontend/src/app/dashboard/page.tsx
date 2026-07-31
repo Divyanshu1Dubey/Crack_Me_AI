@@ -34,13 +34,6 @@ const heatmapFetcher = () => analyticsAPI.getHeatmap().then(r => r.data || []).c
 const streakFetcher = () => analyticsAPI.getStreak().then(r => r.data).catch(() => null);
 const announcementsFetcher = () => announcementsAPI.list().then(r => r.data || []).catch(() => []);
 
-const CAMPUS_MOMENTUM = [
-    { name: 'Riya S.', college: 'AIIMS Delhi', note: '412 Qs this month' },
-    { name: 'Aarav M.', college: 'CMC Vellore', note: '7-day streak active' },
-    { name: 'Nisha K.', college: 'JIPMER Puducherry', note: 'Top 9% mock rank' },
-    { name: 'Harsh V.', college: 'KGMU Lucknow', note: '58 weak topics fixed' },
-] as const;
-
 const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
 const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
 
@@ -370,30 +363,33 @@ export default function DashboardPage() {
                         </div>
                     )}
 
-                    {/* Hero Welcome Card */}
-                    <Card className="overflow-hidden border-0 shadow-md bg-slate-900 border-border text-white relative">
+                    {/* Hero Welcome Card — branded for both light and dark modes.
+                        In light mode we use a tinted brand surface instead of an
+                        opaque slate-900, so the dark text "Welcome back, Dr. ..."
+                        and the secondary buttons remain legible. */}
+                    <Card className="overflow-hidden border-0 shadow-md bg-sky-700 dark:bg-slate-900 text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
                             <Image src="/dashboard_hero.png" alt="Medical Hero" fill sizes="(min-width: 768px) 33vw, 0px" className="object-cover object-left" />
-                            <div className="absolute inset-0 bg-linear-to-r from-slate-900 to-transparent"></div>
+                            <div className="absolute inset-0 bg-linear-to-r from-sky-700 from-0% via-sky-700/60 to-transparent dark:from-slate-900 dark:via-slate-900/60"></div>
                         </div>
                         <CardContent className="p-0 relative z-10">
                             <div className="grid md:grid-cols-3">
                                 <div className="md:col-span-2 p-6 md:p-8">
-                                    <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium mb-4 text-blue-200">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-medium mb-4 text-white">
                                         <CustomIcon name="medical-stethoscope" label="Medical" className="w-3.5 h-3.5" variant="active" />
                                         CrackLabs Medical Companion
                                     </div>
-                                    <h1 className="text-2xl md:text-3xl font-bold mb-2">
+                                    <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white">
                                         Welcome back, Dr. {user?.first_name || user?.username || 'Doctor'}
                                     </h1>
-                                    <p className="text-sky-100 text-sm md:text-base mb-6 max-w-xl">
+                                    <p className="text-sky-50 text-sm md:text-base mb-6 max-w-xl">
                                         Your comprehensive preparation dashboard. Solve clinical case drills, review textbooks, and ask the AI Tutor for diagnostics guides.
                                     </p>
-                                    <div className="bg-sky-900/40 border border-sky-700/50 rounded-lg p-3 mb-6 max-w-xl flex items-start gap-3">
-                                        <Calendar className="w-5 h-5 text-sky-300 shrink-0 mt-0.5" />
+                                    <div className="bg-white/15 border border-white/30 rounded-lg p-3 mb-6 max-w-xl flex items-start gap-3">
+                                        <Calendar className="w-5 h-5 text-white shrink-0 mt-0.5" />
                                         <div>
-                                            <h4 className="text-sm font-semibold text-sky-100">UPSC CMS 2026 Cycle Dates</h4>
-                                            <p className="text-xs text-sky-300">Notification: Mar 11, 2026 | Exam: Aug 2, 2026</p>
+                                            <h4 className="text-sm font-semibold text-white">UPSC CMS 2026 Cycle Dates</h4>
+                                            <p className="text-xs text-sky-50">Notification: Mar 11, 2026 | Exam: Aug 2, 2026</p>
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-3">
@@ -410,16 +406,16 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="p-6 md:p-8 bg-black/10 backdrop-blur-sm space-y-4">
                                     <div className="rounded-xl bg-white/15 p-4">
-                                        <p className="text-xs text-sky-100 mb-1">Current Streak</p>
-                                        <p className="text-3xl font-bold">{streak?.current_streak || 0} <span className="text-sm font-medium text-sky-100">days</span></p>
+                                        <p className="text-xs text-sky-50 mb-1">Current Streak</p>
+                                        <p className="text-3xl font-bold text-white">{streak?.current_streak || 0} <span className="text-sm font-medium text-sky-50">days</span></p>
                                     </div>
                                     <div className="rounded-xl bg-white/15 p-4">
-                                        <p className="text-xs text-sky-100 mb-1">Today&apos;s Questions</p>
-                                        <p className="text-3xl font-bold">{todayActivity.questions_attempted}</p>
+                                        <p className="text-xs text-sky-50 mb-1">Today&apos;s Questions</p>
+                                        <p className="text-3xl font-bold text-white">{todayActivity.questions_attempted}</p>
                                     </div>
                                     <div className="rounded-xl bg-white/15 p-4">
-                                        <p className="text-xs text-sky-100 mb-1">Overall Accuracy</p>
-                                        <p className="text-3xl font-bold">{overall.overall_accuracy}%</p>
+                                        <p className="text-xs text-sky-50 mb-1">Overall Accuracy</p>
+                                        <p className="text-3xl font-bold text-white">{overall.overall_accuracy}%</p>
                                     </div>
                                 </div>
                             </div>
@@ -683,14 +679,16 @@ export default function DashboardPage() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <Badge className="bg-sky-600 text-white hover:bg-sky-600 py-1 px-2.5 font-bold">2,900+ active aspirants this week</Badge>
-                                    {CAMPUS_MOMENTUM.map((student) => (
-                                        <div key={student.name} className="rounded-xl border border-border p-3">
-                                            <p className="text-sm font-semibold text-foreground">{student.name}</p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">{student.college}</p>
-                                            <p className="text-xs font-medium text-sky-700 dark:text-sky-300 mt-1">{student.note}</p>
-                                        </div>
-                                    ))}
+                                    <p className="text-xs text-muted-foreground">
+                                        Real peer progress appears here once the leaderboard goes live. Until then, we don't show
+                                        invented names or aspirant counts — your privacy and trust matter more than a busy section.
+                                    </p>
+                                    <a
+                                        href="/leaderboard"
+                                        className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:underline"
+                                    >
+                                        Open the leaderboard →
+                                    </a>
                                 </CardContent>
                             </Card>
                         </div>
