@@ -1,10 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { questionsAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import QuestionEditModal from './QuestionEditModal';
 
 export default function AdminQuestionsEditorPage() {
+  const router = useRouter();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  // Client-side admin gate. The backend still enforces `IsAdminUser` on every
+  // mutation, but hiding destructive UI from non-admins keeps student
+  // sessions tidy and the audit log clean.
+  const isAdmin = !!user?.is_admin;
+
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -128,6 +137,19 @@ export default function AdminQuestionsEditorPage() {
   useEffect(() => {
     fetchQuestions();
   }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased]);
+
+  // Client-side admin gate. Backend enforces permissions; this just keeps
+  // non-admins from seeing destructive affordances.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+    if (!isAdmin) {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, isAuthenticated, isAdmin, router]);
 
   // Reset page whenever filters change so the user doesn't sit on an empty page
   const resetPage = () => setPage(1);
