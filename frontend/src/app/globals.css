@@ -773,24 +773,10 @@ body.sidebar-hidden .main-content {
   display: block;
 }
 
-/* Mobile menu button */
-.mobile-menu-btn {
-  display: none;
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 50;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
-  background: var(--color-card);
-  color: var(--color-foreground);
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-}
+/* Mobile menu button — full styling lives in the earlier rule (line ~714)
+   which already includes the @media (max-width: 768px) { display: flex } toggle.
+   This empty block is intentionally left as a marker so the earlier rule
+   remains the single source of truth for mobile-menu-btn styling. */
 
 /* Disabled button */
 .btn-primary:disabled {
