@@ -219,9 +219,9 @@ export default function Header() {
     : 'User settings';
 
   return (
-      <header className="sticky top-0 z-30 mb-4 flex h-16 items-center justify-between rounded-2xl border border-border/80 bg-card/80 px-4 shadow-sm backdrop-blur-xl md:px-6">
+      <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl md:gap-3 md:px-6">
       {/* Left: Page title */}
-      <div className="flex items-center gap-3 pl-12 md:pl-0">
+      <div className="flex min-w-0 items-center gap-3 pl-12 md:pl-0">
         <div className="md:hidden">
           <BrandMark href="/dashboard" compact showTagline={false} />
         </div>
@@ -233,7 +233,7 @@ export default function Header() {
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-2 md:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 md:gap-3">
         {/* Search shortcut */}
         <button onClick={() => setSearchOpen(true)}
           className="hidden md:flex items-center gap-2 rounded-xl border border-border/80 bg-muted/70 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent">
@@ -252,9 +252,9 @@ export default function Header() {
 
         {/* Token balance */}
         {tokenInfo && (
-          <Link href="/tokens" className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:border-amber-500/30">
+          <Link href="/tokens" className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:border-amber-500/30 md:px-3">
             <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <span className="hidden text-sm font-semibold text-amber-700 dark:text-amber-400 md:inline">
               {tokenInfo.is_admin ? 'Admin' : `${tokenInfo.available} Tokens`}
             </span>
           </Link>
