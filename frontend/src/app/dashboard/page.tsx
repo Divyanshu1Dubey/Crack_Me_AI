@@ -380,7 +380,7 @@ export default function DashboardPage() {
                                         CrackLabs Medical Companion
                                     </div>
                                     <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white">
-                                        Welcome back, Dr. {user?.first_name || user?.username || 'Doctor'}
+                                        {user?.role === 'admin' ? 'Welcome back' : 'Welcome back, Dr.'} {user?.role === 'admin' ? (user?.first_name || user?.username || 'Admin') : (user?.first_name || user?.username || 'Doctor')}
                                     </h1>
                                     <p className="text-sky-50 text-sm md:text-base mb-6 max-w-xl">
                                         Your comprehensive preparation dashboard. Solve clinical case drills, review textbooks, and ask the AI Tutor for diagnostics guides.

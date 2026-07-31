@@ -223,7 +223,7 @@ export default function Sidebar() {
                 <div className="hidden md:block px-4 pt-4 pb-3">
                     <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
-                        <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                        <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground dark:text-slate-300">
                             <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
                             {decodeMojiB(trackLabel)}
                         </div>
@@ -331,7 +331,7 @@ export default function Sidebar() {
                         <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
                             <Sparkles className="w-3 h-3 text-amber-500" /> Quick Tip
                         </p>
-                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground dark:text-slate-300">
                             Take one timed test daily and review your top 3 weak tags.
                         </p>
                     </div>

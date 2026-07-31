@@ -14,7 +14,8 @@ export default function ThemeToggle() {
 
     return (
         <button
-            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTheme(isDark ? 'light' : 'dark'); }}
             className="p-2 rounded-lg hover:bg-accent transition-colors"
             title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >

@@ -26,9 +26,9 @@ export function WatermarkOverlay() {
   const watermarkText = `${user.email || user.username} • ${timestamp}`;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden opacity-[0.03] select-none flex flex-wrap justify-center items-center gap-24 transform -rotate-12 scale-150">
-      {[...Array(50)].map((_, i) => (
-        <span key={i} className="text-xl font-bold whitespace-nowrap text-foreground">
+    <div aria-hidden="true" className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden opacity-[0.015] select-none flex flex-wrap justify-center items-center gap-24 transform -rotate-12 scale-150">
+      {[...Array(30)].map((_, i) => (
+        <span key={i} aria-hidden="true" className="text-xl font-medium whitespace-nowrap text-foreground">
           {watermarkText}
         </span>
       ))}
