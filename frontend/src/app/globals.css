@@ -578,8 +578,15 @@ h4 {
   }
 }
 
-.sidebar.desktop-hidden {
-  display: none !important;
+/* Desktop-only: hide sidebar when user has collapsed it. On mobile (<768px)
+   the sidebar is a slide-in drawer controlled by .open, so the
+   `desktop-hidden` class (which is applied based on the SidebarContext
+   desktop-open state) must NOT trigger display:none — otherwise the
+   mobile drawer can never open. */
+@media (min-width: 769px) {
+  .sidebar.desktop-hidden {
+    display: none !important;
+  }
 }
 
 body.sidebar-hidden .main-content {
