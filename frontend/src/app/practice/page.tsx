@@ -100,6 +100,7 @@ function PracticeInner() {
     const [picked, setPicked] = useState<string>("");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [showFilters, setShowFilters] = useState(false);
 
     // Cached reference data for filter UI.
@@ -203,7 +204,21 @@ function PracticeInner() {
         try {
             await api.post(`/api/questions/${q.id}/practice/attempt/`, { answer });
             setRevealed(true);
-        } catch {/* swallow */} finally { setBusy(false); }
+            setSubmitError(null);
+        } catch (err) {
+            // Don't swallow errors — the user needs to know their attempt
+            // didn't persist so they can retry. The answer is still
+            // visually chosen (setPicked above) so the explanation flow
+            // can proceed, but the analytics row will be missing.
+            // Re-throwing here would let the caller choose to revert; we
+            // just keep the picked state and flag the failure.
+            const message = err instanceof Error ? err.message : 'Could not save your attempt.';
+            setSubmitError(message);
+            // eslint-disable-next-line no-console
+            console.error('practice attempt failed', err);
+        } finally {
+            setBusy(false);
+        }
     }, [q]);
 
     const onState = useCallback((s: QuestionState) => {
@@ -332,6 +347,17 @@ function PracticeInner() {
 
                     {q.id ? (
                         <ImageGallery questionId={q.id} fallbackImage={q.page_screenshot} />
+                    ) : null}
+
+                    {submitError ? (
+                        <div
+                            role="alert"
+                            className="mt-3 rounded border border-amber-500/60 bg-amber-900/30 px-3 py-2 text-sm text-amber-100"
+                        >
+                            Couldn't save your attempt: {submitError}. The answer is still selected
+                            but the analytics row may be missing — try Submit again or check your
+                            connection.
+                        </div>
                     ) : null}
 
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
