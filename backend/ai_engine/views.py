@@ -483,10 +483,17 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
 
 
 class RAGSearchView(AITutorThrottleMixin, APIView):
-    """Semantic search across indexed textbooks."""
+    """Semantic search across indexed textbooks.
+
+    Auth + token-cost: RAG search is a free (no-token) lookup, but it still
+    requires authentication. Anonymous callers (including the DEBUG-mode
+    allow-list) are rejected so a single attacker can't amplify compute
+    against the TF-IDF store. The `ai_tutor` throttle cap (30/min) gives
+    a per-user rate ceiling.
+    """
 
     def get_permissions(self):
-        return _get_permission()
+        return [IsAuthenticated()]
 
     def post(self, request):
         query = request.data.get('query', '')
@@ -585,10 +592,14 @@ class RAGAnswerView(AITutorThrottleMixin, APIView):
 
 
 class TextbookReferenceView(AITutorThrottleMixin, APIView):
-    """Find textbook references for a question or topic."""
+    """Find textbook references for a question or topic.
+
+    Auth required even in DEBUG: textbook-reference lookups drive real
+    RAG cost and must not be reachable by anonymous callers.
+    """
 
     def get_permissions(self):
-        return _get_permission()
+        return [IsAuthenticated()]
 
     def post(self, request):
         question_text = request.data.get('question_text', '')
