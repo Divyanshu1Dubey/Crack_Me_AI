@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run Django checks
-        run: python manage.py check --deploy 2>&1 || true
+        run: python manage.py check --deploy 2>&1
       - name: Run migrations check
         run: python manage.py makemigrations --check --dry-run
       - name: Run tests
@@ -50,7 +50,7 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Security audit
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high
       - name: Build
         run: npm run build
         env:
@@ -67,9 +67,9 @@ jobs:
       - name: Install security tools
         run: pip install bandit safety
       - name: Bandit SAST scan
-        run: bandit -r backend/ -x backend/__pycache__,backend/migrations --skip B101 -f json -o bandit-report.json || true
+        run: bandit -r backend/ -x backend/__pycache__,backend/migrations --skip B101 -f json -o bandit-report.json
       - name: Safety dependency check
-        run: safety check -r backend/requirements.txt || true
+        run: safety check -r backend/requirements.txt
 
   # Visual regression — runs the Playwright visual-snapshots suite against
   # the production site (cracklabs.app) using a real student account.
