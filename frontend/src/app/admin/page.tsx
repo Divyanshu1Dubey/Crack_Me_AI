@@ -1467,7 +1467,7 @@ export default function AdminDashboardPage() {
         { label: 'Active Today', value: data?.active_today || 0, icon: TrendingUp, color: 'text-green-500' },
         { label: 'Total Questions', value: data?.total_questions || 0, icon: BookOpen, color: 'text-purple-500' },
         { label: 'Tests Taken', value: data?.total_tests_taken || 0, icon: FileText, color: 'text-cyan-500' },
-        { label: 'With Answers', value: `${data?.answer_percentage?.toFixed(1) || 0}%`, icon: CheckCircle, color: 'text-emerald-500' },
+        { label: 'With Answers', value: `${data?.questions_with_answer?.toLocaleString() || 0} / ${data?.total_questions?.toLocaleString() || 0}`, icon: CheckCircle, color: 'text-emerald-500' },
         { label: 'With Explanations', value: data?.questions_with_explanation || 0, icon: CheckCircle, color: 'text-teal-500' },
         { label: 'Unresolved Feedback', value: data?.unresolved_feedback || 0, icon: AlertTriangle, color: data?.unresolved_feedback ? 'text-amber-500' : 'text-slate-400' },
     ];

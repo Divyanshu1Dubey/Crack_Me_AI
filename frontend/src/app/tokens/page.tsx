@@ -350,7 +350,7 @@ export default function TokensPage() {
                                                         <td className="py-2 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{u.user_id}</td>
                                                         <td className="py-2 px-2">
                                                             <div className="font-medium">{u.username}</div>
-                                                            <div style={{ color: 'var(--text-secondary)' }}>{u.email}</div>
+                                                            <div style={{ color: 'var(--text-secondary)' }}>{u.email ? `${u.email.slice(0, 3)}***@${u.email.split('@')[1] || ''}` : '—'}</div>
                                                             {u.is_admin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>ADMIN</span>}
                                                         </td>
                                                         <td className="text-right py-2 px-2 font-bold" style={{ color: u.is_admin ? '#8b5cf6' : '#f59e0b' }}>

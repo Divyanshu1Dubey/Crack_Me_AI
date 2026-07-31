@@ -204,7 +204,7 @@ export default function SettingsPage() {
                                     <span style={{ color: 'var(--text-secondary)' }}>Email</span><span>{user?.email}</span>
                                 </div>
                                 <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Name</span><span>{user?.first_name} {user?.last_name}</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Name</span><span>{[user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Not provided'}</span>
                                 </div>
                                 <div className="flex justify-between py-2" style={{ borderBottom: '1px solid rgba(139,149,168,0.05)' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>Mobile Number</span><span>{user?.phone || 'Not provided'}</span>
