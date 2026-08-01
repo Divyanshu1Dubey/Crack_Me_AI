@@ -21,7 +21,7 @@ const ROUTE_BY_EXAM: Record<string, string> = {
   fmge: '/questions?exam=fmge',
 };
 
-export default function ExamSwitcher() {
+export default function ExamSwitcher({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [exam, setExam] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -42,14 +42,14 @@ export default function ExamSwitcher() {
     router.refresh();
   };
 
-  if (!mounted) return <div className="w-[140px] h-9 bg-muted rounded-md animate-pulse" />;
+  if (!mounted) return <div className={`bg-muted rounded-md animate-pulse ${compact ? 'w-9 h-9' : 'w-[140px] h-9'}`} />;
 
   return (
-    <div className="flex items-center gap-2 bg-muted/50 rounded-md border p-1 pl-3 shadow-sm">
-      <BookOpen className="w-4 h-4 text-muted-foreground" />
+    <div className={`flex items-center gap-1 bg-muted/50 rounded-md border shadow-sm ${compact ? 'p-1' : 'p-1 pl-3'}`}>
+      <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
       <Select value={exam} onValueChange={handleExamChange}>
-        <SelectTrigger className="w-[120px] h-7 border-0 bg-transparent focus:ring-0 focus:ring-offset-0 p-0 pr-3 shadow-none text-xs font-semibold">
-          <SelectValue placeholder="Target Exam" />
+        <SelectTrigger className={`border-0 bg-transparent focus:ring-0 focus:ring-offset-0 p-0 pr-3 shadow-none text-xs font-semibold ${compact ? 'w-9 h-7 min-w-9' : 'w-[120px] h-7'}`}>
+          <SelectValue placeholder="Exam" />
         </SelectTrigger>
         <SelectContent>
           {EXAM_OPTIONS.map((opt) => (

@@ -376,9 +376,9 @@ export default function Header() {
           </Button>
         </div>
 
-        {/* Exam Switcher */}
-        <div className="hidden sm:block">
-          <ExamSwitcher />
+        {/* Exam Switcher — visible on mobile so users can switch CMS/NEET PG/INI-CET */}
+        <div className="block">
+          <ExamSwitcher compact />
         </div>
         {/* Theme */}
         <ThemeToggle />

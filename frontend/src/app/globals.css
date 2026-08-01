@@ -656,10 +656,16 @@ body.sidebar-hidden .main-content {
     transform: translateX(0);
     box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45), 8px 0 30px rgba(2, 6, 23, 0.18);
   }
+  /* Top padding: small (12px) because the sticky <header> already provides
+     the visible top offset. The 56px previously reserved for the floating
+     menu button was redundant — the menu button (fixed top:12px, 44x44)
+     sits inside the sticky header's footprint (h-16=64px), so removing
+     this padding does not cause overlap and reclaims ~44px of vertical
+     space on real phones (≈5% of an 844px viewport). */
   .main-content {
     margin-left: 0;
-    padding: 56px 12px 116px; /* 56px leaves room for the floating menu button */
-    padding-bottom: 116px; /* Space for bottom nav + sticky CTA */
+    padding: 12px 12px 116px;
+    padding-bottom: calc(116px + env(safe-area-inset-bottom, 0));
   }
   .page-container {
     padding-inline: 2px;
@@ -1127,16 +1133,34 @@ body.sidebar-hidden .main-content {
   .qbank-grid {
     grid-template-columns: 1fr;
   }
-  /* Reorder: when .has-selected is present, list moves to order-2
-     (below) and detail moves to order-1 (top). */
+  /* Reorder: when .has-selected is present, detail moves to order-1
+     (TOP of the document flow) and list moves to order-2 (BELOW).
+     Students see the answer card right after the page header without
+     having to scroll past 20+ list rows first. */
   .qbank-grid.has-selected .qbank-list { order: 2; }
   .qbank-grid.has-selected .qbank-detail { order: 1; }
+  /* Cap the list's footprint when a question is selected so the detail
+     (order-1) is visible immediately without scrolling. 50vh leaves the
+     list reachable for "next question" jumps but stops it from
+     monopolising the viewport. */
+  .qbank-grid.has-selected .qbank-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  /* Keep the detail card's top edge below the sticky <header> (h-16 = 64px)
+     plus an 8px visual gutter, so the sticky card never slides under
+     the page chrome. z-index 5 keeps it above the list rows without
+     competing with the header (z-30) or floating menu button (z-50). */
   .qbank-detail {
     position: sticky;
-    top: 0;
-    z-index: 10;
-    background: linear-gradient(180deg, var(--color-background) 78%, transparent);
+    top: 72px;
+    z-index: 5;
+    max-height: calc(100vh - 88px);
+    overflow-y: auto;
+    background: linear-gradient(180deg, var(--color-background) 92%, transparent);
     padding-bottom: 8px;
+    scrollbar-width: thin;
   }
 }
 

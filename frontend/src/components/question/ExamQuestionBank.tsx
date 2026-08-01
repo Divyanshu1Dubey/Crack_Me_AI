@@ -940,7 +940,7 @@ function ExamQuestionBankInner({
                             ) : (
                                 <>
                                     {questions.map(q => (
-                                        <Card key={q.id} className={`cursor-pointer border-border/80 bg-card/90 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selectedQuestion === q.id ? 'border-primary/70 ring-2 ring-inset ring-primary/60 shadow-md' : ''}`}
+                                        <Card key={q.id} className={`cursor-pointer border-border/80 bg-card/90 p-3 md:p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selectedQuestion === q.id ? 'border-primary/70 ring-2 ring-inset ring-primary/60 shadow-md' : ''}`}
                                             onClick={() => openQuestion(q.id)}>
                                             <div className="flex justify-between items-start mb-2">
                                                 <Badge variant="secondary" className="text-xs">
@@ -971,7 +971,7 @@ function ExamQuestionBankInner({
                                                     </button>
                                                 </div>
                                             </div>
-                                            <p className="text-sm leading-relaxed text-foreground">{(() => {
+                                            <p className="text-sm leading-relaxed text-foreground line-clamp-3 md:line-clamp-none">{(() => {
                                                 // Decode mojibake (e.g. "iÃ©iÃiÃ©") before display so list
                                                 // cards on the bank show readable text. Falls back to a
                                                 // generic placeholder when the row is still unreadable
