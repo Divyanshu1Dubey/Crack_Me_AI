@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
@@ -23,8 +24,8 @@ const PERIODS: Array<{ key: 'weekly' | 'monthly' | 'all'; label: string }> = [
 ];
 
 export default function LeaderboardPage() {
-    const { user, isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { user } = useAuth();
+    const { ready } = useRequireAuth();
     const searchParams = useSearchParams();
 
     const initialPeriod = normalizePeriod(searchParams.get('period'));
@@ -54,14 +55,10 @@ export default function LeaderboardPage() {
 
     // Auth + initial load
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-            return;
-        }
-        if (isAuthenticated) {
+        if (ready) {
             fetchEnvelope(period);
         }
-    }, [authLoading, isAuthenticated, period, router, fetchEnvelope]);
+    }, [ready, period, fetchEnvelope]);
 
     // URL sync — keep ?period= shareable.
     const handlePeriod = (next: 'weekly' | 'monthly' | 'all') => {
@@ -74,7 +71,7 @@ export default function LeaderboardPage() {
         }
     };
 
-    if (authLoading) return null;
+    if (!ready) return null;
 
     const me = envelope?.me ?? null;
     const rival = envelope?.rival ?? null;

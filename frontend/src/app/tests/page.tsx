@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { testsAPI, questionsAPI } from '@/lib/api';
@@ -28,7 +28,7 @@ interface Subject {
 }
 
 export default function TestsPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { ready } = useRequireAuth();
     const router = useRouter();
     const [tests, setTests] = useState<TestItem[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -48,8 +48,7 @@ export default function TestsPage() {
     }, [examType]);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) {
+        if (ready) {
             Promise.all([
                 testsAPI.list({ exam_type: examType }),
                 questionsAPI.getSubjects({ exam_type: examType }),
@@ -58,7 +57,7 @@ export default function TestsPage() {
                 setSubjects(sRes.data.results || sRes.data || []);
             }).catch(() => { }).finally(() => setLoading(false));
         }
-    }, [authLoading, isAuthenticated, router, examType]);
+    }, [ready, examType]);
 
     const generateTest = async (type: string, subjectId?: number) => {
         setGenerating(true);

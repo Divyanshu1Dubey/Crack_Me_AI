@@ -12,7 +12,7 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn } from 'lucide-react';
@@ -54,6 +54,11 @@ interface Question {
     video_subtitles_url?: string;
     video_duration?: number;
     images?: QuestionImage[];
+    // Bug 2026-08-01 admin-uploaded explanation image shown next to
+    // the question stem before any attempt. Backend now returns a
+    // role-filtered `stem_images` list; mirror the field here so the
+    // typecheck passes.
+    stem_images?: QuestionImage[];
     is_image_based?: boolean;
 }
 
@@ -65,7 +70,7 @@ interface TestData {
 }
 
 export default function TakeTestPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { ready } = useRequireAuth();
     const router = useRouter();
     const params = useParams();
     const testId = Number(params.id);
@@ -112,21 +117,18 @@ export default function TakeTestPage() {
     }, [reviewIdx]);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated && testId) {
-            setError(null);
-            testsAPI.start(testId).then(res => {
-                setTest(res.data.test);
-                setQuestions(res.data.questions);
-                setAttemptId(res.data.attempt_id);
-                setTimeLeft(res.data.test.time_limit_minutes * 60);
-                startTimes.current[0] = Date.now();
-            }).catch(err => {
-                setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
-            }).finally(() => setLoading(false));
-        }
-
-    }, [authLoading, isAuthenticated, testId]);
+        if (!ready || !testId) return;
+        setError(null);
+        testsAPI.start(testId).then(res => {
+            setTest(res.data.test);
+            setQuestions(res.data.questions);
+            setAttemptId(res.data.attempt_id);
+            setTimeLeft(res.data.test.time_limit_minutes * 60);
+            startTimes.current[0] = Date.now();
+        }).catch(err => {
+            setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
+        }).finally(() => setLoading(false));
+    }, [ready, testId]);
 
     // Timer — uses ref to avoid stale closure
     useEffect(() => {
@@ -911,10 +913,21 @@ export default function TakeTestPage() {
                         <div className="text-lg leading-relaxed font-medium mb-10 pb-6" style={{ borderBottom: '1px solid var(--glass-border)' }}>
                             <FormattedText text={currentQ.question_text} />
                         </div>
-                        {/* Images */}
-                        {currentQ?.images && currentQ.images.length > 0 && (
+                        {/* Images — prefer the backend-filtered `stem_images`
+                            (excludes role='explanation') so admin-uploaded
+                            explanation figures do not appear next to the
+                            question stem before the student attempts it.
+                            Falls back to filtering `images` ourselves for
+                            legacy rows. The full `images` array is still
+                            passed to `<FormattedText>` for `[[img:N]]`
+                            token resolution. */}
+                        {((Array.isArray(currentQ?.stem_images) && currentQ.stem_images.length > 0)
+                          || (Array.isArray(currentQ?.images) && currentQ.images.some((img: any) => img.role !== 'explanation'))) && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                                {currentQ.images.map(img => (
+                                {(Array.isArray(currentQ?.stem_images) && currentQ.stem_images.length > 0
+                                    ? currentQ.stem_images
+                                    : (currentQ?.images || []).filter((img: any) => img.role !== 'explanation')
+                                ).map(img => (
                                     <button
                                         key={img.id}
                                         type="button"

@@ -2,13 +2,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
 import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2 } from 'lucide-react';
 
 export default function SettingsPage() {
-    const { user, isAuthenticated, loading: authLoading, logout, refreshProfile } = useAuth();
+    const { user, logout, refreshProfile } = useAuth();
+    const { ready } = useRequireAuth();
     const router = useRouter();
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -28,11 +30,7 @@ export default function SettingsPage() {
     const [deviceError, setDeviceError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.push('/login');
-    }, [authLoading, isAuthenticated, router]);
-
-    useEffect(() => {
-        if (user) {
+        if (ready && user) {
             setForm({
                 first_name: user.first_name || '',
                 last_name: user.last_name || '',
@@ -41,7 +39,7 @@ export default function SettingsPage() {
                 target_exam: user.target_exam || 'UPSC CMS',
             });
         }
-    }, [user]);
+    }, [ready, user]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -73,18 +71,19 @@ export default function SettingsPage() {
     };
 
     useEffect(() => {
-        if (isAuthenticated) {
+        if (ready) {
             fetchDevices();
         }
-    }, [isAuthenticated]);
+    }, [ready]);
 
     const handleRemoveDevice = async (deviceId: number) => {
+        if (!confirm('Remove this device session? You will be logged out of that device.')) return;
         try {
             await authAPI.logoutDevice(deviceId);
             setDevices(devices.filter(d => d.id !== deviceId));
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
-            alert(error.response?.data?.error || "Failed to remove device");
+            setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to remove device' });
         }
     };
 

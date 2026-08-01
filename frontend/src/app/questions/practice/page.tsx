@@ -8,7 +8,7 @@
 'use client';
 import { Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
 import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
@@ -56,7 +56,7 @@ export default function PracticePage() {
 }
 
 function PracticeContent() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { ready } = useRequireAuth();
     const { activeTrack } = useExamTrack();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -96,18 +96,16 @@ function PracticeContent() {
     const [flagError, setFlagError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
+        if (!ready) return;
         if (!year) { router.push('/questions'); return; }
-        if (isAuthenticated && year) {
-            const resolvedExamType = practiceSlugToExamType(examParam) || examParam;
-            questionsAPI.list({ year, exam_type: resolvedExamType, page_size: 200 }).then(res => {
-                const qs = res.data.results || res.data || [];
-                setQuestions(qs);
-            }).catch(() => {
-                setQuestions([]);
-            }).finally(() => setLoading(false));
-        }
-    }, [authLoading, isAuthenticated, router, year, examParam]);
+        const resolvedExamType = practiceSlugToExamType(examParam) || examParam;
+        questionsAPI.list({ year, exam_type: resolvedExamType, page_size: 200 }).then(res => {
+            const qs = res.data.results || res.data || [];
+            setQuestions(qs);
+        }).catch(() => {
+            setQuestions([]);
+        }).finally(() => setLoading(false));
+    }, [ready, router, year, examParam]);
 
     // Detect slug-level fallbacks: ini-cet, inicet, medical-officer all map to cms
     // because those tracks aren't yet populated in our DB. Surface a warning so

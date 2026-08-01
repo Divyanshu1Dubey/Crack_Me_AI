@@ -7,8 +7,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
@@ -80,8 +79,7 @@ const PURCHASE_OPTIONS = [
 ];
 
 export default function TokensPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { ready } = useRequireAuth();
     const [balance, setBalance] = useState<TokenBalance | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,8 +102,7 @@ export default function TokensPage() {
     const [adminAction, setAdminAction] = useState(false);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) {
+        if (ready) {
             Promise.all([
                 authAPI.getTokenBalance().catch(() => ({ data: null })),
                 authAPI.getTokenHistory().catch(() => ({ data: [] })),
@@ -114,7 +111,7 @@ export default function TokensPage() {
                 setTransactions(Array.isArray(histRes.data) ? histRes.data : histRes.data?.results || []);
             }).finally(() => setLoading(false));
         }
-    }, [authLoading, isAuthenticated, router]);
+    }, [ready]);
 
     // Load admin data when balance confirms admin
     useEffect(() => {
@@ -225,7 +222,7 @@ export default function TokensPage() {
         }
     };
 
-    if (authLoading || loading) {
+    if (!ready || loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="animate-pulse text-xl gradient-text">Loading Tokens...</div>
@@ -544,12 +541,16 @@ export default function TokensPage() {
                                 </div>
                             ))}
                         </div>
-                        {selectedPurchase && (
-                            <button onClick={handlePurchase} disabled={purchasing} className="btn-primary w-full justify-center py-3">
-                                {purchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                                {purchasing ? 'Processing...' : `Buy ${selectedPurchase} Tokens for ₹${selectedPurchase}`}
-                            </button>
-                        )}
+                        {selectedPurchase && (() => {
+                            const opt = PURCHASE_OPTIONS.find(o => o.amount === selectedPurchase);
+                            const price = opt ? opt.price.toLocaleString('en-IN') : selectedPurchase.toLocaleString('en-IN');
+                            return (
+                                <button onClick={handlePurchase} disabled={purchasing} className="btn-primary w-full justify-center py-3">
+                                    {purchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+                                    {purchasing ? 'Processing...' : `Buy ${selectedPurchase} Tokens for ₹${price}`}
+                                </button>
+                            );
+                        })()}
                         {/* Token purchases are temporarily disabled while payment
                             integration is being finalized. The backend returns 503 +
                             code "payments_unavailable"; we surface that here so

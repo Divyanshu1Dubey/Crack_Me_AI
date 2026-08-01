@@ -1,7 +1,6 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { jobsAPI } from '@/lib/api';
@@ -50,8 +49,7 @@ export default function JobsPage() {
 }
 
 function JobsContent() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { ready } = useRequireAuth();
     const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -60,15 +58,11 @@ function JobsContent() {
     const [examTrack, setExamTrack] = useState('all');
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-            return;
-        }
-        if (isAuthenticated) {
+        if (ready) {
             fetchJobs(1, true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authLoading, isAuthenticated, router]);
+    }, [ready]);
 
     const fetchJobs = async (pageNum: number, isInitial = false) => {
         try {

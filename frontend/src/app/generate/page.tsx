@@ -17,11 +17,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, Coins } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI } from '@/lib/api';
 import {
@@ -39,9 +38,8 @@ import type { ComposerSubject, Difficulty } from '@/components/QuestionComposer'
 import { useTokenWallet } from '@/hooks/useTokenWallet';
 
 export default function GeneratePage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { ready } = useRequireAuth();
     const { activeTrack, hydrated } = useExamTrack();
-    const router = useRouter();
     const [subjects, setSubjects] = useState<ComposerSubject[]>([]);
     // Track the user's explicit pick separately so we can derive
     // `selectedSubject` against `activeTrack` without setState-in-effect.
@@ -53,16 +51,11 @@ export default function GeneratePage() {
     const gen = useGenerate();
     const { wallet } = useTokenWallet();
 
-    // Auth gate.
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.push('/login');
-    }, [authLoading, isAuthenticated, router]);
-
     // Track-aware subject fetch. On a track change we invalidate the
     // user's prior pick so the derived `selectedSubject` falls back to
     // the new track's default.
     useEffect(() => {
-        if (!isAuthenticated || !hydrated) return;
+        if (!ready || !hydrated) return;
         let cancelled = false;
         questionsAPI.getSubjects({ exam_type: activeTrack })
             .then(res => {
@@ -74,7 +67,7 @@ export default function GeneratePage() {
             })
             .catch(() => { /* keep fallback list */ });
         return () => { cancelled = true; };
-    }, [isAuthenticated, hydrated, activeTrack]);
+    }, [ready, hydrated, activeTrack]);
 
     // Derived subject — no setState-in-effect. If the user has explicitly
     // picked a subject, use that; otherwise use the active track's default.
@@ -104,7 +97,7 @@ export default function GeneratePage() {
         count,
     });
 
-    if (authLoading || !hydrated) return null;
+    if (!ready || !hydrated) return null;
 
     // Score derived state.
     const answeredCount = Object.keys(gen.selectedAnswers).length;

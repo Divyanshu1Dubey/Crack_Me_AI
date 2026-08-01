@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI, questionsAPI, announcementsAPI } from '@/lib/api';
@@ -134,9 +134,8 @@ const BonusTimerBanner = () => {
 };
 
 export default function DashboardPage() {
-    const { user, loading: authLoading, isAuthenticated } = useAuth();
-    const router = useRouter();
-    const isRedirecting = !authLoading && !isAuthenticated;
+    const { user } = useAuth();
+    const { ready } = useRequireAuth();
 
     const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
 
@@ -152,43 +151,37 @@ export default function DashboardPage() {
     };
 
     const { data: dashData, isLoading: loadingDash } = useSWR(
-        isAuthenticated ? 'dashboard' : null,
+        ready ? 'dashboard' : null,
         dashboardFetcher,
         swrConfig
     );
 
     // Dynamic SWR keys based on selected exam source
     const { data: stats } = useSWR(
-        isAuthenticated ? ['question-stats', selectedExam] : null,
+        ready ? ['question-stats', selectedExam] : null,
         () => questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null),
         swrConfig
     );
 
     const { data: heatmap = [] } = useSWR(
-        isAuthenticated ? 'heatmap' : null,
+        ready ? 'heatmap' : null,
         heatmapFetcher,
         swrConfig
     );
 
     const { data: streak } = useSWR(
-        isAuthenticated ? 'streak' : null,
+        ready ? 'streak' : null,
         streakFetcher,
         swrConfig
     );
 
     const { data: announcements = [] } = useSWR(
-        isAuthenticated ? 'announcements' : null,
+        ready ? 'announcements' : null,
         announcementsFetcher,
         swrConfig
     );
 
     const loading = loadingDash;
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.replace('/login');
-        }
-    }, [authLoading, isAuthenticated, router]);
 
     const heatmapByDate = useMemo<Map<string, HeatmapDay>>(() => {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));
@@ -296,7 +289,7 @@ export default function DashboardPage() {
         return { weeks, monthMarkers };
     }, [heatmapByDate, todayDateStr]);
 
-    if (authLoading || isRedirecting) {
+    if (!ready) {
         return (
             <div className="min-h-screen bg-background">
                 <Sidebar />

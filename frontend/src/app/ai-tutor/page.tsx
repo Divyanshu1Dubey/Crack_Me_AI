@@ -7,8 +7,7 @@
 'use client';
 import React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
@@ -189,8 +188,7 @@ function SafeUserText({ content }: { content: unknown }) {
 }
 
 export default function AITutorPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { ready } = useRequireAuth();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -202,16 +200,12 @@ export default function AITutorPage() {
     const chatRef = useRef<HTMLDivElement>(null);
     const lastAiMessageRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.push('/login');
-    }, [authLoading, isAuthenticated, router]);
-
     // Load chat sessions on mount
     useEffect(() => {
-        if (isAuthenticated) {
+        if (ready) {
             loadSessions();
         }
-    }, [isAuthenticated]);
+    }, [ready]);
 
     const loadSessions = async () => {
         setLoadingSessions(true);
@@ -278,14 +272,18 @@ export default function AITutorPage() {
 
     const deleteSession = async (sessionId: number, e: React.MouseEvent) => {
         e.stopPropagation();
+        if (!confirm('Delete this chat session? This cannot be undone.')) return;
         try {
             await aiAPI.deleteChatSession(sessionId);
             setSessions(prev => prev.filter(s => s.id !== sessionId));
             if (currentSessionId === sessionId) {
                 startNewChat();
             }
-        } catch {
-            // Ignore deletion failures silently to avoid breaking chat flow.
+        } catch (err) {
+            if (process.env.NODE_ENV !== 'production') {
+                // eslint-disable-next-line no-console
+                console.error('Failed to delete chat session:', err);
+            }
         }
     };
 

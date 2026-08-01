@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI, questionsAPI } from '@/lib/api';
@@ -43,8 +43,8 @@ interface ScholarshipQuestion {
 }
 
 export default function SubscriptionPage() {
-    const { user, isAuthenticated, loading: authLoading, refreshProfile } = useAuth();
-    const router = useRouter();
+    const { user, refreshProfile } = useAuth();
+    useRequireAuth();
     const [subscribing, setSubscribing] = useState(false);
     const [verifying, setVerifying] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -92,11 +92,7 @@ export default function SubscriptionPage() {
     } | null>(null);
     const [generatingAnalysis, setGeneratingAnalysis] = useState(false);
 
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        }
-    }, [authLoading, isAuthenticated, router]);
+    // Auth is handled by useRequireAuth.
 
     // Lazy-load subscription history when the user expands the history panel
     useEffect(() => {
@@ -129,19 +125,39 @@ export default function SubscriptionPage() {
             const pay = inv.payment;
             const issuedTo = inv.issued_to;
             // Build a small printable HTML window with the invoice details.
+            // SECURITY: every server-controlled field is HTML-escaped before
+            // being interpolated into the document. The earlier version used
+            // raw template-literal interpolation of fields like
+            // `issuedTo.email`, `pay.razorpay_payment_id`, and `sub.status`,
+            // which means a malicious or malformed backend response (or an
+            // admin who edits a subscription row) could inject arbitrary
+            // HTML/script into the pop-up. This is an XSS sink in a
+            // trusted-money flow (the invoice pop-up that students print).
             const win = window.open('', '_blank', 'width=720,height=900');
             if (!win) {
-                alert('Pop-up blocked. Please allow pop-ups to view the invoice.');
+                setErrorMessage('Pop-up blocked. Please allow pop-ups to view the invoice.');
                 return;
             }
+            const escape = (s: unknown): string =>
+                String(s ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
             const purchaseDate = sub?.starts_at
                 ? new Date(sub.starts_at).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' })
                 : '—';
             const expiry = sub?.expires_at
                 ? new Date(sub.expires_at).toLocaleDateString('en-IN', { dateStyle: 'long' })
                 : 'Lifetime';
+            const statusClass = sub?.status && sub.status !== 'active' ? escape(sub.status) : '';
+            const amount = pay?.amount ?? sub?.amount_paid ?? 0;
+            const amountFmt = Number(amount).toLocaleString('en-IN');
+            const orderId = escape(pay?.razorpay_order_id || sub?.razorpay_order_id || '—');
+            const paymentId = escape(pay?.razorpay_payment_id || '—');
             win.document.write(`<!doctype html>
-<html><head><title>Invoice ${inv.invoice_no}</title>
+<html><head><title>Invoice ${escape(inv.invoice_no)}</title>
 <meta charset="utf-8"/>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:680px;margin:32px auto;color:#0f172a;padding:24px;}
@@ -158,21 +174,21 @@ export default function SubscriptionPage() {
 </style></head>
 <body>
   <h1>CrackCMS — Premium Receipt</h1>
-  <p style="margin:4px 0 0;color:#64748b;">Invoice # ${inv.invoice_no}</p>
+  <p style="margin:4px 0 0;color:#64748b;">Invoice # ${escape(inv.invoice_no)}</p>
   <h2>Issued to</h2>
   <table>
-    <tr><td class="k">Name</td><td>${issuedTo.first_name || ''} ${issuedTo.last_name || ''} (${issuedTo.username})</td></tr>
-    <tr><td class="k">Email</td><td>${issuedTo.email}</td></tr>
+    <tr><td class="k">Name</td><td>${escape(issuedTo.first_name || '')} ${escape(issuedTo.last_name || '')} (${escape(issuedTo.username)})</td></tr>
+    <tr><td class="k">Email</td><td>${escape(issuedTo.email)}</td></tr>
   </table>
   <h2>Subscription</h2>
   <table>
-    <tr><td class="k">Plan</td><td>${sub?.plan_display_name}</td></tr>
-    <tr><td class="k">Status</td><td><span class="pill ${sub?.status !== 'active' ? sub?.status : ''}">${sub?.status}</span></td></tr>
-    <tr><td class="k">Purchased</td><td>${purchaseDate}</td></tr>
-    <tr><td class="k">Expires</td><td>${expiry}</td></tr>
-    <tr><td class="k">Amount paid</td><td>₹${pay?.amount ?? sub?.amount_paid}</td></tr>
-    <tr><td class="k">Razorpay order</td><td><code style="font-size:12px;">${pay?.razorpay_order_id || sub?.razorpay_order_id || '—'}</code></td></tr>
-    <tr><td class="k">Razorpay payment</td><td><code style="font-size:12px;">${pay?.razorpay_payment_id || '—'}</code></td></tr>
+    <tr><td class="k">Plan</td><td>${escape(sub?.plan_display_name)}</td></tr>
+    <tr><td class="k">Status</td><td><span class="pill ${statusClass}">${escape(sub?.status)}</span></td></tr>
+    <tr><td class="k">Purchased</td><td>${escape(purchaseDate)}</td></tr>
+    <tr><td class="k">Expires</td><td>${escape(expiry)}</td></tr>
+    <tr><td class="k">Amount paid</td><td>₹${escape(amountFmt)}</td></tr>
+    <tr><td class="k">Razorpay order</td><td><code style="font-size:12px;">${orderId}</code></td></tr>
+    <tr><td class="k">Razorpay payment</td><td><code style="font-size:12px;">${paymentId}</code></td></tr>
   </table>
   <footer>Thank you for supporting CrackCMS. Questions? Contact support@cracklabs.app</footer>
   <script>window.onload=()=>window.print();</script>

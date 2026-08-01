@@ -1,7 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import { aiAPI } from '@/lib/api';
 import { Upload, Brain, FolderSearch, Database, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
@@ -13,23 +12,13 @@ interface KnowledgeStats {
 }
 
 export default function UploadPage() {
-    const { isAuthenticated, loading: authLoading, user } = useAuth();
-    const router = useRouter();
+    const { ready } = useRequireAuth({ requireAdmin: true });
     const [stats, setStats] = useState<KnowledgeStats | null>(null);
     const [uploading, setUploading] = useState(false);
     const [scanning, setScanning] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [bookName, setBookName] = useState('');
-
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            router.push('/login');
-        } else if (!authLoading && user && user.role !== 'admin' && !user.is_admin) {
-            // Non-admin users cannot access this page
-            router.push('/dashboard');
-        }
-    }, [authLoading, isAuthenticated, user, router]);
 
     const fetchStats = useCallback(async () => {
         try {
@@ -41,11 +30,11 @@ export default function UploadPage() {
     }, []);
 
     useEffect(() => {
-        if (isAuthenticated) {
+        if (ready) {
             const timer = setTimeout(() => fetchStats(), 0);
             return () => clearTimeout(timer);
         }
-    }, [isAuthenticated, fetchStats]);
+    }, [ready, fetchStats]);
 
     const handleUpload = async () => {
         if (!selectedFile) return;
@@ -82,7 +71,7 @@ export default function UploadPage() {
         setScanning(false);
     };
 
-    if (authLoading) return null;
+    if (!ready) return null;
 
     return (
         <>

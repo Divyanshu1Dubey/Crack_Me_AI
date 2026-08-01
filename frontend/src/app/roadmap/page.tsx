@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI, analyticsAPI } from '@/lib/api';
@@ -170,8 +169,7 @@ const sectionColors: Record<string, { bg: string; border: string; text: string; 
 };
 
 export default function RoadmapPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    const { ready } = useRequireAuth();
     const [studyPlan, setStudyPlan] = useState('');
     const [highYield, setHighYield] = useState('');
     const [loading, setLoading] = useState(false);
@@ -182,17 +180,13 @@ export default function RoadmapPage() {
     const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]));
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.push('/login');
-    }, [authLoading, isAuthenticated, router]);
-
-    useEffect(() => {
-        if (isAuthenticated) {
+        if (ready) {
             analyticsAPI.getWeakTopics().then(res => {
                 const topics = (res.data?.weak_topics || []).map((t: { topic_name?: string; name?: string; topic?: string } | string) => t && typeof t === 'object' ? (t.topic_name || t.name || t.topic || '') : t);
                 setWeakTopics(topics.slice(0, 5));
             }).catch(() => { });
         }
-    }, [isAuthenticated]);
+    }, [ready]);
 
     const parsedHighYield = useMemo(() => parseHighYieldContent(highYield), [highYield]);
 
@@ -302,7 +296,7 @@ export default function RoadmapPage() {
         return sections;
     }, [studyPlan]);
 
-    if (authLoading) {
+    if (!ready) {
         return (
             <>
                 <Sidebar />
