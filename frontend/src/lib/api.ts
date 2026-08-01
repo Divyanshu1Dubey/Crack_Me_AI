@@ -327,6 +327,7 @@ export const questionsAPI = {
   getImages: (id: number) => api.get(`/questions/${id}/images/`),
   getSubjects: (params?: Record<string, string | number>) => api.get('/questions/subjects/', { params }),
   getTopics: (params?: Record<string, string | number>) => api.get('/questions/topics/', { params }),
+  getExamTracks: (params?: Record<string, string | number>) => api.get('/questions/exam-tracks/', { params }),
   getYears: () => api.get('/questions/years/'),
   getStats: (params?: Record<string, string | number>) => api.get('/questions/stats/', { params }),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),

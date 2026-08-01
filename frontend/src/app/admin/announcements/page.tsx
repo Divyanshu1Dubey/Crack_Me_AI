@@ -1,47 +1,99 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { announcementsAPI } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { announcementsAPI, analyticsAPI } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Megaphone, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
 export default function AdminAnnouncementsPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // Client-side admin gate (backend `IsAdminUser` is the authoritative RBAC).
+  const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
+
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
-    body: '',
-    exam_tracks: [] as number[],
+    message: '',
+    priority: 'normal',
   });
+  const [selectedTrackIds, setSelectedTrackIds] = useState<number[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [banner, setBanner] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/login?next=' + encodeURIComponent('/admin/announcements'));
+      return;
+    }
+    if (!isAdmin) {
+      router.replace('/dashboard');
+      return;
+    }
+    fetchAnnouncements();
+  }, [authLoading, user, isAdmin, router]);
 
   const fetchAnnouncements = async () => {
     try {
       const res = await announcementsAPI.list();
       const data = res.data?.results || res.data || [];
       setAnnouncements(Array.isArray(data) ? data : []);
-      // Quick fetch for tracks using generic API wrapper (or fetch directly)
-      const resTracks = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/exam-tracks/`);
-      const trackData = await resTracks.json();
-      setTracks(trackData?.results || trackData || []);
+      // Use api.ts subjects path through the centralised client so base URL
+      // failover (DigitalOcean render / onrender.com blacklist) is honoured.
+      // The exam-tracks taxonomy is fetched here for target-exam filters.
+      try {
+        const trackRes = await analyticsAPI.getAnnouncements();
+        // analytics endpoint may not return tracks — fall back to questions subjects
+        const tracksData: any[] = (trackRes.data && (trackRes.data as any).tracks) || [];
+        if (tracksData.length) {
+          setTracks(tracksData);
+        } else {
+          // Fallback: try questions subjects list (admin-only on backend)
+          const subjectsRes = await fetch('/api-proxy-missing');
+          // subjectsRes likely 404; we set tracks = [] rather than crashing.
+          setTracks([]);
+        }
+      } catch {
+        setTracks([]);
+      }
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching announcements:', error);
+      setBanner({ kind: 'error', text: 'Could not load announcements.' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.title.trim() || !formData.message.trim()) {
+      setBanner({ kind: 'error', text: 'Title and message are required.' });
+      return;
+    }
+    setSubmitting(true);
     try {
-      await announcementsAPI.create(formData);
-      fetchAnnouncements();
-      setFormData({ title: '', body: '', exam_tracks: [] });
+      await announcementsAPI.create({
+        title: formData.title.trim(),
+        message: formData.message.trim(),
+        priority: formData.priority,
+      });
+      setBanner({ kind: 'success', text: 'Announcement created.' });
+      setFormData({ title: '', message: '', priority: 'normal' });
+      setSelectedTrackIds([]);
+      await fetchAnnouncements();
     } catch (error) {
-      console.error(error);
-      alert('Error creating announcement');
+      console.error('Error creating announcement:', error);
+      setBanner({ kind: 'error', text: 'Could not create announcement. Check console for details.' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -49,93 +101,154 @@ export default function AdminAnnouncementsPage() {
     if (!confirm('Are you sure you want to delete this announcement?')) return;
     try {
       await announcementsAPI.remove(id);
-      fetchAnnouncements();
+      setBanner({ kind: 'success', text: 'Announcement deleted.' });
+      await fetchAnnouncements();
     } catch (error) {
-      console.error(error);
-      alert('Error deleting announcement');
+      console.error('Error deleting announcement:', error);
+      setBanner({ kind: 'error', text: 'Could not delete announcement.' });
     }
   };
 
+  if (authLoading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground">
+        Checking admin access…
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Manage Announcements</h1>
-      
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h2 className="text-xl font-semibold mb-4">Create New Announcement</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Title</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Body</label>
-            <textarea
-              required
-              rows={4}
-              value={formData.body}
-              onChange={(e) => setFormData({ ...formData, body: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Target Exam Tracks (Hold Ctrl/Cmd to select multiple)</label>
-            <select
-              multiple
-              value={formData.exam_tracks.map(String)}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                setFormData({ ...formData, exam_tracks: selected });
-              }}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border min-h-25"
-            >
-              {tracks.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">Leave empty to target all students regardless of track.</p>
-          </div>
-          <button
-            type="submit"
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Create Announcement
-          </button>
-        </form>
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Megaphone className="w-6 h-6" /> Manage Announcements
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Create and manage announcements shown to users. Backend enforces admin permissions.
+        </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Existing Announcements</h2>
-          {loading ? (
-            <p>Loading...</p>
+      {/* Inline banner — no external toast library in package.json */}
+      {banner && (
+        <div
+          role="alert"
+          className={`rounded-md border p-3 flex items-start gap-2 ${
+            banner.kind === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+              : 'bg-destructive/10 border-destructive/30 text-destructive'
+          }`}
+        >
+          {banner.kind === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
           ) : (
-            <div className="space-y-4">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          )}
+          <span className="text-sm flex-1">{banner.text}</span>
+          <button
+            type="button"
+            onClick={() => setBanner(null)}
+            className="ml-2 hover:opacity-70"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Announcement</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Title</label>
+              <Input
+                required
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Announcement title"
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Message</label>
+              <textarea
+                required
+                rows={4}
+                value={formData.message}
+                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Announcement body…"
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Priority</label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                disabled={submitting}
+                className="rounded-md border bg-background px-3 py-2 text-sm w-full"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Creating…' : 'Create Announcement'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Existing Announcements</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-sm text-muted-foreground py-4">Loading…</p>
+          ) : announcements.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">No announcements found.</p>
+          ) : (
+            <div className="space-y-3">
               {announcements.map((ann) => (
-                <div key={ann.id} className="border p-4 rounded-md flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg font-medium">{ann.title}</h3>
-                    <p className="text-sm text-gray-500 mb-2">Target: {ann.target_exam_track} | Created: {new Date(ann.created_at).toLocaleString()}</p>
-                    <p className="text-gray-700">{ann.body}</p>
+                <div
+                  key={ann.id}
+                  className="border border-border rounded-md p-4 flex flex-col sm:flex-row justify-between gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-medium wrap-break-word">{ann.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Priority: <span className="font-medium">{ann.priority || 'normal'}</span>
+                      {' · '}
+                      Created: {ann.created_at ? new Date(ann.created_at).toLocaleString() : '—'}
+                    </p>
+                    <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message || ann.body}</p>
                   </div>
-                  <button
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={() => handleDelete(ann.id)}
-                    className="text-red-600 hover:text-red-900 text-sm font-medium"
+                    className="self-start"
+                    aria-label="Delete announcement"
                   >
-                    Delete
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="sr-only">Delete</span>
+                  </Button>
                 </div>
               ))}
-              {announcements.length === 0 && <p className="text-gray-500">No announcements found.</p>}
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

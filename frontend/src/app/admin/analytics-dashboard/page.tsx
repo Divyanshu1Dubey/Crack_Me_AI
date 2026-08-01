@@ -147,6 +147,10 @@ export default function AdminAnalyticsDashboardPage() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // Honour either backend claim (`role === 'admin'`) or legacy `is_admin`
+    // flag — backend `IsAdminUser` is the authoritative RBAC, this gate
+    // just hides the UI from student sessions.
+    const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
 
     const load = useCallback(async () => {
         try {
@@ -164,19 +168,39 @@ export default function AdminAnalyticsDashboardPage() {
     useEffect(() => {
         if (authLoading) return;
         if (!isAuthenticated) {
-            router.push('/login');
+            // Use replace so the back button can't return to a gated admin page.
+            router.replace('/login?next=' + encodeURIComponent('/admin/analytics-dashboard'));
             return;
         }
-        if (!user?.is_admin) {
-            router.push('/dashboard');
+        if (!isAdmin) {
+            router.replace('/dashboard');
             return;
         }
         void load();
         const interval = setInterval(load, 60_000);
         return () => clearInterval(interval);
-    }, [authLoading, isAuthenticated, user, router, load]);
+    }, [authLoading, isAuthenticated, isAdmin, router, load]);
 
-    if (authLoading || loading) {
+    // Hard stop: don't render dashboard contents while auth is unresolved
+    // or the user is non-admin. Otherwise the data fetch triggers 403s
+    // and a flash of empty cards before the redirect lands.
+    if (authLoading || !isAuthenticated || !isAdmin) {
+        return (
+            <>
+                <Sidebar />
+                <div className="main-content">
+                    <Header />
+                    <div className="px-4 py-10 md:px-8">
+                        <div className="rounded-2xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
+                            Checking admin access…
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    if (loading) {
         return (
             <>
                 <Sidebar />

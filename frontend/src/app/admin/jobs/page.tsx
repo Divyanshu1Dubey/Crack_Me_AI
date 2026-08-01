@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { jobsAPI } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { jobsAPI, questionsAPI } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +42,11 @@ const EMPTY_FORM: JobForm = {
 };
 
 export default function AdminJobsPage() {
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
+    // Client-side admin gate (backend `IsAdminUser` is the authoritative RBAC).
+    const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
+
     const [jobs, setJobs] = useState<any[]>([]);
     const [tracks, setTracks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -55,11 +62,16 @@ export default function AdminJobsPage() {
             const res = await jobsAPI.list();
             const rows = res.data.results || res.data || [];
             setJobs(Array.isArray(rows) ? rows : []);
-            const resTracks = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/exam-tracks/`,
-            );
-            const trackData = await resTracks.json();
-            setTracks(trackData?.results || trackData || []);
+            // Use centralized api.ts so base URL failover (DigitalOcean primary
+            // + onrender.com blacklist) applies. Falls back silently if the
+            // exam-tracks endpoint is unavailable — jobs work fine without it.
+            try {
+                const trackRes = await questionsAPI.getExamTracks();
+                const trackData = trackRes.data?.results || trackRes.data || [];
+                setTracks(Array.isArray(trackData) ? trackData : []);
+            } catch {
+                setTracks([]);
+            }
         } catch (err) {
             console.error(err);
             setError('Could not load jobs. Check the API connection.');
@@ -67,6 +79,19 @@ export default function AdminJobsPage() {
             setLoading(false);
         }
     }, []);
+
+    useEffect(() => {
+        if (authLoading) return;
+        if (!user) {
+            router.replace('/login?next=' + encodeURIComponent('/admin/jobs'));
+            return;
+        }
+        if (!isAdmin) {
+            router.replace('/dashboard');
+            return;
+        }
+        fetchJobs();
+    }, [authLoading, user, isAdmin, router, fetchJobs]);
 
     useEffect(() => {
         fetchJobs();
@@ -103,6 +128,18 @@ export default function AdminJobsPage() {
     };
 
     const trackName = (id: number) => tracks.find(t => t.id === id)?.name ?? `#${id}`;
+
+    if (authLoading || !user) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground">
+                Checking admin access…
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return null;
+    }
 
     return (
         <div className="p-6 max-w-5xl mx-auto space-y-6">

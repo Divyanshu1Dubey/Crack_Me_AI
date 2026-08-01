@@ -64,13 +64,15 @@ export default function AdminQuestionsEditorPage() {
 
   const fetchTaxonomy = async () => {
     try {
-      const resSub = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/subjects/`);
-      const dataSub = await resSub.json();
-      setSubjects(dataSub.results || dataSub || []);
-
-      const resTop = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.9:8000/api'}/questions/topics/`);
-      const dataTop = await resTop.json();
-      setTopics(dataTop.results || dataTop || []);
+      // Use centralized api.ts so base URL failover (DigitalOcean primary
+      // + onrender.com blacklist) applies and the Supabase/Django auth
+      // interceptor adds the bearer token. Both endpoints are admin-gated.
+      const [subRes, topRes] = await Promise.all([
+        questionsAPI.getSubjects(),
+        questionsAPI.getTopics(),
+      ]);
+      setSubjects(subRes.data?.results || subRes.data || []);
+      setTopics(topRes.data?.results || topRes.data || []);
     } catch (e) {
       console.error(e);
     }
