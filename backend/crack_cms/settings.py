@@ -281,6 +281,10 @@ REST_FRAMEWORK = {
         'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
         'token_purchase': os.getenv('DRF_THROTTLE_TOKEN_PURCHASE', '10/min'),
         'subscription_order': os.getenv('DRF_THROTTLE_SUBSCRIPTION_ORDER', '15/min'),
+        # GET endpoints that auto-expire subs and run DB writes — must not
+        # be abusable for DoS. 60/min is generous for real users (mobile + web)
+        # but blocks scripted loops. See accounts.views.SubscriptionStatusView.
+        'subscription_status': os.getenv('DRF_THROTTLE_SUBSCRIPTION_STATUS', '60/min'),
         'contact_us': os.getenv('DRF_THROTTLE_CONTACT_US', '5/min'),
     },
 }

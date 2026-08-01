@@ -17,6 +17,7 @@ import StickyExamCta from "@/components/StickyExamCta";
 import PWAProvider from "@/components/PWAProvider";
 import { ExamTrackProvider } from "@/components/ExamTrackProvider";
 import { WatermarkOverlay } from "@/components/WatermarkOverlay";
+import { ProfileAutoRefreshMount } from "@/components/ProfileAutoRefreshMount";
 import { DockProvider } from "@/context/DockContext";
 import { SidebarProvider } from "@/context/SidebarContext";
 import { QuestionFocusProvider } from "@/context/QuestionFocusContext";
@@ -272,6 +273,7 @@ export default function RootLayout({
             <ThemeSync />
             <TooltipProvider>
               <AuthProvider>
+                <ProfileAutoRefreshMount />
                 <ExamTrackProvider>
                   <SidebarProvider>
                     <QuestionFocusProvider>

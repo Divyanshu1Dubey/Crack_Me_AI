@@ -263,6 +263,7 @@ class SubscribeOrderView(APIView):
 
     def post(self, request):
         import os
+        import uuid
         key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
         key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
         if not key_id or not key_secret:
@@ -271,51 +272,80 @@ class SubscribeOrderView(APIView):
         plan = request.data.get('plan', 'legacy')
         user = request.user
 
-        # Plan routing & amount lookup
+        # Client idempotency key — prevents double-charge if the user
+        # double-clicks "Renew" before the modal dismisses. Same key within
+        # 5 minutes returns the original order instead of creating a new one.
+        client_request_id = (request.data.get('request_id') or '').strip()
+        if client_request_id:
+            from .models import PaymentAttempt
+            existing = PaymentAttempt.objects.filter(
+                user=user,
+                error_message__icontains=f'request_id:{client_request_id}',
+            ).first()
+            if existing:
+                return Response({
+                    'order_id': existing.razorpay_order_id,
+                    'amount': int(existing.amount * 100),
+                    'key_id': key_id,
+                    'plan': existing.plan,
+                    'idempotent_replay': True,
+                })
+
+        # Plan routing & amount lookup — pulled from PLAN_FEATURES so the
+        # source of truth is the same model the subscription uses.
+        from .models import PLAN_FEATURES
+        plan_features = PLAN_FEATURES.get(plan, PLAN_FEATURES['legacy'])
+        description = f'CrackLabs Premium {plan_features["display_name"]}'
+
         if plan == '1_year':
             amount_paise = 199900
             amount_rs = 1999.00
-            description = 'CrackLabs Premium 1 Year Plan'
         elif plan == '3_months':
             amount_paise = 44900
             amount_rs = 449.00
-            description = 'CrackLabs Premium 3 Months Plan'
         elif plan == '1_month':
             amount_paise = 12900
             amount_rs = 129.00
-            description = 'CrackLabs Premium 1 Month Plan'
         elif plan == 'scholarship_1_month':
             if not user.scholarship_test_passed:
                 return Response({'error': 'You are not eligible for the scholarship rate. Please complete the scholarship test first.'}, status=status.HTTP_403_FORBIDDEN)
             amount_rs = float(user.scholarship_granted_price or 79.00)
             amount_paise = int(amount_rs * 100)
-            description = 'CrackLabs Premium 1 Month (Scholarship Special) Plan'
         else:
             # Fallback legacy early bird pass
             plan = 'legacy'
             amount_paise = 19900
             amount_rs = 199.00
-            description = 'CrackLabs Premium Early Bird Plan'
 
         import razorpay
         client = razorpay.Client(auth=(key_id, key_secret))
-        
+
         try:
+            order_notes = {
+                'plan': plan,
+                'user_id': str(user.id),
+            }
+            if client_request_id:
+                order_notes['request_id'] = client_request_id
+
             order_data = {
                 'amount': amount_paise,
                 'currency': 'INR',
-                'payment_capture': '1'
+                'payment_capture': '1',
+                'notes': order_notes,
             }
             order = client.order.create(data=order_data)
-            
+
             # Record payment attempt with plan type
             from accounts.models import PaymentAttempt
+            error_marker = f'request_id:{client_request_id}' if client_request_id else ''
             PaymentAttempt.objects.create(
                 user=user,
                 razorpay_order_id=order['id'],
                 amount=amount_rs,
                 plan=plan,
-                status='initiated'
+                status='initiated',
+                error_message=error_marker,  # reuse field for idempotency tag
             )
             
             # Send initiated checkout email
@@ -529,28 +559,32 @@ def _serialize_subscription(sub):
 class SubscriptionStatusView(APIView):
     """Return the authenticated user's current subscription status."""
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'subscription_status'
 
     def get(self, request):
         user = request.user
         sub = Subscription.get_active_subscription(user)
 
         # Backward compat: if user.is_subscribed but no Subscription record,
-        # they are a grandfathered lifetime user
+        # they are a grandfathered lifetime user. Route through
+        # _serialize_subscription so the response shape is identical to a
+        # real Subscription row (was missing `id`, `razorpay_order_id`,
+        # `created_at` before — broke downstream consumers).
         if not sub and user.is_subscribed:
+            legacy_stub = Subscription(
+                user=user,
+                plan='legacy',
+                plan_display_name='Legacy Early Bird (Lifetime)',
+                starts_at=user.created_at,
+                expires_at=None,
+                status='active',
+                amount_paid=0,
+                razorpay_order_id='legacy',
+            )
             return Response({
                 'is_subscribed': True,
-                'subscription': {
-                    'plan': 'legacy',
-                    'plan_display_name': 'Legacy Early Bird (Lifetime)',
-                    'status': 'active',
-                    'is_active': True,
-                    'starts_at': user.created_at.isoformat() if user.created_at else None,
-                    'expires_at': None,
-                    'days_remaining': -1,
-                    'amount_paid': 0,
-                    'razorpay_order_id': '',
-                    'created_at': user.created_at.isoformat() if user.created_at else None,
-                },
+                'subscription': _serialize_subscription(legacy_stub),
             })
 
         return Response({
@@ -568,6 +602,8 @@ class SubscriptionHistoryView(APIView):
     what they bought, when, how long it lasted, and how much they paid.
     """
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'subscription_status'
 
     def get(self, request):
         user = request.user
@@ -697,9 +733,19 @@ class RazorpayWebhookView(APIView):
             logger.warning(f'Razorpay webhook: no PaymentAttempt for order {order_id}')
             return Response({'status': 'order_not_found'})
 
-        # Idempotency: already processed
+        # Idempotency: if Razorpay retries with the SAME payment_id we've
+        # already credited, treat as no-op. If it sends a *different*
+        # payment_id (re-captured under a new payment, possible on capture
+        # retries), update the stored payment_id and re-activate — the
+        # previous Subscription.activate_from_payment is naturally
+        # idempotent (extends existing expiry), so the result converges.
         if attempt.status == 'successful':
-            return Response({'status': 'already_processed'})
+            if attempt.razorpay_payment_id == payment_id:
+                return Response({'status': 'already_processed'})
+            logger.warning(
+                f'Razorpay webhook: payment_id changed for order {order_id}: '
+                f'{attempt.razorpay_payment_id} -> {payment_id}. Re-activating.'
+            )
 
         # Activate subscription
         attempt.razorpay_payment_id = payment_id
@@ -1621,7 +1667,14 @@ class AdminSubscriptionManageView(APIView):
             return Response({'message': f'Subscription {plan} granted to {user.username}'})
 
         elif action == 'revoke':
-            Subscription.objects.filter(user=user, is_active=True).update(is_active=False, status='cancelled')
+            # NOTE: Subscription has no `is_active` column — `is_active` is a
+            # @property that derives from status=='active' and not-yet-expired.
+            # The prior filter `is_active=True` translated to `WHERE FALSE` and
+            # silently matched zero rows, so admins could never actually
+            # revoke. Filter by status='active' instead.
+            revoked_count = Subscription.objects.filter(
+                user=user, status='active'
+            ).update(status='cancelled')
             user.is_subscribed = False
             user.save(update_fields=['is_subscribed'])
 
@@ -1630,9 +1683,13 @@ class AdminSubscriptionManageView(APIView):
                 action='subscription_revoke',
                 resource_type='subscription',
                 resource_id=str(user.id),
-                detail=f'Revoked subscription for {user.username}',
+                detail=f'Revoked {revoked_count} active subscription(s) for {user.username}',
+                metadata={'revoked_count': revoked_count},
             )
-            return Response({'message': f'Subscription revoked for {user.username}'})
+            return Response({
+                'message': f'Subscription revoked for {user.username}',
+                'revoked_count': revoked_count,
+            })
             
         return Response({'error': 'Invalid action'}, status=status.HTTP_400_BAD_REQUEST)
 

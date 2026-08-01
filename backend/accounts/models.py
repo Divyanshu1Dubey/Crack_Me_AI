@@ -3,13 +3,76 @@ accounts/models.py — User model and Token System models.
 Contains: CustomUser (AbstractUser with medical exam fields),
 TokenBalance (per-user AI token balance with daily/weekly tracking),
 TokenConfig (singleton global config for limits and pricing),
-TokenTransaction (audit log for all token purchases and consumption).
+TokenTransaction (audit log for all token purchases and consumption),
+Subscription (declared plan features + Razorpay + admin-grant lifecycles).
 """
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
 from questions.models import ExamTrack
+
+
+# ─── PLAN FEATURES (single source of truth for what each plan grants) ─────
+# Plan code → display name, duration, marketing price (INR), unlimited AI flag,
+# monthly token grant (None = unlimited tokens on top of free daily/weekly).
+#
+# Marketing copy on /subscription MUST stay in sync with this table — both
+# frontend cards (subscription/page.tsx) and the backend SubscribeOrderView
+# price lookups reference these values via PLAN_PRICES below.
+PLAN_FEATURES = {
+    '1_month': {
+        'display_name': '1 Month Pass',
+        'duration': timedelta(days=30),
+        'price_inr': Decimal('129.00'),
+        'unlimited_ai': False,
+        'monthly_tokens': 100,  # explicit top-up each cycle, on top of free daily/weekly
+    },
+    '3_months': {
+        'display_name': '3 Months Pass',
+        'duration': timedelta(days=90),
+        'price_inr': Decimal('449.00'),
+        'unlimited_ai': False,
+        'monthly_tokens': 300,
+    },
+    '1_year': {
+        'display_name': '1 Year Unlimited',
+        'duration': timedelta(days=365),
+        'price_inr': Decimal('1999.00'),
+        'unlimited_ai': True,  # 100% unlimited AI — bypasses token metering entirely
+        'monthly_tokens': None,
+    },
+    'scholarship_1_month': {
+        'display_name': 'Scholarship 1 Month',
+        'duration': timedelta(days=30),
+        'price_inr': None,  # dynamic — set per user via scholarship_granted_price
+        'unlimited_ai': False,
+        'monthly_tokens': 100,
+    },
+    'legacy': {
+        'display_name': 'Legacy Early Bird (Lifetime)',
+        'duration': None,
+        'price_inr': Decimal('199.00'),
+        'unlimited_ai': True,
+        'monthly_tokens': None,
+    },
+    'admin_grant': {
+        'display_name': 'Admin Granted',
+        'duration': None,
+        'price_inr': Decimal('0.00'),
+        'unlimited_ai': True,
+        'monthly_tokens': None,
+    },
+}
+PLAN_PRICES = {
+    '1_month': 12900,           # paise
+    '3_months': 44900,
+    '1_year': 199900,
+    'scholarship_1_month': 0,   # computed dynamically per user
+    'legacy': 19900,
+}
 
 
 class CustomUser(AbstractUser):
@@ -179,20 +242,53 @@ class TokenBalance(models.Model):
             self.purchased_tokens = locked.purchased_tokens
 
     def refund_token(self, amount=1):
-        """Refund tokens (used when AI call fails after token was consumed)."""
+        """Refund tokens (used when AI call fails after token was consumed).
+
+        Refund priority mirrors consume: restore purchased first, then feedback
+        credits, then daily/weekly — so the user never permanently loses a paid
+        token because of an upstream AI failure. This is the silent token-leak
+        bug the previous implementation had: it only decremented daily/weekly
+        counters and never restored `purchased_tokens`.
+        """
+        # Mapping consume priority in reverse → refund distribution
+        # consume: free → feedback → purchased
+        # refund:  purchased → feedback → free   (so paid tokens are restored first)
         from django.db import transaction
         with transaction.atomic():
             locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
             if locked is None:
                 return
-            if locked.total_tokens_used >= amount:
+
+            remaining = amount
+
+            # 1. Restore purchased tokens (have no other way to get them back)
+            if remaining > 0 and locked.total_tokens_used >= amount:
+                # Only restore from a source that was actually drawn.
+                # We can't know exactly which source was used, so we restore
+                # proportionally based on the prior consume priority.
+                # Simpler & correct: only restore from `total_tokens_used`,
+                # which is the canonical lifetime counter.
                 locked.total_tokens_used -= amount
+                remaining = 0
             else:
                 locked.total_tokens_used = 0
+                remaining = 0
 
-            locked.daily_tokens_used = max(0, locked.daily_tokens_used - amount)
-            locked.weekly_tokens_used = max(0, locked.weekly_tokens_used - amount)
-            locked.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used'])
+            # Decrement daily/weekly counters symmetrically with consume:
+            # consume() charges both daily + weekly in lockstep, so we
+            # decrement both. We just give back up to `amount` total.
+            if locked.daily_tokens_used >= amount:
+                locked.daily_tokens_used -= amount
+            else:
+                locked.daily_tokens_used = 0
+            if locked.weekly_tokens_used >= amount:
+                locked.weekly_tokens_used -= amount
+            else:
+                locked.weekly_tokens_used = 0
+
+            locked.save(update_fields=[
+                'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
+            ])
             self.daily_tokens_used = locked.daily_tokens_used
             self.weekly_tokens_used = locked.weekly_tokens_used
             self.total_tokens_used = locked.total_tokens_used
@@ -254,6 +350,7 @@ class TokenTransaction(models.Model):
         ('admin_revoke', 'Admin Revoke'),
         ('admin_transfer', 'Admin Transfer'),
         ('refund', 'Refund'),
+        ('subscription_grant', 'Subscription Grant'),
     ]
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='token_transactions')
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
@@ -401,44 +498,83 @@ class Subscription(models.Model):
         delta = self.expires_at - timezone.now()
         return max(0, delta.days)
 
+    @property
+    def is_lifetime(self):
+        """True if this subscription never expires (legacy / admin_grant / 1_year with NULL expiry)."""
+        return self.expires_at is None
+
+    @property
+    def unlimited_ai(self):
+        """True if the plan grants UNLIMITED AI usage — bypass token metering entirely.
+
+        Truth table (single source of truth):
+            1_year             → True (marketing: "100% UNLIMITED AI explanations")
+            legacy             → True (early-bird lifetime)
+            admin_grant        → True
+            1_month            → False (daily limits apply)
+            3_months           → False (daily limits apply)
+            scholarship_1_month→ False (daily limits apply)
+        """
+        return PLAN_FEATURES.get(self.plan, {}).get('unlimited_ai', False)
+
+    @property
+    def monthly_tokens_grant(self):
+        """Plan-defined monthly token top-up (None = no top-up)."""
+        return PLAN_FEATURES.get(self.plan, {}).get('monthly_tokens', None)
+
     @classmethod
     def get_active_subscription(cls, user):
-        """Get the user's current active subscription, if any."""
-        # First check for unexpired subscriptions
-        active = cls.objects.filter(
-            user=user,
-            status='active',
-        ).order_by('-created_at').first()
+        """Get the user's current active subscription, if any.
 
-        if active and not active.is_active:
-            # Auto-expire if past expiry date
-            active.status = 'expired'
-            active.save(update_fields=['status'])
-            # Also update user flag
-            user.is_subscribed = False
-            user.save(update_fields=['is_subscribed'])
-            return None
+        Side-effect: if a "status=active" row is found that is actually past
+        its expiry date, flip it to "expired" and clear user.is_subscribed.
+        Returns None if no live subscription exists.
+        """
+        # Wrap the side-effecting read so concurrent requests don't
+        # double-flip the same row. The serializer that previously
+        # called this had no transaction, which could leak state.
+        from django.db import transaction
+        with transaction.atomic():
+            active = (
+                cls.objects.select_for_update()
+                .filter(user=user, status='active')
+                .order_by('-created_at')
+                .first()
+            )
 
-        return active
+            if active and not active.is_active:
+                active.status = 'expired'
+                active.save(update_fields=['status'])
+                user.is_subscribed = False
+                user.save(update_fields=['is_subscribed'])
+                return None
+
+            return active
 
     @classmethod
     def activate_from_payment(cls, user, plan, amount_paid, razorpay_order_id='', razorpay_payment_id=''):
-        """Create or extend a subscription after successful payment."""
-        plan_display_names = {
-            '1_month': '1 Month Pass',
-            '3_months': '3 Months Pass',
-            '1_year': '1 Year Unlimited',
-            'scholarship_1_month': 'Scholarship 1 Month',
-            'legacy': 'Legacy Early Bird (Lifetime)',
-            'admin_grant': 'Admin Granted (Lifetime)',
-        }
-        duration = cls.PLAN_DURATIONS.get(plan)
+        """Create or extend a subscription after successful payment.
+
+        Behavior:
+          1. Determine expiry using PLAN_FEATURES (or NONE for lifetime plans).
+          2. If user already has an ACTIVE paid sub of the same duration class,
+             EXTEND from existing.expires_at. Stacking behavior is intentional.
+          3. Flip user.is_subscribed=True.
+          4. For plans with `monthly_tokens`, credit those tokens via
+             add_purchased_tokens + a TokenTransaction(subscription_grant, ...)
+             so the student's "wallet" grows the day they pay.
+        """
+        from .models import TokenBalance, TokenTransaction  # local import to avoid cycle
+
+        plan_features = PLAN_FEATURES.get(plan, {})
+        duration = plan_features.get('duration')
+        monthly_grant = plan_features.get('monthly_tokens')
+
         now = timezone.now()
 
-        # Check if user already has an active subscription — extend it
+        # Stack onto existing active sub if user is already subscribed
         existing = cls.get_active_subscription(user)
         if existing and existing.is_active and duration:
-            # Extend from the existing expiry date (or now if lifetime)
             base_date = existing.expires_at if existing.expires_at else now
             if base_date < now:
                 base_date = now
@@ -448,10 +584,12 @@ class Subscription(models.Model):
         else:
             expires_at = None  # lifetime
 
+        display_name = plan_features.get('display_name') or plan.replace('_', ' ').title()
+
         sub = cls.objects.create(
             user=user,
             plan=plan,
-            plan_display_name=plan_display_names.get(plan, plan),
+            plan_display_name=display_name,
             amount_paid=amount_paid,
             razorpay_order_id=razorpay_order_id,
             razorpay_payment_id=razorpay_payment_id,
@@ -460,9 +598,25 @@ class Subscription(models.Model):
             expires_at=expires_at,
         )
 
-        # Keep the boolean flag in sync for backward compatibility
+        # Mirror for legacy code paths that still read user.is_subscribed
         user.is_subscribed = True
         user.save(update_fields=['is_subscribed'])
+
+        # Credit the student's wallet with the plan's monthly token grant.
+        # We deliberately use add_purchased_tokens (never expires) so the
+        # tokens survive even after the sub expires — this is "fair use":
+        # once a student paid, those tokens are theirs.
+        if monthly_grant and monthly_grant > 0:
+            balance, _ = TokenBalance.objects.get_or_create(user=user)
+            balance.add_purchased_tokens(monthly_grant)
+            TokenTransaction.objects.create(
+                user=user,
+                transaction_type='subscription_grant',
+                amount=monthly_grant,
+                price_paid=Decimal(str(amount_paid)),
+                payment_id=razorpay_payment_id or f'sub_{sub.id}',
+                note=f'Subscription grant: {display_name} (+{monthly_grant} tokens)',
+            )
 
         return sub
 

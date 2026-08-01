@@ -170,7 +170,8 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
   subscribe: () => api.post('/auth/subscribe/order/'),
-  subscribeOrder: (plan?: string) => api.post('/auth/subscribe/order/', { plan }),
+  subscribeOrder: (plan?: string, requestId?: string) =>
+    api.post('/auth/subscribe/order/', { plan, request_id: requestId }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
   subscriptionStatus: () => api.get('/auth/subscribe/status/'),

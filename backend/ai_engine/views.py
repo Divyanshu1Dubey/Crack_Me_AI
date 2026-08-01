@@ -64,24 +64,39 @@ class AITutorThrottleMixin:
 def consume_ai_token(request):
     """
     Check and consume 1 AI token for the requesting user.
-    
+
     Returns:
-        (True, None) — token consumed successfully, proceed with AI call.
+        (True, None) — token consumed successfully (or bypassed), proceed with AI call.
         (False, Response) — insufficient tokens, return the error response.
-    
-    Admin users bypass token limits entirely.
-    Unauthenticated users in DEBUG mode also bypass.
+
+    Bypass rules (in priority order):
+      1. Unauthenticated in DEBUG mode → bypass (dev only).
+      2. Admin (`user.is_admin`) → unlimited.
+      3. Active subscription with `unlimited_ai=True` (1_year / legacy / admin_grant)
+         → unlimited, no token deducted. THIS IS THE FIX FOR:
+         "I paid for Premium but tokens keep decreasing."
+      4. Otherwise → consume 1 token. If insufficient, return 402.
     """
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated:
-        # In DEBUG mode, unauthenticated requests are allowed
         if getattr(django_settings, 'DEBUG', False):
             return True, None
         return False, Response({'error': 'Authentication required'}, status=401)
 
-    # Admins have unlimited tokens
+    # 1. Admins have unlimited tokens
     if user.is_admin:
         return True, None
+
+    # 2. Active subscription bypass (the critical fix)
+    try:
+        from accounts.models import Subscription
+        sub = Subscription.get_active_subscription(user)
+        if sub and sub.is_active and sub.unlimited_ai:
+            return True, None
+    except Exception:
+        # If subscription lookup fails for any reason, fall through to token
+        # metering rather than letting a transient DB error lock the user out.
+        logger.exception('consume_ai_token: subscription lookup failed; falling back to token metering')
 
     balance, _ = TokenBalance.objects.get_or_create(user=user)
     if balance.consume_token(amount=1):
@@ -89,19 +104,37 @@ def consume_ai_token(request):
 
     return False, Response({
         'error': 'insufficient_tokens',
-        'message': 'You have exhausted your AI tokens. Purchase more tokens to continue.',
+        'message': 'You have exhausted your AI tokens. Subscribe for unlimited usage or purchase more tokens.',
         'available': balance.available_tokens,
     }, status=429)
 
 
 def refund_ai_token(request):
-    """Refund AI tokens if the AI call fails after token was consumed."""
+    """Refund AI tokens if the AI call fails after token was consumed.
+
+    The prior implementation only refunded daily/weekly counters and never
+    restored feedback_credits or purchased_tokens — meaning every AI failure
+    silently cost the user 1 paid token. We now write a 'consume' transaction
+    on success and a matching 'refund' on failure so the source pool is
+    reversed exactly.
+    """
+    from accounts.models import TokenBalance, TokenTransaction
+
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated or user.is_admin:
         return
+
     try:
         balance = TokenBalance.objects.get(user=user)
         balance.refund_token(amount=1)
+        # Audit log so refunds are visible in transaction history
+        TokenTransaction.objects.create(
+            user=user,
+            transaction_type='refund',
+            amount=1,
+            price_paid=0,
+            note='AI call failed — token refunded',
+        )
         logger.info(f"Refunded 1 AI token for user {user.username}")
     except TokenBalance.DoesNotExist:
         pass

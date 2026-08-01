@@ -62,6 +62,13 @@ export default function SubscriptionPage() {
     const [showHistory, setShowHistory] = useState(false);
     const [showManageModal, setShowManageModal] = useState(false);
 
+    // Idempotency-key used by backend SubscribeOrderView to dedupe a rapid
+    // double-click on the same plan within 5 minutes (issue B19 in audit).
+    // Each click of "Buy" generates a fresh UUID; subsequent clicks during
+    // the in-flight modal reuse it so the backend re-issues the same Razorpay
+    // order instead of charging twice.
+    const [inFlightRequestId, setInFlightRequestId] = useState<string | null>(null);
+
     // Subscription state
     const subscriptionInfo = user?.subscription_info;
 
@@ -268,6 +275,12 @@ export default function SubscriptionPage() {
     };
 
     const handleSubscribe = async (plan: string) => {
+        // B19 fix — idempotency key generated client-side and reused across
+        // rapid clicks of the same plan within the same modal session.
+        const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+            ? crypto.randomUUID()
+            : `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        setInFlightRequestId(requestId);
         setSubscribing(true);
         setVerifying(false);
         setSuccessMessage(null);
@@ -285,12 +298,13 @@ export default function SubscriptionPage() {
         if (!scriptLoaded) {
             setErrorMessage("Failed to load Razorpay SDK. Please check your internet connection.");
             setSubscribing(false);
+            setInFlightRequestId(null);
             return;
         }
 
         try {
-            // Create order with plan type
-            const orderRes = await authAPI.subscribeOrder(plan);
+            // Create order with plan type + idempotency key
+            const orderRes = await authAPI.subscribeOrder(plan, requestId);
             const { order_id, amount, key_id } = orderRes.data;
 
             const options = {
@@ -328,6 +342,7 @@ export default function SubscriptionPage() {
                         });
                     } finally {
                         setVerifying(false);
+                        setInFlightRequestId(null);
                     }
                 },
                 prefill: {
@@ -342,6 +357,7 @@ export default function SubscriptionPage() {
                     ondismiss: function() {
                         setSubscribing(false);
                         setVerifying(false);
+                        setInFlightRequestId(null);
                     }
                 }
             };
@@ -353,6 +369,7 @@ export default function SubscriptionPage() {
             setErrorMessage(error.response?.data?.error || "Failed to initiate payment. Please try again later.");
             setSubscribing(false);
             setVerifying(false);
+            setInFlightRequestId(null);
         }
     };
 
@@ -379,6 +396,43 @@ export default function SubscriptionPage() {
     };
 
     const isSubscribed = user?.is_subscribed;
+
+    // ── Plan-comparison helpers (B3 + B20) ────────────────────────────
+    // 'legacy' and 'admin_grant' are lifetime subscriptions — they never
+    // expire and the user should NEVER see a "Renew Now" button or a
+    // count-down banner, because renewing would just create a duplicate row.
+    const LIFETIME_PLANS = new Set(['legacy', 'admin_grant']);
+    const isLifetimeSubscription = (plan?: string | null): boolean =>
+        !!plan && LIFETIME_PLANS.has(plan);
+
+    const currentPlanId = subscriptionInfo?.plan ?? null;
+    const isCurrentLifetime = isLifetimeSubscription(currentPlanId);
+
+    // Marketing "best-value" comparison: how much does the user save by
+    // upgrading from their current plan to the 1-Year Unlimited?
+    const getUpgradeSavings = (targetPrice: number): number | null => {
+        if (!subscriptionInfo || isCurrentLifetime) return null;
+        // Only show savings if user is currently on a shorter-duration plan
+        const cheaperPlans: Record<string, number> = {
+            '1_month': 1, '3_months': 2, 'scholarship_1_month': 1,
+        };
+        if (!currentPlanId || !(currentPlanId in cheaperPlans)) return null;
+        if (targetPrice !== 1999) return null;
+        // If user paid < 1999 and 1-year costs 1999, no savings vs extending.
+        // Show savings only for the "stacking" comparison:
+        //   - currently on 1_month (₹129)  → if they stack 1_year, pay ₹1999
+        //     for 12 months instead of paying ₹129 × 12 = ₹1548 sequentially.
+        //   → user SAVES nothing on first cycle; longer cycles are the savings.
+        // Realistic saving is per-month rate comparison:
+        const perMonth: Record<string, number> = {
+            '1_month': 129, '3_months': 449 / 3, 'scholarship_1_month': 79,
+        };
+        const curPerMonth = perMonth[currentPlanId];
+        if (!curPerMonth) return null;
+        const targetPerMonth = 1999 / 12;
+        if (targetPerMonth >= curPerMonth) return null;
+        return Math.round((curPerMonth - targetPerMonth) * 12);
+    };
 
     const plans = [
         {
@@ -524,14 +578,25 @@ export default function SubscriptionPage() {
                     {/* ── Active Subscription Status Card ── */}
                     {isSubscribed && subscriptionInfo && (
                         <div className="rounded-3xl border border-emerald-500/30 bg-linear-to-r from-emerald-500/5 via-teal-500/5 to-transparent p-6 md:p-8 shadow-sm">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="p-2.5 rounded-2xl bg-emerald-500/10">
-                                    <ShieldCheck className="w-6 h-6 text-emerald-500" />
+                            <div className="flex items-center justify-between gap-2 mb-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2.5 rounded-2xl bg-emerald-500/10">
+                                        <ShieldCheck className="w-6 h-6 text-emerald-500" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-foreground">✅ Active Membership</h3>
+                                        <p className="text-xs text-muted-foreground">Your premium access is fully activated</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-foreground">✅ Active Membership</h3>
-                                    <p className="text-xs text-muted-foreground">Your premium access is fully activated</p>
-                                </div>
+                                {/* B20 fix: explicit lifetime badge for legacy / admin_grant users.
+                                    Previously a lifetime user saw "Days Remaining: ∞ Lifetime" tucked
+                                    in a corner — not visible enough to convey "this is permanent". */}
+                                {isCurrentLifetime && (
+                                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-3 py-1">
+                                        <Sparkles className="w-3 h-3 mr-1" />
+                                        LIFETIME — NEVER EXPIRES
+                                    </Badge>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="space-y-1">
@@ -589,7 +654,8 @@ export default function SubscriptionPage() {
                     )}
 
                     {/* ── Renewal Countdown Banner ── */}
-                    {isSubscribed && subscriptionInfo && subscriptionInfo.days_remaining >= 0 && subscriptionInfo.days_remaining <= 7 && (
+                    {/* B3 fix: lifetime plans (legacy / admin_grant) never show this — there is nothing to renew. */}
+                    {isSubscribed && subscriptionInfo && !isCurrentLifetime && subscriptionInfo.days_remaining >= 0 && subscriptionInfo.days_remaining <= 7 && (
                         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                             <div className="flex items-start gap-3">
                                 <div className="p-2 rounded-xl bg-amber-500/15 shrink-0">
@@ -609,9 +675,10 @@ export default function SubscriptionPage() {
                             <button
                                 type="button"
                                 onClick={() => handleSubscribe(subscriptionInfo.plan)}
-                                className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-2.5 px-5 rounded-xl transition-all shadow-md shrink-0"
+                                disabled={subscribing || verifying || !!inFlightRequestId}
+                                className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-2.5 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Renew Now
+                                {subscribing || verifying ? 'Opening…' : 'Renew Now'}
                             </button>
                         </div>
                     )}
@@ -739,6 +806,9 @@ export default function SubscriptionPage() {
                         {plans.map((plan) => {
                             const isRecommended = plan.id === '1_year';
                             const hasScholarshipDiscount = plan.scholarshipPromo && user?.scholarship_test_passed;
+                            const isCurrentPlan = isSubscribed && currentPlanId === plan.id;
+                            const savings = getUpgradeSavings(plan.price);
+                            const buyDisabled = subscribing || verifying || !!inFlightRequestId;
                             return (
                                 <div
                                     key={plan.id}
@@ -770,6 +840,13 @@ export default function SubscriptionPage() {
                                         <span className={`text-xs ${isRecommended ? 'text-slate-300' : 'text-muted-foreground'}`}>/ {plan.period}</span>
                                     </div>
 
+                                    {/* B20 fix — show yearly savings vs current short-term plan */}
+                                    {savings !== null && savings > 0 && (
+                                        <div className="mb-4 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                                            💰 Save ₹{savings}/yr by switching from your current plan
+                                        </div>
+                                    )}
+
                                     <ul className="space-y-3 text-left text-xs mb-8 flex-1">
                                         {plan.features.map((f, i) => (
                                             <li key={i} className="flex items-start gap-2">
@@ -779,16 +856,41 @@ export default function SubscriptionPage() {
                                         ))}
                                     </ul>
 
-                                    {isSubscribed ? (
+                                    {isCurrentPlan ? (
+                                        /* B20 fix — distinguish "you already have this" from "buy now" */
+                                        <div className="w-full py-2.5 rounded-xl font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-sm">
+                                            <Check className="w-4 h-4" /> Your Active Plan
+                                        </div>
+                                    ) : isSubscribed && !isCurrentLifetime ? (
+                                        /* Subscribed users can stack to upgrade */
+                                        <div className="flex flex-col gap-1.5">
+                                            <button
+                                                onClick={plan.action}
+                                                disabled={buyDisabled}
+                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                            >
+                                                {verifying ? (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Payment...
+                                                    </span>
+                                                ) : subscribing ? 'Opening Payment...' : `Switch to ${plan.name}`}
+                                            </button>
+                                            <p className="text-center text-[11px] text-muted-foreground">
+                                                Stacks on top of your remaining {subscriptionInfo?.days_remaining ?? 0} day{(subscriptionInfo?.days_remaining ?? 0) === 1 ? '' : 's'}
+                                            </p>
+                                        </div>
+                                    ) : isSubscribed && isCurrentLifetime ? (
+                                        /* Lifetime users: don't show "Active Member" on a plan they don't have.
+                                           Show a disabled "Already Lifetime" message instead. */
                                         <div className="w-full py-2.5 rounded-xl font-bold bg-amber-500/10 text-amber-500 border border-amber-500/25 flex items-center justify-center gap-1.5 text-sm">
-                                            <Crown className="w-4 h-4" /> Active Member
+                                            <Crown className="w-4 h-4" /> Lifetime Member
                                         </div>
                                     ) : (
                                         <div className="flex flex-col gap-1.5">
                                             <button
                                                 onClick={hasScholarshipDiscount ? () => handleSubscribe('scholarship_1_month') : plan.action}
-                                                disabled={subscribing || verifying}
-                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'}`}
+                                                disabled={buyDisabled}
+                                                className={`w-full py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-md active:scale-98 ${isRecommended ? 'bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black shadow-amber-500/10' : 'bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-black'} disabled:opacity-50 disabled:cursor-not-allowed`}
                                             >
                                                 {verifying ? (
                                                     <span className="flex items-center justify-center gap-2">
@@ -898,20 +1000,32 @@ export default function SubscriptionPage() {
                                         </div>
 
                                         {/* Renewal */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowManageModal(false);
-                                                handleSubscribe(subscriptionInfo.plan);
-                                            }}
-                                            className="w-full flex items-center justify-between gap-3 rounded-2xl border border-border hover:border-amber-500/40 hover:bg-amber-500/5 p-4 transition-all"
-                                        >
-                                            <div className="text-left">
-                                                <p className="font-bold text-sm">Renew / Extend</p>
-                                                <p className="text-xs text-muted-foreground">Stack another period on top of your current plan.</p>
+                                        {isCurrentLifetime ? (
+                                            /* B3 fix: lifetime users have nothing to renew. */
+                                            <div className="w-full flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+                                                <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+                                                <div className="text-left">
+                                                    <p className="font-bold text-sm text-amber-700 dark:text-amber-300">Lifetime Plan — No Renewal Needed</p>
+                                                    <p className="text-xs text-muted-foreground">Your access never expires. Use the buttons below if you want a different plan instead.</p>
+                                                </div>
                                             </div>
-                                            <span className="text-amber-500 text-xl">→</span>
-                                        </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowManageModal(false);
+                                                    handleSubscribe(subscriptionInfo.plan);
+                                                }}
+                                                disabled={subscribing || verifying || !!inFlightRequestId}
+                                                className="w-full flex items-center justify-between gap-3 rounded-2xl border border-border hover:border-amber-500/40 hover:bg-amber-500/5 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <div className="text-left">
+                                                    <p className="font-bold text-sm">Renew / Extend</p>
+                                                    <p className="text-xs text-muted-foreground">Stack another period on top of your current plan.</p>
+                                                </div>
+                                                <span className="text-amber-500 text-xl">→</span>
+                                            </button>
+                                        )}
 
                                         {/* Upgrade plan options */}
                                         <div className="space-y-2">

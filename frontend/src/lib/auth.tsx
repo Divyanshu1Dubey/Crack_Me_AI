@@ -106,6 +106,33 @@ const fetchBackendProfile = async (accessToken: string) => {
     return response.json();
 };
 
+/**
+ * Fetch the backend profile with automatic Supabase session refresh on 401.
+ *
+ * Why this exists: Supabase access tokens are short-lived (default 1 hour).
+ * If the user has a long-lived frontend session and the access token expires
+ * mid-flow, the old code would silently fall through to `mapSupabaseUser`
+ * which has NO `subscription_info`, `is_subscribed`, or `token_info` — making
+ * a paying user appear unsubscribed. We now try-refresh-once on 401 so the
+ * common case (token expired during a session, not a leaked credential) is
+ * self-healing.
+ */
+const fetchBackendProfileWithRefresh = async (accessToken: string): Promise<unknown> => {
+    try {
+        return await fetchBackendProfile(accessToken);
+    } catch (err: unknown) {
+        const is401 = err instanceof Error && /401/.test(err.message);
+        if (!is401) throw err;
+        const supabase = getSupabaseBrowserClient();
+        if (!supabase) throw err;
+        const { data, error: refreshErr } = await supabase.auth.refreshSession();
+        if (refreshErr || !data.session?.access_token) {
+            throw err;
+        }
+        return await fetchBackendProfile(data.session.access_token);
+    }
+};
+
 const getAuthRedirectTo = () => {
     if (typeof window !== 'undefined' && window.location?.origin) {
         return `${window.location.origin}/auth/callback`;
@@ -189,9 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // Try to sync profile from backend (which has updated role from Supabase metadata)
                 try {
-                    const profileRes = await fetchBackendProfile(data.session.access_token);
+                    const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
                     if (!mounted) return;
-                    setUser(profileRes);
+                    setUser(profileRes as User);
                 } catch {
                     // Fallback to mapped Supabase user
                     if (mounted) {
@@ -219,11 +246,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            // Sync profile after auth state change
-            fetchBackendProfile(session.access_token)
+            // Sync profile after auth state change (with refresh-on-401)
+            fetchBackendProfileWithRefresh(session.access_token)
                 .then((profileRes) => {
                     if (!mounted) return;
-                    setUser(profileRes);
+                    setUser(profileRes as User);
                 })
                 .catch(() => {
                     if (mounted) {
@@ -270,9 +297,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 throw new Error('Missing Supabase access token');
             }
 
-            const profileRes = await fetchBackendProfile(accessToken);
-            setUser(profileRes);
-            return profileRes;
+            const profileRes = await fetchBackendProfileWithRefresh(accessToken);
+            setUser(profileRes as User);
+            return profileRes as User;
         } catch {
             // Fallback to mapped Supabase user if profile sync fails
             const mapped = mapSupabaseUser(signedInUser);
@@ -310,8 +337,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message || 'Registration failed');
         if (data.session?.user) {
             try {
-                const profileRes = await fetchBackendProfile(data.session.access_token);
-                setUser(profileRes);
+                const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
+                setUser(profileRes as User);
             } catch {
                 setUser(mapSupabaseUser(data.session.user));
             }
@@ -397,8 +424,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const refreshProfile = async () => {
-        if (!SUPABASE_AUTH_ENABLED) return;
-
+        // BUG FIX: previously gated on SUPABASE_AUTH_ENABLED — if Supabase
+        // was misconfigured on a deployed node, refreshProfile() was a no-op
+        // and the user appeared unsubscribed forever. We now ALWAYS attempt
+        // the profile fetch when there is a session, regardless of which
+        // auth backend is enabled.
         const supabase = getSupabaseBrowserClient();
         if (!supabase) return;
 
@@ -409,8 +439,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 throw new Error('Missing Supabase access token');
             }
 
-            const profileRes = await fetchBackendProfile(accessToken);
-            setUser(profileRes);
+            const profileRes = await fetchBackendProfileWithRefresh(accessToken);
+            setUser(profileRes as User);
         } catch (error: unknown) {
             if (isInvalidRefreshTokenError(error)) {
                 await clearSupabaseLocalSession();
