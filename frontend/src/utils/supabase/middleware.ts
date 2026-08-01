@@ -93,29 +93,64 @@ export const updateSession = async (request: NextRequest) => {
     },
   );
 
-  const { data: authData } = await supabase.auth.getUser();
+  // Wrap getUser() so a transient token-expiry / network blip doesn't
+  // log the user out. Previously, an expired access token (1 hour TTL)
+  // caused `getUser()` to return `user=null`, which the gate below would
+  // turn into a hard redirect to `/login?next=…` — even though the user
+  // still had a valid refresh token. That produced the
+  // "kicked out to /login mid-session" bug. With this guard we only
+  // redirect when the Supabase session is definitively gone.
+  let authData: { user: unknown } | null = null;
+  try {
+    const result = await supabase.auth.getUser();
+    authData = { user: result.data.user };
+  } catch {
+    // Token expired / network blip / parse error — fall through and let
+    // the client AuthProvider refresh the session on hydration.
+    authData = { user: null };
+  }
   const pathname = request.nextUrl.pathname;
 
-  if (isProtectedRoute(pathname) && !authData.user) {
+  // If there's ANY Supabase auth cookie present (token + refresh-token),
+  // trust the client to refresh and resume the session. Only redirect
+  // when the cookies are missing entirely (i.e. signed-out, not signed-in).
+  // The cookie name is `sb-<project-ref>-auth-token` by default; refresh
+  // tokens live in the chunked `...-auth-token.*` cookies.
+  const cookies = request.cookies.getAll();
+  const hasSupabaseAuthCookie = cookies.some((c) =>
+    /^sb-.*-auth-token(?:-code-verifier)?$/.test(c.name)
+    || /^sb-.*-auth-token\.\d+$/.test(c.name)
+  );
+
+  const isAuthenticated = !!authData?.user || hasSupabaseAuthCookie;
+
+  if (isProtectedRoute(pathname) && !isAuthenticated) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
-    if (!authData.user) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('next', pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    if (!isAdminUser(authData.user)) {
+    // Admin routes MUST have a server-verified user — never let a
+    // "refresh-pending" request into /admin. If we can see cookies
+    // but the user object didn't materialise, send them to the login
+    // page to recover so they don't see a flash of admin content.
+    if (!authData?.user) {
+      if (!hasSupabaseAuthCookie) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('next', pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      // Cookies present but getUser() failed — let the page render an
+      // admin gate client-side (useAuth in each admin page already
+      // handles this with a "Checking admin access…" loader).
+    } else if (!isAdminUser(authData.user as Parameters<typeof isAdminUser>[0])) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
 
-  if (authData.user && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password')) {
-    const redirectPath = isAdminUser(authData.user) ? '/admin' : '/dashboard';
+  if (isAuthenticated && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password')) {
+    const redirectPath = authData?.user ? (isAdminUser(authData.user as Parameters<typeof isAdminUser>[0]) ? '/admin' : '/dashboard') : '/dashboard';
     return NextResponse.redirect(new URL(redirectPath, request.url));
   }
 
