@@ -13,7 +13,8 @@ class TestSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'test_type', 'description', 'subject',
                   'subject_name', 'topic', 'topic_name', 'num_questions',
                   'time_limit_minutes', 'negative_marking', 'negative_mark_value',
-                  'is_published', 'version', 'attempt_count', 'created_at', 'updated_at']
+                  'is_published', 'is_free_preview', 'version',
+                  'attempt_count', 'created_at', 'updated_at']
 
     def get_attempt_count(self, obj):
         request = self.context.get('request')

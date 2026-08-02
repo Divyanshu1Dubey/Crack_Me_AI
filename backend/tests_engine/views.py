@@ -14,6 +14,7 @@ from .serializers import (
 )
 from questions.models import Question, Subject, Topic
 from accounts.permissions import IsControlTowerAdmin
+from accounts.utils import is_premium as _is_premium
 
 
 class TestViewSet(viewsets.ModelViewSet):
@@ -321,6 +322,31 @@ class TestViewSet(viewsets.ModelViewSet):
         "at most one active attempt" invariant at the DB level.
         """
         test = self.get_object()
+
+        # Freemium gate (Task 7): free users can only start tests that the
+        # admin has marked as `is_free_preview=True`. Premium and admin
+        # users bypass entirely. Checked after `get_object()` so a 404 on
+        # a missing test still returns 404 (not 402).
+        user = getattr(self.request, 'user', None)
+        if (
+            user is not None
+            and getattr(user, 'is_authenticated', False)
+            and not (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))
+            and not _is_premium(user)
+            and not getattr(test, 'is_free_preview', False)
+        ):
+            return Response(
+                {
+                    'code': 'upgrade_required',
+                    'feature': 'Mock Tests',
+                    'message': (
+                        'This mock test is part of the Premium library. '
+                        'Subscribe to unlock all 100+ tests from just ₹129/month.'
+                    ),
+                },
+                status=402,
+            )
+
         from questions.serializers import QuestionListSerializer
         with transaction.atomic():
             attempt = (
