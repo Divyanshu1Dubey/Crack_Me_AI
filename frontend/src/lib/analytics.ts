@@ -107,6 +107,10 @@ export type AnalyticsEvent =
     | 'payment_success'
     | 'payment_failure'
     | 'coupon_applied'
+    /* Paywall (freemium conversion layer — 2026-08-02) */
+    | 'paywall_view'
+    | 'upgrade_click'
+    | 'paywall_dismissed'
     /* Leaderboard */
     | 'leaderboard_view'
     | 'leaderboard_tab_switch'
@@ -619,6 +623,35 @@ export function trackScrollDepth(force?: boolean): void {
 
 export function resetScrollTracking(): void {
     scrollMarked = new Set();
+}
+
+/* ----------------------------------------------------------------------- */
+/* Paywall events (freemium conversion layer — 2026-08-02)                   */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * User saw the global UpgradeModal for a given feature. Fired on every
+ * modal open. Used by the funnel dashboard to measure impressions.
+ */
+export function paywallView(feature: string, params?: EventParams): void {
+    dispatch('paywall_view', { feature, ...(params ?? {}) });
+}
+
+/**
+ * User clicked the "Start Now" CTA inside the modal. Strongest intent
+ * signal — drops them onto /subscription?
+ */
+export function upgradeClick(feature: string, params?: EventParams): void {
+    dispatch('upgrade_click', { feature, ...(params ?? {}) });
+}
+
+/**
+ * User dismissed the modal without clicking the CTA (close button,
+ * overlay click, or "Maybe later"). Used to compute impression-to-click
+ * conversion; high dismissal rate suggests copy or trigger is wrong.
+ */
+export function paywallDismissed(feature: string, params?: EventParams): void {
+    dispatch('paywall_dismissed', { feature, ...(params ?? {}) });
 }
 
 /* ----------------------------------------------------------------------- */
