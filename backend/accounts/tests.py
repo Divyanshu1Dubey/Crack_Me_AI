@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .supabase_rest_auth import SupabaseJWTAuthentication
 
@@ -1134,4 +1137,68 @@ class SubscriptionEndToEndWorkflowTests(TestCase):
         # Even after the test's date mocking would push past any expiry,
         # lifetime plans remain active.
         self.assertTrue(sub.is_active)
+
+
+class IsPremiumHelperTests(TestCase):
+    """Freemium gate: is_premium(user) is the single source of truth for
+    whether the user has paid access. Used by every backend gate.
+    """
+
+    def setUp(self):
+        self.student = User.objects.create_user(
+            username='is_premium_stu', email='stu@x.com', password='x',
+        )
+        self.admin = User.objects.create_user(
+            username='is_premium_adm', email='adm@x.com', password='x',
+            is_staff=True, is_superuser=True,
+        )
+
+    def test_anonymous_user_is_not_premium(self):
+        from django.contrib.auth.models import AnonymousUser
+        from accounts.utils import is_premium
+        self.assertFalse(is_premium(AnonymousUser()))
+
+    def test_student_without_subscription_is_not_premium(self):
+        from accounts.utils import is_premium
+        self.assertFalse(is_premium(self.student))
+
+    def test_admin_is_always_premium(self):
+        from accounts.utils import is_premium
+        self.assertTrue(is_premium(self.admin))
+
+    def test_active_subscription_makes_premium(self):
+        from accounts.utils import is_premium
+        from accounts.models import Subscription
+        Subscription.objects.create(
+            user=self.student, plan='1_month', status='active',
+            expires_at=timezone.now() + timedelta(days=30), amount_paid=12900,
+        )
+        self.assertTrue(is_premium(self.student))
+
+    def test_expired_subscription_is_not_premium(self):
+        from accounts.utils import is_premium
+        from accounts.models import Subscription
+        Subscription.objects.create(
+            user=self.student, plan='1_month', status='active',
+            expires_at=timezone.now() - timedelta(days=1), amount_paid=12900,
+        )
+        self.assertFalse(is_premium(self.student))
+
+    def test_cancelled_subscription_is_not_premium(self):
+        from accounts.utils import is_premium
+        from accounts.models import Subscription
+        Subscription.objects.create(
+            user=self.student, plan='1_month', status='cancelled',
+            expires_at=timezone.now() + timedelta(days=30), amount_paid=12900,
+        )
+        self.assertFalse(is_premium(self.student))
+
+    def test_lifetime_subscription_is_premium(self):
+        from accounts.utils import is_premium
+        from accounts.models import Subscription
+        Subscription.objects.create(
+            user=self.student, plan='legacy', status='active',
+            expires_at=None, amount_paid=19900,
+        )
+        self.assertTrue(is_premium(self.student))
 
