@@ -9,3 +9,5 @@ class AccountsConfig(AppConfig):
         # Ensure the freemium models module is imported so makemigrations
         # and the ORM see FreeShowcaseQuestion.
         from . import models_freemium  # noqa: F401
+        # Wire up post_migrate → freemium auto-seed (showcase + free preview tests).
+        from . import signals  # noqa: F401
