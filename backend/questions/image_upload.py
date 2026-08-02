@@ -133,6 +133,24 @@ def upload_image_to_supabase(
         if role != existing.role:
             existing.role = role
             existing.save(update_fields=["role", "updated_at"])
+        # Belt-and-suspenders: on the dedup path, also auto-append the
+        # [[img:N]] token if the new role is 'explanation'. The token
+        # may not exist in the explanation text if the admin uploaded
+        # the same image twice or if a previous save was interrupted.
+        if role == "explanation":
+            from questions.models import Question as _Q
+            try:
+                q = _Q.objects.only("id", "explanation").get(pk=question_id)
+                token = f"[[img:{existing.id}]]"
+                if token not in (q.explanation or ""):
+                    q.explanation = ((q.explanation or "") + "\n\n" + token).strip()
+                    q.save(update_fields=["explanation", "updated_at"])
+                    logger.info(
+                        "Auto-appended %s on dedup path (question %s, role=explanation)",
+                        token, question_id,
+                    )
+            except _Q.DoesNotExist:
+                pass
         # No mutable bookkeeping to update — the bytes, mime, and url are
         # byte-for-byte identical (sha256 dedup), so just return the row.
         return UploadedImage(
@@ -179,6 +197,33 @@ def upload_image_to_supabase(
         url=public_url,
     )
     logger.info("Uploaded QuestionImage #%s to %s", row.id, public_url)
+
+    # Belt-and-suspenders for the explanation-image-leak bug (2026-08-01):
+    # when an admin uploads with role='explanation', append the
+    # [[img:N]] token to the question's `explanation` field server-side
+    # so the token is ALWAYS persisted, even if the modal's network save
+    # failed or the admin never clicked Save. The frontend client also
+    # inserts the token in form state and re-saves on Save click, but
+    # this server-side append guarantees the runtime heuristic and the
+    # future backfill migration can always find the token, so the image
+    # is correctly excluded from the stem-pane render.
+    #
+    # Idempotent: skip if the token is already there (re-uploads, retries).
+    if role == "explanation":
+        from questions.models import Question as _Q
+        try:
+            q = _Q.objects.only("id", "explanation").get(pk=question_id)
+            token = f"[[img:{row.id}]]"
+            if token not in (q.explanation or ""):
+                q.explanation = ((q.explanation or "") + "\n\n" + token).strip()
+                q.save(update_fields=["explanation", "updated_at"])
+                logger.info(
+                    "Auto-appended %s to question %s explanation (role=explanation upload)",
+                    token, question_id,
+                )
+        except _Q.DoesNotExist:
+            pass
+
     return UploadedImage(
         id=row.id,
         url=public_url,

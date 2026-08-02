@@ -40,6 +40,7 @@ def _backfill_explanation_role(apps, schema_editor):
     QuestionImage = apps.get_model("questions", "QuestionImage")
 
     updated = 0
+    orphaned_appended = 0
     # Process question-by-question so the per-row Python check stays
     # cheap. `uploaded_by_admin=True` is a db_index, so the candidate
     # scan is index-only.
@@ -57,7 +58,7 @@ def _backfill_explanation_role(apps, schema_editor):
     for question_id, image_ids in by_question.items():
         try:
             q = Question.objects.only(
-                "question_text", "explanation",
+                "id", "question_text", "explanation",
                 "concept_explanation", "mnemonic",
             ).get(pk=question_id)
         except Question.DoesNotExist:
@@ -66,7 +67,8 @@ def _backfill_explanation_role(apps, schema_editor):
         stem = (q.question_text or "")
         expl = (q.explanation or "") + (q.concept_explanation or "") + (q.mnemonic or "")
 
-        eligible: list[int] = []
+        token_referenced: list[int] = []
+        orphan_ids: list[int] = []
         for img_id in image_ids:
             token = f"[[img:{img_id}]]"
             # Skip if the image is referenced from the stem — it's a
@@ -78,14 +80,52 @@ def _backfill_explanation_role(apps, schema_editor):
             # orphaned the image (deleted the inline reference) and we
             # don't want to silently reclassify it.
             if token in expl:
-                eligible.append(img_id)
+                token_referenced.append(img_id)
+            else:
+                # Truly orphan row: admin uploaded with role=illustration
+                # but no token landed in any text field (e.g. the modal
+                # save crashed before the token was persisted). Treat as
+                # an explanation image AND auto-append the token so
+                # future runs of this migration (and the runtime
+                # heuristic in the detail serializer) can find it.
+                #
+                # Conservative gate: only handle rows where the question
+                # has SOME non-empty explanation-class text, which means
+                # the admin was actively editing the explanation at
+                # upload time. Without that we risk reclassifying
+                # legitimate stem images that simply haven't been
+                # inlined into `question_text` yet.
+                if (q.explanation or "") or (q.concept_explanation or "") or (q.mnemonic or ""):
+                    orphan_ids.append(img_id)
 
-        if eligible:
-            updated += QuestionImage.objects.filter(id__in=eligible).update(role="explanation")
+        if token_referenced:
+            updated += QuestionImage.objects.filter(
+                id__in=token_referenced
+            ).update(role="explanation")
+
+        if orphan_ids:
+            orphan_updated = QuestionImage.objects.filter(
+                id__in=orphan_ids
+            ).update(role="explanation")
+            updated += orphan_updated
+            # Auto-append the token to explanation so subsequent runs
+            # can locate these rows via the token-referenced path
+            # (and the runtime heuristic in get_images can drop them
+            # from `stem_images`).
+            for img_id in orphan_ids:
+                token = f"[[img:{img_id}]]"
+                if token not in expl:
+                    q.explanation = ((q.explanation or "") + "\n\n" + token).strip()
+                    q.save(update_fields=["explanation"])
+                    orphaned_appended += 1
+                    expl = (q.explanation or "") + (q.concept_explanation or "") + (q.mnemonic or "")
 
     # `updated` is local so a global counter isn't useful here. Logging
     # happens via the migration framework's stdout.
-    print(f"[0035] Promoted {updated} QuestionImage row(s) to role='explanation'")
+    print(
+        f"[0035] Promoted {updated} QuestionImage row(s) to role='explanation'; "
+        f"auto-appended {orphaned_appended} orphan token(s) to question.explanation"
+    )
 
 
 def _noop_reverse(apps, schema_editor):
