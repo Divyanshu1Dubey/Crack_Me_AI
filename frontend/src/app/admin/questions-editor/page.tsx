@@ -45,6 +45,10 @@ export default function AdminQuestionsEditorPage() {
   const [removeSubmitting, setRemoveSubmitting] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
+  // Page-level banner so destructive failures (drag-reorder, inline edit,
+  // merge-confirmation guard) surface inline instead of via window.alert().
+  const [pageError, setPageError] = useState<string | null>(null);
+
   // Drag and drop state
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
@@ -197,15 +201,15 @@ export default function AdminQuestionsEditorPage() {
   const handleUpdate = async (id: number, field: string, value: any) => {
     try {
       // Auto-flag admin_edited = true on any edit
-      await questionsAPI.update(id, { 
+      await questionsAPI.update(id, {
         [field]: value,
-        admin_edited: true 
+        admin_edited: true
       });
       // Update local state
       setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value, admin_edited: true } : q));
     } catch (error) {
       console.error(error);
-      alert('Failed to update question');
+      setPageError('Failed to update question. Change has been reverted.');
       fetchQuestions(); // Revert on failure
     }
   };
@@ -234,7 +238,7 @@ export default function AdminQuestionsEditorPage() {
       ));
     } catch (e) {
       console.error(e);
-      alert('Error updating display numbers');
+      setPageError('Error updating display numbers. Reverted to original order.');
       fetchQuestions();
     }
   };
@@ -292,7 +296,7 @@ export default function AdminQuestionsEditorPage() {
   const submitMergeDuplicates = async () => {
     if (!mergeFor) return;
     if (mergeDropIds.length === 0) {
-      alert('Select at least one duplicate to drop.');
+      setMergeError('Select at least one duplicate to drop.');
       return;
     }
     const confirmMsg =
@@ -354,6 +358,22 @@ export default function AdminQuestionsEditorPage() {
 
   return (
     <div className="p-6 mx-auto space-y-6 text-gray-900 dark:text-slate-100">
+      {pageError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-700 px-4 py-3 text-sm text-red-800 dark:text-red-200 flex items-start gap-3"
+        >
+          <span className="flex-1">{pageError}</span>
+          <button
+            type="button"
+            onClick={() => setPageError(null)}
+            className="text-red-700 hover:text-red-900 dark:text-red-300"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Questions Editor</h1>
         <div className="text-sm text-gray-700 dark:text-slate-300">
@@ -632,7 +652,7 @@ export default function AdminQuestionsEditorPage() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => alert('Merge/Split feature coming soon!')}
+                      onClick={() => setPageError('Merge/Split feature coming soon!')}
                       className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:text-indigo-100 border border-indigo-200 dark:border-indigo-800 px-3 py-1 rounded"
                     >
                       Merge / Split

@@ -103,6 +103,8 @@ export default function AdminDashboardPage() {
     const [userStatusFilter, setUserStatusFilter] = useState('all');
     const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
     const [userActionMessage, setUserActionMessage] = useState('');
+    const [dataActionBusy, setDataActionBusy] = useState<'backup' | 'restore' | null>(null);
+    const [dataActionMessage, setDataActionMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
     const [deviceModalOpen, setDeviceModalOpen] = useState(false);
     const [deviceModalUserId, setDeviceModalUserId] = useState<number | null>(null);
     const [deviceModalList, setDeviceModalList] = useState<any[]>([]);
@@ -886,14 +888,14 @@ export default function AdminDashboardPage() {
         try {
             if (plan.toLowerCase() === 'revoke') {
                 await authAPI.adminManageSubscription(subModalUserId, { action: 'revoke' });
-                alert("Subscription revoked.");
+                setUserActionMessage('Subscription revoked.');
             } else {
                 await authAPI.adminManageSubscription(subModalUserId, { action: 'grant', plan });
-                alert(`Subscription ${plan} granted.`);
+                setUserActionMessage(`Subscription ${plan} granted.`);
             }
             fetchUsers();
         } catch (e: any) {
-            alert(extractApiErrorMessage(e?.response?.data || "Action failed"));
+            setUserActionMessage(extractApiErrorMessage(e?.response?.data || 'Subscription action failed'));
         }
         setUserActionLoadingId(null);
     };
@@ -907,7 +909,7 @@ export default function AdminDashboardPage() {
             setDeviceModalUserId(targetUserId);
             setDeviceModalOpen(true);
         } catch (e: any) {
-            alert(extractApiErrorMessage(e?.response?.data || "Failed to manage devices"));
+            setUserActionMessage(extractApiErrorMessage(e?.response?.data || 'Failed to manage devices'));
         }
         setUserActionLoadingId(null);
     };
@@ -917,8 +919,9 @@ export default function AdminDashboardPage() {
         try {
             await authAPI.adminLogoutUserDevice(deviceModalUserId, deviceId);
             setDeviceModalList(prev => prev.filter(d => d.id !== deviceId));
+            setUserActionMessage('Device logged out.');
         } catch (e: any) {
-            alert("Failed to logout device");
+            setUserActionMessage(extractApiErrorMessage(e?.response?.data || 'Failed to logout device'));
         }
     };
 
@@ -942,6 +945,39 @@ export default function AdminDashboardPage() {
             setUserActionMessage('System action failed.');
         }
         setSystemActionLoading(false);
+    };
+
+    const handleBackupData = async () => {
+        setDataActionBusy('backup');
+        setDataActionMessage(null);
+        try {
+            const res = await authAPI.adminBackupData();
+            setDataActionMessage({ type: 'ok', text: res.data?.message || 'Backup completed' });
+        } catch (e: any) {
+            setDataActionMessage({
+                type: 'err',
+                text: extractApiErrorMessage(e?.response?.data || 'Failed to backup data'),
+            });
+        } finally {
+            setDataActionBusy(null);
+        }
+    };
+
+    const handleRestoreData = async () => {
+        if (!confirm('Are you sure you want to restore data? This will overwrite matching records.')) return;
+        setDataActionBusy('restore');
+        setDataActionMessage(null);
+        try {
+            const res = await authAPI.adminRestoreData();
+            setDataActionMessage({ type: 'ok', text: res.data?.message || 'Restore completed' });
+        } catch (e: any) {
+            setDataActionMessage({
+                type: 'err',
+                text: extractApiErrorMessage(e?.response?.data || 'Failed to restore data'),
+            });
+        } finally {
+            setDataActionBusy(null);
+        }
     };
 
     const handleQuestionFilterApply = () => {
@@ -1147,7 +1183,7 @@ export default function AdminDashboardPage() {
         } catch (err: any) {
             console.error('Failed to save question edit:', err);
             const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
-            alert(`Error saving question: ${msg}`);
+            setUserActionMessage(`Error saving question: ${msg}`);
         }
         setSavingEdit(false);
     };
@@ -3303,24 +3339,44 @@ export default function AdminDashboardPage() {
                                     </CardTitle>
                                     <CardDescription>Backup and restore core configuration data (Exams, Subjects, Topics, Jobs) across environments.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="flex gap-4">
-                                    <Button onClick={async () => {
-                                        try {
-                                            const res = await authAPI.adminBackupData();
-                                            alert(res.data?.message || 'Backup completed');
-                                        } catch (e: any) { alert(e.response?.data?.error || 'Failed to backup data'); }
-                                    }} variant="outline">
-                                        <FileSearch className="w-4 h-4 mr-2" /> Export Structure to JSON
-                                    </Button>
-                                    <Button onClick={async () => {
-                                        if (!confirm('Are you sure you want to restore data? This will overwrite matching records.')) return;
-                                        try {
-                                            const res = await authAPI.adminRestoreData();
-                                            alert(res.data?.message || 'Restore completed');
-                                        } catch (e: any) { alert(e.response?.data?.error || 'Failed to restore data'); }
-                                    }} variant="destructive">
-                                        <ShieldCheck className="w-4 h-4 mr-2" /> Import Structure from JSON
-                                    </Button>
+                                <CardContent className="flex flex-col gap-3">
+                                    {dataActionMessage && (
+                                        <div
+                                            role="alert"
+                                            className={`rounded-lg border px-4 py-2 text-sm flex items-start gap-3 ${dataActionMessage.type === 'ok'
+                                                ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
+                                                : 'border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-700 text-red-800 dark:text-red-200'
+                                                }`}
+                                        >
+                                            <span className="flex-1">{dataActionMessage.text}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDataActionMessage(null)}
+                                                className="opacity-70 hover:opacity-100"
+                                                aria-label="Dismiss message"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-4">
+                                        <Button
+                                            onClick={handleBackupData}
+                                            disabled={dataActionBusy !== null}
+                                            variant="outline"
+                                        >
+                                            <FileSearch className="w-4 h-4 mr-2" />
+                                            {dataActionBusy === 'backup' ? 'Backing up…' : 'Export Structure to JSON'}
+                                        </Button>
+                                        <Button
+                                            onClick={handleRestoreData}
+                                            disabled={dataActionBusy !== null}
+                                            variant="destructive"
+                                        >
+                                            <ShieldCheck className="w-4 h-4 mr-2" />
+                                            {dataActionBusy === 'restore' ? 'Restoring…' : 'Import Structure from JSON'}
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>
