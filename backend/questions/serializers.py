@@ -206,6 +206,45 @@ class QuestionListSerializer(serializers.ModelSerializer):
     duplicate_count = serializers.SerializerMethodField()
     duplicate_cluster_id = serializers.SerializerMethodField()
 
+    # Cache key for the runtime role-resolution pass below. Keyed on the
+    # question id so each request only does the per-row heuristic once.
+    _runtime_role_cache: dict = {}
+
+    def _resolve_runtime_role(self, obj, img) -> str:
+        """Reclassify `img.role` based on which text fields reference its id.
+
+        Belt-and-suspenders for the explanation-image leak: even if a row
+        was uploaded with the wrong role (e.g. via the pre-fix upload path
+        that didn't forward `role=`), the API response can correct it on
+        the fly. Heuristic:
+          * If the question's `question_text` references this image via
+            a `[[img:N]]` token, the row is a legitimate stem image.
+          * Otherwise, if `explanation`, `concept_explanation`, or
+            `mnemonic` references it, the row is explanation-attached.
+          * Otherwise, leave the stored role alone.
+
+        Cached per `obj.id` so a list-endpoint response of N rows only
+        does the text-token scan once per question.
+        """
+        per_q = self._runtime_role_cache.setdefault(obj.id, {})
+        if img.id in per_q:
+            return per_q[img.id]
+        stem = (obj.question_text or "")
+        expl = (
+            (obj.explanation or "")
+            + (obj.concept_explanation or "")
+            + (obj.mnemonic or "")
+        )
+        token = f"[[img:{img.id}]]"
+        if token in stem:
+            role = img.role  # legitimate stem image; keep stored role
+        elif token in expl:
+            role = "explanation"
+        else:
+            role = img.role
+        per_q[img.id] = role
+        return role
+
     def to_representation(self, instance):
         """Repair mojibake on every text field at the API boundary AND
         rename the loader-created "Imported" Subject to "Expert Curated".
@@ -350,7 +389,12 @@ class QuestionListSerializer(serializers.ModelSerializer):
                 'id': img.id,
                 'page_number': img.page_number,
                 'image_index_in_page': img.image_index_in_page,
-                'role': img.role,
+                # Bug fix 2026-08-01 (belt-and-suspenders): reclassify
+                # the role at response time so stale admin uploads with
+                # the wrong role are corrected before reaching the
+                # client. `get_stem_images` then drops these rows from
+                # the stem-pane list. See _resolve_runtime_role.
+                'role': self._resolve_runtime_role(obj, img),
                 'modality': img.modality,
                 'mime': img.mime,
                 'width': img.width,
@@ -470,6 +514,28 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     # the question stem before any attempt.
     stem_images = serializers.SerializerMethodField()
 
+    _runtime_role_cache: dict = {}
+
+    def _resolve_runtime_role(self, obj, img) -> str:
+        per_q = self._runtime_role_cache.setdefault(obj.id, {})
+        if img.id in per_q:
+            return per_q[img.id]
+        stem = (obj.question_text or "")
+        expl = (
+            (obj.explanation or "")
+            + (obj.concept_explanation or "")
+            + (obj.mnemonic or "")
+        )
+        token = f"[[img:{img.id}]]"
+        if token in stem:
+            role = img.role
+        elif token in expl:
+            role = "explanation"
+        else:
+            role = img.role
+        per_q[img.id] = role
+        return role
+
     def to_representation(self, instance):
         """Repair mojibake on every text field at the API boundary AND
         rename the loader-created "Imported" Subject to "Expert Curated".
@@ -539,7 +605,11 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
                 'id': img.id,
                 'page_number': img.page_number,
                 'image_index_in_page': img.image_index_in_page,
-                'role': img.role,
+                # Bug fix 2026-08-01 (belt-and-suspenders): reclassify
+                # the role at response time so stale admin uploads with
+                # the wrong role are corrected before reaching the
+                # client. See _resolve_runtime_role.
+                'role': self._resolve_runtime_role(obj, img),
                 'modality': img.modality,
                 'mime': img.mime,
                 'width': img.width,

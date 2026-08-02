@@ -228,3 +228,54 @@ class QuestionImageUploadTests(APITestCase):
         self.assertEqual(len(data["stem_images"]), 1, "explanation row filtered out of `stem_images`")
         self.assertEqual(data["stem_images"][0]["role"], "illustration")
         self.assertNotIn("explanation", [img["role"] for img in data["stem_images"]])
+
+    def test_runtime_role_correction(self):
+        """Belt-and-suspenders: even when a row was uploaded with the
+        WRONG role (e.g. via the pre-fix upload path that didn't forward
+        role=), the detail serializer's runtime heuristic must reclassify
+        it based on which text fields reference the image id. An image
+        referenced from `explanation` but not `question_text` is treated
+        as `role='explanation'` at response time so `stem_images` drops
+        it before reaching the client. Bug 2026-08-01 production case."""
+        from questions.serializers import QuestionDetailSerializer
+
+        # Create one row that was uploaded with the WRONG role (the
+        # legacy bug pattern: role='illustration' but referenced from
+        # the explanation text). Force its id to match the token so the
+        # heuristic can detect the leak.
+        leaked = QuestionImage.objects.create(
+            question_id=self.question.id,
+            page_number=0,
+            image_index_in_page=0,
+            file="",
+            mime="image/png",
+            width=10,
+            height=10,
+            bytes=100,
+            sha256="r" * 64,
+            sha256_short="r" * 16,
+            modality="other",
+            role="illustration",  # wrong on purpose — the legacy bug
+            uploaded_by_admin=True,
+            url="https://example.com/leaked.png",
+        )
+        # Use raw SQL to set the id so we can reference it from the
+        # explanation via [[img:N]] token. SQLite autoincrement is off
+        # when we override pk.
+        from django.db import connection
+        with connection.cursor() as c:
+            c.execute(
+                "UPDATE questions_questionimage SET id=42000 WHERE id=%s",
+                [leaked.id],
+            )
+        self.question.explanation = "[[img:42000]] The bell of the stethoscope is best."
+        self.question.save(update_fields=["explanation"])
+
+        data = QuestionDetailSerializer(self.question).data
+        roles = {img["id"]: img["role"] for img in data["images"]}
+        self.assertEqual(roles.get(42000), "explanation",
+                         "runtime correction must reclassify leaked image to 'explanation'")
+        self.assertEqual(
+            [img["id"] for img in data["stem_images"]], [],
+            "stem_images must drop the leaked image even when its stored role is wrong",
+        )
