@@ -1202,3 +1202,71 @@ class IsPremiumHelperTests(TestCase):
         )
         self.assertTrue(is_premium(self.student))
 
+
+class FreeShowcaseQuestionTests(TestCase):
+    """Freemium: 10 admin-curated questions per year shown to free users."""
+
+    def setUp(self):
+        from questions.models import Question, Subject, ExamTrack
+        self.track = ExamTrack.objects.create(code='cms', name='UPSC CMS')
+        self.subject = Subject.objects.create(
+            name='Medicine', code='med', exam_track=self.track,
+        )
+        self.questions = []
+        for i in range(12):
+            self.questions.append(
+                Question.objects.create(
+                    question_text=f'Q{i}',
+                    option_a='A', option_b='B', option_c='C', option_d='D',
+                    correct_answer='A',
+                    year=2024,
+                    subject=self.subject,
+                )
+            )
+
+    def test_unique_year_position_pair(self):
+        from accounts.models_freemium import FreeShowcaseQuestion
+        from django.db import IntegrityError, transaction
+
+        FreeShowcaseQuestion.objects.create(
+            question=self.questions[0], year=2024, position=1
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                FreeShowcaseQuestion.objects.create(
+                    question=self.questions[1], year=2024, position=1
+                )
+
+    def test_same_question_can_be_in_multiple_years(self):
+        """OneToOneField means a question can only be a showcase for ONE year.
+        This is intentional — prevents duplication if admin re-curates a year."""
+        from accounts.models_freemium import FreeShowcaseQuestion
+        from django.db import IntegrityError, transaction
+
+        FreeShowcaseQuestion.objects.create(
+            question=self.questions[0], year=2024, position=1
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                FreeShowcaseQuestion.objects.create(
+                    question=self.questions[0], year=2023, position=1
+                )
+
+    def test_ordering_by_year_then_position(self):
+        from accounts.models_freemium import FreeShowcaseQuestion
+        FreeShowcaseQuestion.objects.create(
+            question=self.questions[2], year=2024, position=3
+        )
+        FreeShowcaseQuestion.objects.create(
+            question=self.questions[0], year=2024, position=1
+        )
+        FreeShowcaseQuestion.objects.create(
+            question=self.questions[1], year=2024, position=2
+        )
+        ordered = list(
+            FreeShowcaseQuestion.objects.filter(year=2024).values_list(
+                'position', flat=True
+            )
+        )
+        self.assertEqual(ordered, [1, 2, 3])
+

@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import AdminAuditLog, CustomUser, TokenBalance, TokenConfig, TokenTransaction
+from .models_freemium import FreeShowcaseQuestion
 
 
 @admin.register(CustomUser)
@@ -63,3 +64,12 @@ class AdminAuditLogAdmin(admin.ModelAdmin):
 
     def get_actions(self, request):
         return {}
+
+
+@admin.register(FreeShowcaseQuestion)
+class FreeShowcaseQuestionAdmin(admin.ModelAdmin):
+    list_display = ('year', 'position', 'question')
+    list_filter = ('year',)
+    ordering = ('year', 'position')
+    search_fields = ('question__question_text',)
+    raw_id_fields = ('question',)
