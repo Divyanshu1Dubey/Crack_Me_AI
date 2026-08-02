@@ -23,6 +23,13 @@ interface ImageRow {
   ocr_text?: string;
   page_number?: number;
   image_index_in_page?: number;
+  // Bug fix 2026-08-01: rows with role='explanation' are admin-uploaded
+  // figures that belong next to the explanation text. They MUST NOT
+  // appear in this stem-pane grid before the student attempts the
+  // question. The `images` endpoint is admin-only so student responses
+  // are empty arrays already, but we filter here as defence-in-depth
+  // for any admin-context gallery renders.
+  role?: 'primary' | 'option' | 'illustration' | 'explanation' | string;
 }
 
 interface Props {
@@ -76,7 +83,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {images.map((img) => (
+      {images.filter((img) => img.role !== 'explanation').map((img) => (
         <div key={img.id} className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-2">
           <QuestionImageZoom src={img} alt={`Image ${img.image_index_in_page ?? ""}`} />
           <div className="mt-2 flex items-center justify-between text-xs text-slate-400">

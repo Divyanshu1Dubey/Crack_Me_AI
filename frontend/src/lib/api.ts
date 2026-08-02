@@ -378,10 +378,17 @@ export const questionsAPI = {
   setConceptId: (id: number, conceptId: string) => api.patch(`/questions/${id}/concept-id/`, { concept_id: conceptId }),
   updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
   formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
-  uploadImage: (data: { questionId: number; file: File }) => {
+  uploadImage: (data: { questionId: number; file: File; role?: 'primary' | 'option' | 'illustration' | 'explanation' }) => {
     const form = new FormData();
     form.append('question_id', String(data.questionId));
     form.append('file', data.file);
+    // Optional role hint. The admin editor sends 'explanation' when the
+    // upload is triggered from the explanation / concept_explanation /
+    // mnemonic field so the backend records the row with role='explanation'
+    // and the question stem pane stops showing the figure before the
+    // student attempts the question. Omitting role keeps the prior
+    // 'illustration' default for legacy callers.
+    if (data.role) form.append('role', data.role);
     return api.post('/questions/images/', form, {
       headers: { 'Content-Type': undefined },
     });

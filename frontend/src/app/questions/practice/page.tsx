@@ -122,9 +122,23 @@ function PracticeContent() {
     // Resolve `[[img:N]]` tokens in the question text against the question's
     // image list so public practice pages render real `<img>` tags instead of
     // the raw token. Cached per `(id, imageCount)` for cheap re-renders.
+    //
+    // Bug fix 2026-08-01: prefer the backend-filtered `stem_images`
+    // (excludes `role='explanation'`) so admin-uploaded explanation
+    // figures don't render inline next to the stem before the student
+    // attempts the question. Fall back to filtering `images` ourselves
+    // for legacy rows that pre-date the `stem_images` field. The
+    // explanation / mnemonic panels below still use the full `images`
+    // list (rendered only after `showAnswer`) so `[[img:N]]` tokens
+    // inside explanation text resolve correctly.
     const qId = currentQ?.id ?? null;
     const qText = currentQ?.question_text ?? '';
-    const qImages = currentQ?.images ?? null;
+    const qImages = (() => {
+        const stem = (currentQ as any)?.stem_images;
+        if (Array.isArray(stem)) return stem;
+        const all = currentQ?.images;
+        return Array.isArray(all) ? all.filter((img: any) => img?.role !== 'explanation') : [];
+    })();
     const resolvedQuestionText = useMemo(() => {
         if (!currentQ) return '';
         const cleaned = sanitizeQuestionText(qText);
@@ -360,7 +374,7 @@ function PracticeContent() {
                                         <span className="flex-1 text-sm font-medium">
                                             <FormattedOptionText
                                                 text={cleanOptionText(String(optionText))}
-                                                images={currentQ.images}
+                                                images={qImages}
                                             />
                                         </span>
                                         {showAnswer && isCorrectOpt && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">✓ Correct</span>}

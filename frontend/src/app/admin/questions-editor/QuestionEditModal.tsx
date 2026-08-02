@@ -248,7 +248,20 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         return;
       }
       try {
-        const res = await questionsAPI.uploadImage({ questionId: question.id, file });
+        // Send `role='explanation'` when the upload is triggered from the
+        // explanation / concept_explanation / mnemonic editor so the
+        // backend records the row with role='explanation'. The question
+        // stem pane then filters these out and stops showing the figure
+        // before the student attempts the question. The explanation /
+        // mnemonic text itself still renders the figure inline via the
+        // `[[img:N]]` token we insert below.
+        const role: 'primary' | 'option' | 'illustration' | 'explanation' =
+          fieldKey === 'explanation' ||
+          fieldKey === 'concept_explanation' ||
+          fieldKey === 'mnemonic'
+            ? 'explanation'
+            : 'illustration';
+        const res = await questionsAPI.uploadImage({ questionId: question.id, file, role });
         const img = res.data as QuestionImageLike;
         const newImages = [...images, img];
         setImages(newImages);

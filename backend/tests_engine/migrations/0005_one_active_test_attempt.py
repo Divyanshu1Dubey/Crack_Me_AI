@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('tests_engine', '0004_test_exam_type'),
-        ('accounts', '__latest__'),
+        ('accounts', '0017_alter_tokentransaction_transaction_type'),
     ]
 
     operations = [

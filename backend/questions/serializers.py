@@ -202,6 +202,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
     user_is_correct = serializers.BooleanField(read_only=True, required=False)
     video_subtitles_url = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    stem_images = serializers.SerializerMethodField()
     duplicate_count = serializers.SerializerMethodField()
     duplicate_cluster_id = serializers.SerializerMethodField()
 
@@ -245,7 +246,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
                   'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
                   'video_thumbnail', 'video_duration', 'video_subtitles_url',
-                  'is_image_based', 'page_screenshot', 'images',
+                  'is_image_based', 'page_screenshot', 'images', 'stem_images',
                   'duplicate_count', 'duplicate_cluster_id']
 
     def get_is_bookmarked(self, obj):
@@ -359,6 +360,16 @@ class QuestionListSerializer(serializers.ModelSerializer):
             })
         return out
 
+    def get_stem_images(self, obj):
+        """List-serializer variant of `get_stem_images`.
+
+        Same semantics as the detail-serializer version: returns the
+        `images` list with `role='explanation'` rows filtered out so
+        the list cards / previews don't show explanation figures. Full
+        `images` list is still returned (for `[[img:N]]` token resolution).
+        """
+        return [img for img in self.get_images(obj) if img.get('role') != 'explanation']
+
     def get_duplicate_count(self, obj):
         """Total rows in the same DuplicateCluster (including self).
 
@@ -448,6 +459,16 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     user_is_correct = serializers.SerializerMethodField()
     video_subtitles_url = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    # Subset of `images` that should appear next to the question stem.
+    # Excludes `role='explanation'` so admin-uploaded explanation figures
+    # stop leaking into the stem pane before the student has even picked
+    # an answer. `images` is still returned (unchanged) so `[[img:N]]`
+    # tokens inside the explanation text still resolve via the
+    # `resolveImageTokensForMarkdown` resolver — admins only lose the
+    # *duplicate* render of those figures, not their inline rendering.
+    # Bug: 2026-08-01 admin-uploaded explanation image shown next to
+    # the question stem before any attempt.
+    stem_images = serializers.SerializerMethodField()
 
     def to_representation(self, instance):
         """Repair mojibake on every text field at the API boundary AND
@@ -480,7 +501,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'mnemonic', 'book_name', 'chapter', 'page_number', 'reference_text', 'paper',
             'source', 'exam_source', 'times_asked', 'is_active', 'created_at', 'updated_at',
             'textbook_references', 'learning_technique', 'shortcut_tip', 'page_screenshot',
-            'is_image_based', 'images',
+            'is_image_based', 'images', 'stem_images',
             'concept_keywords', 'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
@@ -527,6 +548,20 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
                 'sha256_short': img.sha256_short,
             })
         return out
+
+    def get_stem_images(self, obj):
+        """Return only the images that belong next to the question stem.
+
+        Excludes `role='explanation'` so admin-uploaded explanation
+        figures (which the admin editor's `[[img:N]]` token already
+        renders inside the explanation text) do not get double-rendered
+        in the stem pane before the student attempts the question.
+
+        `images` is kept untouched so `resolveImageTokensForMarkdown`
+        can still resolve the `[[img:N]]` tokens in explanation /
+        mnemonic / concept_explanation text via the same ID lookup.
+        """
+        return [img for img in self.get_images(obj) if img.get('role') != 'explanation']
 
     def _resolve_image_url(self, img):
         """Pick the best URL for a QuestionImage — proxy or stored public URL."""

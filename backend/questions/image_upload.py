@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
 BUCKET_NAME = "crack-cms-question-images"
 MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_MIME = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+# Valid `role` values for a new upload. Mirrors `QuestionImage.ROLE_CHOICES`
+# so we can validate at the upload boundary (the field itself is a
+# CharField with choices, so a bad value would 500 on `full_clean()`).
+ALLOWED_ROLES = {"primary", "option", "illustration", "explanation"}
+DEFAULT_ROLE = "illustration"
 
 
 @dataclass
@@ -61,6 +66,7 @@ def upload_image_to_supabase(
     question_id: int,
     content_type: str,
     original_filename: str,
+    role: str | None = None,
 ) -> UploadedImage:
     """Upload `file_obj` to Supabase Storage and create a `QuestionImage` row.
 
@@ -70,8 +76,18 @@ def upload_image_to_supabase(
     the same bytes updates the existing row's `updated_at` and returns
     the same id.
 
+    `role` selects which slot the image fills — 'primary' for the
+    question stem, 'option' for option-attached figures, 'illustration'
+    for in-stem diagrams, and 'explanation' for figures that belong
+    inside the admin's explanation/concept_explanation/mnemonic text.
+    The admin editor (frontend `QuestionEditModal`) passes 'explanation'
+    when uploading from the explanation field, which is the source of
+    the long-standing bug where explanation images leaked into the
+    question stem before the student attempted the question. Default is
+    'illustration' to preserve the historical upload contract.
+
     Raises:
-        ValueError: wrong MIME or too large.
+        ValueError: wrong MIME, too large, or invalid role.
         RuntimeError: Supabase not configured or upload failed.
     """
     from questions.models import QuestionImage  # local import to avoid AppRegistryNotReady
@@ -79,6 +95,13 @@ def upload_image_to_supabase(
     if content_type not in ALLOWED_MIME:
         raise ValueError(
             f"Unsupported MIME {content_type!r}. Allowed: {sorted(ALLOWED_MIME)}"
+        )
+
+    if role is None:
+        role = DEFAULT_ROLE
+    if role not in ALLOWED_ROLES:
+        raise ValueError(
+            f"Unsupported role {role!r}. Allowed: {sorted(ALLOWED_ROLES)}"
         )
 
     payload = file_obj.read()
@@ -103,6 +126,13 @@ def upload_image_to_supabase(
     ).first()
     if existing:
         logger.info("Re-using existing QuestionImage #%s (sha256 short=%s)", existing.id, sha256_short)
+        # If the caller recorded a more specific role than the existing
+        # row's default, promote it. This matters when the admin later
+        # drags the same file to a different field — the upload is
+        # idempotent on bytes but the role can be upgraded.
+        if role != existing.role:
+            existing.role = role
+            existing.save(update_fields=["role", "updated_at"])
         # No mutable bookkeeping to update — the bytes, mime, and url are
         # byte-for-byte identical (sha256 dedup), so just return the row.
         return UploadedImage(
@@ -144,6 +174,7 @@ def upload_image_to_supabase(
         sha256=sha256,
         sha256_short=sha256_short,
         modality="other",
+        role=role,
         uploaded_by_admin=True,
         url=public_url,
     )

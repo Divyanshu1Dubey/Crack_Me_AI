@@ -117,7 +117,7 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
                 bytes=imp.size_bytes or 0,
                 sha256=imp.sha256 or "",
                 sha256_short=(imp.sha256 or "")[:16],
-                role="inline",
+                role="illustration",
             )
             # Re-load bytes from stored_path and save to the ImageField. The
             # stored_path is an absolute file path under MEDIA_ROOT.

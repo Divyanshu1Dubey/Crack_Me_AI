@@ -2799,12 +2799,30 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
                 {"detail": "question_id must be an integer"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Optional `role` from the admin editor. Defaults to 'illustration'
+        # inside the helper; we pass through whatever the admin sent (after
+        # validating it against the choice set) so uploads from the
+        # explanation / concept editor get the correct role. This is the
+        # upload-end half of the explanation-image-in-stem bug fix; the
+        # read-end half lives in the question serializer's `stem_images`
+        # getter.
+        from .image_upload import ALLOWED_ROLES
+        requested_role = request.data.get("role")
+        if requested_role is not None and requested_role not in ALLOWED_ROLES:
+            return Response(
+                {"detail": (
+                    f"Unsupported role {requested_role!r}. Allowed: "
+                    f"{sorted(ALLOWED_ROLES)}"
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             uploaded = upload_image_to_supabase(
                 file_obj=file_obj,
                 question_id=question_id_int,
                 content_type=file_obj.content_type or "application/octet-stream",
                 original_filename=file_obj.name or "image.png",
+                role=requested_role,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

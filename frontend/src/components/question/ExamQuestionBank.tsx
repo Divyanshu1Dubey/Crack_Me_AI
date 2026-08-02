@@ -1170,8 +1170,22 @@ function ExamQuestionBankInner({
                                             (40%) so the image takes a good amount of screen
                                             while solving. On mobile the image pane sits below
                                             the stem (stacked) so vertical scroll works. The
-                                            options block remains full-width below this row. */}
-                                        {Array.isArray(detail.images) && detail.images.length > 0 ? (
+                                            options block remains full-width below this row.
+
+                                            Bug fix 2026-08-01: prefer `detail.stem_images`
+                                            (the backend's role-filtered list) so explanation
+                                            images uploaded by the admin from the explanation
+                                            editor stop leaking into the stem pane before the
+                                            student attempts the question. We fall back to
+                                            `detail.images` filtered by role for legacy rows
+                                            that pre-date the `stem_images` field, so the fix
+                                            works for both new and existing questions. The
+                                            FULL `detail.images` array is still passed into
+                                            `resolveImageTokensForMarkdown` below so the
+                                            `[[img:N]]` tokens inside the explanation text
+                                            continue to resolve. */}
+                                        {((Array.isArray(detail.stem_images) && detail.stem_images.length > 0)
+                                            || (Array.isArray(detail.images) && detail.images.some((img: any) => img.role !== 'explanation'))) ? (
                                             <div className="qbank-solve-layout flex flex-col lg:flex-row gap-4 mb-3">
                                                 <div className="qbank-stem-pane lg:basis-3/5 lg:min-w-0">
                                                     <div className="text-base font-medium leading-relaxed">
@@ -1182,7 +1196,11 @@ function ExamQuestionBankInner({
                                                 </div>
                                                 <div className="qbank-image-pane lg:basis-2/5 lg:min-w-0 lg:self-start lg:sticky lg:top-4">
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {detail.images.map((img: any, idx: number) => {
+                                                        {(
+                                                            Array.isArray(detail.stem_images) && detail.stem_images.length > 0
+                                                                ? detail.stem_images
+                                                                : detail.images.filter((img: any) => img.role !== 'explanation')
+                                                        ).map((img: any, idx: number) => {
                                                             const imgSrc = img.url || img.file_url;
                                                             return imgSrc ? (
                                                                 <button
@@ -1200,7 +1218,11 @@ function ExamQuestionBankInner({
                                                         {/* Show a hint chip when the question declares images but none of them have a resolvable URL.
                                                            Avoids the confusing "broken-image icon + alt text" that previously rendered for image-questions
                                                            whose media files are still missing from /media (e.g. NEET PG recall imports). */}
-                                                        {detail.images.every((img: any) => !(img.url || img.file_url)) && (
+                                                        {(
+                                                            Array.isArray(detail.stem_images) && detail.stem_images.length > 0
+                                                                ? detail.stem_images
+                                                                : detail.images.filter((img: any) => img.role !== 'explanation')
+                                                        ).every((img: any) => !(img.url || img.file_url)) && (
                                                             <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 text-center">
                                                                 <p className="text-xs text-muted-foreground">
                                                                     🖼️ Image unavailable — see question text below for the full stem.
@@ -1243,7 +1265,7 @@ function ExamQuestionBankInner({
                                                         }`}
                                                         onClick={() => handleSelectOption(opt)}>
                                                         <div className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${showAnswer ? (isCorrect ? 'bg-emerald-500 text-white' : isWrong ? 'bg-red-500 text-white' : 'bg-muted text-muted-foreground') : (isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}`}>{opt}</div>
-                                                        <div className="flex-1 min-w-0 text-sm font-medium break-words whitespace-pre-wrap leading-relaxed">{cleanOptionText(String(optionText))}</div>
+                                                        <div className="flex-1 min-w-0 text-sm font-medium wrap-break-word whitespace-pre-wrap leading-relaxed">{cleanOptionText(String(optionText))}</div>
                                                         {showAnswer && isCorrect && <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0 self-center">✓ Correct</span>}
                                                         {isWrong && <span className="text-xs font-bold text-red-600 dark:text-red-400 shrink-0 self-center">✗ Wrong</span>}
                                                     </div>
@@ -1866,12 +1888,12 @@ function ExamQuestionBankInner({
                 pinch-zoom, side-by-side, and fullscreen all work. Previously
                 the carousel used <a target="_blank"> which would leak
                 potentially-short-lived presigned S3 URLs into a new tab. */}
-            {viewImageIdx !== null && Array.isArray(detail?.images) && detail.images.length > 0 && (
+            {viewImageIdx !== null && Array.isArray(detail?.stem_images) && detail.stem_images.length > 0 && (
                 <ImageViewer
                     open
                     onClose={() => setViewImageIdx(null)}
                     startIndex={viewImageIdx}
-                    images={(detail.images as ViewerImage[]).map((img: ViewerImage | any) => ({
+                    images={(detail.stem_images as ViewerImage[]).map((img: ViewerImage | any) => ({
                         id: img.id,
                         file_url: img.file_url || img.url || null,
                         caption: img.caption,
@@ -1907,6 +1929,22 @@ interface Question {
     video_thumbnail?: string;
     video_subtitles_url?: string;
     video_duration?: number;
+    // Bug 2026-08-01 admin-uploaded explanation image shown next to
+    // the question stem before any attempt. Added to mirror the
+    // backend's role-filtered `stem_images` field so the typecheck
+    // stays clean.
+    stem_images?: QuestionImage[];
+}
+
+interface QuestionImage {
+    id: number;
+    url?: string | null;
+    file_url?: string | null;
+    role?: 'primary' | 'option' | 'illustration' | 'explanation';
+    caption?: string | null;
+    page_number?: number;
+    image_index_in_page?: number;
+    modality?: string;
 }
 
 interface Subject {

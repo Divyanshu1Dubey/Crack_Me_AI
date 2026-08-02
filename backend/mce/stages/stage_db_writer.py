@@ -303,7 +303,7 @@ def run(ctx: MceContext, *, pages: Optional[list[int]] = None,
                         caption=im.get("caption", ""),
                         caption_source=im.get("caption_source", "none"),
                         extraction_confidence=im.get("extraction_confidence"),
-                        role=im.get("role", "other"),
+                        role=im.get("role", "illustration"),
                         is_active=True,
                     )
                     stats.images_created += 1

@@ -196,11 +196,23 @@ def extract_cell_images(doc, cell) -> list[tuple[bytes, str, str]]:
     return out
 
 
-def upload_pending_images(images: list[tuple[bytes, str, str]], question_id: int) -> list[dict]:
+def upload_pending_images(
+    images: list[tuple[bytes, str, str]],
+    question_id: int,
+    roles: list[str] | None = None,
+) -> list[dict]:
     """Upload a list of image tuples to Supabase Storage and return URL metadata.
 
     Each returned dict: {url, sha256_short, role_index}.
     Falls back to local MEDIA_ROOT write if Supabase upload fails.
+
+    `roles` is parallel to `images`; each uploaded row gets the matching
+    QuestionImage.role so solution images aren't stored with the default
+    'illustration' (which would leak them into the question stem pane).
+    Missing entries fall back to 'illustration' — the safe stem-render
+    default. Bug fix 2026-08-01: previously solution images were silently
+    persisted as 'illustration' because the upload helper created the row
+    BEFORE the caller's `get_or_create` had a chance to set `defaults`.
     """
     if not images:
         return []
@@ -214,6 +226,7 @@ def upload_pending_images(images: list[tuple[bytes, str, str]], question_id: int
         _io = None
 
     for idx, (blob, ext, mime) in enumerate(images):
+        role = (roles[idx] if roles and idx < len(roles) else None) or "illustration"
         if upload_image_to_supabase and _io:
             try:
                 uploaded = upload_image_to_supabase(
@@ -221,8 +234,9 @@ def upload_pending_images(images: list[tuple[bytes, str, str]], question_id: int
                     question_id=question_id,
                     content_type=mime,
                     original_filename=f"mocktest_{question_id}_{idx}.{ext}",
+                    role=role,
                 )
-                urls.append({"url": uploaded.url, "sha256_short": uploaded.sha256_short, "index": idx})
+                urls.append({"url": uploaded.url, "sha256_short": uploaded.sha256_short, "index": idx, "role": role})
                 continue
             except Exception as exc:
                 logger.warning("Supabase upload failed for Q%s img %s: %s", question_id, idx, exc)
@@ -233,7 +247,7 @@ def upload_pending_images(images: list[tuple[bytes, str, str]], question_id: int
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if not out_path.exists():
             out_path.write_bytes(blob)
-        urls.append({"url": settings.MEDIA_URL + rel, "sha256_short": digest, "index": idx})
+        urls.append({"url": settings.MEDIA_URL + rel, "sha256_short": digest, "index": idx, "role": role})
     return urls
 
 
@@ -911,12 +925,25 @@ class Command(BaseCommand):
                     q_n = len(pq.question_images or [])
                     pending = (pq.question_images or []) + (pq.solution_images or [])
                     if pending:
-                        uploaded = upload_pending_images(pending, q.id)
+                        # Bug fix 2026-08-01: per-image role so solution images
+                        # are stored as 'explanation' (filtered out of the
+                        # stem pane) and question images as 'primary' /
+                        # 'illustration' (visible in the stem).
+                        roles: list[str] = []
+                        for i in range(q_n):
+                            roles.append("primary" if i == 0 else "illustration")
+                        for _ in range(len(pq.solution_images or [])):
+                            roles.append("explanation")
+                        uploaded = upload_pending_images(pending, q.id, roles=roles)
                         from questions.models import QuestionImage as _QI
                         id_tokens: list[str] = []
                         for u in uploaded:
-                            # Persist a QuestionImage row keyed by URL so the
-                            # frontend can resolve [[img:N]] tokens by ID.
+                            # The row was created during upload with the
+                            # correct role; `get_or_create` returns the
+                            # existing row and the role stays as the helper
+                            # persisted it. We still hit `get_or_create`
+                            # to be safe for rows that existed before this
+                            # command ran (legacy URL-keyed rows).
                             img_row, _ = _QI.objects.get_or_create(
                                 question=q,
                                 url=u["url"],
@@ -925,7 +952,7 @@ class Command(BaseCommand):
                                     "image_index_in_page": u["index"],
                                     "mime": "image/png",
                                     "sha256_short": u.get("sha256_short", "")[:16],
-                                    "role": "primary" if u["index"] < q_n else "explanation",
+                                    "role": u.get("role") or ("primary" if u["index"] < q_n else "explanation"),
                                     "is_active": True,
                                 },
                             )
