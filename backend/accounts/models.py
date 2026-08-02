@@ -318,6 +318,13 @@ class TokenConfig(models.Model):
     """
     free_daily_tokens = models.IntegerField(default=10, help_text='Free AI tokens per user per day')
     free_weekly_tokens = models.IntegerField(default=50, help_text='Free AI tokens per user per week')
+    # Freemium 2/day cap on structured AI tutor calls (tutor/mnemonic/explain/
+    # textbook/analyze) for free users. Premium and admin users bypass this cap
+    # entirely. Change here to tune without redeploying.
+    ai_tutor_daily_cap = models.IntegerField(
+        default=2,
+        help_text='Free AI Tutor messages/day for free users (premium/admin bypass).',
+    )
     token_price = models.DecimalField(max_digits=6, decimal_places=2, default=1.00,
                                       help_text='Price per token in INR')
     feedback_reward = models.IntegerField(default=2, help_text='Tokens awarded for accepted feedback')
@@ -503,6 +510,33 @@ class Subscription(models.Model):
         """True if this subscription never expires (legacy / admin_grant / 1_year with NULL expiry)."""
         return self.expires_at is None
 
+    @classmethod
+    def has_active_sub(cls, user) -> bool:
+        """Tight read-only check: does the user have any active sub right now?
+
+        Used by ``accounts.utils.is_premium`` on hot read paths. Performs
+        NO writes — does not lazy-expire stale rows. If a row is past its
+        expiry but still status='active' (because nobody has read it yet),
+        it counts as active here until a payment/admin endpoint triggers
+        ``get_active_subscription`` to flip it.
+
+        The DB query is a single ``EXISTS`` with a WHERE on status +
+        expires_at — covered by ``subscription_user_status_idx`` (added
+        in migration 0020). No row read, no row lock, no savepoint.
+        """
+        from django.db.models import Q
+        from django.utils import timezone
+
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        now = timezone.now()
+        return cls.objects.filter(
+            user=user,
+            status='active',
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+        ).exists()
+
     @property
     def unlimited_ai(self):
         """True if the plan grants UNLIMITED AI usage — bypass token metering entirely.
@@ -526,14 +560,25 @@ class Subscription(models.Model):
     def get_active_subscription(cls, user):
         """Get the user's current active subscription, if any.
 
-        Side-effect: if a "status=active" row is found that is actually past
-        its expiry date, flip it to "expired" and clear user.is_subscribed.
-        Returns None if no live subscription exists.
+        Side-effect: if a ``status='active'`` row is found that is actually
+        past its expiry date, flip it to ``'expired'`` and clear
+        ``user.is_subscribed``. Returns ``None`` if no live subscription.
+
+        Concurrency:
+            * Locks the Subscription row with ``select_for_update`` so
+              concurrent profile fetches don't race the same expiry-flip.
+            * Updates ``user.is_subscribed`` via ``User.objects.filter(
+              id=user.id).update(...)`` rather than ``user.save()`` to
+              avoid pulling the User row into the same lock graph
+              (which previously could deadlock when the user row was
+              already locked by another request).
+
+        The function is safe to call from inside an outer
+        ``transaction.atomic``; Django nests the lock acquisition as a
+        savepoint.
         """
-        # Wrap the side-effecting read so concurrent requests don't
-        # double-flip the same row. The serializer that previously
-        # called this had no transaction, which could leak state.
         from django.db import transaction
+
         with transaction.atomic():
             active = (
                 cls.objects.select_for_update()
@@ -542,11 +587,17 @@ class Subscription(models.Model):
                 .first()
             )
 
-            if active and not active.is_active:
-                active.status = 'expired'
-                active.save(update_fields=['status'])
-                user.is_subscribed = False
-                user.save(update_fields=['is_subscribed'])
+            if active is None:
+                return None
+
+            if not active.is_active:
+                # Lazy-expire this row. Use a filter+update to be idempotent
+                # under concurrent flips: if another worker already flipped
+                # it, this becomes a no-op rather than a 0-row save error.
+                cls.objects.filter(pk=active.pk, status='active').update(
+                    status='expired'
+                )
+                CustomUser.objects.filter(pk=user.pk).update(is_subscribed=False)
                 return None
 
             return active
@@ -557,13 +608,20 @@ class Subscription(models.Model):
 
         Behavior:
           1. Determine expiry using PLAN_FEATURES (or NONE for lifetime plans).
-          2. If user already has an ACTIVE paid sub of the same duration class,
-             EXTEND from existing.expires_at. Stacking behavior is intentional.
-          3. Flip user.is_subscribed=True.
-          4. For plans with `monthly_tokens`, credit those tokens via
-             add_purchased_tokens + a TokenTransaction(subscription_grant, ...)
-             so the student's "wallet" grows the day they pay.
+          2. If user already has an ACTIVE paid sub, EXTEND from
+             existing.expires_at (stacking behavior is intentional).
+          3. Flip user.is_subscribed=True via filter-update (no User lock).
+          4. For plans with ``monthly_tokens``, credit those tokens via
+             ``add_purchased_tokens`` + a TokenTransaction.
+
+        Concurrency:
+            The entire read-existing + create-new + flip-is_subscribed +
+            credit-tokens sequence runs inside one ``transaction.atomic``.
+            This prevents two concurrent payments from both observing "no
+            active sub" and creating duplicate active subscriptions for
+            the same user.
         """
+        from django.db import transaction
         from .models import TokenBalance, TokenTransaction  # local import to avoid cycle
 
         plan_features = PLAN_FEATURES.get(plan, {})
@@ -572,51 +630,53 @@ class Subscription(models.Model):
 
         now = timezone.now()
 
-        # Stack onto existing active sub if user is already subscribed
-        existing = cls.get_active_subscription(user)
-        if existing and existing.is_active and duration:
-            base_date = existing.expires_at if existing.expires_at else now
-            if base_date < now:
-                base_date = now
-            expires_at = base_date + duration
-        elif duration:
-            expires_at = now + duration
-        else:
-            expires_at = None  # lifetime
+        with transaction.atomic():
+            # Re-acquire the existing active sub inside this transaction so
+            # the read is consistent with the upcoming write. If the user
+            # already paid in another tab between request entry and here,
+            # we'll stack onto that sub rather than creating a duplicate.
+            existing = cls.get_active_subscription(user)
+            if existing is not None and duration:
+                base_date = existing.expires_at if existing.expires_at else now
+                if base_date < now:
+                    base_date = now
+                expires_at = base_date + duration
+            elif duration:
+                expires_at = now + duration
+            else:
+                expires_at = None  # lifetime
 
-        display_name = plan_features.get('display_name') or plan.replace('_', ' ').title()
+            display_name = plan_features.get('display_name') or plan.replace('_', ' ').title()
 
-        sub = cls.objects.create(
-            user=user,
-            plan=plan,
-            plan_display_name=display_name,
-            amount_paid=amount_paid,
-            razorpay_order_id=razorpay_order_id,
-            razorpay_payment_id=razorpay_payment_id,
-            status='active',
-            starts_at=now,
-            expires_at=expires_at,
-        )
-
-        # Mirror for legacy code paths that still read user.is_subscribed
-        user.is_subscribed = True
-        user.save(update_fields=['is_subscribed'])
-
-        # Credit the student's wallet with the plan's monthly token grant.
-        # We deliberately use add_purchased_tokens (never expires) so the
-        # tokens survive even after the sub expires — this is "fair use":
-        # once a student paid, those tokens are theirs.
-        if monthly_grant and monthly_grant > 0:
-            balance, _ = TokenBalance.objects.get_or_create(user=user)
-            balance.add_purchased_tokens(monthly_grant)
-            TokenTransaction.objects.create(
+            sub = cls.objects.create(
                 user=user,
-                transaction_type='subscription_grant',
-                amount=monthly_grant,
-                price_paid=Decimal(str(amount_paid)),
-                payment_id=razorpay_payment_id or f'sub_{sub.id}',
-                note=f'Subscription grant: {display_name} (+{monthly_grant} tokens)',
+                plan=plan,
+                plan_display_name=display_name,
+                amount_paid=amount_paid,
+                razorpay_order_id=razorpay_order_id,
+                razorpay_payment_id=razorpay_payment_id,
+                status='active',
+                starts_at=now,
+                expires_at=expires_at,
             )
+
+            # Mirror for legacy code paths that still read user.is_subscribed.
+            # Use filter-update so we don't lock the user row inside the
+            # Subscription-graph transaction.
+            CustomUser.objects.filter(pk=user.pk).update(is_subscribed=True)
+
+            # Credit the student's wallet with the plan's monthly token grant.
+            if monthly_grant and monthly_grant > 0:
+                balance, _ = TokenBalance.objects.get_or_create(user=user)
+                balance.add_purchased_tokens(monthly_grant)
+                TokenTransaction.objects.create(
+                    user=user,
+                    transaction_type='subscription_grant',
+                    amount=monthly_grant,
+                    price_paid=Decimal(str(amount_paid)),
+                    payment_id=razorpay_payment_id or f'sub_{sub.id}',
+                    note=f'Subscription grant: {display_name} (+{monthly_grant} tokens)',
+                )
 
         return sub
 

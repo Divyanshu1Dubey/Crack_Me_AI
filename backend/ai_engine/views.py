@@ -144,25 +144,47 @@ def refund_ai_token(request):
 # Premium and admin users bypass entirely. The cap is *additional* to the
 # existing token economy (daily 10 + weekly 50 + purchased + feedback) — users
 # with an unlimited plan never hit this counter at all.
+#
+# Configurable at runtime via ``accounts.TokenConfig.ai_tutor_daily_cap`` so
+# ops can tune without a deploy. Falls back to the constant when no row exists.
 AI_TUTOR_DAILY_FREE_CAP = 2
 
 
-def _check_ai_tutor_quota(user):
-    """Return ``None`` if the user may call an AI tutor endpoint today,
-    or a 402 ``Response`` describing the upgrade if the daily cap is hit.
+def _ai_tutor_cap() -> int:
+    """Read the AI tutor daily cap from TokenConfig (single source of truth)."""
+    try:
+        from accounts.models import TokenConfig
+        cfg = TokenConfig.get_config()
+        val = getattr(cfg, 'ai_tutor_daily_cap', None)
+        if isinstance(val, int) and val >= 0:
+            return val
+    except Exception:
+        logger.exception('_ai_tutor_cap: TokenConfig lookup failed; using fallback')
+    return AI_TUTOR_DAILY_FREE_CAP
 
-    The endpoint must invoke this BEFORE ``consume_ai_token`` so that free
-    users see the upgrade modal instead of silently burning a paid token.
-    The atomic counter itself lives in :mod:`ai_engine.models_usage`.
+
+def _check_ai_tutor_quota(user):
+    """Atomic check-and-consume for the AI tutor daily cap.
+
+    Returns ``None`` if the user may proceed, or a 402 ``Response`` if the
+    daily cap is hit. Uses ``models_usage.check_and_consume`` which holds a
+    row lock for the entire check+increment window — race-free even under
+    100 concurrent requests from the same user.
+
+    Bypass order (must match ``consume_ai_token`` so we never bill a free
+    user for an upgrade-gated call):
+        1. Anonymous / not authenticated → anonymous path returns None here;
+           the view's permission_classes handles 401 separately.
+        2. Admin / superuser → unlimited.
+        3. Active subscription with ``unlimited_ai=True`` (1_year / legacy /
+           admin_grant) → unlimited.
+        4. Otherwise → atomic check-and-consume on the daily counter.
     """
     if not user or not getattr(user, 'is_authenticated', False):
-        # Anonymous is handled by the view's permission_classes; this helper
-        # assumes an authenticated user.
         return None
     if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
         return None
 
-    # Premium bypass — same source of truth as consume_ai_token() (PLAN_FEATURES).
     try:
         from accounts.models import Subscription
         sub = Subscription.get_active_subscription(user)
@@ -171,26 +193,25 @@ def _check_ai_tutor_quota(user):
     except Exception:
         logger.exception('_check_ai_tutor_quota: subscription lookup failed; applying cap anyway')
 
-    from .models_usage import consume_ai_tutor_message, get_today_usage
+    from .models_usage import check_and_consume
 
-    used = get_today_usage(user)
-    if used >= AI_TUTOR_DAILY_FREE_CAP:
-        return Response(
-            {
-                'code': 'upgrade_required',
-                'feature': 'AI Tutor',
-                'message': (
-                    "You've used your 2 free AI Tutor messages for today. "
-                    'Subscribe for unlimited AI explanations from just ₹129/month.'
-                ),
-                'remaining': 0,
-                'cap': AI_TUTOR_DAILY_FREE_CAP,
-            },
-            status=402,
-        )
-
-    consume_ai_tutor_message(user)
-    return None
+    cap = _ai_tutor_cap()
+    allowed, new_count = check_and_consume(user, cap=cap)
+    if allowed:
+        return None
+    return Response(
+        {
+            'code': 'upgrade_required',
+            'feature': 'AI Tutor',
+            'message': (
+                f"You've used your {cap} free AI Tutor messages for today. "
+                'Subscribe for unlimited AI explanations from just ₹129/month.'
+            ),
+            'remaining': 0,
+            'cap': cap,
+        },
+        status=402,
+    )
 
 
 def _check_freemium_ai_quota(request):
