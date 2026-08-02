@@ -1298,11 +1298,14 @@ class AITutorDailyUsageTests(TestCase):
     def test_unique_per_user_per_date(self):
         from ai_engine.models_usage import AITutorDailyUsage, consume_ai_tutor_message
         from django.db import IntegrityError, transaction
+        from django.utils import timezone
         consume_ai_tutor_message(self.student)
+        today = timezone.now().date()
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AITutorDailyUsage.objects.create(
                     user=self.student,
+                    date=today,
                     message_count=0,
                 )
 

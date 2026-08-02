@@ -283,25 +283,35 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not is_admin:
             queryset = queryset.filter(is_active=True)
 
-        # Freemium gate (Task 6): free users see only the admin-curated
-        # showcase questions (10/year by default). Premium and admin users
-        # continue to see the full list. Anonymous requests also get the
-        # full list — public SEO/showroom value is intentional.
+        # Freemium gate (Task 6 + Phase 4 audit): free users see only the
+        # admin-curated showcase questions (10/year by default). The gate
+        # applies to BOTH the list endpoint AND the detail/retrieve
+        # endpoint — without the retrieve check, a free user can deep-link
+        # to /api/questions/{id}/ for any question and bypass the gate.
+        # Premium and admin users continue to see the full set. Anonymous
+        # requests also get the full set — public SEO/showroom value is
+        # intentional (the data is non-sensitive: stems + options, no
+        # correct answer / explanation in the public serializer).
         if (
-            self.action == 'list'
+            self.action in ('list', 'retrieve')
             and user is not None
             and getattr(user, 'is_authenticated', False)
             and not is_admin
             and not _is_premium(user)
         ):
-            showcase_qs = FreeShowcaseQuestion.objects.all().values_list('question_id', flat=True)
+            # Use Exists subquery rather than id__in to avoid loading the
+            # full showcase list into memory and to let the optimizer use
+            # the (year, position) index on accounts.FreeShowcaseQuestion.
+            showcase_filter = FreeShowcaseQuestion.objects.filter(
+                question_id=OuterRef('pk'),
+            )
             year_param = self.request.query_params.get('year')
             if year_param not in (None, ''):
                 try:
-                    showcase_qs = showcase_qs.filter(year=int(year_param))
+                    showcase_filter = showcase_filter.filter(year=int(year_param))
                 except (TypeError, ValueError):
                     pass
-            queryset = queryset.filter(id__in=list(showcase_qs))
+            queryset = queryset.filter(Exists(showcase_filter))
 
         if self.action == 'list':
             queryset = queryset.select_related('subject', 'topic', 'verified_by')
@@ -314,7 +324,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             # Annotate each row with its DuplicateCluster info so the admin
             # list can flag rows that have duplicate siblings. Single
             # subquery + a correlated count keeps this O(1) per row.
-            from django.db.models import Subquery, IntegerField, OuterRef
+            from django.db.models import Subquery, IntegerField
             _cluster_id_subq = Subquery(
                 DuplicateMember.objects.filter(question_id=OuterRef('pk'))
                 .values('cluster_id')[:1],
@@ -340,7 +350,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 ),
             )
             if user and getattr(user, 'is_authenticated', False):
-                from django.db.models import Subquery
                 from questions.models import QuestionAttempt
                 queryset = queryset.annotate(
                     is_bookmarked=Exists(
