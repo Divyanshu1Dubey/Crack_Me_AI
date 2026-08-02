@@ -57,6 +57,14 @@ class UserSerializer(serializers.ModelSerializer):
     subscription_info = serializers.SerializerMethodField()
 
     is_online = serializers.SerializerMethodField()
+    # Freemium conversion layer (Task 9): exposes per-user AI tutor daily
+    # counter + per-year showcase quota so the frontend can render the
+    # <UsageBanner> "X/2 AI chats used today" copy and the question bank
+    # can show the showcase progress badge.
+    ai_tutor_used_today = serializers.SerializerMethodField()
+    ai_tutor_daily_cap = serializers.SerializerMethodField()
+    showcase_questions_remaining = serializers.SerializerMethodField()
+    is_premium = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -64,8 +72,10 @@ class UserSerializer(serializers.ModelSerializer):
                   'phone', 'college', 'role', 'target_exam', 'target_year', 'avatar_url',
                   'created_at', 'is_admin', 'token_info', 'profile_bonus_rewarded', 'is_subscribed',
                   'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price',
-                  'subscription_info', 'last_seen', 'is_online']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online']
+                  'subscription_info', 'last_seen', 'is_online',
+                  'ai_tutor_used_today', 'ai_tutor_daily_cap',
+                  'showcase_questions_remaining', 'is_premium']
+        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
 
     def get_is_online(self, obj):
         from django.utils import timezone
@@ -137,6 +147,63 @@ class UserSerializer(serializers.ModelSerializer):
             'total_used': balance.total_tokens_used,
             'is_admin': obj.is_admin,
         }
+
+    # ── Freemium conversion layer (Task 9) ───────────────────────────
+    def get_is_premium(self, obj):
+        """True if the user has any active subscription OR is admin/staff.
+
+        Mirrors `accounts.utils.is_premium()` — exposed inline here so the
+        frontend can gate render logic without making a second API call.
+        Admins and lifetime subscribers always read as premium.
+        """
+        try:
+            from .utils import is_premium
+            return bool(is_premium(obj))
+        except Exception:
+            # Never let a freemium payload crash the profile fetch.
+            return bool(getattr(obj, 'is_admin', False))
+
+    def get_ai_tutor_used_today(self, obj):
+        """Today's AI tutor message count for this user (0 if no row).
+
+        Premium and admin users always read as 0 so the soft banner's
+        progress copy (`X/2`) is hidden — they are unlimited.
+        """
+        try:
+            from ai_engine.models_usage import get_today_usage
+            if self.get_is_premium(obj):
+                return 0
+            return int(get_today_usage(obj))
+        except Exception:
+            # Never break profile fetch on freemium telemetry lookup.
+            return 0
+
+    def get_ai_tutor_daily_cap(self, obj):
+        """Daily AI tutor cap for this user. Premium and admin → None (unlimited)."""
+        try:
+            from ai_engine.views import AI_TUTOR_DAILY_FREE_CAP
+            if self.get_is_premium(obj):
+                return None
+            return int(AI_TUTOR_DAILY_FREE_CAP)
+        except Exception:
+            return 2
+
+    def get_showcase_questions_remaining(self, obj):
+        """Count of FreeShowcaseQuestion rows per year for the user's track.
+
+        Premium users → None (they see the full bank, no per-year cap).
+        Free users → 10 (the admin-curated ceiling — UI can refine per year).
+        """
+        try:
+            if self.get_is_premium(obj):
+                return None
+            from accounts.models_freemium import FreeShowcaseQuestion
+            # 10/year is the admin-curated ceiling. We just confirm at least
+            # one year has been curated; if not, surface 0 so the banner can
+            # prompt "no showcase for your track yet — subscribe for full PYQ".
+            return int(FreeShowcaseQuestion.objects.values('year').distinct().count() and 10)
+        except Exception:
+            return 10
 
 
 class LoginSerializer(serializers.Serializer):

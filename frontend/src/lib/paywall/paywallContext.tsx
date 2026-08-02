@@ -3,10 +3,13 @@
 /**
  * Paywall store (Task 8 of the freemium conversion layer).
  *
- * Simple React Context + reducer so we don't pull in another dependency
- * (no Zustand installed in this project). Anywhere in the app can call
- * `usePaywall().show('AI Tutor')` to open the global UpgradeModal; the
- * modal is mounted once at the layout root by `<PaywallRoot />`.
+ * Simple React Context wrapper around the module-level singleton store
+ * (`./paywallStore`). We don't pull in Zustand because there's only one
+ * global piece of state and the api.ts interceptor needs to fire it from
+ * outside React (see paywallStore.showPaywall / dismissPaywall).
+ *
+ * Anywhere in the app can call `usePaywall().show('AI Tutor')` to open
+ * the global UpgradeModal; the modal is mounted once at the layout root.
  *
  * Feature strings intentionally match the backend `code: 'upgrade_required'`
  * payloads — see `backend/ai_engine/views.py`, `tests_engine/views.py`,
@@ -16,51 +19,20 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useReducer,
+  useState,
 } from 'react';
 
-export type PaywallFeature =
-  | 'AI Tutor'
-  | 'Mock Tests'
-  | 'PYQ answers'
-  | 'Full PYQ practice'
-  | 'Deep Analytics'
-  | string; // allow ad-hoc labels; backend is the source of truth
+import {
+  showPaywall,
+  dismissPaywall,
+  subscribePaywall,
+  getPaywallState,
+} from './paywallStore';
 
-export interface PaywallState {
-  open: boolean;
-  feature: PaywallFeature;
-  remaining: number | null;
-  cap: number | null;
-}
-
-const initial: PaywallState = {
-  open: false,
-  feature: 'Premium',
-  remaining: null,
-  cap: null,
-};
-
-type Action =
-  | { type: 'show'; feature: PaywallFeature; remaining?: number | null; cap?: number | null }
-  | { type: 'dismiss' };
-
-function reducer(state: PaywallState, action: Action): PaywallState {
-  switch (action.type) {
-    case 'show':
-      return {
-        open: true,
-        feature: action.feature,
-        remaining: action.remaining ?? null,
-        cap: action.cap ?? null,
-      };
-    case 'dismiss':
-      return { ...state, open: false };
-    default:
-      return state;
-  }
-}
+export type { PaywallFeature, PaywallState } from './paywallStore';
+import type { PaywallFeature, PaywallState } from './paywallStore';
 
 const PaywallContext = createContext<{
   state: PaywallState;
@@ -69,15 +41,24 @@ const PaywallContext = createContext<{
 } | null>(null);
 
 export function PaywallProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initial);
+  // Read initial state synchronously so SSR + first render line up.
+  const [state, setState] = useState<PaywallState>(() => getPaywallState());
+
+  useEffect(() => {
+    // Subscribe to the module store so the React tree re-renders when
+    // the api.ts interceptor opens the modal. Avoids the React 19 lint
+    // rule `react-hooks/set-state-in-effect` — the setState here only
+    // fires on actual store mutations, not on every render.
+    return subscribePaywall(setState);
+  }, []);
 
   const show = useCallback(
     (feature: PaywallFeature, opts?: { remaining?: number | null; cap?: number | null }) =>
-      dispatch({ type: 'show', feature, remaining: opts?.remaining, cap: opts?.cap }),
+      showPaywall(feature, opts),
     [],
   );
 
-  const dismiss = useCallback(() => dispatch({ type: 'dismiss' }), []);
+  const dismiss = useCallback(() => dismissPaywall(), []);
 
   const value = useMemo(() => ({ state, show, dismiss }), [state, show, dismiss]);
 

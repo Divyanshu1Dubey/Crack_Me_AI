@@ -43,6 +43,11 @@ interface User {
     scholarship_granted_price?: number;
     subscription_info?: SubscriptionInfo | null;
     is_online?: boolean;
+    // Freemium conversion layer (Task 9) — surfaced from /api/auth/profile/
+    ai_tutor_used_today?: number;
+    ai_tutor_daily_cap?: number | null;
+    showcase_questions_remaining?: number | null;
+    is_premium?: boolean;
 }
 
 export type { User };

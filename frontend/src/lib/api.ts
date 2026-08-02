@@ -147,6 +147,32 @@ api.interceptors.response.use(
       }
     }
 
+    // Freemium conversion layer (Task 9) — backend gates free users with
+    // `code: 'upgrade_required'`. Open the global UpgradeModal so the user
+    // sees the same CTA regardless of which surface they hit (Q-bank,
+    // tests, AI tutor). Dynamic import keeps the paywall store out of
+    // the SSR bundle for non-interactive pages.
+    if (
+      typeof window !== 'undefined' &&
+      (errorCode === 'upgrade_required')
+    ) {
+      const data = (error.response?.data || {}) as {
+        feature?: string;
+        remaining?: number;
+        cap?: number;
+        message?: string;
+      };
+      const feature = data.feature || 'this feature';
+      import('./paywall/paywallStore').then(({ showPaywall }) => {
+        showPaywall(feature, {
+          remaining: typeof data.remaining === 'number' ? data.remaining : null,
+          cap: typeof data.cap === 'number' ? data.cap : null,
+        });
+      }).catch(() => {
+        /* swallow — UI will fall back to whatever error the caller shows */
+      });
+    }
+
     const shouldFailover =
       !USE_API_PROXY &&
       !originalRequest._apiBaseFailover &&
