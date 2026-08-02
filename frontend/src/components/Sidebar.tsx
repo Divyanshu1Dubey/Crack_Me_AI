@@ -24,6 +24,8 @@ import CustomIcon from '@/components/CustomIcon';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { decodeMojiB } from '@/lib/textCleanup';
 import { useSidebar } from '@/context/SidebarContext';
+import { LockedBadge } from '@/components/paywall/LockedBadge';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface NavItem {
     href: string;
@@ -32,6 +34,12 @@ interface NavItem {
     badge?: string;
     adminOnly?: boolean;
     requireTrack?: string[];
+    /** Freemium gate (Task 10): if true, free users see a <LockedBadge /> next
+     *  to the label, and clicking opens the UpgradeModal. Premium + admin
+     *  users see no badge and the link is fully clickable. */
+    premium?: boolean;
+    /** Display label used in the upgrade modal trigger — defaults to `label`. */
+    premiumFeature?: string;
 }
 
 interface NavSection {
@@ -44,18 +52,21 @@ const navSections: NavSection[] = [
         title: 'Study',
         items: [
             { href: '/dashboard', iconName: 'dashboard-layout', label: 'Dashboard' },
-            { href: '/questions', iconName: 'question-bank-book', label: 'Question Bank' },
-            { href: '/tests', iconName: 'tests-check', label: 'Tests' },
-            { href: '/flashcards', iconName: 'flashcards-cards', label: 'Flashcards' },
-            { href: '/simulator', iconName: 'simulator-target', label: 'CMS Simulator' },
+            // Freemium: free users get a "Premium" badge next to Question Bank
+            // but the link still routes — clicks inside the bank hit the
+            // backend filter (Task 6) which restricts to 10 showcase items.
+            { href: '/questions', iconName: 'question-bank-book', label: 'Question Bank', premium: true, premiumFeature: 'Full PYQ practice' },
+            { href: '/tests', iconName: 'tests-check', label: 'Tests', premium: true, premiumFeature: 'Mock Tests' },
+            { href: '/flashcards', iconName: 'flashcards-cards', label: 'Flashcards', premium: true, premiumFeature: 'Flashcards' },
+            { href: '/simulator', iconName: 'simulator-target', label: 'CMS Simulator', premium: true, premiumFeature: 'Mock Tests' },
         ]
     },
     {
         title: 'AI Tools',
         items: [
-            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor', badge: 'AI' },
-            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator', badge: 'AI' },
-            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan', badge: 'AI' },
+            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
+            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
+            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
         ]
     },
     {
@@ -71,7 +82,10 @@ const navSections: NavSection[] = [
     {
         title: 'Account',
         items: [
-            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics' },
+            // Analytics: free users get the basic dashboard at /dashboard; the
+            // deep per-topic mastery tab inside /analytics is gated by
+            // Deep Analytics in Task 11 — sidebar keeps the link visible.
+            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics', premium: true, premiumFeature: 'Deep Analytics' },
             { href: '/leaderboard', iconName: 'leaderboard-trophy', label: 'Leaderboard' },
             { href: '/bookmarks', iconName: 'bookmarks-ribbon', label: 'Bookmarks' },
             { href: '/subscription', iconName: 'subscription-gold', label: 'Subscription' },
@@ -100,6 +114,7 @@ export default function Sidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuth();
     const { activeTrack, hydrated } = useExamTrack();
+    const { show: showPaywall } = usePaywall();
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
@@ -154,6 +169,15 @@ export default function Sidebar() {
     };
 
     const isAdmin = user?.role === 'admin' || user?.is_admin;
+    // Freemium (Task 10): a user is "premium" if they have an active
+    // subscription OR are admin/staff. Mirrors the backend source of truth
+    // (`accounts.utils.is_premium`); `user.is_premium` is already on the
+    // /api/auth/profile/ payload (Task 9) so we read it here without an
+    // extra request. Falls back to subscription_info for legacy sessions.
+    const isPremium =
+        isAdmin ||
+        user?.is_premium === true ||
+        user?.subscription_info?.is_active === true;
     // IMPORTANT: only honour the activeTrack from the provider AFTER hydration.
     // Until then the server-rendered HTML used 'cms' (the default), so the
     // /questions href on the client must also be '/questions' to avoid React
@@ -257,11 +281,28 @@ export default function Sidebar() {
                                             const isActive = pathname === resolvedHref
                                                 || pathname?.startsWith(resolvedHref + '/')
                                                 || (resolvedHref === '/questions' && (pathname === '/questions' || pathname?.startsWith('/questions/')));
+                                            // Freemium (Task 10): free users see a small
+                                            // "Premium" pill next to the label, but the link
+                                            // is still clickable — visibility of premium
+                                            // features is part of the conversion funnel.
+                                            // The page itself enforces the gate; the
+                                            // api.ts interceptor opens the UpgradeModal.
+                                            const showLock = !isPremium && item.premium === true;
+                                            const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+                                                saveSidebarScroll();
+                                                setOpen(false);
+                                                if (showLock) {
+                                                    // Free user clicking a premium link — open
+                                                    // the upgrade modal explicitly so they get a
+                                                    // nudge before the page itself gates them.
+                                                    showPaywall(item.premiumFeature || item.label);
+                                                }
+                                            };
                                             return (
                                                 <Link
                                                     key={item.href}
                                                     href={resolvedHref}
-                                                    onClick={() => { saveSidebarScroll(); setOpen(false); }}
+                                                    onClick={handleClick}
                                                     className={`sidebar-link ${isActive ? 'active' : ''}`}
                                                     aria-current={isActive ? 'page' : undefined}
                                                 >
@@ -273,7 +314,8 @@ export default function Sidebar() {
                                                         variant={isActive ? 'active' : 'default'}
                                                     />
                                                     <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
-                                                    {item.badge && (
+                                                    {showLock && <LockedBadge size="sm" />}
+                                                    {item.badge && !showLock && (
                                                         <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
                                                             {item.badge}
                                                         </span>
