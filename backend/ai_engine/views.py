@@ -140,6 +140,67 @@ def refund_ai_token(request):
         pass
 
 
+# Free-tier daily cap for the AI Tutor (tutor/mnemonic/explain/textbook/analyze).
+# Premium and admin users bypass entirely. The cap is *additional* to the
+# existing token economy (daily 10 + weekly 50 + purchased + feedback) — users
+# with an unlimited plan never hit this counter at all.
+AI_TUTOR_DAILY_FREE_CAP = 2
+
+
+def _check_ai_tutor_quota(user):
+    """Return ``None`` if the user may call an AI tutor endpoint today,
+    or a 402 ``Response`` describing the upgrade if the daily cap is hit.
+
+    The endpoint must invoke this BEFORE ``consume_ai_token`` so that free
+    users see the upgrade modal instead of silently burning a paid token.
+    The atomic counter itself lives in :mod:`ai_engine.models_usage`.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        # Anonymous is handled by the view's permission_classes; this helper
+        # assumes an authenticated user.
+        return None
+    if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
+        return None
+
+    # Premium bypass — same source of truth as consume_ai_token() (PLAN_FEATURES).
+    try:
+        from accounts.models import Subscription
+        sub = Subscription.get_active_subscription(user)
+        if sub and getattr(sub, 'is_active', False) and getattr(sub, 'unlimited_ai', False):
+            return None
+    except Exception:
+        logger.exception('_check_ai_tutor_quota: subscription lookup failed; applying cap anyway')
+
+    from .models_usage import consume_ai_tutor_message, get_today_usage
+
+    used = get_today_usage(user)
+    if used >= AI_TUTOR_DAILY_FREE_CAP:
+        return Response(
+            {
+                'code': 'upgrade_required',
+                'feature': 'AI Tutor',
+                'message': (
+                    "You've used your 2 free AI Tutor messages for today. "
+                    'Subscribe for unlimited AI explanations from just ₹129/month.'
+                ),
+                'remaining': 0,
+                'cap': AI_TUTOR_DAILY_FREE_CAP,
+            },
+            status=402,
+        )
+
+    consume_ai_tutor_message(user)
+    return None
+
+
+def _check_freemium_ai_quota(request):
+    """Convenience wrapper for views: same as ``_check_ai_tutor_quota`` but
+    reads ``user`` off the request object. Returns the Response to short-circuit
+    with, or ``None`` if the call may proceed.
+    """
+    return _check_ai_tutor_quota(getattr(request, 'user', None))
+
+
 class AskTutorView(AITutorThrottleMixin, APIView):
     """AI Tutor — RAG-grounded medical Q&A."""
 
@@ -151,6 +212,11 @@ class AskTutorView(AITutorThrottleMixin, APIView):
         context = request.data.get('context', '')
         if not question:
             return Response({'error': 'Question is required'}, status=400)
+
+        # Freemium 2/day cap — premium/admin bypass entirely
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
 
         # Token check — admins bypass
         ok, err = consume_ai_token(request)
@@ -179,6 +245,10 @@ class GenerateMnemonicView(AITutorThrottleMixin, APIView):
         if not topic:
             return Response({'error': 'Topic is required'}, status=400)
 
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
+
         ok, err = consume_ai_token(request)
         if not ok:
             return err
@@ -204,6 +274,10 @@ class ExplainConceptView(AITutorThrottleMixin, APIView):
         level = request.data.get('level', 'basic')
         if not concept:
             return Response({'error': 'Concept is required'}, status=400)
+
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
 
         ok, err = consume_ai_token(request)
         if not ok:
@@ -231,6 +305,10 @@ class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
         correct_answer = request.data.get('correct_answer', '')
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
+
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
 
         ok, err = consume_ai_token(request)
         if not ok:
@@ -575,6 +653,10 @@ class RAGAnswerView(AITutorThrottleMixin, APIView):
         question = request.data.get('question', '')
         if not question:
             return Response({'error': 'Question is required'}, status=400)
+
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
 
         ok, err = consume_ai_token(request)
         if not ok:
