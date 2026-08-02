@@ -191,6 +191,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
     is_bookmarked = serializers.SerializerMethodField()
+    is_showcase = serializers.SerializerMethodField()
     verified_by_username = serializers.CharField(source='verified_by.username', read_only=True, default='')
     effective_answer = serializers.SerializerMethodField()
     effective_explanation = serializers.SerializerMethodField()
@@ -279,7 +280,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
                   'year', 'subject', 'subject_name',
                   'topic', 'topic_name', 'difficulty', 'exam_source',
                   'concept_tags', 'concept_id', 'book_name', 'chapter', 'page_number', 'reference_text',
-                  'textbook_references', 'is_bookmarked', 'is_verified_by_admin',
+                  'textbook_references', 'is_bookmarked', 'is_showcase', 'is_verified_by_admin',
                   'verified_at', 'verified_by', 'verified_by_username',
                   'effective_answer', 'effective_explanation',
                   'revision_count', 'last_revision_at', 'related_question_ids', 'accuracy',
@@ -290,6 +291,12 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
     def get_is_bookmarked(self, obj):
         return bool(getattr(obj, 'is_bookmarked', False))
+
+    def get_is_showcase(self, obj):
+        # `is_showcase` is annotated in QuestionViewSet.get_queryset via an
+        # Exists() subquery on FreeShowcaseQuestion. Fallback to False for
+        # serializers instantiated outside the list view (e.g. tests).
+        return bool(getattr(obj, 'is_showcase', False))
 
     def _is_admin(self):
         """True when the requesting user is staff / admin.

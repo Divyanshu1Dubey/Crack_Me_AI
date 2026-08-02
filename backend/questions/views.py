@@ -23,6 +23,8 @@ from django.db.models import Count, F, Max, Q, Value
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
+from accounts.utils import is_premium as _is_premium
+from accounts.models_freemium import FreeShowcaseQuestion
 from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, compute_stem_hash
 from .serializers import (
     SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
@@ -280,6 +282,27 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return queryset
         if not is_admin:
             queryset = queryset.filter(is_active=True)
+
+        # Freemium gate (Task 6): free users see only the admin-curated
+        # showcase questions (10/year by default). Premium and admin users
+        # continue to see the full list. Anonymous requests also get the
+        # full list — public SEO/showroom value is intentional.
+        if (
+            self.action == 'list'
+            and user is not None
+            and getattr(user, 'is_authenticated', False)
+            and not is_admin
+            and not _is_premium(user)
+        ):
+            showcase_qs = FreeShowcaseQuestion.objects.all().values_list('question_id', flat=True)
+            year_param = self.request.query_params.get('year')
+            if year_param not in (None, ''):
+                try:
+                    showcase_qs = showcase_qs.filter(year=int(year_param))
+                except (TypeError, ValueError):
+                    pass
+            queryset = queryset.filter(id__in=list(showcase_qs))
+
         if self.action == 'list':
             queryset = queryset.select_related('subject', 'topic', 'verified_by')
             queryset = queryset.annotate(
@@ -307,6 +330,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
             queryset = queryset.annotate(
                 _cluster_id=_cluster_id_subq,
                 _cluster_member_count=_cluster_member_count_subq,
+            )
+            # Freemium annotation: `is_showcase=True` when this row is in
+            # accounts.FreeShowcaseQuestion. Used by the frontend to render
+            # a "Premium" badge on non-showcase rows for free users.
+            queryset = queryset.annotate(
+                is_showcase=Exists(
+                    FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))
+                ),
             )
             if user and getattr(user, 'is_authenticated', False):
                 from django.db.models import Subquery
