@@ -350,17 +350,28 @@ export default function AITutorPage() {
         } catch (err: unknown) {
             const statusCode = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
             const errorPayload = (err as { response?: { data?: unknown } })?.response?.data;
+            const errorCode = (errorPayload as { code?: string } | undefined)?.code;
             const is429 = statusCode === 429;
-            const message = is429
-                ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
-                : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
+            // Freemium conversion layer (Task 11): when the api.ts interceptor
+            // fires the global UpgradeModal on `code: 'upgrade_required'`,
+            // suppress the noisy inline error message — the modal already
+            // tells the user what happened. Roll the failed user message
+            // back so the chat input clears cleanly.
+            const isUpgradeRequired = errorCode === 'upgrade_required';
+            if (isUpgradeRequired) {
+                setMessages(prev => prev.slice(0, -1));
+            } else {
+                const message = is429
+                    ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
+                    : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
 
-            setMessages(prev => [...prev, {
-                role: 'ai',
-                content: message,
-                type: mode
-            }]);
-            scrollToLatestAiMessage();
+                setMessages(prev => [...prev, {
+                    role: 'ai',
+                    content: message,
+                    type: mode
+                }]);
+                scrollToLatestAiMessage();
+            }
         } finally {
             setLoading(false);
         }

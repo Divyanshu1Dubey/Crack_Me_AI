@@ -5,11 +5,14 @@ import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { testsAPI, questionsAPI } from '@/lib/api';
-import { FileText, Play, Clock, Target, Sparkles, Plus, Award, ChevronRight } from 'lucide-react';
+import { FileText, Play, Clock, Target, Sparkles, Plus, Award, ChevronRight, Lock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LockedBadge } from '@/components/paywall/LockedBadge';
+import { usePaywall } from '@/lib/paywall/paywallContext';
+import { useAuth } from '@/lib/auth';
 
 interface TestItem {
     id: number;
@@ -19,6 +22,10 @@ interface TestItem {
     num_questions: number;
     time_limit_minutes: number;
     attempt_count: number;
+    // Freemium (Task 4 / Task 11): true when admin marked this test as
+    // a free-preview — free users can attempt it; everyone else needs
+    // an active subscription. Surfaced by TestSerializer.
+    is_free_preview?: boolean;
 }
 
 interface Subject {
@@ -29,6 +36,8 @@ interface Subject {
 
 export default function TestsPage() {
     const { ready } = useRequireAuth();
+    const { user } = useAuth();
+    const { show: showPaywall } = usePaywall();
     const router = useRouter();
     const [tests, setTests] = useState<TestItem[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -36,6 +45,14 @@ export default function TestsPage() {
     const [generating, setGenerating] = useState(false);
 
     const [examType, setExamType] = useState('cms');
+
+    // Freemium (Task 11): a user is "premium" if they have an active
+    // subscription OR are admin/staff — same source of truth as the
+    // Sidebar (mirrors backend `accounts.utils.is_premium`).
+    const isPremium =
+        user?.is_premium === true ||
+        user?.subscription_info?.is_active === true ||
+        user?.is_admin === true;
 
     useEffect(() => {
         const syncExam = () => {
@@ -75,8 +92,17 @@ export default function TestsPage() {
         }
     };
 
-    const startTest = async (testId: number) => {
-        router.push(`/tests/${testId}`);
+    const startTest = async (test: TestItem) => {
+        // Freemium gate (Task 7/11): free users can only start tests that
+        // the admin has marked is_free_preview=true. Backend enforces the
+        // same rule with a 403 upgrade_required; we open the modal
+        // proactively here so the user sees the same nudge the backend
+        // would otherwise deliver via the api.ts interceptor.
+        if (!isPremium && !test.is_free_preview) {
+            showPaywall('Mock Tests');
+            return;
+        }
+        router.push(`/tests/${test.id}`);
     };
 
     const testTypes = [
@@ -152,15 +178,22 @@ export default function TestsPage() {
                                     <CardContent className="p-5">
                                         <div className="flex justify-between items-start mb-3 gap-2">
                                             <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
-                                            <Badge variant="secondary" className="shrink-0 whitespace-nowrap">{test.test_type}</Badge>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {!isPremium && !test.is_free_preview && <LockedBadge size="sm" />}
+                                                <Badge variant="secondary" className="whitespace-nowrap">{test.test_type}</Badge>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-4 text-xs mb-4 text-muted-foreground">
                                             <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {test.num_questions} Qs</span>
                                             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {test.time_limit_minutes} min</span>
                                             <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
                                         </div>
-                                        <Button variant="neon" onClick={() => startTest(test.id)} className="w-full" size="sm">
-                                            Start Test <ChevronRight className="w-4 h-4 ml-1" />
+                                        <Button variant="neon" onClick={() => startTest(test)} className="w-full" size="sm">
+                                            {isPremium || test.is_free_preview ? (
+                                                <>Start Test <ChevronRight className="w-4 h-4 ml-1" /></>
+                                            ) : (
+                                                <>Unlock Test <Lock className="w-4 h-4 ml-1" /></>
+                                            )}
                                         </Button>
                                     </CardContent>
                                 </Card>

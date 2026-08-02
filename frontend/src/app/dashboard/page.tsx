@@ -19,6 +19,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import CustomIcon from '@/components/CustomIcon';
+import { LockedBadge } from '@/components/paywall/LockedBadge';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface HeatmapDay {
     date: string;
@@ -136,6 +138,7 @@ const BonusTimerBanner = () => {
 export default function DashboardPage() {
     const { user } = useAuth();
     const { ready } = useRequireAuth();
+    const { show: showPaywall } = usePaywall();
 
     const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
 
@@ -414,6 +417,63 @@ export default function DashboardPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Freemium conversion layer (Task 11): premium feature
+                        row for free users. Three call-to-action cards — each
+                        gated by Subscription.is_active; clicking opens the
+                        global UpgradeModal via usePaywall(). Premium + admin
+                        users never see this row (the conversion nudge is
+                        irrelevant to them). */}
+                    {(() => {
+                        const isPremium =
+                            user?.is_premium === true ||
+                            user?.subscription_info?.is_active === true ||
+                            user?.is_admin === true;
+                        if (isPremium) return null;
+                        const lockedFeatures = [
+                            {
+                                label: 'Adaptive Mock Tests',
+                                desc: 'AI-built personalized tests from your weak topics',
+                                iconName: 'tests-check',
+                                feature: 'Mock Tests',
+                            },
+                            {
+                                label: 'Unlimited AI Tutor',
+                                desc: 'Beyond 2 free chats/day — mnemonics, explanations, RAG',
+                                iconName: 'ai-tutor-brain',
+                                feature: 'AI Tutor',
+                            },
+                            {
+                                label: 'Full PYQ Library',
+                                desc: 'All years with explanations + video — not just 10 curated',
+                                iconName: 'question-bank-book',
+                                feature: 'Full PYQ practice',
+                            },
+                        ];
+                        return (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {lockedFeatures.map((f) => (
+                                    <button
+                                        key={f.label}
+                                        type="button"
+                                        onClick={() => showPaywall(f.feature)}
+                                        className="text-left rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-50 dark:from-amber-950/30 dark:via-yellow-950/20 dark:to-amber-950/30 hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-950/40 dark:hover:to-yellow-950/30 transition-colors p-4"
+                                        aria-label={`Unlock ${f.label} — opens subscription page`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <CustomIcon name={f.iconName} label={f.label} className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" variant="active" />
+                                                <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-200 truncate">{f.label}</h3>
+                                            </div>
+                                            <LockedBadge size="sm" />
+                                        </div>
+                                        <p className="text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">{f.desc}</p>
+                                        <p className="mt-2 text-[11px] font-semibold text-amber-700 dark:text-amber-300">Unlock from ₹129/month →</p>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
 
                     {/* KPI Strip */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
