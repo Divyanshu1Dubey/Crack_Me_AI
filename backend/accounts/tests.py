@@ -1270,3 +1270,39 @@ class FreeShowcaseQuestionTests(TestCase):
         )
         self.assertEqual(ordered, [1, 2, 3])
 
+
+class AITutorDailyUsageTests(TestCase):
+    """Freemium: atomic per-user daily counter for AI tutor messages."""
+
+    def setUp(self):
+        from ai_engine.models_usage import AITutorDailyUsage
+        self.student = User.objects.create_user(
+            username='ai_quota_stu', email='aiq@x.com', password='x',
+        )
+
+    def test_first_message_creates_row(self):
+        from ai_engine.models_usage import consume_ai_tutor_message, AITutorDailyUsage
+        count = consume_ai_tutor_message(self.student)
+        self.assertEqual(count, 1)
+        self.assertTrue(AITutorDailyUsage.objects.filter(user=self.student).exists())
+
+    def test_subsequent_messages_increment(self):
+        from ai_engine.models_usage import consume_ai_tutor_message, AITutorDailyUsage
+        consume_ai_tutor_message(self.student)
+        consume_ai_tutor_message(self.student)
+        count = consume_ai_tutor_message(self.student)
+        self.assertEqual(count, 3)
+        row = AITutorDailyUsage.objects.get(user=self.student)
+        self.assertEqual(row.message_count, 3)
+
+    def test_unique_per_user_per_date(self):
+        from ai_engine.models_usage import AITutorDailyUsage, consume_ai_tutor_message
+        from django.db import IntegrityError, transaction
+        consume_ai_tutor_message(self.student)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AITutorDailyUsage.objects.create(
+                    user=self.student,
+                    message_count=0,
+                )
+
