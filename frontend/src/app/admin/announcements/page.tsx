@@ -9,6 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Megaphone, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
+interface AnnouncementItem {
+  id: number;
+  title: string;
+  message?: string;
+  body?: string;
+  priority?: string;
+  created_at?: string;
+}
+
 export default function AdminAnnouncementsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -16,15 +25,13 @@ export default function AdminAnnouncementsPage() {
   // Client-side admin gate (backend `IsAdminUser` is the authoritative RBAC).
   const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
 
-  const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [tracks, setTracks] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     message: '',
     priority: 'normal',
   });
-  const [selectedTrackIds, setSelectedTrackIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
@@ -45,25 +52,7 @@ export default function AdminAnnouncementsPage() {
     try {
       const res = await announcementsAPI.list();
       const data = res.data?.results || res.data || [];
-      setAnnouncements(Array.isArray(data) ? data : []);
-      // Use api.ts subjects path through the centralised client so base URL
-      // failover (DigitalOcean render / onrender.com blacklist) is honoured.
-      // The exam-tracks taxonomy is fetched here for target-exam filters.
-      try {
-        const trackRes = await analyticsAPI.getAnnouncements();
-        // analytics endpoint may not return tracks — fall back to questions subjects
-        const tracksData: any[] = (trackRes.data && (trackRes.data as any).tracks) || [];
-        if (tracksData.length) {
-          setTracks(tracksData);
-        } else {
-          // Fallback: try questions subjects list (admin-only on backend)
-          const subjectsRes = await fetch('/api-proxy-missing');
-          // subjectsRes likely 404; we set tracks = [] rather than crashing.
-          setTracks([]);
-        }
-      } catch {
-        setTracks([]);
-      }
+      setAnnouncements(Array.isArray(data) ? (data as AnnouncementItem[]) : []);
     } catch (error) {
       console.error('Error fetching announcements:', error);
       setBanner({ kind: 'error', text: 'Could not load announcements.' });
@@ -87,7 +76,6 @@ export default function AdminAnnouncementsPage() {
       });
       setBanner({ kind: 'success', text: 'Announcement created.' });
       setFormData({ title: '', message: '', priority: 'normal' });
-      setSelectedTrackIds([]);
       await fetchAnnouncements();
     } catch (error) {
       console.error('Error creating announcement:', error);

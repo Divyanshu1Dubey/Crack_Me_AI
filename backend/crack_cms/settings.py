@@ -46,9 +46,13 @@ if SENTRY_DSN:
         send_default_pii=sentry_send_pii,
     )
 
+is_testing = 'test' in sys.argv or 'pytest' in sys.modules
 secret_key_from_env = (os.getenv('DJANGO_SECRET_KEY') or os.getenv('SECRET_KEY') or '').strip()
 if not secret_key_from_env and not DEBUG:
-    raise ImproperlyConfigured('SECRET_KEY is required when DEBUG is false.')
+    if is_testing:
+        secret_key_from_env = 'ci-secret-key-12345'
+    else:
+        raise ImproperlyConfigured('SECRET_KEY is required when DEBUG is false.')
 
 SECRET_KEY = secret_key_from_env or 'django-insecure-local-dev-only'
 

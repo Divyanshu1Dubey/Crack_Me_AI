@@ -2,7 +2,7 @@ import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
-import { Award, Brain, Heart, Lightbulb, ShieldCheck, Sparkles, Target, Users } from 'lucide-react';
+import { Brain, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { siteName, siteUrl } from '@/lib/seo';
 
 const title = 'About CrackCMS — Built by Doctors, Powered by AI';

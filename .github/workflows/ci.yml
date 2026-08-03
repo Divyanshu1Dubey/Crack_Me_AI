@@ -24,11 +24,18 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run Django checks
         run: python manage.py check --deploy 2>&1
+        env:
+          SECRET_KEY: ci-secret-key-12345
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
       - name: Run migrations check
         run: python manage.py makemigrations --check --dry-run
+        env:
+          SECRET_KEY: ci-secret-key-12345
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
       - name: Run tests
         run: python manage.py test --verbosity=2
         env:
+          SECRET_KEY: ci-secret-key-12345
           DJANGO_SECRET_KEY: test-secret-key-for-ci
           DEBUG: 'False'
 
@@ -86,6 +93,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/playwright-setup
       - name: Run visual snapshots against cracklabs.app
         env:
@@ -130,6 +138,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/playwright-setup
       - name: Run live audit against cracklabs.app
         env:
