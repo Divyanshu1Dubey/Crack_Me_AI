@@ -270,12 +270,35 @@ export default function AdminDashboardPage() {
         }
         if (isAuthenticated && hasAdminAccess) {
             Promise.all([
-                analyticsAPI.getAdminDashboard().catch(() => ({ data: null })),
-                analyticsAPI.getAnnouncements().catch(() => ({ data: [] })),
+                analyticsAPI.getAdminDashboard().catch((err: unknown) => {
+                    // Don't silently swallow auth/permission errors — the user
+                    // needs to see *why* the dashboard is empty. Anything else
+                    // (network blip, 5xx) we still surface via console.
+                    // eslint-disable-next-line no-console
+                    console.error('[admin] /api/analytics/admin-dashboard/ failed:', err);
+                    return { data: null, _error: extractApiErrorMessage(err, 'Failed to load admin dashboard') };
+                }),
+                analyticsAPI.getAnnouncements().catch((err: unknown) => {
+                    // eslint-disable-next-line no-console
+                    console.error('[admin] /api/analytics/announcements/ failed:', err);
+                    return { data: [], _error: extractApiErrorMessage(err, 'Failed to load announcements') };
+                }),
             ]).then(([dashRes, annRes]) => {
-                setData(dashRes.data);
-                setAnnouncements(Array.isArray(annRes.data) ? annRes.data : annRes.data?.results || []);
+                const dashAny = dashRes as { data: unknown; _error?: string };
+                const annAny = annRes as { data: unknown; _error?: string };
+                setData((dashAny.data ?? null) as DashboardData | null);
+                const annData: unknown = annAny.data;
+                setAnnouncements(
+                    Array.isArray(annData)
+                        ? (annData as Announcement[])
+                        : (((annData as { results?: Announcement[] })?.results) ?? [])
+                );
                 setLoading(false);
+                if (dashAny._error) {
+                    setUserActionMessage(`Admin dashboard unavailable: ${dashAny._error}`);
+                } else if (annAny._error) {
+                    setUserActionMessage(`Announcements unavailable: ${annAny._error}`);
+                }
             });
         }
     }, [isAuthenticated, authLoading, hasAdminAccess, router]);
@@ -311,7 +334,11 @@ export default function AdminDashboardPage() {
 
         authAPI.adminListUsers(params)
             .then(res => setUserList(Array.isArray(res.data) ? res.data : res.data?.results || res.data?.users || []))
-            .catch(() => {})
+            .catch((err: unknown) => {
+                // eslint-disable-next-line no-console
+                console.error('[admin] /api/auth/admin/users/ failed:', err);
+                setUserActionMessage(extractApiErrorMessage(err, 'Failed to load users'));
+            })
             .finally(() => setUsersLoading(false));
     };
 

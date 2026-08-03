@@ -23,6 +23,7 @@ import { SidebarProvider } from "@/context/SidebarContext";
 import { QuestionFocusProvider } from "@/context/QuestionFocusContext";
 import { FloatingDock } from "@/components/FloatingDock";
 import { PaywallRoot } from "@/components/paywall/PaywallRoot";
+import { PaywallProvider } from "@/lib/paywall/paywallContext";
 import Footer from "@/components/Footer";
 import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 import { graphSchema, orgSchema, softwareAppSchema, websiteSchema } from "@/lib/metadata";
@@ -273,31 +274,33 @@ export default function RootLayout({
           <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="crackcms-theme">
             <ThemeSync />
             <TooltipProvider>
-              <AuthProvider>
-                <ProfileAutoRefreshMount />
-                <ExamTrackProvider>
-                  <SidebarProvider>
-                    <QuestionFocusProvider>
-                      <DockProvider>
-                        <DatadogInit />
-                        <ClarityInit />
-                        <PostHogInit />
-                        <Suspense fallback={null}>
-                          <TrafficAnalytics />
-                        </Suspense>
-                        <BackendWarmup />
-                        <main id="main-content">{children}</main>
-                        <Footer />
-                        <FloatingDock />
-                        <WatermarkOverlay />
-                        <StickyExamCta />
-                        <ConsentBanner />
-                        <PaywallRoot />
-                      </DockProvider>
-                    </QuestionFocusProvider>
-                  </SidebarProvider>
-                </ExamTrackProvider>
-              </AuthProvider>
+              <PaywallProvider>
+                <AuthProvider>
+                  <ProfileAutoRefreshMount />
+                  <ExamTrackProvider>
+                    <SidebarProvider>
+                      <QuestionFocusProvider>
+                        <DockProvider>
+                          <DatadogInit />
+                          <ClarityInit />
+                          <PostHogInit />
+                          <Suspense fallback={null}>
+                            <TrafficAnalytics />
+                          </Suspense>
+                          <BackendWarmup />
+                          <main id="main-content">{children}</main>
+                          <Footer />
+                          <FloatingDock />
+                          <WatermarkOverlay />
+                          <StickyExamCta />
+                          <ConsentBanner />
+                          <PaywallRoot />
+                        </DockProvider>
+                      </QuestionFocusProvider>
+                    </SidebarProvider>
+                  </ExamTrackProvider>
+                </AuthProvider>
+              </PaywallProvider>
             </TooltipProvider>
           </ThemeProvider>
         </PWAProvider>
