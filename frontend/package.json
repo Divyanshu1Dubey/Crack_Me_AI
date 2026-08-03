@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "icons:download": "node scripts/download-icons.mjs icons/icons-manifest.json public/icons/custom"
   },
   "dependencies": {
