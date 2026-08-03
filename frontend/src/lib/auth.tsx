@@ -450,18 +450,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isInvalidRefreshTokenError(error)) {
                 await clearSupabaseLocalSession();
             }
-            // Fallback: try to get Supabase user
+            // SECURITY / UX (Fix #8): do NOT overwrite a known-good user
+            // (one that already has subscription_info / is_premium populated)
+            // with a degraded mapSupabaseUser fallback. The previous
+            // behaviour silently demoted a paying user to a free user
+            // whenever the profile endpoint returned a transient 5xx,
+            // because mapSupabaseUser returns a User with no
+            // subscription_info and is_premium=false. Instead, keep the
+            // existing user state intact on transient failures.
+            setUser((current) => {
+                if (current && (current.subscription_info || current.is_premium)) {
+                    // Known-good paying/admin user — keep them.
+                    return current;
+                }
+                // No existing user state OR current user is already
+                // unsubscribed (free tier). Try the Supabase fallback.
+                return null;
+            });
+            // Try the Supabase fallback outside of setUser so we don't
+            // mix functional updates with side effects. Only adopt the
+            // fallback if we still have no user in state.
             try {
                 const { data } = await supabase.auth.getUser();
                 if (data.user) {
-                    setUser(mapSupabaseUser(data.user));
+                    setUser((current) => {
+                        if (current) return current; // keep priority user
+                        return mapSupabaseUser(data.user);
+                    });
                     return;
                 }
             } catch {
-                // Ignore fallback getUser errors and clear stale user state.
-            }
-            {
-                setUser(null);
+                // Ignore fallback getUser errors.
             }
         }
     };

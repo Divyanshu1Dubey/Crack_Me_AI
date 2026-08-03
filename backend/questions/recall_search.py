@@ -79,17 +79,71 @@ def recall_search(self, request):
     """
     # Phase 3: short-lived cache keyed on (query, query-stamp minute)
     # keeps DB cost under control for repeat front-end queries.
+    # SECURITY (Fix #6): the cache key MUST include a per-user bucket so
+    # a free user's restricted query (10 showcase items) cannot be served
+    # to a premium user (or vice-versa) and so that freemium-restricted
+    # result sets cannot leak via cache poisoning. We bucket by either
+    # the authenticated user id or "anon" — never by raw QUERY_STRING
+    # alone, which is shared across users.
     from django.core.cache import cache
     from .models import Question, QuestionImage
     from .serializers import QuestionListSerializer
 
-    cache_key = "recall_search:v2:" + (request.META.get("QUERY_STRING") or "")
+    # SECURITY (Fix #6): apply the freemium gate that views.py already
+    # applies to `list` / `retrieve`. Without this, a free user could
+    # `GET /api/questions/recall_search/?q=…` and bypass the showcase
+    # filter — `recall_search` is wired as an AllowAny @action so it
+    # was previously exempt from the gate. Now: premium + admin get the
+    # full set; free users get only the admin-curated 10 showcase rows.
+    request_user = getattr(request, "user", None)
+    is_authed = bool(request_user and getattr(request_user, "is_authenticated", False))
+    is_admin = bool(
+        is_authed
+        and (
+            getattr(request_user, "is_superuser", False)
+            or getattr(request_user, "is_staff", False)
+            or getattr(request_user, "role", "") == "admin"
+        )
+    )
+    # is_premium() lives in accounts.utils; import lazily to avoid a
+    # circular import at module load time.
+    is_premium = False
+    if is_authed and not is_admin:
+        try:
+            from accounts.utils import is_premium as _is_premium
+            is_premium = _is_premium(request_user)
+        except Exception:
+            is_premium = False
+
+    cache_bucket = (
+        f"u{request_user.id}" if is_authed else "anon"
+    )
+    cache_key = (
+        f"recall_search:v3:{cache_bucket}:"
+        + (request.META.get("QUERY_STRING") or "")
+    )
     cached = cache.get(cache_key)
     if cached is not None:
         return Response(cached)
 
     qs = (Question.objects.filter(is_active=True)
           .select_related("subject", "topic"))
+
+    # Freemium gate (Fix #6). Mirrors the showcase filter in views.py:
+    # only questions whose PK appears in FreeShowcaseQuestion for the
+    # requested year (or any year, if year is omitted) are visible to a
+    # free authenticated user.
+    if is_authed and not is_admin and not is_premium:
+        from accounts.models_freemium import FreeShowcaseQuestion  # local import
+        from django.db.models import Exists, OuterRef
+        showcase_qs = FreeShowcaseQuestion.objects.filter(question_id=OuterRef("pk"))
+        year_param = request.query_params.get("year")
+        if year_param not in (None, ""):
+            try:
+                showcase_qs = showcase_qs.filter(year=int(year_param))
+            except (TypeError, ValueError):
+                pass
+        qs = qs.filter(Exists(showcase_qs))
 
     for param, lookup in _PARAM_FILTERS.items():
         raw = request.query_params.get(param)

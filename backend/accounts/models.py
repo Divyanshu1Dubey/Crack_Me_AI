@@ -128,6 +128,21 @@ class TokenBalance(models.Model):
     last_daily_reset = models.DateField(default=timezone.now, help_text='Last date daily counter was reset')
     last_weekly_reset = models.DateField(default=timezone.now, help_text='Last date weekly counter was reset')
     feedback_credits = models.IntegerField(default=0, help_text='Tokens earned from accepted feedback')
+    # High-water marks used by refund_token to restore purchased tokens /
+    # feedback credits when an AI call fails after consuming a token. We
+    # can't peek into consume_token()'s source-of-truth after the fact, so
+    # we track the maximum purchased/feedback pool we've ever seen and
+    # refund the difference between that and the current balance. If a
+    # user has spent 3 of 5 purchased tokens (max=5, current=2) and gets
+    # a refund of 1, refund_token can restore purchased back to 3.
+    purchased_tokens_max = models.IntegerField(
+        default=50,
+        help_text='High-water mark of purchased tokens — used by refund_token.',
+    )
+    feedback_credits_max = models.IntegerField(
+        default=0,
+        help_text='High-water mark of feedback credits — used by refund_token.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -238,21 +253,43 @@ class TokenBalance(models.Model):
             if locked is None:
                 return
             locked.purchased_tokens += amount
-            locked.save(update_fields=['purchased_tokens'])
+            # Keep the high-water mark in sync so refund_token can restore
+            # spent tokens back up to (but not above) what the user paid for.
+            locked.purchased_tokens_max = max(
+                locked.purchased_tokens_max or 0,
+                locked.purchased_tokens,
+            )
+            locked.save(update_fields=['purchased_tokens', 'purchased_tokens_max'])
             self.purchased_tokens = locked.purchased_tokens
+            self.purchased_tokens_max = locked.purchased_tokens_max
 
     def refund_token(self, amount=1):
         """Refund tokens (used when AI call fails after token was consumed).
 
-        Refund priority mirrors consume: restore purchased first, then feedback
-        credits, then daily/weekly — so the user never permanently loses a paid
-        token because of an upstream AI failure. This is the silent token-leak
-        bug the previous implementation had: it only decremented daily/weekly
-        counters and never restored `purchased_tokens`.
+        Refund priority mirrors consume in REVERSE: restore `purchased_tokens`
+        FIRST, then `feedback_credits`, then decrement `daily_tokens_used` /
+        `weekly_tokens_used`. This is the silent-token-leak bug-fix for the
+        previous implementation, which only decremented `daily_tokens_used` /
+        `weekly_tokens_used` / `total_tokens_used` and never restored
+        `purchased_tokens` or `feedback_credits` — meaning a paid token (or a
+        token earned by submitting feedback) that was consumed before an AI
+        provider failure was permanently lost.
+
+        Why we restore purchased first:
+            - Purchased tokens have no free replacement path. A user who paid
+              for 10 tokens and lost 1 to an upstream failure would silently
+              lose money.
+            - Feedback credits come from a positive contribution (rated answer)
+              that the user actually earned. Don't punish them for an
+              upstream failure either.
+            - Free daily/weekly counters reset on their own schedule; giving
+              them back here is the least valuable refund.
+
+        Note: we cannot perfectly reconstruct which source `consume_token`
+        drew from for a particular call — that information is lost once the
+        counters are updated. We approximate by restoring purchased first,
+        then feedback, then free, until the refund amount is satisfied.
         """
-        # Mapping consume priority in reverse → refund distribution
-        # consume: free → feedback → purchased
-        # refund:  purchased → feedback → free   (so paid tokens are restored first)
         from django.db import transaction
         with transaction.atomic():
             locked = TokenBalance.objects.select_for_update().filter(pk=self.pk).first()
@@ -261,37 +298,62 @@ class TokenBalance(models.Model):
 
             remaining = amount
 
-            # 1. Restore purchased tokens (have no other way to get them back)
-            if remaining > 0 and locked.total_tokens_used >= amount:
-                # Only restore from a source that was actually drawn.
-                # We can't know exactly which source was used, so we restore
-                # proportionally based on the prior consume priority.
-                # Simpler & correct: only restore from `total_tokens_used`,
-                # which is the canonical lifetime counter.
-                locked.total_tokens_used -= amount
-                remaining = 0
-            else:
-                locked.total_tokens_used = 0
-                remaining = 0
+            # 1. Restore purchased tokens first (highest-value refund).
+            if remaining > 0 and locked.purchased_tokens_max is not None:
+                # `purchased_tokens_max` is the running high-water mark of
+                # purchased tokens ever observed for this user. Anything
+                # below it was consumed and is eligible for refund.
+                # If we don't have a high-water mark (legacy rows), fall
+                # back to refunding up to current purchased + amount.
+                restore_from_purchased = min(remaining, max(0, (locked.purchased_tokens_max or 0) - locked.purchased_tokens))
+                if restore_from_purchased > 0:
+                    locked.purchased_tokens += restore_from_purchased
+                    locked.purchased_tokens_max = (locked.purchased_tokens_max or 0) + restore_from_purchased
+                    remaining -= restore_from_purchased
+            elif remaining > 0:
+                # No high-water mark — refund up to `amount` into purchased
+                # if total_tokens_used shows we used that many.
+                if locked.total_tokens_used >= amount:
+                    locked.purchased_tokens += remaining
+                    remaining = 0
 
-            # Decrement daily/weekly counters symmetrically with consume:
+            # 2. Restore feedback credits next.
+            if remaining > 0 and locked.feedback_credits_max is not None:
+                restore_from_feedback = min(remaining, max(0, (locked.feedback_credits_max or 0) - locked.feedback_credits))
+                if restore_from_feedback > 0:
+                    locked.feedback_credits += restore_from_feedback
+                    locked.feedback_credits_max = (locked.feedback_credits_max or 0) + restore_from_feedback
+                    remaining -= restore_from_feedback
+
+            # 3. Decrement daily/weekly counters symmetrically with consume:
             # consume() charges both daily + weekly in lockstep, so we
-            # decrement both. We just give back up to `amount` total.
-            if locked.daily_tokens_used >= amount:
-                locked.daily_tokens_used -= amount
-            else:
-                locked.daily_tokens_used = 0
-            if locked.weekly_tokens_used >= amount:
-                locked.weekly_tokens_used -= amount
-            else:
-                locked.weekly_tokens_used = 0
+            # decrement both. We just give back up to `remaining` total.
+            # IMPORTANT: we decrement daily + weekly by the SAME amount
+            # (mirroring consume's lockstep behaviour). Capturing
+            # ``daily_refund`` before mutating ``remaining`` is required —
+            # if we let ``remaining`` reach 0 after the daily decrement,
+            # the weekly decrement would become a no-op.
+            if remaining > 0:
+                daily_refund = min(remaining, locked.daily_tokens_used)
+                weekly_refund = min(remaining, locked.weekly_tokens_used)
+                locked.daily_tokens_used -= daily_refund
+                locked.weekly_tokens_used -= weekly_refund
+
+            # Decrement the lifetime counter to keep it consistent.
+            locked.total_tokens_used = max(0, locked.total_tokens_used - amount)
 
             locked.save(update_fields=[
                 'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
+                'purchased_tokens', 'feedback_credits',
+                'purchased_tokens_max', 'feedback_credits_max',
             ])
             self.daily_tokens_used = locked.daily_tokens_used
             self.weekly_tokens_used = locked.weekly_tokens_used
             self.total_tokens_used = locked.total_tokens_used
+            self.purchased_tokens = locked.purchased_tokens
+            self.feedback_credits = locked.feedback_credits
+            self.purchased_tokens_max = locked.purchased_tokens_max
+            self.feedback_credits_max = locked.feedback_credits_max
 
     def add_feedback_credit(self, amount=2):
         """Reward user for accepted feedback (default: +2 tokens)."""
@@ -301,8 +363,14 @@ class TokenBalance(models.Model):
             if locked is None:
                 return
             locked.feedback_credits += amount
-            locked.save(update_fields=['feedback_credits'])
+            # Keep the high-water mark in sync for refund_token.
+            locked.feedback_credits_max = max(
+                locked.feedback_credits_max or 0,
+                locked.feedback_credits,
+            )
+            locked.save(update_fields=['feedback_credits', 'feedback_credits_max'])
             self.feedback_credits = locked.feedback_credits
+            self.feedback_credits_max = locked.feedback_credits_max
 
 
 class TokenConfig(models.Model):
@@ -484,6 +552,16 @@ class Subscription(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            # Hot-path EXISTS query for has_active_sub(). The migration
+            # 0020 added this index via AddIndex; declaring it here too so
+            # ``manage.py makemigrations --check`` doesn't see drift and
+            # so fresh databases pick it up at table-create time.
+            models.Index(
+                fields=['user', 'status', 'expires_at'],
+                name='subscription_user_status_idx',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username}: {self.get_plan_display()} ({self.status})"

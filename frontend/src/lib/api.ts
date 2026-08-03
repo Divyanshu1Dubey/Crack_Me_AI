@@ -131,6 +131,7 @@ api.interceptors.response.use(
     const originalRequest = (error.config || {}) as {
       _retry?: boolean;
       _apiBaseFailover?: boolean;
+      _tokenRefresh?: boolean;
       baseURL?: string;
       headers?: Record<string, string>;
     };
@@ -171,6 +172,41 @@ api.interceptors.response.use(
       }).catch(() => {
         /* swallow — UI will fall back to whatever error the caller shows */
       });
+    }
+
+    // SECURITY / UX (Fix #7): on 401, attempt a one-shot Supabase session
+    // refresh and retry the original request once. Supabase access tokens
+    // are short-lived (default 1h). Without this, a paying user who keeps
+    // a long-lived frontend session tab open for >1h starts seeing 401s
+    // on every API call and has to manually reload — and the profile
+    // refresh in auth.tsx falls back to mapSupabaseUser which has NO
+    // subscription_info, so the paying user appears unsubscribed until
+    // a hard reload. One refresh attempt + one retry closes both loops.
+    if (
+      status === 401 &&
+      !originalRequest._tokenRefresh &&
+      typeof window !== 'undefined' &&
+      isSupabaseAuthEnabled()
+    ) {
+      originalRequest._tokenRefresh = true;
+      try {
+        const supabase = getSupabaseBrowserClient();
+        if (supabase) {
+          const { data, error: refreshErr } = await supabase.auth.refreshSession();
+          if (!refreshErr && data.session?.access_token) {
+            const newToken = data.session.access_token;
+            originalRequest.headers = originalRequest.headers || {};
+            (originalRequest.headers as Record<string, string>)['Authorization'] =
+              `Bearer ${newToken}`;
+            return api(originalRequest);
+          }
+        }
+      } catch (refreshError) {
+        if (isInvalidRefreshTokenError(refreshError)) {
+          await clearSupabaseLocalSession();
+        }
+        // fall through to reject so the caller can render its own UI
+      }
     }
 
     const shouldFailover =

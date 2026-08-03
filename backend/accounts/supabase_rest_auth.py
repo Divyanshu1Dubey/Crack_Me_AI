@@ -4,12 +4,42 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
 from rest_framework import authentication
 
 from .models import TokenBalance
+
+# SECURITY (Fix #3): The X-Session-ID header is trusted by this backend as a
+# device fingerprint. Without validation, any attacker can rotate the header
+# (`X-Session-ID: 1`, `2`, `3`, ...) to spawn unlimited parallel sessions
+# and bypass the per-user device limit. We require the header to look like
+# either:
+#   - a UUID-shaped token (8-4-4-4-12 hex), OR
+#   - a client-prefixed random ID matching ``^(dev|ses)_[a-z0-9_]{8,80}$``
+#     (the formats emitted by frontend/src/lib/api.ts:84-92), OR
+#   - an alphanumeric token of length 16-128 with no obvious high-entropy
+#     attacks (only [A-Za-z0-9_-]).
+# Plain integers, short strings, and special characters are rejected so
+# simple enumeration can't multiply the device count.
+_SESSION_ID_PATTERN = re.compile(
+    r"^(?:"
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|(?:dev|ses)_[A-Za-z0-9_]{8,80}"
+    r"|[A-Za-z0-9_\-]{16,128}"
+    r")$"
+)
+
+
+def _is_valid_session_id(value):
+    """Return True iff ``value`` looks like a non-spoofable device token."""
+    if not value or not isinstance(value, str):
+        return False
+    if len(value) > 128:
+        return False
+    return bool(_SESSION_ID_PATTERN.match(value))
 
 
 class SupabaseJWTAuthentication(authentication.BaseAuthentication):
@@ -41,22 +71,37 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
         # ── Device Management & Limits ──
         incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
-        
+
         # Premium student exception: ensure they never get locked out due to device limits/race conditions
         if user.email in ['sbsp181107@gmail.com'] or user.role == 'admin':
             return (user, None)
-            
+
+        # SECURITY (Fix #3): reject any X-Session-ID that doesn't match a
+        # known device-token shape. Without this, an attacker can enumerate
+        # X-Session-ID: 1, 2, 3, ... and spawn unlimited parallel sessions,
+        # bypassing the per-user device limit.
+        if incoming_session_id and not _is_valid_session_id(incoming_session_id):
+            # Drop the spoofed header; behave as if no device tracker was
+            # attached for this request. We don't fail authentication — the
+            # user is still legitimately authenticated via Supabase — but
+            # we won't enroll this fingerprint as a "device", so any later
+            # attempt with a valid-looking session will be the one that
+            # counts toward the limit.
+            incoming_session_id = None
+
         if incoming_session_id:
             from .models import UserDevice
-            
-            x_forwarded_for = request_obj.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                ip = x_forwarded_for.split(',')[0].strip()
-            else:
-                ip = request_obj.META.get('REMOTE_ADDR')
-                
+
+            # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
+            # bookkeeping. X-Forwarded-For is attacker-controlled when the
+            # client can reach the backend directly, so honoring it lets
+            # anyone spoof their IP for rate-limit / geo / device bookkeeping.
+            # Render sits behind a known proxy; we still capture the raw
+            # socket address.
+            ip = request_obj.META.get('REMOTE_ADDR', '').strip()
+
             user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
-            
+
             device, created = UserDevice.objects.get_or_create(
                 user=user,
                 device_fingerprint=incoming_session_id,
@@ -66,23 +111,23 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                     'is_active': True
                 }
             )
-            
+
             if not created:
                 # Update last login
                 device.device_name = user_agent
                 device.ip_address = ip
                 device.save(update_fields=['device_name', 'ip_address', 'last_login'])
-                
+
             if not device.is_active:
                 from rest_framework import exceptions
                 raise exceptions.AuthenticationFailed({
                     "detail": "This device has been logged out or blocked.",
                     "code": "device_inactive"
                 })
-                
+
             # Enforce limits if it's a new device or checking limits
             limit = 4 if getattr(user, 'is_subscribed', False) else 2
-            
+
             active_devices = UserDevice.objects.filter(user=user, is_active=True).order_by('-last_login')
             if active_devices.count() > limit:
                 # If this device isn't in the allowed top N devices, reject
@@ -104,11 +149,15 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
             or ""
         ).rstrip("/")
+        # SECURITY (Fix #4): Never use the SERVICE ROLE key as a verify_key
+        # fallback. The service role key bypasses RLS and impersonates any
+        # user — falling back to it (when anon/verify_key is missing) would
+        # silently authenticate forged JWTs. If no anon / explicit verify
+        # key is configured, fail closed.
         verify_key = (
             os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip()
             or os.getenv("SUPABASE_ANON_KEY", "").strip()
             or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip()
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
         )
 
         if not supabase_url or not verify_key:

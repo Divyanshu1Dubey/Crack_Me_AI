@@ -401,19 +401,46 @@ class SubscribeVerifyView(APIView):
             return Response({'error': 'Missing payment verification details'}, status=status.HTTP_400_BAD_REQUEST)
 
         # ── Idempotency: if this order was already verified, return success ──
+        # SECURITY (Fix #1): verify that the PaymentAttempt (if any) belongs
+        # to the requesting user. Without this check, any authenticated user
+        # who happens to learn another user's `razorpay_order_id` could verify
+        # the payment against their own account and steal the subscription.
+        # Razorpay's HMAC signature proves the payment happened — but it does
+        # NOT prove the payment was for THIS user; the attacker can replay
+        # someone else's successful verify call with their own JWT.
         from accounts.models import PaymentAttempt
         try:
             existing_attempt = PaymentAttempt.objects.get(razorpay_order_id=order_id)
-            if existing_attempt.status == 'successful':
-                # Already verified — return success without re-processing
+        except PaymentAttempt.DoesNotExist:
+            existing_attempt = None
+
+        if existing_attempt is not None and existing_attempt.user_id != request.user.id:
+            logger.warning(
+                "SubscribeVerify ownership mismatch: user_id=%s tried to verify order_id=%s owned by user_id=%s",
+                request.user.id, order_id, existing_attempt.user_id,
+            )
+            return Response(
+                {'error': 'This payment belongs to a different account.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if existing_attempt is not None and existing_attempt.status == 'successful':
+            # Already verified — return success without re-processing.
+            # Still respect ownership: a free user can't see another user's
+            # subscription status by guessing an order_id.
+            if existing_attempt.user_id == request.user.id:
                 sub = Subscription.get_active_subscription(request.user)
                 return Response({
                     'message': 'Subscription is already active!',
                     'is_subscribed': True,
                     'subscription': _serialize_subscription(sub) if sub else None,
                 })
-        except PaymentAttempt.DoesNotExist:
-            existing_attempt = None
+            # If a different user already successfully verified this order,
+            # we treat it as a replay attempt and reject.
+            return Response(
+                {'error': 'This payment belongs to a different account.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
         key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
@@ -442,11 +469,17 @@ class SubscribeVerifyView(APIView):
         plan = 'legacy'
         price_paid = 199.00
 
-        # Mark attempt as successful and extract plan info
+        # Mark attempt as successful and extract plan info.
+        # SECURITY (Fix #1): when no existing_attempt was found, bind the
+        # PaymentAttempt.user to the requesting user so the next verify call
+        # from any other account is rejected by the ownership check above.
         if existing_attempt:
             existing_attempt.razorpay_payment_id = payment_id
             existing_attempt.status = 'successful'
-            existing_attempt.save(update_fields=['razorpay_payment_id', 'status'])
+            # Defensive: pin user_id again even though the ownership check
+            # already enforced it. Belt + braces for direct DB tampering.
+            existing_attempt.user = user
+            existing_attempt.save(update_fields=['razorpay_payment_id', 'status', 'user'])
             price_paid = float(existing_attempt.amount)
             plan = existing_attempt.plan or 'legacy'
         else:
