@@ -28,16 +28,23 @@ export function FloatingDock() {
     }
   };
 
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const showStatus = (msg: string) => {
+    setStatusMessage(msg);
+    setTimeout(() => setStatusMessage(null), 3500);
+  };
+
   const handleSaveFlashcard = async () => {
     try {
       await api.post('/questions/flashcards/', {
         front: selectedText || 'New Flashcard',
         back: aiResponse || '...',
       });
-      alert('Flashcard Saved');
-      setActivePanel('none');
+      showStatus('Flashcard saved successfully!');
+      setTimeout(() => setActivePanel('none'), 1200);
     } catch (e) {
-      alert('Error saving flashcard');
+      showStatus('Error saving flashcard. Please try again.');
     }
   };
 
@@ -83,6 +90,12 @@ export function FloatingDock() {
         </Button>
       </div>
 
+      {statusMessage && (
+        <div role="status" className="bg-primary/10 text-primary border-b border-primary/20 text-xs px-4 py-2 font-medium animate-in fade-in">
+          {statusMessage}
+        </div>
+      )}
+
       <div className="p-4 flex-1 flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
         {activePanel === 'ask-ai' && (
           <>
@@ -109,13 +122,13 @@ export function FloatingDock() {
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
                     api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: true });
-                    alert('Feedback sent: Thanks for your feedback!');
+                    showStatus('Thanks for your feedback!');
                   }}>
                     👍 Helpful
                   </Button>
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => {
                     api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: false, report_reason: 'User report from dock' });
-                    alert('Reported: This response has been flagged for review.');
+                    showStatus('Response flagged for review.');
                   }}>
                     👎 Report
                   </Button>
