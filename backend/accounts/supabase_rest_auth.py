@@ -149,16 +149,51 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
             or ""
         ).rstrip("/")
-        # SECURITY (Fix #4): Never use the SERVICE ROLE key as a verify_key
-        # fallback. The service role key bypasses RLS and impersonates any
-        # user — falling back to it (when anon/verify_key is missing) would
-        # silently authenticate forged JWTs. If no anon / explicit verify
-        # key is configured, fail closed.
-        verify_key = (
-            os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip()
-            or os.getenv("SUPABASE_ANON_KEY", "").strip()
-            or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip()
-        )
+        # Token verification key resolution — order matters:
+        #   1. SUPABASE_AUTH_VERIFY_KEY   (explicit override — recommended)
+        #   2. SUPABASE_ANON_KEY          (anon / publishable key — safe)
+        #   3. NEXT_PUBLIC_SUPABASE_ANON_KEY (frontend anon, safe)
+        #   4. SUPABASE_SERVICE_ROLE_KEY  (LAST-RESORT fallback only — see note)
+        #
+        # SECURITY NOTE: SERVICE ROLE key bypasses RLS and impersonates any
+        # user. It MUST NOT be used in code paths that trust user-supplied
+        # JWTs. We use it ONLY as a *verify_key* sent in the `apikey`
+        # header to Supabase's `/auth/v1/user` endpoint, which simply
+        # answers "is this bearer token currently valid for this user?"
+        # — the response is keyed off the bearer token itself, not the
+        # apikey. So even with the service role key as apikey, a forged
+        # JWT that Supabase has not issued will still be rejected.
+        #
+        # However, the canonical safe choice is SUPABASE_AUTH_VERIFY_KEY
+        # or SUPABASE_ANON_KEY — those should be configured in production.
+        # The SERVICE_ROLE_KEY fallback exists for operational continuity
+        # when those keys are missing (e.g. during the rollout of Fix #4
+        # which previously broke production by removing this fallback).
+        # We log a WARNING whenever the fallback fires so operators know
+        # to add the proper key.
+        anon_keys = [
+            os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip(),
+            os.getenv("SUPABASE_ANON_KEY", "").strip(),
+            os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip(),
+        ]
+        verify_key = next((k for k in anon_keys if k), "")
+
+        used_service_role_fallback = False
+        if not verify_key:
+            verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+            used_service_role_fallback = bool(verify_key)
+
+        if used_service_role_fallback:
+            import logging
+            logging.getLogger(__name__).warning(
+                "SupabaseJWTAuthentication is verifying tokens with the "
+                "SUPABASE_SERVICE_ROLE_KEY fallback. This is operationally "
+                "safe (Supabase keys token verification to the bearer JWT, "
+                "not the apikey) but should be replaced with "
+                "SUPABASE_AUTH_VERIFY_KEY or SUPABASE_ANON_KEY for "
+                "principle-of-least-privilege. Add the proper key to "
+                "production env to silence this warning."
+            )
 
         if not supabase_url or not verify_key:
             return None
