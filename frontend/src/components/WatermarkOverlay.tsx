@@ -3,6 +3,29 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 
+/**
+ * WatermarkOverlay
+ * ----------------
+ * Screen-recording deterrent for PYQ content. Renders the user's email
+ * and current timestamp tiled across the viewport, rotated -12°, scaled
+ * 150%, at near-invisible opacity.
+ *
+ * Why `mix-blend-mode: difference`:
+ *   A flat opacity (e.g. 0.015) reads as "barely there" on a light
+ *   background but becomes clearly legible on dark backgrounds because
+ *   the foreground/text colors are constant. Switching to
+ *   `mix-blend-mode: difference` makes the watermark invert against
+ *   whatever sits beneath it — so on white it's faint dark, on dark
+ *   it's faint light, on a colored card it's faint complementary. The
+ *   perceived contrast stays low across every theme without per-theme
+ *   tuning.
+ *
+ * Opacity is also dropped to 0.05 (from 0.015) for additional
+ * deterrence on light backgrounds; difference-blend keeps it subtle.
+ *
+ * Tested in `frontend/tests/e2e/neet-pg-qa.spec.ts` (Bug #R1) — the
+ * overlay's computed opacity must remain <= 0.10 to satisfy that test.
+ */
 export function WatermarkOverlay() {
   const { user } = useAuth();
   const [timestamp, setTimestamp] = useState('');
@@ -26,9 +49,17 @@ export function WatermarkOverlay() {
   const watermarkText = `${user.email || user.username} • ${timestamp}`;
 
   return (
-    <div aria-hidden="true" className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden opacity-[0.015] select-none flex flex-wrap justify-center items-center gap-24 transform -rotate-12 scale-150">
+    <div
+      aria-hidden="true"
+      style={{ mixBlendMode: 'difference' }}
+      className="pointer-events-none fixed inset-0 z-9999 flex flex-wrap items-center justify-center gap-24 overflow-hidden select-none opacity-[0.05] scale-150 -rotate-12"
+    >
       {[...Array(30)].map((_, i) => (
-        <span key={i} aria-hidden="true" className="text-xl font-medium whitespace-nowrap text-foreground">
+        <span
+          key={i}
+          aria-hidden="true"
+          className="text-xl font-medium whitespace-nowrap text-white"
+        >
           {watermarkText}
         </span>
       ))}
