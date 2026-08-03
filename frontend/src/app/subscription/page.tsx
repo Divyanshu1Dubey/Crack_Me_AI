@@ -43,7 +43,7 @@ interface ScholarshipQuestion {
 }
 
 export default function SubscriptionPage() {
-    const { user, refreshProfile } = useAuth();
+    const { user, refreshProfile, setUser } = useAuth();
     useRequireAuth();
     const [subscribing, setSubscribing] = useState(false);
     const [verifying, setVerifying] = useState(false);
@@ -339,8 +339,42 @@ export default function SubscriptionPage() {
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_signature: response.razorpay_signature,
                         });
-                        await refreshProfile();
                         const sub = verifyRes.data?.subscription;
+                        // DEFENSIVE: the verify response ALREADY carries the
+                        // active subscription serialised by the backend
+                        // (same shape as `UserSerializer.get_subscription_info`).
+                        // Merge it into user state immediately so the UI flips
+                        // to "Active Member" the moment the response lands —
+                        // don't gate this on `refreshProfile`, which may
+                        // transiently fail (5xx / network blip / base-URL
+                        // failover). Without this, a paying user would see
+                        // the success toast but their sidebar / Dashboard
+                        // / premium features would still look free until
+                        // a hard reload.
+                        if (sub && sub.is_active) {
+                            setUser((current) => {
+                                if (!current) return current;
+                                return {
+                                    ...current,
+                                    is_subscribed: true,
+                                    is_premium: true,
+                                    ai_tutor_used_today: 0,
+                                    ai_tutor_daily_cap: null,
+                                    showcase_questions_remaining: null,
+                                    subscription_info: {
+                                        plan: sub.plan,
+                                        plan_display_name: sub.plan_display_name,
+                                        status: sub.status,
+                                        is_active: sub.is_active,
+                                        starts_at: sub.starts_at,
+                                        expires_at: sub.expires_at,
+                                        days_remaining: sub.days_remaining,
+                                        amount_paid: sub.amount_paid,
+                                    },
+                                };
+                            });
+                        }
+                        await refreshProfile();
                         const planName = sub?.plan_display_name || 'Premium';
                         setSuccessMessage(`🎉 Congratulations! Your ${planName} subscription has been successfully activated.`);
                         setRetryData(null);
@@ -395,8 +429,33 @@ export default function SubscriptionPage() {
         setErrorMessage(null);
         try {
             const verifyRes = await authAPI.subscribeVerify(retryData);
-            await refreshProfile();
             const sub = verifyRes.data?.subscription;
+            // Same defensive merge as handleSubscribe — flip the UI on the
+            // verified payload before refreshProfile runs.
+            if (sub && sub.is_active) {
+                setUser((current) => {
+                    if (!current) return current;
+                    return {
+                        ...current,
+                        is_subscribed: true,
+                        is_premium: true,
+                        ai_tutor_used_today: 0,
+                        ai_tutor_daily_cap: null,
+                        showcase_questions_remaining: null,
+                        subscription_info: {
+                            plan: sub.plan,
+                            plan_display_name: sub.plan_display_name,
+                            status: sub.status,
+                            is_active: sub.is_active,
+                            starts_at: sub.starts_at,
+                            expires_at: sub.expires_at,
+                            days_remaining: sub.days_remaining,
+                            amount_paid: sub.amount_paid,
+                        },
+                    };
+                });
+            }
+            await refreshProfile();
             const planName = sub?.plan_display_name || 'Premium';
             setSuccessMessage(`🎉 Verification successful! Your ${planName} subscription is now active.`);
             setRetryData(null);

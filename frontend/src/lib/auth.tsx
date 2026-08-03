@@ -61,6 +61,18 @@ interface AuthContextType {
     register: (data: Record<string, string>) => Promise<void>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    /**
+     * Imperatively merge a partial User patch into the current session state.
+     *
+     * Use this after a server-confirmed state change (e.g. a successful
+     * Razorpay `/subscribe/verify/` response) to make the UI reflect the new
+     * subscription immediately, without waiting for a full profile round-trip
+     * that may transiently fail (5xx / network blip / failover).
+     *
+     * The merge preserves `id` and `email` from the existing user so the
+     * session identity is never overwritten by a partial patch.
+     */
+    setUser: (updater: User | null | ((current: User | null) => User | null)) => void;
     resetPassword: (email: string) => Promise<void>;
     isAuthenticated: boolean;
     isSupabaseAuth: boolean;
@@ -77,6 +89,7 @@ const AuthContext = createContext<AuthContextType>({
     register: async () => undefined,
     logout: async () => undefined,
     refreshProfile: async () => undefined,
+    setUser: () => undefined,
     resetPassword: async () => undefined,
     isAuthenticated: false,
     isSupabaseAuth: false,
@@ -191,7 +204,7 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUserState] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -214,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .then(async ({ data }) => {
                 if (!mounted) return;
                 if (!data.session?.user) {
-                    setUser(null);
+                    setUserState(null);
                     setLoading(false);
                     return;
                 }
@@ -223,11 +236,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 try {
                     const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
                     if (!mounted) return;
-                    setUser(profileRes as User);
+                    setUserState(profileRes as User);
                 } catch {
                     // Fallback to mapped Supabase user
                     if (mounted) {
-                        setUser(mapSupabaseUser(data.session.user));
+                        setUserState(mapSupabaseUser(data.session.user));
                     }
                 } finally {
                     if (mounted) setLoading(false);
@@ -238,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     await clearSupabaseLocalSession();
                 }
                 if (mounted) {
-                    setUser(null);
+                    setUserState(null);
                     setLoading(false);
                 }
             });
@@ -247,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
             if (!mounted) return;
             if (!session?.user) {
-                setUser(null);
+                setUserState(null);
                 return;
             }
 
@@ -255,11 +268,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             fetchBackendProfileWithRefresh(session.access_token)
                 .then((profileRes) => {
                     if (!mounted) return;
-                    setUser(profileRes as User);
+                    setUserState(profileRes as User);
                 })
                 .catch(() => {
                     if (mounted) {
-                        setUser(mapSupabaseUser(session.user));
+                        setUserState(mapSupabaseUser(session.user));
                     }
                 });
         });
@@ -303,12 +316,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             const profileRes = await fetchBackendProfileWithRefresh(accessToken);
-            setUser(profileRes as User);
+            setUserState(profileRes as User);
             return profileRes as User;
         } catch {
             // Fallback to mapped Supabase user if profile sync fails
             const mapped = mapSupabaseUser(signedInUser);
-            setUser(mapped);
+            setUserState(mapped);
             return mapped;
         }
     };
@@ -343,9 +356,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.session?.user) {
             try {
                 const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
-                setUser(profileRes as User);
+                setUserState(profileRes as User);
             } catch {
-                setUser(mapSupabaseUser(data.session.user));
+                setUserState(mapSupabaseUser(data.session.user));
             }
         }
     };
@@ -424,7 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             console.error('Supabase sign out failed:', error);
         } finally {
-            setUser(null);
+            setUserState(null);
         }
     };
 
@@ -445,7 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             const profileRes = await fetchBackendProfileWithRefresh(accessToken);
-            setUser(profileRes as User);
+            setUserState(profileRes as User);
         } catch (error: unknown) {
             if (isInvalidRefreshTokenError(error)) {
                 await clearSupabaseLocalSession();
@@ -458,7 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // because mapSupabaseUser returns a User with no
             // subscription_info and is_premium=false. Instead, keep the
             // existing user state intact on transient failures.
-            setUser((current) => {
+            setUserState((current) => {
                 if (current && (current.subscription_info || current.is_premium)) {
                     // Known-good paying/admin user — keep them.
                     return current;
@@ -467,13 +480,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // unsubscribed (free tier). Try the Supabase fallback.
                 return null;
             });
-            // Try the Supabase fallback outside of setUser so we don't
+            // Try the Supabase fallback outside of setUserState so we don't
             // mix functional updates with side effects. Only adopt the
             // fallback if we still have no user in state.
             try {
                 const { data } = await supabase.auth.getUser();
                 if (data.user) {
-                    setUser((current) => {
+                    setUserState((current) => {
                         if (current) return current; // keep priority user
                         return mapSupabaseUser(data.user);
                     });
@@ -483,6 +496,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Ignore fallback getUser errors.
             }
         }
+    };
+
+    /**
+     * Public setUser: applies an imperative user-state patch from any
+     * component, typically after a server-confirmed action (Razorpay verify,
+     * token purchase, admin grant, etc.) where waiting on a full profile
+     * round-trip would either:
+     *   1. Leave the UI stale until next hard reload, or
+     *   2. Transiently fail (5xx, network blip, base-URL failover) and
+     *      silently demote a paying user to a free user.
+     *
+     * The patch is merged into the current user — id + email are preserved
+     * so the session identity can never be overwritten by a partial response.
+     * If `current` is null (no user yet) the patch is adopted as-is.
+     */
+    const setUser: AuthContextType['setUser'] = (updater) => {
+        setUserState((current) => {
+            const next = typeof updater === 'function'
+                ? (updater as (c: User | null) => User | null)(current)
+                : updater;
+            if (!next) return next;
+            // Preserve session identity. If the patch omits id/email, fall
+            // back to the current user so they aren't blanked.
+            return {
+                ...current,
+                ...next,
+                id: next.id ?? current?.id,
+                email: next.email ?? current?.email,
+                username: next.username ?? current?.username,
+            } as User;
+        });
     };
 
     return (
@@ -495,6 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             register,
             logout,
             refreshProfile,
+            setUser,
             resetPassword,
             isAuthenticated: !!user,
             isSupabaseAuth: SUPABASE_AUTH_ENABLED,
