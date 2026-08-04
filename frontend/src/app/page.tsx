@@ -39,6 +39,10 @@ const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   loading: () => <div className="h-9 w-9 rounded-xl border border-border/70 bg-muted/60" aria-hidden="true" />,
 });
 
+const Aurora = dynamic(() => import('@/components/ui/Aurora'), { ssr: false });
+const MagicBento = dynamic(() => import('@/components/ui/MagicBento'), { ssr: false });
+
+
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cracklabs.app';
 
 export default function LandingPage() {
@@ -327,6 +331,13 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
+        {/* WebGL Aurora Background Animation */}
+        <Aurora
+          colorStops={["#5227FF", "#7cff67", "#5227FF"]}
+          blend={0.5}
+          amplitude={1.0}
+          speed={0.5}
+        />
         {/* Glow decorative effects */}
         <div className="absolute left-1/4 top-10 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />
         <div className="absolute right-1/4 bottom-10 -z-10 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl dark:bg-teal-500/5" />
@@ -409,6 +420,64 @@ export default function LandingPage() {
               We broken down exam preparation into modular, specialized engines that work together seamlessly. Explore them live below.
             </p>
             <div className="h-1.5 w-16 bg-blue-500 rounded-full mx-auto" />
+          </div>
+
+          {/* Interactive Magic Bento Grid Section */}
+          <div className="space-y-6">
+            <div className="text-center space-y-2 max-w-xl mx-auto">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-primary">Interactive Platform Overview</span>
+              <h3 className="text-2xl font-bold text-foreground">Explore Our Core Medical Exam Engines</h3>
+            </div>
+            <MagicBento 
+              textAutoHide={true}
+              enableStars={true}
+              enableSpotlight={true}
+              enableBorderGlow={true}
+              enableTilt={true}
+              enableMagnetism={true}
+              clickEffect={true}
+              spotlightRadius={300}
+              particleCount={12}
+              glowColor="132, 0, 255"
+              cards={[
+                {
+                  color: '#120F17',
+                  title: 'UPSC CMS Question Bank',
+                  description: '3,300+ authentic previous year questions with AI-grounded medical explanations.',
+                  label: 'UPSC CMS'
+                },
+                {
+                  color: '#120F17',
+                  title: 'NEET PG Clinical Bank',
+                  description: 'Subject-wise high-yield practice with image-based questions and mnemonics.',
+                  label: 'NEET PG'
+                },
+                {
+                  color: '#120F17',
+                  title: 'AI Tutor Assistant',
+                  description: 'Harrison & Robbins trained multi-model AI assistant for immediate doubts.',
+                  label: 'AI Tutor'
+                },
+                {
+                  color: '#120F17',
+                  title: 'Adaptive Mock Tests',
+                  description: 'Timed exam engine simulating exact NBE and UPSC test environments.',
+                  label: 'Mock Tests'
+                },
+                {
+                  color: '#120F17',
+                  title: 'Rapid Recall Flashcards',
+                  description: 'SM-2 algorithm flashcards for rapid high-yield clinical memory retention.',
+                  label: 'Recall'
+                },
+                {
+                  color: '#120F17',
+                  title: 'Performance Analytics',
+                  description: 'Granular weak-area identification and real-time rank predictions.',
+                  label: 'Analytics'
+                }
+              ]}
+            />
           </div>
 
           {/* Feature 1: Clinical PYQ Atlas (Interactive MCQ) */}
