@@ -61,9 +61,9 @@ class AITutorThrottleMixin:
     throttle_scope = 'ai_tutor'
 
 
-def consume_ai_token(request):
+def consume_ai_token(request, amount: int = 1):
     """
-    Check and consume 1 AI token for the requesting user.
+    Check and consume N AI tokens for the requesting user.
 
     Returns:
         (True, None) — token consumed successfully (or bypassed), proceed with AI call.
@@ -75,7 +75,15 @@ def consume_ai_token(request):
       3. Active subscription with `unlimited_ai=True` (1_year / legacy / admin_grant)
          → unlimited, no token deducted. THIS IS THE FIX FOR:
          "I paid for Premium but tokens keep decreasing."
-      4. Otherwise → consume 1 token. If insufficient, return 402.
+      4. Otherwise → consume ``amount`` tokens. If insufficient, return 429.
+
+    Token cost (2026-08-04 update): heavy generation endpoints that produce a
+    structured multi-section analysis (mnemonic + why_correct + topic deep dive
+    + high-yield points + key differentiators + textbook references + clinical
+    pearls + exam tips + quick revision + related concepts + PYQ intelligence)
+    cost 10 tokens per call. Lighter chat-style endpoints (ask_tutor,
+    generate_questions) cost 1 token per call. The distinction is encoded
+    at the call site, not here, so we keep this function parameterised.
     """
     user = getattr(request, 'user', None)
     if not user or not user.is_authenticated:
@@ -99,17 +107,18 @@ def consume_ai_token(request):
         logger.exception('consume_ai_token: subscription lookup failed; falling back to token metering')
 
     balance, _ = TokenBalance.objects.get_or_create(user=user)
-    if balance.consume_token(amount=1):
+    if balance.consume_token(amount=amount):
         return True, None
 
     return False, Response({
         'error': 'insufficient_tokens',
-        'message': 'You have exhausted your AI tokens. Subscribe for unlimited usage or purchase more tokens.',
+        'message': f'This AI action costs {amount} tokens but you have insufficient balance. Subscribe for unlimited usage or purchase more tokens.',
         'available': balance.available_tokens,
+        'required': amount,
     }, status=429)
 
 
-def refund_ai_token(request):
+def refund_ai_token(request, amount: int = 1):
     """Refund AI tokens if the AI call fails after token was consumed.
 
     The prior implementation only refunded daily/weekly counters and never
@@ -117,6 +126,9 @@ def refund_ai_token(request):
     silently cost the user 1 paid token. We now write a 'consume' transaction
     on success and a matching 'refund' on failure so the source pool is
     reversed exactly.
+
+    The ``amount`` argument must match the ``amount`` that was originally
+    passed to ``consume_ai_token`` so we never over-refund.
     """
     from accounts.models import TokenBalance, TokenTransaction
 
@@ -126,16 +138,16 @@ def refund_ai_token(request):
 
     try:
         balance = TokenBalance.objects.get(user=user)
-        balance.refund_token(amount=1)
+        balance.refund_token(amount=amount)
         # Audit log so refunds are visible in transaction history
         TokenTransaction.objects.create(
             user=user,
             transaction_type='refund',
-            amount=1,
+            amount=amount,
             price_paid=0,
-            note='AI call failed — token refunded',
+            note=f'AI call failed — {amount} token(s) refunded',
         )
-        logger.info(f"Refunded 1 AI token for user {user.username}")
+        logger.info(f"Refunded {amount} AI token(s) for user {user.username}")
     except TokenBalance.DoesNotExist:
         pass
 
@@ -270,7 +282,7 @@ class GenerateMnemonicView(AITutorThrottleMixin, APIView):
         if freemium_err is not None:
             return freemium_err
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -280,7 +292,7 @@ class GenerateMnemonicView(AITutorThrottleMixin, APIView):
             return Response({'mnemonic': mnemonic})
         except Exception as e:
             logger.error(f"GenerateMnemonic failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -300,7 +312,7 @@ class ExplainConceptView(AITutorThrottleMixin, APIView):
         if freemium_err is not None:
             return freemium_err
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -310,7 +322,7 @@ class ExplainConceptView(AITutorThrottleMixin, APIView):
             return Response({'explanation': explanation})
         except Exception as e:
             logger.error(f"ExplainConcept failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -331,7 +343,7 @@ class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
         if freemium_err is not None:
             return freemium_err
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -341,7 +353,7 @@ class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
             return Response({'analysis': analysis})
         except Exception as e:
             logger.error(f"AnalyzeQuestion failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -395,7 +407,7 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
         if not question_text:
             return Response({'error': 'question_text is required'}, status=400)
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -438,7 +450,7 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             return Response(result)
         except Exception as e:
             logger.error(f"ExplainAfterAnswer failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -496,7 +508,7 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
                 except (ValueError, TypeError):
                     pass  # corrupt cache → fall through to regenerate
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -548,7 +560,7 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
             })
         except Exception as e:
             logger.error(f"ExplainQuestion failed for Q{question_id}: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -758,7 +770,7 @@ class StudyPlanView(AITutorThrottleMixin, APIView):
         days_remaining = request.data.get('days_remaining', 60)
         user_analytics = request.data.get('analytics', None)
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -768,7 +780,7 @@ class StudyPlanView(AITutorThrottleMixin, APIView):
             return Response({'study_plan': plan})
         except Exception as e:
             logger.error(f"StudyPlan failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 
@@ -845,7 +857,7 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
         if not subject:
             return Response({'error': 'Subject is required'}, status=400)
 
-        ok, err = consume_ai_token(request)
+        ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
@@ -855,7 +867,7 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
             return Response({'questions': questions, 'count': len(questions)})
         except Exception as e:
             logger.error(f"GenerateQuestions failed: {e}")
-            refund_ai_token(request)
+            refund_ai_token(request, amount=10)
             return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
 
 

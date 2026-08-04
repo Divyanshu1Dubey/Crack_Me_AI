@@ -33,6 +33,7 @@ import {
     BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight,
     ChevronDown, Loader2, Brain, Sparkles, CheckCircle, ArrowRight,
     Flag, Target, Zap, GraduationCap, Lightbulb, Play, Calendar, ListChecks,
+    Lock,
 } from 'lucide-react';
 import DiscussionThread from '@/components/DiscussionThread';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
@@ -46,6 +47,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
+import { LockedBadge } from '@/components/paywall/LockedBadge';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
@@ -145,9 +148,16 @@ function ExamQuestionBankInner({
     initialQueryId,
     initialBookmarkOnly,
 }: ExamQuestionBankProps) {
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { isAuthenticated, loading: authLoading, user } = useAuth();
     const { activeTrack } = useExamTrack();
     const { setContextQuestionId } = useDock();
+    const { show: showPaywall } = usePaywall();
+    // Freemium: a user is "premium" if they have an active subscription OR
+    // are admin/staff — mirrors backend `accounts.utils.is_premium`.
+    const isPremium =
+        (user as { is_premium?: boolean } | null)?.is_premium === true ||
+        (user as { subscription_info?: { is_active?: boolean } } | null)?.subscription_info?.is_active === true ||
+        (user as { is_admin?: boolean } | null)?.is_admin === true;
     // Broadcast whether a question is currently being solved so the
     // SidebarAutoHide controller can keep the sidebar collapsed for the
     // entire /questions session while a question is open.
@@ -939,9 +949,24 @@ function ExamQuestionBankInner({
                                 </Card>
                             ) : (
                                 <>
-                                    {questions.map(q => (
-                                        <Card key={q.id} className={`cursor-pointer border-border/80 bg-card/90 p-3 md:p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selectedQuestion === q.id ? 'border-primary/70 ring-2 ring-inset ring-primary/60 shadow-md' : ''}`}
-                                            onClick={() => openQuestion(q.id)}>
+                                    {questions.map(q => {
+                                        // Freemium: backend annotates each row with `is_showcase`.
+                                        // For non-showcase rows we render a blurred overlay + lock
+                                        // badge so free users see the full catalog (better conversion
+                                        // signal — "2,277 questions waiting") but cannot start the
+                                        // question without subscribing. The backend still 403s on
+                                        // /api/questions/{id}/ retrieve for free non-showcase users
+                                        // as a hard server-side gate.
+                                        const isLockedForFreeUser = !isPremium && !q.is_showcase;
+                                        return (
+                                        <Card key={q.id} className={`relative cursor-pointer border-border/80 bg-card/90 p-3 md:p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selectedQuestion === q.id ? 'border-primary/70 ring-2 ring-inset ring-primary/60 shadow-md' : ''} ${isLockedForFreeUser ? 'overflow-hidden' : ''}`}
+                                            onClick={() => {
+                                                if (isLockedForFreeUser) {
+                                                    showPaywall('PYQ answers');
+                                                    return;
+                                                }
+                                                openQuestion(q.id);
+                                            }}>
                                             <div className="flex justify-between items-start mb-2">
                                                 <Badge variant="secondary" className="text-xs">
                                                     {/* Backend uses year=0 as a sentinel for "Expert Curated"
@@ -1010,8 +1035,21 @@ function ExamQuestionBankInner({
                                                     <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">🔥 High Yield</Badge>
                                                 )}
                                             </div>
+                                            {isLockedForFreeUser && (
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]"
+                                                    aria-hidden="true"
+                                                >
+                                                    <div className="flex flex-col items-center gap-1 rounded-xl bg-card/95 px-4 py-3 shadow-lg ring-1 ring-amber-500/40">
+                                                        <Lock className="w-5 h-5 text-amber-400" />
+                                                        <span className="text-xs font-semibold text-foreground">Premium Question</span>
+                                                        <LockedBadge size="sm" />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </Card>
-                                    ))}
+                                        );
+                                    })}
                                     {totalPages > 1 && (
                                         <div className="flex items-center justify-center gap-2 pt-4">
                                             <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
@@ -1934,6 +1972,11 @@ interface Question {
     // backend's role-filtered `stem_images` field so the typecheck
     // stays clean.
     stem_images?: QuestionImage[];
+    // Freemium (UX update 2026-08-04): backend annotates each list row
+    // with `is_showcase=true` when it is in accounts.FreeShowcaseQuestion.
+    // Free users see ALL questions in the list, but rows where this is
+    // false render a blurred lock overlay and trigger the paywall on click.
+    is_showcase?: boolean;
 }
 
 interface QuestionImage {

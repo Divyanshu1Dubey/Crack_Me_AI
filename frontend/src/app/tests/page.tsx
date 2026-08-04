@@ -26,6 +26,10 @@ interface TestItem {
     // a free-preview — free users can attempt it; everyone else needs
     // an active subscription. Surfaced by TestSerializer.
     is_free_preview?: boolean;
+    // Derived from backend (2026-08-04): true if this test is free for
+    // the CURRENT requester (admin-marked OR test_type=daily OR
+    // num_questions <= 20). Mirrors the gate in tests_engine/views.py.
+    is_free_for_current_user?: boolean;
 }
 
 interface Subject {
@@ -93,12 +97,14 @@ export default function TestsPage() {
     };
 
     const startTest = async (test: TestItem) => {
-        // Freemium gate (Task 7/11): free users can only start tests that
-        // the admin has marked is_free_preview=true. Backend enforces the
+        // Freemium gate (Task 7/11, updated 2026-08-04): free users can
+        // only start tests that are free for THEM — backend defines this
+        // as admin-marked is_free_preview OR a small practice test
+        // (test_type=daily OR num_questions<=20). Backend enforces the
         // same rule with a 403 upgrade_required; we open the modal
         // proactively here so the user sees the same nudge the backend
         // would otherwise deliver via the api.ts interceptor.
-        if (!isPremium && !test.is_free_preview) {
+        if (!isPremium && !test.is_free_for_current_user) {
             showPaywall('Mock Tests');
             return;
         }
@@ -173,13 +179,15 @@ export default function TestsPage() {
                         </Card>
                     ) : (
                         <div className="grid md:grid-cols-2 gap-4">
-                            {tests.map(test => (
+                            {tests.map(test => {
+                                const isFreeForUser = isPremium || test.is_free_for_current_user;
+                                return (
                                 <Card key={test.id}>
                                     <CardContent className="p-5">
                                         <div className="flex justify-between items-start mb-3 gap-2">
                                             <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                {!isPremium && !test.is_free_preview && <LockedBadge size="sm" />}
+                                                {!isFreeForUser && <LockedBadge size="sm" />}
                                                 <Badge variant="secondary" className="whitespace-nowrap">{test.test_type}</Badge>
                                             </div>
                                         </div>
@@ -189,7 +197,7 @@ export default function TestsPage() {
                                             <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
                                         </div>
                                         <Button variant="neon" onClick={() => startTest(test)} className="w-full" size="sm">
-                                            {isPremium || test.is_free_preview ? (
+                                            {isFreeForUser ? (
                                                 <>Start Test <ChevronRight className="w-4 h-4 ml-1" /></>
                                             ) : (
                                                 <>Unlock Test <Lock className="w-4 h-4 ml-1" /></>
@@ -197,7 +205,8 @@ export default function TestsPage() {
                                         </Button>
                                     </CardContent>
                                 </Card>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

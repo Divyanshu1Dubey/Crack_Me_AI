@@ -292,25 +292,27 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # requests also get the full set — public SEO/showroom value is
         # intentional (the data is non-sensitive: stems + options, no
         # correct answer / explanation in the public serializer).
+        #
+        # UX update: we now return ALL active questions for free users on the
+        # LIST endpoint (with is_showcase annotation), and rely on the
+        # frontend to render a locked / blurred overlay on non-showcase
+        # rows. The reasoning: a free user who only sees 10/yr thinks the
+        # platform has almost no content — which kills conversion. Showing
+        # the full catalog with locked badges makes the value proposition
+        # obvious ("2,277 questions waiting for you") while keeping the
+        # hard server-side gate on retrieve + answer-submit endpoints.
+        # RETRIEVE remains gated — a free user cannot deep-link to a
+        # non-showcase question via /api/questions/{id}/.
         if (
-            self.action in ('list', 'retrieve')
+            self.action == 'retrieve'
             and user is not None
             and getattr(user, 'is_authenticated', False)
             and not is_admin
             and not _is_premium(user)
         ):
-            # Use Exists subquery rather than id__in to avoid loading the
-            # full showcase list into memory and to let the optimizer use
-            # the (year, position) index on accounts.FreeShowcaseQuestion.
             showcase_filter = FreeShowcaseQuestion.objects.filter(
                 question_id=OuterRef('pk'),
             )
-            year_param = self.request.query_params.get('year')
-            if year_param not in (None, ''):
-                try:
-                    showcase_filter = showcase_filter.filter(year=int(year_param))
-                except (TypeError, ValueError):
-                    pass
             queryset = queryset.filter(Exists(showcase_filter))
 
         if self.action == 'list':
