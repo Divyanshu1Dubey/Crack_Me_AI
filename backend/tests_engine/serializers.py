@@ -41,9 +41,11 @@ class TestSerializer(serializers.ModelSerializer):
                 return True
         except Exception:
             pass
-        # Free user: free iff admin-marked OR small practice test.
-        if getattr(obj, 'is_free_preview', False):
-            return True
+        # Free user: free iff SMALL practice test (daily OR ≤20 Qs). The
+        # `is_free_preview` admin-flag is no longer honoured — admin should
+        # never mark a big premium test (Paper 1/2 mock, full PYQ-year
+        # simulation) as free. Mirrors the gate in views.py exactly so the
+        # UI badge never disagrees with the backend's 402 response.
         if getattr(obj, 'test_type', '') == 'daily':
             return True
         try:
