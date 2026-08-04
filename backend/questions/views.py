@@ -351,6 +351,40 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))
                 ),
             )
+            # UX update (2026-08-04): for free users, sprinkle showcase
+            # questions across the bank so a free card appears every ~10
+            # paid cards (matches the user's "3 free then paid up to 10"
+            # rhythm). Strategy:
+            #   paid rows    ->  sort by a shuffled id position: `(id * 7) % 13 + 13`
+            #   showcase rows -> sort by a slot 0..12:               `(id * 11) % 13`
+            # so a showcase row that hashes to slot 5 lands at slot 5 of
+            # the global timeline, and the paid row whose id hashes to 5
+            # gets pushed to slot 18 (5 + 13) — naturally alternating.
+            # This works for both SQLite and Postgres.
+            #
+            # `extra(select=...)` is the simplest cross-DB way to expose a
+            # computed column to order_by.
+            if (
+                user is not None
+                and getattr(user, 'is_authenticated', False)
+                and not is_admin
+                and not _is_premium(user)
+            ):
+                queryset = queryset.extra(
+                    select={
+                        # Same prime modulus (23) for both branches so
+                        # showcase and paid rows land in the SAME 0..22
+                        # bucket range — a free card at slot 5 sits next
+                        # to a paid card at slot 5 (different ids), giving
+                        # true interleaving. Different multiplier (11 vs
+                        # 7) keeps them from accidentally landing on the
+                        # same id-derived slot too often.
+                        'shuffle_slot':
+                            '(CASE WHEN EXISTS(SELECT 1 FROM "accounts_freeshowcasequestion" U WHERE U."question_id" = "questions_question"."id") '
+                            'THEN (("questions_question"."id" * 11) %% 23) '
+                            'ELSE (("questions_question"."id" * 7) %% 23) END)',
+                    },
+                ).order_by('shuffle_slot', F('is_showcase').desc(), '-id')
             if user and getattr(user, 'is_authenticated', False):
                 from questions.models import QuestionAttempt
                 queryset = queryset.annotate(

@@ -323,15 +323,17 @@ class TestViewSet(viewsets.ModelViewSet):
         """
         test = self.get_object()
 
-        # Freemium gate (Task 7, updated 2026-08-04): a test is "free" for a
-        # non-premium user if EITHER:
-        #   (a) admin explicitly marked `is_free_preview=True`, OR
-        #   (b) it is a *small* practice test: test_type='daily' (the Daily
-        #       Quick Test generator always emits 20 Qs / 30 min), OR
-        #   (c) it has ≤20 questions (covers the Mixed Practice 20-Qs and
-        #       Subject-wise 20-Qs generated tests).
-        # All other tests (Paper 1 Mock, Paper 2 Mock, PYQ Year Simulation
-        # 120+ Qs, full-length CMS simulations) remain premium-only.
+        # Freemium gate (Task 7, updated 2026-08-04, then simplified
+        # 2026-08-04): a test is "free" for a non-premium user ONLY if it
+        # is a *small* practice test — test_type='daily' (the Daily Quick
+        # Test generator always emits 20 Qs / 30 min) OR ≤20 questions
+        # (covers the Mixed Practice 20-Qs and Subject-wise 20-Qs generated
+        # tests). The earlier `is_free_preview=True` admin-mark path was
+        # removed because admins had marked full-length Paper-1 (120 Qs)
+        # and PYQ-Year simulations (241 Qs) as free, which made the
+        # "unlock" paywall inconsistent with the conversion goal.
+        # All other tests (Paper 1 Mock, Paper 2 Mock, PYQ Year Simulation,
+        # full-length CMS simulations) remain premium-only.
         # Premium and admin users bypass entirely.
         user = getattr(self.request, 'user', None)
         is_small_practice = (
@@ -343,7 +345,6 @@ class TestViewSet(viewsets.ModelViewSet):
             and getattr(user, 'is_authenticated', False)
             and not (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))
             and not _is_premium(user)
-            and not getattr(test, 'is_free_preview', False)
             and not is_small_practice
         ):
             return Response(

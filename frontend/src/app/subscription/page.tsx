@@ -854,7 +854,7 @@ export default function SubscriptionPage() {
                                     Diagnose 5/5 Correctly to Get Monthly Pass for ₹79
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (**+2.08**) & negative marking (**-0.69**) applies. Get free AI-powered test analysis. Score a perfect 5/5 to claim the ₹79/month scholarship price!
+                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+2.08</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-0.69</strong>) applies. Get free AI-powered test analysis. Score a perfect 5/5 to claim the ₹79/month scholarship price!
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (
@@ -1306,7 +1306,24 @@ export default function SubscriptionPage() {
                                     ) : (
                                         /* Question-by-Question Flow */
                                         <div className="space-y-6 text-left">
-                                            {scholarshipQuestions.length > 0 && (
+                                            {scholarshipQuestions.length === 0 ? (
+                                                /* Empty-state when no scholarship-eligible questions exist yet.
+                                                   Without this branch the modal renders a blank body and the
+                                                   user can't tell what happened (the API returns 0 because
+                                                   admins haven't flagged any questions as eligible yet). */
+                                                <div className="py-10 flex flex-col items-center justify-center gap-4 text-center">
+                                                    <AlertTriangle className="w-10 h-10 text-amber-500" />
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-sm font-bold text-foreground">No scholarship questions available right now</p>
+                                                        <p className="text-xs text-muted-foreground max-w-sm">
+                                                            Our team is curating the next scholarship challenge. Please check back soon, or subscribe directly at the standard rate.
+                                                        </p>
+                                                    </div>
+                                                    <Button variant="outline" onClick={() => setShowTestModal(false)} className="rounded-xl text-xs px-5 mt-2">
+                                                        Close
+                                                    </Button>
+                                                </div>
+                                            ) : (
                                                 <div className="space-y-6">
                                                     <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
                                                         <span>QUESTION {currentQuestionIdx + 1} OF 5</span>
