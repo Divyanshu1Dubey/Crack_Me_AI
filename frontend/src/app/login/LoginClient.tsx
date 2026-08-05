@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
 import { extractApiErrorMessage } from '@/lib/api';
+import { safeInternalPath } from '@/lib/auth-redirect';
 
 export default function LoginClient() {
     const [identifier, setIdentifier] = useState('');
@@ -35,11 +36,15 @@ export default function LoginClient() {
             // snapshot is still the pre-login (often stale or null) value.
             const signedIn = await login(identifier, password);
             // Send admins to the control tower, students to their dashboard.
-            const next = searchParams.get('next');
+            const rawNext = searchParams.get('next');
             const isAdmin =
                 String((signedIn as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
                 ((signedIn as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
-            router.push(next || (isAdmin ? '/admin' : '/dashboard'));
+            const fallback = isAdmin ? '/admin' : '/dashboard';
+            // Guard against open-redirect: only accept same-origin relative paths
+            // (rejects protocol-relative `//evil.com`, absolute URLs, scheme
+            // separators, etc.).
+            router.push(safeInternalPath(rawNext, fallback));
         } catch (err: unknown) {
             const error = err as { response?: { data?: unknown } };
             if (error.response?.data) {

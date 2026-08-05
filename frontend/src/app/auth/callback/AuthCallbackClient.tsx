@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { authAPI } from '@/lib/api';
+import { safeInternalPath } from '@/lib/auth-redirect';
 
 const decodeUrlFragment = () => {
   if (typeof window === 'undefined') return new URLSearchParams();
@@ -86,7 +87,7 @@ export default function AuthCallbackClient() {
           // Profile fetch failed, but continue with redirect
         }
 
-        const safeNextPath = nextPath.startsWith('/') ? nextPath : '';
+        const safeNextPath = safeInternalPath(nextPath, '');
         if (safeNextPath) {
           router.replace(safeNextPath);
           return;

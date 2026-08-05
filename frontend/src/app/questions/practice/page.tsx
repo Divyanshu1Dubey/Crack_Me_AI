@@ -6,7 +6,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { Suspense, useEffect, useMemo, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
@@ -88,6 +88,14 @@ function PracticeContent() {
     const [showPalette, setShowPalette] = useState(false);
     const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
 
+    // Used to cancel in-flight AI explanation requests when the student
+    // navigates to a different question before the response arrives.
+    // See `fetchAiExplanation` below.
+    const aiAbortRef = useRef<(() => void) | null>(null);
+    // Mirrors `currentQ.id` so async resolvers can check whether the active
+    // question has changed since they fired (race-condition guard).
+    const currentQIdRef = useRef<number | null>(null);
+
     const [flagOpen, setFlagOpen] = useState(false);
     const [flagCategory, setFlagCategory] = useState('wrong_answer');
     const [flagComment, setFlagComment] = useState('');
@@ -119,6 +127,20 @@ function PracticeContent() {
     const currentQ = questions[currentIdx];
     const totalQ = questions.length;
     const answeredCount = Object.keys(answers).length;
+    // Keep the ref in sync with the actively-shown question so async
+    // resolvers can detect that the user has moved on.
+    useEffect(() => {
+        currentQIdRef.current = currentQ?.id ?? null;
+        // Whenever the active question changes, any in-flight AI request is
+        // now stale — cancel it so its `.then` / `.catch` bails out and
+        // doesn't leak state across questions.
+        return () => {
+            if (aiAbortRef.current) {
+                aiAbortRef.current();
+                aiAbortRef.current = null;
+            }
+        };
+    }, [currentQ?.id]);
     // Resolve `[[img:N]]` tokens in the question text against the question's
     // image list so public practice pages render real `<img>` tags instead of
     // the raw token. Cached per `(id, imageCount)` for cheap re-renders.
@@ -185,6 +207,12 @@ function PracticeContent() {
         setAiExplanation(null);
         setTokenError(false);
         setAiError(null);
+        // Capture the question we're explaining so a quick navigation
+        // doesn't let an older request resolve into the newer question's UI
+        // (race condition that previously leaked state across questions).
+        const reqQuestionId = currentQ.id;
+        let cancelled = false;
+        aiAbortRef.current = () => { cancelled = true; };
         aiAPI.explainAfterAnswer({
             question_text: sanitizeQuestionText(currentQ.question_text),
             options: {
@@ -198,9 +226,11 @@ function PracticeContent() {
             subject: currentQ.subject_name || '',
             topic: currentQ.topic_name || '',
         }).then(res => {
+            if (cancelled || reqQuestionId !== currentQIdRef.current) return;
             setAiExplanation(res.data);
             setAiLoading(false);
         }).catch(err => {
+            if (cancelled || reqQuestionId !== currentQIdRef.current) return;
             if (err?.response?.status === 429) {
                 setTokenError(true);
             } else {
@@ -240,7 +270,10 @@ function PracticeContent() {
         });
     };
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts. Re-binds whenever the active question or the
+    // answers map changes so the closure always sees the up-to-date
+    // `currentQ` / `answers` (avoids stale-closure bugs that previously
+    // let the wrong option get recorded after a "Next" press).
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key === 'ArrowRight' || e.key === 'n') handleNext();
@@ -251,7 +284,7 @@ function PracticeContent() {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    });
+    }, [handleNext, handlePrev, handleSelectOption, answers, currentQ?.id]);
 
     if (loading) {
         return (

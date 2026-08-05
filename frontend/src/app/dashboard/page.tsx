@@ -375,7 +375,7 @@ export default function DashboardPage() {
                                         <CustomIcon name="medical-stethoscope" label="Medical" className="w-3.5 h-3.5" variant="active" />
                                         CrackLabs Medical Companion
                                     </div>
-                                    <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white">
+                                    <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white break-words [overflow-wrap:anywhere] hyphens-auto">
                                         {user?.role === 'admin' ? 'Welcome back' : 'Welcome back, Dr.'} {user?.role === 'admin' ? (user?.first_name || user?.username || 'Admin') : (user?.first_name || user?.username || 'Doctor')}
                                     </h1>
                                     <p className="text-sky-50 text-sm md:text-base mb-6 max-w-xl">

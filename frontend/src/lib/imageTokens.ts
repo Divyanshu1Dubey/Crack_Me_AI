@@ -48,6 +48,17 @@ export function resolveImageTokens(
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
+  // XSS defense: the raw `html` argument is admin-typed question text that
+  // ultimately reaches `dangerouslySetInnerHTML` on both the admin preview
+  // and the public practice page. Without this pass, an admin pasting
+  // `<img src=x onerror=alert(1)>` would execute in every student browser.
+  //
+  // We escape first, THEN run the token substitutions on the escaped string.
+  // The substitutions only emit literal markup (`<img>` / `<span>`) whose
+  // attribute values were already escaped by `_imgTag` / `escapeAttr`, so the
+  // round-trip stays safe.
+  const escapedHtml = escapeHtml(html);
+
   const byId = new Map(images.map((i) => [i.id, i]));
   // Build a basename → image lookup for the bare-URL fallback path.
   // `file` may be a relative path or a basename, so we match on the
@@ -61,7 +72,7 @@ export function resolveImageTokens(
   }
 
   // First, resolve `[[img:N]]` tokens.
-  let resolved = html.replace(TOKEN_RE, (_match, idStr: string) => {
+  let resolved = escapedHtml.replace(TOKEN_RE, (_match, idStr: string) => {
     const id = parseInt(idStr, 10);
     const img = byId.get(id);
     if (!img) {
@@ -120,6 +131,22 @@ function escapeAttr(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/**
+ * Escape every angle bracket / quote / ampersand in user-supplied HTML so the
+ * only `<...>` that survives is markup we generate ourselves below.
+ *
+ * Order matters: replace `&` last to avoid double-encoding entities like
+ * `&quot;` introduced by `escapeAttr`.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/&/g, '&amp;');
 }
 
 function _imgTag(img: QuestionImageLike, fallbackAlt: string): string {

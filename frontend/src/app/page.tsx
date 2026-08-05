@@ -722,10 +722,34 @@ export default function LandingPage() {
                             <Brain className="h-3.5 w-3.5" />
                             RAG Grounded Response
                           </div>
-                          <div 
+                          <div
                             className="space-y-2 whitespace-pre-line"
                             dangerouslySetInnerHTML={{
-                              __html: tutorConversations[activeTutorTopic].reply.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              // XSS defense: this is a `dangerouslySetInnerHTML`
+                              // sink that today only renders hard-coded data, but
+                              // the same code path is reused for AI-generated
+                              // explanations, so we escape any user-supplied HTML
+                              // before allowing the `**bold**` substitution to add
+                              // the one tag we actually want.
+                              __html: (() => {
+                                const escapeHtml = (v: string) =>
+                                  v
+                                    .replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;')
+                                    .replace(/"/g, '&quot;')
+                                    .replace(/'/g, '&#39;')
+                                    .replace(/&/g, '&amp;');
+                                const raw = tutorConversations[activeTutorTopic].reply;
+                                // Escape every angle bracket / quote first so
+                                // `&lt;script&gt;` is shown literally, then
+                                // promote the markdown bold syntax. The split-
+                                // match-restore trick keeps the bold markup
+                                // intact without re-introducing an injection.
+                                const parts = raw.split(/\*\*(.*?)\*\*/g);
+                                return parts
+                                  .map((p, i) => (i % 2 === 1 ? `<strong>${p}</strong>` : escapeHtml(p)))
+                                  .join('');
+                              })()
                             }}
                           />
                         </div>

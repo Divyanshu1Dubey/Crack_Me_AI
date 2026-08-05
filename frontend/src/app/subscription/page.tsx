@@ -17,6 +17,33 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+/**
+ * Safe wrapper around `console.error` for axios errors.
+ *
+ * The raw axios error has a `config` object whose `data` field is the
+ * ORIGINAL REQUEST BODY (a serialized JSON string) — meaning sensitive
+ * fields like `razorpay_payment_id`, `razorpay_signature`,
+ * `razorpay_order_id`, and `amount_paid` end up in browser memory, on
+ * crash-reporting telemetry (Sentry, Vercel logs), and in any
+ * `console.error`-forwarding tooling. We log a minimal, redacted summary
+ * instead so production diagnostics stay useful without leaking PII /
+ * payment credentials to logs.
+ */
+function logAxiosError(context: string, err: unknown): void {
+    if (typeof console === 'undefined') return;
+    const e = err as {
+        message?: string;
+        response?: { status?: number; statusText?: string; data?: unknown };
+        code?: string;
+    };
+    console.error(context, {
+        message: e?.message,
+        status: e?.response?.status,
+        statusText: e?.response?.statusText,
+        code: e?.code,
+    });
+}
+
 // ── Subscription history row shape (mirrors backend SubscriptionHistoryView) ──
 interface SubscriptionRow {
     id: number;
@@ -111,7 +138,7 @@ export default function SubscriptionPage() {
             setHistoryRows(list);
             setHistoryLoaded(true);
         } catch (err) {
-            console.error('Failed to load subscription history:', err);
+            logAxiosError('Failed to load subscription history:', err);
         } finally {
             setHistoryLoading(false);
         }
@@ -195,7 +222,7 @@ export default function SubscriptionPage() {
 </body></html>`);
             win.document.close();
         } catch (err) {
-            console.error('Failed to load invoice:', err);
+            logAxiosError('Failed to load invoice:', err);
             setErrorMessage('Unable to fetch the invoice. Please contact support.');
         }
     };
@@ -222,7 +249,7 @@ export default function SubscriptionPage() {
             const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
             setScholarshipQuestions(shuffled.slice(0, 5));
         } catch (err) {
-            console.error('Failed to load scholarship questions:', err);
+            logAxiosError('Failed to load scholarship questions:', err);
         } finally {
             setLoadingQuestions(false);
         }
