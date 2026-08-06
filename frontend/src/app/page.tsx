@@ -353,14 +353,14 @@ export default function LandingPage() {
               Doctor-first prep. Smart study platform.
             </Badge>
 
-            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+            <div className="flex flex-col gap-6 items-center text-center md:flex-row md:items-start md:text-left">
               {/* CMS Circle Logo */}
-              <div className="relative h-32 w-32 md:h-48 md:w-48 lg:h-56 lg:w-56 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
-                <Image 
-                  src="/cms-circle-logo.png" 
-                  alt="CMS Circle Logo" 
+              <div className="relative h-28 w-28 sm:h-36 sm:w-36 md:h-44 md:w-44 lg:h-52 lg:w-52 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
+                <Image
+                  src="/cms-circle-logo.png"
+                  alt="CMS Circle Logo"
                   fill
-                  sizes="(max-width: 768px) 128px, (max-width: 1024px) 192px, 224px"
+                  sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, (max-width: 1024px) 176px, 208px"
                   className="object-cover rounded-full"
                   priority
                 />
@@ -368,16 +368,22 @@ export default function LandingPage() {
 
               {/* Title, Description & CTAs */}
               <div className="space-y-4 flex-1">
-                <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
-                  <span className="bg-linear-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400">AI Powered</span> UPSC CMS Platform
+                <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+                  {/* The Aurora background also renders blue/indigo/teal, so a
+                      gradient of those exact stops camouflages the clipped text.
+                      Use a contrasting amber→pink→violet ramp + a soft drop
+                      shadow so the title stays legible over the WebGL aurora.
+                      Inherits `text-center md:text-left` from the parent flex
+                      row so it stays centered on mobile, left-aligned on ≥md. */}
+                  <span className="bg-linear-to-r from-amber-500 via-pink-500 to-violet-600 bg-clip-text text-transparent dark:from-amber-300 dark:via-pink-300 dark:to-violet-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">AI Powered</span> UPSC CMS Platform
                 </h1>
                 
-                <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground text-left">
-                  Build daily clinical consistency with an integrated medical prep operating system. 
+                <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground md:text-left">
+                  Build daily clinical consistency with an integrated medical prep operating system.
                   Equipped with a smart question bank, AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
                 </p>
 
-                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
+                <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center pt-2 md:items-start">
                   <Button variant="gradient" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
                     <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                       Start Preparing
