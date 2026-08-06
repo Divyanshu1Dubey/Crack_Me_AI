@@ -5,6 +5,20 @@ import cmsNeetPgLastWeek from '@/content/blog/cms-and-neet-pg-last-week-shared-r
 import cms2026Notification from '@/content/blog/upsc-cms-2026-official-notification-guide';
 import neetPgVsUpscCms from '@/content/blog/neet-pg-vs-upsc-cms';
 
+// August 2026 SEO expansion — 6 new posts covering syllabus, cutoff,
+// strategy, comparative decision content, and a verified book shortlist.
+// Each post emits Article + FAQ + BreadcrumbList JSON-LD; see the
+// `BlogPostLayout` for the schema wiring.
+import cmsSyllabusHighYield from '@/content/blog/upsc-cms-syllabus-high-yield-topics';
+import cmsCutoff2024 from '@/content/blog/upsc-cms-2024-cutoff-marks-category-wise';
+import cmsPrepStrategy6Month from '@/content/blog/upsc-cms-preparation-strategy-6-month-plan';
+import neetPgCutoff2024 from '@/content/blog/neet-pg-2024-cutoff-category-wise';
+import neetPgPrepStrategy from '@/content/blog/neet-pg-preparation-strategy-study-plans';
+import neetPgVsIniCet from '@/content/blog/neet-pg-vs-ini-cet';
+import iniCetCutoff2024 from '@/content/blog/ini-cet-2024-cutoff-closing-ranks';
+import cmsVsNeetPgVsIniCet from '@/content/blog/cms-vs-neet-pg-vs-ini-cet';
+import bestPgBooks from '@/content/blog/best-pg-medical-entrance-books';
+
 /**
  * EEAT-grade blog post shape.
  *
@@ -106,7 +120,23 @@ export interface BlogPost {
 }
 
 /** The single source of truth for blog posts. */
-const posts: BlogPost[] = [cms2026Notification, cmsLast5Days, cmsNeetPgLastWeek, neetPgVsUpscCms];
+const posts: BlogPost[] = [
+    // Original 4 posts.
+    cms2026Notification,
+    cmsLast5Days,
+    cmsNeetPgLastWeek,
+    neetPgVsUpscCms,
+    // August 2026 expansion — 6 new posts.
+    cmsSyllabusHighYield,
+    cmsCutoff2024,
+    cmsPrepStrategy6Month,
+    neetPgCutoff2024,
+    neetPgPrepStrategy,
+    neetPgVsIniCet,
+    iniCetCutoff2024,
+    cmsVsNeetPgVsIniCet,
+    bestPgBooks,
+];
 
 // Newest first.
 posts.sort((a, b) => (a.datePublished < b.datePublished ? 1 : -1));
