@@ -72,6 +72,32 @@ const content: ExamLandingContent = {
     accentTo: 'to-violet-700',
     emoji: '🏛️',
     pyqCount: '1,920+',
+    relatedBlogPosts: [
+        {
+            slug: 'upsc-cms-syllabus-high-yield-topics',
+            title: 'UPSC CMS Syllabus: High-Yield Topics by Subject (10-Year PYQ Analysis)',
+            excerpt:
+                'Cornerstone guide — which UPSC CMS subjects and topics consistently carry the most marks, based on 10 years of PYQ data.',
+        },
+        {
+            slug: 'upsc-cms-2024-cutoff-marks-category-wise',
+            title: 'UPSC CMS 2024 Cutoff Marks: Category-Wise (Gen / OBC / SC / ST / EWS / PwBD)',
+            excerpt:
+                'Final-merit cutoffs for UPSC CMS 2024 across all categories plus a 5-year trend (2020–2024).',
+        },
+        {
+            slug: 'upsc-cms-preparation-strategy-6-month-plan',
+            title: 'UPSC CMS Preparation Strategy: 6-Month Plan with Daily Timetable',
+            excerpt:
+                'Month-by-month 6-month UPSC CMS plan — with 2hr / 4hr / 6hr daily schedule variants.',
+        },
+        {
+            slug: 'cms-vs-neet-pg-vs-ini-cet',
+            title: 'CMS vs NEET PG vs INI-CET: Which PG Exam is Right for You?',
+            excerpt:
+                'Definitive three-way comparison across salary, lifestyle, difficulty, and 5-year career trajectory.',
+        },
+    ],
 };
 
 export const metadata = buildExamMetadata(content);

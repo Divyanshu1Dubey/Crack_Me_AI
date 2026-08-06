@@ -464,6 +464,66 @@ export default function NeetPgLanding() {
         </div>
       </section>
 
+      {/* ════════════════ FROM THE BLOG (internal-link cluster) ════════════════ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+        <div className="flex items-end justify-between gap-4 mb-6">
+          <div>
+            <span className="inline-flex items-center rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/30 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+              From the Blog
+            </span>
+            <h2 className="mt-3 text-2xl md:text-4xl font-bold tracking-tight">
+              NEET PG deep-dive guides
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+              Long-form, EEAT-reviewed coverage of NEET PG cutoffs, strategy, comparisons, and books.
+            </p>
+          </div>
+          <Link href="/blog" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-emerald-700 hover:underline shrink-0">
+            All posts →
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              slug: 'neet-pg-2024-cutoff-category-wise',
+              title: 'NEET PG 2024 Cutoff: Qualifying Percentile + Closing Ranks',
+              excerpt: 'Category-wise cutoff + closing ranks for clinical branches — verified against NBE data.',
+            },
+            {
+              slug: 'neet-pg-preparation-strategy-study-plans',
+              title: 'NEET PG Preparation Strategy: 4-Month + 8-Month Study Plans',
+              excerpt: 'Two complete plans with subject triage, daily time-blocking, and final-30-day protocol.',
+            },
+            {
+              slug: 'neet-pg-vs-ini-cet',
+              title: 'NEET PG vs INI-CET: Difficulty, Syllabus, Salary & Strategy',
+              excerpt: 'Honest comparison — including how to attempt both without burning out.',
+            },
+            {
+              slug: 'cms-vs-neet-pg-vs-ini-cet',
+              title: 'CMS vs NEET PG vs INI-CET: Which PG Exam is Right for You?',
+              excerpt: 'Definitive three-way comparison across salary, lifestyle, and 5-year trajectory.',
+            },
+          ].map((p) => (
+            <Link
+              key={p.slug}
+              href={`/blog/${p.slug}`}
+              className="group rounded-2xl border border-border/60 bg-card/90 dark:bg-slate-900/60 p-5 transition-all hover:border-emerald-500/50 hover:shadow-md"
+            >
+              <h3 className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors leading-snug">
+                {p.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                {p.excerpt}
+              </p>
+              <p className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-emerald-600">
+                Read guide <span className="transition-transform group-hover:translate-x-0.5">→</span>
+              </p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* ════════════════ CTA STRIP ════════════════ */}
       <section className="bg-linear-to-br from-emerald-700 via-teal-700 to-cyan-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 text-center">

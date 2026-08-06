@@ -77,6 +77,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/government-doctor-jobs',
                     '/exams',
                     '/guides',
+                    '/blog',
                     '/about',
                     '/contact',
                     '/subscription',

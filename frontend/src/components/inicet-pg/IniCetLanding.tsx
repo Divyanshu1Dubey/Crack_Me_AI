@@ -480,6 +480,66 @@ export default function IniCetLanding() {
         </div>
       </section>
 
+      {/* From the Blog (internal-link cluster) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+        <div className="flex items-end justify-between gap-4 mb-6">
+          <div>
+            <span className="inline-flex items-center rounded-full bg-indigo-600/10 text-indigo-700 dark:text-indigo-300 border border-indigo-600/30 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+              From the Blog
+            </span>
+            <h2 className="mt-3 text-2xl md:text-4xl font-bold tracking-tight">
+              INI-CET deep-dive guides
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+              Long-form, EEAT-reviewed coverage of INI-CET cutoffs, comparison with NEET PG, and strategy.
+            </p>
+          </div>
+          <Link href="/blog" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-indigo-700 hover:underline shrink-0">
+            All posts →
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              slug: 'ini-cet-2024-cutoff-closing-ranks',
+              title: 'INI-CET 2024 Cutoff: Closing Ranks by Institute (Jan + July)',
+              excerpt: 'AIIMS Delhi, PGIMER, JIPMER, NIMHANS — closing ranks for both sessions.',
+            },
+            {
+              slug: 'neet-pg-vs-ini-cet',
+              title: 'NEET PG vs INI-CET: Difficulty, Syllabus, Salary & Strategy',
+              excerpt: 'Honest comparison — including how to attempt both without burning out.',
+            },
+            {
+              slug: 'cms-vs-neet-pg-vs-ini-cet',
+              title: 'CMS vs NEET PG vs INI-CET: Which PG Exam is Right for You?',
+              excerpt: 'Definitive three-way comparison across salary, lifestyle, and 5-year trajectory.',
+            },
+            {
+              slug: 'best-pg-medical-entrance-books',
+              title: 'Best Medical PG Entrance Books: Verified by PYQs (2026)',
+              excerpt: 'Every title on this list has appeared in UPSC CMS / NEET PG / INI-CET PYQs.',
+            },
+          ].map((p) => (
+            <Link
+              key={p.slug}
+              href={`/blog/${p.slug}`}
+              className="group rounded-2xl border border-border/60 bg-card/90 dark:bg-slate-900/60 p-5 transition-all hover:border-indigo-500/50 hover:shadow-md"
+            >
+              <h3 className="text-base font-bold text-foreground group-hover:text-indigo-600 transition-colors leading-snug">
+                {p.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                {p.excerpt}
+              </p>
+              <p className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-indigo-600">
+                Read guide <span className="transition-transform group-hover:translate-x-0.5">→</span>
+              </p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* CTA strip */}
       <section className="bg-linear-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 text-center">

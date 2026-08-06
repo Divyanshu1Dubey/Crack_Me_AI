@@ -42,6 +42,10 @@ export interface ExamLandingContent {
     emoji?: string;
     /** Number of PYQs in our bank for this exam */
     pyqCount: string;
+    /** Optional: hand-picked blog posts to surface at the bottom of the
+     *  landing page (max 4). Builds the internal-link cluster between
+     *  high-authority landing pages and the /blog content silo. */
+    relatedBlogPosts?: { slug: string; title: string; excerpt: string }[];
 }
 
 interface ExamLandingLayoutProps extends ExamLandingContent {
@@ -343,6 +347,47 @@ export function ExamLandingLayout(c: ExamLandingContent) {
                         ))}
                     </div>
                 </section>
+
+                {/* ─── FROM THE BLOG (internal-link cluster) ─── */}
+                {c.relatedBlogPosts && c.relatedBlogPosts.length > 0 && (
+                    <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
+                        <div className="flex items-end justify-between gap-4 mb-6">
+                            <div>
+                                <Badge className="bg-primary/10 text-primary border-primary/30 text-xs font-bold uppercase tracking-wider">
+                                    From the Blog
+                                </Badge>
+                                <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
+                                    Deep-dive guides on {c.name}
+                                </h2>
+                                <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+                                    Long-form, EEAT-reviewed coverage of {c.name} syllabus, cutoffs, strategy, and books.
+                                </p>
+                            </div>
+                            <Link href="/blog" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline shrink-0">
+                                All posts <ArrowRight className="h-4 w-4" />
+                            </Link>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-3">
+                            {c.relatedBlogPosts.slice(0, 4).map((p) => (
+                                <Link
+                                    key={p.slug}
+                                    href={`/blog/${p.slug}`}
+                                    className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md"
+                                >
+                                    <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors leading-snug">
+                                        {p.title}
+                                    </h3>
+                                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                                        {p.excerpt}
+                                    </p>
+                                    <p className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary">
+                                        Read guide <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                                    </p>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* ─── FAQ ─── */}
                 <section className="border-t border-border bg-muted/30">
