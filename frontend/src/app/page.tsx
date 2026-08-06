@@ -345,9 +345,9 @@ export default function LandingPage() {
         <div className="flex flex-col gap-10">
           {/* Header block with Logo and Title */}
           <div className="space-y-6 max-w-5xl mx-auto w-full">
-            <Badge 
-              variant="secondary" 
-              className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
+            <Badge
+              variant="secondary"
+              className="inline-flex items-center rounded-full border border-primary/30 bg-card/95 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary shadow-sm backdrop-blur"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2 text-primary" />
               Doctor-first prep. Smart study platform.
@@ -366,25 +366,33 @@ export default function LandingPage() {
                 />
               </div>
 
-              {/* Title, Description & CTAs */}
-              <div className="space-y-4 flex-1">
+              {/* Title, Description & CTAs. Wrapped in a translucent card so
+                  the Aurora WebGL background doesn't wash out the body text
+                  or camouflage the gradient CTA. `bg-card/85 backdrop-blur`
+                  keeps the layered look but restores contrast. */}
+              <div className="space-y-4 flex-1 rounded-2xl border border-border/40 bg-card/85 p-5 shadow-xl shadow-slate-950/5 backdrop-blur-md md:bg-card/70 md:p-6">
                 <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                  {/* The Aurora background also renders blue/indigo/teal, so a
-                      gradient of those exact stops camouflages the clipped text.
-                      Use a contrasting amber→pink→violet ramp + a soft drop
-                      shadow so the title stays legible over the WebGL aurora.
-                      Inherits `text-center md:text-left` from the parent flex
-                      row so it stays centered on mobile, left-aligned on ≥md. */}
-                  <span className="bg-linear-to-r from-amber-500 via-pink-500 to-violet-600 bg-clip-text text-transparent dark:from-amber-300 dark:via-pink-300 dark:to-violet-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">AI Powered</span> UPSC CMS Platform
+                  {/* Gradient stays inside this single span so the rest of the
+                      title ("UPSC CMS Platform") inherits `text-foreground`
+                      and is always legible. */}
+                  <span className="bg-linear-to-r from-amber-500 via-pink-500 to-violet-600 bg-clip-text text-transparent dark:from-amber-300 dark:via-pink-300 dark:to-violet-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">AI Powered</span>{' '}
+                  <span className="text-foreground">UPSC CMS Platform</span>
                 </h1>
-                
-                <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground md:text-left">
+
+                <p className="max-w-3xl text-base leading-relaxed text-foreground/80 sm:text-lg md:text-left">
                   Build daily clinical consistency with an integrated medical prep operating system.
                   Equipped with a smart question bank, AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
                 </p>
 
                 <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center pt-2 md:items-start">
-                  <Button variant="gradient" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
+                  {/* Inline-styled gradient with strong contrast stops so it
+                      doesn't blend into the aurora background. */}
+                  <Button
+                    asChild
+                    size="xl"
+                    className="w-full rounded-2xl sm:w-auto font-semibold text-white shadow-lg shadow-fuchsia-500/30 transition-all hover:shadow-xl hover:shadow-fuchsia-500/40 hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #ec4899 50%, #7c3aed 100%)' }}
+                  >
                     <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                       Start Preparing
                       <ChevronRight className="ml-1.5 w-5 h-5" />
@@ -398,15 +406,15 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-wrap justify-center gap-2.5 pt-4 w-full">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/95 px-4 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur">
                 <Clock3 className="h-4 w-4 text-blue-500" />
                 Daily workflow optimized
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/95 px-4 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur">
                 <Target className="h-4 w-4 text-teal-500" />
                 Exam-style reasoning
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/95 px-4 py-2 text-xs font-semibold text-foreground shadow-sm backdrop-blur">
                 <TrendingUp className="h-4 w-4 text-indigo-500" />
                 Outcome-focused analytics
               </div>
