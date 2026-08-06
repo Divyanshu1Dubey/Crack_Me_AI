@@ -333,10 +333,10 @@ export default function LandingPage() {
       <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
         {/* WebGL Aurora Background Animation */}
         <Aurora
-          colorStops={["#5227FF", "#7cff67", "#5227FF"]}
-          blend={0.5}
-          amplitude={1.0}
-          speed={0.5}
+          colorStops={["#3b82f6", "#8b5cf6", "#3b82f6"]}
+          blend={0.25}
+          amplitude={0.6}
+          speed={0.3}
         />
         {/* Glow decorative effects */}
         <div className="absolute left-1/4 top-10 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />

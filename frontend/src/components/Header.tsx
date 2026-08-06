@@ -363,16 +363,20 @@ export default function Header() {
           )}
         </div>
 
-        {/* Download App Button */}
+        {/* Download App Button. Icon-only on small screens (so it stays
+            a single button without getting truncated to "U..." when the
+            header has too many items) and reveals the "Download App"
+            label only at lg+ when there's room. */}
         <div className="hidden sm:block">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="gap-2 rounded-full border-primary/20 text-primary hover:bg-primary/10"
             onClick={handleInstallClick}
+            aria-label="Download mobile app"
           >
             <Smartphone className="w-4 h-4" />
-            <span>Download App</span>
+            <span className="hidden lg:inline">Download App</span>
           </Button>
         </div>
 

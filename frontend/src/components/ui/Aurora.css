@@ -4,4 +4,19 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Tame the WebGL canvas: the default full-saturation output makes the
+     page look like a fluorescent banner. Soften + lower the opacity so
+     it sits BEHIND the content as ambient atmosphere rather than
+     competing with it for attention. */
+  opacity: 0.5;
+  filter: blur(40px) saturate(0.85);
+  mix-blend-mode: screen;
+}
+
+/* In dark mode the bright lime/violet streaks read even hotter - drop
+   the saturation a notch further so the aurora doesn't dominate a dark
+   hero card. */
+:where(.dark) .aurora-container {
+  opacity: 0.35;
+  filter: blur(60px) saturate(0.6);
 }
