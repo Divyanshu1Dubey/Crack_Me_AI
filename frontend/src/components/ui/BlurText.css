@@ -1,0 +1,10 @@
+.blur-text-container {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+.blur-text-word {
+  display: inline-block;
+  will-change: transform, filter, opacity;
+  transition: filter 0.5s ease-out, opacity 0.5s ease-out, transform 0.5s ease-out;
+}

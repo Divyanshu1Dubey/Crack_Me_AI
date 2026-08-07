@@ -39,9 +39,13 @@ const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   loading: () => <div className="h-9 w-9 rounded-xl border border-border/70 bg-muted/60" aria-hidden="true" />,
 });
 
-const Aurora = dynamic(() => import('@/components/ui/Aurora'), { ssr: false });
+const ClickSpark = dynamic(() => import('@/components/ui/ClickSpark'), { ssr: false });
 const MagicBento = dynamic(() => import('@/components/ui/MagicBento'), { ssr: false });
-
+const CardNav = dynamic(() => import('@/components/ui/CardNav'), { ssr: false });
+const ScrollFloat = dynamic(() => import('@/components/ui/ScrollFloat'), { ssr: false });
+const GradientText = dynamic(() => import('@/components/ui/GradientText'), { ssr: false });
+const BlurText = dynamic(() => import('@/components/ui/BlurText'), { ssr: false });
+const SplitText = dynamic(() => import('@/components/ui/SplitText'), { ssr: false });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cracklabs.app';
 
@@ -268,7 +272,8 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent font-sans">
+    <ClickSpark sparkColor="#3b82f6" sparkSize={10} sparkRadius={15} sparkCount={8} duration={400}>
+      <div className="min-h-screen bg-transparent font-sans">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -301,83 +306,66 @@ export default function LandingPage() {
       {/* Exam Countdown Banner */}
       <ExamCountdown />
 
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-all">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <BrandMark href="/" compact showTagline={false} />
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            {isAuthenticated ? (
-              <Button asChild className="rounded-xl font-semibold shadow-sm shadow-primary/10">
-                <Link href="/dashboard">
-                  Open Dashboard <ChevronRight className="ml-1 w-4 h-4" />
-                </Link>
-              </Button>
-            ) : (
-              <>
-                <Button variant="ghost" asChild className="hidden sm:inline-flex font-medium text-muted-foreground hover:text-foreground">
-                  <Link href="/login">Log in</Link>
-                </Button>
-                <Button asChild className="rounded-xl font-semibold shadow-md shadow-primary/15 transition-transform active:scale-95">
-                  <Link href="/register">
-                    Start Free <ChevronRight className="ml-1 w-4 h-4" />
-                  </Link>
-                </Button>
-              </>
-            )}
-          </div>
+      {/* Header Navigation with React Bits CardNav */}
+      <CardNav logoText="crackCMS" isAuthenticated={isAuthenticated} themeToggleSlot={<ThemeToggle />} />
+
+      {/* Top Hero Section (Left-aligned) */}
+      <section className="relative mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 overflow-hidden text-left">
+        {/* CSS Ambient Gradient Background */}
+        <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none" aria-hidden="true">
+          <div className="absolute left-10 top-0 h-96 w-full max-w-7xl bg-gradient-to-b from-blue-500/10 via-indigo-500/5 to-transparent blur-3xl opacity-70 dark:from-blue-600/15 dark:via-indigo-600/10 dark:to-transparent" />
+          <div className="absolute left-10 top-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />
+          <div className="absolute right-1/4 bottom-10 h-80 w-80 rounded-full bg-teal-500/10 blur-3xl dark:bg-teal-500/5" />
         </div>
-      </nav>
 
-      {/* Hero Section */}
-      <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 overflow-hidden">
-        {/* WebGL Aurora Background Animation */}
-        <Aurora
-          colorStops={["#5227FF", "#7cff67", "#5227FF"]}
-          blend={0.5}
-          amplitude={1.0}
-          speed={0.5}
-        />
-        {/* Glow decorative effects */}
-        <div className="absolute left-1/4 top-10 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/5" />
-        <div className="absolute right-1/4 bottom-10 -z-10 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl dark:bg-teal-500/5" />
-
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-8 text-left items-start">
           {/* Header block with Logo and Title */}
-          <div className="space-y-6 max-w-5xl mx-auto w-full">
-            <Badge 
-              variant="secondary" 
-              className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
-            >
-              <Sparkles className="w-3.5 h-3.5 mr-2 text-primary" />
-              Doctor-first prep. Smart study platform.
-            </Badge>
+          <div className="space-y-6 max-w-5xl text-left items-start w-full">
+            <div className="inline-flex justify-start">
+              <Badge 
+                variant="secondary" 
+                className="inline-flex items-center rounded-full border border-primary/10 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-primary"
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-2 text-primary" />
+                Doctor-first prep. Smart study platform.
+              </Badge>
+            </div>
 
-            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+            <div className="flex flex-col items-start text-left sm:flex-row gap-6 md:gap-8">
               {/* CMS Circle Logo */}
-              <div className="relative h-32 w-32 md:h-48 md:w-48 lg:h-56 lg:w-56 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
+              <div className="relative h-28 w-28 sm:h-36 sm:w-36 md:h-44 md:w-44 lg:h-48 lg:w-48 shrink-0 overflow-hidden rounded-full border-2 border-amber-500/30 bg-slate-950 shadow-xl shadow-amber-500/10">
                 <Image 
                   src="/cms-circle-logo.png" 
                   alt="CMS Circle Logo" 
                   fill
-                  sizes="(max-width: 768px) 128px, (max-width: 1024px) 192px, 224px"
+                  sizes="(max-width: 640px) 112px, (max-width: 768px) 144px, (max-width: 1024px) 176px, 192px"
                   className="object-cover rounded-full"
                   priority
                 />
               </div>
 
               {/* Title, Description & CTAs */}
-              <div className="space-y-4 flex-1">
-                <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
-                  <span className="bg-linear-to-r from-blue-600 via-indigo-600 to-teal-500 bg-clip-text text-transparent dark:from-blue-400 dark:via-indigo-300 dark:to-teal-400">AI Powered</span> UPSC CMS Platform
+              <div className="space-y-4 flex-1 w-full text-left">
+                <h1 className="font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-foreground sm:text-5xl lg:text-6xl text-left">
+                  <GradientText
+                    colors={['#2563eb', '#7c3aed', '#0d9488', '#2563eb']}
+                    animationSpeed={5}
+                    className="text-3xl font-black sm:text-5xl lg:text-6xl inline-block mr-3"
+                  >
+                    AI Powered
+                  </GradientText>
+                  UPSC CMS Platform
                 </h1>
                 
-                <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground text-left">
-                  Build daily clinical consistency with an integrated medical prep operating system. 
-                  Equipped with a smart question bank, AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics.
-                </p>
+                <BlurText
+                  text="Build daily clinical consistency with an integrated medical prep operating system. Equipped with a smart question bank, AI tutoring, hyper-realistic simulated mock tests, and smart weak-area analytics."
+                  delay={70}
+                  animateBy="words"
+                  direction="top"
+                  className="max-w-3xl text-base sm:text-lg leading-relaxed text-muted-foreground text-left"
+                />
 
-                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center pt-2">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-start pt-2 w-full">
                   <Button variant="gradient" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold shadow-lg shadow-primary/15 transition-all hover:shadow-xl hover:shadow-primary/20">
                     <Link href={isAuthenticated ? '/dashboard' : '/register'}>
                       Start Preparing
@@ -391,43 +379,54 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2.5 pt-4 w-full">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
-                <Clock3 className="h-4 w-4 text-blue-500" />
-                Daily workflow optimized
+            <div className="flex flex-wrap justify-start gap-2.5 pt-4 w-full">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/75 px-4 py-2 text-xs font-bold text-foreground shadow-xs transition-all duration-300 hover:border-blue-500/50 hover:shadow-md hover:shadow-blue-500/10 hover:scale-[1.03] cursor-default">
+                <Clock3 className="h-4 w-4 text-blue-500 animate-pulse" />
+                Daily Workflow Optimized
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
-                <Target className="h-4 w-4 text-teal-500" />
-                Exam-style reasoning
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/75 px-4 py-2 text-xs font-bold text-foreground shadow-xs transition-all duration-300 hover:border-teal-500/50 hover:shadow-md hover:shadow-teal-500/10 hover:scale-[1.03] cursor-default">
+                <Target className="h-4 w-4 text-teal-500 animate-pulse" />
+                Exam-Style Reasoning
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/65 px-4 py-2 text-xs font-semibold text-muted-foreground shadow-sm">
-                <TrendingUp className="h-4 w-4 text-indigo-500" />
-                Outcome-focused analytics
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/75 px-4 py-2 text-xs font-bold text-foreground shadow-xs transition-all duration-300 hover:border-indigo-500/50 hover:shadow-md hover:shadow-indigo-500/10 hover:scale-[1.03] cursor-default">
+                <TrendingUp className="h-4 w-4 text-indigo-500 animate-pulse" />
+                Outcome-Focused Analytics
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
       {/* Downward Page Motion Feature Showcase (Decluttering + Side-by-side Storytelling) */}
       <section id="features" className="border-t border-border/60 bg-muted/20 py-24 px-4 sm:px-6">
         <div className="mx-auto max-w-6xl space-y-32">
           
-          {/* Header block */}
-          <div className="text-center max-w-2xl mx-auto space-y-4">
-            <h2 className="font-display text-3xl font-extrabold text-foreground sm:text-4xl tracking-tight">
+          {/* Header block with ScrollFloat animation */}
+          <div className="text-center max-w-3xl mx-auto space-y-4">
+            <ScrollFloat 
+              animationDuration={0.8}
+              ease="back.inOut(2)"
+              scrollStart="top bottom-=10%"
+              scrollEnd="center center"
+              stagger={0.02}
+              textClassName="font-display text-3xl font-extrabold text-foreground sm:text-4xl tracking-tight"
+            >
               Everything Needed for High-Performance CMS Prep
-            </h2>
+            </ScrollFloat>
             <p className="text-lg text-muted-foreground">
               We broken down exam preparation into modular, specialized engines that work together seamlessly. Explore them live below.
             </p>
             <div className="h-1.5 w-16 bg-blue-500 rounded-full mx-auto" />
           </div>
 
-          {/* Interactive Magic Bento Grid Section */}
-          <div className="space-y-6">
+          {/* Core Engines Section */}
+          <div className="space-y-8">
             <div className="text-center space-y-2 max-w-xl mx-auto">
               <span className="text-xs font-extrabold uppercase tracking-widest text-primary">Interactive Platform Overview</span>
               <h3 className="text-2xl font-bold text-foreground">Explore Our Core Medical Exam Engines</h3>
             </div>
+            
+            {/* Interactive Magic Bento Component */}
             <MagicBento 
               textAutoHide={true}
               enableStars={true}
@@ -438,43 +437,55 @@ export default function LandingPage() {
               clickEffect={true}
               spotlightRadius={300}
               particleCount={12}
-              glowColor="132, 0, 255"
+              glowColor="59, 130, 246"
               cards={[
                 {
-                  color: '#120F17',
                   title: 'UPSC CMS Question Bank',
                   description: '3,300+ authentic previous year questions with AI-grounded medical explanations.',
-                  label: 'UPSC CMS'
+                  label: 'UPSC CMS',
+                  icon: <FileText className="h-5 w-5" />,
+                  badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+                  href: '/questions'
                 },
                 {
-                  color: '#120F17',
                   title: 'NEET PG Clinical Bank',
                   description: 'Subject-wise high-yield practice with image-based questions and mnemonics.',
-                  label: 'NEET PG'
+                  label: 'NEET PG',
+                  icon: <GraduationCap className="h-5 w-5" />,
+                  badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+                  href: '/neet-pg'
                 },
                 {
-                  color: '#120F17',
                   title: 'AI Tutor Assistant',
                   description: 'Harrison & Robbins trained multi-model AI assistant for immediate doubts.',
-                  label: 'AI Tutor'
+                  label: 'AI Tutor',
+                  icon: <Brain className="h-5 w-5" />,
+                  badgeColor: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+                  href: '/ai-tutor'
                 },
                 {
-                  color: '#120F17',
                   title: 'Adaptive Mock Tests',
                   description: 'Timed exam engine simulating exact NBE and UPSC test environments.',
-                  label: 'Mock Tests'
+                  label: 'Mock Tests',
+                  icon: <Activity className="h-5 w-5" />,
+                  badgeColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+                  href: '/tests'
                 },
                 {
-                  color: '#120F17',
                   title: 'Rapid Recall Flashcards',
                   description: 'SM-2 algorithm flashcards for rapid high-yield clinical memory retention.',
-                  label: 'Recall'
+                  label: 'Recall',
+                  icon: <Zap className="h-5 w-5" />,
+                  badgeColor: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+                  href: '/flashcards'
                 },
                 {
-                  color: '#120F17',
                   title: 'Performance Analytics',
                   description: 'Granular weak-area identification and real-time rank predictions.',
-                  label: 'Analytics'
+                  label: 'Analytics',
+                  icon: <TrendingUp className="h-5 w-5" />,
+                  badgeColor: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+                  href: '/analytics'
                 }
               ]}
             />
@@ -552,6 +563,7 @@ export default function LandingPage() {
                         return (
                           <button
                             key={opt.key}
+                            suppressHydrationWarning
                             onClick={() => {
                               if (pyqAnswer === null) {
                                 setPyqAnswer(opt.key);
@@ -588,6 +600,7 @@ export default function LandingPage() {
                         {/* Generate AI Analysis button */}
                         {!pyqAiDone && !pyqAiLoading && (
                           <button
+                            suppressHydrationWarning
                             onClick={() => { setPyqAiLoading(true); setTimeout(() => { setPyqAiLoading(false); setPyqAiDone(true); }, 1800); }}
                             className="w-full rounded-xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-3 flex items-center justify-center gap-2 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs font-bold text-blue-700 dark:text-blue-300"
                           >
@@ -620,6 +633,7 @@ export default function LandingPage() {
                         <div className="flex justify-between items-center pt-1 text-[10px] text-muted-foreground border-t border-border/50">
                           <span>Textbook: <strong>Harrison&apos;s Cardiology, Ch. 273</strong></span>
                           <button 
+                            suppressHydrationWarning
                             onClick={() => {
                               setPyqAnswer(null);
                               setShowPyqExplanation(false);
@@ -689,6 +703,7 @@ export default function LandingPage() {
                       ].map((btn) => (
                         <button
                           key={btn.id}
+                          suppressHydrationWarning
                           onClick={() => setActiveTutorTopic(btn.id as 'ra' | 'se' | 'as')}
                           className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
                             activeTutorTopic === btn.id
@@ -806,6 +821,7 @@ export default function LandingPage() {
                         return (
                           <button
                             key={ch.key}
+                            suppressHydrationWarning
                             onClick={() => setExamSelectedOption(ch.key)}
                             className={`w-full text-left rounded-xl border p-3 text-[11px] font-semibold flex items-center gap-3 transition-all ${
                               isSel
@@ -886,6 +902,7 @@ export default function LandingPage() {
                     {mnemonicCards.map((c) => (
                       <button
                         key={c.id}
+                        suppressHydrationWarning
                         onClick={() => setFlippedCard(flippedCard === c.id ? null : c.id)}
                         className={`py-2 px-3 text-center rounded-xl text-[10px] font-bold border transition-all ${
                           flippedCard === c.id
@@ -910,6 +927,7 @@ export default function LandingPage() {
                       return (
                         <div
                           key={c.id}
+                          suppressHydrationWarning
                           onClick={() => setFlippedCard(flippedCard === c.id ? null : c.id)}
                           className={`w-full h-full duration-500 transform-style-3d relative cursor-pointer select-none rounded-3xl border border-border/80 bg-card shadow-lg ${
                             activeFlippedState ? 'rotate-y-180' : ''
@@ -1011,6 +1029,7 @@ export default function LandingPage() {
                       <div>
                         <label className="block font-bold text-muted-foreground mb-1">Subject</label>
                         <select
+                          suppressHydrationWarning
                           value={demoSubject}
                           onChange={(e) => {
                             setDemoSubject(e.target.value);
@@ -1027,6 +1046,7 @@ export default function LandingPage() {
                       <div>
                         <label className="block font-bold text-muted-foreground mb-1">Topic (optional)</label>
                         <input
+                          suppressHydrationWarning
                           type="text"
                           value={demoTopic}
                           onChange={(e) => {
@@ -1042,6 +1062,7 @@ export default function LandingPage() {
 
                     {!demoGenerated && !demoLoading && (
                       <button
+                        suppressHydrationWarning
                         onClick={handleDemoGenerate}
                         className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/10 active:scale-95 transition-all cursor-pointer"
                       >
@@ -1082,6 +1103,7 @@ export default function LandingPage() {
                             return (
                               <button
                                 key={opt.key}
+                                suppressHydrationWarning
                                 onClick={() => {
                                   if (demoAnswer === null) {
                                     setDemoAnswer(opt.key);
@@ -1117,6 +1139,7 @@ export default function LandingPage() {
                             {/* Generate AI Analysis in demo */}
                             {!demoAiDone && !demoAiLoading && (
                               <button
+                                suppressHydrationWarning
                                 onClick={() => { setDemoAiLoading(true); setTimeout(() => { setDemoAiLoading(false); setDemoAiDone(true); }, 1800); }}
                                 className="w-full rounded-xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-3 flex items-center justify-center gap-2 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs font-bold text-blue-700 dark:text-blue-300"
                               >
@@ -1144,6 +1167,7 @@ export default function LandingPage() {
 
                             <div className="flex justify-end pt-1 border-t border-border/50">
                               <button
+                                suppressHydrationWarning
                                 onClick={() => {
                                   setDemoGenerated(false);
                                   setDemoAnswer(null);
@@ -1221,24 +1245,29 @@ export default function LandingPage() {
               rating: 5
             }
           ].map((item, idx) => (
-            <div key={idx} className="glass-card p-6 border border-border/60 hover:border-primary/20 transition-all group duration-300 relative bg-slate-900/40" style={{ backdropFilter: 'blur(12px)' }}>
-              <div className="flex gap-1 text-amber-500 mb-4">
-                {Array.from({ length: item.rating }).map((_, i) => (
-                  <svg key={i} className="w-4 h-4 fill-current text-amber-400" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                ))}
+            <div 
+              key={idx} 
+              className="group relative flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-6 shadow-xs transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md dark:bg-card dark:border-border/80"
+            >
+              <div>
+                <div className="flex gap-1 text-[#F59E0B] dark:text-[#FBBF24] mb-4" aria-label={`Rating: ${item.rating} out of 5 stars`}>
+                  {Array.from({ length: item.rating }).map((_, i) => (
+                    <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                <p className="text-xs md:text-sm text-[#111827] dark:text-[#F9FAFB] leading-relaxed italic">
+                  &quot;{item.quote}&quot;
+                </p>
               </div>
-              <p className="text-xs md:text-sm text-slate-300 leading-relaxed italic">
-                &quot;{item.quote}&quot;
-              </p>
-              <div className="border-t border-slate-800/60 mt-4 pt-3 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary">
+              <div className="border-t border-border/50 mt-4 pt-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary shrink-0">
                   ⚕️
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-white">{item.title}</h4>
-                  <p className="text-[10px] text-muted-foreground">{item.inst}</p>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-semibold text-[#000000] dark:text-[#FFFFFF] truncate">{item.title}</h4>
+                  <p className="text-[10px] text-[#4B5563] dark:text-[#D1D5DB] truncate">{item.inst}</p>
                 </div>
               </div>
             </div>
@@ -1448,7 +1477,6 @@ export default function LandingPage() {
             </Card>
           </div>
         </div>
-      </div>
 
         {/* Stats Strip */}
         <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4 pt-8 border-t border-border/50 max-w-5xl mx-auto w-full">
@@ -1472,7 +1500,6 @@ export default function LandingPage() {
           <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">No Credit Card Required</span>
           <span className="rounded-full border border-border/60 bg-card px-3.5 py-1 text-xs font-semibold text-foreground shadow-sm">Free Daily Tokens</span>
         </div>
-      </section>
 
       {/* Subjects Section */}
       <section className="px-4 py-24 sm:px-6 relative overflow-hidden">
@@ -1592,9 +1619,16 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <div className="text-center mb-10">
             <Badge variant="outline" className="mb-4 border-primary/30 text-primary">Three Exams. One Workflow.</Badge>
-            <h2 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+            <ScrollFloat 
+              animationDuration={0.8}
+              ease="back.inOut(2)"
+              scrollStart="top bottom-=10%"
+              scrollEnd="center center"
+              stagger={0.02}
+              textClassName="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-foreground"
+            >
               Pick your exam microsite
-            </h2>
+            </ScrollFloat>
             <p className="mt-3 text-sm md:text-base text-muted-foreground max-w-2xl mx-auto">
               Each exam gets its own dedicated experience — different subjects,
               different PYQs, different mocks — but the same AI tutor and analytics you trust.
@@ -1649,6 +1683,7 @@ export default function LandingPage() {
       </section>
 
       {/* Site-wide footer is rendered from root layout.tsx */}
-    </div>
+      </div>
+    </ClickSpark>
   );
 }

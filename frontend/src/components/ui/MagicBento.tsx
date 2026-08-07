@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import Link from 'next/link';
 import { gsap } from 'gsap';
+import { ChevronRight } from 'lucide-react';
 import './MagicBento.css';
 
 export interface BentoCardProps {
   color?: string;
-  title?: string;
-  description?: string;
-  label?: string;
-  badge?: string;
-  ctaText?: string;
+  title: string;
+  description: string;
+  label: string;
+  badgeColor?: string;
   href?: string;
   icon?: React.ReactNode;
   textAutoHide?: boolean;
@@ -30,52 +31,12 @@ export interface BentoProps {
   glowColor?: string;
   clickEffect?: boolean;
   enableMagnetism?: boolean;
-  onCardClick?: (card: BentoCardProps, index: number) => void;
 }
 
 const DEFAULT_PARTICLE_COUNT = 12;
 const DEFAULT_SPOTLIGHT_RADIUS = 300;
-const DEFAULT_GLOW_COLOR = '132, 0, 255';
+const DEFAULT_GLOW_COLOR = '59, 130, 246';
 const MOBILE_BREAKPOINT = 768;
-
-const defaultCardData: BentoCardProps[] = [
-  {
-    color: '#120F17',
-    title: 'UPSC CMS Question Bank',
-    description: '3,300+ authentic previous year questions with AI-grounded explanations.',
-    label: 'UPSC CMS'
-  },
-  {
-    color: '#120F17',
-    title: 'NEET PG Clinical Bank',
-    description: 'Subject-wise high-yield practice with image-based questions and mnemonics.',
-    label: 'NEET PG'
-  },
-  {
-    color: '#120F17',
-    title: 'AI Tutor Assistant',
-    description: 'Harrison & Robbins trained multi-model AI assistant for immediate doubts.',
-    label: 'AI Tutor'
-  },
-  {
-    color: '#120F17',
-    title: 'Adaptive Mock Tests',
-    description: 'Timed exam engine simulating exact NBE and UPSC test environments.',
-    label: 'Mock Test'
-  },
-  {
-    color: '#120F17',
-    title: 'Spaced Repetition Flashcards',
-    description: 'SM-2 algorithm flashcards for rapid high-yield clinical recall.',
-    label: 'Recall'
-  },
-  {
-    color: '#120F17',
-    title: 'Performance Analytics',
-    description: 'Granular weak-area identification and real-time rank predictions.',
-    label: 'Analytics'
-  }
-];
 
 const createParticleElement = (x: number, y: number, color: string = DEFAULT_GLOW_COLOR): HTMLDivElement => {
   const el = document.createElement('div');
@@ -121,7 +82,7 @@ const ParticleCard: React.FC<{
   enableTilt?: boolean;
   clickEffect?: boolean;
   enableMagnetism?: boolean;
-  onClick?: () => void;
+  href?: string;
 }> = ({
   children,
   className = '',
@@ -132,7 +93,7 @@ const ParticleCard: React.FC<{
   enableTilt = true,
   clickEffect = false,
   enableMagnetism = false,
-  onClick
+  href
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<HTMLDivElement[]>([]);
@@ -189,8 +150,8 @@ const ParticleCard: React.FC<{
         gsap.fromTo(clone, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: 'back.out(1.7)' });
 
         gsap.to(clone, {
-          x: (Math.random() - 0.5) * 100,
-          y: (Math.random() - 0.5) * 100,
+          x: (Math.random() - 0.5) * 80,
+          y: (Math.random() - 0.5) * 80,
           rotation: Math.random() * 360,
           duration: 2 + Math.random() * 2,
           ease: 'none',
@@ -222,8 +183,8 @@ const ParticleCard: React.FC<{
 
       if (enableTilt) {
         gsap.to(element, {
-          rotateX: 4,
-          rotateY: 4,
+          rotateX: 3,
+          rotateY: 3,
           duration: 0.3,
           ease: 'power2.out',
           transformPerspective: 1000
@@ -290,7 +251,6 @@ const ParticleCard: React.FC<{
     };
 
     const handleClick = (e: MouseEvent) => {
-      if (onClick) onClick();
       if (!clickEffect) return;
 
       const rect = element.getBoundingClientRect();
@@ -321,17 +281,8 @@ const ParticleCard: React.FC<{
 
       gsap.fromTo(
         ripple,
-        {
-          scale: 0,
-          opacity: 1
-        },
-        {
-          scale: 1,
-          opacity: 0,
-          duration: 0.8,
-          ease: 'power2.out',
-          onComplete: () => ripple.remove()
-        }
+        { scale: 0, opacity: 1 },
+        { scale: 1, opacity: 0, duration: 0.8, ease: 'power2.out', onComplete: () => ripple.remove() }
       );
     };
 
@@ -348,17 +299,24 @@ const ParticleCard: React.FC<{
       element.removeEventListener('click', handleClick);
       clearAllParticles();
     };
-  }, [animateParticles, clearAllParticles, disableAnimations, enableTilt, enableMagnetism, clickEffect, glowColor, onClick]);
+  }, [animateParticles, clearAllParticles, disableAnimations, enableTilt, enableMagnetism, clickEffect, glowColor]);
 
-  return (
+  const content = (
     <div
       ref={cardRef}
-      className={`${className} particle-container`}
+      className={`${className} particle-container group`}
       style={{ ...style, position: 'relative', overflow: 'hidden' }}
+      suppressHydrationWarning
     >
       {children}
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="block no-underline">{content}</Link>;
+  }
+
+  return content;
 };
 
 const GlobalSpotlight: React.FC<{
@@ -375,7 +333,6 @@ const GlobalSpotlight: React.FC<{
   glowColor = DEFAULT_GLOW_COLOR
 }) => {
   const spotlightRef = useRef<HTMLDivElement | null>(null);
-  const isInsideSection = useRef(false);
 
   useEffect(() => {
     if (disableAnimations || !gridRef?.current || !enabled) return;
@@ -384,22 +341,19 @@ const GlobalSpotlight: React.FC<{
     spotlight.className = 'global-spotlight';
     spotlight.style.cssText = `
       position: fixed;
-      width: 800px;
-      height: 800px;
+      width: 600px;
+      height: 600px;
       border-radius: 50%;
       pointer-events: none;
       background: radial-gradient(circle,
-        rgba(${glowColor}, 0.15) 0%,
-        rgba(${glowColor}, 0.08) 15%,
-        rgba(${glowColor}, 0.04) 25%,
+        rgba(${glowColor}, 0.12) 0%,
+        rgba(${glowColor}, 0.06) 20%,
         rgba(${glowColor}, 0.02) 40%,
-        rgba(${glowColor}, 0.01) 65%,
         transparent 70%
       );
-      z-index: 200;
+      z-index: 30;
       opacity: 0;
       transform: translate(-50%, -50%);
-      mix-blend-mode: screen;
     `;
     document.body.appendChild(spotlight);
     spotlightRef.current = spotlight;
@@ -412,15 +366,10 @@ const GlobalSpotlight: React.FC<{
       const mouseInside =
         rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
 
-      isInsideSection.current = mouseInside || false;
       const cards = gridRef.current.querySelectorAll('.magic-bento-card');
 
       if (!mouseInside) {
-        gsap.to(spotlightRef.current, {
-          opacity: 0,
-          duration: 0.3,
-          ease: 'power2.out'
-        });
+        gsap.to(spotlightRef.current, { opacity: 0, duration: 0.3, ease: 'power2.out' });
         cards.forEach(card => {
           (card as HTMLElement).style.setProperty('--glow-intensity', '0');
         });
@@ -435,8 +384,7 @@ const GlobalSpotlight: React.FC<{
         const cardRect = cardElement.getBoundingClientRect();
         const centerX = cardRect.left + cardRect.width / 2;
         const centerY = cardRect.top + cardRect.height / 2;
-        const distance =
-          Math.hypot(e.clientX - centerX, e.clientY - centerY) - Math.max(cardRect.width, cardRect.height) / 2;
+        const distance = Math.hypot(e.clientX - centerX, e.clientY - centerY) - Math.max(cardRect.width, cardRect.height) / 2;
         const effectiveDistance = Math.max(0, distance);
 
         minDistance = Math.min(minDistance, effectiveDistance);
@@ -473,16 +421,11 @@ const GlobalSpotlight: React.FC<{
     };
 
     const handleMouseLeave = () => {
-      isInsideSection.current = false;
       gridRef.current?.querySelectorAll('.magic-bento-card').forEach(card => {
         (card as HTMLElement).style.setProperty('--glow-intensity', '0');
       });
       if (spotlightRef.current) {
-        gsap.to(spotlightRef.current, {
-          opacity: 0,
-          duration: 0.3,
-          ease: 'power2.out'
-        });
+        gsap.to(spotlightRef.current, { opacity: 0, duration: 0.3, ease: 'power2.out' });
       }
     };
 
@@ -499,24 +442,13 @@ const GlobalSpotlight: React.FC<{
   return null;
 };
 
-const BentoCardGrid: React.FC<{
-  children: React.ReactNode;
-  gridRef?: React.RefObject<HTMLDivElement | null>;
-}> = ({ children, gridRef }) => (
-  <div className="card-grid bento-section" ref={gridRef}>
-    {children}
-  </div>
-);
-
 const useMobileDetection = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-
     checkMobile();
     window.addEventListener('resize', checkMobile);
-
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -524,7 +456,7 @@ const useMobileDetection = () => {
 };
 
 const MagicBento: React.FC<BentoProps> = ({
-  cards = defaultCardData,
+  cards,
   textAutoHide = true,
   enableStars = true,
   enableSpotlight = true,
@@ -532,15 +464,16 @@ const MagicBento: React.FC<BentoProps> = ({
   disableAnimations = false,
   spotlightRadius = DEFAULT_SPOTLIGHT_RADIUS,
   particleCount = DEFAULT_PARTICLE_COUNT,
-  enableTilt = true,
+  enableTilt = false,
   glowColor = DEFAULT_GLOW_COLOR,
   clickEffect = true,
-  enableMagnetism = true,
-  onCardClick
+  enableMagnetism = true
 }) => {
   const gridRef = useRef<HTMLDivElement>(null);
   const isMobile = useMobileDetection();
   const shouldDisableAnimations = disableAnimations || isMobile;
+
+  const displayCards = cards && cards.length > 0 ? cards : [];
 
   return (
     <>
@@ -554,41 +487,44 @@ const MagicBento: React.FC<BentoProps> = ({
         />
       )}
 
-      <BentoCardGrid gridRef={gridRef}>
-        {cards.map((card, index) => {
+      <div className="card-grid bento-section" ref={gridRef}>
+        {displayCards.map((card, index) => {
           const baseClassName = `magic-bento-card ${textAutoHide ? 'magic-bento-card--text-autohide' : ''} ${enableBorderGlow ? 'magic-bento-card--border-glow' : ''}`;
-          const cardProps = {
-            className: baseClassName,
-            style: {
-              backgroundColor: card.color || '#120F17',
-              '--glow-color': glowColor
-            } as React.CSSProperties
-          };
 
           return (
             <ParticleCard
               key={index}
-              {...cardProps}
+              className={baseClassName}
               disableAnimations={shouldDisableAnimations}
               particleCount={particleCount}
               glowColor={glowColor}
               enableTilt={enableTilt}
               clickEffect={clickEffect}
               enableMagnetism={enableMagnetism}
-              onClick={() => onCardClick?.(card, index)}
+              href={card.href}
             >
               <div className="magic-bento-card__header">
-                <div className="magic-bento-card__label">{card.label || 'Feature'}</div>
-                {card.icon && <div className="text-primary">{card.icon}</div>}
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${card.badgeColor || 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'}`}>
+                  {card.label}
+                </span>
+                {card.icon && (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                    {card.icon}
+                  </div>
+                )}
               </div>
-              <div className="magic-bento-card__content">
-                <h3 className="magic-bento-card__title">{card.title}</h3>
+              <div className="magic-bento-card__content mt-4">
+                <h3 className="magic-bento-card__title group-hover:text-primary transition-colors">{card.title}</h3>
                 <p className="magic-bento-card__description">{card.description}</p>
+              </div>
+              <div className="pt-4 mt-4 border-t border-border/40 flex items-center text-xs font-semibold text-primary">
+                <span>Explore Engine</span>
+                <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </div>
             </ParticleCard>
           );
         })}
-      </BentoCardGrid>
+      </div>
     </>
   );
 };

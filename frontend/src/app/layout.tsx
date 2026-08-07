@@ -268,7 +268,7 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
+      <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`} suppressHydrationWarning>
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <PWAProvider>
           <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="crackcms-theme">
