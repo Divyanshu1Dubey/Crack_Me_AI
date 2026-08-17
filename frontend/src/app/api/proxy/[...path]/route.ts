@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server';
 
-const DEFAULT_BACKEND_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
+const DEFAULT_BACKEND_API_URL = 'https://crackmeai-production.up.railway.app/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
 const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-backend.onrender.com',
   '.onrender.com',
+  'crackcms-vsthc.ondigitalocean.app',
+  '.ondigitalocean.app',
 ];
 
 const normalizeApiBaseUrl = (url: string) => {

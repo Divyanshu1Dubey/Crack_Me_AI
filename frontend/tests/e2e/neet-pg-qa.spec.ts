@@ -10,7 +10,7 @@
  */
 import { test, expect, request } from '@playwright/test';
 
-const API_BASE = process.env.API_BASE_URL || 'https://crackcms-vsthc.ondigitalocean.app';
+const API_BASE = process.env.API_BASE_URL || 'https://crackmeai-production.up.railway.app';
 
 test.describe('Bug #6 — exam_source filter was ignored on /api/questions/', () => {
     test('filterset_fields must include exam_source', async () => {

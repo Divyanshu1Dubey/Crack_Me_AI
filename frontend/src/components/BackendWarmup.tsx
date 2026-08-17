@@ -2,10 +2,12 @@
 import { useEffect } from 'react';
 
 const DEFAULT_LOCAL_BACKEND_BASE = 'http://localhost:8000';
-const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackcms-vsthc.ondigitalocean.app';
+const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://crackmeai-production.up.railway.app';
 const LEGACY_UNHEALTHY_API_HOSTS = [
     'crackcms-backend.onrender.com',
     '.onrender.com',
+    'crackcms-vsthc.ondigitalocean.app',
+    '.ondigitalocean.app',
 ];
 
 const resolveBackendBase = () => {

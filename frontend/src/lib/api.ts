@@ -30,10 +30,12 @@ const isAppRunningLocally = () => {
 
 const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
 const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
-const DEFAULT_PRODUCTION_API_URL = 'https://crackcms-vsthc.ondigitalocean.app/api';
+const DEFAULT_PRODUCTION_API_URL = 'https://crackmeai-production.up.railway.app/api';
 const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-backend.onrender.com',
   '.onrender.com',
+  'crackcms-vsthc.ondigitalocean.app',
+  '.ondigitalocean.app',
 ];
 
 const normalizeApiBaseUrl = (url: string) => {
