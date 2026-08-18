@@ -100,7 +100,12 @@ const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
 const getBackendProfileUrl = () => {
     const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
     if (configuredApiUrl) {
-        return `${configuredApiUrl.replace(/\/+$/, '')}/auth/profile/`;
+        const base = configuredApiUrl.replace(/\/+$/, '');
+        // If NEXT_PUBLIC_API_URL already ends in /api, just append the path;
+        // otherwise treat it as the API root and prepend /api.
+        return base.endsWith('/api')
+            ? `${base}/auth/profile/`
+            : `${base}/api/auth/profile/`;
     }
 
     if (process.env.NODE_ENV === 'production') {

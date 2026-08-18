@@ -346,6 +346,19 @@ def _append_unique(items: list[str], value: str) -> list[str]:
     return items
 
 
+def _sync_www_variant(items: list[str], base_url: str) -> None:
+    """If base_url is a bare domain, also allow its www variant (and vice-versa)."""
+    parsed = urlparse(base_url)
+    host = parsed.hostname or ''
+    if '.' not in host:
+        return
+    if host.startswith('www.'):
+        alt = f"{parsed.scheme}://{host[4:]}"
+    else:
+        alt = f"{parsed.scheme}://www.{host}"
+    _append_unique(items, alt)
+
+
 # Used only to keep CORS/CSRF checks aligned with the frontend origin; defaults to empty.
 cors_frontend_url = os.getenv('FRONTEND_URL', '').strip()
 
@@ -358,6 +371,8 @@ cors_allowed_origins = _parse_origin_list(
 )
 if cors_frontend_url:
     _append_unique(cors_allowed_origins, cors_frontend_url)
+    # Also allow the www subdomain if FRONTEND_URL is the bare domain (and vice-versa)
+    _sync_www_variant(cors_allowed_origins, cors_frontend_url)
 CORS_ALLOWED_ORIGINS = cors_allowed_origins
 CORS_ALLOW_CREDENTIALS = True
 
@@ -375,6 +390,7 @@ csrf_trusted_origins = _parse_origin_list(
 )
 if cors_frontend_url:
     _append_unique(csrf_trusted_origins, cors_frontend_url)
+    _sync_www_variant(csrf_trusted_origins, cors_frontend_url)
 CSRF_TRUSTED_ORIGINS = csrf_trusted_origins
 
 # Internationalization
