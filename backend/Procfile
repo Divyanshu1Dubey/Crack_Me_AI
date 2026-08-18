@@ -1,2 +1,2 @@
 release: python manage.py migrate --no-input && python manage.py bootstrap_admin && python manage.py seed_data
-web: gunicorn crack_cms.wsgi --log-file -
+web: gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120 --log-file -
