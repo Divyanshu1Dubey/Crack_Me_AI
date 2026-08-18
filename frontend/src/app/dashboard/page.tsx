@@ -31,10 +31,7 @@ interface HeatmapDay {
 }
 
 // SWR fetchers with caching
-const dashboardFetcher = () => analyticsAPI.getDashboard().then(r => r.data).catch(() => null);
-const heatmapFetcher = () => analyticsAPI.getHeatmap().then(r => r.data || []).catch(() => []);
-const streakFetcher = () => analyticsAPI.getStreak().then(r => r.data).catch(() => null);
-const announcementsFetcher = () => announcementsAPI.list().then(r => r.data || []).catch(() => []);
+const dashboardFetcher = () => analyticsAPI.getBundle().then(r => r.data).catch(() => null);
 
 const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
 const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
@@ -153,34 +150,27 @@ export default function DashboardPage() {
         errorRetryCount: 2,
     };
 
-    const { data: dashData, isLoading: loadingDash } = useSWR(
-        ready ? 'dashboard' : null,
+    const { data: bundle, isLoading: loadingDash } = useSWR(
+        ready ? 'dashboard-bundle' : null,
         dashboardFetcher,
         swrConfig
     );
 
-    // Dynamic SWR keys based on selected exam source
+    const dashData = bundle?.dashboard;
+    const heatmap = bundle?.heatmap || [];
+    const streak = bundle?.streak;
+    const announcements = bundle?.announcements || [];
+    const questionStats = bundle?.question_stats;
+
+    // Dynamic SWR keys based on selected exam source (lightweight — just counts)
     const { data: stats } = useSWR(
         ready ? ['question-stats', selectedExam] : null,
-        () => questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null),
-        swrConfig
-    );
-
-    const { data: heatmap = [] } = useSWR(
-        ready ? 'heatmap' : null,
-        heatmapFetcher,
-        swrConfig
-    );
-
-    const { data: streak } = useSWR(
-        ready ? 'streak' : null,
-        streakFetcher,
-        swrConfig
-    );
-
-    const { data: announcements = [] } = useSWR(
-        ready ? 'announcements' : null,
-        announcementsFetcher,
+        () => {
+            if (questionStats) {
+                return selectedExam === 'NEET PG' ? questionStats.neet_pg : questionStats.cms;
+            }
+            return questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null);
+        },
         swrConfig
     );
 

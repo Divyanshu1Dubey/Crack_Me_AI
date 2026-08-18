@@ -34,7 +34,8 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
 
     from django.core.exceptions import ImproperlyConfigured
 
-    if os.getenv("DJANGO_SECRET_KEY", "").strip() in ("", "django-insecure-local-dev-only"):
+    secret_key = os.getenv("DJANGO_SECRET_KEY", os.getenv("SECRET_KEY", "")).strip()
+    if secret_key in ("", "django-insecure-local-dev-only"):
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY must be set to a strong value in production."
         )

@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import dashboard_v3 as views_v3
 from . import views_internal
+from . import views_bundle
 
 urlpatterns = [
     # Internal analytics ingestion + admin dashboard
@@ -35,6 +36,7 @@ urlpatterns = [
     path('admin/campaigns/<int:pk>/send-now/', views.AdminCampaignSendNowView.as_view(), name='admin-campaign-send-now'),
     # Phase 3 — combined dashboard + new analytics endpoints (additive).
     path('dashboard_v3/', views_v3.DashboardV3View.as_view(), name='dashboard-v3'),
+    path('dashboard/bundle/', views_bundle.DashboardBundleView.as_view(), name='dashboard-bundle'),
     path('heatmap/subject/', views_v3.HeatmapSubjectView.as_view(), name='heatmap-subject'),
     path('revision_progress/', views_v3.RevisionProgressView.as_view(), name='revision-progress'),
     path('pyq_coverage/', views_v3.PYQCoverageView.as_view(), name='pyq-coverage'),

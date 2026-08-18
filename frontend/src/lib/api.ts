@@ -505,6 +505,7 @@ export const testsAPI = {
 // Analytics API
 export const analyticsAPI = {
   getDashboard: () => api.get('/analytics/dashboard/'),
+  getBundle: () => api.get('/analytics/dashboard/bundle/'),
   getWeakTopics: () => api.get('/analytics/weak-topics/'),
   getTopicPerformance: () => api.get('/analytics/topic-performance/'),
   getHeatmap: () => api.get('/analytics/heatmap/'),
