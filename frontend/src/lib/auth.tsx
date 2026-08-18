@@ -104,7 +104,7 @@ const getBackendProfileUrl = () => {
     }
 
     if (process.env.NODE_ENV === 'production') {
-        return 'https://crackmeai-production.up.railway.app/api/auth/profile/';
+        return 'https://api.cracklabs.app/api/auth/profile/';
     }
 
     return 'http://localhost:8000/api/auth/profile/';

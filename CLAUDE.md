@@ -37,7 +37,7 @@ Only after reading the relevant documentation should you open individual source 
 - **AI**: 11-provider round-robin with RAG over TF-IDF SQLite store
 - **Auth**: Custom JWT + Supabase (hybrid); django-axes brute-force protection
 - **Deployment**: Render (backend) + Vercel (frontend); GitHub Actions CI
-- **Live**: `cracklabs.app` ↔ `crackcms-vsthc.ondigitalocean.app/api/`
+- **Live**: `cracklabs.app` ↔ `api.cracklabs.app/api/`
 
 ## Common Commands
 

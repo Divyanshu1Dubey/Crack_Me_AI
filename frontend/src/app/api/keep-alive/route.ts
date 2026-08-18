@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const DEFAULT_BACKEND_BASE_URL = 'https://crackmeai-production.up.railway.app';
+const DEFAULT_BACKEND_BASE_URL = 'https://api.cracklabs.app';
 
 const resolveBackendBaseUrl = () => {
     const configured = (
