@@ -110,6 +110,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -175,7 +176,7 @@ if DATABASE_URL and not IS_COLLECTSTATIC:
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=int(os.getenv('CONN_MAX_AGE', 0)),
+            conn_max_age=int(os.getenv('CONN_MAX_AGE', '60')),
             ssl_require=not DEBUG,
         )
     }
