@@ -1,6 +1,5 @@
 
 
-
 # 🏥 Crack_Me_AI — UPSC CMS Exam Preparation Platform
 
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2016-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
