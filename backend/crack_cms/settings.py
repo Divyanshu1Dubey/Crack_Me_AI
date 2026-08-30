@@ -103,6 +103,8 @@ INSTALLED_APPS = [
     'ingestion',
     # Generic material importer (DOCX/PDF/PPT) for cms_exclusive_material.
     'material_importer',
+    # Blog management backend — model, admin, DRF API.
+    'blog_engine',
     # Security
     'axes',
 ]

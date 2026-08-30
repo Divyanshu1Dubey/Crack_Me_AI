@@ -15,6 +15,9 @@ python manage.py collectstatic --no-input
 # Self-healing migration handles stale KB tables — no manual ALTER needed.
 python manage.py migrate --no-input
 
+# Seed blog posts from frontend static content (idempotent update_or_create)
+python manage.py seed_blogs || true
+
 # Bootstrap MEDIA_ROOT for recall image persistence.
 # The importer writes extracted images into MEDIA_ROOT/recall_images/...
 # so the browser can fetch them via MEDIA_URL. Without this mkdir,

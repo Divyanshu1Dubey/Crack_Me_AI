@@ -595,6 +595,8 @@ export const aiAPI = {
     api.post(`/ai/chat/sessions/${sessionId}/messages/add/`, data),
 };
 
+// Blog API is in @/lib/blogAPI.ts (blog_api import)
+
 // Textbooks API
 export const textbooksAPI = {
   list: (params?: Record<string, string | number>) => api.get('/textbooks/books/', { params }),

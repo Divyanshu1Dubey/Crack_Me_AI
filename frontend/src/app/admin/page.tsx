@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI, authAPI, questionsAPI, testsAPI, textbooksAPI, extractApiErrorMessage } from '@/lib/api';
+import { blogAPI } from '@/lib/blogAPI';
 import {
     Users, BookOpen, FileText, AlertTriangle, TrendingUp,
     CheckCircle, Clock, Shield, Megaphone, Plus, Trash2,
@@ -75,7 +76,8 @@ type AdminTabKey =
     | 'audit'
     | 'finance'
     | 'ai'
-    | 'jobs';
+    | 'jobs'
+    | 'blogs';
 
 export default function AdminDashboardPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -258,6 +260,35 @@ export default function AdminDashboardPage() {
     // Audit explorer
     const [auditRows, setAuditRows] = useState<any[]>([]);
     const [auditLoading, setAuditLoading] = useState(false);
+    // Blog management
+    const [blogList, setBlogList] = useState<any[]>([]);
+    const [blogLoading, setBlogLoading] = useState(false);
+    const [blogSearch, setBlogSearch] = useState('');
+    const [blogCategoryFilter, setBlogCategoryFilter] = useState('');
+    const [blogPage, setBlogPage] = useState(1);
+    const [blogTotal, setBlogTotal] = useState(0);
+    const [blogShowForm, setBlogShowForm] = useState(false);
+    const [blogEditingId, setBlogEditingId] = useState<number | null>(null);
+    const [blogSaving, setBlogSaving] = useState(false);
+    const [blogForm, setBlogForm] = useState({
+        slug: '',
+        title: '',
+        description: '',
+        excerpt: '',
+        cover_image: '',
+        category: '',
+        subcategory: '',
+        tags: '',
+        difficulty: 'intermediate',
+        author: '',
+        author_role: '',
+        date_published: '',
+        reading_time: '10 min',
+        is_published: true,
+        pinned: false,
+        trending: false,
+        body: '',
+    });
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -442,6 +473,9 @@ export default function AdminDashboardPage() {
         if (tab === 'audit') {
             fetchAuditLogs();
         }
+        if (tab === 'blogs' && blogList.length === 0) {
+            fetchBlogs();
+        }
     };
 
     const fetchWeakAreaControl = async () => {
@@ -542,6 +576,131 @@ export default function AdminDashboardPage() {
             setAuditRows([]);
         }
         setAuditLoading(false);
+    };
+
+    const fetchBlogs = () => {
+        setBlogLoading(true);
+        const params: Record<string, string | number> = { page: blogPage };
+        if (blogSearch.trim()) params.search = blogSearch.trim();
+        if (blogCategoryFilter) params.category = blogCategoryFilter;
+        if (blogCategoryFilter) params.is_published = 'all';
+        blogAPI.list(params)
+            .then((res: any) => {
+                const payload = res.data;
+                const rows = Array.isArray(payload) ? payload : payload?.results || [];
+                setBlogList(rows);
+                setBlogTotal(Number(payload?.count ?? rows.length));
+            })
+            .catch(() => setBlogList([]))
+            .finally(() => setBlogLoading(false));
+    };
+
+    const resetBlogForm = () => setBlogForm({
+        slug: '',
+        title: '',
+        description: '',
+        excerpt: '',
+        cover_image: '',
+        category: '',
+        subcategory: '',
+        tags: '',
+        difficulty: 'intermediate',
+        author: '',
+        author_role: '',
+        date_published: '',
+        reading_time: '10 min',
+        is_published: true,
+        pinned: false,
+        trending: false,
+        body: '',
+    });
+
+    const openBlogCreate = () => {
+        resetBlogForm();
+        setBlogEditingId(null);
+        setBlogShowForm(true);
+    };
+
+    const openBlogEdit = (post: any) => {
+        setBlogForm({
+            slug: post.slug || '',
+            title: post.title || '',
+            description: post.description || '',
+            excerpt: post.excerpt || '',
+            cover_image: post.cover_image || '',
+            category: post.category || '',
+            subcategory: post.subcategory || '',
+            tags: Array.isArray(post.tags) ? post.tags.join(', ') : '',
+            difficulty: post.difficulty || 'intermediate',
+            author: post.author || '',
+            author_role: post.author_role || '',
+            date_published: post.date_published || '',
+            reading_time: post.reading_time || '10 min',
+            is_published: post.is_published ?? true,
+            pinned: post.pinned ?? false,
+            trending: post.trending ?? false,
+            body: post.body || '',
+        });
+        setBlogEditingId(Number(post.id));
+        setBlogShowForm(true);
+    };
+
+    const handleBlogSave = async () => {
+        if (!blogForm.title.trim() || !blogForm.slug.trim()) return;
+        setBlogSaving(true);
+        try {
+            const payload: Record<string, unknown> = {
+                slug: blogForm.slug.trim(),
+                title: blogForm.title.trim(),
+                description: blogForm.description.trim(),
+                excerpt: blogForm.excerpt.trim(),
+                cover_image: blogForm.cover_image.trim(),
+                category: blogForm.category.trim(),
+                subcategory: blogForm.subcategory.trim(),
+                tags: blogForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+                difficulty: blogForm.difficulty,
+                author: blogForm.author.trim(),
+                author_role: blogForm.author_role.trim(),
+                date_published: blogForm.date_published.trim(),
+                reading_time: blogForm.reading_time.trim(),
+                is_published: blogForm.is_published,
+                pinned: blogForm.pinned,
+                trending: blogForm.trending,
+                body: blogForm.body.trim(),
+            };
+            if (blogEditingId) {
+                await blogAPI.update(blogEditingId, payload);
+            } else {
+                await blogAPI.create(payload);
+            }
+            setBlogShowForm(false);
+            setBlogEditingId(null);
+            resetBlogForm();
+            fetchBlogs();
+        } catch {
+            // keep form open on failure
+        }
+        setBlogSaving(false);
+    };
+
+    const handleBlogTogglePublish = async (id: number) => {
+        try {
+            await blogAPI.togglePublish(id);
+            setBlogList((rows) => rows.map((r) => (Number(r.id) === id ? { ...r, is_published: !r.is_published } : r)));
+        } catch {
+            // keep UI stable
+        }
+    };
+
+    const handleBlogDelete = async (id: number) => {
+        if (!confirm('Delete this blog post permanently?')) return;
+        try {
+            await blogAPI.remove(id);
+            setBlogList((rows) => rows.filter((r) => Number(r.id) !== id));
+            setBlogTotal((t) => Math.max(0, t - 1));
+        } catch {
+            // keep UI stable
+        }
     };
 
     const loadRevisionHistory = async () => {
@@ -822,6 +981,7 @@ export default function AdminDashboardPage() {
         { key: 'finance', label: 'Finance', icon: Wallet },
         { key: 'ai', label: 'AI Monitoring', icon: Sparkles },
         { key: 'jobs', label: 'Jobs', icon: Briefcase },
+        { key: 'blogs', label: 'Blog Posts', icon: FileText },
     ];
 
     const handleGrantTokens = async () => {
@@ -3582,23 +3742,194 @@ export default function AdminDashboardPage() {
                         </Card>
                     )}
 
-                    {activeTab === 'jobs' && (
+                    {activeTab === 'blogs' && (
                         <div className="space-y-4">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Jobs Management</CardTitle>
-                                    <CardDescription>
-                                        View, edit, or remove medical job postings on the platform.
-                                    </CardDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                                <FileText className="w-5 h-5" /> Blog Posts
+                                            </CardTitle>
+                                            <CardDescription>
+                                                All {blogTotal} blog posts. Create, edit, publish, and delete.
+                                            </CardDescription>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" onClick={fetchBlogs} disabled={blogLoading}>
+                                                {blogLoading ? 'Loading...' : 'Refresh'}
+                                            </Button>
+                                            <Button size="sm" onClick={openBlogCreate}>
+                                                <Plus className="w-4 h-4 mr-1" /> New Post
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground space-y-3">
-                                        <Briefcase className="h-10 w-10 opacity-50" />
-                                        <p>The full Jobs Management UI lives at its own page.</p>
-                                        <Button onClick={() => router.push('/admin/jobs')} className="mt-1">
-                                            Open Jobs Management
-                                        </Button>
+                                    {/* Filters */}
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        <Input
+                                            className="flex-1 min-w-48"
+                                            placeholder="Search by title, slug, body..."
+                                            value={blogSearch}
+                                            onChange={(e) => setBlogSearch(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') { setBlogPage(1); fetchBlogs(); } }}
+                                        />
+                                        <input
+                                            className="h-10 rounded-md border bg-background px-3 text-sm"
+                                            placeholder="Category filter"
+                                            value={blogCategoryFilter}
+                                            onChange={(e) => setBlogCategoryFilter(e.target.value)}
+                                        />
+                                        <Button size="sm" onClick={() => { setBlogPage(1); fetchBlogs(); }}>Apply</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setBlogSearch(''); setBlogCategoryFilter(''); setBlogPage(1); fetchBlogs(); }}>Reset</Button>
                                     </div>
+
+                                    {/* Create / Edit form */}
+                                    {blogShowForm && (
+                                        <div className="rounded-lg border p-4 mb-4 bg-muted/20 space-y-3">
+                                            <p className="text-sm font-semibold">{blogEditingId ? 'Edit Blog Post' : 'New Blog Post'}</p>
+                                            <div className="grid sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Slug *</label>
+                                                    <Input value={blogForm.slug} onChange={(e) => setBlogForm({ ...blogForm, slug: e.target.value })} placeholder="my-blog-post-slug" disabled={!!blogEditingId} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Title *</label>
+                                                    <Input value={blogForm.title} onChange={(e) => setBlogForm({ ...blogForm, title: e.target.value })} placeholder="Post title" />
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Description</label>
+                                                    <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-y" value={blogForm.description} onChange={(e) => setBlogForm({ ...blogForm, description: e.target.value })} placeholder="SEO description (≤160 chars)" />
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Excerpt</label>
+                                                    <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px] resize-y" value={blogForm.excerpt} onChange={(e) => setBlogForm({ ...blogForm, excerpt: e.target.value })} placeholder="Short excerpt shown on cards" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Category</label>
+                                                    <Input value={blogForm.category} onChange={(e) => setBlogForm({ ...blogForm, category: e.target.value })} placeholder="e.g. UPSC CMS" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Subcategory</label>
+                                                    <Input value={blogForm.subcategory} onChange={(e) => setBlogForm({ ...blogForm, subcategory: e.target.value })} placeholder="e.g. Strategy" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Tags (comma-separated)</label>
+                                                    <Input value={blogForm.tags} onChange={(e) => setBlogForm({ ...blogForm, tags: e.target.value })} placeholder="UPSC CMS, Strategy, PYQs" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Difficulty</label>
+                                                    <select className="h-10 rounded-md border bg-background px-3 text-sm w-full" value={blogForm.difficulty} onChange={(e) => setBlogForm({ ...blogForm, difficulty: e.target.value })}>
+                                                        <option value="beginner">Beginner</option>
+                                                        <option value="intermediate">Intermediate</option>
+                                                        <option value="advanced">Advanced</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Author</label>
+                                                    <Input value={blogForm.author} onChange={(e) => setBlogForm({ ...blogForm, author: e.target.value })} placeholder="Dr. Name, MBBS" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Author Role</label>
+                                                    <Input value={blogForm.author_role} onChange={(e) => setBlogForm({ ...blogForm, author_role: e.target.value })} placeholder="Senior Editor — Medicine" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Date Published</label>
+                                                    <Input type="date" value={blogForm.date_published} onChange={(e) => setBlogForm({ ...blogForm, date_published: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Reading Time</label>
+                                                    <Input value={blogForm.reading_time} onChange={(e) => setBlogForm({ ...blogForm, reading_time: e.target.value })} placeholder="e.g. 12 min" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Cover Image Path</label>
+                                                    <Input value={blogForm.cover_image} onChange={(e) => setBlogForm({ ...blogForm, cover_image: e.target.value })} placeholder="/blog/og/my-post-cover.png" />
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <label className="flex items-center gap-2 text-sm">
+                                                        <input type="checkbox" checked={blogForm.is_published} onChange={(e) => setBlogForm({ ...blogForm, is_published: e.target.checked })} /> Published
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-sm">
+                                                        <input type="checkbox" checked={blogForm.pinned} onChange={(e) => setBlogForm({ ...blogForm, pinned: e.target.checked })} /> Pinned
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-sm">
+                                                        <input type="checkbox" checked={blogForm.trending} onChange={(e) => setBlogForm({ ...blogForm, trending: e.target.checked })} /> Trending
+                                                    </label>
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <label className="text-xs font-medium text-muted-foreground block mb-1">Body (Markdown)</label>
+                                                    <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[120px] resize-y font-mono" value={blogForm.body} onChange={(e) => setBlogForm({ ...blogForm, body: e.target.value })} placeholder="Full markdown body..." />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" onClick={handleBlogSave} disabled={blogSaving || !blogForm.title.trim() || !blogForm.slug.trim()}>
+                                                    {blogSaving ? 'Saving...' : blogEditingId ? 'Update' : 'Create'}
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setBlogShowForm(false); setBlogEditingId(null); resetBlogForm(); }}>Cancel</Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Blog posts table */}
+                                    {blogLoading ? (
+                                        <p className="text-sm text-muted-foreground animate-pulse text-center py-8">Loading blog posts...</p>
+                                    ) : blogList.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground text-center py-8">No blog posts found. Click "New Post" to create one.</p>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b text-left text-muted-foreground">
+                                                        <th className="pb-2 pr-4">Title</th>
+                                                        <th className="pb-2 pr-4">Category</th>
+                                                        <th className="pb-2 pr-4">Author</th>
+                                                        <th className="pb-2 pr-4">Published</th>
+                                                        <th className="pb-2 pr-4">Pinned</th>
+                                                        <th className="pb-2 pr-4">Trending</th>
+                                                        <th className="pb-2 pr-4 text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {blogList.map((post: any) => (
+                                                        <tr key={post.id} className="border-b last:border-0 hover:bg-muted/50">
+                                                            <td className="py-2 pr-4">
+                                                                <div className="font-medium truncate max-w-[300px]">{post.title}</div>
+                                                                <div className="text-xs text-muted-foreground font-mono">{post.slug}</div>
+                                                            </td>
+                                                            <td className="py-2 pr-4">
+                                                                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{post.category}</span>
+                                                                {post.subcategory && <span className="text-xs text-muted-foreground ml-1">{post.subcategory}</span>}
+                                                            </td>
+                                                            <td className="py-2 pr-4 text-xs">{post.author}</td>
+                                                            <td className="py-2 pr-4">
+                                                                <Badge variant={post.is_published ? 'default' : 'secondary'} className="text-[10px]">
+                                                                    {post.is_published ? 'Published' : 'Draft'}
+                                                                </Badge>
+                                                            </td>
+                                                            <td className="py-2 pr-4">
+                                                                {post.pinned && <span className="text-xs text-amber-600 dark:text-amber-400">📌 Pinned</span>}
+                                                            </td>
+                                                            <td className="py-2 pr-4">
+                                                                {post.trending && <span className="text-xs text-rose-600 dark:text-rose-400">🔥 Trending</span>}
+                                                            </td>
+                                                            <td className="py-2 pr-4">
+                                                                <div className="flex justify-end gap-1">
+                                                                    <Button size="sm" variant="outline" onClick={() => openBlogEdit(post)}>Edit</Button>
+                                                                    <Button size="sm" variant="outline" onClick={() => handleBlogTogglePublish(Number(post.id))}>
+                                                                        {post.is_published ? 'Unpublish' : 'Publish'}
+                                                                    </Button>
+                                                                    <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleBlogDelete(Number(post.id))}>
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>

@@ -89,6 +89,7 @@ urlpatterns = [
     path("api/ingestion/", include("ingestion.urls")),
     # Admin Import Center (Phase 1) — staff-only ingestion UI backend.
     path("api/admin/import/", include("material_importer.urls")),
+    path("api/blog/", include("blog_engine.urls")),
 ]
 
 if settings.DEBUG:
