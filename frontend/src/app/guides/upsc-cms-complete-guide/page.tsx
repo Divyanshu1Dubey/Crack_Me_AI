@@ -1,5 +1,6 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
+import { ArrowRight } from 'lucide-react';
 
 const title = 'UPSC CMS Complete Guide 2026 — Eligibility, Syllabus, Pattern, Books, Salary';
 const description = 'Everything about UPSC CMS 2026: eligibility (MBBS, age limit), exam pattern (240 MCQs, -0.33), subject-wise syllabus, topper-recommended books, salary, cutoff, and a 6-month study plan.';
@@ -209,11 +210,25 @@ export default function UPSCCMSGuide() {
                 <li>Personalised analytics — see exactly which topics are dragging your rank</li>
             </ul>
 
-            <h2>Frequently asked questions</h2>
-            <p>
-                See the FAQ section above for answers to the most common UPSC CMS questions. If you have additional
-                queries, ask our <a href="/ai-tutor">AI tutor</a> or browse our <a href="/questions">question bank</a>.
-            </p>
+            <h2>Essential UPSC CMS Resources</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+                <a href="/cms/exam-pattern" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                    <p className="text-sm font-bold group-hover:underline">UPSC CMS Exam Pattern <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                    <p className="mt-1 text-sm text-muted-foreground">240 MCQs, marking scheme, subject-wise distribution, negative marking rules.</p>
+                </a>
+                <a href="/cms/salary" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                    <p className="text-sm font-bold group-hover:underline">UPSC CMS Salary &amp; Career Growth <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                    <p className="mt-1 text-sm text-muted-foreground">Pay structure, NPA, HRA, promotion hierarchy from MO to DGHS.</p>
+                </a>
+                <a href="/cms/vs-neet-pg" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                    <p className="text-sm font-bold group-hover:underline">UPSC CMS vs NEET PG <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                    <p className="mt-1 text-sm text-muted-foreground">Which exam should you choose? Side-by-side comparison of career tracks, salary, and difficulty.</p>
+                </a>
+                <a href="/cms/cutoff/2026" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                    <p className="text-sm font-bold group-hover:underline">UPSC CMS 2026 Cutoff <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                    <p className="mt-1 text-sm text-muted-foreground">Category-wise qualifying marks, previous year trends, and expected cutoff.</p>
+                </a>
+            </div>
         </GuideLayout>
     );
 }

@@ -44,7 +44,7 @@ export default function AuthShell({
 
       <div className="relative w-full max-w-110 z-10">
         <div className="mb-8 flex justify-center">
-            <BrandMark href="/" priority className="scale-110" />
+            <BrandMark href="/" className="scale-110" />
         </div>
         
         <Card className="border-border shadow-2xl bg-card">

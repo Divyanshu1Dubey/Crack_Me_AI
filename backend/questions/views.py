@@ -20,8 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, F, Max, Q, Value
-from django.db.models import Exists, OuterRef
+from django.db.models import Count, F, Max, Q, Subquery, Value, OuterRef, IntegerField, Case, When, Exists
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
@@ -56,34 +55,45 @@ _QUESTION_BOOTSTRAP_LOCK = Lock()
 
 
 def _ensure_question_bank_loaded():
-    """Load fixture once if question bank is empty in a fresh deployment."""
+    """Load fixture once if question bank is empty in a fresh deployment.
+
+    Uses a cache flag so we don't run the expensive COUNT query on
+    every single API request — which was adding ~1-2s per page load
+    on Postgres.
+    """
     import sys
     if 'test' in sys.argv or 'test_all' in sys.argv:
         return
 
-    if Question.objects.filter(is_active=True).count() >= 1800:
+    # Cache the "already checked" flag for 10 minutes so we skip
+    # the COUNT query on every request. The count is still correct
+    # because a fresh deploy will have a different cache namespace.
+    cache_flag = cache.get('qbank:checked')
+    if cache_flag is not None:
         return
 
-    # Back-compat: try fixtures/cms_fixture.json first, then legacy
-    # backend/questions_fixture.json at repo root.
+    if Question.objects.filter(is_active=True).count() >= 1800:
+        cache.set('qbank:checked', '1', 600)
+        return
+
     fixture_path = Path(settings.BASE_DIR) / 'fixtures' / 'cms_fixture.json'
     if not fixture_path.exists():
         fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
     if not fixture_path.exists():
+        cache.set('qbank:checked', '1', 600)
         return
 
     with _QUESTION_BOOTSTRAP_LOCK:
         if Question.objects.filter(is_active=True).count() >= 1800:
+            cache.set('qbank:checked', '1', 600)
             return
-        
-        # 1. Run migrations to ensure database schema exists
+
         try:
             logger.info("Auto-running migrations on startup...")
             call_command('migrate', no_input=True, verbosity=0)
         except Exception:
             logger.exception("Auto-migration failed")
-            
-        # 2. Run seed_data to populate subjects and topics
+
         try:
             logger.info("Auto-running seed_data to populate subjects and topics...")
             call_command('seed_data', verbosity=0)
@@ -93,6 +103,7 @@ def _ensure_question_bank_loaded():
         logger.warning('Question bank empty. Bootstrapping from fixture: %s', fixture_path)
         try:
             call_command('loaddata', str(fixture_path), verbosity=0)
+            cache.set('qbank:checked', '1', 600)
             logger.info('Question bank bootstrap complete. Active questions=%s', Question.objects.filter(is_active=True).count())
         except Exception:
             logger.exception('Question bank bootstrap failed')
@@ -357,26 +368,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
             ).annotate(
                 accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
             )
-            # Annotate each row with its DuplicateCluster info so the admin
-            # list can flag rows that have duplicate siblings. Single
-            # subquery + a correlated count keeps this O(1) per row.
-            from django.db.models import Subquery, IntegerField
-            _cluster_id_subq = Subquery(
-                DuplicateMember.objects.filter(question_id=OuterRef('pk'))
-                .values('cluster_id')[:1],
-                output_field=IntegerField(),
-            )
-            _cluster_member_count_subq = Subquery(
-                DuplicateMember.objects.filter(cluster_id=OuterRef('_cluster_id'))
-                .values('cluster_id')
-                .annotate(c=Count('id'))
-                .values('c')[:1],
-                output_field=IntegerField(),
-            )
-            queryset = queryset.annotate(
-                _cluster_id=_cluster_id_subq,
-                _cluster_member_count=_cluster_member_count_subq,
-            )
+            # NOTE: DuplicateCluster annotations removed — they caused
+            # 2 correlated subqueries per row (slow on 8k+ questions).
+            # The admin duplicate page computes these on demand instead.
             # Freemium annotation: `is_showcase=True` when this row is in
             # accounts.FreeShowcaseQuestion. Used by the frontend to render
             # a "Premium" badge on non-showcase rows for free users.
@@ -404,21 +398,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 and not is_admin
                 and not _is_premium(user)
             ):
-                queryset = queryset.extra(
-                    select={
-                        # Same prime modulus (23) for both branches so
-                        # showcase and paid rows land in the SAME 0..22
-                        # bucket range — a free card at slot 5 sits next
-                        # to a paid card at slot 5 (different ids), giving
-                        # true interleaving. Different multiplier (11 vs
-                        # 7) keeps them from accidentally landing on the
-                        # same id-derived slot too often.
-                        'shuffle_slot':
-                            '(CASE WHEN EXISTS(SELECT 1 FROM "accounts_freeshowcasequestion" U WHERE U."question_id" = "questions_question"."id") '
-                            'THEN (("questions_question"."id" * 11) %% 23) '
-                            'ELSE (("questions_question"."id" * 7) %% 23) END)',
-                    },
-                ).order_by('shuffle_slot', F('is_showcase').desc(), '-id')
+                queryset = queryset.annotate(
+                    shuffle_slot=Case(
+                        When(is_showcase=True, then=F('id') % 23),
+                        default=F('id') % 23 + 23,
+                        output_field=IntegerField(),
+                    ),
+                ).order_by('shuffle_slot', '-id')
             if user and getattr(user, 'is_authenticated', False):
                 from questions.models import QuestionAttempt
                 queryset = queryset.annotate(
