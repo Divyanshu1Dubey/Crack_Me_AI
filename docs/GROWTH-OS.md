@@ -80,15 +80,62 @@ All added to sitemap.ts with priority 0.85.
 
 ---
 
-## MISSING HIGH-VALUE PAGES (rank #1 priority)
-| Page | Keywords | Impressions | Effort |
-|------|----------|-------------|--------|
-| `/cms/salary` | `upsc cms salary`, `admo salary` | 150+ | ✅ Built (Sep 2026) |
-| `/cms/exam-pattern` | `upsc cms exam pattern`, `cms marking` | 139+ | ✅ Built (Sep 2026) |
-| `/neet-pg/vs-upsc-cms` | `neet pg vs upsc cms` | 141+ | ✅ Built (Sep 2026) |
-| `/neet-pg/vs-ini-cet` | `neet pg vs ini cet` | 141+ | ⏳ Next |
-| `/cms/result-2026` | `upsc cms result 2026`, `upsc cms result date` | 155+ | ⏳ When results approach |
-| `/cms/syllabus` | `upsc cms syllabus`, `upsc cms subjects` | 170+ | ⏳ Medium priority |
+## NEW PAGES CREATED (Sep 2026)
+| Page | Target Keywords | Impressions | Status |
+|------|----------------|-------------|--------|
+| `/cms/salary` | `upsc cms salary`, `admo salary` | 150+ | ✅ Live |
+| `/cms/exam-pattern` | `upsc cms exam pattern`, `cms marking` | 139+ | ✅ Live |
+| `/neet-pg/vs-upsc-cms` | `neet pg vs upsc cms` | 141+ | ✅ Live |
+| `/neet-pg/vs-ini-cet` | `neet pg vs ini cet` | 141+ | ✅ Live (cycle 2) |
+| `/cms/vs-ini-cet` | `upsc cms vs ini cet` | 100+ | ✅ Live (cycle 2) |
+| `/tools/upsc-cms-eligibility-checker` | `upsc cms eligibility` | 200+ | ✅ Live (cycle 2) |
+
+## TECHNICAL SEO FIXES (Sep 2026)
+- `/cms/cutoff` → 301 redirect to `/cms/cutoff/2026` (fixes duplicate content, captures 41 imp)
+- `/cms/vs-neet-pg` CTR fix: hero + breadcrumbs + FAQ schema (15,735 imp)
+- `/neet-pg/vs-usmle` CTR fix: hero + breadcrumbs + FAQ schema (2,495 imp)
+- FAQ schema on `/guides/upsc-cms-complete-guide` (GuideLayout handles it)
+- Sitemap updated with all new routes
+
+## INTERNAL LINK GRAPH (complete after cycle 2)
+**Hubs with cross-links:**
+- `/cms` → `/cms/cutoff/2026`, `/cms/exam-pattern`, `/cms/salary`, `/cms/vs-neet-pg`, `/cms/vs-ini-cet`
+- `/neet-pg` → `/neet-pg/vs-usmle`, `/neet-pg/vs-upsc-cms`, `/neet-pg/vs-ini-cet`, `/guides/neet-pg-complete-guide`, `/guides/study-plan-builder`
+- `/usmle` → `/neet-pg/vs-usmle`, `/neet-pg`, `/guides/usmle-step-1-guide`
+- `/ini-cet` → `/neet-pg/vs-ini-cet`, `/cms/vs-ini-cet`, `/guides/ini-cet-complete-guide`
+- `/medical-officer` → `/cms/salary`, `/cms`, `/government-doctor-jobs`
+- `/government-doctor-jobs` → `/cms/salary`, `/medical-officer`, `/cms`
+- `/guides/upsc-cms-complete-guide` → `/cms/exam-pattern`, `/cms/salary`, `/cms/vs-neet-pg`, `/cms/vs-ini-cet`, `/cms/cutoff/2026`
+- `/guides/neet-pg-complete-guide` → `/neet-pg/vs-ini-cet`, `/neet-pg/vs-upsc-cms`
+- `/guides/usmle-step-1-guide` → `/neet-pg/vs-usmle`, `/neet-pg`
+
+## COMPARISON PAGES (complete after cycle 2)
+| Page | Status | Impressions | CTR |
+|------|--------|-------------|-----|
+| `/cms/vs-neet-pg` | ✅ Live + enhanced | 15,735 | 0.3% |
+| `/cms/vs-ini-cet` | ✅ Live | — | — |
+| `/neet-pg/vs-usmle` | ✅ Live + enhanced | 2,495 | 0% |
+| `/neet-pg/vs-ini-cet` | ✅ Live | — | — |
+| `/neet-pg/vs-upsc-cms` | ✅ Live | — | — |
+| `/fmge/vs-next` | ✅ Live | 229 | 0% |
+
+## TOOLS OPPORTUNITIES (updated)
+| Tool | Status | Target Query | Impressions |
+|------|--------|-------------|-------------|
+| UPSC CMS Eligibility Checker | ✅ Built | `upsc cms eligibility` | 200+ |
+| UPSC CMS Salary Calculator | ⏳ Next | `upsc cms salary calculator` | ~50 |
+| NEET PG Rank Predictor | ⏳ Medium | `neet pg rank predictor` | ~30 |
+| Exam Countdown Widget | ⏳ Low | `upsc cms exam date 2026` | ~100 |
+
+## NEXT PRIORITIES (ordered, updated)
+1. **Build UPSC CMS Salary Calculator** (premium tool, ₹29 one-time, 50 imp)
+2. **Add breadcrumbs + structured data to remaining pages** (image alt audit)
+3. **Mobile Core Web Vitals audit** (75% mobile traffic)
+4. **Add affiliate book links to guide pages** (once Amazon Associates approved)
+5. **Add `/neet-pg/vs-ini-cet` relatedLinks + relatedBlogPosts** (comparisonData done, page done, need guide integration)
+6. **Create `/cms/result-2026`** (when UPSC CMS results drop, ~Oct 2026)
+7. **Create `/guides/ini-cet-complete-guide`** (currently referenced in INI-CET landing but not built)
+8. **Add `/guides/study-plan-builder`** (referenced in NEET PG landing but not built)
 
 ---
 
