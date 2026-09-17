@@ -1,4 +1,6 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 const content: ExamLandingContent = {
     slug: 'government-doctor-jobs',
@@ -64,5 +66,30 @@ const content: ExamLandingContent = {
 export const metadata = buildExamMetadata(content);
 
 export default function GovDoctorJobsPage() {
-    return ExamLandingLayout(content);
+    return (
+        <>
+            <ExamLandingLayout content={content}>
+                <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+                    <h2 className="text-2xl font-bold mb-6">Popular Government Doctor Career Paths</h2>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <Link href="/cms/salary" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Salary</p>
+                            <p className="mt-1 font-semibold group-hover:underline">UPSC CMS Salary & Promotion <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Pay structure, NPA, career growth from MO to DGHS</p>
+                        </Link>
+                        <Link href="/medical-officer" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">MO Exam Prep</p>
+                            <p className="mt-1 font-semibold group-hover:underline">Medical Officer Exam Prep <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">6,000+ PYQs, state-specific mocks, AI tutor</p>
+                        </Link>
+                        <Link href="/cms" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">UPSC CMS</p>
+                            <p className="mt-1 font-semibold group-hover:underline">Prepare for UPSC CMS <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Central government MO posts through UPSC</p>
+                        </Link>
+                    </div>
+                </div>
+            </ExamLandingLayout>
+        </>
+    );
 }

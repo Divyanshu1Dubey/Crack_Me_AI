@@ -164,9 +164,95 @@ export const FMGE_VS_NEXT: ComparisonContent = {
     ],
 };
 
+export const NEETPG_VS_UPSC_CMS: ComparisonContent = {
+    examASlug: 'neet-pg',
+    examBSlug: 'cms',
+    examAName: 'NEET PG',
+    examBName: 'UPSC CMS',
+    examALandingPath: '/neet-pg',
+    examBLandingPath: '/cms',
+    description: 'NEET PG vs UPSC CMS: Which exam should you choose after MBBS? Compare syllabus overlap, difficulty, salary, career growth, exam pattern, and which one matches your goals.',
+    verdict: 'NEET PG leads to MD/MS clinical specialisation with higher long-term earnings. UPSC CMS leads to a central government Medical Officer post with stable salary and job security from day one. Both exams overlap ~70% in syllabus — most candidates attempt both.',
+    chooseA: [
+        'You want a clinical MD/MS in a specific branch (Medicine, Surgery, Radiology, Anaesthesia)',
+        'You want to become a superspecialist later (DM/MCh)',
+        'You are willing to invest 3 years of residency for long-term growth',
+        'You want private practice or hospital consultant track',
+    ],
+    chooseB: [
+        'You want a stable central government medical officer post (Railways, CHS, ESIC)',
+        'You prefer a non-clinical or administrative career path',
+        'You want work-life balance from day one without 3 years of residency',
+        'You value job security, pension, and government perks',
+    ],
+    rows: [
+        { label: 'Conducting body', examA: 'NBE', examB: 'UPSC' },
+        { label: 'Frequency', examA: 'Once a year', examB: 'Once a year' },
+        { label: 'Pattern', examA: '200 MCQs, single paper, 3.5 hours, 800 marks', examB: '240 MCQs, 2 papers, 2 hrs each, 960 marks' },
+        { label: 'Negative marking', examA: 'No', examB: 'Yes (-0.33 per wrong answer)' },
+        { label: 'Mode', examA: 'CBT', examB: 'Offline (pen-and-paper OMR)' },
+        { label: 'Subjects', examA: 'All 19 pre-clinical, para-clinical, clinical subjects', examB: 'Medicine, Surgery, Paediatrics, OBG, PSM + minor subjects' },
+        { label: 'Difficulty', examA: 'Hard (breadth across 19 subjects)', examB: 'Moderate (clinic-heavy, less depth)' },
+        { label: 'Outcome', examA: 'MD/MS seat (residency)', examB: 'Medical Officer / GDMO post' },
+        { label: 'Starting income', examA: '₹70k-₹1L stipend during 3-year residency', examB: '₹80k-₹1.2L from day one' },
+        { label: 'Long-term earnings', examA: '₹20L-₹1Cr+ (private practice)', examB: '₹1.5L-₹2L (govt scale)' },
+        { label: 'Career ceiling', examA: 'Prof, HOD, superspecialist, hospital consultant', examB: 'CMO, ADG, DGHS' },
+        { label: 'Prep time', examA: '12-18 months typical', examB: '6 months typical' },
+    ],
+    faqs: [
+        { q: 'Which is better, NEET PG or UPSC CMS?', a: 'It depends on your career goals. NEET PG is better if you want clinical MD/MS specialisation and long-term earning potential. UPSC CMS is better if you want a stable government job with work-life balance from day one without spending 3 years in residency.' },
+        { q: 'Can I prepare for NEET PG and UPSC CMS together?', a: 'Yes — the two exams overlap ~70% in syllabus. Most candidates use NEET PG prep as a base and add UPSC-CMS-specific PSM and Surgery depth. Both exams are around 6 months apart, allowing back-to-back attempts.' },
+        { q: 'Which pays more, NEET PG or UPSC CMS?', a: 'NEET PG leads to clinical specialisation with much higher long-term earnings (₹20L-₹1Cr+ in private practice). UPSC CMS gives a stable ₹80k-₹1.2L government salary from day one with excellent job security and pension benefits.' },
+        { q: 'Is UPSC CMS tougher than NEET PG?', a: 'NEET PG is generally considered harder because of its breadth (19 subjects, 200 Qs in one sitting). UPSC CMS is clinic-focused (240 Qs across 2 papers) and can be covered in 6 months with focused preparation.' },
+    ],
+};
+
+export const NEETPG_VS_INICET: ComparisonContent = {
+    examASlug: 'neet-pg',
+    examBSlug: 'ini-cet',
+    examAName: 'NEET PG',
+    examBName: 'INI-CET',
+    examALandingPath: '/neet-pg',
+    examBLandingPath: '/ini-cet',
+    description: 'NEET PG vs INI-CET — which PG entrance exam is right for you? Compare pattern, difficulty, negative marking, seats, stipend, institutes (AIIMS/PGI/JIPMER vs all India), and preparation strategy.',
+    verdict: 'NEET PG opens MD/MS seats across all medical colleges in India (~10,000+ seats). INI-CET opens PG seats only at AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST (~1,000-1,500 seats) but with higher brand value. Syllabus is ~80% overlapping. Most serious candidates attempt both.',
+    chooseA: [
+        'You want MD/MS seats across all medical colleges (including private and state)',
+        'You prefer a broader, more predictable exam pattern',
+        'You want counselling through MCC (centralised all-India counselling)',
+        'You are targeting a specific branch and want maximum seat options',
+    ],
+    chooseB: [
+        'You want a PG seat at AIIMS, PGI, JIPMER, NIMHANS, SCTIMST',
+        'You thrive on conceptual, image-based questions',
+        'You want the prestige and research opportunities of central institutes',
+        'You want two chances per year (January + July sessions)',
+    ],
+    rows: [
+        { label: 'Conducting body', examA: 'NBE', examB: 'AIIMS New Delhi' },
+        { label: 'Frequency', examA: 'Once a year (June)', examB: 'Twice a year (Jan + July)' },
+        { label: 'Questions', examA: '200 MCQs, 3.5 hours', examB: '200 MCQs, 3 hours' },
+        { label: 'Negative marking', examA: 'No', examB: 'Yes (-1/3 per wrong answer)' },
+        { label: 'Total marks', examA: '800', examB: '200' },
+        { label: 'Mode', examA: 'CBT', examB: 'CBT' },
+        { label: 'Institutes', examA: 'All medical colleges in India', examB: 'AIIMS, PGI, JIPMER, NIMHANS, SCTIMST only' },
+        { label: 'Seats', examA: '~10,000+ MD/MS seats', examB: '~1,000-1,500 PG seats' },
+        { label: 'Difficulty', examA: 'Hard (breadth across 19 subjects)', examB: 'Harder (depth + image-based + -1/3)' },
+        { label: 'Stipend', examA: '₹70k-₹1L/month', examB: '₹90k-₹1.1L/month' },
+    ],
+    faqs: [
+        { q: 'Which is tougher, NEET PG or INI-CET?', a: 'INI-CET is generally considered slightly tougher due to deeper clinical reasoning, image-based questions, and -1/3 negative marking. NEET PG is broader but has more memory-based questions and no negative marking.' },
+        { q: 'Is INI-CET and NEET PG syllabus same?', a: 'Yes — both cover the same 19 pre-clinical, para-clinical and clinical subjects. INI-CET questions tend to be more conceptual and image-based, while NEET PG has more direct recall questions.' },
+        { q: 'Can I appear for both NEET PG and INI-CET?', a: 'Yes — NEET PG is once yearly (June), INI-CET is twice yearly (Jan + July). Many serious candidates attempt both to maximise PG seat options. The syllabus is ~80% overlapping.' },
+        { q: 'Which institutes are under INI-CET?', a: 'INI-CET is the common entrance for AIIMS (all campuses), PGIMER Chandigarh, JIPMER Puducherry, NIMHANS Bangalore, and SCTIMST Trivandrum.' },
+    ],
+};
+
 export const ALL_COMPARISONS: Record<string, ComparisonContent> = {
     'cms/vs-neet-pg': CMS_VS_NEETPG,
     'cms/vs-ini-cet': CMS_VS_INICET,
     'neet-pg/vs-usmle': NEETPG_VS_USMLE,
+    'neet-pg/vs-ini-cet': NEETPG_VS_INICET,
+    'neet-pg/vs-upsc-cms': NEETPG_VS_UPSC_CMS,
     'fmge/vs-next': FMGE_VS_NEXT,
 };

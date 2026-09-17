@@ -173,6 +173,14 @@ export default function NEETPGGuide() {
                 <strong>INI-CET</strong> (for AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST) is considered more
                 conceptual and image-heavy, with a faster pace (200 questions in 180 minutes vs 210 for NEET PG).
                 NEET PG has a slightly higher negative marking penalty (-1 vs -1/3). Most toppers attempt both.
+                See our detailed <a href="/neet-pg/vs-ini-cet" className="text-primary underline">NEET PG vs INI-CET</a> comparison.
+            </p>
+
+            <h2>NEET PG vs UPSC CMS — Which is better?</h2>
+            <p>
+                <strong>NEET PG</strong> leads to MD/MS clinical specialisation (private practice, faculty, superspecialty).
+                <strong>UPSC CMS</strong> leads to a central government Medical Officer post with stable salary and job security.
+                The two exams overlap ~70% in syllabus. See <a href="/neet-pg/vs-upsc-cms" className="text-primary underline">NEET PG vs UPSC CMS</a> for a detailed side-by-side comparison.
             </p>
 
             <h2>Why CrackCMS for NEET PG?</h2>

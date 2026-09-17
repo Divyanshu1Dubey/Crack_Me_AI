@@ -118,6 +118,13 @@ export default function USMLEGuide() {
                 <li>NBME-style practice blocks (40 questions, 60-min timed)</li>
                 <li>High-yield flashcards auto-generated from your weak areas</li>
             </ul>
+
+            <h2>For Indian MBBS Graduates: USMLE vs Alternatives</h2>
+            <p>
+                If you are an Indian MBBS graduate weighing USMLE against Indian PG exams, see our detailed
+                <a href="/neet-pg/vs-usmle" className="text-primary underline">NEET PG vs USMLE</a> comparison
+                for costs, timelines, career outcomes, and which route suits your goals.
+            </p>
         </GuideLayout>
     );
 }

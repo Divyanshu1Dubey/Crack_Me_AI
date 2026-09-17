@@ -181,6 +181,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/cms/exam-pattern', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/practice', priority: 0.8, changeFrequency: 'weekly' as const },
         { path: '/neet-pg/vs-upsc-cms', priority: 0.85, changeFrequency: 'monthly' as const },
+        { path: '/neet-pg/vs-ini-cet', priority: 0.85, changeFrequency: 'monthly' as const },
+        { path: '/tools/upsc-cms-eligibility-checker', priority: 0.8, changeFrequency: 'monthly' as const },
     ];
 
     const staticEntries = publicRoutes.map((r) => ({

@@ -1,4 +1,6 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 const content: ExamLandingContent = {
     slug: 'ini-cet',
@@ -65,5 +67,30 @@ const content: ExamLandingContent = {
 export const metadata = buildExamMetadata(content);
 
 export default function INICETPage() {
-    return ExamLandingLayout(content);
+    return (
+        <>
+            <ExamLandingLayout content={content}>
+                <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+                    <h2 className="text-2xl font-bold mb-6">INI-CET Comparisons & Resources</h2>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <Link href="/neet-pg/vs-ini-cet" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Compare</p>
+                            <p className="mt-1 font-semibold group-hover:underline">NEET PG vs INI-CET <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Which exam is right for you?</p>
+                        </Link>
+                        <Link href="/cms/vs-ini-cet" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Compare</p>
+                            <p className="mt-1 font-semibold group-hover:underline">UPSC CMS vs INI-CET <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Government MO vs AIIMS PG</p>
+                        </Link>
+                        <Link href="/guides/ini-cet-complete-guide" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Guide</p>
+                            <p className="mt-1 font-semibold group-hover:underline">INI-CET Complete Guide <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Strategy, books, cutoff, and PYQ analysis</p>
+                        </Link>
+                    </div>
+                </div>
+            </ExamLandingLayout>
+        </>
+    );
 }
