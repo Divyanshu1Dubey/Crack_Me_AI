@@ -352,3 +352,170 @@ export function graphSchema(nodes: object[]) {
         "@graph": nodes,
     };
 }
+
+// ─── AEO / GEO Schemas ──────────────────────────────────────────────────────
+// Structured data types optimised for AI search engines (SGE, Perplexity,
+// Claude Web, Bing Chat) and traditional rich results. Use alongside the
+// existing Article / FAQPage / Course schemas.
+
+/**
+ * `DefinedTerm` — ideal for medical-glossary pages. AI engines surface
+ * definitions directly in their answers (Perplexity, Google AI Overview).
+ */
+export function glossaryTermSchema({
+    term,
+    definition,
+    source,
+    relatedTerms,
+}: {
+    term: string;
+    definition: string;
+    source?: string;
+    relatedTerms?: string[];
+}) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "DefinedTerm",
+        name: term,
+        description: definition,
+        inLanguage: "en-IN",
+        ...(source ? { "url": source } : {}),
+        ...(relatedTerms && relatedTerms.length > 0
+            ? { "relatedLink": relatedTerms.map(t => `${siteUrl}/glossary?term=${encodeURIComponent(t)}`) }
+            : {}),
+    };
+}
+
+/**
+ * `QAPage` — for question + answer content. Google's "People Also Ask"
+ * and AI Overviews pull from this type.
+ */
+export function qaPageSchema({
+    question,
+    answer,
+    answerDetail,
+    sourceUrl,
+    reviewedBy,
+}: {
+    question: string;
+    answer: string;
+    answerDetail?: string;
+    sourceUrl?: string;
+    reviewedBy?: { name: string; credential?: string };
+}) {
+    const schema: Record<string, unknown> = {
+        "@context": "https://schema.org",
+        "@type": "QAPage",
+        mainEntity: {
+            "@type": "Question",
+            name: question,
+            acceptedAnswer: {
+                "@type": "Answer",
+                text: answer,
+                ...(answerDetail ? { "description": answerDetail } : {}),
+                ...(sourceUrl ? { "url": sourceUrl } : {}),
+                ...(reviewedBy
+                    ? {
+                          author: {
+                              "@type": "Person",
+                              name: reviewedBy.name,
+                              ...(reviewedBy.credential ? { hasCredential: reviewedBy.credential } : {}),
+                          },
+                      }
+                    : {}),
+            },
+        },
+    };
+    return schema;
+}
+
+/**
+ * `MedicalWebPage` extended with `about` → `MedicalCondition` — helps
+ * AI engines understand the medical topic coverage and surface the page
+ * for condition-specific queries.
+ */
+export function medicalWebPageSchema({
+    title,
+    description,
+    path,
+    condition,
+    reviewedBy,
+    lastReviewed,
+}: {
+    title: string;
+    description: string;
+    path: string;
+    condition?: string;
+    reviewedBy?: { name: string; credential?: string };
+    lastReviewed?: string;
+}) {
+    const schema: Record<string, unknown> = {
+        "@context": "https://schema.org",
+        "@type": "MedicalWebPage",
+        "@id": buildCanonical(path),
+        name: title,
+        description,
+        url: buildCanonical(path),
+        inLanguage: "en-IN",
+        publisher: { "@id": `${siteUrl}/#organization` },
+        isPartOf: { "@id": `${siteUrl}/#website` },
+    };
+    if (condition) {
+        schema.about = {
+            "@type": "MedicalCondition",
+            name: condition,
+        };
+    }
+    if (reviewedBy) {
+        schema.reviewedBy = {
+            "@type": "Person",
+            name: reviewedBy.name,
+            ...(reviewedBy.credential ? { hasCredential: reviewedBy.credential } : {}),
+        };
+    }
+    if (lastReviewed) {
+        schema.dateReviewed = lastReviewed;
+    }
+    return schema;
+}
+
+/**
+ * `CriticReview` — for content that has been medically reviewed.
+ * Signals E-E-A-T to AI search engines.
+ */
+export function criticReviewSchema({
+    itemReviewed,
+    reviewBody,
+    reviewerName,
+    reviewerCredential,
+    reviewRating,
+}: {
+    itemReviewed: string;
+    reviewBody: string;
+    reviewerName: string;
+    reviewerCredential?: string;
+    reviewRating?: number; // 1-5
+}) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "CriticReview",
+        itemReviewed: {
+            "@type": "Thing",
+            name: itemReviewed,
+        },
+        reviewBody,
+        author: {
+            "@type": "Person",
+            name: reviewerName,
+            ...(reviewerCredential ? { hasCredential: reviewerCredential } : {}),
+        },
+        reviewRating: reviewRating
+            ? {
+                  "@type": "Rating",
+                  ratingValue: reviewRating,
+                  bestRating: 5,
+                  worstRating: 1,
+              }
+            : undefined,
+    };
+}

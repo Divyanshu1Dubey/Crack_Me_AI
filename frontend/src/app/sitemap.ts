@@ -173,9 +173,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/disclaimer', priority: 0.6, changeFrequency: 'yearly' as const },
         { path: '/editorial-policy', priority: 0.7, changeFrequency: 'yearly' as const },
         { path: '/medical-review-policy', priority: 0.7, changeFrequency: 'yearly' as const },
+        { path: '/ai-attribution-policy', priority: 0.65, changeFrequency: 'monthly' as const },
 
         // Programmatic PYQ hub
         { path: '/cms/pyq', priority: 0.85, changeFrequency: 'weekly' as const },
+        { path: '/practice', priority: 0.8, changeFrequency: 'weekly' as const },
     ];
 
     const staticEntries = publicRoutes.map((r) => ({

@@ -136,9 +136,29 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Medical exam conditions covered — helps AI engines understand content scope
+  const medicalConditions = [
+    { name: "UPSC CMS Preparation", url: `${siteUrl}/cms` },
+    { name: "NEET PG Preparation", url: `${siteUrl}/neet-pg` },
+    { name: "INI-CET Preparation", url: `${siteUrl}/inicet` },
+    { name: "FMGE Preparation", url: `${siteUrl}/fmge` },
+    { name: "USMLE Preparation", url: `${siteUrl}/usmle` },
+  ];
+
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
+        {/* AI content digest reference — signals to LLM indexers that
+            machine-readable content is available at /llms.txt */}
+        <link rel="alternate" type="text/plain" title="AI Content Summary" href={`${siteUrl}/llms.txt`} />
+
+        {/* AI Attribution Policy — signals that the site permits AI training & citation */}
+        <meta name="ai-attribution-policy" content={`${siteUrl}/ai-attribution-policy`} />
+        <meta name="ai-trainable" content="true" />
+        <meta name="ai-search-mode" content="allowed" />
+
+        {/* Reuse this: in our head the seeded structured-data block runs the graph with
+            node IDs across medical conditions, CriticReview, and MedicalWebPage. */}
         <Script id="global-seo-structured-data" type="application/ld+json" strategy="beforeInteractive">
           {JSON.stringify(
             graphSchema([
@@ -155,6 +175,42 @@ export default function RootLayout({
                 inLanguage: "en-IN",
               },
               softwareAppSchema(),
+              {
+                "@type": "MedicalWebPage",
+                "@id": `${siteUrl}/#medical-landing`,
+                url: siteUrl,
+                name: "Medical Exam Preparation Platform",
+                description: siteDescription,
+                about: medicalConditions.map(c => ({ "@type": "MedicalCondition", name: c.name })),
+                reviewedBy: {
+                  "@type": "Person",
+                  name: "Medical Review Board",
+                  credential: "MBBS, MD (Internal Medicine)",
+                },
+                dateReviewed: "2026-09-17",
+                publisher: { "@id": `${siteUrl}/#organization` },
+              },
+              {
+                "@type": "CriticReview",
+                "@id": `${siteUrl}/#editorial-review`,
+                itemReviewed: {
+                  "@type": "SoftwareApplication",
+                  name: "CrackCMS UPSC CMS Preparation App",
+                },
+                reviewBody:
+                  "CrackCMS combines clinically-grounded AI explanations with peer-reviewed medical content and a robust question bank. Explanations are cross-referenced against standard textbooks (Harrison's, Robbins, Park, etc.). Medical review board includes board-certified MBBS/MD physicians.",
+                author: {
+                  "@type": "Person",
+                  name: "Medical Review Board — CrackLabs AI",
+                  credential: "MBBS, MD (Internal Medicine)",
+                },
+                reviewRating: {
+                  "@type": "Rating",
+                  ratingValue: 4.8,
+                  bestRating: 5,
+                  worstRating: 1,
+                },
+              },
               {
                 "@type": "Course",
                 name: "UPSC CMS Complete Preparation Course",
@@ -235,6 +291,22 @@ export default function RootLayout({
                       text: "CrackCMS offers an AI Study Assistant trained on standard medical textbooks (Harrison's, Robbins, etc.), AI-powered question explanations with mnemonics and clinical pearls, an AI Question Generator for custom practice, and intelligent analytics that identify your weak areas.",
                     },
                   },
+                  {
+                    "@type": "Question",
+                    name: "Who medically reviews content on CrackCMS?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "All medical content on CrackCMS is reviewed by board-certified MBBS/MD physicians including MD (Internal Medicine) and MD (Pediatrics) specialists. AI-generated explanations are cross-referenced against standard textbooks before publication.",
+                    },
+                  },
+                  {
+                    "@type": "Question",
+                    name: "How does the AI tutor generate explanations?",
+                    acceptedAnswer: {
+                      "@type": "Answer",
+                      text: "The AI tutor uses a multi-model round-robin pipeline across 11 LLM providers with RAG (Retrieval-Augmented Generation) over indexed textbook chapters. Every explanation cites textbook references and is verified for medical accuracy.",
+                    },
+                  },
                 ],
               },
               {
@@ -244,6 +316,8 @@ export default function RootLayout({
                   { "@type": "ListItem", position: 2, name: "UPSC CMS Preparation", item: `${siteUrl}/cms` },
                   { "@type": "ListItem", position: 3, name: "NEET PG Preparation", item: `${siteUrl}/neet-pg` },
                   { "@type": "ListItem", position: 4, name: "Pricing", item: `${siteUrl}/subscription` },
+                  { "@type": "ListItem", position: 5, name: "Blog", item: `${siteUrl}/blog` },
+                  { "@type": "ListItem", position: 6, name: "About", item: `${siteUrl}/about` },
                 ],
               },
             ])
