@@ -12,7 +12,7 @@ from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement,
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
                           AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer)
 from tests_engine.models import TestAttempt
-from questions.models import Subject, Question
+from questions.models import Question
 from accounts.permissions import IsControlTowerAdmin
 
 logger = logging.getLogger(__name__)
@@ -67,22 +67,26 @@ class DashboardView(APIView):
         total_incorrect = (overall['total_incorrect'] or 0) + qbank_incorrect
         overall_accuracy = round(total_correct / total_q * 100, 1) if total_q > 0 else 0
 
-        # Subject-wise performance
-        subject_perf = []
-        for subject in Subject.objects.all():
-            perf = UserTopicPerformance.objects.filter(
-                user=user, subject=subject
-            ).aggregate(
-                total=Sum('total_attempts'),
-                correct=Sum('correct_answers'),
+        # Subject-wise performance — single aggregated query, no N+1
+        from django.db.models import Sum as AggSum
+        subject_perfs = (
+            UserTopicPerformance.objects
+            .filter(user=user)
+            .values('subject__name', 'subject__code', 'subject__color')
+            .annotate(
+                total=AggSum('total_attempts'),
+                correct=AggSum('correct_answers'),
             )
+        )
+        subject_perf = []
+        for perf in subject_perfs:
             total = perf['total'] or 0
             correct = perf['correct'] or 0
             acc = round(correct / total * 100, 1) if total > 0 else 0
             subject_perf.append({
-                'subject': subject.name,
-                'code': subject.code,
-                'color': subject.color,
+                'subject': perf['subject__name'],
+                'code': perf['subject__code'],
+                'color': perf['subject__color'],
                 'total_attempts': total,
                 'correct': correct,
                 'accuracy': acc,
@@ -208,21 +212,25 @@ class ScorePredictionView(APIView):
             predicted_correct * 2.08 - predicted_wrong * 0.33, 1
         )
 
-        # Subject-wise prediction
-        subject_predictions = []
-        for subject in Subject.objects.all():
-            perf = UserTopicPerformance.objects.filter(
-                user=user, subject=subject
-            ).aggregate(
-                total=Sum('total_attempts'),
-                correct=Sum('correct_answers'),
+        # Subject-wise prediction — single aggregated query, no N+1
+        from django.db.models import Sum as AggSum
+        sub_rows = (
+            UserTopicPerformance.objects
+            .filter(user=user)
+            .values('subject__name', 'subject__code', 'subject__color')
+            .annotate(
+                total=AggSum('total_attempts'),
+                correct=AggSum('correct_answers'),
             )
+        )
+        subject_predictions = []
+        for perf in sub_rows:
             total = perf['total'] or 0
             correct = perf['correct'] or 0
             acc = round(correct / total * 100, 1) if total > 0 else 0
             subject_predictions.append({
-                'subject': subject.name,
-                'code': subject.code,
+                'subject': perf['subject__name'],
+                'code': perf['subject__code'],
                 'accuracy': acc,
                 'predicted_correct': int(24 * acc / 100),  # ~24 questions per subject
                 'strength': 'strong' if acc >= 70 else ('average' if acc >= 50 else 'weak'),

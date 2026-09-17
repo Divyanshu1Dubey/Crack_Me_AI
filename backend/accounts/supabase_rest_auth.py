@@ -144,6 +144,15 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         return (user, token)
 
     def _fetch_supabase_user(self, token: str):
+        # Cache Supabase JWT validation for the token's remaining lifetime
+        # (Supabase access tokens last ~1h). Avoids a 100–300 ms outbound
+        # HTTP call on every authenticated request.
+        from django.core.cache import cache
+        cache_key = f"supabase_jwt:{token[:64]}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         supabase_url = (
             os.getenv("SUPABASE_URL", "").strip()
             or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
@@ -212,7 +221,13 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 if int(getattr(resp, "status", 0) or 0) != 200:
                     return None
                 payload = resp.read().decode("utf-8", errors="ignore")
-                return json.loads(payload)
+                result = json.loads(payload)
+                # Cache valid token for 5 minutes (well within the 1h JWT lifetime)
+                try:
+                    cache.set(cache_key, result, 300)
+                except Exception:
+                    pass
+                return result
         except (error.HTTPError, error.URLError, TimeoutError, json.JSONDecodeError):
             return None
 
