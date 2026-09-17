@@ -461,6 +461,10 @@ class TestViewSet(viewsets.ModelViewSet):
         attempt.time_taken_seconds = (attempt.completed_at - attempt.started_at).total_seconds()
         attempt.save()
 
+        from django.core.cache import cache
+        cache.delete(f'dashboard:{request.user.id}')
+        cache.delete(f'dashboard_bundle:{request.user.id}')
+
         # Update Analytics Dashboard
         from analytics.models import UserTopicPerformance, DailyActivity, StudyStreak
         from django.db.models import F

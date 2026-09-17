@@ -20,6 +20,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Avg, Count, Max, Q, Subquery, Sum
+from django.core.cache import cache
 
 from .models import TokenBalance, TokenConfig, TokenTransaction, Subscription
 from questions.models import Question
@@ -597,6 +598,10 @@ class SubscriptionStatusView(APIView):
 
     def get(self, request):
         user = request.user
+        cache_key = f'sub_status:{user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
         sub = Subscription.get_active_subscription(user)
 
         # Backward compat: if user.is_subscribed but no Subscription record,
@@ -615,15 +620,19 @@ class SubscriptionStatusView(APIView):
                 amount_paid=0,
                 razorpay_order_id='legacy',
             )
-            return Response({
+            result = Response({
                 'is_subscribed': True,
                 'subscription': _serialize_subscription(legacy_stub),
             })
+            cache.set(cache_key, result.data, 120)
+            return result
 
-        return Response({
+        result = Response({
             'is_subscribed': sub.is_active if sub else False,
             'subscription': _serialize_subscription(sub) if sub else None,
         })
+        cache.set(cache_key, result.data, 120)
+        return result
 
 
 class SubscriptionHistoryView(APIView):
@@ -807,6 +816,7 @@ class RazorpayWebhookView(APIView):
         )
 
         logger.info(f'Webhook activated subscription for {user.username}: {sub.plan_display_name}')
+        cache.delete(f'sub_status:{user.id}')
         return Response({'status': 'activated'})
 
 

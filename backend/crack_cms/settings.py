@@ -178,7 +178,7 @@ if DATABASE_URL and not IS_COLLECTSTATIC:
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=int(os.getenv('CONN_MAX_AGE', '60')),
+            conn_max_age=int(os.getenv('CONN_MAX_AGE', '120')),
             ssl_require=not DEBUG,
         )
     }
@@ -219,7 +219,11 @@ if DATABASES['default'].get('ENGINE', '').endswith('sqlite3'):
 # Keep database failures fast in production so API returns explicit 5xx instead of platform 504 timeouts.
 if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
     db_options = DATABASES['default'].setdefault('OPTIONS', {})
-    db_options.setdefault('connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '5')))
+    db_options.setdefault('connect_timeout', int(os.getenv('DB_CONNECT_TIMEOUT', '10')))
+    db_options.setdefault('keepalives', 1)
+    db_options.setdefault('keepalives_idle', 30)
+    db_options.setdefault('keepalives_interval', 10)
+    db_options.setdefault('keepalives_count', 5)
     if IS_PRODUCTION_RUNTIME:
         db_options.setdefault('sslmode', 'require')
 

@@ -350,6 +350,12 @@ class Question(models.Model):
             models.Index(fields=['subject', 'topic', 'year', 'difficulty']),
             models.Index(fields=['question_type']),
             models.Index(fields=['clinical_category']),
+            models.Index(fields=['is_active', 'exam_type']),
+            models.Index(fields=['exam_type', 'year']),
+            models.Index(fields=['exam_track', 'is_active', 'year']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['subject', 'is_active', 'difficulty']),
+            models.Index(fields=['topic', 'is_active']),
         ]
 
     def _normalize_text_value(self, value):

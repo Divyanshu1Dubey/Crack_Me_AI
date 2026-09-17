@@ -2,6 +2,7 @@ import csv
 import logging
 from io import StringIO
 from rest_framework.views import APIView
+from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.throttling import ScopedRateThrottle
@@ -43,6 +44,10 @@ class DashboardView(APIView):
 
     def get(self, request):
         user = request.user
+        cache_key = f'dashboard:{user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
         attempts = TestAttempt.objects.filter(user=user, is_completed=True)
 
         # Overall stats
@@ -92,7 +97,7 @@ class DashboardView(APIView):
                 'accuracy': acc,
             })
 
-        return Response({
+        result = Response({
             'overall': {
                 'total_tests': overall['total_tests'] or 0,
                 'avg_score': round(overall['avg_score'] or 0, 1),
@@ -104,6 +109,8 @@ class DashboardView(APIView):
             },
             'subject_performance': subject_perf,
         })
+        cache.set(cache_key, result.data, 120)
+        return result
 
 
 class WeakTopicsView(APIView):

@@ -150,14 +150,11 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class SubjectSerializer(serializers.ModelSerializer):
-    question_count = serializers.SerializerMethodField()
+    question_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Subject
         fields = ['id', 'name', 'code', 'paper', 'description', 'icon', 'color', 'question_count']
-
-    def get_question_count(self, obj):
-        return obj.questions.count()
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -175,15 +172,12 @@ class SubjectSerializer(serializers.ModelSerializer):
 
 class TopicSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
-    question_count = serializers.SerializerMethodField()
+    question_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Topic
         fields = ['id', 'name', 'subject', 'subject_name', 'parent',
                   'importance', 'description', 'question_count']
-
-    def get_question_count(self, obj):
-        return obj.questions.count()
 
 
 class QuestionListSerializer(serializers.ModelSerializer):

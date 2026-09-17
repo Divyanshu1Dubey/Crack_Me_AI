@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework import permissions
 from django.db.models import Count, Avg, Sum, Q
 from django.utils import timezone
+from django.core.cache import cache
 import datetime
 
 from tests_engine.models import TestAttempt
@@ -44,6 +45,11 @@ class DashboardBundleView(APIView):
 
     def get(self, request):
         user = request.user
+        cache_key = f'dashboard_bundle:{user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         now = timezone.now().date()
         days_120 = now - datetime.timedelta(days=120)
 
@@ -149,10 +155,12 @@ class DashboardBundleView(APIView):
             ),
         }
 
-        return Response({
+        result = Response({
             'dashboard': dashboard,
             'heatmap': heatmap,
             'streak': streak_data,
             'announcements': announcements_data,
             'question_stats': question_stats,
         })
+        cache.set(cache_key, result.data, 120)
+        return result
