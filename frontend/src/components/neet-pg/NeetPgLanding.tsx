@@ -551,6 +551,33 @@ export default function NeetPgLanding() {
         </div>
       </section>
 
+      {/* ════════════════ RESOURCES ════════════════ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <h2 className="text-xl font-bold mb-4">NEET PG Resources &amp; Comparisons</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href="/neet-pg/vs-usmle" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Comparison</p>
+            <p className="mt-1 font-semibold group-hover:underline">NEET PG vs USMLE <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+            <p className="mt-1 text-xs text-muted-foreground">Which is better for Indian MBBS graduates?</p>
+          </Link>
+          <Link href="/neet-pg/vs-upsc-cms" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Comparison</p>
+            <p className="mt-1 font-semibold group-hover:underline">NEET PG vs UPSC CMS <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+            <p className="mt-1 text-xs text-muted-foreground">Clinical MD/MS vs Government MO post</p>
+          </Link>
+          <Link href="/guides/neet-pg-complete-guide" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Guide</p>
+            <p className="mt-1 font-semibold group-hover:underline">NEET PG Complete Guide <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+            <p className="mt-1 text-xs text-muted-foreground">Syllabus, strategy, books, cutoff</p>
+          </Link>
+          <Link href="/guides/study-plan-builder" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tool</p>
+            <p className="mt-1 font-semibold group-hover:underline">Study Plan Builder <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+            <p className="mt-1 text-xs text-muted-foreground">Build a personalised 6-month NEET PG plan</p>
+          </Link>
+        </div>
+      </section>
+
       {/* ════════════════ FOOTER ════════════════ */}
       <footer className="border-t border-border/40 bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">

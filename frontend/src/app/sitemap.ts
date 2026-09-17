@@ -177,7 +177,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
         // Programmatic PYQ hub
         { path: '/cms/pyq', priority: 0.85, changeFrequency: 'weekly' as const },
+        { path: '/cms/salary', priority: 0.85, changeFrequency: 'monthly' as const },
+        { path: '/cms/exam-pattern', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/practice', priority: 0.8, changeFrequency: 'weekly' as const },
+        { path: '/neet-pg/vs-upsc-cms', priority: 0.85, changeFrequency: 'monthly' as const },
     ];
 
     const staticEntries = publicRoutes.map((r) => ({

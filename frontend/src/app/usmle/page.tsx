@@ -1,4 +1,6 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 const content: ExamLandingContent = {
     slug: 'usmle',
@@ -67,5 +69,30 @@ const content: ExamLandingContent = {
 export const metadata = buildExamMetadata(content);
 
 export default function USMLEPage() {
-    return ExamLandingLayout(content);
+    return (
+        <>
+            <ExamLandingLayout content={content}>
+                <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+                    <h2 className="text-2xl font-bold mb-6">For Indian MBBS Graduates: USMLE vs Alternatives</h2>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <Link href="/neet-pg/vs-usmle" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Compare</p>
+                            <p className="mt-1 font-semibold group-hover:underline">NEET PG vs USMLE <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Which route fits your budget and goals?</p>
+                        </Link>
+                        <Link href="/neet-pg" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alternative</p>
+                            <p className="mt-1 font-semibold group-hover:underline">NEET PG Preparation <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">MD/MS in India — 2,300+ PYQs + AI tutor</p>
+                        </Link>
+                        <Link href="/guides/usmle-step-1-guide" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Guide</p>
+                            <p className="mt-1 font-semibold group-hover:underline">USMLE Step 1 Guide for Indians <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Costs, timeline, ECFMG, and prep strategy</p>
+                        </Link>
+                    </div>
+                </div>
+            </ExamLandingLayout>
+        </>
+    );
 }

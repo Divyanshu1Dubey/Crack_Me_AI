@@ -1,4 +1,6 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 const content: ExamLandingContent = {
     slug: 'cms',
@@ -103,5 +105,35 @@ const content: ExamLandingContent = {
 export const metadata = buildExamMetadata(content);
 
 export default function CMSPage() {
-    return ExamLandingLayout(content);
+    return (
+        <>
+            <ExamLandingLayout content={content}>
+                <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+                    <h2 className="text-2xl font-bold mb-6">Essential UPSC CMS Resources</h2>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <Link href="/cms/cutoff/2026" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cutoff</p>
+                            <p className="mt-1 font-semibold group-hover:underline">UPSC CMS 2026 Cutoff <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Category-wise qualifying marks</p>
+                        </Link>
+                        <Link href="/cms/exam-pattern" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pattern</p>
+                            <p className="mt-1 font-semibold group-hover:underline">Exam Pattern & Syllabus <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">240 MCQs, marking scheme, subjects</p>
+                        </Link>
+                        <Link href="/cms/salary" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Career</p>
+                            <p className="mt-1 font-semibold group-hover:underline">Salary & Promotion <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Pay structure, NPA, career growth</p>
+                        </Link>
+                        <Link href="/cms/vs-neet-pg" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Compare</p>
+                            <p className="mt-1 font-semibold group-hover:underline">CMS vs NEET PG <ArrowRight className="inline ml-1 h-3 w-3" /></p>
+                            <p className="mt-1 text-xs text-muted-foreground">Which exam suits your goals?</p>
+                        </Link>
+                    </div>
+                </div>
+            </ExamLandingLayout>
+        </>
+    );
 }
