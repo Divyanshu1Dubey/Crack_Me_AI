@@ -1,7 +1,7 @@
 /**
  * Canonical blog post registry for CrackCMS.
  *
- * Each entry is fully typed against BlogPost.  Fields marked with "/* REQUIRED */"
+ * Each entry is fully typed against BlogPost.  Fields marked with "REQUIRED"
  * are consumed by the SSG page (page.tsx) and by the JSON-LD index.  Everything
  * else is optional metadata used by CMS/referrer routing.
  *
