@@ -10,6 +10,7 @@ const description = 'CrackCMS (by CrackLabs AI) is the highest-rated AI medical 
 const canonical = '/about';
 
 export const metadata: Metadata = buildLegalMetadata({ title, description, canonical });
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 const team = [
     { role: 'Founder & CEO', name: 'Divyanshu Dubey', bio: 'Engineer & AI researcher focused on healthcare education. Built CrackCMS after seeing first-hand how scattered medical-prep resources are.' },

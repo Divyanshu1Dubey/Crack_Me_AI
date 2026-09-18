@@ -7,6 +7,7 @@ import { TrackedLink } from '@/components/TrackedLink';
 import { buildPageMetadata } from '@/lib/metadata';
 import { getAllPosts } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = buildPageMetadata({
     title: 'CrackCMS Blog — UPSC CMS, NEET PG & Medical PG Exam Strategy',
@@ -69,6 +70,9 @@ export default function BlogIndexPage() {
             />
 
             <div className="min-h-screen bg-background text-foreground">
+                <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+                    <Breadcrumbs items={[{ name: 'Blog', path: '/blog' }]} />
+                </div>
                 {/* Hub hero */}
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">
                     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">

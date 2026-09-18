@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import {
   ArrowRight, BookOpen, Calendar, CheckCircle2, ChevronRight,
   Clock, GraduationCap, Layers, Sparkles, Target, TrendingUp,
@@ -23,6 +24,9 @@ interface Props { cfg: ExamConfig }
 export function ExamMicrosite({ cfg }: Props) {
   return (
     <main className="min-h-screen bg-background">
+      <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+        <Breadcrumbs items={[{ name: cfg.shortName, path: `/exams/${cfg.slug}` }]} />
+      </div>
       {/* ── HERO ───────────────────────────────────────────── */}
       <section className={`relative overflow-hidden bg-linear-to-br ${cfg.theme.heroGradient} text-white`}>
         <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none"

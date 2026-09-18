@@ -23,6 +23,7 @@ import { questionsAPI } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -156,6 +157,9 @@ export default function IniCetLanding() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+        <Breadcrumbs items={[{ name: 'INI-CET', path: '/inicet' }]} />
+      </div>
       {/* ════════════════ HERO ════════════════ */}
       <section className="relative overflow-hidden bg-linear-to-br from-indigo-700 via-violet-700 to-sky-800 text-white">
         <div className="absolute inset-0 pointer-events-none opacity-30"

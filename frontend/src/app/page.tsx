@@ -118,10 +118,10 @@ export default function LandingPage() {
   ];
 
   const stats = [
-    { value: '2000+', label: 'Verified PYQs', icon: FileText, desc: 'UPSC CMS 2018-2025' },
-    { value: '5', label: 'Core Subjects', icon: Stethoscope, desc: 'Paper 1 & Paper 2' },
-    { value: '47+', label: 'Topic Clusters', icon: Activity, desc: 'High-yield medical focus' },
-    { value: '9', label: 'Exam Modes', icon: ShieldCheck, desc: 'Drills to full simulation' },
+    { value: '2000+', label: 'Verified PYQs', icon: FileText, desc: 'UPSC CMS 2018-2025', accent: 'text-amber-500' },
+    { value: '5000+', label: 'Total Questions', icon: Activity, desc: 'Across all exams', accent: 'text-fuchsia-500' },
+    { value: '47+', label: 'Topic Clusters', icon: Stethoscope, desc: 'High-yield medical focus', accent: 'text-blue-500' },
+    { value: '10,000+', label: 'Aspirants', icon: TrendingUp, desc: 'Trust CrackCMS nationwide', accent: 'text-emerald-500' },
   ];
 
   // ─── Structured data ─────────────────────────────────────────────────────
@@ -194,28 +194,28 @@ export default function LandingPage() {
 
           <div className="relative z-10 mx-auto max-w-6xl px-4 pb-10 pt-12 sm:px-6">
             <div className="max-w-3xl mx-auto text-center space-y-5">
-              {/* Live indicator */}
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-4 py-1.5">
+              {/* Live indicator — enhanced */}
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/5 px-4 py-1.5 animate-pulse-slow">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <span className="text-xs font-semibold text-primary tracking-wide">2,000+ PYQ Questions • AI-Powered Prep</span>
+                <span className="text-xs font-semibold text-emerald-400 tracking-wide">5,000+ Questions • 11 AI Providers • AI-Powered Prep</span>
               </div>
 
               <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                <span className="bg-linear-to-r from-amber-500 via-pink-500 to-violet-600 bg-clip-text text-transparent dark:from-amber-300 dark:via-pink-300 dark:to-violet-300">AI Powered</span>{' '}
-                <span className="text-foreground">UPSC CMS Platform</span>
+                <span className="bg-linear-to-r from-amber-500 via-pink-500 to-violet-600 bg-clip-text text-transparent dark:from-amber-300 dark:via-pink-300 dark:to-violet-300">Your Complete</span>{' '}
+                <span className="text-foreground">Medical Exam OS</span>
               </h1>
 
               <p className="text-base leading-relaxed text-foreground/80 sm:text-lg max-w-2xl mx-auto">
-                Build daily clinical consistency with an integrated medical prep operating system.
-                Smart question bank, AI tutoring, hyper-realistic mock tests, and weak-area analytics.
+                One platform for <strong className="text-foreground">UPSC CMS, NEET PG, INI-CET, FMGE/NEXT</strong> — with AI tutor, adaptive mocks, and
+                <span className="bg-linear-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent font-bold"> doctor-grade analytics</span>.
               </p>
 
               <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-center pt-1">
                 <Button asChild size="xl" className="w-full rounded-2xl sm:w-auto font-semibold text-white shadow-lg shadow-fuchsia-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] btn-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #ec4899 50%, #7c3aed 100%)', backgroundSize: '200% 100%' }}>
-                  <Link href={isAuthenticated ? '/dashboard' : '/register'}>Start Preparing <ChevronRight className="ml-1.5 w-5 h-5" /></Link>
+                  <Link href={isAuthenticated ? '/dashboard' : '/register'}>🚀 Start Preparing <ChevronRight className="ml-1.5 w-5 h-5" /></Link>
                 </Button>
                 <Button variant="glass" size="xl" asChild className="w-full rounded-2xl sm:w-auto font-semibold">
                   <Link href="#features">Explore Features</Link>
@@ -252,8 +252,9 @@ export default function LandingPage() {
               { href: '/fmge', badge: 'FMGE', name: 'FMGE / NEXT', desc: 'Screening test + NEXT pattern practice.', gradient: 'from-amber-600 to-orange-700', icon: '📋' },
               { href: '/usmle', badge: 'USMLE', name: 'USMLE', desc: 'Step 1 + Step 2 CK. Beta access — join waitlist.', gradient: 'from-indigo-600 to-violet-700', icon: '🌎' },
             ].map((c) => (
-              <Link key={c.href} href={c.href} className="group rounded-2xl border border-border/60 bg-card/80 overflow-hidden transition-all hover:-translate-y-1 exam-card-3d">
-                <div className={`bg-linear-to-br ${c.gradient} text-white p-5`}>
+              <Link key={c.href} href={c.href} className="group rounded-2xl border border-border/60 bg-card/80 overflow-hidden transition-all hover:-translate-y-1 exam-card-3d hover:shadow-xl hover:shadow-black/10">
+                <div className={`bg-linear-to-br ${c.gradient} text-white p-5 relative overflow-hidden`}>
+                  <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="flex items-center justify-between mb-2">
                     <Badge className="bg-white/15 text-white border border-white/20 backdrop-blur-sm text-[10px]">{c.badge}</Badge>
                     <span className="text-2xl">{c.icon}</span>
@@ -349,11 +350,10 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {stats.map((stat, i) => (
               <div key={i} className="stat-card-glow flex flex-col items-center text-center p-6 rounded-2xl border border-border/60 bg-card/80 cursor-default">
-                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 relative">
-                  <stat.icon className="h-5 w-5 text-primary relative z-10" />
-                  <div className="absolute inset-0 rounded-xl bg-primary/5 animate-pulse" />
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-3 relative" style={{ background: `${stat.accent.replace('text-', 'bg-').replace('500', '500/10')}` }}>
+                  <stat.icon className={`h-5 w-5 relative z-10 ${stat.accent}`} />
                 </div>
-                <span className="text-3xl font-extrabold text-foreground tracking-tight gradient-text">{stat.value}</span>
+                <span className="text-3xl font-extrabold text-foreground tracking-tight">{stat.value}</span>
                 <span className="text-sm font-bold text-foreground mt-1">{stat.label}</span>
                 <span className="text-xs text-muted-foreground">{stat.desc}</span>
               </div>
@@ -375,10 +375,10 @@ export default function LandingPage() {
                 { quote: "Mock simulations feel incredibly close to actual exam software. My score estimates went from 55% to 74% in two weeks.", title: "Verified Resident Doctor", inst: "JIPMER Puducherry" },
                 { quote: "Requested textbook mapping for pediatric guidelines — added within hours. The curated notes are super high yield.", title: "Verified MO Aspirant", inst: "Seth GS Medical College" },
               ].map((item, idx) => (
-                <div key={idx} className="glass-card p-5 border border-border/60 hover:border-primary/20 transition-all duration-300 relative bg-slate-900/40" style={{ backdropFilter: 'blur(12px)' }}>
-                  <div className="flex gap-1 text-amber-500 mb-3">
+                <div key={idx} className="glass-card p-5 border border-border/60 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 relative bg-slate-900/40 group" style={{ backdropFilter: 'blur(12px)' }}>
+                  <div className="flex gap-1 mb-3">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <svg key={i} className="w-3.5 h-3.5 fill-current text-amber-400" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                      <svg key={i} className="w-4 h-4 fill-current text-amber-400 group-hover:scale-110 transition-transform" style={{ transitionDelay: `${i * 50}ms` }} viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                     ))}
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed italic">"{item.quote}"</p>
@@ -484,6 +484,37 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 3.5 — HOW IT WORKS
+      ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="border-t border-border/60 bg-muted/20 py-20 px-4 sm:px-6">
+        <div className="mx-auto max-w-5xl space-y-10">
+          <div className="text-center space-y-3">
+            <h2 className="font-display text-3xl font-extrabold text-foreground sm:text-4xl tracking-tight">Three steps to your top rank</h2>
+            <p className="text-muted-foreground">From signup to score improvement — faster than any other prep platform.</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              { step: '01', title: 'Choose Your Exam', desc: 'UPSC CMS, NEET PG, INI-CET, FMGE/NEXT or USMLE. Your dashboard auto-configures for that exam\'s pattern, marking scheme, and syllabus.', icon: '🎯' },
+              { step: '02', title: 'Practice & Learn', desc: 'Solve PYQs, take timed mocks, use AI tutor with textbook-grounded explanations, and reinforce with SM-2 spaced repetition flashcards.', icon: '📚' },
+              { step: '03', title: 'Track & Improve', desc: 'Granular analytics show weak topics, rank predictions, and a personalized revision roadmap. Your score goes up — we guarantee the process.', icon: '📈' },
+            ].map((s) => (
+              <div key={s.step} className="relative rounded-2xl border border-border/60 bg-card/80 p-6 text-center group hover:border-primary/25 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">{s.icon}</div>
+                <span className="gradient-text text-sm font-extrabold tracking-widest">{s.step}</span>
+                <h3 className="font-display text-lg font-extrabold text-foreground mt-1">{s.title}</h3>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
+                {s.step !== '03' && (
+                  <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10 text-primary/40">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
           SECTION 4 — PREMIUM PRICING
       ═══════════════════════════════════════════════════════════════════════ */}
       <section className="px-4 py-16 sm:px-6">
@@ -520,21 +551,22 @@ export default function LandingPage() {
               </div>
 
               <div className="flex justify-center">
-                <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-slate-900/60 p-7 text-center backdrop-blur-md relative overflow-hidden">
+                <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-slate-900/60 p-7 text-center backdrop-blur-md relative overflow-hidden pricing-glow">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Premium Pass</span>
+                  <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-amber-400/10 rounded-full blur-2xl pointer-events-none" />
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-widest relative z-10">Premium Pass</span>
                   <div className="mt-4 flex items-baseline justify-center gap-2">
-                    <span className="text-5xl font-black text-white">₹199</span>
+                    <span className="text-5xl font-black text-white relative z-10">₹199</span>
                     <span className="text-lg line-through text-slate-500">₹10,000</span>
                   </div>
-                  <p className="text-[10px] text-amber-400/90 font-bold mt-1 tracking-wide">98% Launch Offer — Rising Soon</p>
+                  <p className="text-[10px] text-amber-400/90 font-bold mt-1 tracking-wide relative z-10">🔥 98% Launch Offer — Price Rising to ₹999</p>
                   <ul className="mt-5 space-y-2.5 text-left text-xs text-slate-300 border-t border-slate-800 pt-5">
-                    {['Unlimited AI tutor (no tokens)','Handwritten study materials','Faculty doubt support','All reference books & guides'].map((li, i) => (
-                      <li key={i} className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-amber-500" /> {li}</li>
+                    {['Unlimited AI tutor (no tokens)','Handwritten study materials','Faculty doubt support','All reference books & guides','Mock tests + analytics'].map((li, i) => (
+                      <li key={i} className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {li}</li>
                     ))}
                   </ul>
-                  <Button size="xl" asChild className="w-full mt-6 rounded-2xl bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold shadow-lg shadow-amber-500/20 py-3.5 transition-transform active:scale-95">
-                    <Link href="/subscription">Claim Offer Now <ArrowRight className="w-4 h-4 ml-1" /></Link>
+                  <Button size="xl" asChild className="w-full mt-6 rounded-2xl bg-linear-to-r from-amber-500 via-yellow-500 to-amber-500 btn-shimmer bg-size-200 text-black font-extrabold shadow-lg shadow-amber-500/25 py-3.5 transition-all hover:shadow-amber-500/40 active:scale-95 hover:brightness-110">
+                    <Link href="/subscription">🔥 Claim Offer Now <ArrowRight className="w-4 h-4 ml-1" /></Link>
                   </Button>
                   <span className="block text-[9px] text-slate-500 mt-2.5">Secure via Razorpay. Cancel anytime.</span>
                 </div>
@@ -546,11 +578,18 @@ export default function LandingPage() {
 
       {/* ═══════════════════════════════════════════════════════════════════════
           SECTION 5 — COMPARISON PAGES + FINAL CTA
-          High-impression pages: cms/vs-neet-pg (15k+), neet-pg/vs-usmle, etc.
-          Drive SEO value + internal linking.
       ═══════════════════════════════════════════════════════════════════════ */}
       <section className="px-4 py-16 sm:px-6 border-t border-border/60 bg-muted/20">
         <div className="mx-auto max-w-6xl space-y-12">
+          {/* Trust strip */}
+          <div className="text-center space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Trusted by aspirants from</p>
+            <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold text-muted-foreground/70">
+              {['AIIMS Delhi', 'CMC Vellore', 'JIPMER', 'KGMU Lucknow', 'MAMC', 'Seth GS', 'PGIMER', 'NIMHANS'].map((inst) => (
+                <span key={inst} className="rounded-lg border border-border/40 bg-card/50 px-3 py-1.5 hover:border-primary/20 hover:text-primary transition-colors">{inst}</span>
+              ))}
+            </div>
+          </div>
           {/* Comparison grid */}
           <div className="text-center mb-8 space-y-2">
             <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Compare Exams</Badge>
@@ -559,16 +598,16 @@ export default function LandingPage() {
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { href: '/cms/vs-neet-pg', q1: 'UPSC CMS vs NEET PG', q2: 'Which is tougher?', q3: 'Salary & scope comparison', badge: '15k+ searches/mo' },
-              { href: '/cms/vs-ini-cet', q1: 'UPSC CMS vs INI-CET', q2: 'AIIMS vs UPSC pathway', q3: 'Posting & stipend details', badge: 'Top comparison' },
-              { href: '/neet-pg/vs-usmle', q1: 'NEET PG vs USMLE', q2: 'Indian PG vs US residency', q3: 'Cost, time, and ROI', badge: 'Growing interest' },
-              { href: '/cms/salary', q1: 'UPSC CMS Salary', q2: 'Pay scale & grade pay', q3: 'Posting-wise breakdown', badge: '10+ imp queries' },
-              { href: '/cms/exam-pattern', q1: 'UPSC CMS Exam Pattern', q2: 'Paper 1 & 2 breakdown', q3: 'Negative marking + duration', badge: 'High intent' },
-              { href: '/guides/medical-officer-jobs', q1: 'Medical Officer Jobs', q2: 'After MBBS govt roles', q3: 'Salary, eligibility, vacancies', badge: '1.5k+ imp/mo' },
+              { href: '/cms/vs-neet-pg', q1: 'UPSC CMS vs NEET PG', q2: 'Which is tougher?', q3: 'Salary & scope comparison', badge: '🔥 15k+ searches/mo', hot: true },
+              { href: '/cms/vs-ini-cet', q1: 'UPSC CMS vs INI-CET', q2: 'AIIMS vs UPSC pathway', q3: 'Posting & stipend details', badge: '⭐ Top comparison' },
+              { href: '/neet-pg/vs-usmle', q1: 'NEET PG vs USMLE', q2: 'Indian PG vs US residency', q3: 'Cost, time, and ROI', badge: '📈 Growing interest' },
+              { href: '/cms/salary', q1: 'UPSC CMS Salary', q2: 'Pay scale & grade pay', q3: 'Posting-wise breakdown', badge: '💰 High intent' },
+              { href: '/cms/exam-pattern', q1: 'UPSC CMS Exam Pattern', q2: 'Paper 1 & 2 breakdown', q3: 'Negative marking + duration', badge: '📋 High intent' },
+              { href: '/guides/medical-officer-jobs', q1: 'Medical Officer Jobs', q2: 'After MBBS govt roles', q3: 'Salary, eligibility, vacancies', badge: '🏛️ 1.5k+ imp/mo' },
             ].map((c) => (
-              <Link key={c.href} href={c.href} className="group rounded-2xl border border-border/50 bg-card/70 p-5 hover:border-primary/30 hover:-translate-y-0.5 transition-all">
+              <Link key={c.href} href={c.href} className="group rounded-2xl border border-border/50 bg-card/70 p-5 hover:border-primary/30 hover:-translate-y-0.5 transition-all hover:shadow-lg hover:shadow-primary/5">
                 <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline" className="text-[9px] border-border/60 text-muted-foreground">{c.badge}</Badge>
+                  <Badge variant="outline" className={`text-[9px] ${c.hot ? 'border-amber-500/40 text-amber-500 bg-amber-500/5' : 'border-border/60 text-muted-foreground'}`}>{c.badge}</Badge>
                   <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
                 <h3 className="text-sm font-extrabold text-foreground group-hover:text-primary transition-colors">{c.q1}</h3>
@@ -579,14 +618,26 @@ export default function LandingPage() {
           </div>
 
           {/* Final CTA */}
-          <div className="text-center space-y-5 pt-8 border-t border-border/40">
-            <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">Ready to build an exam-ready routine?</h2>
-            <p className="text-muted-foreground max-w-lg mx-auto text-sm">Join thousands of medical graduates leveraging an AI + doctor prep workflow to study faster, cleaner, and with optimized memory retention.</p>
-            <Button size="xl" asChild className="rounded-2xl bg-white text-slate-950 hover:bg-slate-100 font-bold shadow-xl transition-all px-8 active:scale-[0.98]">
-              <Link href={isAuthenticated ? '/dashboard' : '/register'}>
-                Get Started Free <ArrowRight className="ml-1.5 w-5 h-5 text-slate-950" />
-              </Link>
-            </Button>
+          <div className="text-center space-y-5 pt-8 border-t border-border/40 relative">
+            <div className="absolute inset-0 bg-linear-to-r from-blue-500/5 via-fuchsia-500/5 to-amber-500/5 rounded-3xl pointer-events-none" />
+            <div className="relative z-10">
+              <Badge variant="outline" className="border-amber-500/30 text-amber-500 mb-3 text-[10px]">🔥 98% OFF — Launch Offer</Badge>
+              <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">Ready to build an exam-ready routine?</h2>
+              <p className="text-muted-foreground max-w-lg mx-auto text-sm">Join 10,000+ medical graduates leveraging an <strong className="text-foreground">AI + doctor prep workflow</strong> to study faster, cleaner, and with optimized memory retention.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <Button size="xl" asChild className="rounded-2xl bg-white text-slate-950 hover:bg-slate-100 font-bold shadow-xl transition-all px-8 active:scale-[0.98]">
+                  <Link href={isAuthenticated ? '/dashboard' : '/register'}>
+                    Get Started Free <ArrowRight className="ml-1.5 w-5 h-5 text-slate-950" />
+                  </Link>
+                </Button>
+                <Button variant="outline" size="xl" asChild className="rounded-2xl font-semibold">
+                  <Link href="/subscription">
+                    View Premium Plans <Crown className="ml-1.5 w-4 h-4" />
+                  </Link>
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-3">No credit card required • Cancel anytime • 30-day money-back guarantee</p>
+            </div>
           </div>
         </div>
       </section>
