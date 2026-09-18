@@ -34,28 +34,32 @@ export interface ComparisonContent {
     rows: ComparisonRow[];
     /** FAQs for FAQPage schema */
     faqs: { q: string; a: string }[];
+    /** Related internal links for SEO backlinks */
+    relatedLinks?: { label: string; href: string }[];
 }
 
 export function buildComparisonMetadata(c: ComparisonContent, path: string): Metadata {
-    const title = `${c.examAName} vs ${c.examBName} — Which is harder? Comparison | CrackCMS`;
+    const title = `${c.examAName} vs ${c.examBName}: Full Comparison — Pattern, Salary, Difficulty, Cutoff`;
+    const description = `Compare ${c.examAName} vs ${c.examBName} in 2026. Side-by-side on exam pattern, negative marking, total marks, salary, success rate, and which exam suits your career goals.`;
     return {
         title,
-        description: c.description,
+        description,
         alternates: { canonical: path, languages: { 'en-IN': path } },
         openGraph: {
             type: 'article',
             url: path,
             title,
-            description: c.description,
+            description,
             siteName,
             images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: title }],
         },
-        twitter: { card: 'summary_large_image', title, description: c.description },
+        twitter: { card: 'summary_large_image', title, description },
         robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
     };
 }
 
-export default function ComparisonLayout(c: ComparisonContent) {
+export default function ComparisonLayout(props: ComparisonContent | { content: ComparisonContent }) {
+    const c = 'content' in props && props.content ? props.content : (props as ComparisonContent);
     const path = `/${c.examASlug}/vs-${c.examBSlug}`;
     const jsonLd = {
         '@context': 'https://schema.org',
@@ -181,6 +185,21 @@ export default function ComparisonLayout(c: ComparisonContent) {
                 <section className="mx-auto max-w-4xl px-4 pb-12 sm:px-6">
                     <FAQSection items={c.faqs} title={`${c.examAName} vs ${c.examBName} — FAQs`} />
                 </section>
+
+                {/* Related guides */}
+                {c.relatedLinks && c.relatedLinks.length > 0 && (
+                    <section className="mx-auto max-w-5xl px-4 pb-12 sm:px-6">
+                        <h2 className="text-xl font-black tracking-tight mb-4">Related guides</h2>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {c.relatedLinks.map((link, i) => (
+                                <Link key={i} href={link.href}
+                                    className="rounded-xl border border-border bg-card p-4 text-sm font-medium hover:bg-muted/40 transition-colors">
+                                    {link.label}
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* CTA */}
                 <section className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">

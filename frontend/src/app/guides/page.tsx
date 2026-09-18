@@ -5,6 +5,7 @@ import { ArrowRight, BookOpen } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
     title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET | CrackCMS',

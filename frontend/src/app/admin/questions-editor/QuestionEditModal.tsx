@@ -581,7 +581,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="font-mono">#{img.id}</span>
-                    <span className="text-gray-500 dark:text-slate-400 truncate max-w-[8rem]" title={img.mime || ''}>{img.mime}</span>
+                    <span className="text-gray-500 dark:text-slate-400 truncate max-w-32" title={img.mime || ''}>{img.mime}</span>
                   </div>
                   {img.caption && (
                     <div className="truncate text-gray-700 dark:text-slate-300" title={img.caption}>{img.caption}</div>

@@ -291,8 +291,8 @@ export default function DashboardPage() {
                     <div className="page-container space-y-5">
                         <Skeleton className="h-40 rounded-2xl" />
                         <div className="grid md:grid-cols-12 gap-4">
-                            <Skeleton className="h-[520px] md:col-span-8 rounded-2xl" />
-                            <Skeleton className="h-[520px] md:col-span-4 rounded-2xl" />
+                            <Skeleton className="h-130 md:col-span-8 rounded-2xl" />
+                            <Skeleton className="h-130 md:col-span-4 rounded-2xl" />
                         </div>
                     </div>
                 </div>
@@ -309,8 +309,8 @@ export default function DashboardPage() {
                     <div className="page-container space-y-5">
                         <Skeleton className="h-40 rounded-2xl" />
                         <div className="grid md:grid-cols-12 gap-4">
-                            <Skeleton className="h-[520px] md:col-span-8 rounded-2xl" />
-                            <Skeleton className="h-[520px] md:col-span-4 rounded-2xl" />
+                            <Skeleton className="h-130 md:col-span-8 rounded-2xl" />
+                            <Skeleton className="h-130 md:col-span-4 rounded-2xl" />
                         </div>
                     </div>
                 </div>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
                                         <CustomIcon name="medical-stethoscope" label="Medical" className="w-3.5 h-3.5" variant="active" />
                                         CrackLabs Medical Companion
                                     </div>
-                                    <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white break-words [overflow-wrap:anywhere] hyphens-auto">
+                                    <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white wrap-anywhere hyphens-auto">
                                         {user?.role === 'admin' ? 'Welcome back' : 'Welcome back, Dr.'} {user?.role === 'admin' ? (user?.first_name || user?.username || 'Admin') : (user?.first_name || user?.username || 'Doctor')}
                                     </h1>
                                     <p className="text-sky-50 text-sm md:text-base mb-6 max-w-xl">
@@ -447,7 +447,7 @@ export default function DashboardPage() {
                                         key={f.label}
                                         type="button"
                                         onClick={() => showPaywall(f.feature)}
-                                        className="text-left rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-50 dark:from-amber-950/30 dark:via-yellow-950/20 dark:to-amber-950/30 hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-950/40 dark:hover:to-yellow-950/30 transition-colors p-4"
+                                        className="text-left rounded-2xl border border-amber-300/60 bg-linear-to-br from-amber-50 via-yellow-50 to-amber-50 dark:from-amber-950/30 dark:via-yellow-950/20 dark:to-amber-950/30 hover:from-amber-100 hover:to-yellow-100 dark:hover:from-amber-950/40 dark:hover:to-yellow-950/30 transition-colors p-4"
                                         aria-label={`Unlock ${f.label} — opens subscription page`}
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -633,7 +633,7 @@ export default function DashboardPage() {
                                                 {hoveredDay.date} | Q: {hoveredDay.questions}, Tests: {hoveredDay.tests}, Time: {hoveredDay.minutes}m
                                             </div>
                                         )}
-                                        <div className="min-w-[720px]">
+                                        <div className="min-w-180">
                                             <div className="relative h-5 mb-2 text-[10px] text-muted-foreground">
                                                 {contributionGrid.monthMarkers.map((marker) => (
                                                     <span

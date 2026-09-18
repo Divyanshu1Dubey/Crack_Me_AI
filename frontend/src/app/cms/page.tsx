@@ -77,28 +77,28 @@ const content: ExamLandingContent = {
     pyqCount: '1,920+',
     relatedBlogPosts: [
         {
-            slug: 'upsc-cms-syllabus-high-yield-topics',
-            title: 'UPSC CMS Syllabus: High-Yield Topics by Subject (10-Year PYQ Analysis)',
+            slug: 'upsc-cms-complete-guide',
+            title: 'UPSC CMS Complete Guide 2026: Pattern, Syllabus, Cutoff, Salary',
             excerpt:
-                'Cornerstone guide — which UPSC CMS subjects and topics consistently carry the most marks, based on 10 years of PYQ data.',
+                'Definitive UPSC CMS 2026 guide covering exam pattern, eligibility, high-yield topics, expected cutoff, and government medical officer salary.',
         },
         {
-            slug: 'upsc-cms-2024-cutoff-marks-category-wise',
-            title: 'UPSC CMS 2024 Cutoff Marks: Category-Wise (Gen / OBC / SC / ST / EWS / PwBD)',
+            slug: 'upsc-cms-negative-marking',
+            title: 'UPSC CMS Marking Scheme Explained: −0.33 Negative Marking Strategy',
             excerpt:
-                'Final-merit cutoffs for UPSC CMS 2024 across all categories plus a 5-year trend (2020–2024).',
+                'How to tackle UPSC CMS negative marking (−0.33 per wrong answer). Smart guessing strategy + score calculator.',
         },
         {
-            slug: 'upsc-cms-preparation-strategy-6-month-plan',
-            title: 'UPSC CMS Preparation Strategy: 6-Month Plan with Daily Timetable',
+            slug: 'upsc-cms-cutoff-2024',
+            title: 'UPSC CMS 2024 Cutoff Marks: Category-Wise (Gen / OBC / SC / ST / EWS)',
             excerpt:
-                'Month-by-month 6-month UPSC CMS plan — with 2hr / 4hr / 6hr daily schedule variants.',
+                'Final-merit cutoffs for UPSC CMS 2024 across all categories plus 5-year trend analysis (2020–2024).',
         },
         {
-            slug: 'cms-vs-neet-pg-vs-ini-cet',
-            title: 'CMS vs NEET PG vs INI-CET: Which PG Exam is Right for You?',
+            slug: 'upsc-cms-strategy-6-month',
+            title: 'UPSC CMS 6-Month Strategy: Daily Timetable & Subject Priority',
             excerpt:
-                'Definitive three-way comparison across salary, lifestyle, difficulty, and 5-year career trajectory.',
+                'Month-by-month UPSC CMS preparation plan — with 2hr / 4hr / 6hr daily schedule variants and PYQ-based subject triage.',
         },
     ],
 };

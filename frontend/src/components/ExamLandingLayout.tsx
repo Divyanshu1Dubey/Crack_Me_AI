@@ -48,9 +48,9 @@ export interface ExamLandingContent {
     relatedBlogPosts?: { slug: string; title: string; excerpt: string }[];
 }
 
-interface ExamLandingLayoutProps extends ExamLandingContent {
-    children?: React.ReactNode;
-}
+export type ExamLandingLayoutProps =
+    | { content: ExamLandingContent; children?: React.ReactNode }
+    | (ExamLandingContent & { content?: never; children?: React.ReactNode });
 
 export function buildExamMetadata(c: ExamLandingContent): Metadata {
     const canonical = `/${c.slug}`;
@@ -92,7 +92,9 @@ export function buildExamMetadata(c: ExamLandingContent): Metadata {
     };
 }
 
-export function ExamLandingLayout(c: ExamLandingContent) {
+export function ExamLandingLayout(props: ExamLandingLayoutProps) {
+    const c = 'content' in props && props.content ? props.content : (props as ExamLandingContent);
+    const children = props.children;
     const canonical = `/${c.slug}`;
 
     // JSON-LD: Course + FAQPage + BreadcrumbList
@@ -388,6 +390,8 @@ export function ExamLandingLayout(c: ExamLandingContent) {
                         </div>
                     </section>
                 )}
+
+                {children}
 
                 {/* ─── FAQ ─── */}
                 <section className="border-t border-border bg-muted/30">

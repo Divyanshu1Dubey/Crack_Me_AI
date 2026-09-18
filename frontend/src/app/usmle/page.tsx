@@ -65,6 +65,28 @@ const content: ExamLandingContent = {
     accentTo: 'to-indigo-700',
     emoji: '🇺🇸',
     pyqCount: '10,000+',
+    relatedBlogPosts: [
+        {
+            slug: 'usmle-step-1-guide',
+            title: 'USMLE Step 1 Complete Guide for Indian MBBS Graduates (IMGs)',
+            excerpt: 'Everything IMGs need — eligibility, Step 1 pass/fail scoring, ECFMG pathway, study resources, and residency match tips.',
+        },
+        {
+            slug: 'neet-pg-vs-usmle-comparison',
+            title: 'NEET PG vs USMLE: Full Comparison for Indian MBBS Graduates',
+            excerpt: 'Cost, prep time, success rate, lifestyle — side-by-side to help you choose between Indian PG and US residency.',
+        },
+        {
+            slug: 'best-pg-medical-entrance-books-2026',
+            title: 'Best PG Medical Entrance Books 2026: UPSC CMS, NEET PG, INI-CET',
+            excerpt: 'Curated textbook + MCQ book recommendations for every major medical PG exam in India and abroad.',
+        },
+        {
+            slug: 'high-yield-topics',
+            title: 'High-Yield Topics That Dominate Every Medical Entrance Paper',
+            excerpt: 'Subject-wise topic analysis across USMLE Step 1, NEET PG, INI-CET, and UPSC CMS — maximise your score per hour.',
+        },
+    ],
 };
 
 export const metadata = buildExamMetadata(content);

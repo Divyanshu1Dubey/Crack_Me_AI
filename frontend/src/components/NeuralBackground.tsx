@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Renderer, Program, Mesh, Triangle, Vec2, Color } from 'ogl';
+import { Renderer, Program, Mesh, Triangle, Color } from 'ogl';
 
 import './NeuralBackground.css';
+
+type Vec2Tuple = [number, number];
+type Vec3Tuple = [number, number, number];
+type Vec4Tuple = [number, number, number, number];
 
 // ---------------------------------------------------------------
 // Shader sources
@@ -146,14 +150,14 @@ function resolveTint(): string {
   return v || '#3b82f6';
 }
 
-function resolveBg(isDark: boolean): { light: Vec2; dark: Vec2 } | null {
+function resolveBg(isDark: boolean): { light: Vec3Tuple; dark: Vec3Tuple } | null {
   if (typeof window === 'undefined') return null;
   const root = document.documentElement;
-  const getRgb = (varName: string): Vec2 => {
+  const getRgb = (varName: string): Vec3Tuple => {
     const raw = getComputedStyle(root).getPropertyValue(varName).trim();
     const m = raw.match(/(\d+)\s+(\d+)\s+(\d+)/);
     if (!m) return isDark ? [0.035, 0.063, 0.09] : [0.973, 0.98, 0.988];
-    return [m[1] / 255, m[2] / 255, m[3] / 255];
+    return [Number(m[1]) / 255, Number(m[2]) / 255, Number(m[3]) / 255];
   };
   return {
     light: getRgb('--color-background'),
@@ -161,7 +165,7 @@ function resolveBg(isDark: boolean): { light: Vec2; dark: Vec2 } | null {
   };
 }
 
-function hexToVec3(hex: string): Vec2 {
+function hexToVec3(hex: string): Vec3Tuple {
   const c = new Color(hex);
   return [c.r, c.g, c.b];
 }
@@ -182,11 +186,11 @@ export default function NeuralBackground({
 }: NeuralBackgroundProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<{
-    renderer: ReturnType<typeof Renderer>;
+    renderer: Renderer;
     mesh: Mesh;
-    program: ReturnType<typeof Program>;
-    particles: Vec2[];
-    velocities: Vec2[];
+    program: Program;
+    particles: Vec2Tuple[];
+    velocities: Vec2Tuple[];
     animateId: number;
   } | null>(null);
 
@@ -201,9 +205,9 @@ export default function NeuralBackground({
     const isDark = document.documentElement.classList.contains('dark');
     const resolvedTint = tint || resolveTint();
     const bgColors = resolveBg(isDark);
-    const bgLight: Vec2 = bgColors ? bgColors.light : [0.973, 0.98, 0.988];
-    const bgDark: Vec2 = bgColors ? bgColors.dark : [0.035, 0.063, 0.09];
-    const tintVec: Vec2 = hexToVec3(resolvedTint);
+    const bgLight: Vec3Tuple = bgColors ? bgColors.light : [0.973, 0.98, 0.988];
+    const bgDark: Vec3Tuple = bgColors ? bgColors.dark : [0.035, 0.063, 0.09];
+    const tintVec: Vec3Tuple = hexToVec3(resolvedTint);
 
     // --- Renderer -----------------------------------------------
     const renderer = new Renderer({
@@ -230,8 +234,8 @@ export default function NeuralBackground({
     // --- Particles ----------------------------------------------
     const count = Math.min(particleCount, 48);
     const aspect = width / height;
-    const particles: Vec2[] = [];
-    const velocities: Vec2[] = [];
+    const particles: Vec2Tuple[] = [];
+    const velocities: Vec2Tuple[] = [];
 
     for (let i = 0; i < count; i++) {
       particles.push([
@@ -244,7 +248,7 @@ export default function NeuralBackground({
     }
 
     // Pack into uniform vec4 array
-    const particleUniforms: Vec2[] = particles.map((p, i) => [
+    const particleUniforms: Vec4Tuple[] = particles.map((p, i) => [
       p[0],
       p[1],
       velocities[i][0],
@@ -286,10 +290,12 @@ export default function NeuralBackground({
     window.addEventListener('resize', onResize);
 
     // --- Animate -----------------------------------------------
+    let animateId = 0;
     const animate = (t: number) => {
       const ref = glRef.current;
       if (!ref) return;
-      ref.animateId = requestAnimationFrame(animate);
+      animateId = requestAnimationFrame(animate);
+      ref.animateId = animateId;
 
       const { program: prog, particles: pts, velocities: vels } = ref;
       const aspectNow = prog.uniforms.uResolution.value[0]
@@ -331,15 +337,18 @@ export default function NeuralBackground({
       prog.uniforms.uTime.value = time;
       renderer.render({ scene: mesh });
     };
-    ref.animateId = requestAnimationFrame(animate);
+    animateId = requestAnimationFrame(animate);
+    if (glRef.current) {
+      glRef.current.animateId = animateId;
+    }
 
     return () => {
-      cancelAnimationFrame(ref.animateId);
+      cancelAnimationFrame(animateId);
       window.removeEventListener('resize', onResize);
       if (gl.canvas.parentNode === container) {
         container.removeChild(gl.canvas as HTMLCanvasElement);
       }
-      (gl.getExtension('WEBGL_lose_context') as WebGLExtension)?.loseContext();
+      (gl.getExtension('WEBGL_lose_context') as any)?.loseContext();
     };
   }, [particleCount, speed, lineAlpha, dotAlpha, tint]);
 

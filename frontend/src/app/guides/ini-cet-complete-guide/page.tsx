@@ -20,7 +20,17 @@ const faqs = [
 
 export default function INICETGuide() {
     return (
-        <GuideLayout title={title} description={description} slug={slug} faqs={faqs}>
+        <GuideLayout
+            title={title}
+            description={description}
+            slug={slug}
+            heading="INI-CET Complete Guide 2026"
+            lede="Crack INI-CET for AIIMS, PGIMER, JIPMER, and NIMHANS. Exam pattern, subject-wise strategy, cutoffs, and 4-month preparation plan."
+            author="Dr. CrackCMS Editorial Team"
+            lastUpdated="July 21, 2026"
+            readingTime="10 min"
+            faqs={faqs}
+        >
             <h2>INI-CET exam pattern at a glance</h2>
             <ul>
                 <li>Mode: Computer-Based Test (CBT) — online</li>

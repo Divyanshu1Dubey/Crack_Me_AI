@@ -489,14 +489,14 @@ export default function NeetPgLanding() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[
             {
-              slug: 'neet-pg-2024-cutoff-category-wise',
+              slug: 'neet-pg-cutoff-2024',
               title: 'NEET PG 2024 Cutoff: Qualifying Percentile + Closing Ranks',
               excerpt: 'Category-wise cutoff + closing ranks for clinical branches — verified against NBE data.',
             },
             {
-              slug: 'neet-pg-preparation-strategy-study-plans',
-              title: 'NEET PG Preparation Strategy: 4-Month + 8-Month Study Plans',
-              excerpt: 'Two complete plans with subject triage, daily time-blocking, and final-30-day protocol.',
+              slug: 'neet-pg-preparation-strategy',
+              title: 'NEET PG Preparation Strategy: Study Plans & Time Management',
+              excerpt: 'Complete preparation strategy with subject triage, daily time-blocking, and final-30-day protocol.',
             },
             {
               slug: 'neet-pg-vs-ini-cet',

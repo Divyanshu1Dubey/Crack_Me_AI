@@ -1,6 +1,7 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 const content: ExamLandingContent = {
     slug: 'ini-cet',
@@ -62,6 +63,28 @@ const content: ExamLandingContent = {
     accentTo: 'to-rose-700',
     emoji: '🏥',
     pyqCount: '12,000+',
+    relatedBlogPosts: [
+        {
+            slug: 'ini-cet-complete-guide',
+            title: 'INI-CET Complete Guide 2026: AIIMS, PGIMER, JIPMER, NIMHANS',
+            excerpt: 'Everything about INI-CET — pattern, eligibility, syllabus, preparation strategy, and how to crack AIIMS MD/MS seats.',
+        },
+        {
+            slug: 'neet-pg-vs-ini-cet-comparison',
+            title: 'NEET PG vs INI-CET: Difficulty, Syllabus, Salary & Strategy',
+            excerpt: 'Honest side-by-side comparison — including how to attempt both without burning out.',
+        },
+        {
+            slug: 'ini-cet-study-plan',
+            title: 'INI-CET Study Plan: 4-Month Strategy to Crack AIIMS/PGI/JIPMER',
+            excerpt: 'Month-by-month INI-CET plan with subject triage, image-based MCQ focus, and mock test schedule.',
+        },
+        {
+            slug: 'upsc-cms-vs-neet-pg-comparison',
+            title: 'UPSC CMS vs NEET PG: Full Comparison — Pattern, Salary, Difficulty',
+            excerpt: 'Side-by-side on exam pattern, negative marking, total marks, salary, success rate, and which exam suits your career goals.',
+        },
+    ],
 };
 
 export const metadata = buildExamMetadata(content);
