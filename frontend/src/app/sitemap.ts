@@ -183,6 +183,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/neet-pg/vs-upsc-cms', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/neet-pg/vs-ini-cet', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/tools/upsc-cms-eligibility-checker', priority: 0.8, changeFrequency: 'monthly' as const },
+        { path: '/tools/upsc-cms-salary-calculator', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/study-plan-builder', priority: 0.75, changeFrequency: 'monthly' as const },
     ];
 
     const staticEntries = publicRoutes.map((r) => ({
