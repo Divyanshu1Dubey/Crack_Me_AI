@@ -1,3 +1,5 @@
+'use client';
+
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
 import { useState } from 'react';

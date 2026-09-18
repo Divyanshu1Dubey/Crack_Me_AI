@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
 import { siteName, siteUrl } from '@/lib/seo';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import { ArrowLeft, CalendarDays, FileText, ShieldCheck } from 'lucide-react';
 
 interface LegalLayoutProps {
@@ -94,6 +95,12 @@ export function LegalLayout({
 
     return (
         <div className="min-h-screen bg-background text-foreground">
+            <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[
+                    { name: 'Home', path: '/' },
+                    { name: title.replace(/ — .*/, ''), path: canonical },
+                ]} />
+            </div>
             <Script
                 id={`legal-schema-${canonical.split('/').pop()}`}
                 type="application/ld+json"

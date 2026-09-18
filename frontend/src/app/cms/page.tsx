@@ -107,6 +107,9 @@ export const metadata = buildExamMetadata(content);
 export default function CMSPage() {
     return (
         <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }]} />
+            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Essential UPSC CMS Resources</h2>

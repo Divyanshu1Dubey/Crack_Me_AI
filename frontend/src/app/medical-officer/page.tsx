@@ -67,6 +67,9 @@ export const metadata = buildExamMetadata(content);
 export default function MedicalOfficerPage() {
     return (
         <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'Medical Officer', path: '/medical-officer' }]} />
+            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Career Paths After Medical Officer Exam</h2>

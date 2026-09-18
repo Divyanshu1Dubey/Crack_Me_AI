@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, Clock, User, BookOpen, GraduationCap } from 'l
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 interface GuideLayoutProps {
     /** SEO title */
@@ -114,6 +115,12 @@ export function GuideLayout({
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
+                <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+                    <Breadcrumbs items={[
+                        { name: 'Guides', path: '/guides' },
+                        { name: heading, path: `/guides/${slug}` },
+                    ]} />
+                </div>
                 {/* Hero */}
                 <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">
                     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">

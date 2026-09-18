@@ -69,6 +69,9 @@ export const metadata = buildExamMetadata(content);
 export default function INICETPage() {
     return (
         <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'INI-CET', path: '/ini-cet' }]} />
+            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">INI-CET Comparisons & Resources</h2>

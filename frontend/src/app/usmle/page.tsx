@@ -1,6 +1,7 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 const content: ExamLandingContent = {
     slug: 'usmle',
@@ -71,6 +72,9 @@ export const metadata = buildExamMetadata(content);
 export default function USMLEPage() {
     return (
         <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'USMLE', path: '/usmle' }]} />
+            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">For Indian MBBS Graduates: USMLE vs Alternatives</h2>

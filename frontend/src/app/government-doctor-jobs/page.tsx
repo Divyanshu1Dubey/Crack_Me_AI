@@ -68,6 +68,9 @@ export const metadata = buildExamMetadata(content);
 export default function GovDoctorJobsPage() {
     return (
         <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'Government Doctor Jobs', path: '/government-doctor-jobs' }]} />
+            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Popular Government Doctor Career Paths</h2>

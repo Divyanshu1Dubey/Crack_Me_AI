@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 // ──────────────────────────────────────────────────── types ──
 
@@ -160,6 +161,9 @@ export default function NeetPgLanding() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
+        <Breadcrumbs items={[{ name: 'NEET PG', path: '/neet-pg' }]} />
+      </div>
       {/* ════════════════ HERO ════════════════ */}
       <section className="relative overflow-hidden bg-linear-to-br from-emerald-600 via-teal-600 to-cyan-800 text-white">
         {/* layered overlays */}

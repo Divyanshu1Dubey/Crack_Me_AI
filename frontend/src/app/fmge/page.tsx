@@ -1,4 +1,7 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+import Breadcrumbs from '@/components/Breadcrumbs';
 
 const content: ExamLandingContent = {
     slug: 'fmge',
@@ -64,5 +67,26 @@ const content: ExamLandingContent = {
 export const metadata = buildExamMetadata(content);
 
 export default function FMGEPage() {
-    return ExamLandingLayout(content);
+    return (
+        <>
+            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
+                <Breadcrumbs items={[{ name: 'FMGE', path: '/fmge' }]} />
+            </div>
+            <ExamLandingLayout content={content}>
+                <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+                    <h2 className="text-2xl font-bold mb-6">FMGE Comparisons & Resources</h2>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <a href="/fmge/vs-next" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-sm font-bold group-hover:underline">FMGE vs NEXT <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                            <p className="mt-1 text-sm text-muted-foreground">Compare FMGE (MCI Screening) with NExT for foreign MBBS graduates.</p>
+                        </a>
+                        <a href="/guides/fmge-complete-guide" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+                            <p className="text-sm font-bold group-hover:underline">FMGE Complete Guide <ArrowRight className="inline ml-1 h-4 w-4" /></p>
+                            <p className="mt-1 text-sm text-muted-foreground">Strategy, books, syllabus, and 6-month study plan for FMGE 2026.</p>
+                        </a>
+                    </div>
+                </div>
+            </ExamLandingLayout>
+        </>
+    );
 }
