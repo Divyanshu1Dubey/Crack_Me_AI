@@ -741,11 +741,12 @@ class AIService:
             return None
 
         models = [
-            "t3-web/gpt-4o",             # OpenAI gpt-4o via gateway (200 OK)
-            "t3-web/claude-3-5-sonnet-20240620",  # Anthropic Claude via gateway
-            "openai/gpt-4o",             # OpenAI via gateway (429 rate-limited but works)
-            "t3-web/llama-3.3-70b",      # Open-source via gateway (200 OK)
-            "t3-web/deepseek-r1",        # Reasoning model via gateway (200 OK)
+            "auto/fast",              # grok-4.6 — fast, reliable (primary)
+            "auto/chat",              # grok-4.6 — fast chat model
+            "auto/best-chat",         # claude-opus-4-6-thinking — high quality reasoning
+            "auto/best-reasoning",    # gemini-3.1-pro-low — strong reasoning for MCQs
+            "openai/gpt-4o-mini",     # OpenAI lightweight fallback
+            "openai/gpt-4.1-mini",    # OpenAI latest mini fallback
         ]
 
         for model_name in models:
