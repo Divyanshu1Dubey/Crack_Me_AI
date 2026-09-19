@@ -70,7 +70,22 @@ class SQLiteRAGPipeline:
         logger.info(f"SQLite RAG initialized: {count} existing chunks")
 
     def _init_ai(self):
-        """Initialize AI clients for answer generation."""
+        """Initialize AI clients for answer generation (OmniRoute first, then fallbacks)."""
+        # OmniRoute gateway — first-stop for all AI calls
+        omniroute_key = getattr(settings, 'OMNIROUTE_API_KEY', '') or os.getenv('OMNIROUTE_API_KEY', '')
+        omniroute_base = getattr(settings, 'OMNIROUTE_BASE_URL', '') or os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-production-9d6b.up.railway.app/v1')
+        if omniroute_key and omniroute_base:
+            try:
+                from openai import OpenAI
+                self._omniroute = OpenAI(
+                    api_key=omniroute_key,
+                    base_url=omniroute_base,
+                    max_retries=0
+                )
+                logger.info("✅ OmniRoute gateway initialized for SQLite RAG")
+            except Exception as e:
+                logger.warning(f"OmniRoute init failed for SQLite RAG: {e}")
+
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '')
         if gemini_key:
             try:
@@ -303,7 +318,30 @@ Be precise and exam-focused."""
     # ─── HELPERS ────────────────────────────────────────
 
     def _generate_answer(self, prompt: str) -> str:
-        """Generate answer using Gemini or Groq."""
+        """Generate answer using OmniRoute gateway first, then Gemini/Groq fallbacks."""
+        # Try OmniRoute first (tries multiple models via gateway)
+        if hasattr(self, '_omniroute') and self._omniroute:
+            for model_name in ["gpt-4o", "claude-3-5-sonnet-20240620", "gemini-2.0-flash"]:
+                try:
+                    response = self._omniroute.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": "You are a UPSC CMS medical exam expert."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.2,
+                        max_tokens=2048,
+                        timeout=20.0,
+                    )
+                    text = response.choices[0].message.content
+                    if text:
+                        logger.info(f"RAG OmniRoute [{model_name}] OK")
+                        return text
+                except Exception as e:
+                    logger.warning(f"RAG OmniRoute [{model_name}] error: {e}")
+                    continue
+
+        # Fallback to Gemini
         if self._gemini:
             try:
                 response = self._gemini.generate_content(

@@ -4,6 +4,7 @@ Handles the full pipeline: PDF → raw text → AI parsing → structured questi
 """
 import json
 import logging
+import os
 import re
 from typing import Optional
 
@@ -56,7 +57,22 @@ class PYQExtractor:
         self._init_ai()
 
     def _init_ai(self):
-        """Initialize AI clients."""
+        """Initialize AI clients (OmniRoute gateway first, then fallbacks)."""
+        # OmniRoute gateway — first-stop for all AI calls
+        omniroute_key = getattr(settings, 'OMNIROUTE_API_KEY', '') or os.getenv('OMNIROUTE_API_KEY', '')
+        omniroute_base = getattr(settings, 'OMNIROUTE_BASE_URL', '') or os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-production-9d6b.up.railway.app/v1')
+        if omniroute_key and omniroute_base:
+            try:
+                from openai import OpenAI
+                self.omniroute_client = OpenAI(
+                    api_key=omniroute_key,
+                    base_url=omniroute_base,
+                    max_retries=0
+                )
+                logger.info("✅ OmniRoute gateway initialized for PYQ extraction")
+            except Exception as e:
+                logger.warning(f"OmniRoute init failed for PYQ extraction: {e}")
+
         self.gemini_client = None
         self.groq_client = None
 
@@ -201,8 +217,30 @@ class PYQExtractor:
         return "General Medicine"
 
     def _call_ai(self, prompt: str) -> Optional[str]:
-        """Call AI with fallback chain: Gemini → Groq."""
-        # Try Gemini first
+        """Call AI with OmniRoute first, then Gemini/Groq fallbacks."""
+        # Try OmniRoute first (tries multiple models via gateway)
+        if hasattr(self, 'omniroute_client') and self.omniroute_client:
+            for model_name in ["gpt-4o", "claude-3-5-sonnet-20240620", "gemini-2.0-flash"]:
+                try:
+                    response = self.omniroute_client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": "You are a UPSC CMS medical exam expert."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=8192,
+                        timeout=20.0,
+                    )
+                    text = response.choices[0].message.content
+                    if text:
+                        logger.info(f"PYQ OmniRoute [{model_name}] OK")
+                        return text
+                except Exception as e:
+                    logger.warning(f"PYQ OmniRoute [{model_name}] error: {e}")
+                    continue
+
+        # Fallback to Gemini
         if self.gemini_client:
             try:
                 logger.info("Calling Gemini for extraction...")
