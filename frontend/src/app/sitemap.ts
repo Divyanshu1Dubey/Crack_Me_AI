@@ -185,6 +185,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/tools/upsc-cms-eligibility-checker', priority: 0.8, changeFrequency: 'monthly' as const },
         { path: '/tools/upsc-cms-salary-calculator', priority: 0.75, changeFrequency: 'monthly' as const },
         { path: '/tools/study-plan-builder', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/marks-vs-rank-predictor', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/cutoff-analyzer', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/subject-weightage-analyzer', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/score-calculator', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/preparation-time-estimator', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/category-rank-filter', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/college-predictor', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/mock-test-analyzer', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/exam-readiness-score', priority: 0.75, changeFrequency: 'monthly' as const },
+        { path: '/tools/pyq-attempt-analyzer', priority: 0.75, changeFrequency: 'monthly' as const },
     ];
 
     const staticEntries = publicRoutes.map((r) => ({
