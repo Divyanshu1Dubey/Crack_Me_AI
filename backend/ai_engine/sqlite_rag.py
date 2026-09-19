@@ -321,7 +321,7 @@ Be precise and exam-focused."""
         """Generate answer using OmniRoute gateway first, then Gemini/Groq fallbacks."""
         # Try OmniRoute first (tries multiple models via gateway)
         if hasattr(self, '_omniroute') and self._omniroute:
-            for model_name in ["gpt-4o", "claude-3-5-sonnet-20240620", "gemini-2.0-flash"]:
+            for model_name in ["t3-web/gpt-4o", "t3-web/claude-3-5-sonnet-20240620", "t3-web/llama-3.3-70b", "t3-web/deepseek-r1"]:
                 try:
                     response = self._omniroute.chat.completions.create(
                         model=model_name,

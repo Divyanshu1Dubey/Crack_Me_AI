@@ -741,11 +741,11 @@ class AIService:
             return None
 
         models = [
-            "gpt-4o",                     # OpenAI flagship via gateway
-            "claude-3-5-sonnet-20240620", # Anthropic via gateway
-            "gemini-2.0-flash",           # Gemini via gateway
-            "llama-3.3-70b",              # Open-source via gateway
-            "deepseek-r1",                # Reasoning model via gateway
+            "t3-web/gpt-4o",             # OpenAI gpt-4o via gateway (200 OK)
+            "t3-web/claude-3-5-sonnet-20240620",  # Anthropic Claude via gateway
+            "openai/gpt-4o",             # OpenAI via gateway (429 rate-limited but works)
+            "t3-web/llama-3.3-70b",      # Open-source via gateway (200 OK)
+            "t3-web/deepseek-r1",        # Reasoning model via gateway (200 OK)
         ]
 
         for model_name in models:

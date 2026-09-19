@@ -67,7 +67,7 @@ HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')
 AIML_API_KEY = os.getenv('AIML_API_KEY', '')
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 NVIDIA_MISTRAL_API_KEY = os.getenv('NVIDIA_MISTRAL_API_KEY', '')
-OMNIROUTE_API_KEY = os.getenv('OMNIROUTE_API_KEY', '')
+OMNIROUTE_API_KEY = os.getenv('OMNIROUTE_API_KEY', '') or os.getenv('OMNIROUTEAPI', '')
 OMNIROUTE_BASE_URL = os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-production-9d6b.up.railway.app/v1')
 
 

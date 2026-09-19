@@ -220,7 +220,7 @@ class PYQExtractor:
         """Call AI with OmniRoute first, then Gemini/Groq fallbacks."""
         # Try OmniRoute first (tries multiple models via gateway)
         if hasattr(self, 'omniroute_client') and self.omniroute_client:
-            for model_name in ["gpt-4o", "claude-3-5-sonnet-20240620", "gemini-2.0-flash"]:
+            for model_name in ["t3-web/gpt-4o", "t3-web/claude-3-5-sonnet-20240620", "t3-web/llama-3.3-70b", "t3-web/deepseek-r1"]:
                 try:
                     response = self.omniroute_client.chat.completions.create(
                         model=model_name,
