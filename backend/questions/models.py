@@ -546,7 +546,7 @@ class QuestionBookmark(models.Model):
     user = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='bookmarks')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='bookmarks')
     note = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ['user', 'question']

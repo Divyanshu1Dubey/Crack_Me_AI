@@ -43,7 +43,7 @@ class UserTopicPerformance(models.Model):
 class DailyActivity(models.Model):
     """Track daily user activity for heatmap."""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='daily_activities')
-    date = models.DateField()
+    date = models.DateField(db_index=True)
     questions_attempted = models.IntegerField(default=0)
     correct_answers = models.IntegerField(default=0)
     time_spent_minutes = models.IntegerField(default=0)
@@ -143,7 +143,7 @@ class StudyStreak(models.Model):
     longest_streak = models.IntegerField(default=0)
     total_study_days = models.IntegerField(default=0)
     last_activity_date = models.DateField(null=True, blank=True)
-    xp_points = models.IntegerField(default=0)
+    xp_points = models.IntegerField(default=0, db_index=True)
 
     def record_activity(self):
         today = timezone.now().date()

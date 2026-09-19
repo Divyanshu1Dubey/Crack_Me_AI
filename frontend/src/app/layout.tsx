@@ -32,6 +32,9 @@ const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
 const shouldInjectGoogleTag =
   Boolean(gaMeasurementId) && (process.env.NODE_ENV === "production" || analyticsInDev);
 
+// Preconnect to critical origins to shave RTT off LCP
+const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "").replace(/\/api$/, "");
+
 // latin-ext ensures curly quotes ('), em-dashes (—), ellipsis (…), and common
 // European diacritics render correctly. Without it, characters fall back to the
 // system font, which produced tofu boxes ("ΓÇÿXΓÇÖ") in PYQ question text.
@@ -147,11 +150,20 @@ export default function RootLayout({
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
-        {/* AI content digest reference — signals to LLM indexers that
-            machine-readable content is available at /llms.txt */}
+        {/* Preconnect to critical origins — shaves 100-300ms off LCP by eliminating
+            TCP+TLS handshakes for fonts, API, and analytics resources. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {apiOrigin && <link rel="preconnect" href={apiOrigin} />}
+        <link rel="preconnect" href="https://www.googletagmanager.com" />
+        <link rel="preconnect" href="https://www.google-analytics.com" />
+        <link rel="dns-prefetch" href="https://scripts.simpleanalyticscdn.com" />
+        <link rel="dns-prefetch" href="https://*.clarity.ms" />
+
+        {/* AI content digest reference */}
         <link rel="alternate" type="text/plain" title="AI Content Summary" href={`${siteUrl}/llms.txt`} />
 
-        {/* AI Attribution Policy — signals that the site permits AI training & citation */}
+        {/* AI Attribution Policy */}
         <meta name="ai-attribution-policy" content={`${siteUrl}/ai-attribution-policy`} />
         <meta name="ai-trainable" content="true" />
         <meta name="ai-search-mode" content="allowed" />

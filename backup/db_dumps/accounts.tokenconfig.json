@@ -1,0 +1,1 @@
+[{"model": "accounts.tokenconfig", "pk": 1, "fields": {"free_daily_tokens": 10, "free_weekly_tokens": 50, "ai_tutor_daily_cap": 2, "token_price": "1.00", "feedback_reward": 2, "min_purchase": 10, "max_purchase": 500}}]

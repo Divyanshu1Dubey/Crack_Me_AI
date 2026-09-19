@@ -5,6 +5,7 @@ and RAG-backed textbook grounding. Distributes calls across providers
 to minimize quota exhaustion on any single API.
 
 Providers (all free-tier capable unless noted):
+  0. OmniRoute          — OpenAI-compatible gateway (routes to all providers, first-stop)
   1. Groq              — Llama 3.3 70B   (30 RPM, 14,400 RPD)
   2. Cerebras          — Llama 3.1 8B    (30 RPM, ~1M tokens/day)
   3. Gemini            — Flash 2.0       (15 RPM, 1,500 RPD per model)
@@ -151,6 +152,7 @@ class AIService:
         self.huggingface = None
         self.mistral = None
         self.nvidia_mistral = None
+        self.omniroute = None
         self._rag = None
         self._init_clients()
 
@@ -278,8 +280,23 @@ class AIService:
             except Exception as e:
                 logger.warning(f"NVIDIA Mistral init failed: {e}")
 
+        # OmniRoute gateway - OpenAI-compatible proxy (first-stop for all AI calls)
+        omniroute_key = getattr(settings, "OMNIROUTE_API_KEY", "") or os.getenv("OMNIROUTE_API_KEY", "")
+        omniroute_base = getattr(settings, "OMNIROUTE_BASE_URL", "") or os.getenv("OMNIROUTE_BASE_URL", "https://omniroute-production-9d6b.up.railway.app/v1")
+        if omniroute_key and omniroute_base:
+            try:
+                from openai import OpenAI
+                self.omniroute = OpenAI(
+                    api_key=omniroute_key,
+                    base_url=omniroute_base,
+                    max_retries=0
+                )
+                logger.info("✅ OmniRoute gateway initialized")
+            except Exception as e:
+                logger.warning(f"OmniRoute init failed: {e}")
+
         providers_ok = [name for name, client in [
-            ('Gemini', self.gemini_client), ('Groq', self.groq),
+            ('OmniRoute', self.omniroute), ('Gemini', self.gemini_client), ('Groq', self.groq),
             ('Cerebras', self.cerebras), ('Cohere', self.cohere),
             ('OpenRouter', self.openrouter), ('OpenRouter2', self.openrouter2),
             ('GitHub', self.github_models), ('HuggingFace', self.huggingface),
@@ -714,6 +731,58 @@ class AIService:
         self.openrouter2 = None
         return None
 
+    # ─── OMNROUTE GATEWAY ─────────────────────────────────
+
+    def _call_omniroute(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
+        """Call AI via OmniRoute gateway (OpenAI-compatible).
+        Tries multiple high-quality models via the gateway.
+        The gateway routes to all underlying providers."""
+        if not self.omniroute:
+            return None
+
+        models = [
+            "gpt-4o",                     # OpenAI flagship via gateway
+            "claude-3-5-sonnet-20240620", # Anthropic via gateway
+            "gemini-2.0-flash",           # Gemini via gateway
+            "llama-3.3-70b",              # Open-source via gateway
+            "deepseek-r1",                # Reasoning model via gateway
+        ]
+
+        for model_name in models:
+            try:
+                messages = []
+                if system:
+                    messages.append({"role": "system", "content": system})
+                messages.append({"role": "user", "content": prompt})
+
+                response = self.omniroute.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=20.0,
+                )
+                text = response.choices[0].message.content
+                if text:
+                    logger.info(f"OmniRoute [{model_name}] OK")
+                    return text
+            except Exception as e:
+                err = str(e)
+                if "401" in err or "403" in err:
+                    logger.warning("OmniRoute API key invalid - disabling for this session")
+                    self.omniroute = None
+                    return None
+                elif "429" in err:
+                    logger.info(f"OmniRoute [{model_name}] rate limited, trying next model...")
+                    continue
+                else:
+                    logger.warning(f"OmniRoute [{model_name}] error: {e}")
+                    continue
+
+        logger.warning("OmniRoute: all models exhausted - disabling for this session")
+        self.omniroute = None
+        return None
+
     # ─── LOAD-BALANCED DISPATCHER ──────────────────────────
 
     @staticmethod
@@ -734,6 +803,7 @@ class AIService:
         import time
         global _call_counter
         providers = [
+            ('omniroute', self._call_omniroute),
             ('groq', self._call_groq),
             ('cerebras', self._call_cerebras),
             ('gemini', self._call_gemini),
@@ -1265,6 +1335,7 @@ D) {options.get('D', '')}
 Answer (single letter only):"""
 
         providers = [
+            ('omniroute', self._call_omniroute),
             ('groq', self._call_groq),
             ('cerebras', self._call_cerebras),
             ('github', self._call_github_models),

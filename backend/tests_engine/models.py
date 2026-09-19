@@ -72,7 +72,7 @@ class TestAttempt(models.Model):
     incorrect_count = models.IntegerField(default=0)
     unanswered_count = models.IntegerField(default=0)
     time_taken_seconds = models.IntegerField(null=True, blank=True)
-    is_completed = models.BooleanField(default=False)
+    is_completed = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         ordering = ['-started_at']

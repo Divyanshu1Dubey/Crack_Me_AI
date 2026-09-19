@@ -67,6 +67,8 @@ HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')
 AIML_API_KEY = os.getenv('AIML_API_KEY', '')
 MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 NVIDIA_MISTRAL_API_KEY = os.getenv('NVIDIA_MISTRAL_API_KEY', '')
+OMNIROUTE_API_KEY = os.getenv('OMNIROUTE_API_KEY', '')
+OMNIROUTE_BASE_URL = os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-production-9d6b.up.railway.app/v1')
 
 
 allowed_hosts_default = 'localhost,127.0.0.1,testserver'
@@ -387,6 +389,7 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-session-id",
 ]
+CORS_MAX_AGE = 86400  # 24 hours — browsers cache preflight responses
 
 # CSRF trusted origins (needed for production)
 csrf_trusted_origins = _parse_origin_list(
@@ -574,6 +577,7 @@ X_FRAME_OPTIONS = 'DENY'
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 if not DEBUG:
     # Production-only TLS enforcement
