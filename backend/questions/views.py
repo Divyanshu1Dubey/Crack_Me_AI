@@ -132,9 +132,18 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_staff:
             return Announcement.objects.all()
-        # Ensure we filter by target_exam_track if applicable (dummy logic here assumes 'all' or student's target exam)
-        # Ideally, we filter based on user's exam track if they have one configured in their profile
-        return Announcement.objects.all() # Keep simple for now, filter logic can be expanded
+
+        now = timezone.now()
+        user_target = getattr(user, 'target_exam', 'all')
+
+        return Announcement.objects.filter(
+            # Not expired
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+            # Visible to this user's exam track
+            Q(target_exam_track='all') |
+            Q(target_exam_track=user_target) |
+            Q(target_users=user)
+        ).distinct().order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
         """Cached list — bypass for staff (always fresh) and invalidate on writes."""
@@ -353,6 +362,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 question_id=OuterRef('pk'),
             )
             queryset = queryset.filter(Exists(showcase_filter))
+
+        if self.action == 'retrieve':
+            queryset = queryset.select_related('subject', 'topic', 'verified_by')
 
         if self.action == 'list':
             queryset = queryset.select_related('subject', 'topic', 'verified_by')
@@ -2472,7 +2484,7 @@ class DiscussionListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         question_id = self.request.query_params.get('question')
-        qs = Discussion.objects.select_related('user').filter(parent__isnull=True)
+        qs = Discussion.objects.select_related('user', 'question').filter(parent__isnull=True)
         if question_id:
             qs = qs.filter(question_id=question_id)
         return qs
@@ -2651,8 +2663,7 @@ class FlashcardAnalyticsView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        from django.db.models import Avg, Q
-        from django.utils import timezone
+        from django.db.models import Avg
 
         cards = Flashcard.objects.filter(user=request.user)
         total = cards.count()
@@ -2668,11 +2679,12 @@ class FlashcardAnalyticsView(generics.GenericAPIView):
             avg_ease=Avg('ease_factor'),
             avg_interval=Avg('interval_days'),
         )
+        retention_count = cards.filter(ease_factor__gte=2.5).count()
 
         return Response({
             'total_cards': total,
             'cards_due_today': due_today,
-            'retention_rate': round(cards.filter(ease_factor__gte=2.5).count() / total, 3),
+            'retention_rate': round(retention_count / total, 3),
             'avg_ease_factor': round(aggs['avg_ease'] or 0, 2),
             'avg_interval': round(aggs['avg_interval'] or 0, 1),
             'interval_distribution': {

@@ -2,7 +2,7 @@
 # Site: https://cracklabs.app
 # Purpose: Enable AI search engines, LLMs, and AI assistants to accurately cite
 #          and summarize CrackCMS medical exam preparation content.
-# Last updated: 2026-09-17
+# Last updated: 2026-09-21
 
 ## About CrackCMS
 
@@ -22,7 +22,7 @@ CrackCMS (by CrackLabs AI, cracklabs.app) is an AI-powered medical exam preparat
    - Similar PYQ links for pattern recognition
 
 2. AI Tutor: Multi-model AI assistant trained on standard medical textbooks
-   - 11 LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, , etc.)
+   - 11 LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, etc.)
    - RAG-grounded responses from indexed textbook chapters
    - Supports Socratic, Viva, and High-Yield chat modes
 

@@ -438,6 +438,9 @@ class TokenTransaction(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+        ]
 
     def __str__(self):
         return f"{self.user.username}: {self.get_transaction_type_display()} +{self.amount} tokens"

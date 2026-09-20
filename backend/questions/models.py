@@ -638,6 +638,9 @@ class Discussion(models.Model):
 
     class Meta:
         ordering = ['-is_pinned', '-upvotes', '-created_at']
+        indexes = [
+            models.Index(fields=['question', 'parent', 'is_pinned']),
+        ]
 
     def __str__(self):
         return f"{self.user.username} on Q{self.question.id}: {self.text[:60]}"
@@ -690,6 +693,10 @@ class Flashcard(models.Model):
 
     class Meta:
         ordering = ['next_review', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'next_review']),
+            models.Index(fields=['user', 'subject']),
+        ]
 
     def schedule_next_review(self, quality):
         """SM-2 spaced repetition algorithm. quality: 0-5"""
