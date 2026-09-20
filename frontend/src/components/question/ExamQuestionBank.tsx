@@ -181,6 +181,7 @@ function ExamQuestionBankInner({
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear ?? '');
     const [years, setYears] = useState<number[]>([]);
     const [qbankStats, setQbankStats] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
     const [listError, setListError] = useState<string | null>(null);
     const [selectedQuestion, setSelectedQuestion] = useState<number | null>(
         initialQueryId ? Number(initialQueryId) : null,
@@ -474,6 +475,9 @@ function ExamQuestionBankInner({
                 if (res.data.user_selected_answer) {
                     setSelectedAnswer(res.data.user_selected_answer);
                 }
+            }).catch(() => {
+                // Both detail endpoints failed — show a user-facing error
+                setError('Unable to load question details. Please try again.');
             });
         });
     }, []);

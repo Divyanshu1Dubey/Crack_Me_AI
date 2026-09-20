@@ -18,7 +18,7 @@ import { usePWA } from '@/components/PWAProvider';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
-  loading: () => <div className="p-2 w-8.5 h-8.5" />,
+  loading: () => <div className="p-2 w-8 h-8" />,
 });
 
 interface TokenInfo {

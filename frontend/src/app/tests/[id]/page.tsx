@@ -199,6 +199,10 @@ export default function TakeTestPage() {
             } catch { /* review fetch is non-critical */ }
         } catch (err) {
             console.error('Submit failed:', err);
+            // Surface the error so the user can recover instead of being stuck.
+            const message = extractApiErrorMessage(err) || 'Failed to submit test. Please check your connection and try again.';
+            setError(message);
+            setShowConfirm(false);
         }
     }, [attemptId, submitted, currentIdx, questions, answers, testId]);
 

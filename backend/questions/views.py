@@ -2374,10 +2374,20 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         return [IsControlTowerAdmin()]
 
+    def get_throttles(self):
+        """Rate-limit unauthenticated feedback to prevent spam."""
+        from rest_framework.throttles import AnonRateThrottle
+        if self.action == 'create' and not self.request.user.is_authenticated:
+            return [AnonRateThrottle()]
+        return []
+
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:
             serializer.save(user=self.request.user)
         else:
+            # Unauthenticated submissions are allowed (public flagging) but
+            # are rate-limited via AnonRateThrottle and flagged in the
+            # serializer for admin moderation.
             serializer.save()
 
     @action(detail=False, methods=['get'], url_path='admin-queue')

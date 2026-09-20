@@ -16,7 +16,8 @@ import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
   BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
-  CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag
+  CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag,
+  AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +88,7 @@ function PracticeContent() {
     const [tokenError, setTokenError] = useState(false);
     const [showPalette, setShowPalette] = useState(false);
     const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Used to cancel in-flight AI explanation requests when the student
     // navigates to a different question before the response arrives.
@@ -107,10 +109,12 @@ function PracticeContent() {
         if (!ready) return;
         if (!year) { router.push('/questions'); return; }
         const resolvedExamType = practiceSlugToExamType(examParam) || examParam;
+        setLoadError(null);
         questionsAPI.list({ year, exam_type: resolvedExamType, page_size: 200 }).then(res => {
             const qs = res.data.results || res.data || [];
             setQuestions(qs);
         }).catch(() => {
+            setLoadError('Failed to load questions. Check your connection and try again.');
             setQuestions([]);
         }).finally(() => setLoading(false));
     }, [ready, router, year, examParam]);
@@ -293,6 +297,26 @@ function PracticeContent() {
                     <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
                     <p className="text-sm text-muted-foreground font-medium">Loading {year} PYQs...</p>
                 </div>
+            </div>
+        );
+    }
+
+    if (questions.length === 0 && loadError) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <Card className="max-w-md p-8 text-center space-y-4">
+                    <AlertTriangle className="w-12 h-12 text-destructive mx-auto" />
+                    <h2 className="text-lg font-bold">Failed to Load</h2>
+                    <p className="text-sm text-muted-foreground">{loadError}</p>
+                    <div className="flex gap-3 justify-center">
+                        <Button onClick={() => window.location.reload()}>
+                            <RefreshCw className="w-4 h-4 mr-2" /> Retry
+                        </Button>
+                        <Button variant="outline" onClick={() => router.push('/questions')}>
+                            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+                        </Button>
+                    </div>
+                </Card>
             </div>
         );
     }
@@ -485,7 +509,9 @@ function PracticeContent() {
                                                 </select>
                                                 <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
                                                     placeholder="Describe the issue (e.g., correct answer should be B because...)"
-                                                    value={flagComment} onChange={e => setFlagComment(e.target.value)} />
+                                                    value={flagComment} onChange={e => setFlagComment(e.target.value)}
+                                                    maxLength={500} />
+                                                <div className="text-right text-[10px] text-muted-foreground">{flagComment.length}/500</div>
                                                 <div className="flex gap-2">
                                                     <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
                                                         {flagSubmitting ? 'Submitting...' : 'Submit'}

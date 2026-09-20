@@ -50,7 +50,7 @@ export function FloatingDock() {
 
   if (activePanel === 'none') {
     return (
-      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-45">
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
         <Button
           variant="default"
           size="icon"
@@ -80,7 +80,7 @@ export function FloatingDock() {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="floating-dock-title" className="fixed bottom-6 right-6 w-80 sm:w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col z-45 overflow-hidden animate-in slide-in-from-bottom-5">
+    <div role="dialog" aria-modal="true" aria-labelledby="floating-dock-title" className="fixed bottom-6 right-6 w-80 sm:w-96 bg-card border border-border shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-5">
       <div className="flex justify-between items-center p-4 border-b bg-muted/50">
         <h3 id="floating-dock-title" className="font-semibold text-sm">
           {activePanel === 'ask-ai' ? 'Ask AI Assistant' : 'Create Flashcard'}
