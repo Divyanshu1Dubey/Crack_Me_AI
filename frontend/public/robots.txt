@@ -1,0 +1,81 @@
+User-agent: *
+Allow: /
+
+# Allow AI crawlers explicitly
+User-agent: GPTBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+User-agent: Googlebot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+User-agent: Bingbot
+Allow: /
+User-agent: Slurp
+Allow: /
+User-agent: Baiduspider
+Allow: /
+User-agent: YandexBot
+Allow: /
+User-agent: cohere-ai
+Allow: /
+User-agent: cohere-training-crawler
+Allow: /
+User-agent: ccbot
+Allow: /
+User-agent: Diffbot
+Allow: /
+User-agent: DuckAssist
+Allow: /
+
+# Disallow admin, API, and private routes
+Disallow: /api/
+Disallow: /admin/
+Disallow: /settings
+Disallow: /dashboard
+Disallow: /tokens
+Disallow: /subscription
+Disallow: /tests/
+Disallow: /simulator
+Disallow: /ai-tutor
+Disallow: /flashcards
+Disallow: /bookmarks
+Disallow: /leaderboard
+Disallow: /analytics/
+Disallow: /ingestion/
+Disallow: /jobs/
+Disallow: /_next/
+Disallow: /cdn-cgi/
+
+# Allow public content
+Allow: /questions/
+Allow: /neet-pg/
+Allow: /inicet/
+Allow: /cms/
+Allow: /usmle/
+Allow: /fmge/
+Allow: /medical-officer/
+Allow: /blog/
+Allow: /guides/
+Allow: /about
+Allow: /terms
+Allow: /privacy-policy
+Allow: /refund-policy
+Allow: /disclaimer
+Allow: /cookie-policy
+Allow: /medical-review-policy
+Allow: /editorial-policy
+Allow: /ai-attribution-policy
+
+Sitemap: https://www.cracklabs.app/sitemap.xml
