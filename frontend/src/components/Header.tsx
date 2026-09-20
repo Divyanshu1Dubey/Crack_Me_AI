@@ -234,7 +234,7 @@ export default function Header() {
         <div className="hidden h-9 w-1 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 md:block" />
         <div className="hidden md:block">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-slate-300">Workspace</p>
-          <h1 className="text-base font-bold text-foreground md:text-lg">{getTitle()}</h1>
+          <p className="text-base font-bold text-foreground md:text-lg" role="heading" aria-level={1}>{getTitle()}</p>
         </div>
       </div>
 

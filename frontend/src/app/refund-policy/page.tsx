@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
 
@@ -90,7 +91,7 @@ export default function RefundPolicyPage() {
             <h2>6. Subscription Auto-Renewal</h2>
             <p>
                 Premium plans auto-renew unless cancelled before the renewal date. You can cancel anytime
-                from <a href="/settings">Settings → Subscription</a>. Cancelling stops future renewals but
+                from <Link href="/settings">Settings → Subscription</Link>. Cancelling stops future renewals but
                 does not retroactively refund the current term.
             </p>
 

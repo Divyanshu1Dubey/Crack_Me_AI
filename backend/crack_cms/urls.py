@@ -43,6 +43,9 @@ def api_root(request):
 
 
 def trigger_error(request):
+    if not settings.DEBUG:
+        from django.http import HttpResponseNotFound
+        return HttpResponseNotFound()
     1 / 0
 
 

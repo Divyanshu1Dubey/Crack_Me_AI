@@ -340,8 +340,11 @@ class AIService:
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         for model_name in GEMINI_MODELS:
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
-                headers = {"Content-Type": "application/json"}
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": gemini_key,
+                }
                 payload = {
                     "contents": [{"parts": [{"text": full_prompt}]}],
                     "generationConfig": {

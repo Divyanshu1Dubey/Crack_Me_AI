@@ -303,6 +303,7 @@ export default function Sidebar() {
                                                     key={item.href}
                                                     href={resolvedHref}
                                                     onClick={handleClick}
+                                                    prefetch={false}
                                                     className={`sidebar-link ${isActive ? 'active' : ''}`}
                                                     aria-current={isActive ? 'page' : undefined}
                                                 >

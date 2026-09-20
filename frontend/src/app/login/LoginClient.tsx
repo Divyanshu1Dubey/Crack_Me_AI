@@ -137,6 +137,7 @@ export default function LoginClient() {
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                             onClick={() => setShowPassword(!showPassword)}
                             aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            aria-pressed={showPassword}
                         >
                             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                         </button>
@@ -175,7 +176,7 @@ export default function LoginClient() {
                         }
                     }}
                 >
-                    {magicLoading ? 'Sending magic link...' : (<><Mail className="w-4 h-4" /> Send Magic Link</>)}
+                    {magicLoading ? 'Sending magic link...' : (<><Mail className="w-4 h-4 mr-2" /> Send Magic Link</>)}
                 </Button>
 
                 <Button

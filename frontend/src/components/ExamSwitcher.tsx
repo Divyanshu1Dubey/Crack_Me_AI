@@ -39,7 +39,6 @@ export default function ExamSwitcher({ compact = false }: { compact?: boolean })
     localStorage.setItem('active_exam_track', val);
     window.dispatchEvent(new Event('exam_changed'));
     router.push(ROUTE_BY_EXAM[val] || `/questions?exam=${val}`);
-    router.refresh();
   };
 
   if (!mounted) return <div className={`bg-muted rounded-md animate-pulse ${compact ? 'w-9 h-9' : 'w-[140px] h-9'}`} />;

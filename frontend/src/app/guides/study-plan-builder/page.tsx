@@ -1,5 +1,6 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 const title = 'Build a Personalised UPSC CMS / NEET PG Study Plan';
 const description = 'Step-by-step framework to build a 6-month UPSC CMS or NEET PG study plan using PYQs, AI tutor, and spaced repetition.';
@@ -99,7 +100,7 @@ export default function StudyPlanBuilderGuide() {
 
             <h2>Start today</h2>
             <p>
-                <a href="/register">Create a free CrackCMS account</a> to access the diagnostic test, AI tutor, and
+                <Link href="/register">Create a free CrackCMS account</Link> to access the diagnostic test, AI tutor, and
                 full question bank. Your personalised study plan awaits.
             </p>
         </GuideLayout>

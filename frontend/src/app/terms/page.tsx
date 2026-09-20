@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
 
@@ -60,14 +61,14 @@ export default function TermsPage() {
             <p>
                 Premium subscriptions unlock unlimited AI tutor sessions, advanced analytics, exam
                 simulations, and full textbook access. Pricing is displayed on the
-                <a href="/subscription">/subscription</a> page.
+                <Link href="/subscription">/subscription</Link> page.
             </p>
             <h3>5.3 Refunds</h3>
             <p>
                 Within 7 days of purchase, if you have used fewer than 10 AI tokens, you are eligible for a
                 full refund. After 7 days or once you have consumed 10+ AI tokens, the purchase is
                 non-refundable except where required by law. See our full
-                <a href="/refund-policy">Refund Policy</a>.
+                <Link href="/refund-policy">Refund Policy</Link>.
             </p>
 
             <h2>6. Content &amp; Intellectual Property</h2>
@@ -87,7 +88,7 @@ export default function TermsPage() {
                 The AI tutor is a study aid, not a substitute for medical judgement. AI explanations may
                 occasionally contain errors. Always verify clinical information against authoritative
                 textbooks (Harrison&apos;s, Robbins, Bailey &amp; Love, Ghai, Park&apos;s) and your
-                university curriculum. See <a href="/disclaimer">Disclaimer</a>.
+                university curriculum. See <Link href="/disclaimer">Disclaimer</Link>.
             </p>
 
             <h2>8. Limitation of Liability</h2>

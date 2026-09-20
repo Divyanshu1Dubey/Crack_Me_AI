@@ -1,5 +1,6 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 const title = 'How AI Is Transforming Medical Education — UPSC CMS, NEET PG';
 const description = 'How AI tutors, large language models, and adaptive MCQs are reshaping medical exam preparation. A practising clinician&apos;s perspective.';
@@ -113,7 +114,7 @@ export default function AIMedEdGuide() {
                 <li><strong>Personalised study plans</strong> auto-generated from your weak topics.</li>
             </ul>
             <p>
-                At CrackCMS we&apos;re building all of this. <a href="/register">Create a free account</a> to start using the
+                At CrackCMS we&apos;re building all of this. <Link href="/register">Create a free account</Link> to start using the
                 AI tutor today.
             </p>
         </GuideLayout>

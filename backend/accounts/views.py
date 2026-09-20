@@ -1024,7 +1024,7 @@ class AdminTokenTransferView(APIView):
             except User.DoesNotExist:
                 return Response({"error": f"Source user ID {from_user_id} not found"}, status=404)
 
-            from_balance, _ = TokenBalance.objects.get_or_create(user=from_user)
+            from_balance = TokenBalance.objects.select_for_update().get(user=from_user)
 
             if from_balance.purchased_tokens < amount:
                 return Response(

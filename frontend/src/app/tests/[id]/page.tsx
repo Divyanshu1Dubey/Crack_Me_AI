@@ -12,6 +12,7 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
@@ -558,9 +559,9 @@ export default function TakeTestPage() {
                                     <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                                         Your daily/weekly free tokens have been used up. Purchase more tokens to continue using AI features.
                                     </p>
-                                    <a href="/tokens" className="btn-primary text-xs mt-3 inline-flex">
+                                    <Link href="/tokens" className="btn-primary text-xs mt-3 inline-flex">
                                         <Zap className="w-3 h-3" /> Buy Tokens
-                                    </a>
+                                    </Link>
                                 </div>
                             </div>
                         </div>

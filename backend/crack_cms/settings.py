@@ -54,7 +54,7 @@ if not secret_key_from_env and not DEBUG:
     else:
         raise ImproperlyConfigured('SECRET_KEY is required when DEBUG is false.')
 
-SECRET_KEY = secret_key_from_env or 'django-insecure-local-dev-only'
+SECRET_KEY = secret_key_from_env or ('ci-secret-key-12345' if is_testing else 'django-insecure-local-dev-only')
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')

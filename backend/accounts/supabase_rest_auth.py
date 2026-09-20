@@ -73,7 +73,7 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
 
         # Premium student exception: ensure they never get locked out due to device limits/race conditions
-        if user.email in ['sbsp181107@gmail.com'] or user.role == 'admin':
+        if user.role == 'admin':
             return (user, None)
 
         # SECURITY (Fix #3): reject any X-Session-ID that doesn't match a
@@ -265,7 +265,6 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 for item in raw.split(",")
                 if item and item.strip()
             }
-            configured.update(["meduraa.web@gmail.com", "parulmaterial@gmail.com"])
             bootstrap_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
             if bootstrap_email:
                 configured.add(bootstrap_email)

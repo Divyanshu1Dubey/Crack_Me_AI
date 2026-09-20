@@ -37,16 +37,12 @@ class IsAdminUser(BasePermission):
 
 
 def _get_permission():
-    """Allow unauthenticated access in DEBUG mode for development."""
-    if getattr(django_settings, 'DEBUG', False):
-        return [AllowAny()]
+    """Never bypass authentication — DEBUG mode still requires valid users."""
     return [IsAuthenticated()]
 
 
 def _get_admin_permission():
     """Only allow admin users (for upload/train features)."""
-    if getattr(django_settings, 'DEBUG', False):
-        return [AllowAny()]  # Allow in debug for testing
     return [IsAdminUser()]
 
 

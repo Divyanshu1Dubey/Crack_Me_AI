@@ -17,6 +17,7 @@ export default function ThemeToggle() {
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTheme(isDark ? 'light' : 'dark'); }}
             className="p-2 rounded-lg hover:bg-accent transition-colors"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
             {isDark ? (

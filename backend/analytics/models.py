@@ -51,6 +51,9 @@ class DailyActivity(models.Model):
 
     class Meta:
         unique_together = ['user', 'date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
         ordering = ['-date']
 
     def __str__(self):

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
 
@@ -134,7 +135,7 @@ export default function MedicalOfficerJobsGuide() {
             <p>
                 CrackCMS covers PYQs for UPSC CMS, ESIC, AIIMS MO, and all major state PSCs. AI tutor explains every
                 answer with public-health context, and our analytics identify your weakest topics. Subscribe to
-                our <a href="/jobs">/jobs</a> page for weekly vacancy updates.
+                our <Link href="/jobs">/jobs</Link> page for weekly vacancy updates.
             </p>
         </GuideLayout>
     );

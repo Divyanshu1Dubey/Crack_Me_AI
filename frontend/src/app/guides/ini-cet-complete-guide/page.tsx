@@ -96,7 +96,7 @@ export default function INICETGuide() {
                 <strong>INI-CET</strong> is generally considered slightly tougher than NEET PG due to deeper clinical reasoning,
                 image-based questions, and -1/3 negative marking. NEET PG has a slightly higher negative marking penalty
                 (-1 vs -1/3). Most serious candidates attempt both.
-                See our detailed <a href="/neet-pg/vs-ini-cet" className="text-primary underline">NEET PG vs INI-CET</a> comparison.
+                See our detailed <Link href="/neet-pg/vs-ini-cet" className="text-primary underline">NEET PG vs INI-CET</Link> comparison.
             </p>
 
             <h2>Essential INI-CET Resources</h2>

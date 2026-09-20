@@ -19,6 +19,127 @@ import iniCetCutoff2024 from '@/content/blog/ini-cet-2024-cutoff-closing-ranks';
 import cmsVsNeetPgVsIniCet from '@/content/blog/cms-vs-neet-pg-vs-ini-cet';
 import bestPgBooks from '@/content/blog/best-pg-medical-entrance-books';
 
+// September 2026 expansion — 50 new posts: clinical concepts, subject prep,
+// exam strategy, career guides, and more.
+import ecgInterpretation from '@/content/blog/ecg-interpretation-upsc-cms-made-easy';
+import antibioticResistance from '@/content/blog/antibiotic-resistance-upsc-cms-guide';
+import acidBaseInterpretation from '@/content/blog/acid-base-interpretation-made-simple';
+import cnsAnatomyMnemonics from '@/content/blog/cns-anatomy-upsc-cms-mnemonics';
+import imageBasedQuestions from '@/content/blog/image-based-questions-cms-strategy';
+import timeManagement from '@/content/blog/time-management-upsc-cms-paper';
+import omrMistakes from '@/content/blog/omr-filling-mistakes-upsc-cms';
+import oneLinerMedicine from '@/content/blog/one-liner-medicine-upsc-cms';
+import instituteOfImportance from '@/content/blog/institute-of-importance-upsc-cms';
+import jobProfileMedicalOfficer from '@/content/blog/job-profile-medical-officer-upsc-cms';
+import deepDiveHypertension from '@/content/blog/deep-dive-systemic-hypertension';
+import deepDiveDiabetes from '@/content/blog/deep-dive-diabetes-mellitus-type2';
+import deepDiveTuberculosis from '@/content/blog/deep-dive-tuberculosis';
+import deepDiveNeonatalResuscitation from '@/content/blog/deep-dive-neonatal-resuscitation';
+import deepDiveGynaeOncology from '@/content/blog/deep-dive-gynecological-oncology';
+import neetPgVsCmsSalary from '@/content/blog/neet-pg-vs-cms-salary-lifestyle';
+import governmentDoctorCareerPath from '@/content/blog/government-doctor-career-path';
+import upscCmsVsSsc from '@/content/blog/upsc-cms-vs-ssc-choosing-right-exam';
+import medicalCoachingWorthIt from '@/content/blog/medical-coaching-for-upsc-cms-worth-it';
+import bestTimeToStartPrep from '@/content/blog/best-time-to-start-upsc-cms-preparation';
+import neetPgToppersRoutine from '@/content/blog/neet-pg-toppers-routine-breakdown';
+import deselectingOptions from '@/content/blog/deselecting-options-upsc-cms-technique';
+import anatomyHighYield from '@/content/blog/anatomy-high-yield-topics-upsc-cms';
+import physiologyRevisionTricks from '@/content/blog/physiology-revision-tricks-mnemonics';
+import biochemistryMnemonics from '@/content/blog/biochemistry-metabolic-pathways-mnemonics';
+import pharmacologyClassifications from '@/content/blog/pharmacology-drug-classifications-cms';
+import pathologyGrossHisto from '@/content/blog/pathology-gross-histo-upsc-cms';
+import microbiologyMustKnow from '@/content/blog/microbiology-upsc-cms-must-know';
+import forensicMedicineEssentials from '@/content/blog/forensic-medicine-upsc-cms-essentials';
+import psmEpidemiologyStats from '@/content/blog/psm-epidemiology-stats-cms';
+import orthopaedicsFractures from '@/content/blog/orthopaedics-cms-common-fractures';
+import dermatologyVisualGuide from '@/content/blog/dermatology-upsc-cms-visual-guide';
+import radiologyBasics from '@/content/blog/radiology-basics-cms-aspirants';
+import anaesthesiaMcqs from '@/content/blog/anaesthesia-mcqs-upsc-cms';
+import psychiatryCommonDisorders from '@/content/blog/psychiatry-upsc-cms-common-disorders';
+import eyeDiseases from '@/content/blog/eye-diseases-upsc-cms-quick-guide';
+import entHighYield from '@/content/blog/ent-upsc-cms-high-yield';
+import nutritionOverlooked from '@/content/blog/nutrition-upsc-cms-overlooked-topics';
+import nursingProcedures from '@/content/blog/nursing-procedure-upsc-cms';
+import emergencyMedicineQuick from '@/content/blog/emergency-medicine-upsc-cms-quick-reference';
+import clinicalExamSkills from '@/content/blog/clinical-exam-skills-upsc-cms';
+import commonEmergenciesManagement from '@/content/blog/common-medical-emergencies-management';
+import negativeMarkingStrategy from '@/content/blog/negative-marking-strategy-upsc-cms';
+import mockTestAnalysis from '@/content/blog/mock-test-analysis-upsc-cms';
+import memorizationTechniques from '@/content/blog/memorization-techniques-medical-aspirants';
+import stressManagement from '@/content/blog/stress-management-medical-exams';
+import sleepOptimization from '@/content/blog/sleep-optimization-exam-performance';
+import paper1VsPaper2Strategy from '@/content/blog/upsc-cms-paper-1-vs-paper-2-strategy';
+import commonlyConfusedTopics from '@/content/blog/commonly-confused-topics-upsc-cms';
+import readingComprehension from '@/content/blog/reading-comprehension-upsc-cms-stems';
+import flashcardsSpacedRepetition from '@/content/blog/flashcards-spaced-repetition-upsc-cms';
+
+// September 2026 expansion batch 2 — 50 more posts.
+import surgerySuturing from '@/content/blog/surgery-suturing-techniques-upsc-cms';
+import surgeryAnastomosis from '@/content/blog/surgery-anastomosis-types-cms';
+import obgAntenatalCare from '@/content/blog/obg-antental-care-upsc-cms';
+import contraceptionMethods from '@/content/blog/contraception-methods-upsc-cms';
+import paedsImmunization from '@/content/blog/paediatrics-immunization-schedule-upsc-cms';
+import paedsGrowthMilestones from '@/content/blog/paediatrics-growth-milestones-upsc-cms';
+import psmNationalHealthPrograms from '@/content/blog/psm-national-health-programs-upsc-cms';
+import surgeryBreastDiseases from '@/content/blog/surgery-breast-diseases-upsc-cms';
+import surgeryThyroid from '@/content/blog/surgery-thyroid-upsc-cms';
+import surgeryHerniaTypes from '@/content/blog/surgery-hernia-types-upsc-cms';
+import obgLabourManagement from '@/content/blog/obg-labour-management-upsc-cms';
+import obgGynaeDisorders from '@/content/blog/obg-gynaecology-common-disorders-upsc-cms';
+import renalPhysiology from '@/content/blog/renal-physiology-upsc-cms';
+import cardiacPhysiology from '@/content/blog/cardiac-physiology-upsc-cms';
+import respiratoryPhysiology from '@/content/blog/respiratory-physiology-upsc-cms';
+import cnsPhysiology from '@/content/blog/cns-physiology-upsc-cms';
+import surgicalOncology from '@/content/blog/surgical-oncology-upsc-cms';
+import urologyHighYield from '@/content/blog/urology-upsc-cms-high-yield';
+import ophthalmologyGlaucoma from '@/content/blog/ophthalmology-glaucoma-upsc-cms';
+import entHearingLoss from '@/content/blog/ent-hearing-loss-types-upsc-cms';
+import orthoSpineInjuries from '@/content/blog/orthopaedics-spine-injuries-upsc-cms';
+import giEndoscopy from '@/content/blog/gi-endoscopy-upsc-cms';
+import clinicalCommunication from '@/content/blog/clinical-skills-communication-upsc-cms';
+import dermatologyDrugEruptions from '@/content/blog/dermatology-drug-eruptions-leprosy-upsc-cms';
+import medicineArrhythmias from '@/content/blog/medicine-arrhythmias-upsc-cms';
+import medicineHeartFailure from '@/content/blog/medicine-heart-failure-upsc-cms';
+import medicineValvular from '@/content/blog/medicine-valvular-heart-disease-upsc-cms';
+import medicineCnsInfections from '@/content/blog/medicine-cns-infections-upsc-cms';
+import medicineRheumatology from '@/content/blog/medicine-rheumatology-upsc-cms';
+import medicineGastroenterology from '@/content/blog/medicine-gastroenterology-upsc-cms';
+import medicineHaematology from '@/content/blog/medicine-haematology-upsc-cms';
+import medicineNephrology from '@/content/blog/medicine-nephrology-upsc-cms';
+import neetPgVsOtherExams from '@/content/blog/neet-pg-comedk-mss-nursing-exams-comparison';
+import doctorBurnout from '@/content/blog/doctor-burnout-government-hospitals-upsc-cms';
+import bloodPhysiology from '@/content/blog/physiology-blood-upsc-cms';
+import neurologyStroke from '@/content/blog/neurology-stroke-upsc-cms';
+import medicineEndocrinology from '@/content/blog/medicine-endocrinology-upsc-cms';
+import medicineRespiratory from '@/content/blog/medicine-respiratory-upsc-cms';
+import medicineCns from '@/content/blog/medicine-cns-upsc-cms';
+import medicinePoisoning from '@/content/blog/medicine-poisoning-toxicology-upsc-cms';
+import medicineSystemicSkin from '@/content/blog/medicine-dermatology-systemic-upsc-cms';
+import surgeryAbdominal from '@/content/blog/surgery-abdominal-surgery-upsc-cms';
+import medicineInfectiousDisease from '@/content/blog/medicine-infectious-disease-upsc-cms';
+import pharmacologyCardiac from '@/content/blog/pharmacology-cardiac-drugs-upsc-cms';
+import pharmacologyCns from '@/content/blog/pharmacology-cns-drugs-upsc-cms';
+import obgObstetricEmergencies from '@/content/blog/obg-obstetric-emergencies-upsc-cms';
+import obgGynaeOncology from '@/content/blog/obg-gynaecologic-oncology-upsc-cms';
+import surgeryTumourMarkers from '@/content/blog/surgery-tumour-markers-upsc-cms';
+import surgeryShock from '@/content/blog/surgery-shock-types-upsc-cms';
+import anaesthesiaLocalRegional from '@/content/blog/anaesthesia-local-regional-upsc-cms';
+import orthoArthritis from '@/content/blog/orthopaedics-arthritis-upsc-cms';
+import orthoSoftTissue from '@/content/blog/orthopaedics-soft-tissue-upsc-cms';
+import anaesthesiaObstetric from '@/content/blog/anaesthesia-obstetric-upsc-cms';
+import radiologyChest from '@/content/blog/radiology-chest-xray-upsc-cms';
+import radiologyAbdominal from '@/content/blog/radiology-abdominal-imaging-upsc-cms';
+import pathologyGeneral from '@/content/blog/pathology-general-upsc-cms';
+import pathologySystemic from '@/content/blog/pathology-systemic-upsc-cms';
+import medicineRheumatologyAdvanced from '@/content/blog/medicine-rheumatology-advanced-upsc-cms';
+import medicineCriticalCare from '@/content/blog/medicine-critical-care-upsc-cms';
+import surgeryTrauma from '@/content/blog/surgery-trauma-upsc-cms';
+import forensicToxicology from '@/content/blog/forensic-medicine-toxicology-upsc-cms';
+import forensicIdentification from '@/content/blog/forensic-medicine-identification-upsc-cms';
+import medicineHaemOncology from '@/content/blog/medicine-hematology-oncology-upsc-cms';
+import psmBiostatistics from '@/content/blog/psm-biostatistics-formulas-upsc-cms';
+import psmCommunityMedicine from '@/content/blog/psm-community-medicine-upsc-cms';
+
 /**
  * EEAT-grade blog post shape.
  *
@@ -136,6 +257,124 @@ const posts: BlogPost[] = [
     iniCetCutoff2024,
     cmsVsNeetPgVsIniCet,
     bestPgBooks,
+    // September 2026 expansion — 50 new posts.
+    ecgInterpretation,
+    antibioticResistance,
+    acidBaseInterpretation,
+    cnsAnatomyMnemonics,
+    imageBasedQuestions,
+    timeManagement,
+    omrMistakes,
+    oneLinerMedicine,
+    instituteOfImportance,
+    jobProfileMedicalOfficer,
+    deepDiveHypertension,
+    deepDiveDiabetes,
+    deepDiveTuberculosis,
+    deepDiveNeonatalResuscitation,
+    deepDiveGynaeOncology,
+    neetPgVsCmsSalary,
+    governmentDoctorCareerPath,
+    upscCmsVsSsc,
+    medicalCoachingWorthIt,
+    bestTimeToStartPrep,
+    neetPgToppersRoutine,
+    deselectingOptions,
+    anatomyHighYield,
+    physiologyRevisionTricks,
+    biochemistryMnemonics,
+    pharmacologyClassifications,
+    pathologyGrossHisto,
+    microbiologyMustKnow,
+    forensicMedicineEssentials,
+    psmEpidemiologyStats,
+    orthopaedicsFractures,
+    dermatologyVisualGuide,
+    radiologyBasics,
+    anaesthesiaMcqs,
+    psychiatryCommonDisorders,
+    eyeDiseases,
+    entHighYield,
+    nutritionOverlooked,
+    nursingProcedures,
+    emergencyMedicineQuick,
+    clinicalExamSkills,
+    commonEmergenciesManagement,
+    negativeMarkingStrategy,
+    mockTestAnalysis,
+    memorizationTechniques,
+    stressManagement,
+    sleepOptimization,
+    paper1VsPaper2Strategy,
+    commonlyConfusedTopics,
+    readingComprehension,
+    flashcardsSpacedRepetition,
+    // September 2026 batch 2 — 50 more posts.
+    surgerySuturing,
+    surgeryAnastomosis,
+    obgAntenatalCare,
+    contraceptionMethods,
+    paedsImmunization,
+    paedsGrowthMilestones,
+    psmNationalHealthPrograms,
+    surgeryBreastDiseases,
+    surgeryThyroid,
+    surgeryHerniaTypes,
+    obgLabourManagement,
+    obgGynaeDisorders,
+    renalPhysiology,
+    cardiacPhysiology,
+    respiratoryPhysiology,
+    cnsPhysiology,
+    surgicalOncology,
+    urologyHighYield,
+    ophthalmologyGlaucoma,
+    entHearingLoss,
+    orthoSpineInjuries,
+    giEndoscopy,
+    clinicalCommunication,
+    dermatologyDrugEruptions,
+    medicineArrhythmias,
+    medicineHeartFailure,
+    medicineValvular,
+    medicineCnsInfections,
+    medicineRheumatology,
+    medicineGastroenterology,
+    medicineHaematology,
+    medicineNephrology,
+    neetPgVsOtherExams,
+    doctorBurnout,
+    bloodPhysiology,
+    neurologyStroke,
+    medicineEndocrinology,
+    medicineRespiratory,
+    medicineCns,
+    medicinePoisoning,
+    medicineSystemicSkin,
+    surgeryAbdominal,
+    medicineInfectiousDisease,
+    pharmacologyCardiac,
+    pharmacologyCns,
+    obgObstetricEmergencies,
+    obgGynaeOncology,
+    surgeryTumourMarkers,
+    surgeryShock,
+    anaesthesiaLocalRegional,
+    orthoArthritis,
+    orthoSoftTissue,
+    anaesthesiaObstetric,
+    radiologyChest,
+    radiologyAbdominal,
+    pathologyGeneral,
+    pathologySystemic,
+    medicineRheumatologyAdvanced,
+    medicineCriticalCare,
+    surgeryTrauma,
+    forensicToxicology,
+    forensicIdentification,
+    medicineHaemOncology,
+    psmBiostatistics,
+    psmCommunityMedicine,
 ];
 
 // Newest first.

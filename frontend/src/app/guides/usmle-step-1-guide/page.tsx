@@ -1,4 +1,5 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
+import Link from 'next/link';
 import type { Metadata } from 'next';
 
 const title = 'USMLE Step 1 Guide for Indian MBBS Students — First Aid, Pathoma, UWorld';
@@ -122,7 +123,7 @@ export default function USMLEGuide() {
             <h2>For Indian MBBS Graduates: USMLE vs Alternatives</h2>
             <p>
                 If you are an Indian MBBS graduate weighing USMLE against Indian PG exams, see our detailed
-                <a href="/neet-pg/vs-usmle" className="text-primary underline">NEET PG vs USMLE</a> comparison
+                <Link href="/neet-pg/vs-usmle" className="text-primary underline">NEET PG vs USMLE</Link> comparison
                 for costs, timelines, career outcomes, and which route suits your goals.
             </p>
         </GuideLayout>

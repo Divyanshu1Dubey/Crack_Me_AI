@@ -294,8 +294,8 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-background to-background" />
         {/* Floating orbs */}
         <div className="absolute top-20 left-10 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-40 right-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute bottom-20 left-1/3 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-2000" />
+        <div className="absolute top-40 right-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse animate-pulse-delay-1000" />
+        <div className="absolute bottom-20 left-1/3 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl animate-pulse animate-pulse-delay-2000" />
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
       </div>
@@ -783,7 +783,7 @@ export default function LandingPage() {
                       ))}
                     </div>
 
-                    <div className="space-y-3 max-h-70 overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                       {/* User Prompt */}
                       <div className="flex items-start gap-2.5 justify-end">
                         <div className="rounded-2xl rounded-tr-sm bg-blue-600 text-white px-4 py-2.5 max-w-[85%] text-xs font-semibold shadow-lg shadow-blue-500/20">

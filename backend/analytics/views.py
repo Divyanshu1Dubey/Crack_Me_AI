@@ -196,9 +196,10 @@ class ScorePredictionView(APIView):
 
     def get(self, request):
         user = request.user
-        attempts = TestAttempt.objects.filter(user=user, is_completed=True).order_by('-started_at')
+        attempts = TestAttempt.objects.filter(user=user, is_completed=True).select_related('test').order_by('-started_at')
+        attempt_count = attempts.count()
 
-        if attempts.count() < 3:
+        if attempt_count < 3:
             return Response({
                 'predicted_score': None,
                 'message': 'Complete at least 3 tests to get score prediction',
@@ -260,9 +261,9 @@ class ScorePredictionView(APIView):
             'max_score': 250,
             'avg_accuracy': round(avg_accuracy, 1),
             'trend': trend,
-            'confidence': 'high' if attempts.count() >= 10 else 'medium',
+            'confidence': 'high' if attempt_count >= 10 else 'medium',
             'subject_predictions': subject_predictions,
-            'tests_taken': attempts.count(),
+            'tests_taken': attempt_count,
         })
 
 
@@ -273,7 +274,7 @@ class PerformanceTrendView(APIView):
     def get(self, request):
         attempts = TestAttempt.objects.filter(
             user=request.user, is_completed=True
-        ).order_by('started_at')[:20]
+        ).select_related('test').order_by('started_at')[:20]
 
         trend_data = []
         for a in attempts:

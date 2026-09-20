@@ -87,7 +87,7 @@ export default function PyqAttemptAnalyzer() {
 
                         {result.needsWork.length > 0 && (
                             <div className="rounded-xl border border-red-500/40 bg-red-50 dark:bg-red-950/30 p-5">
-                                <p className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">Needs Improvement (<50%)</p>
+                                <p className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">Needs Improvement (&lt;50%)</p>
                                 <ul className="space-y-1">
                                     {result.needsWork.map((t, i) => (
                                         <li key={i} className="text-sm text-red-700 dark:text-red-300">✗ {t}</li>

@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { consent, type ConsentState } from '@/lib/consent';
 import { analytics } from '@/lib/analytics';
 import { ShieldCheck, X } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ConsentBanner() {
     const [mounted, setMounted] = useState(false);
@@ -86,9 +87,9 @@ export default function ConsentBanner() {
                         preferences, and — only with your permission — measure
                         traffic so we can improve CrackCMS. You can change your
                         choice any time in the{' '}
-                        <a href="/cookie-policy" className="text-primary underline">
+                        <Link href="/cookie-policy" className="text-primary underline">
                             cookie policy
-                        </a>
+                        </Link>
                         .
                     </p>
 

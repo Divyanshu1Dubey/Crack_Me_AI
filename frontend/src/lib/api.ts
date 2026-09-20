@@ -101,6 +101,8 @@ const api = axios.create({
 });
 
 // Add auth token and session tracking to requests
+let cachedSession: { access_token: string } | null = null;
+
 api.interceptors.request.use(async (config) => {
   const sessionId = getOrCreateSessionId();
   if (sessionId) {
@@ -111,14 +113,20 @@ api.interceptors.request.use(async (config) => {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       try {
+        // getSession() is cached by the Supabase JS client's internal
+        // session cache (refreshed by autoRefreshToken). We read from it
+        // here because it's the only call that exposes the access_token.
+        // The underlying SDK only hits the network when the cache is cold
+        // or the token has expired — not on every interceptor call.
         const { data } = await supabase.auth.getSession();
-        const supabaseToken = data.session?.access_token;
-        if (supabaseToken) {
-          config.headers.Authorization = `Bearer ${supabaseToken}`;
+        if (data.session?.access_token) {
+          cachedSession = data.session;
+          config.headers.Authorization = `Bearer ${data.session.access_token}`;
         }
       } catch (error: unknown) {
         if (isInvalidRefreshTokenError(error)) {
           await clearSupabaseLocalSession();
+          cachedSession = null;
         }
       }
     }
@@ -368,7 +376,7 @@ export const ingestionAPI = {
     fd.append('file', file);
     if (meta.exam_hint) fd.append('exam_hint', meta.exam_hint);
     return api.post('/ingestion/materials/upload/', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     });
   },
 
@@ -418,7 +426,7 @@ export const questionsAPI = {
   importPreview: (data: Record<string, unknown>) => api.post('/questions/import-preview/', data),
   bulkMetadataUpdate: (data: Record<string, unknown>) => api.patch('/questions/bulk-metadata/', data),
   bulkDelete: (data: Record<string, unknown>) => api.post('/questions/bulk-delete/', data),
-  extractionUpload: (data: FormData) => api.post('/questions/extraction/upload/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  extractionUpload: (data: FormData) => api.post('/questions/extraction/upload/', data, { headers: { 'Content-Type': undefined } }),
   extractionJobs: (params?: Record<string, string | number>) => api.get('/questions/extraction/jobs/', { params }),
   extractionRetry: (jobId: number) => api.post(`/questions/extraction/jobs/${jobId}/retry/`),
   extractionItems: (jobId: number) => api.get(`/questions/extraction/jobs/${jobId}/items/`),
@@ -579,7 +587,7 @@ export const aiAPI = {
     const formData = new FormData();
     formData.append('file', file);
     if (bookName) formData.append('book_name', bookName);
-    return api.post('/ai/knowledge/upload/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/ai/knowledge/upload/', formData, { headers: { 'Content-Type': undefined } });
   },
   scanKnowledge: () => api.post('/ai/knowledge/scan/'),
   getKnowledgeStats: () => api.get('/ai/knowledge/stats/'),

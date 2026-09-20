@@ -74,7 +74,19 @@ export default function TestsPage() {
                 testsAPI.list({ exam_type: examType }),
                 questionsAPI.getSubjects({ exam_type: examType }),
             ]).then(([tRes, sRes]) => {
-                setTests(tRes.data.results || tRes.data || []);
+                const rawTests = tRes.data.results || tRes.data || [];
+                // Deduplicate by (test_type, subject_id, topic_id) keeping the
+                // newest first. Prevents duplicate paper1/subject cards when the
+                // backend returns multiple published rows for the same template.
+                const seen = new Set<string>();
+                const unique: TestItem[] = [];
+                for (const t of rawTests) {
+                    const key = `${t.test_type}:${t.subject_id ?? 'none'}:${t.topic_id ?? 'none'}`;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    unique.push(t);
+                }
+                setTests(unique);
                 setSubjects(sRes.data.results || sRes.data || []);
             }).catch(() => { }).finally(() => setLoading(false));
         }

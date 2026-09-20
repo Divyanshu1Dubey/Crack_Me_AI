@@ -147,9 +147,9 @@ export default function NeetPgLanding() {
     return () => { cancelled = true; };
   }, []);
 
-  const totalQs = stats?.total ?? 0;
+  const totalQs = stats?.total && stats.total > 0 ? stats.total : 2300;
   const totalYears = stats?.by_year.length ?? 0;
-  const totalSubjects = subjects.length || 19;
+  const totalSubjects = subjects.length > 0 ? subjects.length : 19;
 
   // Featured year (most recent with content)
   const featuredYear = useMemo(() => {

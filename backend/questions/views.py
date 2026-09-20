@@ -89,12 +89,6 @@ def _ensure_question_bank_loaded():
             return
 
         try:
-            logger.info("Auto-running migrations on startup...")
-            call_command('migrate', no_input=True, verbosity=0)
-        except Exception:
-            logger.exception("Auto-migration failed")
-
-        try:
             logger.info("Auto-running seed_data to populate subjects and topics...")
             call_command('seed_data', verbosity=0)
         except Exception:
@@ -2633,7 +2627,7 @@ class FlashcardDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Flashcard.objects.filter(user=self.request.user)
+        return Flashcard.objects.filter(user=self.request.user).select_related('subject')
 
 
 class FlashcardReviewView(generics.GenericAPIView):

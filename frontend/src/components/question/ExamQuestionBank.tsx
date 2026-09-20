@@ -27,6 +27,7 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
 import {
@@ -1490,9 +1491,9 @@ function ExamQuestionBankInner({
                                                         <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                                                             Your daily/weekly free tokens have been used up. Purchase more tokens to continue using AI features.
                                                         </p>
-                                                        <a href="/tokens" className="btn-primary text-xs mt-3 inline-flex">
+                                                        <Link href="/tokens" className="btn-primary text-xs mt-3 inline-flex">
                                                             <Zap className="w-3 h-3" /> Buy Tokens
-                                                        </a>
+                                                        </Link>
                                                     </div>
                                                 </div>
                                             </div>

@@ -773,7 +773,7 @@ export default function DashboardPage() {
                                 <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-200/50 dark:border-cyan-800/30">
                                     <span className="text-[10px] uppercase font-bold text-cyan-700 dark:text-cyan-400 tracking-wider">Overall Solved</span>
                                     <p className="text-2xl font-black text-foreground mt-2">
-                                        {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || 1440}</span>
+                                        {stats?.total_solved || 0} <span className="text-xs font-bold text-muted-foreground">/ {stats?.total || '—'}</span>
                                     </p>
                                     {stats?.total && stats?.total > 0 ? (
                                         <div className="mt-3">

@@ -7,7 +7,7 @@ interface CutoffResult {
     selectedYear: string;
     cutoffMarks: number;
     predicted2026: number;
-    deltaFrom2025: number;
+    deltaFrom2026: number;
     confidence: 'low' | 'medium' | 'high';
     recommendation: string;
     trendDirection: 'rising' | 'falling' | 'stable';
@@ -171,7 +171,7 @@ export default function CutoffAnalyzer() {
         const prevYear = years[years.length - 2];
         const lastCutoff = historical[lastYear];
         const prevCutoff = historical[prevYear];
-        const deltaFrom2025 = predicted - lastCutoff;
+        const deltaFrom2026 = predicted - lastCutoff;
 
         const trendDirection: 'rising' | 'falling' | 'stable' = slope > 1 ? 'rising' : slope < -1 ? 'falling' : 'stable';
 
@@ -180,14 +180,14 @@ export default function CutoffAnalyzer() {
             comparison[cat] = predicted;
         });
 
-        const recommendation = getRecommendation(deltaFrom2025, score ? Number(score) : null, confidence);
+        const recommendation = getRecommendation(deltaFrom2026, score ? Number(score) : null, confidence);
 
         setResult({
             selectedCategory: category,
             selectedYear: '2026',
             cutoffMarks: lastCutoff,
             predicted2026: predicted,
-            deltaFrom2026: deltaFrom2025,
+            deltaFrom2026: deltaFrom2026,
             confidence,
             recommendation,
             trendDirection,
