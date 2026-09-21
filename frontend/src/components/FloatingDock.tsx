@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDock } from '@/context/DockContext';
 import { MessageSquare, Layers, X, Send, Save } from 'lucide-react';
 import { Button } from './ui/button';
@@ -11,6 +11,16 @@ export function FloatingDock() {
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Prevent floating buttons from overlapping page content on mobile
+  useEffect(() => {
+    if (activePanel === 'none') {
+      document.body.classList.add('floating-dock-visible');
+    } else {
+      document.body.classList.remove('floating-dock-visible');
+    }
+    return () => document.body.classList.remove('floating-dock-visible');
+  }, [activePanel]);
 
   const handleAskAI = async () => {
     if (!aiQuery.trim()) return;
@@ -50,12 +60,12 @@ export function FloatingDock() {
 
   if (activePanel === 'none') {
     return (
-      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6 flex flex-col gap-2 z-50">
         <Button
           variant="default"
           size="icon"
           aria-label="Open AI Assistant"
-          className="rounded-full shadow-lg h-12 w-12 bg-primary hover:bg-primary/90"
+          className="rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 bg-primary hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           onClick={() => setActivePanel('ask-ai')}
         >
           <MessageSquare className="h-5 w-5" aria-hidden="true" />
@@ -64,7 +74,7 @@ export function FloatingDock() {
           variant="secondary"
           size="icon"
           aria-label="Create flashcard from selected text"
-          className="rounded-full shadow-lg h-12 w-12"
+          className="rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           onClick={() => {
             const selection = window.getSelection()?.toString();
             if (selection) {

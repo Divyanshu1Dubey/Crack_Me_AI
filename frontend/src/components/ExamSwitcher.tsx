@@ -47,7 +47,7 @@ export default function ExamSwitcher({ compact = false }: { compact?: boolean })
     <div className={`flex items-center gap-1 bg-muted/50 rounded-md border shadow-sm ${compact ? 'p-1' : 'p-1 pl-3'}`}>
       <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
       <Select value={exam} onValueChange={handleExamChange}>
-        <SelectTrigger className={`border-0 bg-transparent focus:ring-0 focus:ring-offset-0 p-0 pr-3 shadow-none text-xs font-semibold ${compact ? 'w-9 h-7 min-w-9' : 'w-[120px] h-7'}`}>
+        <SelectTrigger className={`border-0 bg-transparent focus:ring-0 focus:ring-offset-0 p-0 pr-3 shadow-none text-xs font-semibold ${compact ? 'w-9 h-7 min-w-9' : 'w-[120px] h-7'}`} aria-label="Select exam track">
           <SelectValue placeholder="Exam" />
         </SelectTrigger>
         <SelectContent>

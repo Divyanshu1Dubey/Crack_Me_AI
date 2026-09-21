@@ -32,6 +32,8 @@ import RevealExplanation from "@/components/question/RevealExplanation";
 import RelatedPanel from "@/components/question/RelatedPYQs";
 import api, { questionsAPI } from "@/lib/api";
 import { Loader2, Settings2, ChevronDown, ChevronUp, Filter, Shuffle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 interface QRow {
   id: number;
@@ -82,6 +84,7 @@ function PracticeInner() {
     const params = useSearchParams();
     const initialMode = params.get("mode") || "random";
     const initialId = Number(params.get("id")) || null;
+    const { user } = useAuth();
 
     const [mode, setMode] = useState(initialMode);
     const [count, setCount] = useState<number>(30);
@@ -421,7 +424,17 @@ function PracticeInner() {
                     <Loader2 className="h-4 w-4 animate-spin" /> Building queue…
                 </p>
             ) : (
-                <p className="text-slate-400">No questions for this mode yet. Try another mode.</p>
+                <div className="text-center py-12">
+                    <p className="text-slate-400 mb-3">No questions available for this mode.</p>
+                    <p className="text-xs text-slate-500 mb-4">
+                        {user ? 'Try adjusting your filters or switching to a different mode.' : 'Sign in to access practice questions and track your progress.'}
+                    </p>
+                    {!user && (
+                        <Button onClick={() => router.push('/login')} variant="default" size="sm">
+                            Sign In to Continue
+                        </Button>
+                    )}
+                </div>
             )}
 
             <p className="mt-6 text-center text-xs text-slate-500">

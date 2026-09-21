@@ -5,19 +5,13 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-XSS-Protection", "value": "1; mode=block" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
-        { "key": "X-Robots-Tag", "value": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
-        { "key": "X-AI-Trainable", "value": "true" },
-        { "key": "X-AI-Search-Mode", "value": "allowed" },
-        { "key": "X-Source-Content-Authority", "value": "cracklabs.app" },
-        { "key": "X-Content-Author-Type", "value": "medical-education" },
-        { "key": "X-Source-Quality", "value": "peer-reviewed,clinician-reviewed" },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.clarity.ms https://*.posthog.com https://*.datadoghq.com https://*.datadoghq-browser.com https://browser-intake-datadoghq.com https://*.sentry.io https://giscus.app https://*.githubusercontent.com https://scripts.simpleanalyticscdn.com https://static.cloudflareinsights.com https://*.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://api.cracklabs.app https://*.supabase.co https://*.razorpay.com https://lumberjack.razorpay.com https://analytics.google.com https://*.analytics.google.com https://*.clarity.ms https://*.posthog.com https://*.datadoghq.com https://*.sentry.io https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://stats.g.doubleclick.net https://*.doubleclick.net https://giscus.app https://api.github.com https://scripts.simpleanalyticscdn.com https://static.cloudflareinsights.com wss://*.supabase.co; frame-src https://checkout.razorpay.com https://api.razorpay.com https://*.razorpay.com https://giscus.app https://*.doubleclick.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com; frame-ancestors 'none'"
-        }
+        { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://scripts.simpleanalyticscdn.com https://www.googletagmanager.com https://*.supabase.co https://*.supabase.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.cracklabs.app https://crackcms-vsthc.ondigitalocean.app https://*.google-analytics.com https://*.googletagmanager.com https://*.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
       ]
     }
   ]

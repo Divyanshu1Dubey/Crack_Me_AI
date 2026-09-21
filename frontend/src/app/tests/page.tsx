@@ -164,7 +164,6 @@ export default function TestsPage() {
                     </div>
 
                     {/* Subject-wise tests */}
-                    <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Subject-wise Test</h3>
                     <div className="flex flex-wrap gap-2">
                         {subjects.map(s => (
                             <Button key={s.id} variant="outline" size="sm" onClick={() => generateTest('subject', s.id)}

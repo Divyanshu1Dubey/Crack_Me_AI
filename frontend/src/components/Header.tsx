@@ -220,7 +220,7 @@ export default function Header() {
     : 'User settings';
 
   return (
-      <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl md:gap-3 md:px-6">
+      <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl md:gap-3 md:px-6 min-h-16">
       {/* Left: Page title */}
       <div className="flex min-w-0 items-center gap-2 pl-12 md:gap-3 md:pl-0">
         <div className="hidden sm:block md:hidden">

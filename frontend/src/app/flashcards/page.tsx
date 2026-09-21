@@ -97,7 +97,6 @@ export default function FlashcardsPage() {
         setCreateSuccess(false);
         try {
             const response = await flashcardsAPI.create({ front: form.front, back: form.back, difficulty: form.difficulty });
-            console.log('Create response:', response);
             setForm({ front: '', back: '', difficulty: 'medium', note: '' });
             setCreateSuccess(true);
             setTimeout(() => {

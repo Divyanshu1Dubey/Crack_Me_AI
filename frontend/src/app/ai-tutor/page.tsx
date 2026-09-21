@@ -284,6 +284,7 @@ export default function AITutorPage() {
                 // eslint-disable-next-line no-console
                 console.error('Failed to delete chat session:', err);
             }
+            // Silent fail in production — session list stays consistent
         }
     };
 

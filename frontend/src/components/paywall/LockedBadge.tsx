@@ -25,7 +25,7 @@ export function LockedBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full
-        bg-amber-500/15 border border-amber-500/40 text-amber-300
+        bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-200
         font-medium uppercase tracking-wide whitespace-nowrap ${dims} ${className}`}
       title={`${label} feature — subscribe to unlock`}
       aria-label={`${label} feature — subscribe to unlock`}

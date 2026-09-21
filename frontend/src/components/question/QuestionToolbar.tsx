@@ -149,7 +149,7 @@ export default function QuestionToolbar(props: Props) {
         Reveal
       </button>
 
-      <span className="text-xs text-slate-400 ml-2">
+      <span className="text-xs text-slate-300 ml-2">
         ⏱ {Math.round((state.time_spent || 0) / 1000)}s
       </span>
     </div>

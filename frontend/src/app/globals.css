@@ -8,6 +8,17 @@
    classes can still override. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Layout stability — isolate major regions to prevent CLS from
+   notifications, sidebar toggles, and async content loading. */
+.main-content {
+  contain: layout style;
+}
+
+/* Reserve space for notification badge to prevent header shift */
+.bell-btn {
+  position: relative;
+}
+
 /* ==========================================
    CrackCMS Design Token Layer
    Single source of truth for spacing, typography,
@@ -80,6 +91,26 @@
   --opacity-muted:    0.5;
   --opacity-subtle:   0.6;
   --opacity-faint:    0.3;
+
+  /* --- Review Tag Colors --- */
+  --review-tag-cyan-bg:    rgba(6,182,212,0.12);
+  --review-tag-cyan-text:  #0891b2;
+  --review-tag-cyan-border:rgba(6,182,212,0.25);
+  --review-tag-purple-bg:    rgba(139,92,246,0.12);
+  --review-tag-purple-text:  #7c3aed;
+  --review-tag-purple-border:rgba(139,92,246,0.25);
+  --review-tag-pink-bg:    rgba(236,72,153,0.12);
+  --review-tag-pink-text:  #db2777;
+  --review-tag-pink-border:rgba(236,72,153,0.25);
+  --review-tag-amber-bg:    rgba(245,158,11,0.12);
+  --review-tag-amber-text: #d97706;
+  --review-tag-amber-border:rgba(245,158,11,0.25);
+  --review-tag-green-bg:    rgba(16,185,129,0.12);
+  --review-tag-green-text: #059669;
+  --review-tag-green-border:rgba(16,185,129,0.25);
+  --review-tag-red-bg:    rgba(239,68,68,0.12);
+  --review-tag-red-text:  #dc2626;
+  --review-tag-red-border:rgba(239,68,68,0.25);
 
   /* --- Transitions --- */
   --transition-fast:   150ms;
@@ -1043,6 +1074,17 @@ body.sidebar-hidden .main-content {
   padding-left: 0 !important;
 }
 
+/* Floating dock mobile — reserve space so buttons don't overlap content */
+@media (max-width: 640px) {
+  body.floating-dock-visible {
+    padding-bottom: 5rem;
+  }
+  body.floating-dock-visible main,
+  body.floating-dock-visible .main-content {
+    padding-bottom: 5rem;
+  }
+}
+
 /* Option card for MCQs */
 .option-card {
   background: var(--color-card);
@@ -1067,12 +1109,12 @@ body.sidebar-hidden .main-content {
 }
 
 .option-card.correct {
-  border-color: #10b981;
+  border-color: #059669;
   background: rgba(16, 185, 129, 0.08);
 }
 
 .option-card.incorrect {
-  border-color: #ef4444;
+  border-color: #dc2626;
   background: rgba(239, 68, 68, 0.08);
 }
 
@@ -1656,12 +1698,12 @@ body.sidebar-hidden .main-content {
   font-weight: 600;
   white-space: nowrap;
 }
-.review-tag-cyan { background: rgba(6,182,212,0.1); color: #06b6d4; border: 1px solid rgba(6,182,212,0.2); }
-.review-tag-purple { background: rgba(139,92,246,0.1); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.2); }
-.review-tag-pink { background: rgba(236,72,153,0.1); color: #ec4899; border: 1px solid rgba(236,72,153,0.2); }
-.review-tag-amber { background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.2); }
-.review-tag-green { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
-.review-tag-red { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+.review-tag-cyan { background: var(--review-tag-cyan-bg); color: var(--review-tag-cyan-text); border: 1px solid var(--review-tag-cyan-border); }
+.review-tag-purple { background: var(--review-tag-purple-bg); color: var(--review-tag-purple-text); border: 1px solid var(--review-tag-purple-border); }
+.review-tag-pink { background: var(--review-tag-pink-bg); color: var(--review-tag-pink-text); border: 1px solid var(--review-tag-pink-border); }
+.review-tag-amber { background: var(--review-tag-amber-bg); color: var(--review-tag-amber-text); border: 1px solid var(--review-tag-amber-border); }
+.review-tag-green { background: var(--review-tag-green-bg); color: var(--review-tag-green-text); border: 1px solid var(--review-tag-green-border); }
+.review-tag-red { background: var(--review-tag-red-bg); color: var(--review-tag-red-text); border: 1px solid var(--review-tag-red-border); }
 
 /* Review Option Styles */
 .review-option {

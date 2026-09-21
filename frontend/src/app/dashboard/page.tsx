@@ -333,14 +333,14 @@ export default function DashboardPage() {
                             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground px-1">Platform Announcements</h3>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {announcements.slice(0, 3).map((ann: any) => (
-                                    <Card key={ann.id} className="border-indigo-100 bg-indigo-50/50 shadow-sm">
+                                    <Card key={ann.id} className="border-indigo-100 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-sm">
                                         <CardContent className="p-4 flex flex-col justify-between h-full space-y-2">
                                             <div>
                                                 <div className="flex justify-between items-start mb-1">
-                                                    <h4 className="font-semibold text-indigo-900">{ann.title}</h4>
-                                                    <Badge variant="outline" className="text-[10px] bg-white">{new Date(ann.created_at).toLocaleDateString()}</Badge>
+                                                    <h4 className="font-semibold text-indigo-900 dark:text-indigo-100">{ann.title}</h4>
+                                                    <Badge variant="outline" className="text-[10px] bg-white dark:bg-slate-800">{new Date(ann.created_at).toLocaleDateString()}</Badge>
                                                 </div>
-                                                <p className="text-xs text-indigo-700/80 line-clamp-3">{ann.body}</p>
+                                                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-3">{ann.body}</p>
                                             </div>
                                         </CardContent>
                                     </Card>

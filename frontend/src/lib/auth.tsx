@@ -439,8 +439,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const supabase = getSupabaseBrowserClient();
         try {
             await supabase?.auth.signOut();
-        } catch (error) {
-            console.error('Supabase sign out failed:', error);
+        } catch {
+            // Silent fail in production — user state is cleared below
         } finally {
             setUserState(null);
         }
