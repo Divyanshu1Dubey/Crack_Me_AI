@@ -340,6 +340,8 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 is_admin_user = True
 
             desired_role = "admin" if is_admin_user else "student"
+            updates: list[str] = []
+
             if user.role != desired_role:
                 user.role = desired_role
                 updates.append("role")
