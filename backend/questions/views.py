@@ -908,10 +908,40 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 params[k] = v
 
         ids = _practice_modes.build_queue(mode, request.user, params)
+
+        # Freemium filter: free (non-premium, non-admin) users only get
+        # admin-curated showcase questions in their practice queue.
+        # Premium users and admins see the full queue.
+        user = request.user
+        if (
+            ids
+            and user is not None
+            and getattr(user, 'is_authenticated', False)
+            and not getattr(user, 'is_admin', False)
+            and not getattr(user, 'is_superuser', False)
+            and not _is_premium(user)
+        ):
+            showcase_ids = set(
+                FreeShowcaseQuestion.objects.filter(
+                    question_id__in=ids
+                ).values_list('question_id', flat=True)
+            )
+            original_count = len(ids)
+            ids = [qid for qid in ids if qid in showcase_ids]
+            if len(ids) == 0:
+                # Graceful fallback: return first 3 showcase questions
+                # so the free user sees SOMETHING even if no showcase
+                # matches the selected mode/filters.
+                ids = list(
+                    FreeShowcaseQuestion.objects.order_by('year', 'position')
+                    .values_list('question_id', flat=True)[:3]
+                )
+
         return Response({
             "mode": mode,
             "count": len(ids),
             "question_ids": ids,
+            "freemium": not _is_premium(user) if user and getattr(user, 'is_authenticated', False) else False,
         })
 
     @action(detail=True, methods=['get'], url_path='ai/concept',

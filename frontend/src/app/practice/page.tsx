@@ -167,8 +167,15 @@ function PracticeInner() {
                 const ids: number[] = r.data?.question_ids || [];
                 setQueue(ids);
                 setIdx(initialId ? Math.max(0, ids.indexOf(initialId)) : 0);
-            } catch {
-                if (alive) setQueue([]);
+                // Freemium hint: show remaining free count if server reported it
+                if (r.data?.freemium && ids.length > 0) {
+                    console.info(`[practice] Free tier: showing ${ids.length} curated questions`);
+                }
+            } catch (err) {
+                if (alive) {
+                    setQueue([]);
+                    console.error('[practice] Failed to load practice queue:', err);
+                }
             } finally {
                 if (alive) setLoading(false);
             }
@@ -430,6 +437,33 @@ function PracticeInner() {
                 <p className="flex items-center gap-2 text-slate-400">
                     <Loader2 className="h-4 w-4 animate-spin" /> Building queue…
                 </p>
+            ) : total === 0 && !loading ? (
+                <div className="text-center py-12">
+                    <p className="text-slate-400 mb-3">No questions available for this mode.</p>
+                    {user ? (
+                        <div className="space-y-3">
+                            <p className="text-xs text-slate-500">
+                                Free users see a curated set of questions per year.
+                                Try switching to <strong>Random</strong> mode or a different year.
+                            </p>
+                            <Button onClick={() => setMode('random')} variant="default" size="sm" className="mr-2">
+                                Switch to Random Mode
+                            </Button>
+                            <Button onClick={() => router.push('/subscription')} variant="outline" size="sm">
+                                Upgrade for Full Access
+                            </Button>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-500 mb-4">
+                            Sign in to access practice questions and track your progress.
+                        </p>
+                    )}
+                    {!user && (
+                        <Button onClick={() => router.push('/login')} variant="default" size="sm">
+                            Sign In to Continue
+                        </Button>
+                    )}
+                </div>
             ) : (
                 <div className="text-center py-12">
                     <p className="text-slate-400 mb-3">No questions available for this mode.</p>

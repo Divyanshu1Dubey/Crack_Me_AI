@@ -325,6 +325,15 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 pass
         else:
 
+            # Cross-check Django DB admin flag. If the Django DB says admin
+            # but Supabase metadata is stale/missing the flag, treat the DB as
+            # the source of truth. This prevents silent admin-role loss when
+            # Supabase metadata drifts (e.g., after password resets, profile
+            # edits, or re-login cycles).
+            db_admin = bool(user.is_admin or user.is_superuser)
+            if db_admin and not is_admin_user:
+                is_admin_user = True
+
             updates = []
             desired_role = "admin" if is_admin_user else "student"
             if user.role != desired_role:
