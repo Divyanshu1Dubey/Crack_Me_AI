@@ -70,6 +70,6 @@ class Command(BaseCommand):
             u.is_superuser = True
             u.is_staff = True
             u.save(update_fields=['role', 'is_superuser', 'is_staff'])
-            self.stdout.write(self.style.SUCCESS(f"  ✓ Fixed: {u.email}"))
+            self.stdout.write(self.style.SUCCESS(f"  Fixed: {u.email}"))
 
         self.stdout.write(self.style.SUCCESS(f"\nRepaired {len(broken)} accounts."))
