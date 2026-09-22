@@ -2,6 +2,7 @@ import hashlib
 import re
 import uuid
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 
 
@@ -22,6 +23,10 @@ from django.conf import settings
 # models.py would create a dependency cycle the other way around. The
 # two regex objects must remain byte-identical.
 # ---------------------------------------------------------------------------
+from django.urls import reverse
+from django.utils import timezone
+from django.conf import settings
+
 _STEM_NORMALISE_RE = re.compile(r"\s+")
 _STEM_NOISE_RE = re.compile(
     r"\[(?:image|fig|figure)[^\]]*\]|\b(?:q|question|ans|answer|exp|explanation)\s*[:\-\.]?\s*",
@@ -30,13 +35,7 @@ _STEM_NOISE_RE = re.compile(
 
 
 def normalise_stem(text: str) -> str:
-    """Canonical stem normalization for tombstone hashing.
-
-    Mirrors `importers/neetpg/deduplicator.normalise` and
-    `importers/inicet/deduplicator.normalise` exactly. Lower-case, strip
-    [image|fig|figure|q|question|ans|answer|...] noise tokens, collapse
-    whitespace, strip.
-    """
+    """Canonical stem normalization for tombstone hashing."""
     text = (text or "").lower()
     text = _STEM_NOISE_RE.sub(" ", text)
     text = _STEM_NORMALISE_RE.sub(" ", text)
@@ -44,18 +43,10 @@ def normalise_stem(text: str) -> str:
 
 
 def compute_stem_hash(text: str) -> str:
-    """SHA-256 of the canonical-normalized stem.
-
-    Returns the 64-char hex digest. Used by:
-      - `remove_from_bank` / `unremove_from_bank` admin endpoints
-      - `import_neet_pg._save_questions` (skip on hash match)
-      - `load_exam_fixture._upsert_questions` (skip on hash match)
-      - `importers/neetpg/db_writer.py` and `importers/inicet/db_writer.py`
-        (skip on hash match)
-
-    Keep this in sync with `importers/neetpg/deduplicator.text_sha256` —
-    the only acceptable difference is the name/location, not the bytes.
-    """
+    """SHA-256 of the canonical-normalized stem."""
+    import hashlib
+    text = normalise_stem(text)
+    return hashlib.sha256(text.encode()).hexdigest()
     return hashlib.sha256(normalise_stem(text).encode("utf-8")).hexdigest()
 
 
@@ -212,6 +203,14 @@ class Question(models.Model):
     )
     learning_technique = models.TextField(blank=True, help_text='How to study/approach this concept')
     shortcut_tip = models.TextField(blank=True, help_text='Quick solving trick or shortcut')
+
+    # AI explanation fields — per-option rationale (AdSense-complete admin workflow)
+    why_correct = models.TextField(blank=True, help_text='Why the selected correct answer is right')
+    why_wrong_a = models.TextField(blank=True, help_text='Why option A is wrong')
+    why_wrong_b = models.TextField(blank=True, help_text='Why option B is wrong')
+    why_wrong_c = models.TextField(blank=True, help_text='Why option C is wrong')
+    why_wrong_d = models.TextField(blank=True, help_text='Why option D is wrong')
+
     page_screenshot = models.ImageField(
         upload_to='question_screenshots/', blank=True, null=True,
         help_text='Screenshot of textbook page where answer is discussed'
@@ -1010,6 +1009,72 @@ class DuplicateMember(models.Model):
         return f"Cluster{self.cluster_id} <- Q{self.question_id} ({self.similarity_score})"
 
 
+class TopicNote(models.Model):
+    """Admin-curated topic-wise notes for exam revision.
+
+    One note per (topic, exam_type, is_combined) combination.  When
+    `is_combined` is True the note synthesises content across multiple
+    exams on the same topic; individual exam notes use `is_combined=False`.
+
+    The long-term pipeline (not yet automated) is:
+      PYQ explanations (same topic) → AI synthesis → populate this model.
+    """
+
+    EXAM_TYPE_CHOICES = [
+        ('cms', 'UPSC CMS'),
+        ('neet_pg', 'NEET PG'),
+        ('ini_cet', 'INICET'),
+        ('usmle', 'USMLE'),
+        ('fmge', 'FMGE'),
+        ('other', 'Other'),
+    ]
+
+    title = models.CharField(max_length=300)
+    content = models.TextField(help_text='Markdown-formatted note content.')
+    topic = models.ForeignKey(
+        'questions.Topic', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='topic_notes',
+    )
+    subject = models.ForeignKey(
+        'questions.Subject', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='topic_notes',
+    )
+    exam_type = models.CharField(
+        max_length=20, choices=EXAM_TYPE_CHOICES, default='cms',
+        db_index=True,
+    )
+    is_combined = models.BooleanField(
+        default=False,
+        help_text='True when this note covers the same topic across multiple exams.',
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='created_topic_notes',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['topic', 'exam_type', 'is_combined'],
+                name='uniq_topic_note',
+                condition=Q(topic__isnull=False),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['subject', 'exam_type', 'is_active']),
+            models.Index(fields=['topic', 'is_active']),
+        ]
+
+    def __str__(self):
+        exam_label = dict(self.EXAM_TYPE_CHOICES).get(self.exam_type, self.exam_type)
+        topic_part = self.topic.name if self.topic else 'No topic'
+        return f"[{exam_label}] {self.title} ({topic_part})"
+
+
 class RemovedQuestion(models.Model):
     """Durable soft-delete tombstone.
 
@@ -1051,4 +1116,124 @@ class RemovedQuestion(models.Model):
 
     def __str__(self):
         return f"RemovedQ#{self.id} ({self.exam_source}, year={self.year})"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Student Experience — Study Analytics & Gamification Models
+# ════════════════════════════════════════════════════════════════════════════
+
+class StudyTimeBreakdown(models.Model):
+    """Per-subject study time tracking for pie chart visualization."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='study_time_breakdowns')
+    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='study_time_entries')
+    date = models.DateField()
+    seconds = models.IntegerField(default=0, help_text='Seconds spent studying this subject')
+    question_count = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ['user', 'subject', 'date']
+        ordering = ['-date', '-seconds']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.subject.name} @ {self.date} ({self.seconds}s)"
+
+
+class UserQuest(models.Model):
+    """Daily quest system — gamified study targets with XP rewards."""
+    QUEST_TYPE_CHOICES = [
+        ('solve_questions', 'Solve Questions'),
+        ('complete_tests', 'Complete Tests'),
+        ('study_subject', 'Study Specific Subject'),
+        ('review_mistakes', 'Review Mistakes'),
+        ('streak_maintain', 'Maintain Streak'),
+        ('speed_round', 'Speed Round'),
+    ]
+    DIFFICULTY_CHOICES = [
+        ('easy', 'Easy'),
+        ('medium', 'Medium'),
+        ('hard', 'Hard'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quests')
+    quest_type = models.CharField(max_length=30, choices=QUEST_TYPE_CHOICES)
+    difficulty = models.CharField(max_length=10, choices=DIFFICULTY_CHOICES, default='medium')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    target_value = models.IntegerField(help_text='e.g., 20 questions')
+    current_value = models.IntegerField(default=0)
+    xp_reward = models.IntegerField(default=10)
+    is_completed = models.BooleanField(default=False)
+    is_claimed = models.BooleanField(default=False)
+    quest_date = models.DateField()
+    expires_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'quest_type', 'quest_date']
+        ordering = ['-quest_date', 'quest_type']
+        indexes = [
+            models.Index(fields=['user', 'quest_date']),
+        ]
+
+    @property
+    def progress_percent(self):
+        return min(100, round((self.current_value / self.target_value) * 100)) if self.target_value > 0 else 0
+
+    def __str__(self):
+        return f"{self.user.username}: {self.title} ({self.progress_percent}%)"
+
+
+class QuestStreak(models.Model):
+    """Track daily quest completion streaks for gamification."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='quest_streak')
+    current_streak = models.IntegerField(default=0)
+    longest_streak = models.IntegerField(default=0)
+    total_quests_completed = models.IntegerField(default=0)
+    total_xp_earned = models.IntegerField(default=0)
+    last_quest_date = models.DateField(null=True, blank=True)
+    streak_frozen = models.BooleanField(default=False, help_text='Streak freeze to prevent loss')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}: {self.current_streak} day streak"
+
+
+class MistakeNotebook(models.Model):
+    """Student mistake tracking — wrong answers with review scheduling."""
+    REVIEW_STATUS_CHOICES = [
+        ('new', 'New'),
+        ('learning', 'Learning'),
+        ('reviewing', 'Reviewing'),
+        ('mastered', 'Mastered'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mistake_notebook')
+    question = models.ForeignKey('Question', on_delete=models.CASCADE, related_name='mistake_entries')
+    selected_answer = models.CharField(max_length=1)
+    correct_answer = models.CharField(max_length=1)
+    is_correct = models.BooleanField()
+    attempt = models.ForeignKey('QuestionAttempt', on_delete=models.SET_NULL, null=True, blank=True)
+    review_status = models.CharField(max_length=20, choices=REVIEW_STATUS_CHOICES, default='new')
+    review_count = models.IntegerField(default=0)
+    last_reviewed_at = models.DateTimeField(null=True, blank=True)
+    next_review_at = models.DateTimeField(null=True, blank=True)
+    is_flagged = models.BooleanField(default=False)
+    user_note = models.TextField(blank=True, help_text='Student personal note about this mistake')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'question']
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'review_status']),
+            models.Index(fields=['user', 'next_review_at']),
+            models.Index(fields=['user', 'is_flagged']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} mistake: Q{self.question_id} ({self.review_status})"
 

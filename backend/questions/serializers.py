@@ -5,7 +5,9 @@ from .models import (
     Subject, Topic, Question, QuestionBookmark, QuestionFeedback,
     Discussion, Note, Flashcard, QuestionImportJob,
     QuestionExtractionItem, AdminAIPromptVersion,
-    QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack
+    QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack,
+    TopicNote,
+    StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook,
 )
 from .text_encoding import normalize_text
 import json as _json
@@ -477,14 +479,19 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
 
 class QuestionAdminListSerializer(QuestionListSerializer):
-    """Admin list serializer that exposes lock controls."""
+    """Admin list serializer that exposes lock controls + AI explanation fields."""
 
     class Meta(QuestionListSerializer.Meta):
         fields = QuestionListSerializer.Meta.fields + [
-            'correct_answer', 'explanation', 'paper', 
-            'lock_answer', 'lock_explanation', 
+            'correct_answer', 'explanation', 'paper',
+            'lock_answer', 'lock_explanation',
             'admin_answer_override', 'admin_explanation_override',
-            'video_url', 'video_status'
+            'video_url', 'video_status',
+            # AI explanation fields populated by admin AI generation
+            'concept_explanation', 'mnemonic', 'concept_keywords',
+            'book_name', 'chapter', 'page_number', 'reference_text',
+            'shortcut_tip', 'why_correct',
+            'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
         ]
 
 
@@ -856,3 +863,100 @@ class QuestionRevisionSnapshotSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionRevisionSnapshot
         fields = ['id', 'question', 'changed_by', 'changed_by_username', 'reason', 'snapshot', 'created_at']
+
+
+class TopicNoteSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default='')
+
+    class Meta:
+        model = TopicNote
+        fields = [
+            'id', 'subject', 'subject_name', 'topic', 'topic_name',
+            'exam_type', 'title', 'content', 'source_question_ids',
+            'ai_generated', 'is_published',
+            'created_by', 'created_by_username', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Student Experience — Study Analytics & Gamification Serializers
+# ════════════════════════════════════════════════════════════════════════════
+
+class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
+    subject_color = serializers.CharField(source='subject.color', read_only=True, default='')
+
+    class Meta:
+        model = StudyTimeBreakdown
+        fields = ['id', 'user', 'subject', 'subject_name', 'subject_code', 'subject_color',
+                  'date', 'seconds', 'question_count']
+        read_only_fields = ['id', 'user']
+
+
+class UserQuestSerializer(serializers.ModelSerializer):
+    progress_percent = serializers.IntegerField(read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+
+    class Meta:
+        model = UserQuest
+        fields = ['id', 'user', 'quest_type', 'difficulty', 'title', 'description',
+                  'target_value', 'current_value', 'xp_reward', 'is_completed', 'is_claimed',
+                  'progress_percent', 'subject_name', 'quest_date', 'expires_at',
+                  'completed_at', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
+class QuestStreakSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestStreak
+        fields = ['id', 'user', 'current_streak', 'longest_streak', 'total_quests_completed',
+                  'total_xp_earned', 'last_quest_date', 'streak_frozen', 'updated_at']
+        read_only_fields = ['id', 'user']
+
+
+class MistakeNotebookSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source='question.question_text', read_only=True, default='')
+    option_a = serializers.CharField(source='question.option_a', read_only=True, default='')
+    option_b = serializers.CharField(source='question.option_b', read_only=True, default='')
+    option_c = serializers.CharField(source='question.option_c', read_only=True, default='')
+    option_d = serializers.CharField(source='question.option_d', read_only=True, default='')
+    correct_answer = serializers.CharField(source='question.correct_answer', read_only=True, default='')
+    explanation = serializers.CharField(source='question.explanation', read_only=True, default='')
+    subject_name = serializers.CharField(source='question.subject.name', read_only=True, default='')
+    topic_name = serializers.CharField(source='question.topic.name', read_only=True, default='')
+    exam_type = serializers.CharField(source='question.exam_type', read_only=True, default='')
+
+    class Meta:
+        model = MistakeNotebook
+        fields = ['id', 'user', 'question', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+                  'selected_answer', 'correct_answer', 'is_correct', 'review_status',
+                  'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
+                  'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
+class MistakeNotebookCreateSerializer(serializers.ModelSerializer):
+    """Create a mistake entry directly from a question attempt."""
+    class Meta:
+        model = MistakeNotebook
+        fields = ['question', 'selected_answer', 'correct_answer', 'is_correct',
+                  'attempt', 'review_status', 'user_note']
+        read_only_fields = ['user']
+
+
+class TopicNoteListSerializer(serializers.ModelSerializer):
+    """Lite serializer for listing notes without full content."""
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default='')
+
+    class Meta:
+        model = TopicNote
+        fields = ['id', 'exam_type', 'subject', 'subject_name', 'topic', 'topic_name',
+                  'title', 'content_preview', 'ai_generated', 'source_question_count',
+                  'created_by_username', 'is_published', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

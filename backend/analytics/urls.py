@@ -42,4 +42,19 @@ urlpatterns = [
     path('pyq_coverage/', views_v3.PYQCoverageView.as_view(), name='pyq-coverage'),
     path('average_time/', views_v3.AverageTimeView.as_view(), name='average-time'),
     path('search_analytics/', views_v3.SearchAnalyticsView.as_view(), name='search-analytics'),
+
+    # ─── Student Experience — Study Analytics & Gamification ───
+    # Study time breakdown
+    path('study-time/', views.StudyTimeView.as_view(), name='study-time'),
+    # Mistake notebook
+    path('mistake-notebook/', views.MistakeNotebookView.as_view(), name='mistake-notebook-list'),
+    path('mistake-notebook/due/', views.MistakeNotebookDueView.as_view(), name='mistake-notebook-due'),
+    path('mistake-notebook/stats/', views.MistakeStatsView.as_view(), name='mistake-notebook-stats'),
+    path('mistake-notebook/<int:pk>/', views.MistakeNotebookDetailView.as_view(), name='mistake-notebook-detail'),
+    path('mistake-notebook/<int:pk>/review/', views.MistakeNotebookReviewView.as_view(), name='mistake-notebook-review'),
+    # Quests & streaks
+    path('quests/', views.UserQuestListView.as_view(), name='quest-list'),
+    path('quests/<int:pk>/', views.UserQuestDetailView.as_view(), name='quest-detail'),
+    path('quests/streak/', views.QuestStreakView.as_view(), name='quest-streak'),
+    path('quests/streak/freeze/', views.QuestStreakFreezeView.as_view(), name='quest-streak-freeze'),
 ]

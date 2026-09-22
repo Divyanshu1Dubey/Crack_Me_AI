@@ -450,6 +450,9 @@ export const questionsAPI = {
   setConceptId: (id: number, conceptId: string) => api.patch(`/questions/${id}/concept-id/`, { concept_id: conceptId }),
   updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
   formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
+  // Admin AI explanation generation
+  generateExplanation: (id: number, data: { correct_answer: string; regenerate_if_exists?: boolean; update_correct_answer?: boolean }) =>
+    api.post(`/questions/${id}/generate-explanation/`, data),
   uploadImage: (data: { questionId: number; file: File; role?: 'primary' | 'option' | 'illustration' | 'explanation' }) => {
     const form = new FormData();
     form.append('question_id', String(data.questionId));
@@ -640,7 +643,54 @@ export const discussionsAPI = {
   vote: (id: number, voteType: 'up' | 'down') => api.post(`/questions/discussions/${id}/vote/`, { vote_type: voteType }),
 };
 
-// Notes API
+// Topic Notes API — PYQ explanation → revision notes pipeline
+export const topicNotesAPI = {
+  list: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
+  get: (id: number) => api.get(`/questions/notes/${id}/`),
+  create: (data: { subject: number; topic: number; exam_type?: string; title: string; content?: string; source_question_ids?: number[] }) =>
+    api.post('/questions/notes/', data),
+  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
+  delete: (id: number) => api.delete(`/questions/notes/${id}/`),
+  generateFromTopic: (id: number) => api.post(`/questions/notes/${id}/generate/`),
+  // Admin topic notes (exam_type-specific)
+  adminList: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
+  adminCreate: (data: Record<string, unknown>) => api.post('/questions/topic-notes/', data),
+  adminGenerate: (id: number) => api.post(`/questions/topic-notes/${id}/generate/`),
+};
+
+// Mistake Notebook API — student review tracking
+export const mistakeNotebookAPI = {
+  list: (params?: Record<string, string | number>) => api.get('/analytics/mistake-notebook/', { params }),
+  add: (data: { question: number; selected_answer?: string; user_note?: string; is_flagged?: boolean }) =>
+    api.post('/analytics/mistake-notebook/', data),
+  get: (id: number) => api.get(`/analytics/mistake-notebook/${id}/`),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/analytics/mistake-notebook/${id}/`, data),
+  remove: (id: number) => api.delete(`/analytics/mistake-notebook/${id}/`),
+  review: (id: number) => api.post(`/analytics/mistake-notebook/${id}/review/`),
+  due: () => api.get('/analytics/mistake-notebook/due/'),
+  stats: () => api.get('/analytics/mistake-notebook/stats/'),
+};
+
+// Study Time API — time-per-subject tracking
+export const studyTimeAPI = {
+  record: (data: { subject: number; seconds: number; question_count: number; date?: string }) =>
+    api.post('/analytics/study-time/', data),
+  list: (params?: { start?: string; end?: string }) =>
+    api.get('/analytics/study-time/', { params }),
+};
+
+// Quests API — daily quests and streaks
+export const questsAPI = {
+  list: (params?: { status?: string }) =>
+    api.get('/analytics/quests/', { params }),
+  get: (id: number) => api.get(`/analytics/quests/${id}/`),
+  complete: (id: number) => api.post(`/analytics/quests/${id}/complete/`, { is_completed: true }),
+  remove: (id: number) => api.delete(`/analytics/quests/${id}/`),
+  getStreak: () => api.get('/analytics/quests/streak/'),
+  toggleFreeze: () => api.post('/analytics/quests/streak/freeze/'),
+};
+
+// Notes API — user personal notes
 export const notesAPI = {
   list: (params?: { question?: number; topic?: number }) => api.get('/questions/notes/', { params }),
   create: (data: { question?: number; topic?: number; title?: string; content: string }) => api.post('/questions/notes/', data),

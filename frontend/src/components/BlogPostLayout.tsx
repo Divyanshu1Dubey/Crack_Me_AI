@@ -33,6 +33,7 @@ import { siteName, siteUrl } from '@/lib/seo';
 import type { BlogPost } from '@/lib/blog';
 import { formatPostDate, getRelatedPosts, categoryToSlug } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
+import AdSense from '@/components/AdSense';
 
 interface BlogPostLayoutProps {
     post: BlogPost;
@@ -239,6 +240,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                             </div>
 
                             {/* Share row */}
+                            <AdSense slot="in-content" />
                             <div className="mt-10 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-4 sm:p-5">
                                 <span className="inline-flex items-center gap-2 text-xs font-bold text-foreground">
                                     <Share2 className="h-4 w-4" /> Share this post

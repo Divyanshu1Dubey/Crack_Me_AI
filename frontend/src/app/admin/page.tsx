@@ -77,7 +77,8 @@ type AdminTabKey =
     | 'finance'
     | 'ai'
     | 'jobs'
-    | 'blogs';
+    | 'blogs'
+    | 'notes';
 
 export default function AdminDashboardPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -449,6 +450,9 @@ export default function AdminDashboardPage() {
             if (aiPromptVersions.length === 0) fetchAiPromptVersions();
             fetchQuestions(1);
             setQuestionPage(1);
+        }
+        if (tab === 'notes') {
+            // Topic notes are rendered via /admin/notes route
         }
         if (tab === 'tests') {
             fetchAdminTests();
@@ -969,6 +973,7 @@ export default function AdminDashboardPage() {
     const moduleTabs: { key: AdminTabKey; label: string; icon: any }[] = [
         { key: 'overview', label: 'Overview', icon: TrendingUp },
         { key: 'questions', label: 'Question Bank', icon: BookOpen },
+        { key: 'notes', label: 'Topic Notes', icon: FileText },
         { key: 'users', label: 'Users & Tokens', icon: Users },
         { key: 'feedback', label: 'Feedback Queue', icon: MessageSquare },
         { key: 'tests', label: 'Tests Engine', icon: FileText },
@@ -1375,6 +1380,48 @@ export default function AdminDashboardPage() {
         setSavingEdit(false);
     };
 
+    const saveInlineEditAndNext = async (id: number) => {
+        if (savingEdit) return;
+        setSavingEdit(true);
+        try {
+            await questionsAPI.update(id, {
+                question_text: editingForm.question_text,
+                option_a: editingForm.option_a,
+                option_b: editingForm.option_b,
+                option_c: editingForm.option_c,
+                option_d: editingForm.option_d,
+                correct_answer: editingForm.correct_answer,
+                explanation: editingForm.explanation,
+                difficulty: editingForm.difficulty,
+                year: Number(editingForm.year),
+                subject: Number(editingForm.subject),
+                topic: editingForm.topic ? Number(editingForm.topic) : null,
+                paper: editingForm.paper ? Number(editingForm.paper) : 0,
+                concept_id: editingForm.concept_id,
+                book_name: editingForm.book_name,
+                chapter: editingForm.chapter,
+                page_number: editingForm.page_number,
+                reference_text: editingForm.reference_text,
+            });
+            const relatedIds = parseRelatedIds(editingForm.related_question_ids);
+            await questionsAPI.linkRelatedPyqs(id, relatedIds);
+            const idx = questionList.findIndex((q: any) => Number(q.id) === Number(id));
+            if (idx >= 0 && idx < questionList.length - 1) {
+                const nextQ = questionList[idx + 1];
+                startInlineEdit(nextQ);
+                setEditingQuestionId(Number(nextQ.id));
+            } else {
+                cancelInlineEdit();
+                fetchQuestions();
+            }
+        } catch (err: any) {
+            console.error('Failed to save question edit:', err);
+            const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
+            setUserActionMessage(`Error saving question: ${msg}`);
+        }
+        setSavingEdit(false);
+    };
+
     const handleCreateQuestion = async () => {
         if (!createForm.question_text.trim() || !createForm.subject || !createForm.year) return;
         setCreateLoading(true);
@@ -1476,6 +1523,25 @@ export default function AdminDashboardPage() {
             fetchQuestions();
         } catch {
             // Keep UI stable on API failure.
+        }
+    };
+
+    // AI Explain: generate complete explanation for a question from the list view.
+    // Admin selects correct_answer on the question, then clicks this button.
+    const [aiExplainId, setAiExplainId] = useState<number | null>(null);
+    const handleAiExplain = async (q: any) => {
+        const correctAnswer = (q.correct_answer || 'A').toUpperCase();
+        setAiExplainId(q.id);
+        try {
+            await questionsAPI.generateExplanation(q.id, {
+                correct_answer: correctAnswer,
+                regenerate_if_exists: true,
+            });
+            fetchQuestions();
+        } catch {
+            // Keep UI stable on API failure.
+        } finally {
+            setAiExplainId(null);
         }
     };
 
@@ -2946,13 +3012,16 @@ export default function AdminDashboardPage() {
                                                                     placeholder="Textbook reference excerpt"
                                                                 />
                                                                 <div className="flex gap-2">
-                                                                    <Button size="sm" onClick={() => saveInlineEdit(Number(q.id))} disabled={savingEdit}>
-                                                                        {savingEdit ? 'Saving...' : 'Save'}
-                                                                    </Button>
-                                                                    <Button size="sm" variant="outline" onClick={cancelInlineEdit} disabled={savingEdit}>
-                                                                        Cancel
-                                                                    </Button>
-                                                                </div>
+                                                                            <Button size="sm" onClick={() => saveInlineEdit(Number(q.id))} disabled={savingEdit}>
+                                                                                {savingEdit ? 'Saving...' : 'Save'}
+                                                                            </Button>
+                                                                            <Button size="sm" variant="outline" onClick={cancelInlineEdit} disabled={savingEdit}>
+                                                                                Cancel
+                                                                            </Button>
+                                                                            <Button size="sm" variant="secondary" onClick={() => saveInlineEditAndNext(Number(q.id))} disabled={savingEdit}>
+                                                                                {savingEdit ? 'Saving...' : 'Save & Next →'}
+                                                                            </Button>
+                                                                        </div>
                                                             </div>
                                                         ) : (
                                                             <div className="space-y-1">
@@ -3076,6 +3145,16 @@ export default function AdminDashboardPage() {
                                                             onClick={() => handleFormatFix(Number(q.id))}
                                                         >
                                                             Fix Format
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="default"
+                                                            onClick={() => handleAiExplain(q)}
+                                                            disabled={aiExplainId === Number(q.id)}
+                                                            className="gap-1"
+                                                        >
+                                                            <Sparkles className="w-3.5 h-3.5" />
+                                                            {aiExplainId === Number(q.id) ? 'Generating…' : 'AI Explain'}
                                                         </Button>
                                                         <Button
                                                             size="sm"
@@ -3738,6 +3817,28 @@ export default function AdminDashboardPage() {
                                         </div>
                                     </div>
                                 )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {activeTab === 'notes' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Topic Notes</CardTitle>
+                                <CardDescription>
+                                    Revision notes synthesized from PYQ explanations. Use the dedicated
+                                    notes editor for full functionality.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                    Topic notes are managed in the dedicated editor.
+                                    Create notes by subject, topic, and exam type, then use
+                                    AI to compile explanations from PYQs into concise revision material.
+                                </p>
+                                <Button size="sm" onClick={() => router.push('/admin/notes')}>
+                                    Open Notes Editor →
+                                </Button>
                             </CardContent>
                         </Card>
                     )}

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { questionsAPI } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import QuestionEditModal from './QuestionEditModal';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 export default function AdminQuestionsEditorPage() {
   const router = useRouter();
@@ -30,6 +31,20 @@ export default function AdminQuestionsEditorPage() {
   const [editing, setEditing] = useState<any | null>(null);
   const onEdit = (q: any) => setEditing(q);
 
+  // Save & Next: after saving current question, open the next one in the list
+  const handleSaveAndNext = (saved: any) => {
+    setQuestions(questions.map((q) => (q.id === saved.id ? saved : q)));
+    // Find the index of the saved question in the current list
+    const idx = questions.findIndex((q) => q.id === saved.id);
+    if (idx >= 0 && idx < questions.length - 1) {
+      // Open the next question in the same page
+      setEditing(questions[idx + 1]);
+    } else {
+      // No more questions on this page — close modal
+      setEditing(null);
+    }
+  };
+
   // Merge-duplicates modal state (Bug 4 — surface duplicate questions in the list).
   const [mergeFor, setMergeFor] = useState<any | null>(null);
   const [mergeCluster, setMergeCluster] = useState<any | null>(null);
@@ -44,6 +59,67 @@ export default function AdminQuestionsEditorPage() {
   const [removeConfirmId, setRemoveConfirmId] = useState('');
   const [removeSubmitting, setRemoveSubmitting] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Prev/Next navigation state for fast sequential processing
+  const [navLoading, setNavLoading] = useState(false);
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+
+  const goToPrevQuestion = useCallback(() => {
+    const currentQuestions = questionsRef.current;
+    const currentEditing = editingRef.current;
+    if (!currentEditing || currentQuestions.length === 0) return;
+    const idx = currentQuestions.findIndex(q => q.id === currentEditing.id);
+    if (idx > 0) {
+      onEdit(currentQuestions[idx - 1]);
+    }
+  }, [onEdit]);
+
+  const goToNextQuestion = useCallback(() => {
+    const currentQuestions = questionsRef.current;
+    const currentEditing = editingRef.current;
+    if (!currentEditing || currentQuestions.length === 0) return;
+    const idx = currentQuestions.findIndex(q => q.id === currentEditing.id);
+    if (idx < currentQuestions.length - 1) {
+      onEdit(currentQuestions[idx + 1]);
+    } else if (page < totalPages) {
+      setNavLoading(true);
+      setPage(p => p + 1);
+      setTimeout(async () => {
+        try {
+          const params: any = { page: page + 1, page_size: 20, ordering: 'display_number' };
+          if (examType) params.exam_type = examType;
+          if (year) params.year = year;
+          if (subjectId) params.subject = subjectId;
+          if (topicId) params.topic = topicId;
+          if (difficulty) params.difficulty = difficulty;
+          if (needsReview) params.needs_review = true;
+          if (isDropped) params.is_dropped = true;
+          if (isControversial) params.is_controversial = true;
+          if (isImageBased) params.is_image_based = true;
+          if (search) params.search = search;
+          const res = await questionsAPI.list(params);
+          const nextQuestions = res.data.results || res.data;
+          if (nextQuestions.length > 0) {
+            onEdit(nextQuestions[0]);
+          }
+        } catch (e) {
+          console.error('Failed to fetch next page', e);
+        } finally {
+          setNavLoading(false);
+        }
+      }, 300);
+    }
+  }, [page, totalPages, onEdit]);
+
+  // Keyboard prev-question navigation from the edit modal
+  useEffect(() => {
+    const handler = () => goToPrevQuestion();
+    window.addEventListener('admin-qeditor:prev', handler);
+    return () => window.removeEventListener('admin-qeditor:prev', handler);
+  }, [goToPrevQuestion]);
 
   // Page-level banner so destructive failures (drag-reorder, inline edit,
   // merge-confirmation guard) surface inline instead of via window.alert().
@@ -115,6 +191,7 @@ export default function AdminQuestionsEditorPage() {
 
   const fetchQuestions = async () => {
     setLoading(true);
+    setPageError(null);
     try {
       const params: any = { page, page_size: 20, ordering: 'display_number' };
       if (needsReview) params.needs_review = true;
@@ -135,6 +212,7 @@ export default function AdminQuestionsEditorPage() {
       }
     } catch (error) {
       console.error(error);
+      setPageError('Failed to load questions. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -364,14 +442,23 @@ export default function AdminQuestionsEditorPage() {
           className="rounded-lg border border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-700 px-4 py-3 text-sm text-red-800 dark:text-red-200 flex items-start gap-3"
         >
           <span className="flex-1">{pageError}</span>
-          <button
-            type="button"
-            onClick={() => setPageError(null)}
-            className="text-red-700 hover:text-red-900 dark:text-red-300"
-            aria-label="Dismiss error"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => { setPageError(null); fetchQuestions(); }}
+              className="text-xs font-semibold bg-red-100 dark:bg-red-800 hover:bg-red-200 dark:hover:bg-red-700 px-2.5 py-1 rounded-md transition-colors"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => setPageError(null)}
+              className="text-red-700 hover:text-red-900 dark:text-red-300"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
       <div className="flex justify-between items-center">
@@ -690,9 +777,37 @@ export default function AdminQuestionsEditorPage() {
           onClose={() => setEditing(null)}
           onSaved={(updated: any) => {
             setQuestions(questions.map((q) => (q.id === updated.id ? updated : q)));
-            setEditing(null);
           }}
+          onSaveAndNext={handleSaveAndNext}
         />
+      )}
+
+      {/* Prev/Next navigation bar for fast sequential question processing */}
+      {editing && (
+        <div className="sticky bottom-4 z-20 flex items-center justify-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg px-4 py-3">
+          <button
+            onClick={goToPrevQuestion}
+            disabled={navLoading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 text-sm font-medium transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Previous
+          </button>
+          <span className="text-xs text-muted-foreground font-medium">
+            Q{editing.id} — {questions.findIndex(q => q.id === editing.id) + 1} of {questions.length}
+          </span>
+          <button
+            onClick={goToNextQuestion}
+            disabled={navLoading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 text-sm font-medium transition"
+          >
+            {navLoading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>
+            ) : (
+              <>Next <ChevronRight className="w-4 h-4" /></>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Merge Duplicates modal (Bug 4) — list sibling questions and confirm

@@ -945,8 +945,14 @@ function ExamQuestionBankInner({
                                     {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                                 </div>
                             ) : listError ? (
-                                <Card className="p-8 text-center text-destructive">
-                                    {listError}
+                                <Card className="p-8 text-center">
+                                    <p className="text-destructive text-sm mb-3">{listError}</p>
+                                    <button
+                                      onClick={() => handleSearch()}
+                                      className="text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      Retry
+                                    </button>
                                 </Card>
                             ) : questions.length === 0 ? (
                                 <Card className="p-8 text-center text-muted-foreground">

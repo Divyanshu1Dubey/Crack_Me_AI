@@ -63,10 +63,18 @@ export default function CookiePolicyPage() {
 
             <h2>3. Cookies We Do NOT Use</h2>
             <ul>
-                <li>No advertising cookies (no AdSense, no Facebook Pixel, no cross-site tracking).</li>
-                <li>No third-party retargeting pixels.</li>
+                <li>No third-party retargeting pixels beyond the advertising cookies described below.</li>
                 <li>No social-media tracking cookies unless you explicitly click a social share button.</li>
             </ul>
+
+            <h2>3a. Advertising Cookies (AdSense)</h2>
+            <p>
+                CrackCMS participates in the Google AdSense program. When you consent to marketing cookies,
+                Google may set advertising cookies on your device to serve relevant ads. These cookies are
+                controlled by Google and subject to Google's Privacy Policy. You can opt out of personalized
+                advertising at any time via the cookie banner or your browser settings. See
+                <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer">Google Ads Settings</a>.
+            </p>
 
             <h2>4. Controlling Cookies</h2>
             <p>

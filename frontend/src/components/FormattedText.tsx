@@ -57,18 +57,15 @@ function ImgWithFallback({ src, alt, ...rest }: any) {
  * the colour / underline actually renders (react-markdown v10 strips raw
  * HTML by default).
  */
-export function FormattedText({ text, className = '' }: FormattedTextProps) {
+export function FormattedText({ text, className = '', images }: FormattedTextProps & { images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }> }) {
     if (!text) return null;
 
-    // Collapse horizontal whitespace (tabs, runs of spaces) to a single space
-    // so CommonMark inline-emphasis rules (`**Foo\tbar**` is invalid, since
-    // the `**` must abut non-whitespace) actually parse. The recall importer
-    // and docx copy-pastes leave literal `\t` characters in the DB which
-    // silently disable bold/italic/links. We do NOT touch newlines — those
-    // carry paragraph + list semantics that `react-markdown` + remark-breaks
-    // need.
+    // Collapse horizontal whitespace so CommonMark inline-emphasis rules parse.
     const normalized = text.replace(/[ \t\f\v]+/g, ' ');
-    const clean = decodeMojiB(applyColorTokens(normalized));
+    // Resolve [[img:N]] tokens to markdown image syntax BEFORE color tokens,
+    // so the inner alt-text can't swallow a stray [[red]] marker.
+    const withImages = images ? resolveImageTokensForMarkdown(normalized, images) : normalized;
+    const clean = decodeMojiB(applyColorTokens(withImages));
 
     return (
         <div className={`formatted-text ${className}`}>

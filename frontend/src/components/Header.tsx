@@ -97,7 +97,8 @@ export default function Header() {
       const res = await analyticsAPI.getAnnouncements();
       setNotifications(Array.isArray(res.data) ? res.data : res.data?.results || []);
     } catch {
-      // ignore
+      // Silently ignore — notifications are non-critical.
+      // A retry will fire on the next interval tick.
     } finally {
       isFetchingNotifications.current = false;
       setLoading(false);

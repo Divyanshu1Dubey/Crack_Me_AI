@@ -25,14 +25,16 @@ from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
 from accounts.models_freemium import FreeShowcaseQuestion
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, compute_stem_hash
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, TopicNote, MistakeNotebook, StudyTimeBreakdown, UserQuest, QuestStreak, compute_stem_hash
 from .serializers import (
     SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
     QuestionUploadSerializer, BookmarkSerializer,
     QuestionFeedbackSerializer, DiscussionSerializer,
     NoteSerializer, FlashcardSerializer, QuestionImportJobSerializer, QuestionExtractionItemSerializer,
-    AdminAIPromptVersionSerializer, QuestionAIOperationLogSerializer, QuestionRevisionSnapshotSerializer
+    AdminAIPromptVersionSerializer, QuestionAIOperationLogSerializer, QuestionRevisionSnapshotSerializer,
+    TopicNoteSerializer, MistakeNotebookSerializer, StudyTimeBreakdownSerializer,
+    UserQuestSerializer, QuestStreakSerializer, MistakeNotebookCreateSerializer,
 )
 from .recall_serializers import (
     # Used directly here:
@@ -325,6 +327,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions',
             'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision',
             'link_related', 'set_concept_id', 'update_reference', 'format_fix',
+            'generate_explanation',
         }
         if self.action in admin_actions:
             return queryset
@@ -2966,7 +2969,112 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], url_path='generate-explanation')
+    def generate_explanation(self, request, pk=None):
+        """Generate an AI explanation for this question.
+
+        Admin workflow: open question → verify correct answer → click "AI
+        Generate Explanation" → AI fills ALL explanation fields → admin
+        reviews → makes corrections → saves → next question.
+
+        Request body:
+        {
+            "correct_answer": "A" | "B" | "C" | "D",   // which option is correct
+            "regenerate_if_exists": false                  // if true, overwrite existing explanation
+        }
+
+        The AI's prompt explicitly locks on the selected correct_answer as
+        the source of truth. It never silently changes the admin's choice.
+
+        If an explanation already exists and regenerate_if_exists is false,
+        the endpoint returns 409 with the existing data so the admin can
+        confirm before overwriting.
+        """
+        from ai_engine.services import AIService
+        question = self.get_object()
+        correct_answer = str(request.data.get('correct_answer', question.correct_answer or 'A')).upper()[:1]
+        regenerate = bool(request.data.get('regenerate_if_exists', False))
+
+        # Protection: don't silently overwrite existing manually-reviewed content
+        existing_fields = ['explanation', 'concept_explanation', 'mnemonic',
+                           'book_name', 'chapter', 'reference_text', 'shortcut_tip']
+        has_existing = any(getattr(question, f, '') for f in existing_fields)
+        if has_existing and not regenerate:
+            return Response({
+                'detail': 'This question already has an explanation. Set regenerate_if_exists=true to overwrite.',
+                'existing_fields': {f: getattr(question, f, '') for f in existing_fields if getattr(question, f, '')},
+                'requires_confirmation': True,
+            }, status=status.HTTP_409_CONFLICT)
+
+        # Collect images for AI context
+        image_descriptions = []
+        for img in question.images.filter(is_active=True).order_by('image_index_in_page', 'id')[:6]:
+            if img.caption:
+                image_descriptions.append(img.caption)
+            elif img.alt_text:
+                image_descriptions.append(img.alt_text)
+
+        options = {
+            'A': question.option_a or '',
+            'B': question.option_b or '',
+            'C': question.option_c or '',
+            'D': question.option_d or '',
+        }
+
+        try:
+            ai_service = AIService()
+            result = ai_service.generate_admin_explanation(
+                question_text=question.question_text or '',
+                options=options,
+                correct_answer=correct_answer,
+                subject=str(question.subject or ''),
+                topic=str(question.topic or ''),
+                exam_type=str(question.exam_type or 'cms'),
+                existing_explanation=question.explanation or '',
+                image_descriptions=image_descriptions if image_descriptions else None,
+            )
+
+            # Apply only the fields that were generated — never overwrite unrelated admin data
+            updatable_fields = [
+                'explanation', 'concept_explanation', 'mnemonic',
+                'book_name', 'chapter', 'page_number', 'reference_text',
+                'shortcut_tip', 'concept_keywords',
+                'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+            ]
+            for field in updatable_fields:
+                if field in result and result[field]:
+                    setattr(question, field, result[field])
+
+            # Optionally update correct_answer if admin changed it
+            if request.data.get('update_correct_answer', False) and correct_answer != question.correct_answer:
+                question.correct_answer = correct_answer
+
+            # Record who generated (without consuming user tokens — admin action)
+            try:
+                admin_user = request.user if request.user.is_authenticated else None
+                if admin_user and admin_user.is_staff:
+                    if hasattr(question, 'verified_by_id') and not question.verified_by_id:
+                        question.verified_by = admin_user
+                        question.verified_at = timezone.now()
+                        question.is_verified_by_admin = True
+            except Exception:
+                pass
+
+            question.save()
+            question.refresh_from_db()
+
+            return Response({
+                'detail': 'Explanation generated successfully.',
+                'generated_fields': {k: result.get(k, '') for k in updatable_fields if result.get(k, '')},
+                'question': QuestionAdminListSerializer(question, context={'request': request}).data,
+            })
+        except Exception as e:
+            logger.error(f"Admin explanation generation failed for Q{question.id}: {e}")
+            return Response({
+                'detail': f'AI generation failed: {str(e)}. No changes were saved to the question.',
+                'error': str(e),
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
     def reorder(self, request, pk=None):
         """Reorder images within a question. Body: `{question_id, new_index_in_page}`."""
         image = self.get_object()
@@ -2978,3 +3086,465 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
         image.image_index_in_page = new_index
         image.save(update_fields=["image_index_in_page"])
         return Response(QuestionImageSerializer(image).data)
+
+
+# ─── Topic Notes (PYQ explanation → revision notes pipeline) ──────────────────
+
+from rest_framework.permissions import IsAdminUser
+
+class TopicNoteViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for topic-wise notes compiled from PYQ explanations.
+
+    The notes-generation pipeline groups questions by (subject, topic, exam_type)
+    and synthesizes their reviewed explanations into concise revision notes.
+    This viewset exposes the resulting notes for admin editing and publishing.
+    """
+    queryset = TopicNote.objects.select_related('subject', 'topic', 'created_by').order_by('-updated_at')
+    permission_classes = [IsAdminUser]
+    serializer_class = TopicNoteSerializer
+    filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated']
+    search_fields = ['title', 'content']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="generate")
+    def generate_from_topic(self, request, pk=None):
+        """Generate a note from all questions in the same topic.
+
+        Uses the AI to synthesize explanations from questions sharing
+        this note's subject + topic + exam_type into a concise note.
+        """
+        note = self.get_object()
+        from ai_engine.services import AIService
+        from questions.models import Question
+
+        qs = Question.objects.filter(
+            subject=note.subject, topic=note.topic,
+            exam_type=note.exam_type, is_active=True,
+        ).exclude(explanation='')[:20]
+
+        if not qs.exists():
+            return Response({'detail': 'No questions with explanations found for this topic.'}, status=400)
+
+        explanations = []
+        for q in qs:
+            explanations.append(f"Q: {q.question_text[:200]}\nA: {q.correct_answer}\nExplanation: {q.explanation[:500]}")
+
+        prompt = f"""You are a medical educator. Compile the following question explanations into concise, revision-friendly notes for the topic "{note.topic}" in {note.exam_type}.
+
+Organize the notes as:
+1. Key Concepts (core principles)
+2. Important Facts (high-yield points)
+3. Clinical Correlations
+4. Exam Tips
+
+Keep it concise — bullet points, not paragraphs. Focus on medically important information.
+
+Explanations to synthesize:
+{chr(10).join(explanations[:15])}
+
+Respond with structured content in markdown format."""
+
+        try:
+            ai_service = AIService()
+            raw = ai_service._call_ai(prompt, max_tokens=3000, temperature=0.3)
+            note.content = raw.strip()
+            note.ai_generated = True
+            note.save()
+            return Response({'detail': 'Note generated.', 'content': note.content})
+        except Exception as e:
+            return Response({'detail': f'Generation failed: {e}'}, status=503)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Student Experience — Study & Gamification Views
+# ════════════════════════════════════════════════════════════════════════════
+
+class MistakeNotebookStudentView(APIView):
+    """Student mistake notebook — list with optional filters."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = MistakeNotebook.objects.filter(user=request.user).select_related(
+            'question__subject', 'question__topic', 'question__sub_topic'
+        )
+        # Filters
+        review_status = request.query_params.get('review_status')
+        is_flagged = request.query_params.get('is_flagged')
+        subject_id = request.query_params.get('subject')
+        topic_id = request.query_params.get('topic')
+
+        if review_status:
+            qs = qs.filter(review_status=review_status)
+        if is_flagged is not None:
+            qs = qs.filter(is_flagged=is_flagged == 'true')
+        if subject_id:
+            qs = qs.filter(question__subject_id=subject_id)
+        if topic_id:
+            qs = qs.filter(question__topic_id=topic_id)
+
+        qs = qs.order_by('-created_at')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        total = qs.count()
+        start = (page - 1) * page_size
+        items = qs[start:start + page_size]
+        serializer = MistakeNotebookSerializer(items, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+        })
+
+    def post(self, request):
+        """Add a question to mistake notebook."""
+        question_id = request.data.get('question')
+        if not question_id:
+            return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            question = Question.objects.get(pk=question_id)
+        except Question.DoesNotExist:
+            return Response({'error': 'Question not found'}, status=404)
+
+        obj, created = MistakeNotebook.objects.get_or_create(
+            user=request.user,
+            question=question,
+            defaults={
+                'selected_answer': request.data.get('selected_answer', ''),
+                'correct_answer': question.correct_answer,
+                'is_correct': False,
+                'review_status': 'new',
+                'user_note': request.data.get('user_note', ''),
+            }
+        )
+        if not created:
+            obj.user_note = request.data.get('user_note', obj.user_note)
+            obj.is_flagged = request.data.get('is_flagged', obj.is_flagged)
+            obj.review_status = request.data.get('review_status', obj.review_status)
+            obj.save(update_fields=['user_note', 'is_flagged', 'review_status'])
+        serializer = MistakeNotebookSerializer(obj)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else 200)
+
+
+class MistakeNotebookDetailView(APIView):
+    """Update/delete a mistake notebook entry."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_object(self, request, pk):
+        try:
+            return MistakeNotebook.objects.get(pk=pk, user=request.user)
+        except MistakeNotebook.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, pk):
+        obj = self._get_object(request, pk)
+        serializer = MistakeNotebookSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        obj = self._get_object(request, pk)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MistakeNotebookReviewView(APIView):
+    """Mark a mistake as reviewed (spaced-repetition scheduler)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            obj = MistakeNotebook.objects.get(pk=pk, user=request.user)
+        except MistakeNotebook.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+
+        now = timezone.now()
+        obj.review_count += 1
+        obj.last_reviewed_at = now
+        if obj.review_count == 1:
+            obj.next_review_at = now + timezone.timedelta(days=1)
+            obj.review_status = 'learning'
+        elif obj.review_count == 2:
+            obj.next_review_at = now + timezone.timedelta(days=3)
+            obj.review_status = 'reviewing'
+        elif obj.review_count >= 3:
+            obj.next_review_at = now + timezone.timedelta(days=7)
+            if obj.review_count >= 5:
+                obj.review_status = 'mastered'
+        obj.save(update_fields=['review_count', 'last_reviewed_at', 'next_review_at', 'review_status'])
+        serializer = MistakeNotebookSerializer(obj)
+        return Response(serializer.data)
+
+
+class MistakeNotebookDueView(APIView):
+    """Get all mistakes due for review today."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        now = timezone.now()
+        due = MistakeNotebook.objects.filter(
+            user=request.user,
+            next_review_at__lte=now,
+        ).exclude(review_status='mastered').select_related(
+            'question__subject', 'question__topic', 'question__sub_topic'
+        ).order_by('next_review_at')
+        serializer = MistakeNotebookSerializer(due, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': due.count(),
+        })
+
+
+class MistakeStatsView(APIView):
+    """Aggregate stats for the mistake notebook dashboard widget."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        total = MistakeNotebook.objects.filter(user=user).count()
+        by_status = {}
+        for key, _ in MistakeNotebook.REVIEW_STATUS_CHOICES:
+            by_status[key] = MistakeNotebook.objects.filter(user=user, review_status=key).count()
+        flagged = MistakeNotebook.objects.filter(user=user, is_flagged=True).count()
+        due_today = MistakeNotebook.objects.filter(
+            user=user, next_review_at__lte=timezone.now()
+        ).exclude(review_status='mastered').count()
+        return Response({
+            'total': total,
+            'by_status': by_status,
+            'flagged': flagged,
+            'due_today': due_today,
+        })
+
+
+class UserQuestListView(APIView):
+    """List and create daily quests."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        quests = UserQuest.objects.filter(user=request.user)
+        status_filter = request.query_params.get('status')
+        if status_filter == 'active':
+            quests = quests.filter(is_completed=False, expires_at__gt=timezone.now())
+        elif status_filter == 'completed':
+            quests = quests.filter(is_completed=True)
+        elif status_filter == 'expired':
+            quests = quests.filter(expires_at__lt=timezone.now(), is_completed=False)
+        else:
+            quests = quests.order_by('-quest_date', 'quest_type')
+        serializer = UserQuestSerializer(quests[:20], many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new quest (admin or system-generated)."""
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=403)
+        serializer = UserQuestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UserQuestDetailView(APIView):
+    """Update/complete/delete a quest."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_object(self, request, pk):
+        try:
+            return UserQuest.objects.get(pk=pk, user=request.user)
+        except UserQuest.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, pk):
+        obj = self._get_object(request, pk)
+        serializer = UserQuestSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data.get('is_completed') and not obj.is_completed:
+            obj.completed_at = timezone.now()
+            # Award XP to quest streak
+            quest_streak, _ = QuestStreak.objects.get_or_create(user=request.user)
+            quest_streak.total_xp_earned += obj.xp_reward
+            quest_streak.total_quests_completed += 1
+            if obj.quest_date == timezone.now().date():
+                quest_streak.current_streak += 1
+            quest_streak.longest_streak = max(quest_streak.longest_streak, quest_streak.current_streak)
+            quest_streak.last_quest_date = obj.quest_date
+            quest_streak.save(update_fields=['total_xp_earned', 'total_quests_completed',
+                                              'current_streak', 'longest_streak', 'last_quest_date'])
+            # Also award XP to main StudyStreak
+            study_streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+            study_streak.add_xp(obj.xp_reward)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        obj = self._get_object(request, pk)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuestStreakView(APIView):
+    """Get quest streak info."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        streak, _ = QuestStreak.objects.get_or_create(user=request.user)
+        serializer = QuestStreakSerializer(streak)
+        return Response(serializer.data)
+
+
+class QuestStreakFreezeView(APIView):
+    """Toggle streak freeze."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        freeze = bool(request.data.get('streak_frozen', True))
+        streak, _ = QuestStreak.objects.get_or_create(user=request.user)
+        streak.streak_frozen = freeze
+        streak.save(update_fields=['streak_frozen'])
+        serializer = QuestStreakSerializer(streak)
+        return Response(serializer.data)
+
+
+class StudyTimeView(APIView):
+    """Record and retrieve study time per subject."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = StudyTimeBreakdown.objects.filter(user=request.user)
+        start = request.query_params.get('start')
+        end = request.query_params.get('end')
+        if start:
+            qs = qs.filter(date__gte=start)
+        if end:
+            qs = qs.filter(date__lte=end)
+        serializer = StudyTimeBreakdownSerializer(qs, many=True)
+        totals = qs.values('subject').annotate(
+            total_seconds=Sum('seconds'),
+            total_questions=Sum('question_count'),
+        )
+        return Response({
+            'breakdown': serializer.data,
+            'totals': list(totals),
+        })
+
+    def post(self, request):
+        subject_id = request.data.get('subject')
+        seconds = int(request.data.get('seconds', 0))
+        question_count = int(request.data.get('question_count', 0))
+        date_str = request.data.get('date') or timezone.now().date().isoformat()
+        try:
+            subject = Subject.objects.get(pk=subject_id)
+        except Subject.DoesNotExist:
+            return Response({'error': 'Subject not found'}, status=404)
+        obj, _ = StudyTimeBreakdown.objects.get_or_create(
+            user=request.user, subject=subject, date=date_str,
+            defaults={'seconds': 0, 'question_count': 0},
+        )
+        obj.seconds += seconds
+        obj.question_count += question_count
+        obj.save(update_fields=['seconds', 'question_count'])
+        serializer = StudyTimeBreakdownSerializer(obj)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class TopicNoteCreateView(APIView):
+    """Create a topic note with optional AI generation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = TopicNoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        exam_type = serializer.validated_data.get('exam_type', 'cms')
+        subject = serializer.validated_data['subject']
+        topic = serializer.validated_data['topic']
+        title = serializer.validated_data['title']
+
+        note, created = TopicNote.objects.get_or_create(
+            exam_type=exam_type,
+            subject=subject,
+            topic=topic,
+            title=title,
+            defaults={'content': '', 'content_preview': '', 'source_question_count': 0},
+        )
+        if not created:
+            note.content = serializer.validated_data.get('content', note.content)
+            note.is_published = serializer.validated_data.get('is_published', note.is_published)
+            note.save()
+
+        out = TopicNoteSerializer(note)
+        return Response(out.data, status=status.HTTP_201_CREATED if created else 200)
+
+
+class AITopicNoteGenerationView(APIView):
+    """Generate topic note from similar question explanations using AI."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'ai_heavy'
+
+    def post(self, request):
+        topic_note_id = request.data.get('topic_note_id')
+        if topic_note_id:
+            try:
+                note = TopicNote.objects.get(pk=topic_note_id)
+            except TopicNote.DoesNotExist:
+                return Response({'error': 'TopicNote not found'}, status=404)
+        else:
+            exam_type = request.data.get('exam_type', 'cms')
+            subject_id = request.data.get('subject')
+            topic_id = request.data.get('topic')
+            title = request.data.get('title', '')
+            if not all([subject_id, topic_id]):
+                return Response({'error': 'subject and topic are required'}, status=400)
+            note, _ = TopicNote.objects.get_or_create(
+                exam_type=exam_type,
+                subject_id=subject_id,
+                topic_id=topic_id,
+                title=title,
+                defaults={'content': '', 'content_preview': ''},
+            )
+
+        # Gather explanations from similar questions
+        qs = Question.objects.filter(
+            subject=note.subject,
+            topic=note.topic,
+            exam_type=note.exam_type,
+            explanation__isnull=False,
+        ).exclude(explanation='').order_by('-year')[:20]
+        explanations = [q.explanation for q in qs if q.explanation]
+        question_ids = list(qs.values_list('id', flat=True))
+        note.source_question_count = len(explanations)
+
+        if not explanations:
+            return Response({'error': 'No explanations found for this topic. Please generate explanations for questions first.'}, status=400)
+
+        # Build prompt for AI synthesis
+        from ai_engine.services import AIService
+        ai_service = AIService()
+        context = "\n\n---\n\n".join(explanations[:15])
+        prompt = (
+            f"You are a medical education expert. Synthesize the following explanations "
+            f"for '{note.topic.name}' (Subject: {note.subject.name}) into concise, "
+            f"well-structured topic notes for exam preparation.\n\n"
+            f"Guidelines:\n"
+            f"- Combine repeated concepts, remove redundancy\n"
+            f"- Organize logically with clear headings\n"
+            f"- Retain all medically important facts and clinical correlations\n"
+            f"- Use bullet points and short paragraphs\n"
+            f"- Make it revision-friendly\n"
+            f"- Do NOT copy-paste; rewrite in your own words\n"
+            f"- Focus on exam-relevant information\n\n"
+            f"Source explanations:\n{context}\n\n"
+            f"Write comprehensive topic notes:"
+        )
+        try:
+            raw = ai_service._call_ai(prompt, max_tokens=4000, temperature=0.3)
+            note.content = raw.strip()
+            note.content_preview = note.content[:300] + '...' if len(note.content) > 300 else note.content
+            note.ai_generated = True
+            note.save(update_fields=['content', 'content_preview', 'ai_generated', 'source_question_count'])
+            return Response({'detail': 'Note generated.', 'content': note.content})
+        except Exception as e:
+            return Response({'detail': f'Generation failed: {e}'}, status=503)

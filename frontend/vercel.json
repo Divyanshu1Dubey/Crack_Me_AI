@@ -11,7 +11,7 @@
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
         { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://scripts.simpleanalyticscdn.com https://www.googletagmanager.com https://*.supabase.co https://*.supabase.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.cracklabs.app https://crackcms-vsthc.ondigitalocean.app https://*.google-analytics.com https://*.googletagmanager.com https://*.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://scripts.simpleanalyticscdn.com https://www.googletagmanager.com https://*.googlesyndication.com https://*.googleadservices.com https://*.supabase.co https://*.supabase.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.cracklabs.app https://crackcms-vsthc.ondigitalocean.app https://*.google-analytics.com https://*.googletagmanager.com https://*.google.com https://*.googlesyndication.com https://*.googleadservices.com https://*.doubleclick.net; frame-src 'self' https://*.googlesyndication.com https://*.googleadservices.com https://*.doubleclick.net; base-uri 'self'; form-action 'self'" }
       ]
     }
   ]

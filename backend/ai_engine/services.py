@@ -1318,6 +1318,128 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
                 "raw_response": raw[:800] if raw else "",
             }
 
+    def generate_admin_explanation(
+        self, question_text: str, options: dict, correct_answer: str,
+        subject: str = "", topic: str = "", exam_type: str = "cms",
+        existing_explanation: str = "", image_descriptions: list = None,
+    ) -> dict:
+        """Generate a complete explanation for a question in the admin editor.
+
+        Used by the content-team workflow: admin selects the correct answer → clicks
+        "AI Generate" → all explanation fields are populated. The admin's selected
+        correct_answer is the source of truth; the AI must NOT change it.
+
+        Returns a dict mapping field names → values that can be applied directly
+        to the Question model instance.
+        """
+        options_str = "\n".join([f"  {k}: {v}" for k, v in (options or {}).items()])
+        img_ctx = ""
+        if image_descriptions:
+            img_ctx = "\n\nIMAGE DESCRIPTIONS (these are text representations of images attached to the question):\n"
+            for desc in image_descriptions:
+                img_ctx += f"- {desc}\n"
+
+        prompt = f"""You are a medical educator specializing in UPSC CMS exam preparation. A content editor has verified the correct answer for the following question. Your task is to generate a COMPLETE, MEDICALLY ACCURATE explanation based on the selected correct answer.
+
+**CRITICAL: The correct answer has been verified by the content editor as: {correct_answer}**
+Do NOT change or question this answer. Build your explanation around it being correct.
+
+Question: {question_text}
+Options:
+{options_str}
+VERIFIED CORRECT ANSWER: {correct_answer}
+{f'Subject: {subject}' if subject else ''}
+{f'Topic: {topic}' if topic else ''}
+{f'Exam: {exam_type}' if exam_type else ''}
+{img_ctx}
+{f'Existing explanation (for reference, do not simply repeat): {existing_explanation}' if existing_explanation else ''}
+
+You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
+{{
+  "explanation": "5-7 line detailed explanation of why option {correct_answer} is correct. Include the medical reasoning, pathophysiology, and key facts. Also briefly mention why other plausible options are incorrect.",
+  "concept_explanation": "8-10 line comprehensive explanation of the underlying medical concept from first principles. Cover: definition, classification if applicable, clinical features, diagnostic approach, and management principles. Written as a mini-lecture.",
+  "mnemonic": "A creative, catchy mnemonic for this concept. Use memorable acronyms or phrases. Explain each component.",
+  "book_name": "Standard textbook name (e.g., Harrison's Principles of Internal Medicine, Ghai's Pediatrics, Park's Preventive Medicine, Bailey & Love's Short Practice of Surgery, Dutta's Gynecology, etc.)",
+  "chapter": "Relevant chapter or section name",
+  "page_number": "Page number or range if known (can be empty string)",
+  "reference_text": "2-3 sentences of relevant textbook content that directly supports the answer",
+  "shortcut_tip": "2-3 line exam-solving tip: how to approach this type of question, key patterns to spot, elimination strategies",
+  "concept_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "why_correct": "3-4 line focused explanation of why {correct_answer} is the right answer with clinical reasoning",
+  "why_wrong_a": "1-2 line explanation of why A is wrong (if A != {correct_answer})",
+  "why_wrong_b": "1-2 line explanation of why B is wrong (if B != {correct_answer})",
+  "why_wrong_c": "1-2 line explanation of why C is wrong (if C != {correct_answer})",
+  "why_wrong_d": "1-2 line explanation of why D is wrong (if D != {correct_answer})"
+}}
+
+RULES:
+- The explanation MUST support option {correct_answer} as the correct answer
+- Be medically precise — use proper terminology appropriate for MBBS/PG level
+- Keep explanations concise but complete — avoid unnecessary repetition
+- If you don't know a specific page number, leave it as empty string
+- For why_wrong fields where the option equals the correct answer, write a brief explanation of the key distinguishing feature instead
+- Do NOT include any markdown code fences — return raw JSON only
+"""
+
+        try:
+            raw = self._call_ai(prompt, max_tokens=4000, temperature=0.2)
+            text = raw.strip()
+            # Strip markdown fences
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+            if text.endswith('```'):
+                text = text[:-3]
+            text = text.strip()
+            if text.lower().startswith('json'):
+                text = text[4:].strip()
+            result = json.loads(text)
+            # Ensure all expected keys exist
+            defaults = {
+                'explanation': '', 'concept_explanation': '', 'mnemonic': '',
+                'book_name': '', 'chapter': '', 'page_number': '',
+                'reference_text': '', 'shortcut_tip': '', 'concept_keywords': [],
+                'why_correct': '', 'why_wrong_a': '', 'why_wrong_b': '',
+                'why_wrong_c': '', 'why_wrong_d': '',
+            }
+            for k, v in defaults.items():
+                result.setdefault(k, v)
+            # Clean up why_wrong for the correct answer option
+            correct_map = {'a': 'why_wrong_a', 'b': 'why_wrong_b', 'c': 'why_wrong_c', 'd': 'why_wrong_d'}
+            correct_field = correct_map.get(correct_answer.lower())
+            if correct_field and correct_field in result:
+                # If the correct answer ended up in a "why_wrong" field, repurpose it
+                if result[correct_field]:
+                    pass  # Keep it — it likely has useful "why it's right" content
+            return result
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"Failed to parse admin explanation JSON: {e}")
+            # Second-pass JSON extraction
+            if raw:
+                start = raw.find('{')
+                end = raw.rfind('}')
+                if start != -1 and end > start:
+                    try:
+                        result = json.loads(raw[start:end + 1])
+                        defaults = {
+                            'explanation': '', 'concept_explanation': '', 'mnemonic': '',
+                            'book_name': '', 'chapter': '', 'page_number': '',
+                            'reference_text': '', 'shortcut_tip': '', 'concept_keywords': [],
+                            'why_correct': '', 'why_wrong_a': '', 'why_wrong_b': '',
+                            'why_wrong_c': '', 'why_wrong_d': '',
+                        }
+                        for k, v in defaults.items():
+                            result.setdefault(k, v)
+                        return result
+                    except (json.JSONDecodeError, Exception):
+                        pass
+            return {
+                'explanation': f'AI generation failed: {str(e)}. Please edit manually.',
+                'concept_explanation': '', 'mnemonic': '', 'book_name': '', 'chapter': '',
+                'page_number': '', 'reference_text': '', 'shortcut_tip': '',
+                'concept_keywords': [], 'why_correct': '', 'why_wrong_a': '',
+                'why_wrong_b': '', 'why_wrong_c': '', 'why_wrong_d': '',
+            }
+
     # ─── MULTI-MODEL VOTING (for batch enrichment) ──────
 
     def get_consensus_answer(self, question_text: str, options: dict) -> Optional[str]:

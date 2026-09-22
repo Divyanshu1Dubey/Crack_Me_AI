@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
+from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
 
 
 class TopicPerformanceSerializer(serializers.ModelSerializer):
@@ -84,3 +85,74 @@ class LeaderboardEntrySerializer(serializers.Serializer):
     total_study_days = serializers.IntegerField()
     accuracy = serializers.FloatField()
     tests_completed = serializers.IntegerField()
+
+
+class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
+    subject_color = serializers.CharField(source='subject.color', read_only=True, default='')
+
+    class Meta:
+        model = StudyTimeBreakdown
+        fields = ['id', 'subject', 'subject_name', 'subject_code', 'subject_color',
+                  'date', 'seconds', 'question_count']
+        read_only_fields = ['id']
+
+
+class UserQuestSerializer(serializers.ModelSerializer):
+    progress_percent = serializers.IntegerField(read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+
+    class Meta:
+        model = UserQuest
+        fields = ['id', 'user', 'quest_type', 'difficulty', 'title', 'description',
+                  'target_value', 'current_value', 'xp_reward', 'is_completed', 'is_claimed',
+                  'progress_percent', 'subject_name', 'quest_date', 'expires_at',
+                  'completed_at', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
+class QuestStreakSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestStreak
+        fields = ['id', 'user', 'current_streak', 'longest_streak', 'total_quests_completed',
+                  'total_xp_earned', 'last_quest_date', 'streak_frozen', 'updated_at']
+        read_only_fields = ['id', 'user']
+
+
+class MistakeNotebookSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source='question.question_text', read_only=True, default='')
+    option_a = serializers.CharField(source='question.option_a', read_only=True, default='')
+    option_b = serializers.CharField(source='question.option_b', read_only=True, default='')
+    option_c = serializers.CharField(source='question.option_c', read_only=True, default='')
+    option_d = serializers.CharField(source='question.option_d', read_only=True, default='')
+    correct_answer = serializers.CharField(source='question.correct_answer', read_only=True, default='')
+    explanation = serializers.CharField(source='question.explanation', read_only=True, default='')
+    subject_name = serializers.CharField(source='question.subject.name', read_only=True, default='')
+    topic_name = serializers.CharField(source='question.topic.name', read_only=True, default='')
+    exam_type = serializers.CharField(source='question.exam_type', read_only=True, default='')
+
+    class Meta:
+        model = MistakeNotebook
+        fields = ['id', 'user', 'question', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+                  'selected_answer', 'correct_answer', 'is_correct', 'review_status',
+                  'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
+                  'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
+class TopicNoteListSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    exam_type = serializers.CharField()
+    subject = serializers.IntegerField()
+    subject_name = serializers.CharField()
+    topic = serializers.IntegerField()
+    topic_name = serializers.CharField()
+    title = serializers.CharField()
+    content_preview = serializers.CharField()
+    ai_generated = serializers.BooleanField()
+    source_question_count = serializers.IntegerField()
+    created_by_username = serializers.CharField()
+    is_published = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()

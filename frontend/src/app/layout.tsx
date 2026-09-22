@@ -352,6 +352,9 @@ export default function RootLayout({
             </Script>
           </>
         )}
+
+        {/* Google AdSense — loaded on all public pages. */}
+        <link rel="ads.txt" href="/ads.txt" />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <a href="#main-content" className="skip-link">Skip to main content</a>

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
+import AdSense from '@/components/AdSense';
 
 export interface StrategyWeek {
     week: number;
@@ -159,6 +160,8 @@ export default function StrategyLayout(c: StrategyContent) {
                         </table>
                     </div>
                 </section>
+
+                <AdSense slot="in-content" />
 
                 {/* Weekly plan */}
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6">

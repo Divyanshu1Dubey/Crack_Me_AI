@@ -10,8 +10,11 @@ from django.http import HttpResponse
 from django.db.models import Sum, Avg, Count, F, Q
 from django.utils import timezone
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
+from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
-                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer)
+                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
+                          StudyTimeBreakdownSerializer, UserQuestSerializer, QuestStreakSerializer,
+                          MistakeNotebookSerializer)
 from tests_engine.models import TestAttempt
 from questions.models import Question
 from accounts.permissions import IsControlTowerAdmin
@@ -983,6 +986,442 @@ class AdminWeakAreaControlView(APIView):
             'cohort_weak_areas': cohort_weak_areas,
             'impact_priorities': impact_priorities,
             'revision_recommendations': recommendations,
+        })
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Student Experience — Study Analytics & Gamification Views
+# ════════════════════════════════════════════════════════════════════════════
+
+class DashboardV3View(APIView):
+    """Combined dashboard: stats + heatmap + streak + announcements."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        from questions.models import Subject
+        # Heatmap data
+        thirty_days_ago = timezone.now().date() - timezone.timedelta(days=30)
+        heatmap_qs = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
+        heatmap = DailyActivitySerializer(heatmap_qs, many=True).data
+        # Streak
+        streak_obj, _ = StudyStreak.objects.get_or_create(user=user)
+        streak_data = StudyStreakSerializer(streak_obj).data
+        # Announcements
+        now = timezone.now()
+        announcements = Announcement.objects.filter(
+            is_active=True, delivery_status='sent',
+        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        announcements_data = AnnouncementSerializer(announcements[:20], many=True).data
+
+        # Subject pie data (study time breakdown for last 7 days)
+        week_ago = timezone.now().date() - timezone.timedelta(days=7)
+        study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
+        study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
+
+        # Active quests
+        quests_qs = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now())
+        quests_data = UserQuestSerializer(quests_qs[:5], many=True).data
+
+        return Response({
+            'heatmap': heatmap,
+            'streak': streak_data,
+            'announcements': announcements_data,
+            'study_time': study_time_data,
+            'active_quests': quests_data,
+        })
+
+
+class DashboardBundleView(APIView):
+    """Phase 3: single-call bundle for the dashboard page."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        cache_key = f"analytics:bundle:{user.id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        from questions.models import Subject, Question
+        # Dashboard stats
+        from analytics.views import StudyStreakSerializer, DailyActivitySerializer
+        # Get recent attempts for the user
+        recent_attempts = TestAttempt.objects.filter(
+            user=user, is_completed=True
+        ).order_by('-started_at')[:10]
+        attempts_data = []
+        for a in recent_attempts:
+            attempts_data.append({
+                'id': a.id,
+                'test_title': a.test.title if a.test else 'Test',
+                'score': a.score,
+                'accuracy': a.accuracy,
+                'correct_count': a.correct_count,
+                'incorrect_count': a.incorrect_count,
+                'total_questions': a.total_questions,
+                'started_at': a.started_at.strftime('%Y-%m-%d %H:%M'),
+                'time_minutes': round((a.time_taken_seconds or 0) / 60, 1),
+            })
+
+        # Question stats
+        question_stats = {
+            'total': Question.objects.count(),
+            'cms': Question.objects.filter(exam_type='cms').count(),
+            'neet_pg': Question.objects.filter(exam_type='neet_pg').count(),
+            'ini_cet': Question.objects.filter(exam_type='ini_cet').count(),
+        }
+
+        # Heatmap — last 30 days
+        thirty_days_ago = timezone.now().date() - timezone.timedelta(days=30)
+        heatmap = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
+        heatmap_data = DailyActivitySerializer(heatmap, many=True).data
+
+        # Streak
+        streak_obj, _ = StudyStreak.objects.get_or_create(user=user)
+        streak_data = StudyStreakSerializer(streak_obj).data
+
+        # Mistake notebook stats
+        mistake_count = MistakeNotebook.objects.filter(user=user).count()
+        flagged_count = MistakeNotebook.objects.filter(user=user, is_flagged=True).count()
+
+        # Active quests
+        quests = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now())
+        quests_data = UserQuestSerializer(quests[:5], many=True).data
+
+        # Study time breakdown (pie chart) — last 7 days
+        week_ago = timezone.now().date() - timezone.timedelta(days=7)
+        study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
+        study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
+
+        # Active quests count
+        active_quests_count = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now()).count()
+
+        result = {
+            'dashboard': {
+                'question_stats': question_stats,
+                'recent_attempts': attempts_data,
+                'total_attempts': recent_attempts.count(),
+                'mistake_notebook_count': mistake_count,
+                'flagged_count': flagged_count,
+                'active_quests_count': active_quests_count,
+                'xp_points': streak_data.get('xp_points', 0),
+                'current_streak': streak_data.get('current_streak', 0),
+                'longest_streak': streak_data.get('longest_streak', 0),
+            },
+            'heatmap': heatmap_data,
+            'streak': streak_data,
+            'study_time': study_time_data,
+            'quests': quests_data,
+        }
+
+        try:
+            cache.set(cache_key, result, 30)
+        except Exception:
+            pass
+        return Response(result)
+
+
+class MistakeNotebookView(APIView):
+    """Get user's mistake notebook entries with optional filters."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = MistakeNotebook.objects.filter(user=request.user).select_related(
+            'question__subject', 'question__topic'
+        )
+        # Filters
+        review_status = request.query_params.get('review_status')
+        is_flagged = request.query_params.get('is_flagged')
+        subject_id = request.query_params.get('subject')
+        topic_id = request.query_params.get('topic')
+
+        if review_status:
+            qs = qs.filter(review_status=review_status)
+        if is_flagged is not None:
+            qs = qs.filter(is_flagged=is_flagged == 'true')
+        if subject_id:
+            qs = qs.filter(question__subject_id=subject_id)
+        if topic_id:
+            qs = qs.filter(question__topic_id=topic_id)
+
+        qs = qs.order_by('-created_at')
+        # Pagination
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        total = qs.count()
+        start = (page - 1) * page_size
+        items = qs[start:start + page_size]
+
+        serializer = MistakeNotebookSerializer(items, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+        })
+
+    def post(self, request):
+        """Add a question to mistake notebook."""
+        question_id = request.data.get('question')
+        if not question_id:
+            return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            question = Question.objects.get(pk=question_id)
+        except Question.DoesNotExist:
+            return Response({'error': 'Question not found'}, status=404)
+
+        obj, created = MistakeNotebook.objects.get_or_create(
+            user=request.user,
+            question=question,
+            defaults={
+                'selected_answer': request.data.get('selected_answer', ''),
+                'correct_answer': question.correct_answer,
+                'is_correct': False,
+                'review_status': 'new',
+                'user_note': request.data.get('user_note', ''),
+            }
+        )
+        if not created:
+            obj.user_note = request.data.get('user_note', obj.user_note)
+            obj.is_flagged = request.data.get('is_flagged', obj.is_flagged)
+            obj.review_status = request.data.get('review_status', obj.review_status)
+            obj.save(update_fields=['user_note', 'is_flagged', 'review_status'])
+        serializer = MistakeNotebookSerializer(obj)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else 200)
+
+
+class MistakeNotebookDetailView(APIView):
+    """Update/delete a mistake notebook entry."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_object(self, request, pk):
+        try:
+            return MistakeNotebook.objects.get(pk=pk, user=request.user)
+        except MistakeNotebook.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, pk):
+        obj = self._get_object(request, pk)
+        serializer = MistakeNotebookSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        obj = self._get_object(request, pk)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MistakeNotebookReviewView(APIView):
+    """Mark a mistake as reviewed (spaced-repetition scheduler)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            obj = MistakeNotebook.objects.get(pk=pk, user=request.user)
+        except MistakeNotebook.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+
+        from django.utils import timezone as tz
+        now = tz.now()
+        obj.review_count += 1
+        obj.last_reviewed_at = now
+        # Spaced repetition: increase interval based on review count
+        if obj.review_count == 1:
+            obj.next_review_at = now + timezone.timedelta(days=1)
+            obj.review_status = 'learning'
+        elif obj.review_count == 2:
+            obj.next_review_at = now + timezone.timedelta(days=3)
+            obj.review_status = 'reviewing'
+        elif obj.review_count >= 3:
+            obj.next_review_at = now + timezone.timedelta(days=7)
+            if obj.review_count >= 5:
+                obj.review_status = 'mastered'
+        obj.save(update_fields=['review_count', 'last_reviewed_at', 'next_review_at', 'review_status'])
+        serializer = MistakeNotebookSerializer(obj)
+        return Response(serializer.data)
+
+
+class MistakeNotebookDueView(APIView):
+    """Get all mistakes due for review today."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        now = timezone.now()
+        due = MistakeNotebook.objects.filter(
+            user=request.user,
+            next_review_at__lte=now,
+        ).exclude(review_status='mastered').select_related(
+            'question__subject', 'question__topic'
+        ).order_by('next_review_at')
+        serializer = MistakeNotebookSerializer(due, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': due.count(),
+        })
+
+
+class UserQuestListView(APIView):
+    """List and create daily quests."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        quests = UserQuest.objects.filter(user=request.user)
+        # Filter by status
+        status_filter = request.query_params.get('status')
+        if status_filter == 'active':
+            quests = quests.filter(is_completed=False, expires_at__gt=timezone.now())
+        elif status_filter == 'completed':
+            quests = quests.filter(is_completed=True)
+        elif status_filter == 'expired':
+            quests = quests.filter(expires_at__lt=timezone.now(), is_completed=False)
+        else:
+            quests = quests.order_by('-quest_date', 'quest_type')
+
+        serializer = UserQuestSerializer(quests[:20], many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new quest (admin or system-generated)."""
+        if not request.user.is_admin:
+            return Response({'error': 'Admin only'}, status=403)
+        serializer = UserQuestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UserQuestDetailView(APIView):
+    """Update/complete a quest."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_object(self, request, pk):
+        try:
+            return UserQuest.objects.get(pk=pk, user=request.user)
+        except UserQuest.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, pk):
+        obj = self._get_object(request, pk)
+        serializer = UserQuestSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        # Track completion
+        if serializer.validated_data.get('is_completed') and not obj.is_completed:
+            obj.completed_at = timezone.now()
+            # Award XP
+            streak_obj, _ = QuestStreak.objects.get_or_create(user=request.user)
+            streak_obj.total_xp_earned += obj.xp_reward
+            streak_obj.total_quests_completed += 1
+            if obj.quest_date == timezone.now().date():
+                streak_obj.current_streak += 1
+            streak_obj.longest_streak = max(streak_obj.longest_streak, streak_obj.current_streak)
+            streak_obj.last_quest_date = obj.quest_date
+            streak_obj.save(update_fields=['total_xp_earned', 'total_quests_completed',
+                                          'current_streak', 'longest_streak', 'last_quest_date'])
+            # Also add to main StudyStreak
+            study_streak, _ = StudyStreak.objects.get_or_create(user=request.user)
+            study_streak.add_xp(obj.xp_reward)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        obj = self._get_object(request, pk)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class QuestStreakView(APIView):
+    """Get/update quest streak info."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        streak, _ = QuestStreak.objects.get_or_create(user=request.user)
+        serializer = QuestStreakSerializer(streak)
+        return Response(serializer.data)
+
+
+class QuestStreakFreezeView(APIView):
+    """Toggle streak freeze."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        freeze = bool(request.data.get('streak_frozen', True))
+        streak, _ = QuestStreak.objects.get_or_create(user=request.user)
+        streak.streak_frozen = freeze
+        streak.save(update_fields=['streak_frozen'])
+        serializer = QuestStreakSerializer(streak)
+        return Response(serializer.data)
+
+
+class StudyTimeView(APIView):
+    """Record and retrieve study time per subject."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = StudyTimeBreakdown.objects.filter(user=request.user)
+        # Date range filter
+        start = request.query_params.get('start')
+        end = request.query_params.get('end')
+        if start:
+            qs = qs.filter(date__gte=start)
+        if end:
+            qs = qs.filter(date__lte=end)
+
+        serializer = StudyTimeBreakdownSerializer(qs, many=True)
+        # Aggregate totals
+        totals = qs.values('subject').annotate(
+            total_seconds=Sum('seconds'),
+            total_questions=Sum('question_count'),
+        )
+        return Response({
+            'breakdown': serializer.data,
+            'totals': list(totals),
+        })
+
+    def post(self, request):
+        subject_id = request.data.get('subject')
+        seconds = int(request.data.get('seconds', 0))
+        question_count = int(request.data.get('question_count', 0))
+        date_str = request.data.get('date') or timezone.now().date().isoformat()
+
+        from questions.models import Subject
+        try:
+            subject = Subject.objects.get(pk=subject_id)
+        except Subject.DoesNotExist:
+            return Response({'error': 'Subject not found'}, status=404)
+
+        obj, _ = StudyTimeBreakdown.objects.get_or_create(
+            user=request.user, subject=subject, date=date_str,
+            defaults={'seconds': 0, 'question_count': 0},
+        )
+        obj.seconds += seconds
+        obj.question_count += question_count
+        obj.save(update_fields=['seconds', 'question_count'])
+        serializer = StudyTimeBreakdownSerializer(obj)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class MistakeStatsView(APIView):
+    """Aggregate stats for the mistake notebook dashboard widget."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        total = MistakeNotebook.objects.filter(user=user).count()
+        by_status = {}
+        for key, _ in MistakeNotebook.REVIEW_STATUS_CHOICES:
+            by_status[key] = MistakeNotebook.objects.filter(user=user, review_status=key).count()
+        flagged = MistakeNotebook.objects.filter(user=user, is_flagged=True).count()
+        due_today = MistakeNotebook.objects.filter(
+            user=user, next_review_at__lte=timezone.now()
+        ).exclude(review_status='mastered').count()
+        return Response({
+            'total': total,
+            'by_status': by_status,
+            'flagged': flagged,
+            'due_today': due_today,
         })
 
 

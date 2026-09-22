@@ -9,6 +9,7 @@ router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
 router.register(r'exam-tracks', views.ExamTrackViewSet, basename='examtrack')
 router.register(r'images', views.QuestionImageViewSet, basename='question-image')
+router.register(r'notes', views.TopicNoteViewSet, basename='topic-note')
 router.register(r'', views.QuestionViewSet, basename='question')
 
 # NOTE: Explicit paths must come BEFORE router.urls because the router's
@@ -33,6 +34,25 @@ urlpatterns = [
     # render container doesn't ship the local PNGs in git. This view
     # streams the QuestionImage.file binary through Django instead.
     path('images/<int:image_id>/serve/', views.QuestionImageServeView.as_view(), name='question-image-serve'),
+
+    # ─── Student Experience — Study Analytics & Gamification ───
+    # Mistake Notebook
+    path('mistake-notebook/', views.MistakeNotebookStudentView.as_view(), name='mistake-notebook-list'),
+    path('mistake-notebook/due/', views.MistakeNotebookDueView.as_view(), name='mistake-notebook-due'),
+    path('mistake-notebook/stats/', views.MistakeStatsView.as_view(), name='mistake-notebook-stats'),
+    path('mistake-notebook/<int:pk>/', views.MistakeNotebookDetailView.as_view(), name='mistake-notebook-detail'),
+    path('mistake-notebook/<int:pk>/review/', views.MistakeNotebookReviewView.as_view(), name='mistake-notebook-review'),
+    # Study Time
+    path('study-time/', views.StudyTimeView.as_view(), name='study-time'),
+    # Quests
+    path('quests/', views.UserQuestListView.as_view(), name='quest-list'),
+    path('quests/<int:pk>/', views.UserQuestDetailView.as_view(), name='quest-detail'),
+    path('quests/streak/', views.QuestStreakView.as_view(), name='quest-streak'),
+    path('quests/streak/freeze/', views.QuestStreakFreezeView.as_view(), name='quest-streak-freeze'),
+    # Topic Notes (manual + AI generation)
+    path('topic-notes/', views.TopicNoteCreateView.as_view(), name='topic-note-create'),
+    path('topic-notes/<int:pk>/generate/', views.AITopicNoteGenerationView.as_view(), name='topic-note-generate'),
+
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 ]

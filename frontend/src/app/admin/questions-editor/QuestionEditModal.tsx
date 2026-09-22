@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { questionsAPI } from '@/lib/api';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { questionsAPI, topicNotesAPI, analyticsAPI } from '@/lib/api';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
+import { Sparkles, ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface QuestionEditModalProps {
   question: any;
   images: QuestionImageLike[];
   onClose: () => void;
   onSaved: (updated: any) => void;
+  onSaveAndNext?: (updated: any) => void;
 }
 
-export default function QuestionEditModal({ question, images: initialImages, onClose, onSaved }: QuestionEditModalProps) {
+export default function QuestionEditModal({ question, images: initialImages, onClose, onSaved, onSaveAndNext }: QuestionEditModalProps) {
   const [form, setForm] = useState({
     question_text: question.question_text ?? '',
     option_a: question.option_a ?? '',
@@ -27,6 +29,18 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     needs_review: !!question.needs_review,
     is_dropped: !!question.is_dropped,
     is_controversial: !!question.is_controversial,
+    // AI-generated explanation fields (all editable by admin)
+    concept_keywords: Array.isArray(question.concept_keywords) ? question.concept_keywords.join(', ') : (question.concept_keywords ?? ''),
+    book_name: question.book_name ?? '',
+    chapter: question.chapter ?? '',
+    page_number: question.page_number ?? '',
+    reference_text: question.reference_text ?? '',
+    shortcut_tip: question.shortcut_tip ?? '',
+    why_correct: question.why_correct ?? '',
+    why_wrong_a: question.why_wrong_a ?? '',
+    why_wrong_b: question.why_wrong_b ?? '',
+    why_wrong_c: question.why_wrong_c ?? '',
+    why_wrong_d: question.why_wrong_d ?? '',
   });
   const [images, setImages] = useState<QuestionImageLike[]>(initialImages);
   const [updatedAt, setUpdatedAt] = useState<string>(question.updated_at ?? '');
@@ -34,7 +48,49 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<any | null>(null);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuccess, setAiSuccess] = useState<string | null>(null);
+  const [aiGeneratedFields, setAiGeneratedFields] = useState<string[]>([]);
   const fieldRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const formRef = useRef(form);
+  formRef.current = form;
+
+  // Keyboard shortcuts for fast sequential processing:
+  //   Ctrl/Cmd + S  → Save
+  //   Ctrl/Cmd + →  → Save and Next question
+  //   Ctrl/Cmd + ←  → Save and Previous question
+  //   Escape        → Close (only when not editing a text field)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isEditing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as HTMLElement).isContentEditable);
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        save(false);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight') {
+        e.preventDefault();
+        save(false);
+        if (onSaveAndNext) onSaveAndNext(form);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        save(false);
+        window.dispatchEvent(new CustomEvent('admin-qeditor:prev'));
+        return;
+      }
+      if (e.key === 'Escape' && !isEditing) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [saving, onClose]);
 
   // Pre-compute resolved image HTML for every field that supports images.
   // The public practice page mirrors this same pattern.
@@ -53,6 +109,44 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     () => `${question.id}:${images.map((i) => i.id).join('|')}`,
     [question.id, images],
   );
+
+  // Reset form when a new question is opened (e.g. Save & Next)
+  useEffect(() => {
+    setForm({
+      question_text: question.question_text ?? '',
+      option_a: question.option_a ?? '',
+      option_b: question.option_b ?? '',
+      option_c: question.option_c ?? '',
+      option_d: question.option_d ?? '',
+      correct_answer: question.correct_answer ?? 'A',
+      explanation: question.explanation ?? '',
+      mnemonic: question.mnemonic ?? '',
+      concept_explanation: question.concept_explanation ?? '',
+      difficulty: question.difficulty ?? 'medium',
+      topic: question.topic ?? null,
+      needs_review: !!question.needs_review,
+      is_dropped: !!question.is_dropped,
+      is_controversial: !!question.is_controversial,
+      concept_keywords: Array.isArray(question.concept_keywords) ? question.concept_keywords.join(', ') : (question.concept_keywords ?? ''),
+      book_name: question.book_name ?? '',
+      chapter: question.chapter ?? '',
+      page_number: question.page_number ?? '',
+      reference_text: question.reference_text ?? '',
+      shortcut_tip: question.shortcut_tip ?? '',
+      why_correct: question.why_correct ?? '',
+      why_wrong_a: question.why_wrong_a ?? '',
+      why_wrong_b: question.why_wrong_b ?? '',
+      why_wrong_c: question.why_wrong_c ?? '',
+      why_wrong_d: question.why_wrong_d ?? '',
+    });
+    setUpdatedAt(question.updated_at ?? '');
+    setAiGenerating(false);
+    setAiError(null);
+    setAiSuccess(null);
+    setAiGeneratedFields([]);
+    setConflict(null);
+    setError(null);
+  }, [question.id]);
 
   const previewHtml = useMemo(
     () => resolveImageTokens(form.question_text, images, cacheKey),
@@ -337,6 +431,8 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       const fields = [
         'question_text', 'option_a', 'option_b', 'option_c',
         'option_d', 'explanation', 'mnemonic', 'concept_explanation',
+        'reference_text', 'shortcut_tip', 'why_correct',
+        'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
       ] as const;
       for (const k of fields) {
         const v = (cleanedForm as any)[k];
@@ -356,7 +452,14 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           },
         );
       }
-      const payload = { ...cleanedForm, admin_edited: true };
+      const payload = {
+        ...cleanedForm,
+        admin_edited: true,
+        concept_keywords: form.concept_keywords,
+        book_name: form.book_name,
+        chapter: form.chapter,
+        page_number: form.page_number,
+      };
       // Only send If-Match when we have a real updated_at. List-serialised rows
       // don't include updated_at, so updatedAt may be '' on first edit — in that
       // case skip the optimistic lock and let the server accept the save.
@@ -383,7 +486,56 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
   }
 
-  function reloadFromConflict() {
+  async function saveAndNext() {
+    setSaving(true);
+    setError(null);
+    setConflict(null);
+    try {
+      const cleanedForm: typeof form = { ...form };
+      const textFields = [
+        'question_text', 'option_a', 'option_b', 'option_c',
+        'option_d', 'explanation', 'mnemonic', 'concept_explanation',
+        'reference_text', 'shortcut_tip', 'why_correct',
+        'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+      ] as const;
+      for (const k of textFields) {
+        const v = (cleanedForm as any)[k];
+        if (typeof v !== 'string') continue;
+        (cleanedForm as any)[k] = v.replace(
+          /\/media\/fixtures\/images\/([^/\s)\]]+)\/([^\s)\]]+)/g,
+          (_match: string, exam: string, relPath: string) => {
+              const base = relPath.split('/').pop() || relPath;
+              const match = images.find((img) => (img.file || img.url || '').split('/').pop()?.toLowerCase() === base.toLowerCase());
+              if (match) return `[[img:${match.id}]]`;
+              return `[image unavailable: ${base}]`;
+          },
+        );
+      }
+      const payload = {
+        ...cleanedForm,
+        admin_edited: true,
+        concept_keywords: form.concept_keywords,
+        book_name: form.book_name,
+        chapter: form.chapter,
+        page_number: form.page_number,
+      };
+      const opts = !updatedAt ? undefined : { ifMatch: updatedAt };
+      const res = await questionsAPI.update(question.id, payload, opts);
+      setUpdatedAt(res.data.updated_at ?? updatedAt);
+      onSaved(res.data);
+      if (onSaveAndNext) onSaveAndNext(res.data);
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        setConflict(e.response.data.current);
+      } else {
+        setError(e?.response?.data?.detail || e?.response?.data?.error || e?.message || 'Save failed.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reloadFromConflict() {
     if (!conflict) return;
     setForm({
       question_text: conflict.question_text ?? '',
@@ -400,9 +552,64 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       needs_review: !!conflict.needs_review,
       is_dropped: !!conflict.is_dropped,
       is_controversial: !!conflict.is_controversial,
+      concept_keywords: Array.isArray(conflict.concept_keywords) ? conflict.concept_keywords.join(', ') : (conflict.concept_keywords ?? ''),
+      book_name: conflict.book_name ?? '',
+      chapter: conflict.chapter ?? '',
+      page_number: conflict.page_number ?? '',
+      reference_text: conflict.reference_text ?? '',
+      shortcut_tip: conflict.shortcut_tip ?? '',
+      why_correct: conflict.why_correct ?? '',
+      why_wrong_a: conflict.why_wrong_a ?? '',
+      why_wrong_b: conflict.why_wrong_b ?? '',
+      why_wrong_c: conflict.why_wrong_c ?? '',
+      why_wrong_d: conflict.why_wrong_d ?? '',
     });
     setUpdatedAt(conflict.updated_at);
     setConflict(null);
+  }
+
+  async function generateAIExplanation() {
+    setAiGenerating(true);
+    setAiError(null);
+    setAiSuccess(null);
+    setAiGeneratedFields([]);
+    try {
+      const res = await questionsAPI.generateExplanation(question.id, {
+        correct_answer: form.correct_answer,
+        regenerate_if_exists: false,
+      });
+      if (res.data?.detail?.includes('already') || res.status === 409) {
+        if (window.confirm(
+          'This question already has an explanation. Overwrite with AI-generated content?'
+        )) {
+          const retry = await questionsAPI.generateExplanation(question.id, {
+            correct_answer: form.correct_answer,
+            regenerate_if_exists: true,
+          });
+          applyGeneratedFields(retry.data);
+        }
+        setAiGenerating(false);
+        return;
+      }
+      applyGeneratedFields(res.data);
+    } catch (e: any) {
+      setAiError(e?.response?.data?.detail || e?.response?.data?.error || e?.message || 'AI generation failed.');
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  function applyGeneratedFields(data: any) {
+    const generated = data?.generated_fields || {};
+    const updated: any = { ...form };
+    for (const [key, value] of Object.entries(generated)) {
+      if (key in updated) {
+        (updated as any)[key] = value;
+      }
+    }
+    setForm(updated);
+    setAiGeneratedFields(Object.keys(generated));
+    setAiSuccess(`Generated ${Object.keys(generated).length} fields. Review and Save.`);
   }
 
   return (
@@ -537,6 +744,101 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           {renderInlinePreview(form.concept_explanation)}
         </label>
 
+        {/* Why correct + why wrong grid */}
+        <div className="border-t border-gray-200 dark:border-slate-700 pt-3 space-y-3">
+          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">AI Explanation Details</p>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Why Correct Answer is Right</span>
+            <textarea
+              ref={(el) => { fieldRefs.current['why_correct'] = el; }}
+              className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('why_correct') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+              rows={2}
+              value={form.why_correct}
+              onChange={(e) => setForm({ ...form, why_correct: e.target.value })}
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {(['a','b','c','d'] as const).map((opt) => {
+              const fieldKey = `why_wrong_${opt}` as keyof typeof form;
+              const fieldLabel = `Why Option ${opt.toUpperCase()} is Wrong`;
+              const isCorrect = form.correct_answer === opt.toUpperCase();
+              return (
+                <label key={opt} className="block">
+                  <span className={"text-sm font-medium " + (isCorrect ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
+                    {fieldLabel} {isCorrect ? '(correct answer)' : ''}
+                  </span>
+                  <textarea
+                    ref={(el) => { fieldRefs.current[fieldKey] = el; }}
+                    className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes(fieldKey) ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+                    rows={2}
+                    value={form[fieldKey] as string}
+                    onChange={(e) => setForm({ ...form, [fieldKey]: e.target.value })}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Textbook reference fields */}
+        <div className="border-t border-gray-200 dark:border-slate-700 pt-3 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Book Name</span>
+            <input
+              className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('book_name') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+              value={form.book_name}
+              onChange={(e) => setForm({ ...form, book_name: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Chapter</span>
+            <input
+              className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('chapter') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+              value={form.chapter}
+              onChange={(e) => setForm({ ...form, chapter: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Page Number</span>
+            <input
+              className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded p-2 mt-1 text-sm"
+              value={form.page_number}
+              onChange={(e) => setForm({ ...form, page_number: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Reference Text</span>
+            <textarea
+              ref={(el) => { fieldRefs.current['reference_text'] = el; }}
+              className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('reference_text') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+              rows={2}
+              value={form.reference_text}
+              onChange={(e) => setForm({ ...form, reference_text: e.target.value })}
+            />
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Shortcut Tip (exam-solving strategy)</span>
+          <textarea
+            ref={(el) => { fieldRefs.current['shortcut_tip'] = el; }}
+            className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('shortcut_tip') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+            rows={2}
+            value={form.shortcut_tip}
+            onChange={(e) => setForm({ ...form, shortcut_tip: e.target.value })}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Concept Keywords (comma-separated)</span>
+          <input
+            className={"w-full border rounded p-2 mt-1 text-sm " + (aiGeneratedFields.includes('concept_keywords') ? 'ring-2 ring-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100')}
+            value={form.concept_keywords}
+            onChange={(e) => setForm({ ...form, concept_keywords: e.target.value })}
+            placeholder="e.g. hypertension, renal artery stenosis, ACE inhibitor"
+          />
+        </label>
+
         <div className="flex gap-4 text-sm text-gray-900 dark:text-slate-100">
           {(['needs_review', 'is_dropped', 'is_controversial'] as const).map((k) => (
             <label key={k} className="flex items-center gap-2 text-gray-900 dark:text-slate-100">
@@ -600,11 +902,47 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-700">
-          <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
-          <button onClick={() => save(false)} disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+        <div className="flex justify-between gap-2 pt-3 border-t border-gray-200 dark:border-slate-700">
+          <div className="flex gap-2 items-center">
+            {aiSuccess && (
+              <span className="text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded">
+                {aiSuccess}
+              </span>
+            )}
+            {aiError && (
+              <span className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded max-w-md truncate" title={aiError}>
+                {aiError}
+              </span>
+            )}
+            {aiGeneratedFields.length > 0 && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                Populated: {aiGeneratedFields.join(', ')}
+              </span>
+            )}
+            <button
+              onClick={generateAIExplanation}
+              disabled={aiGenerating || saving}
+              title="Use Medical AI to generate explanation based on the selected correct answer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              <Sparkles />
+              {aiGenerating ? 'Generating…' : 'AI Generate Explanation'}
+            </button>
+            {aiGenerating && (
+              <span className="text-xs text-gray-500 dark:text-slate-400 animate-pulse">This may take 15–30 seconds…</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
+            <button onClick={() => save(false)} disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {onSaveAndNext && (
+              <button onClick={() => saveAndNext()} disabled={saving || aiGenerating} className="bg-indigo-600 text-white px-4 py-2 rounded disabled:opacity-50 flex items-center gap-1">
+                Save &amp; Next <span className="text-xs opacity-75">→</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

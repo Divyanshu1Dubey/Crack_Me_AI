@@ -21,7 +21,7 @@
  */
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { FormattedText } from "@/components/FormattedText";
+import { FormattedText, FormattedOptionText } from "@/components/FormattedText";
 import RecallBadge from "@/components/recall/RecallBadge";
 import ImageGallery from "@/components/recall/ImageGallery";
 import ProvenanceList from "@/components/recall/ProvenanceList";
@@ -98,6 +98,7 @@ function PracticeInner() {
     const [queue, setQueue] = useState<number[]>([]);
     const [idx, setIdx] = useState(0);
     const [q, setQ] = useState<QRow | null>(null);
+    const [qImages, setQImages] = useState<Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }>>([]);
     const [eliminated, setEliminated] = useState<string[]>([]);
     const [revealed, setRevealed] = useState(false);
     const [picked, setPicked] = useState<string>("");
@@ -179,14 +180,19 @@ function PracticeInner() {
     const qid = queue[idx];
 
     useEffect(() => {
-        if (!qid) { setQ(null); return; }
+        if (!qid) { setQ(null); setQImages([]); return; }
         let alive = true;
         (async () => {
             try {
                 const r = await api.get(`/api/questions/${qid}/`);
-                if (alive) setQ(r.data);
+                if (alive) {
+                    setQ(r.data);
+                    // Load images so [[img:N]] tokens resolve inline
+                    const imgs = r.data?.images || [];
+                    setQImages(imgs);
+                }
             } catch {
-                if (alive) setQ(null);
+                if (alive) { setQ(null); setQImages([]); }
             }
         })();
         setRevealed(false); setPicked(""); setEliminated([]);
@@ -345,7 +351,7 @@ function PracticeInner() {
                     </div>
 
                     <div className="my-3">
-                        <FormattedText text={q.question_text || ""} />
+                        <FormattedText text={q.question_text || ""} images={qImages} />
                     </div>
 
                     {q.id ? (
@@ -379,7 +385,7 @@ function PracticeInner() {
                                                             wasPicked ? "border-rose-500 bg-rose-900/20" : "border-slate-700/40") : "border-slate-700/40 hover:bg-slate-800/60"}`}
                                 >
                                     <span className="rounded bg-slate-700/60 px-2 py-0.5 text-sm font-bold">{o.k}</span>
-                                    <FormattedText text={o.v} />
+                                    <FormattedOptionText text={o.v} images={qImages} />
                                 </button>
                             );
                         })}
@@ -389,6 +395,7 @@ function PracticeInner() {
                         questionId={q.id}
                         fallbackExplanation={q.explanation}
                         open={revealed}
+                        images={qImages}
                     />
 
                     <div className="mt-4">

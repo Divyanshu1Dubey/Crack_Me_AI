@@ -19,9 +19,10 @@ export default function ConsentBanner() {
     const [mounted, setMounted] = useState(false);
     const [visible, setVisible] = useState(false);
     const [showManage, setShowManage] = useState(false);
-    const [draft, setDraft] = useState<{ analytics: boolean; marketing: boolean }>({
+    const [draft, setDraft] = useState<{ analytics: boolean; marketing: boolean; advertising: boolean }>({
         analytics: false,
         marketing: false,
+        advertising: false,
     });
 
     useEffect(() => {
@@ -48,11 +49,14 @@ export default function ConsentBanner() {
     };
     const saveManage = () => {
         consent.update('analytics', draft.analytics);
-        consent.update('marketing', draft.marketing);
+        // Advertising consent maps to the 'marketing' category so gtag
+        // receives ad_storage=granted. Product analytics (PostHog) is
+        // bundled here to reduce banner complexity.
+        consent.update('marketing', draft.advertising);
         const next: ConsentState = {
             essential: true,
             analytics: draft.analytics,
-            marketing: draft.marketing,
+            marketing: draft.advertising,
             updated_at: new Date().toISOString(),
         };
         setVisible(false);
@@ -85,8 +89,8 @@ export default function ConsentBanner() {
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                         We use cookies to keep you signed in, remember your
                         preferences, and — only with your permission — measure
-                        traffic so we can improve CrackCMS. You can change your
-                        choice any time in the{' '}
+                        traffic and serve relevant ads from Google AdSense.
+                        You can change your choice any time in the{' '}
                         <Link href="/cookie-policy" className="text-primary underline">
                             cookie policy
                         </Link>
@@ -141,6 +145,22 @@ export default function ConsentBanner() {
                                     <span className="block text-muted-foreground">
                                         PostHog funnels, retention cohorts, session
                                         replay (for staff debugging).
+                                    </span>
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-2 text-xs">
+                                <input
+                                    type="checkbox"
+                                    checked={draft.advertising}
+                                    onChange={(e) =>
+                                        setDraft((d) => ({ ...d, advertising: e.target.checked }))
+                                    }
+                                    className="mt-0.5 h-3.5 w-3.5"
+                                />
+                                <span>
+                                    <strong className="text-foreground">Advertising</strong>
+                                    <span className="block text-muted-foreground">
+                                        Google AdSense — relevant ads help keep CrackCMS free.
                                     </span>
                                 </span>
                             </label>

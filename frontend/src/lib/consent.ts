@@ -142,9 +142,9 @@ export const consent = {
                 'update',
                 {
                     analytics_storage: s.analytics ? 'granted' : 'denied',
-                    ad_storage: 'denied',
-                    ad_user_data: 'denied',
-                    ad_personalization: 'denied',
+                    ad_storage: s.marketing ? 'granted' : 'denied',
+                    ad_user_data: s.marketing ? 'granted' : 'denied',
+                    ad_personalization: s.marketing ? 'granted' : 'denied',
                 },
             );
         } catch {

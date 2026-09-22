@@ -11,14 +11,16 @@
  */
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import { FormattedText } from "@/components/FormattedText";
 
 interface Props {
   questionId: number;
   fallbackExplanation?: string;
   open: boolean;
+  images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }>;
 }
 
-export default function RevealExplanation({ questionId, fallbackExplanation, open }: Props) {
+export default function RevealExplanation({ questionId, fallbackExplanation, open, images }: Props) {
   const [ai, setAi] = useState<string>("");
   const [clinical, setClinical] = useState<string>("");
   const [memory, setMemory] = useState<string>("");
@@ -60,7 +62,7 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
       {fallbackExplanation ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-300">Explanation</p>
-          <p className="whitespace-pre-wrap leading-relaxed">{fallbackExplanation}</p>
+          <FormattedText text={fallbackExplanation} images={images} />
         </div>
       ) : null}
 

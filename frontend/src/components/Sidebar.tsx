@@ -59,6 +59,8 @@ const navSections: NavSection[] = [
             { href: '/tests', iconName: 'tests-check', label: 'Tests', premium: true, premiumFeature: 'Mock Tests' },
             { href: '/flashcards', iconName: 'flashcards-cards', label: 'Flashcards', premium: true, premiumFeature: 'Flashcards' },
             { href: '/simulator', iconName: 'simulator-target', label: 'CMS Simulator', premium: true, premiumFeature: 'Mock Tests' },
+            { href: '/mistake-notebook', iconName: 'book-open', label: 'Mistake Notebook' },
+            { href: '/study-time', iconName: 'clock', label: 'Study Time' },
         ]
     },
     {
@@ -91,6 +93,8 @@ const navSections: NavSection[] = [
             { href: '/subscription', iconName: 'subscription-gold', label: 'Subscription' },
             { href: '/feedback', iconName: 'feedback-chat', label: 'Feedback' },
             { href: '/contact', iconName: 'contact-support', label: 'Contact Us' },
+            { href: '/quests', iconName: 'flame', label: 'Quests' },
+            { href: '/topic-notes', iconName: 'file-text', label: 'Topic Notes' },
         ]
     },
 ];
