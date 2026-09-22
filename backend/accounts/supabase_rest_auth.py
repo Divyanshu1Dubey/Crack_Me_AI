@@ -271,26 +271,17 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             return configured
 
         # ── Fix P1 (2026-09-23): admin-role loss bug ─────────────────────
-        # `is_admin_user` is the authoritative privilege level for THIS login.
-        # It comes from Supabase app_metadata (trusted) or the env allowlist
-        # (also trusted).  We NEVER let a stale/missing Supabase field or a
-        # missing env var silently demote an existing admin.
+        # `is_admin_user` is the authoritative privilege level for THIS login
+        # from trusted sources (Supabase app_metadata or env allowlist).
         admin_allowlist = _admin_email_allowlist()
         is_admin_from_metadata = _is_admin_from_metadata(app_metadata)
         is_admin_from_allowlist = email in admin_allowlist
         is_admin_user = is_admin_from_metadata or is_admin_from_allowlist
 
-        # Cross-check Django DB.  If the DB already has this user as admin
-        # (via role or is_superuser), keep admin — never demote.  This
-        # protects against:
-        #   • first signup when allowlist wasn't set yet
-        #   • Supabase app_metadata being cleared/reset
-        #   • transient env-var absence on a given deploy
-        # The allowlist is the ultimate authority: if the email matches,
-        # the user MUST be admin regardless of DB state or metadata.
-        db_is_admin = bool(user.is_admin or user.is_superuser)
-        if db_is_admin or is_admin_from_allowlist:
-            is_admin_user = True
+        # NOTE: we cannot check the DB yet because `get_or_create` happens
+        # below.  For new users, `is_admin_user` is the sole authority.
+        # For existing users, the `else` branch preserves admin if the DB
+        # already has it — never demote, regardless of metadata/allowlist.
 
         desired_role = "admin" if is_admin_user else "student"
 
@@ -341,15 +332,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             except Exception:
                 pass
         else:
-            # ── Fix P1 (2026-09-23): never demote an existing admin ──────
-            # The cross-check above already ensures `is_admin_user` is True
-            # if the DB says admin OR the allowlist matches.  If the DB
-            # disagrees, correct it; otherwise preserve existing state.
-            admin_allowlist = _admin_email_allowlist()
+            # Never demote an existing admin.  If the DB already has admin
+            # privileges, keep them regardless of metadata/allowlist state
+            # for this particular login.
             db_is_admin = bool(user.is_admin or user.is_superuser)
-
-            # Final guard: never demote.
-            if db_is_admin and not is_admin_user:
+            if db_is_admin:
                 is_admin_user = True
 
             desired_role = "admin" if is_admin_user else "student"
