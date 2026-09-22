@@ -913,14 +913,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # admin-curated showcase questions in their practice queue.
         # Premium users and admins see the full queue.
         user = request.user
-        if (
-            ids
-            and user is not None
+        is_free_user = (
+            user is not None
             and getattr(user, 'is_authenticated', False)
             and not getattr(user, 'is_admin', False)
             and not getattr(user, 'is_superuser', False)
             and not _is_premium(user)
-        ):
+        )
+        if is_free_user and ids:
             showcase_ids = set(
                 FreeShowcaseQuestion.objects.filter(
                     question_id__in=ids
@@ -941,7 +941,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
             "mode": mode,
             "count": len(ids),
             "question_ids": ids,
-            "freemium": not _is_premium(user) if user and getattr(user, 'is_authenticated', False) else False,
+            "freemium": is_free_user,
+            "showcase_count": FreeShowcaseQuestion.objects.count() if is_free_user else 0,
         })
 
     @action(detail=True, methods=['get'], url_path='ai/concept',

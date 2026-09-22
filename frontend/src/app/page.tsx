@@ -1345,6 +1345,50 @@ export default function LandingPage() {
         </div>
       </section>
 
+          {/* Free tier section */}
+          <section className="relative px-4 py-16 sm:px-6 overflow-hidden">
+            <div className="mx-auto max-w-5xl">
+              <div className="relative rounded-3xl border-2 border-primary/30 bg-card/60 p-8 sm:p-12 shadow-2xl overflow-hidden backdrop-blur-xl">
+                <div className="absolute right-0 top-0 h-64 w-64 bg-primary/5 rounded-full blur-3xl opacity-60 pointer-events-none" />
+                <div className="relative z-10">
+                  <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border border-primary/30 font-bold uppercase tracking-wider text-[10px] py-1 px-3 mb-6">
+                    <GraduationCap className="w-3.5 h-3.5 mr-1 inline" /> Start Free — No Payment Required
+                  </Badge>
+                  <h2 className="font-display text-2xl sm:text-4xl font-black text-foreground tracking-tight leading-tight mb-4">
+                    Start Practicing in 30 Seconds. No Credit Card.
+                  </h2>
+                  <p className="text-muted-foreground text-sm sm:text-base leading-relaxed mb-8 max-w-2xl">
+                    Every new account gets <strong className="text-foreground">20 curated practice questions</strong> absolutely free.
+                    Experience the full platform before you decide. No paywalls, no timers — just real UPSC CMS practice.
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {[
+                      { icon: FileText, title: "20 Free PYQs", desc: "Hand-picked high-yield questions across subjects. Admin-curated." },
+                      { icon: Brain, title: "Full Explanations", desc: "Every free question comes with a detailed, medically-reviewed explanation." },
+                      { icon: ShieldCheck, title: "Track Progress", desc: "Bookmarks, streaks, and topic analytics — all free." }
+                    ].map((item, i) => (
+                      <div key={i} className="flex gap-3 rounded-2xl border-2 border-border/60 bg-muted/20 p-4">
+                        <item.icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-sm text-foreground">{item.title}</h4>
+                          <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-8 flex flex-wrap gap-3">
+                    <Button size="lg" className="rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold" asChild>
+                      <Link href="/register">Create Free Account</Link>
+                    </Button>
+                    <Button size="lg" variant="outline" className="rounded-2xl border-border/60" asChild>
+                      <Link href="/practice">Try Practice Now</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
       {/* ============================================
           PREMIUM PRICING
       ============================================ */}
