@@ -1,4 +1,5 @@
 from django.urls import path, include
+from django.http import HttpRequest, HttpResponse
 from rest_framework.routers import DefaultRouter
 from . import views
 
@@ -56,7 +57,13 @@ urlpatterns = [
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 
-    # Explicit AI explanation endpoint (DRF @action router quirk fix).
-    # Without this explicit path the nested action returns 404 on some DRF versions.
-    path('<int:pk>/generate-explanation/', views.QuestionViewSet.as_view({'post': 'generate_explanation'}), name='question-generate-explanation'),
+    # Explicit AI explanation endpoint.
+    # Some DRF 3.16 router variants don't route nested @action
+    # on an empty-prefix ViewSet, so this function-based wrapper
+    # guarantees /<pk>/generate-explanation/ always resolves.
+    path('<int:pk>/generate-explanation/', _generate_explanation, name='question-generate-explanation'),
 ]
+
+def _generate_explanation(request: HttpRequest, pk: int) -> HttpResponse:
+    view = QuestionViewSet.as_view({'post': 'generate_explanation'})
+    return view(request, pk=pk)
