@@ -13,6 +13,14 @@ router.register(r'images', views.QuestionImageViewSet, basename='question-image'
 router.register(r'notes', views.TopicNoteViewSet, basename='topic-note')
 router.register(r'', views.QuestionViewSet, basename='question')
 
+# Explicit AI explanation endpoint.
+# Some DRF 3.16 router variants don't route nested @action on an
+# empty-prefix ViewSet, so this function-based wrapper guarantees
+# /<pk>/generate-explanation/ always resolves.
+def _generate_explanation(request: HttpRequest, pk: int) -> HttpResponse:
+    view = views.QuestionViewSet.as_view({'post': 'generate_explanation'})
+    return view(request, pk=pk)
+
 # NOTE: Explicit paths must come BEFORE router.urls because the router's
 # catch-all <pk>/ pattern would otherwise match paths like 'flashcards/'
 urlpatterns = [
@@ -35,8 +43,6 @@ urlpatterns = [
     # render container doesn't ship the local PNGs in git. This view
     # streams the QuestionImage.file binary through Django instead.
     path('images/<int:image_id>/serve/', views.QuestionImageServeView.as_view(), name='question-image-serve'),
-
-    # ─── Student Experience — Study Analytics & Gamification ───
     # Mistake Notebook
     path('mistake-notebook/', views.MistakeNotebookStudentView.as_view(), name='mistake-notebook-list'),
     path('mistake-notebook/due/', views.MistakeNotebookDueView.as_view(), name='mistake-notebook-due'),
@@ -54,16 +60,9 @@ urlpatterns = [
     path('topic-notes/', views.TopicNoteCreateView.as_view(), name='topic-note-create'),
     path('topic-notes/<int:pk>/generate/', views.AITopicNoteGenerationView.as_view(), name='topic-note-generate'),
 
+    # AI explanation endpoint
+    path('<int:pk>/generate-explanation/', _generate_explanation, name='question-generate-explanation'),
+
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
-
-    # Explicit AI explanation endpoint.
-    # Some DRF 3.16 router variants don't route nested @action
-    # on an empty-prefix ViewSet, so this function-based wrapper
-    # guarantees /<pk>/generate-explanation/ always resolves.
-    path('<int:pk>/generate-explanation/', _generate_explanation, name='question-generate-explanation'),
 ]
-
-def _generate_explanation(request: HttpRequest, pk: int) -> HttpResponse:
-    view = QuestionViewSet.as_view({'post': 'generate_explanation'})
-    return view(request, pk=pk)
