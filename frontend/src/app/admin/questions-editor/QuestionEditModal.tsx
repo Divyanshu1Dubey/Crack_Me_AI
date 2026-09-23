@@ -761,11 +761,10 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             {(['a','b','c','d'] as const).map((opt) => {
               const fieldKey = `why_wrong_${opt}` as keyof typeof form;
               const fieldLabel = `Why Option ${opt.toUpperCase()} is Wrong`;
-              const isCorrect = form.correct_answer === opt.toUpperCase();
               return (
                 <label key={opt} className="block">
-                  <span className={"text-sm font-medium " + (isCorrect ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100')}>
-                    {fieldLabel} {isCorrect ? '(correct answer)' : ''}
+                  <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                    {fieldLabel}
                   </span>
                   <textarea
                     ref={(el) => { fieldRefs.current[fieldKey] = el; }}
@@ -939,7 +938,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             </button>
             {onSaveAndNext && (
               <button onClick={() => saveAndNext()} disabled={saving || aiGenerating} className="bg-indigo-600 text-white px-4 py-2 rounded disabled:opacity-50 flex items-center gap-1">
-                Save &amp; Next <span className="text-xs opacity-75">→</span>
+                Save &amp; Next <span className="text-xs opacity-75">&rarr;</span>
               </button>
             )}
           </div>
