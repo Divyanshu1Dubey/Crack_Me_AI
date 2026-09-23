@@ -55,4 +55,8 @@ urlpatterns = [
 
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
+
+    # Explicit AI explanation endpoint (DRF @action router quirk fix).
+    # Without this explicit path the nested action returns 404 on some DRF versions.
+    path('<int:pk>/generate-explanation/', views.QuestionViewSet.as_view({'post': 'generate_explanation'}), name='question-generate-explanation'),
 ]
