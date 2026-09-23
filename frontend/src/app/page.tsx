@@ -513,10 +513,17 @@ export default function LandingPage() {
                 borderColor: 'border-rose-500/30',
                 iconColor: 'text-rose-500',
               },
-            ].map((item, i) => (
-              <div
+            ].map((item, i) => {
+              const hrefs = [
+                '/questions', '/questions', '/ai-tutor',
+                '/tests', '/flashcards', '/analytics',
+              ];
+              const href = hrefs[i] || '#';
+              return (
+              <Link
                 key={i}
-                className="group relative rounded-3xl border-2 border-border/60 bg-card/40 p-6 backdrop-blur-xl transition-all duration-500 hover:scale-[1.02] hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/10 overflow-hidden"
+                href={href}
+                className="group relative rounded-3xl border-2 border-border/60 bg-card/40 p-6 backdrop-blur-xl transition-all duration-500 hover:scale-[1.02] hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/10 overflow-hidden block"
               >
                 {/* Animated gradient background on hover */}
                 <div className={`absolute inset-0 bg-linear-to-br ${item.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
@@ -545,8 +552,9 @@ export default function LandingPage() {
                     Learn more <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
-              </div>
-            ))}
+              </Link>
+              );
+            })}
           </div>
         </div>
       </section>

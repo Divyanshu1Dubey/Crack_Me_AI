@@ -192,6 +192,12 @@ export default function AdminQuestionsEditorPage() {
   const fetchQuestions = async () => {
     setLoading(true);
     setPageError(null);
+    // Guard: skip API call if not yet authenticated or not admin
+    if (!isAuthenticated || !isAdmin) {
+      setQuestions([]);
+      setLoading(false);
+      return;
+    }
     try {
       const params: any = { page, page_size: 20, ordering: 'display_number' };
       if (needsReview) params.needs_review = true;
@@ -206,13 +212,18 @@ export default function AdminQuestionsEditorPage() {
       if (search) params.search = search;
 
       const res = await questionsAPI.list(params);
-      setQuestions(res.data.results || res.data); // Handle both paginated and non-paginated responses
-      if (res.data.count !== undefined) {
-        setTotalPages(Math.max(1, Math.ceil(res.data.count / 20)));
+      const results = res.data?.results || res.data || [];
+      setQuestions(Array.isArray(results) ? results : []);
+      const count = res.data?.count;
+      if (typeof count === 'number' && count > 0) {
+        setTotalPages(Math.max(1, Math.ceil(count / 20)));
+      } else if (Array.isArray(results)) {
+        setTotalPages(1);
       }
-    } catch (error) {
-      console.error(error);
-      setPageError('Failed to load questions. Check your connection and try again.');
+    } catch (error: any) {
+      console.error('Failed to load questions:', error);
+      const detail = error?.response?.data?.detail || error?.message || '';
+      setPageError(detail || 'Failed to load questions. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
