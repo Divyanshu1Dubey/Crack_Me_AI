@@ -110,43 +110,67 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     [question.id, images],
   );
 
-  // Reset form when a new question is opened (e.g. Save & Next)
+  // When the parent opens a new question (Save & Next, prev/next nav),
+  // re-fetch the full detail payload. The list endpoint may strip
+  // explanation fields depending on auth context / serializer, so
+  // without this step the admin sees empty textareas for questions
+  // that were AI-explained from another session.
+  const [loadingDetail, setLoadingDetail] = useState(false);
   useEffect(() => {
-    setForm({
-      question_text: question.question_text ?? '',
-      option_a: question.option_a ?? '',
-      option_b: question.option_b ?? '',
-      option_c: question.option_c ?? '',
-      option_d: question.option_d ?? '',
-      correct_answer: question.correct_answer ?? 'A',
-      explanation: question.explanation ?? '',
-      mnemonic: question.mnemonic ?? '',
-      concept_explanation: question.concept_explanation ?? '',
-      difficulty: question.difficulty ?? 'medium',
-      topic: question.topic ?? null,
-      needs_review: !!question.needs_review,
-      is_dropped: !!question.is_dropped,
-      is_controversial: !!question.is_controversial,
-      concept_keywords: Array.isArray(question.concept_keywords) ? question.concept_keywords.join(', ') : (question.concept_keywords ?? ''),
-      book_name: question.book_name ?? '',
-      chapter: question.chapter ?? '',
-      page_number: question.page_number ?? '',
-      reference_text: question.reference_text ?? '',
-      shortcut_tip: question.shortcut_tip ?? '',
-      why_correct: question.why_correct ?? '',
-      why_wrong_a: question.why_wrong_a ?? '',
-      why_wrong_b: question.why_wrong_b ?? '',
-      why_wrong_c: question.why_wrong_c ?? '',
-      why_wrong_d: question.why_wrong_d ?? '',
-    });
-    setUpdatedAt(question.updated_at ?? '');
-    setAiGenerating(false);
-    setAiError(null);
-    setAiSuccess(null);
-    setAiGeneratedFields([]);
-    setConflict(null);
-    setError(null);
-  }, [question.id]);
+    let cancelled = false;
+    async function loadFullQuestion() {
+      if (!question?.id) return;
+      // If the prop already has an explanation, the list serializer
+      // probably included it — skip the extra fetch.
+      if (question.explanation || question.concept_explanation || question.mnemonic) {
+        setUpdatedAt(question.updated_at ?? '');
+        return;
+      }
+      setLoadingDetail(true);
+      setError(null);
+      try {
+        const detail = await questionsAPI.get(question.id);
+        if (cancelled) return;
+        const q = detail.data;
+        setForm({
+          question_text: q.question_text ?? '',
+          option_a: q.option_a ?? '',
+          option_b: q.option_b ?? '',
+          option_c: q.option_c ?? '',
+          option_d: q.option_d ?? '',
+          correct_answer: q.correct_answer ?? 'A',
+          explanation: q.explanation ?? '',
+          mnemonic: q.mnemonic ?? '',
+          concept_explanation: q.concept_explanation ?? '',
+          difficulty: q.difficulty ?? 'medium',
+          topic: q.topic ?? null,
+          needs_review: !!q.needs_review,
+          is_dropped: !!q.is_dropped,
+          is_controversial: !!q.is_controversial,
+          concept_keywords: Array.isArray(q.concept_keywords) ? q.concept_keywords.join(', ') : (q.concept_keywords ?? ''),
+          book_name: q.book_name ?? '',
+          chapter: q.chapter ?? '',
+          page_number: q.page_number ?? '',
+          reference_text: q.reference_text ?? '',
+          shortcut_tip: q.shortcut_tip ?? '',
+          why_correct: q.why_correct ?? '',
+          why_wrong_a: q.why_wrong_a ?? '',
+          why_wrong_b: q.why_wrong_b ?? '',
+          why_wrong_c: q.why_wrong_c ?? '',
+          why_wrong_d: q.why_wrong_d ?? '',
+        });
+        setUpdatedAt(q.updated_at ?? '');
+      } catch (e: any) {
+        if (cancelled) return;
+        console.warn('Failed to fetch full question detail, using prop data:', e);
+        setError(e?.response?.data?.detail || 'Could not load full question data. Using cached data.');
+      } finally {
+        if (!cancelled) setLoadingDetail(false);
+      }
+    }
+    loadFullQuestion();
+    return () => { cancelled = true; };
+  }, [question.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const previewHtml = useMemo(
     () => resolveImageTokens(form.question_text, images, cacheKey),
@@ -577,6 +601,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       const res = await questionsAPI.generateExplanation(question.id, {
         correct_answer: form.correct_answer,
         regenerate_if_exists: false,
+        update_correct_answer: true,
       });
       if (res.data?.detail?.includes('already') || res.status === 409) {
         if (window.confirm(
@@ -585,6 +610,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           const retry = await questionsAPI.generateExplanation(question.id, {
             correct_answer: form.correct_answer,
             regenerate_if_exists: true,
+            update_correct_answer: true,
           });
           applyGeneratedFields(retry.data);
         }
