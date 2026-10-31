@@ -57,6 +57,14 @@ The existing PostgreSQL service on :5432 is **not** used or modified.
   - Verified over HTTP with the seed student (3 wrong bank answers + 19 wrong test answers → 22 notebook entries; study time recorded; invalid letter → 400) and re-captured (`screenshots\fix1`, 0 errors).
 - Local connection exhaustion ("too many clients" 500s) → `CONN_MAX_AGE=0` for the threaded dev server.
 
+- Local auth could not reach any protected page: the Next middleware gates `/dashboard`, `/questions`, `/tests`, `/admin`… on Supabase cookies, so local mode always redirected to `/login` (41 routes in two screenshot rounds showed the login page). Local mode now gates on presence cookies and makes no Supabase call (`8c2cabd`). Tablet sidebar rail (clipped Premium pills/logo, unnamed Sign-out) fixed in the same commit. Local Playwright harness added (`frontend/playwright.local.config.ts`, `tests/e2e/local/`).
+- `dashboard_v3`, heatmap, revision-progress, PYQ-coverage and average-time endpoints all returned 500 (queried non-existent `TestAttempt` fields) — rewritten on real answer events (`0613c3f`).
+- RAG: whole-store BM25 index with a corpus policy replaces the capped TF-IDF scan (search ~1 ms instead of ~3.5 s; constructor no longer writes to the git-tracked store; offline/total-failure extractive answers). Benchmark running (`backend/ai_eval/rag_benchmark.py`) — results in `docs/audit/RAG_BENCHMARK.md`.
+
+## Discovery (read-only, 139 agents, each finding verified by 2 skeptics)
+
+57 confirmed serious, 2 disputed, 241 medium/low, 55 concerns about earlier fixes. Highlights: committed production credentials (Supabase service-role key, DB passwords, an admin password literal) and committed personal-data dumps; anonymous access to every answer/explanation; Razorpay checkout blocked by the CSP; subscribers capped at 2 AI messages/day; tokens charged when AI fails and outage text persisted into question explanations; blocked users keep API access; deploy-time NEET PG import is destructive; the question rate limiter shares one budget per proxy IP. Fix wave 1 (11 file-disjoint agent groups + independent reviewers) is running.
+
 ## Findings logged for later phases
 
 - **Data quality**: NEET PG subject tags unreliable — 696 questions tagged *Anaesthesia* (694 without topic); a random sample of 18 had ~9 clearly from other subjects. CMS also has placeholder subjects *Expert Curated* (1,285) and *Imported* (541). Plan: classifier + review CSV (never auto-applied to production).
@@ -64,10 +72,13 @@ The existing PostgreSQL service on :5432 is **not** used or modified.
 
 ## In progress / next
 
-1. RAG mapping workflow (`rag-understand`) → eval set + benchmark → implement best → AI offline mode.
-2. Triage discovery workflow results (`crack-discovery`).
-3. UI round-1 review per group, targeted redesign, re-capture.
-4. Playwright E2E suite; security/performance second pass; final report.
+1. Fix wave 1 (workflow `crack-fix-wave1`): integrate, run full suites, commit per group.
+2. RAG benchmark → write `docs/audit/RAG_BENCHMARK.md`; offline mode end to end (with the AI group's `ai_engine/offline.py`).
+3. UI: public review done (69 verified issues), protected-page review running (round 3) → combined polish pass → round 4 capture.
+4. Playwright E2E suite on the local stack; security/performance second pass; final report.
+5. Data quality: subject audit (`backend/ai_eval/subject_audit.py`).
+
+Note: this machine has 5.9 GB RAM (heavy paging with many agents); avoid parallel `next build` / `tsc` runs.
 
 ## Test commands
 
