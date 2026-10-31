@@ -148,7 +148,12 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         # (Supabase access tokens last ~1h). Avoids a 100–300 ms outbound
         # HTTP call on every authenticated request.
         from django.core.cache import cache
-        cache_key = f"supabase_jwt:{token[:64]}"
+        import hashlib
+        # SECURITY: key on a digest of the WHOLE token. The previous key used
+        # token[:64], which for Supabase JWTs is just the (shared) header --
+        # every user's token mapped to the same cache entry, so a request
+        # within 5 minutes of another user's was authenticated as that user.
+        cache_key = "supabase_jwt:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
