@@ -57,6 +57,13 @@ class AITutorThrottleMixin:
     throttle_scope = 'ai_tutor'
 
 
+def _set_consumption(request, breakdown):
+    try:
+        request._ai_token_consumption = breakdown
+    except Exception:  # pragma: no cover - exotic request objects
+        pass
+
+
 def consume_ai_token(request, amount: int = 1):
     """
     Check and consume N AI tokens for the requesting user.
@@ -82,6 +89,8 @@ def consume_ai_token(request, amount: int = 1):
     at the call site, not here, so we keep this function parameterised.
     """
     user = getattr(request, 'user', None)
+    # Nothing consumed yet for this request -> nothing to refund.
+    _set_consumption(request, None)
     if not user or not user.is_authenticated:
         if getattr(django_settings, 'DEBUG', False):
             return True, None
@@ -104,6 +113,7 @@ def consume_ai_token(request, amount: int = 1):
 
     balance, _ = TokenBalance.objects.get_or_create(user=user)
     if balance.consume_token(amount=amount):
+        _set_consumption(request, getattr(balance, '_last_consumption', None))
         return True, None
 
     return False, Response({
@@ -132,9 +142,17 @@ def refund_ai_token(request, amount: int = 1):
     if not user or not user.is_authenticated or user.is_admin:
         return
 
+    # Refund exactly what consume_ai_token drew for this request. When the
+    # call was bypassed (subscription / admin) nothing was deducted, so
+    # nothing is refunded -- refunding anyway minted free tokens.
+    breakdown = getattr(request, '_ai_token_consumption', None)
+    if not breakdown:
+        return
+    _set_consumption(request, None)  # never refund the same draw twice
+
     try:
         balance = TokenBalance.objects.get(user=user)
-        balance.refund_token(amount=amount)
+        balance.refund_token(amount=amount, breakdown=breakdown)
         # Audit log so refunds are visible in transaction history
         TokenTransaction.objects.create(
             user=user,
@@ -849,7 +867,10 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
         subject = request.data.get('subject', '')
         topic = request.data.get('topic', '')
         difficulty = request.data.get('difficulty', 'medium')
-        count = min(int(request.data.get('count', 5)), 20)
+        try:
+            count = max(1, min(int(request.data.get('count', 5)), 20))
+        except (TypeError, ValueError):
+            return Response({'error': 'count must be an integer'}, status=400)
         if not subject:
             return Response({'error': 'Subject is required'}, status=400)
 
@@ -943,7 +964,7 @@ class AIStatusView(APIView):
             }
         except Exception as e:
             logger.error(f"AIService init failed: {e}")
-            providers = {'error': str(e)}
+            providers = {'error': 'AI service failed to initialise; see server logs'}
         keys_present = {
             'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
             'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
@@ -982,7 +1003,7 @@ class AITestView(APIView):
             return Response({'status': 'ok', 'response': result[:100]})
         except Exception as e:
             logger.error(f"AI test failed: {e}")
-            return Response({'status': 'error', 'error': str(e)}, status=500)
+            return Response({'status': 'error', 'error': 'AI test failed; see server logs'}, status=500)
 
 
 # =============================================================================

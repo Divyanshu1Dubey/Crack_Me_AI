@@ -46,7 +46,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
     let alive = true;
     (async () => {
       try {
-        const r = await api.get(`/api/questions/${questionId}/images/`);
+        const r = await api.get(`/questions/${questionId}/images/`);
         if (alive) setImages(r.data || []);
       } catch (e: any) {
         if (alive) setError(e?.message || "Failed to load images");

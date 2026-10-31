@@ -61,9 +61,12 @@ def health_ready(request):
         with connection.cursor() as c:
             c.execute("SELECT 1")
             c.fetchone()
-    except Exception as e:
+    except Exception:
+        # Public endpoint: never echo DB driver errors (host / user names).
+        import logging
+        logging.getLogger(__name__).exception("Readiness check failed")
         return JsonResponse(
-            {"status": "not-ready", "error": str(e)},
+            {"status": "not-ready", "error": "database unavailable"},
             status=503,
         )
     return JsonResponse({"status": "ready", "service": "crack_cms"})

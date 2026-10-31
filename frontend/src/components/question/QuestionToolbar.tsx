@@ -47,7 +47,7 @@ export default function QuestionToolbar(props: Props) {
     setRevealed(false);
     (async () => {
       try {
-        const r = await api.get(`/api/questions/${questionId}/practice/state/`);
+        const r = await api.get(`/questions/${questionId}/practice/state/`);
         const s: QuestionState = r.data || state;
         if (alive) {
           setState(s);
@@ -67,7 +67,7 @@ export default function QuestionToolbar(props: Props) {
   const toggleFlag = useCallback(async () => {
     setBusy(true);
     try {
-      const r = await api.post(`/api/questions/${questionId}/practice/flag/`, { flag: !state.flag });
+      const r = await api.post(`/questions/${questionId}/practice/flag/`, { flag: !state.flag });
       const next = { ...state, flag: r.data.flag };
       setState(next); onStateChange?.(next);
     } finally { setBusy(false); }
@@ -76,7 +76,7 @@ export default function QuestionToolbar(props: Props) {
   const setConf = useCallback(async (n: number) => {
     setBusy(true);
     try {
-      const r = await api.post(`/api/questions/${questionId}/practice/confidence/`, { rating: n });
+      const r = await api.post(`/questions/${questionId}/practice/confidence/`, { rating: n });
       const next = { ...state, confidence: r.data.confidence };
       setState(next); onStateChange?.(next);
     } finally { setBusy(false); }
@@ -89,7 +89,7 @@ export default function QuestionToolbar(props: Props) {
     const next = { ...state, eliminated: list };
     setState(next); onStateChange?.(next); onEliminationChange?.(list);
     try {
-      await api.post(`/api/questions/${questionId}/practice/eliminate/`, { options: list });
+      await api.post(`/questions/${questionId}/practice/eliminate/`, { options: list });
     } catch { /* swallow — optimistic */ }
   }, [state, questionId, onStateChange, onEliminationChange]);
 

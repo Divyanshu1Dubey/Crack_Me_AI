@@ -34,12 +34,12 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
     (async () => {
       try {
         const [a, c, m, e, w, wn] = await Promise.all([
-          api.get(`/api/questions/${questionId}/ai/why_correct/`),
-          api.get(`/api/questions/${questionId}/ai/clinical/`),
-          api.get(`/api/questions/${questionId}/ai/mnemonic/`),
-          api.get(`/api/questions/${questionId}/ai/exam_importance/`),
-          api.get(`/api/questions/${questionId}/ai/concept/`),
-          api.get(`/api/questions/${questionId}/ai/why_incorrect/`),
+          api.get(`/questions/${questionId}/ai/why_correct/`),
+          api.get(`/questions/${questionId}/ai/clinical/`),
+          api.get(`/questions/${questionId}/ai/mnemonic/`),
+          api.get(`/questions/${questionId}/ai/exam_importance/`),
+          api.get(`/questions/${questionId}/ai/concept/`),
+          api.get(`/questions/${questionId}/ai/why_incorrect/`),
         ]);
         if (!alive) return;
         setAi(a.data?.why_correct || "");

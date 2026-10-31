@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
 import { decodeMojiB } from '@/lib/textCleanup';
+import { apiUrl } from '@/lib/apiBase';
 
 interface FormattedTextProps {
     text: string;
@@ -210,7 +211,7 @@ export function resolveImageTokensForMarkdown(
             const found = byBasename.get(base.toLowerCase());
             const served = found
                 ? ((found.url && found.url.length > 0 ? found.url : null) ||
-                   `/api/questions/images/${found.id}/serve/`)
+                   apiUrl(`/questions/images/${found.id}/serve/`))
                 : rawUrl;
             const alt = (found?.caption || `Question image ${base}`).replace(/[\[\]"]/g, '');
             return `![${alt}](${served.replace(/"/g, '%22')})`;
@@ -345,7 +346,7 @@ export function FormattedOptionText({
             const found = byBasename.get(base);
             if (found) {
                 const served = (found.url && found.url.length > 0 ? found.url : null) ||
-                               `/api/questions/images/${found.id}/serve/`;
+                               apiUrl(`/questions/images/${found.id}/serve/`);
                 pushImg(served, found.caption || `Question image ${base}`);
             } else {
                 pushImg(

@@ -19,64 +19,13 @@ import {
   isSupabaseAuthEnabled,
 } from './supabase';
 
-const isAppRunningLocally = () => {
-  if (typeof window === 'undefined') {
-    return process.env.NODE_ENV !== 'production';
-  }
-
-  const host = window.location.hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-};
-
-const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
-const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
-const DEFAULT_PRODUCTION_API_URL = 'https://api.cracklabs.app/api';
-const LEGACY_UNHEALTHY_API_HOSTS = [
-  'crackcms-backend.onrender.com',
-  '.onrender.com',
-  'crackcms-vsthc.ondigitalocean.app',
-  '.ondigitalocean.app',
-];
-
-const normalizeApiBaseUrl = (url: string) => {
-  const normalized = url.replace(/\/+$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-};
-
-const isLocalhostApiUrl = (url: string) => {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-  } catch {
-    return false;
-  }
-};
-
-const shouldIgnoreConfiguredApiUrl = (url: string) =>
-  isLocalhostApiUrl(url) && !isAppRunningLocally();
-
-const isKnownUnhealthyApiHost = (url: string) =>
-  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
-
-const resolveApiBaseUrl = () => {
-  if (USE_API_PROXY) {
-    return '/api/proxy';
-  }
-
-  const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-  if (configured) {
-    const normalized = normalizeApiBaseUrl(configured);
-    if (shouldIgnoreConfiguredApiUrl(normalized) || isKnownUnhealthyApiHost(normalized)) {
-      return DEFAULT_PRODUCTION_API_URL;
-    }
-    return normalized;
-  }
-
-  return process.env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_API_URL : DEFAULT_LOCAL_API_URL;
-};
-
-const API_BASE_URL = resolveApiBaseUrl();
+import {
+  USE_API_PROXY,
+  DEFAULT_PRODUCTION_API_URL,
+  normalizeApiBaseUrl,
+  shouldIgnoreConfiguredApiUrl,
+  API_BASE_URL,
+} from './apiBase';
 const configuredFallback = normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
 const FALLBACK_API_BASE_URL = USE_API_PROXY
   ? API_BASE_URL
@@ -645,15 +594,17 @@ export const discussionsAPI = {
 
 // Topic Notes API — PYQ explanation → revision notes pipeline
 export const topicNotesAPI = {
-  list: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
-  get: (id: number) => api.get(`/questions/notes/${id}/`),
+  // `/questions/notes/` is the *personal* notes endpoint; admin topic notes
+  // live under `/questions/topic-notes/library/`.
+  list: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/library/', { params }),
+  get: (id: number) => api.get(`/questions/topic-notes/library/${id}/`),
   create: (data: { subject: number; topic: number; exam_type?: string; title: string; content?: string; source_question_ids?: number[] }) =>
-    api.post('/questions/notes/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
-  delete: (id: number) => api.delete(`/questions/notes/${id}/`),
-  generateFromTopic: (id: number) => api.post(`/questions/notes/${id}/generate/`),
+    api.post('/questions/topic-notes/library/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/topic-notes/library/${id}/`, data),
+  delete: (id: number) => api.delete(`/questions/topic-notes/library/${id}/`),
+  generateFromTopic: (id: number) => api.post(`/questions/topic-notes/library/${id}/generate/`),
   // Admin topic notes (exam_type-specific)
-  adminList: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
+  adminList: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/library/', { params }),
   adminCreate: (data: Record<string, unknown>) => api.post('/questions/topic-notes/', data),
   adminGenerate: (id: number) => api.post(`/questions/topic-notes/${id}/generate/`),
 };
@@ -684,7 +635,8 @@ export const questsAPI = {
   list: (params?: { status?: string }) =>
     api.get('/analytics/quests/', { params }),
   get: (id: number) => api.get(`/analytics/quests/${id}/`),
-  complete: (id: number) => api.post(`/analytics/quests/${id}/complete/`, { is_completed: true }),
+  // Claim a finished quest; the server validates progress and awards XP.
+  complete: (id: number) => api.patch(`/analytics/quests/${id}/`, { is_completed: true }),
   remove: (id: number) => api.delete(`/analytics/quests/${id}/`),
   getStreak: () => api.get('/analytics/quests/streak/'),
   toggleFreeze: () => api.post('/analytics/quests/streak/freeze/'),
@@ -694,7 +646,7 @@ export const questsAPI = {
 export const notesAPI = {
   list: (params?: { question?: number; topic?: number }) => api.get('/questions/notes/', { params }),
   create: (data: { question?: number; topic?: number; title?: string; content: string }) => api.post('/questions/notes/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/notes/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/notes/${id}/`),
 };
 
@@ -703,7 +655,7 @@ export const flashcardsAPI = {
   list: (params?: { subject?: number; due?: string }) => api.get('/questions/flashcards/', { params }),
   create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string }) =>
     api.post('/questions/flashcards/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/flashcards/${id}/`, data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/flashcards/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/flashcards/${id}/`),
   review: (id: number, quality: number) => api.post(`/questions/flashcards/${id}/review/`, { quality }),
   analytics: () => api.get('/questions/flashcards/analytics/'),

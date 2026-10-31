@@ -6,14 +6,14 @@ from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.throttling import ScopedRateThrottle
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.db.models import Sum, Avg, Count, F, Q
 from django.utils import timezone
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
                           AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
-                          StudyTimeBreakdownSerializer, UserQuestSerializer, QuestStreakSerializer,
+                          StudyTimeBreakdownSerializer, UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
                           MistakeNotebookSerializer)
 from tests_engine.models import TestAttempt
 from questions.models import Question
@@ -171,7 +171,7 @@ class DailyActivityView(APIView):
 
     def get(self, request):
         # Return last 120 days of activity
-        days_ago = timezone.now().date() - timezone.timedelta(days=120)
+        days_ago = timezone.localdate() - timezone.timedelta(days=120)
         activities = DailyActivity.objects.filter(
             user=request.user,
             date__gte=days_ago
@@ -874,7 +874,7 @@ class AdminDashboardView(APIView):
         from django.db.models import Sum
 
         total_users = CustomUser.objects.count()
-        active_today = DailyActivity.objects.filter(date=timezone.now().date()).count()
+        active_today = DailyActivity.objects.filter(date=timezone.localdate()).count()
         total_questions = Question.objects.count()
         questions_with_answer = Question.objects.exclude(correct_answer='').count()
         questions_with_explanation = Question.objects.filter(explanation__isnull=False).exclude(explanation='').count()
@@ -1001,7 +1001,7 @@ class DashboardV3View(APIView):
         user = request.user
         from questions.models import Subject
         # Heatmap data
-        thirty_days_ago = timezone.now().date() - timezone.timedelta(days=30)
+        thirty_days_ago = timezone.localdate() - timezone.timedelta(days=30)
         heatmap_qs = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
         heatmap = DailyActivitySerializer(heatmap_qs, many=True).data
         # Streak
@@ -1015,7 +1015,7 @@ class DashboardV3View(APIView):
         announcements_data = AnnouncementSerializer(announcements[:20], many=True).data
 
         # Subject pie data (study time breakdown for last 7 days)
-        week_ago = timezone.now().date() - timezone.timedelta(days=7)
+        week_ago = timezone.localdate() - timezone.timedelta(days=7)
         study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
         study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
 
@@ -1073,7 +1073,7 @@ class DashboardBundleView(APIView):
         }
 
         # Heatmap — last 30 days
-        thirty_days_ago = timezone.now().date() - timezone.timedelta(days=30)
+        thirty_days_ago = timezone.localdate() - timezone.timedelta(days=30)
         heatmap = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
         heatmap_data = DailyActivitySerializer(heatmap, many=True).data
 
@@ -1090,7 +1090,7 @@ class DashboardBundleView(APIView):
         quests_data = UserQuestSerializer(quests[:5], many=True).data
 
         # Study time breakdown (pie chart) — last 7 days
-        week_ago = timezone.now().date() - timezone.timedelta(days=7)
+        week_ago = timezone.localdate() - timezone.timedelta(days=7)
         study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
         study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
 
@@ -1147,8 +1147,11 @@ class MistakeNotebookView(APIView):
 
         qs = qs.order_by('-created_at')
         # Pagination
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+            page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
+        except (TypeError, ValueError):
+            return Response({'error': 'page and page_size must be integers'}, status=400)
         total = qs.count()
         start = (page - 1) * page_size
         items = qs[start:start + page_size]
@@ -1264,12 +1267,15 @@ class MistakeNotebookDueView(APIView):
 
 
 class UserQuestListView(APIView):
-    """List and create daily quests."""
+    """List the user's quests. Today's daily quests are generated on demand
+    and their progress is computed from real activity (server-side)."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from questions.quest_service import ensure_daily_quests, refresh_progress
+
+        ensure_daily_quests(request.user)
         quests = UserQuest.objects.filter(user=request.user)
-        # Filter by status
         status_filter = request.query_params.get('status')
         if status_filter == 'active':
             quests = quests.filter(is_completed=False, expires_at__gt=timezone.now())
@@ -1277,24 +1283,24 @@ class UserQuestListView(APIView):
             quests = quests.filter(is_completed=True)
         elif status_filter == 'expired':
             quests = quests.filter(expires_at__lt=timezone.now(), is_completed=False)
-        else:
-            quests = quests.order_by('-quest_date', 'quest_type')
-
-        serializer = UserQuestSerializer(quests[:20], many=True)
+        quests = list(quests.order_by('-quest_date', 'quest_type')[:20])
+        refresh_progress(request.user, quests)
+        serializer = UserQuestSerializer(quests, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        """Create a new quest (admin or system-generated)."""
-        if not request.user.is_admin:
+        """Create a custom quest for a user (admin only)."""
+        if not getattr(request.user, 'is_admin', False):
             return Response({'error': 'Admin only'}, status=403)
-        serializer = UserQuestSerializer(data=request.data)
+        serializer = UserQuestAdminSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(user=request.user)
+        serializer.save(user=serializer.validated_data.get('user') or request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class UserQuestDetailView(APIView):
-    """Update/complete a quest."""
+    """Read or claim a quest. PATCH ``{"is_completed": true}`` claims it --
+    the server checks progress and awards the server-defined XP once."""
     permission_classes = [permissions.IsAuthenticated]
 
     def _get_object(self, request, pk):
@@ -1303,31 +1309,38 @@ class UserQuestDetailView(APIView):
         except UserQuest.DoesNotExist:
             raise Http404
 
-    def patch(self, request, pk):
+    def get(self, request, pk):
+        from questions.quest_service import refresh_progress
         obj = self._get_object(request, pk)
-        serializer = UserQuestSerializer(obj, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        # Track completion
-        if serializer.validated_data.get('is_completed') and not obj.is_completed:
-            obj.completed_at = timezone.now()
-            # Award XP
-            streak_obj, _ = QuestStreak.objects.get_or_create(user=request.user)
-            streak_obj.total_xp_earned += obj.xp_reward
-            streak_obj.total_quests_completed += 1
-            if obj.quest_date == timezone.now().date():
-                streak_obj.current_streak += 1
-            streak_obj.longest_streak = max(streak_obj.longest_streak, streak_obj.current_streak)
-            streak_obj.last_quest_date = obj.quest_date
-            streak_obj.save(update_fields=['total_xp_earned', 'total_quests_completed',
-                                          'current_streak', 'longest_streak', 'last_quest_date'])
-            # Also add to main StudyStreak
-            study_streak, _ = StudyStreak.objects.get_or_create(user=request.user)
-            study_streak.add_xp(obj.xp_reward)
-        serializer.save()
-        return Response(serializer.data)
+        refresh_progress(request.user, [obj])
+        return Response(UserQuestSerializer(obj).data)
+
+    def patch(self, request, pk):
+        from questions.quest_service import QuestClaimError, claim_quest
+
+        raw = request.data.get('is_completed')
+        wants_claim = raw is True or str(raw).strip().lower() in ('1', 'true', 'yes')
+        if not wants_claim:
+            return Response({'error': 'Only claiming a finished quest is supported.'}, status=400)
+        try:
+            quest = claim_quest(request.user, pk)
+        except QuestClaimError as exc:
+            return Response({'error': exc.message}, status=exc.status)
+        return Response(UserQuestSerializer(quest).data)
+
+    def post(self, request, pk):
+        """Alias: ``POST .../<pk>/`` with no body also claims."""
+        return self.patch(request, pk)
 
     def delete(self, request, pk):
-        obj = self._get_object(request, pk)
+        # Deleting a claimed daily quest would let it be regenerated and
+        # claimed again for more XP, so only admins may delete.
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'error': 'Admin only'}, status=403)
+        try:
+            obj = UserQuest.objects.get(pk=pk)
+        except UserQuest.DoesNotExist:
+            raise Http404
         obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1382,23 +1395,36 @@ class StudyTimeView(APIView):
 
     def post(self, request):
         subject_id = request.data.get('subject')
-        seconds = int(request.data.get('seconds', 0))
-        question_count = int(request.data.get('question_count', 0))
-        date_str = request.data.get('date') or timezone.now().date().isoformat()
+        try:
+            seconds = max(0, min(int(request.data.get('seconds', 0)), 24 * 3600))
+            question_count = max(0, min(int(request.data.get('question_count', 0)), 1000))
+        except (TypeError, ValueError):
+            return Response({'error': 'seconds and question_count must be integers'}, status=400)
+        import datetime as _dt
+        raw_date = request.data.get('date')
+        try:
+            date_str = _dt.date.fromisoformat(str(raw_date)) if raw_date else timezone.localdate()
+        except ValueError:
+            return Response({'error': 'date must be in YYYY-MM-DD format'}, status=400)
+        if date_str > timezone.localdate():
+            return Response({'error': 'date cannot be in the future'}, status=400)
 
         from questions.models import Subject
         try:
-            subject = Subject.objects.get(pk=subject_id)
-        except Subject.DoesNotExist:
+            subject = Subject.objects.get(pk=int(subject_id))
+        except (Subject.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'Subject not found'}, status=404)
 
         obj, _ = StudyTimeBreakdown.objects.get_or_create(
             user=request.user, subject=subject, date=date_str,
             defaults={'seconds': 0, 'question_count': 0},
         )
-        obj.seconds += seconds
-        obj.question_count += question_count
-        obj.save(update_fields=['seconds', 'question_count'])
+        # Atomic increments (two tabs posting at once used to lose time).
+        StudyTimeBreakdown.objects.filter(pk=obj.pk).update(
+            seconds=F('seconds') + seconds,
+            question_count=F('question_count') + question_count,
+        )
+        obj.refresh_from_db(fields=['seconds', 'question_count'])
         serializer = StudyTimeBreakdownSerializer(obj)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 

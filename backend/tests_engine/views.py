@@ -527,7 +527,7 @@ class TestViewSet(viewsets.ModelViewSet):
         from django.db.models import F
 
         # 1. Update Daily Activity
-        today = timezone.now().date()
+        today = timezone.localdate()
         daily, _ = DailyActivity.objects.get_or_create(user=request.user, date=today)
         daily.questions_attempted += (correct + incorrect)
         daily.correct_answers += correct

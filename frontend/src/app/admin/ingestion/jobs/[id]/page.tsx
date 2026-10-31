@@ -1,40 +1,69 @@
+"use client";
+
 // /admin/ingestion/jobs/[id] — job detail + stage timeline + logs.
+//
+// Client component: the ingestion API is admin-authenticated and the auth
+// token only exists in the browser. As a server component this page could
+// never load a job (every request was anonymous) and always showed
+// "not found".
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ingestionAPI } from "@/lib/api";
+import JobActions from "./JobActions";
 
-export const dynamic = "force-dynamic";
+export default function JobDetail() {
+  const params = useParams<{ id: string }>();
+  const id = Number(params?.id);
+  const [job, setJob] = useState<any>(null);
+  const [stages, setStages] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id: idStr } = await params;
-  const id = Number(idStr);
-  let job: any = null;
-  let stages: any[] = [];
-  let logs: any[] = [];
-  try {
-    const jobRes = await ingestionAPI.getJob(id);
-    job = jobRes.data;
-    const stagesRes = await ingestionAPI.listStages(id);
-    stages = Array.isArray(stagesRes.data) ? stagesRes.data : (stagesRes.data?.results || []);
-    const logsRes = await ingestionAPI.listLogs(id, { page_size: 100 });
-    logs = Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data?.results || []);
-  } catch {
-    job = null;
+  const load = useCallback(async () => {
+    if (!Number.isFinite(id)) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [jobRes, stagesRes, logsRes] = await Promise.all([
+        ingestionAPI.getJob(id),
+        ingestionAPI.listStages(id),
+        ingestionAPI.listLogs(id, { page_size: 100 }),
+      ]);
+      setJob(jobRes.data);
+      setStages(Array.isArray(stagesRes.data) ? stagesRes.data : (stagesRes.data?.results || []));
+      setLogs(Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data?.results || []));
+    } catch {
+      setJob(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading job…</div>;
   }
 
   if (!job) {
     return (
       <div className="p-6">
-        <p>Job #{id} not found.</p>
+        <p>Job #{params?.id} not found.</p>
         <Link href="/admin/ingestion/jobs" className="underline">← back</Link>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-bold break-words">
           Job #{job.id} — {job.parent_exam} v{job.version}
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -55,33 +84,35 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       <section>
         <h2 className="text-xl font-semibold mb-2">Stage Timeline</h2>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="p-2">Stage</th>
-              <th className="p-2">Status</th>
-              <th className="p-2">Pages</th>
-              <th className="p-2">Artefacts</th>
-              <th className="p-2">Started</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stages.map((s) => (
-              <tr key={s.id} className="border-b">
-                <td className="p-2 font-mono text-xs">{s.stage_name}</td>
-                <td className="p-2">{s.status}</td>
-                <td className="p-2">{s.pages_processed}/{s.pages_skipped}</td>
-                <td className="p-2">{s.artefacts_written}</td>
-                <td className="p-2 text-xs">{new Date(s.started_at).toLocaleString()}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="p-2">Stage</th>
+                <th className="p-2">Status</th>
+                <th className="p-2">Pages</th>
+                <th className="p-2">Artefacts</th>
+                <th className="p-2">Started</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {stages.map((s) => (
+                <tr key={s.id} className="border-b">
+                  <td className="p-2 font-mono text-xs">{s.stage_name}</td>
+                  <td className="p-2">{s.status}</td>
+                  <td className="p-2">{s.pages_processed}/{s.pages_skipped}</td>
+                  <td className="p-2">{s.artefacts_written}</td>
+                  <td className="p-2 text-xs">{s.started_at ? new Date(s.started_at).toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section>
         <h2 className="text-xl font-semibold mb-2">Recent Logs</h2>
-        <div className="space-y-1 text-xs font-mono">
+        <div className="space-y-1 text-xs font-mono break-words">
           {logs.slice(0, 50).map((l) => (
             <div key={l.id} className={l.level === "ERROR" ? "text-red-500" : l.level === "WARNING" ? "text-amber-500" : "text-muted-foreground"}>
               [{l.level}] {l.stage_name || ""} {l.message}
@@ -90,7 +121,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </div>
       </section>
 
-      <Actions id={id} />
+      <div className="flex flex-wrap items-center gap-3">
+        <JobActions id={id} onDone={load} />
+        <Link href="/admin/ingestion/jobs" className="underline text-sm">← back to jobs</Link>
+      </div>
     </div>
   );
 }
@@ -100,20 +134,6 @@ function Stat({ label, value }: { label: string; value: any }) {
     <div className="rounded border p-3">
       <div className="text-xs uppercase text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function Actions({ id }: { id: number }) {
-  return (
-    <div className="flex gap-2">
-      <form action={`/api/ingestion/jobs/${id}/retry/`} method="post">
-        <button className="rounded border px-3 py-1 text-sm">Retry</button>
-      </form>
-      <form action={`/api/ingestion/jobs/${id}/cancel/`} method="post">
-        <button className="rounded border px-3 py-1 text-sm">Cancel</button>
-      </form>
-      <Link href="/admin/ingestion/jobs" className="underline text-sm ml-3">← back to jobs</Link>
     </div>
   );
 }

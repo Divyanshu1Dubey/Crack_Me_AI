@@ -15,7 +15,7 @@
  *  - Custom mode (multi-filter form: year, subject, topic, difficulty,
  *    is_image_based, has_ai_enrichment)
  *
- * Backend dispatcher: `/api/questions/practice_queue/?mode=...&count=...
+ * Backend dispatcher: `/questions/practice_queue/?mode=...&count=...
  * &year=...&subject_id=...&topic_id=...&difficulty=...&is_image_based=...
  * &has_ai_enrichment=...`
  */
@@ -162,7 +162,7 @@ function PracticeInner() {
         setIdx(0);
         (async () => {
             try {
-                const r = await api.get(`/api/questions/practice_queue/`, { params: buildParams() });
+                const r = await api.get(`/questions/practice_queue/`, { params: buildParams() });
                 if (!alive) return;
                 const ids: number[] = r.data?.question_ids || [];
                 setQueue(ids);
@@ -191,7 +191,7 @@ function PracticeInner() {
         let alive = true;
         (async () => {
             try {
-                const r = await api.get(`/api/questions/${qid}/`);
+                const r = await api.get(`/questions/${qid}/`);
                 if (alive) {
                     setQ(r.data);
                     // Load images so [[img:N]] tokens resolve inline
@@ -218,7 +218,7 @@ function PracticeInner() {
         setPicked(answer);
         setBusy(true);
         try {
-            await api.post(`/api/questions/${q.id}/practice/attempt/`, { answer });
+            await api.post(`/questions/${q.id}/practice/attempt/`, { answer });
             setRevealed(true);
             setSubmitError(null);
         } catch (err) {

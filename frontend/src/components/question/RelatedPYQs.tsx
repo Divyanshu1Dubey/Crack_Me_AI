@@ -32,8 +32,8 @@ export default function RelatedPanel({ questionId, kind, limit = 8 }: Props) {
     let alive = true;
     setLoading(true);
     const path = kind === "related_pyqs"
-      ? `/api/questions/${questionId}/ai/related_pyqs/?limit=${limit}`
-      : `/api/questions/${questionId}/ai/related_topics/?limit=${limit}`;
+      ? `/questions/${questionId}/ai/related_pyqs/?limit=${limit}`
+      : `/questions/${questionId}/ai/related_topics/?limit=${limit}`;
     (async () => {
       try {
         const r = await api.get(path);

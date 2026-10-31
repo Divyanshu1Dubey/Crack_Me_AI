@@ -42,28 +42,47 @@ class IsAdminUser(BasePermission):
 
 
 def _public_perm():
-    if getattr(django_settings, "DEBUG", False):
-        return [AllowAny()]
+    # Never relax auth based on DEBUG: a debug deployment reachable from the
+    # internet would otherwise expose ingestion / indexing / LLM endpoints.
     return [IsAuthenticated()]
 
 
 def _admin_perm():
-    if getattr(django_settings, "DEBUG", False):
-        return [AllowAny()]
     return [IsAdminUser()]
 
 
 class AskMonicaView(APIView):
-    """POST /api/knowledge/ask/ — citation-aware answer."""
+    """POST /api/knowledge/ask/ — citation-aware answer.
+
+    This calls the LLM, so it is metered exactly like the AI tutor:
+    freemium daily cap, 1 token per call (refunded on failure) and the
+    `ai_tutor` scoped throttle.
+    """
+    throttle_scope = "ai_tutor"
 
     def get_permissions(self):
         return _public_perm()
 
+    def get_throttles(self):
+        from rest_framework.throttling import ScopedRateThrottle
+        return super().get_throttles() + [ScopedRateThrottle()]
+
     def post(self, request):
-        question = request.data.get("question", "").strip()
+        from ai_engine.views import _check_freemium_ai_quota, consume_ai_token, refund_ai_token
+
+        question = str(request.data.get("question", "") or "").strip()
         subject = request.data.get("subject") or None
         if not question:
             return Response({"error": "question is required"}, status=400)
+        if len(question) > 4000:
+            return Response({"error": "question is too long (max 4000 characters)"}, status=400)
+
+        freemium_err = _check_freemium_ai_quota(request)
+        if freemium_err is not None:
+            return freemium_err
+        ok, err = consume_ai_token(request)
+        if not ok:
+            return err
         try:
             monica = Monica()
             result = monica.answer(question, subject=subject)
@@ -75,10 +94,10 @@ class AskMonicaView(APIView):
                 "retrieval_count": result.retrieval_count,
                 "query_expansion": result.query_expansion,
             })
-        except Exception as e:
+        except Exception:
             logger.exception("Monica ask failed")
-            return Response({"error": "knowledge base temporarily unavailable",
-                             "detail": str(e)}, status=503)
+            refund_ai_token(request)
+            return Response({"error": "knowledge base temporarily unavailable"}, status=503)
 
 
 class SearchView(APIView):
@@ -91,7 +110,10 @@ class SearchView(APIView):
         query = request.data.get("query", "").strip()
         subject = request.data.get("subject") or None
         source_slugs = request.data.get("source_slugs") or None
-        top_k = int(request.data.get("top_k", 8))
+        try:
+            top_k = max(1, min(int(request.data.get("top_k", 8)), 25))
+        except (TypeError, ValueError):
+            return Response({"error": "top_k must be an integer"}, status=400)
         if not query:
             return Response({"error": "query is required"}, status=400)
         try:
@@ -112,10 +134,9 @@ class SearchView(APIView):
                     } for c in results
                 ],
             })
-        except Exception as e:
+        except Exception:
             logger.exception("Search failed")
-            return Response({"error": "search failed", "detail": str(e)},
-                            status=503)
+            return Response({"error": "search failed"}, status=503)
 
 
 class StatsView(APIView):
@@ -274,9 +295,9 @@ class IngestView(APIView):
                                    if request.user.is_authenticated else None)
         try:
             result = service.run(**clean_kwargs)
-        except Exception as e:
+        except Exception:
             logger.exception("Ingestion API failed")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "Operation failed; see server logs for details."}, status=500)
 
         return Response({
             "job_id": result.job_id,
@@ -302,9 +323,9 @@ class IndexEmbeddingsView(APIView):
             max_chunks = int(max_chunks) if max_chunks else None
             n = EmbeddingIndexer().index_pending(max_chunks=max_chunks)
             return Response({"indexed": n})
-        except Exception as e:
+        except Exception:
             logger.exception("Indexing failed")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "Operation failed; see server logs for details."}, status=500)
 
 
 class ExtractKGView(APIView):
@@ -319,9 +340,9 @@ class ExtractKGView(APIView):
             subject = request.data.get("subject") or None
             result = KGExtractor().extract_all(subject=subject)
             return Response(result)
-        except Exception as e:
+        except Exception:
             logger.exception("KG extraction failed")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "Operation failed; see server logs for details."}, status=500)
 
 
 class EvalView(APIView):
@@ -335,9 +356,9 @@ class EvalView(APIView):
         try:
             result = run_evaluation()
             return Response(result)
-        except Exception as e:
+        except Exception:
             logger.exception("Eval failed")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "Operation failed; see server logs for details."}, status=500)
 
 
 class HealthView(APIView):

@@ -14,7 +14,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ingestionAPI } from '@/lib/api';
 
-export default function JobActions({ id }: { id: number }) {
+export default function JobActions({ id, onDone }: { id: number; onDone?: () => void }) {
     const router = useRouter();
     const [busy, setBusy] = useState<'retry' | 'cancel' | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -31,7 +31,8 @@ export default function JobActions({ id }: { id: number }) {
             } else {
                 await ingestionAPI.cancelJob(id);
             }
-            router.refresh();
+            if (onDone) onDone();
+            else router.refresh();
         } catch (err) {
             console.error(`Failed to ${kind} job:`, err);
             setError(`Could not ${kind} job. Please try again.`);

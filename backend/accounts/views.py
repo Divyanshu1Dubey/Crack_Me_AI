@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import Avg, Count, Max, Q, Subquery, Sum
 from django.core.cache import cache
 
@@ -210,20 +211,39 @@ class VerifyScholarshipView(APIView):
             return Response({"error": "Max attempts reached. Scholarship challenge is locked."}, status=status.HTTP_403_FORBIDDEN)
 
         answers = request.data.get('answers', {})
-        if not answers or len(answers) < 5:
+        if not isinstance(answers, dict) or len(answers) != 5:
             return Response({"error": "Invalid test submission. Must submit 5 answers."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        correct_count = 0
+
+        # Validate the submission before counting an attempt: exactly five
+        # *distinct* scholarship-eligible questions, one letter each.
+        # Previously the same question could be submitted several times
+        # under different keys ("1", "01", "001") with A/B/C/D, or any
+        # question the user already knew could be used.
+        normalized = {}
         for q_id, selected_opt in answers.items():
             try:
-                qid_int = int(q_id)
-                question = Question.objects.get(id=qid_int)
-                correct_ans = question.correct_answer
-                
-                if correct_ans.upper() == str(selected_opt).upper():
-                    correct_count += 1
-            except (Question.DoesNotExist, ValueError):
-                pass
+                qid_int = int(str(q_id).strip())
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid question id in submission."}, status=status.HTTP_400_BAD_REQUEST)
+            letter = str(selected_opt or '').strip().upper()
+            if qid_int in normalized or letter not in ('', 'A', 'B', 'C', 'D'):
+                return Response({"error": "Invalid test submission."}, status=status.HTTP_400_BAD_REQUEST)
+            normalized[qid_int] = letter
+
+        questions = {
+            q.id: q for q in Question.objects.filter(
+                id__in=list(normalized), is_scholarship_eligible=True, is_active=True,
+            )
+        }
+        if len(questions) != 5:
+            return Response({"error": "Submission contains questions that are not part of the scholarship challenge."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        correct_count = 0
+        for qid_int, letter in normalized.items():
+            correct_ans = (questions[qid_int].correct_answer or '').strip().upper()[:1]
+            if correct_ans and correct_ans == letter:
+                correct_count += 1
 
         user.scholarship_test_attempts += 1
 
@@ -384,8 +404,9 @@ class SubscribeOrderView(APIView):
                 'key_id': key_id,
                 'plan': plan,
             })
-        except Exception as e:
-            return Response({'error': f'Failed to create Razorpay order: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('Failed to create Razorpay order for user_id=%s plan=%s', user.id, plan)
+            return Response({'error': 'Could not start the payment. Please try again in a moment.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SubscribeVerifyView(APIView):
@@ -463,35 +484,46 @@ class SubscribeVerifyView(APIView):
                 existing_attempt.status = 'failed'
                 existing_attempt.error_message = str(e)
                 existing_attempt.save(update_fields=['status', 'error_message'])
-            return Response({'error': f'Payment signature verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning('SubscribeVerify: signature verification failed for order %s: %s', order_id, e)
+            return Response({'error': 'Payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # ── Activate subscription ──
         user = request.user
-        plan = 'legacy'
-        price_paid = 199.00
 
-        # Mark attempt as successful and extract plan info.
-        # SECURITY (Fix #1): when no existing_attempt was found, bind the
-        # PaymentAttempt.user to the requesting user so the next verify call
-        # from any other account is rejected by the ownership check above.
-        if existing_attempt:
-            existing_attempt.razorpay_payment_id = payment_id
-            existing_attempt.status = 'successful'
-            # Defensive: pin user_id again even though the ownership check
-            # already enforced it. Belt + braces for direct DB tampering.
-            existing_attempt.user = user
-            existing_attempt.save(update_fields=['razorpay_payment_id', 'status', 'user'])
-            price_paid = float(existing_attempt.amount)
-            plan = existing_attempt.plan or 'legacy'
-        else:
-            PaymentAttempt.objects.create(
-                user=user,
-                razorpay_order_id=order_id,
-                razorpay_payment_id=payment_id,
-                amount=199.00,
-                plan='legacy',
-                status='successful'
+        # Every order this server creates has a PaymentAttempt (see
+        # SubscribeOrderView). A validly signed payment for an order we did
+        # not create (another product on the same Razorpay account, a
+        # payment link, ...) used to fall back to a *lifetime* "legacy"
+        # plan -- never grant access for an order we can't match.
+        if existing_attempt is None:
+            logger.error(
+                'SubscribeVerify: signed payment %s for unknown order %s (user_id=%s) -- not activating; reconcile manually',
+                payment_id, order_id, user.id,
             )
+            return Response(
+                {'error': 'We could not match this payment to a checkout. Please contact support with your payment ID.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Atomic compare-and-set: exactly one of {this verify call, the
+        # webhook, a duplicate verify} flips the attempt to successful and
+        # activates; the others see 0 rows updated. Prevents stacking two
+        # subscription periods for one payment.
+        claimed = (
+            PaymentAttempt.objects
+            .filter(pk=existing_attempt.pk, user_id=user.id)
+            .exclude(status='successful')
+            .update(status='successful', razorpay_payment_id=payment_id, updated_at=timezone.now())
+        )
+        if not claimed:
+            sub = Subscription.get_active_subscription(user)
+            return Response({
+                'message': 'Subscription is already active!',
+                'is_subscribed': True,
+                'subscription': _serialize_subscription(sub) if sub else None,
+            })
+        price_paid = float(existing_attempt.amount)
+        plan = existing_attempt.plan or 'legacy'
 
         # Create proper Subscription record with plan + expiry
         sub = Subscription.activate_from_payment(
@@ -689,8 +721,11 @@ class SubscriptionInvoiceView(APIView):
         return Response({
             'subscription': _serialize_subscription(sub),
             'payment': {
-                'razorpay_order_id': payment.razorpay_order_id,
-                'razorpay_payment_id': payment.razorpay_payment_id,
+                'razorpay_order_id': payment.razorpay_order_id if payment else (sub.razorpay_order_id or ''),
+                'razorpay_payment_id': (
+                    payment.razorpay_payment_id if payment
+                    else (getattr(sub, 'razorpay_payment_id', '') or '')
+                ),
                 'amount': float(payment.amount) if payment else float(sub.amount_paid),
                 'plan': payment.plan if payment else sub.plan,
                 'status': payment.status if payment else 'successful',
@@ -781,18 +816,26 @@ class RazorpayWebhookView(APIView):
         # retries), update the stored payment_id and re-activate — the
         # previous Subscription.activate_from_payment is naturally
         # idempotent (extends existing expiry), so the result converges.
+        # Once an order has been credited (by verify or an earlier webhook
+        # delivery) never activate again -- a retry carrying a different
+        # payment_id used to stack a second subscription period. The
+        # compare-and-set makes concurrent verify/webhook deliveries safe.
         if attempt.status == 'successful':
-            if attempt.razorpay_payment_id == payment_id:
-                return Response({'status': 'already_processed'})
-            logger.warning(
-                f'Razorpay webhook: payment_id changed for order {order_id}: '
-                f'{attempt.razorpay_payment_id} -> {payment_id}. Re-activating.'
-            )
+            if attempt.razorpay_payment_id != payment_id:
+                logger.warning(
+                    'Razorpay webhook: order %s already credited with payment %s; ignoring payment %s',
+                    order_id, attempt.razorpay_payment_id, payment_id,
+                )
+            return Response({'status': 'already_processed'})
 
-        # Activate subscription
-        attempt.razorpay_payment_id = payment_id
-        attempt.status = 'successful'
-        attempt.save(update_fields=['razorpay_payment_id', 'status'])
+        claimed = (
+            PaymentAttempt.objects
+            .filter(pk=attempt.pk)
+            .exclude(status='successful')
+            .update(razorpay_payment_id=payment_id, status='successful', updated_at=timezone.now())
+        )
+        if not claimed:
+            return Response({'status': 'already_processed'})
 
         user = attempt.user
         plan = attempt.plan or 'legacy'
@@ -1023,31 +1066,38 @@ class AdminTokenTransferView(APIView):
                 from_user = User.objects.get(id=from_user_id)
             except User.DoesNotExist:
                 return Response({"error": f"Source user ID {from_user_id} not found"}, status=404)
+            if from_user.id == to_user.id:
+                return Response({"error": "Source and target user must be different"}, status=400)
 
-            from_balance = TokenBalance.objects.select_for_update().get(user=from_user)
+            # One atomic unit: the row lock is only valid inside a
+            # transaction (Postgres raises TransactionManagementError
+            # otherwise) and the debit + credit must succeed or fail
+            # together.
+            with transaction.atomic():
+                from_balance = TokenBalance.objects.select_for_update().filter(user=from_user).first()
+                if from_balance is None or from_balance.purchased_tokens < amount:
+                    available = from_balance.purchased_tokens if from_balance else 0
+                    return Response(
+                        {"error": f"{from_user.username} only has {available} purchased tokens"},
+                        status=400,
+                    )
 
-            if from_balance.purchased_tokens < amount:
-                return Response(
-                    {"error": f"{from_user.username} only has {from_balance.purchased_tokens} purchased tokens"},
-                    status=400,
+                from_balance.purchased_tokens -= amount
+                from_balance.save(update_fields=["purchased_tokens"])
+                TokenTransaction.objects.create(
+                    user=from_user,
+                    transaction_type="admin_transfer",
+                    amount=-amount,
+                    note=note or f"Admin transferred {amount} tokens to {to_user.username}",
                 )
 
-            from_balance.purchased_tokens -= amount
-            from_balance.save(update_fields=["purchased_tokens"])
-            TokenTransaction.objects.create(
-                user=from_user,
-                transaction_type="admin_transfer",
-                amount=-amount,
-                note=note or f"Admin transferred {amount} tokens to {to_user.username}",
-            )
-
-            to_balance.add_purchased_tokens(amount)
-            TokenTransaction.objects.create(
-                user=to_user,
-                transaction_type="admin_transfer",
-                amount=amount,
-                note=note or f"Admin transferred {amount} tokens from {from_user.username}",
-            )
+                to_balance.add_purchased_tokens(amount)
+                TokenTransaction.objects.create(
+                    user=to_user,
+                    transaction_type="admin_transfer",
+                    amount=amount,
+                    note=note or f"Admin transferred {amount} tokens from {from_user.username}",
+                )
 
             create_admin_audit_log(
                 actor=request.user,
@@ -1579,8 +1629,9 @@ class AdminSystemBackupDataView(APIView):
                 detail='Initiated core data backup to JSON',
             )
             return Response({'message': 'Core data structure backup completed successfully'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('Admin system data operation failed')
+            return Response({'error': 'Operation failed; see server logs for details.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AdminSystemRestoreDataView(APIView):
@@ -1600,8 +1651,9 @@ class AdminSystemRestoreDataView(APIView):
                 detail='Restored core data structure from JSON',
             )
             return Response({'message': 'Core data structure restore completed successfully'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('Admin system data operation failed')
+            return Response({'error': 'Operation failed; see server logs for details.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class PasswordResetConfirmView(APIView):
     """Confirm password reset with uid, token, and new password."""

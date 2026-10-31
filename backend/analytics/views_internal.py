@@ -146,7 +146,9 @@ class AnalyticsDashboardDataView(APIView):
 
     def get(self, request):
         now = timezone.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Local (IST) midnight -- `now` is UTC, so replacing hours on it put
+        # "today" 5h30m off.
+        today_start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=7)
         month_start = today_start - timedelta(days=30)
         last_5min = now - timedelta(minutes=5)
@@ -168,14 +170,18 @@ class AnalyticsDashboardDataView(APIView):
             qs = period_window(start)
             users = qs.values('visitor_id').distinct().count()
             page_views = qs.filter(event_name=AnalyticsEvent.EVENT_PAGE_VIEW).count()
-            sign_ups = qs.filter(event_name=AnalyticsEvent.EVENT_SIGN_UP).count()
-            payments = qs.filter(event_name=AnalyticsEvent.EVENT_PAYMENT_SUCCESS)
-            revenue = 0
-            for p in payments.values_list('properties', flat=True):
-                if isinstance(p, dict):
-                    amt = p.get('amount')
-                    if isinstance(amt, (int, float)):
-                        revenue += float(amt)
+            # Sign-ups and revenue come from authoritative tables: the
+            # event-ingest endpoint is public, so client-posted
+            # `sign_up` / `payment_success` events could be forged to
+            # inflate these KPIs.
+            from django.contrib.auth import get_user_model
+            from django.db.models import Sum
+            from accounts.models import PaymentAttempt
+            sign_ups = get_user_model().objects.filter(date_joined__gte=start).count()
+            revenue = float(
+                PaymentAttempt.objects.filter(status='successful', updated_at__gte=start)
+                .aggregate(total=Sum('amount'))['total'] or 0
+            )
             return {
                 'users': users,
                 'page_views': page_views,

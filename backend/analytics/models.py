@@ -149,7 +149,7 @@ class StudyStreak(models.Model):
     xp_points = models.IntegerField(default=0, db_index=True)
 
     def record_activity(self):
-        today = timezone.now().date()
+        today = timezone.localdate()
         if self.last_activity_date == today:
             return
         if self.last_activity_date and (today - self.last_activity_date).days == 1:
@@ -162,8 +162,11 @@ class StudyStreak(models.Model):
         self.save()
 
     def add_xp(self, points):
-        self.xp_points += points
-        self.save(update_fields=['xp_points'])
+        # Atomic increment: concurrent submits (two tabs, retries) used to
+        # lose XP with the previous read-modify-write.
+        from django.db.models import F
+        type(self).objects.filter(pk=self.pk).update(xp_points=F('xp_points') + int(points))
+        self.refresh_from_db(fields=['xp_points'])
 
     def __str__(self):
         return f"{self.user.username}: {self.current_streak} day streak, {self.xp_points} XP"

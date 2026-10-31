@@ -701,6 +701,14 @@ class Flashcard(models.Model):
         """SM-2 spaced repetition algorithm. quality: 0-5"""
         from django.utils import timezone
         import datetime
+        try:
+            quality = max(0, min(5, int(quality)))
+        except (TypeError, ValueError):
+            quality = 0
+        # `review_count` is the SM-2 repetition number n (consecutive
+        # successful reviews). A lapse restarts the sequence at n=0 so the
+        # next success is scheduled 1 day out (previously the lapse left
+        # n=1 and the next success jumped straight to 6 days).
         if quality < 3:
             self.interval_days = 1
             self.review_count = 0
@@ -710,9 +718,10 @@ class Flashcard(models.Model):
             elif self.review_count == 1:
                 self.interval_days = 6
             else:
-                self.interval_days = round(self.interval_days * self.ease_factor)
-            self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
-        self.review_count += 1
+                self.interval_days = max(1, round(self.interval_days * self.ease_factor))
+            self.review_count += 1
+        # SM-2 updates the ease factor on every review (lapses lower it).
+        self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
         self.next_review = timezone.now() + datetime.timedelta(days=self.interval_days)
         self.save()
 

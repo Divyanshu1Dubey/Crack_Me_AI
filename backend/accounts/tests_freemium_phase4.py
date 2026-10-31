@@ -176,8 +176,28 @@ class ActivateFromPaymentConcurrencyTests(TestCase):
         lifetime = Subscription.activate_from_payment(u, 'legacy', 199)
         monthly = Subscription.activate_from_payment(u, '1_month', 129)
         active = Subscription.get_active_subscription(u)
-        # Most recent active sub wins; that's the monthly.
-        self.assertEqual(active.id, monthly.id)
+        # The lifetime (unlimited-AI) plan must keep winning: buying a
+        # monthly plan on top of it must not downgrade the user, and the
+        # monthly row stays active alongside it.
+        self.assertEqual(active.id, lifetime.id)
+        self.assertTrue(active.unlimited_ai)
+        monthly.refresh_from_db()
+        self.assertEqual(monthly.status, 'active')
+
+    def test_expired_newest_row_does_not_hide_live_lifetime(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        u = _make_user('mixed-expired')
+        lifetime = Subscription.activate_from_payment(u, 'legacy', 199)
+        monthly = Subscription.activate_from_payment(u, '1_month', 129)
+        Subscription.objects.filter(pk=monthly.pk).update(expires_at=timezone.now() - timedelta(days=1))
+        active = Subscription.get_active_subscription(u)
+        self.assertIsNotNone(active)
+        self.assertEqual(active.id, lifetime.id)
+        u.refresh_from_db()
+        self.assertTrue(u.is_subscribed)
+        monthly.refresh_from_db()
+        self.assertEqual(monthly.status, 'expired')
 
 
 class FreemiumSeedTests(TestCase):

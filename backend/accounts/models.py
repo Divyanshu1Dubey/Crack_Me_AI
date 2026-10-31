@@ -155,7 +155,7 @@ class TokenBalance(models.Model):
 
     def _reset_if_needed(self):
         """Reset daily/weekly counters if the period has elapsed."""
-        today = timezone.now().date()
+        today = timezone.localdate()
         changed = False
         last_daily_reset = self.last_daily_reset.date() if hasattr(self.last_daily_reset, 'date') else self.last_daily_reset
         last_weekly_reset = self.last_weekly_reset.date() if hasattr(self.last_weekly_reset, 'date') else self.last_weekly_reset
@@ -210,6 +210,8 @@ class TokenBalance(models.Model):
 
             config = TokenConfig.get_config()
             tokens_to_deduct = amount
+            deduct_from_feedback = 0
+            deduct_from_purchased = 0
 
             # 1. Deduct from free daily/weekly
             free_daily_remaining = max(0, config.free_daily_tokens - locked.daily_tokens_used)
@@ -237,6 +239,14 @@ class TokenBalance(models.Model):
             locked.total_tokens_used += amount
             locked.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'feedback_credits', 'purchased_tokens', 'total_tokens_used'])
 
+            # Exact pools this call drew from, so a refund can reverse it
+            # precisely (see refund_token / ai_engine.views.refund_ai_token).
+            self._last_consumption = {
+                'free': deduct_from_free,
+                'feedback': deduct_from_feedback,
+                'purchased': deduct_from_purchased,
+            }
+
             # Sync in-memory state so subsequent property reads in this request see new values
             self.daily_tokens_used = locked.daily_tokens_used
             self.weekly_tokens_used = locked.weekly_tokens_used
@@ -263,7 +273,7 @@ class TokenBalance(models.Model):
             self.purchased_tokens = locked.purchased_tokens
             self.purchased_tokens_max = locked.purchased_tokens_max
 
-    def refund_token(self, amount=1):
+    def refund_token(self, amount=1, breakdown=None):
         """Refund tokens (used when AI call fails after token was consumed).
 
         Refund priority mirrors consume in REVERSE: restore `purchased_tokens`
@@ -296,6 +306,27 @@ class TokenBalance(models.Model):
             if locked is None:
                 return
 
+            if breakdown is not None:
+                # Exact reversal of a recorded consume_token() call.
+                free = max(0, int(breakdown.get('free', 0) or 0))
+                feedback = max(0, int(breakdown.get('feedback', 0) or 0))
+                purchased = max(0, int(breakdown.get('purchased', 0) or 0))
+                locked.purchased_tokens += purchased
+                locked.feedback_credits += feedback
+                locked.daily_tokens_used = max(0, locked.daily_tokens_used - free)
+                locked.weekly_tokens_used = max(0, locked.weekly_tokens_used - free)
+                locked.total_tokens_used = max(0, locked.total_tokens_used - (free + feedback + purchased))
+                locked.save(update_fields=[
+                    'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
+                    'purchased_tokens', 'feedback_credits',
+                ])
+                self.daily_tokens_used = locked.daily_tokens_used
+                self.weekly_tokens_used = locked.weekly_tokens_used
+                self.total_tokens_used = locked.total_tokens_used
+                self.purchased_tokens = locked.purchased_tokens
+                self.feedback_credits = locked.feedback_credits
+                return
+
             remaining = amount
 
             # 1. Restore purchased tokens first (highest-value refund).
@@ -308,21 +339,16 @@ class TokenBalance(models.Model):
                 restore_from_purchased = min(remaining, max(0, (locked.purchased_tokens_max or 0) - locked.purchased_tokens))
                 if restore_from_purchased > 0:
                     locked.purchased_tokens += restore_from_purchased
-                    locked.purchased_tokens_max = (locked.purchased_tokens_max or 0) + restore_from_purchased
                     remaining -= restore_from_purchased
-            elif remaining > 0:
-                # No high-water mark — refund up to `amount` into purchased
-                # if total_tokens_used shows we used that many.
-                if locked.total_tokens_used >= amount:
-                    locked.purchased_tokens += remaining
-                    remaining = 0
+            # (No high-water mark: we cannot know purchased tokens were
+            # spent, so the refund falls through to the free counters
+            # below instead of minting purchased tokens.)
 
             # 2. Restore feedback credits next.
             if remaining > 0 and locked.feedback_credits_max is not None:
                 restore_from_feedback = min(remaining, max(0, (locked.feedback_credits_max or 0) - locked.feedback_credits))
                 if restore_from_feedback > 0:
                     locked.feedback_credits += restore_from_feedback
-                    locked.feedback_credits_max = (locked.feedback_credits_max or 0) + restore_from_feedback
                     remaining -= restore_from_feedback
 
             # 3. Decrement daily/weekly counters symmetrically with consume:
@@ -661,27 +687,40 @@ class Subscription(models.Model):
         from django.db import transaction
 
         with transaction.atomic():
-            active = (
+            rows = list(
                 cls.objects.select_for_update()
                 .filter(user=user, status='active')
                 .order_by('-created_at')
-                .first()
             )
-
-            if active is None:
+            if not rows:
                 return None
 
-            if not active.is_active:
-                # Lazy-expire this row. Use a filter+update to be idempotent
-                # under concurrent flips: if another worker already flipped
-                # it, this becomes a no-op rather than a 0-row save error.
-                cls.objects.filter(pk=active.pk, status='active').update(
-                    status='expired'
-                )
+            # Evaluate EVERY active row, not just the newest: a user can hold
+            # several (e.g. lifetime + a later monthly, or 1-year + a stacked
+            # monthly). Previously an expired newest row flipped the user to
+            # unsubscribed even though an older lifetime row was still live,
+            # and a stacked non-unlimited row hid the 1-year plan's
+            # unlimited AI.
+            live = [r for r in rows if r.is_active]
+            expired_ids = [r.pk for r in rows if not r.is_active]
+            if expired_ids:
+                # Idempotent under concurrent flips.
+                cls.objects.filter(pk__in=expired_ids, status='active').update(status='expired')
+            if not live:
                 CustomUser.objects.filter(pk=user.pk).update(is_subscribed=False)
                 return None
 
-            return active
+            far_future = timezone.now() + timedelta(days=365 * 100)
+            live.sort(
+                key=lambda r: (
+                    bool(r.unlimited_ai),
+                    r.expires_at is None,
+                    r.expires_at or far_future,
+                    r.created_at,
+                ),
+                reverse=True,
+            )
+            return live[0]
 
     @classmethod
     def activate_from_payment(cls, user, plan, amount_paid, razorpay_order_id='', razorpay_payment_id=''):

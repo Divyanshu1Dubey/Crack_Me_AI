@@ -18,6 +18,8 @@
  * `/media/...` path so the admin can spot it.
  */
 
+import { apiUrl } from './apiBase';
+
 export interface QuestionImageLike {
   id: number;
   url?: string | null;
@@ -99,7 +101,7 @@ export function resolveImageTokens(
       // a fallback for environments where the proxy isn't wired up.
       const served =
         (found.url && found.url.length > 0 ? found.url : null) ||
-        `/api/questions/images/${found.id}/serve/`;
+        apiUrl(`/questions/images/${found.id}/serve/`);
       const alt = (found.caption || `Question image ${base}`).replace(/"/g, '&quot;');
       return `<img src="${escapeAttr(served)}" alt="${alt}" loading="lazy" class="question-inline-image" />`;
     }

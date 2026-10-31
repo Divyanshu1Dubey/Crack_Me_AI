@@ -251,15 +251,6 @@ def _layout_context_answer(block: dict[str, Any]) -> Optional[dict[str, Any]]:
             continue
         return {"labels": labels, "text": text}
     return None
-    """Count occurrences of keyword in text using whole-word boundary regex.
-
-    Replaces the legacy ``kw in text`` substring check that produced
-    collisions such as ``ear`` matching ``year`` / ``near``.  All
-    returned counts are ≥ 0.
-    """
-    if not text or not kw:
-        return 0
-    return len(re.findall(rf"\b{re.escape(kw)}\b", text, flags=re.IGNORECASE))
 
 
 def _map_subject(stem: str, filename_subject: Optional[str],

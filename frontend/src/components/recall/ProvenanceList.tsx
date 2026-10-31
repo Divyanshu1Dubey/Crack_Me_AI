@@ -33,7 +33,7 @@ export default function ProvenanceList({ questionId }: Props) {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get(`/api/questions/${questionId}/sources/`);
+        const r = await api.get(`/questions/${questionId}/sources/`);
         if (alive) setRows(r.data || []);
       } catch (e: any) {
         if (alive) setErr(e?.message || "Failed to load provenance");

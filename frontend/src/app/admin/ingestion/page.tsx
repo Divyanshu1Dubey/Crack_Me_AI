@@ -1,25 +1,38 @@
+"use client";
+
 // /admin/ingestion — landing page.
 // Tiles for queue depth, today stats, last 10 jobs.
+// Client component so the request carries the admin's auth token.
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ingestionAPI } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+export default function IngestionLanding() {
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-async function loadOverview() {
-  try {
-    const r: any = await ingestionAPI.listJobs({ page_size: 10 });
-    const data = r?.data;
-    return Array.isArray(data) ? data : (data?.results || []);
-  } catch {
-    return [];
-  }
-}
+  useEffect(() => {
+    let alive = true;
+    ingestionAPI
+      .listJobs({ page_size: 10 })
+      .then((r: any) => {
+        const data = r?.data;
+        if (alive) setJobs(Array.isArray(data) ? data : (data?.results || []));
+      })
+      .catch(() => {
+        if (alive) setJobs([]);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-export default async function IngestionLanding() {
-  const jobs = await loadOverview();
   const counts = jobs.reduce(
-    (acc: any, j: any) => {
+    (acc: Record<string, number>, j: any) => {
       acc[j.status] = (acc[j.status] || 0) + 1;
       return acc;
     },
@@ -27,7 +40,7 @@ export default async function IngestionLanding() {
   );
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <header>
         <h1 className="text-3xl font-bold">Production Ingestion</h1>
         <p className="text-sm text-muted-foreground">
@@ -50,34 +63,38 @@ export default async function IngestionLanding() {
 
       <section>
         <h2 className="text-xl font-semibold mb-3">Last 10 jobs</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b">
-                <th className="p-2">ID</th>
-                <th className="p-2">Exam</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">PR%</th>
-                <th className="p-2">NR%</th>
-                <th className="p-2">EF%</th>
-                <th className="p-2">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(jobs as any[]).map((j) => (
-                <tr key={j.id} className="border-b hover:bg-muted/40">
-                  <td className="p-2"><Link href={`/admin/ingestion/jobs/${j.id}`} className="underline">#{j.id}</Link></td>
-                  <td className="p-2">{j.parent_exam}</td>
-                  <td className="p-2">{j.status}</td>
-                  <td className="p-2">{j.qa_v2_production_ready_pct ?? "—"}</td>
-                  <td className="p-2">{j.qa_v2_needs_review_pct ?? "—"}</td>
-                  <td className="p-2">{j.qa_v2_extraction_failure_pct ?? "—"}</td>
-                  <td className="p-2">{j.progress_pct ?? 0}%</td>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="p-2">ID</th>
+                  <th className="p-2">Exam</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">PR%</th>
+                  <th className="p-2">NR%</th>
+                  <th className="p-2">EF%</th>
+                  <th className="p-2">Progress</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {jobs.map((j) => (
+                  <tr key={j.id} className="border-b hover:bg-muted/40">
+                    <td className="p-2"><Link href={`/admin/ingestion/jobs/${j.id}`} className="underline">#{j.id}</Link></td>
+                    <td className="p-2">{j.parent_exam}</td>
+                    <td className="p-2">{j.status}</td>
+                    <td className="p-2">{j.qa_v2_production_ready_pct ?? "—"}</td>
+                    <td className="p-2">{j.qa_v2_needs_review_pct ?? "—"}</td>
+                    <td className="p-2">{j.qa_v2_extraction_failure_pct ?? "—"}</td>
+                    <td className="p-2">{j.progress_pct ?? 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

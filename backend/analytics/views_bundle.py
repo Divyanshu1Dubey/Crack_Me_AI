@@ -50,7 +50,7 @@ class DashboardBundleView(APIView):
         if cached is not None:
             return Response(cached)
 
-        now = timezone.now().date()
+        now = timezone.localdate()
         days_120 = now - datetime.timedelta(days=120)
 
         # ── 1. Overall stats + subject performance (mirrors DashboardView) ──

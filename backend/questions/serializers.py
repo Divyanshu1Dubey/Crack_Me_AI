@@ -814,7 +814,7 @@ class FlashcardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Flashcard
         fields = ['id', 'question', 'subject', 'subject_name', 'front', 'back',
-                  'difficulty', 'next_review', 'review_count', 'ease_factor',
+                  'difficulty', 'personal_note', 'next_review', 'review_count', 'ease_factor',
                   'interval_days', 'created_at']
         read_only_fields = ['id', 'review_count', 'ease_factor', 'interval_days',
                             'next_review', 'created_at']
@@ -932,7 +932,20 @@ class UserQuestSerializer(serializers.ModelSerializer):
                   'target_value', 'current_value', 'xp_reward', 'is_completed', 'is_claimed',
                   'progress_percent', 'subject_name', 'quest_date', 'expires_at',
                   'completed_at', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        # Everything is server-controlled: students can only *claim* a
+        # quest via the detail endpoint (see questions.quest_service).
+        read_only_fields = fields
+
+
+class UserQuestAdminSerializer(serializers.ModelSerializer):
+    """Admin-only quest creation (can target any user)."""
+
+    class Meta:
+        model = UserQuest
+        fields = ['id', 'user', 'quest_type', 'difficulty', 'title', 'description',
+                  'target_value', 'xp_reward', 'quest_date', 'expires_at']
+        read_only_fields = ['id']
+        extra_kwargs = {'user': {'required': False}}
 
 
 class QuestStreakSerializer(serializers.ModelSerializer):

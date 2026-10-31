@@ -25,7 +25,7 @@ export default function QuestionTimer({ questionId }: Props) {
       const elapsed = Math.max(0, Date.now() - start.current);
       start.current = Date.now();
       const ms = Math.min(60_000, elapsed); // 60s cap per flush
-      api.post(`/api/questions/${questionId}/practice/time/`, { seconds: Math.round(ms / 1000) })
+      api.post(`/questions/${questionId}/practice/time/`, { seconds: Math.round(ms / 1000) })
         .catch(() => {/* swallow */});
     };
     const onVisibility = () => { if (document.hidden) flush(); };
