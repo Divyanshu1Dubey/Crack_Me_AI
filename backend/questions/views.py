@@ -1101,7 +1101,10 @@ class QuestionViewSet(viewsets.ModelViewSet):
             permission_classes=[permissions.IsAuthenticated])
     def practice_attempt(self, request, pk=None):
         q = self.get_object()
-        answer = (request.data.get("answer") or "").upper()[:1]
+        raw_answer = request.data.get("answer")
+        answer = raw_answer.strip().upper()[:1] if isinstance(raw_answer, str) else ""
+        if answer and answer not in "ABCDE":
+            return Response({"error": "answer must be one of A-E"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             time_spent = int(request.data.get("time_spent", 0))
         except (TypeError, ValueError):
@@ -1716,15 +1719,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def attempt(self, request, pk=None):
         """Record an attempt on a QBank question and update statistics."""
         question = self.get_object()
-        selected_answer = request.data.get('selected_answer')
-        if not selected_answer:
-            return Response({'error': 'selected_answer is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        is_correct = (selected_answer == question.correct_answer)
-        
+        raw_answer = request.data.get('selected_answer')
+        # Normalise: the column is CharField(max_length=1) (longer values made
+        # Postgres reject the insert -> 500) and the comparison used to be
+        # case-sensitive ('a' was marked wrong).
+        selected_answer = str(raw_answer).strip().upper()[:1] if isinstance(raw_answer, str) else ''
+        if not selected_answer or selected_answer not in 'ABCDE':
+            return Response({'error': 'selected_answer must be one of A-E'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_correct = selected_answer == (question.correct_answer or '').strip().upper()[:1]
+
         from questions.models import QuestionAttempt
         from analytics.models import UserTopicPerformance, DailyActivity
-        
+
         attempt, created = QuestionAttempt.objects.update_or_create(
             user=request.user,
             question=question,
@@ -1733,6 +1740,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 'is_correct': is_correct
             }
         )
+        if not is_correct:
+            from questions.mistakes import record_mistake
+            record_mistake(request.user, question, selected_answer, attempt=attempt)
+
+        from questions.study_time import clamp_seconds, record_study_time
+        record_study_time(request.user, [
+            (question.subject_id, clamp_seconds(request.data.get('time_spent_seconds')), 1),
+        ])
 
         # Invalidate per-user caches so dashboard + question list stay fresh.
         cache.delete(f'dashboard:{request.user.id}')

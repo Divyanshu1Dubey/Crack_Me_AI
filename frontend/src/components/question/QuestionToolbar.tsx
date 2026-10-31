@@ -32,6 +32,11 @@ export interface QuestionState {
   bookmarked: boolean;
 }
 
+function formatSpent(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+}
+
 export default function QuestionToolbar(props: Props) {
   const { questionId, index, total, onPrev, onNext, onJump, onEliminationChange, onStateChange } = props;
   const [state, setState] = useState<QuestionState>({
@@ -150,7 +155,8 @@ export default function QuestionToolbar(props: Props) {
       </button>
 
       <span className="text-xs text-slate-300 ml-2">
-        ⏱ {Math.round((state.time_spent || 0) / 1000)}s
+        {/* time_spent is accumulated seconds (was divided by 1000 as if ms) */}
+        ⏱ {formatSpent(state.time_spent || 0)}
       </span>
     </div>
   );

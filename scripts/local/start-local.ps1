@@ -130,7 +130,14 @@ if (-not $SkipFrontend) {
         if ($Frontend -eq 'prod') {
             Write-Host 'Building frontend (next build) ...'
             Push-Location $FrontendDir
-            try { & node $nextBin build | Out-File (Join-Path $Logs 'frontend.build.log') } finally { Pop-Location }
+            try {
+                # Windows PowerShell 5.1 turns native stderr lines into errors,
+                # which 'Stop' would make fatal on the first build warning.
+                $ErrorActionPreference = 'Continue'
+                & node $nextBin build 2>&1 | Out-File (Join-Path $Logs 'frontend.build.log')
+                $buildExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = 'Stop'; Pop-Location }
+            if ($buildExit -ne 0) { throw "next build failed (exit $buildExit); see $Logs\frontend.build.log" }
             $nextArgs = @($nextBin, 'start', '-p', '3000')
         } else {
             $nextArgs = @($nextBin, 'dev', '--webpack', '-p', '3000')

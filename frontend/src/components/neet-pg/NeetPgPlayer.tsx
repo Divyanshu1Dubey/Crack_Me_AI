@@ -264,7 +264,10 @@ export default function NeetPgPlayer({
         const isRight = choice.toUpperCase().trim() === correct;
         setScore(s => ({ ...s, correct: s.correct + (isRight ? 1 : 0), wrong: s.wrong + (isRight ? 0 : 1) }));
         try {
-            await questionsAPI.attempt(current.id, { selected_answer: choice });
+            await questionsAPI.attempt(current.id, {
+                selected_answer: choice,
+                time_spent_seconds: Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
+            });
         } catch { /* offline-tolerant */ }
     }, [current?.id]);
 

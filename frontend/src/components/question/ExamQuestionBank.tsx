@@ -445,7 +445,14 @@ function ExamQuestionBankInner({
         fetchPage(1);
     }, [studyMode, selectedYear, selectedSubject, selectedDifficulty, selectedExam, searchQuery, isAuthenticated, bookmarkedOnly]);
 
+    // When the open question was shown; answers report the time spent so
+    // the server can record per-subject study time.
+    const questionOpenedAt = useRef<number>(0);
+    const secondsOnQuestion = () =>
+        questionOpenedAt.current ? Math.max(0, Math.round((Date.now() - questionOpenedAt.current) / 1000)) : 0;
+
     const openQuestion = useCallback((id: number) => {
+        questionOpenedAt.current = Date.now();
         setSelectedQuestion(id);
         setShowAnswer(false);
         setSelectedAnswer(null);
@@ -503,11 +510,10 @@ function ExamQuestionBankInner({
             setShowAnswer(true);
             const qId = questionDetail.id;
             const isCorrect = opt === questionDetail.correct_answer;
-            questionsAPI.attempt(qId, { selected_answer: opt }).then(res => {
-                const tokenEarned = res.data?.token_earned;
-                if (tokenEarned) {
-                    setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
-                }
+            questionsAPI.attempt(qId, { selected_answer: opt, time_spent_seconds: secondsOnQuestion() }).then(() => {
+                // Mark the row answered in the list (previously only when a
+                // token was earned, so most answers never showed up there).
+                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
             }).catch(() => { });
         }
     };
@@ -517,11 +523,8 @@ function ExamQuestionBankInner({
         setShowAnswer(true);
         const qId = questionDetail.id;
         const isCorrect = selectedAnswer === questionDetail.correct_answer;
-        questionsAPI.attempt(qId, { selected_answer: selectedAnswer }).then(res => {
-            const tokenEarned = res.data?.token_earned;
-            if (tokenEarned) {
-                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
-            }
+        questionsAPI.attempt(qId, { selected_answer: selectedAnswer, time_spent_seconds: secondsOnQuestion() }).then(() => {
+            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
         }).catch(() => { });
         setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
     };

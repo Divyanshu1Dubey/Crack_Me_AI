@@ -476,6 +476,7 @@ class TestViewSet(viewsets.ModelViewSet):
             correct = 0
             incorrect = 0
             responses_to_create = []
+            wrong_answers = []
             for qid, ans in clean_answers.items():
                 question = questions_map.get(qid)
                 if not question:
@@ -489,6 +490,8 @@ class TestViewSet(viewsets.ModelViewSet):
                     else:
                         incorrect += 1
                 ans['is_correct'] = is_correct
+                if is_correct is False:
+                    wrong_answers.append((question, selected))
                 responses_to_create.append(QuestionResponse(
                     attempt=attempt,
                     question=question,
@@ -517,6 +520,21 @@ class TestViewSet(viewsets.ModelViewSet):
             attempt.completed_at = timezone.now()
             attempt.time_taken_seconds = (attempt.completed_at - attempt.started_at).total_seconds()
             attempt.save()
+
+        # Wrong answers feed the student's Mistake Notebook.
+        from questions.mistakes import record_mistakes_bulk
+        record_mistakes_bulk(request.user, wrong_answers)
+
+        # Per-subject study time (Study Time page, dashboard weekly totals).
+        from questions.study_time import record_study_time, rows_for_test_submission
+        record_study_time(request.user, rows_for_test_submission(
+            [
+                (questions_map[qid].subject_id, ans['time_taken'], bool(ans['selected']))
+                for qid, ans in clean_answers.items() if qid in questions_map
+            ],
+            attempt.time_taken_seconds,
+            test.time_limit_minutes,
+        ))
 
         from django.core.cache import cache
         cache.delete(f'dashboard:{request.user.id}')

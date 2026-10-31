@@ -183,12 +183,21 @@ function PracticeContent() {
         return q && a === (q.correct_answer || '');
     }).length;
 
+    // Reset the per-question timer whenever a new question is shown.
+    const questionShownAt = useRef<number>(Date.now());
+    useEffect(() => {
+        questionShownAt.current = Date.now();
+    }, [currentQ?.id]);
+
     const handleSelectOption = (opt: string) => {
         if (!currentQ || answers[currentQ.id]) return;
         setAnswers(prev => ({ ...prev, [currentQ.id]: opt }));
         setShowAnswer(true);
-        // Log attempt
-        questionsAPI.attempt(currentQ.id, { selected_answer: opt }).catch(() => {});
+        // Log attempt (time spent feeds study-time tracking)
+        questionsAPI.attempt(currentQ.id, {
+            selected_answer: opt,
+            time_spent_seconds: Math.max(0, Math.round((Date.now() - questionShownAt.current) / 1000)),
+        }).catch(() => {});
     };
 
     const goToQuestion = useCallback((idx: number) => {

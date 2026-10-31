@@ -19,7 +19,7 @@
  * &year=...&subject_id=...&topic_id=...&difficulty=...&is_image_based=...
  * &has_ai_enrichment=...`
  */
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { FormattedText, FormattedOptionText } from "@/components/FormattedText";
 import RecallBadge from "@/components/recall/RecallBadge";
@@ -191,8 +191,11 @@ function PracticeInner() {
     }, [ready, JSON.stringify(buildParams())]);
 
     const qid = queue[idx];
+    // When the current question was shown (time spent feeds study time).
+    const shownAt = useRef<number>(Date.now());
 
     useEffect(() => {
+        shownAt.current = Date.now();
         if (!qid) { setQ(null); setQImages([]); return; }
         let alive = true;
         (async () => {
@@ -224,7 +227,10 @@ function PracticeInner() {
         setPicked(answer);
         setBusy(true);
         try {
-            await api.post(`/questions/${q.id}/practice/attempt/`, { answer });
+            await api.post(`/questions/${q.id}/practice/attempt/`, {
+                answer,
+                time_spent: Math.max(0, Math.round((Date.now() - shownAt.current) / 1000)),
+            });
             setRevealed(true);
             setSubmitError(null);
         } catch (err) {

@@ -117,12 +117,17 @@ def submit_attempt(q, user, *, answer: str, correct: bool, time_spent: int = 0,
 
     answer = (answer or "").strip().upper()[:1]
     if answer:
-        QuestionAttempt.objects.update_or_create(
+        attempt, _ = QuestionAttempt.objects.update_or_create(
             user=user, question=q,
             defaults={"selected_answer": answer, "is_correct": bool(correct)},
         )
+        if not correct:
+            from questions.mistakes import record_mistake
+            record_mistake(user, q, answer, attempt=attempt)
     if time_spent:
         add_time_spent(q, user, time_spent)
     if confidence:
         set_confidence(q, user, confidence)
+    from questions.study_time import clamp_seconds, record_study_time
+    record_study_time(user, [(q.subject_id, clamp_seconds(time_spent), 1 if answer else 0)])
     return {"question_id": q.id, "correct": bool(correct), "time_spent": time_spent}

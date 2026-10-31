@@ -373,7 +373,9 @@ export const questionsAPI = {
   getYears: () => api.get('/questions/years/'),
   getStats: (params?: Record<string, string | number>) => api.get('/questions/stats/', { params }),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
-  attempt: (id: number, data: { selected_answer: string }) => api.post(`/questions/${id}/attempt/`, data),
+  // time_spent_seconds feeds server-side study-time tracking (optional).
+  attempt: (id: number, data: { selected_answer: string; time_spent_seconds?: number }) =>
+    api.post(`/questions/${id}/attempt/`, data),
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
   create: (data: Record<string, unknown>) => api.post('/questions/', data),
