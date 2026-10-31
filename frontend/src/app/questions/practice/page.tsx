@@ -629,8 +629,8 @@ function PracticeContent() {
                         <div className="bg-card rounded-2xl border border-border/80 shadow-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto m-4" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-sm font-bold">Question Palette — {currentExamLabel} {year} PYQs</h3>
-                                <button onClick={() => setShowPalette(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer">
-                                    <X className="w-4 h-4" />
+                                <button onClick={() => setShowPalette(false)} aria-label="Close question palette" className="p-1 rounded-lg hover:bg-muted cursor-pointer">
+                                    <X className="w-4 h-4" aria-hidden="true" />
                                 </button>
                             </div>
                             <div className="grid grid-cols-8 gap-1.5">

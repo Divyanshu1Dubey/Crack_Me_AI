@@ -157,12 +157,14 @@ export default function FeedbackPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Rating</label>
-                                <div className="flex gap-1 mt-1">
+                                <span id="feedback-rating-label" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Rating</span>
+                                <div className="flex gap-1 mt-1" role="group" aria-labelledby="feedback-rating-label">
                                     {[1, 2, 3, 4, 5].map(s => (
                                         <button key={s} type="button" onClick={() => setRating(s)}
+                                            aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                                            aria-pressed={s <= rating}
                                             className="transition-transform hover:scale-110">
-                                            <Star className="w-7 h-7" fill={s <= rating ? '#f59e0b' : 'transparent'}
+                                            <Star className="w-7 h-7" aria-hidden="true" fill={s <= rating ? '#f59e0b' : 'transparent'}
                                                 stroke={s <= rating ? '#f59e0b' : 'var(--text-muted)'} />
                                         </button>
                                     ))}

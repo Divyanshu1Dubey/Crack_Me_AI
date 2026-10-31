@@ -616,7 +616,7 @@ export default function IniCetPlayer({
                                         </h3>
                                         <div className="flex flex-wrap gap-1.5">
                                             {(current as any).concept_keywords.slice(0, 12).map((k: string, idx: number) => (
-                                                <Badge key={idx} variant="outline" className="text-[11px] bg-white">
+                                                <Badge key={idx} variant="outline" className="text-[11px] bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                                     {k}
                                                 </Badge>
                                             ))}
@@ -718,7 +718,7 @@ export default function IniCetPlayer({
                                 value={state.notes}
                                 onChange={(e) => setState(s => ({ ...s, notes: e.target.value }))}
                                 placeholder="High-yield takeaway, image-description mnemonic, revision priority…"
-                                className="mt-3 w-full min-h-20 p-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="mt-3 w-full min-h-20 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </details>
                     </div>
@@ -824,7 +824,7 @@ export default function IniCetPlayer({
                     aria-modal="true"
                 >
                     <div
-                        className="bg-white rounded-2xl border border-indigo-200 shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+                        className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 rounded-2xl border border-indigo-200 dark:border-slate-700 shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur z-10 px-6 py-4 border-b border-indigo-100 dark:border-slate-800 flex items-center justify-between">

@@ -18,6 +18,8 @@ interface TestItem {
     id: number;
     title: string;
     test_type: string;
+    subject?: number | null;
+    topic?: number | null;
     subject_name: string;
     num_questions: number;
     time_limit_minutes: number;
@@ -47,6 +49,7 @@ export default function TestsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState<string | null>(null);
 
     const [examType, setExamType] = useState('cms');
 
@@ -81,7 +84,10 @@ export default function TestsPage() {
                 const seen = new Set<string>();
                 const unique: TestItem[] = [];
                 for (const t of rawTests) {
-                    const key = `${t.test_type}:${t.subject_id ?? 'none'}:${t.topic_id ?? 'none'}`;
+                    // The API returns `subject` / `topic` (ids). The old key read
+                    // non-existent `subject_id` / `topic_id`, collapsing every test
+                    // of one type (all subjects, all PYQ years) into a single card.
+                    const key = `${t.test_type}:${t.subject ?? 'none'}:${t.topic ?? 'none'}:${t.title}`;
                     if (seen.has(key)) continue;
                     seen.add(key);
                     unique.push(t);
@@ -94,15 +100,24 @@ export default function TestsPage() {
 
     const generateTest = async (type: string, subjectId?: number) => {
         setGenerating(true);
+        setGenerateError(null);
         try {
             const data: Record<string, string | number> = { test_type: type, num_questions: 20 };
+            // Tag the generated test with the active exam track so it shows up
+            // in this track's list (the list is filtered by exam_type).
+            if (['cms', 'neet_pg', 'ini_cet', 'usmle', 'fmge'].includes(examType)) data.exam_type = examType;
             if (subjectId) data.subject_id = subjectId;
             if (type === 'paper1' || type === 'paper2') data.num_questions = 120;
             if (type === 'daily') data.num_questions = 20;
             const res = await testsAPI.generate(data);
             setTests(prev => [res.data, ...prev]);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to generate test:', err);
+            setGenerateError(
+                err?.response?.data?.error
+                || err?.response?.data?.detail
+                || 'Could not generate a test right now. Please try again.'
+            );
         } finally {
             setGenerating(false);
         }
@@ -141,6 +156,12 @@ export default function TestsPage() {
                     Test Center
                 </h1>
                 <p className="text-sm mb-6 text-muted-foreground">Generate & take practice tests</p>
+
+                {generateError && (
+                    <div role="alert" className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                        {generateError}
+                    </div>
+                )}
 
                 {/* Quick Generate */}
                 <div className="mb-8">

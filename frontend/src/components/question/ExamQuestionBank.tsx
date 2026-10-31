@@ -1063,14 +1063,14 @@ function ExamQuestionBankInner({
                                     })}
                                     {totalPages > 1 && (
                                         <div className="flex items-center justify-center gap-2 pt-4">
-                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
-                                                <ChevronLeft className="w-4 h-4" />
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1} aria-label="Previous page">
+                                                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                                             </Button>
                                             <span className="text-sm px-3 text-muted-foreground">
                                                 Page {page} of {totalPages}
                                             </span>
-                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>
-                                                <ChevronRight className="w-4 h-4" />
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages} aria-label="Next page">
+                                                <ChevronRight className="w-4 h-4" aria-hidden="true" />
                                             </Button>
                                         </div>
                                     )}

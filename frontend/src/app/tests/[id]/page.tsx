@@ -89,6 +89,12 @@ export default function TakeTestPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
+    // Submit failures are shown inline (with Retry) instead of through
+    // `error`, which replaces the whole exam with "Failed to Load Test"
+    // and threw away the student's answers.
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
     const [reviewMode, setReviewMode] = useState(false);
     const [reviewIdx, setReviewIdx] = useState(0);
     const [reviewAiExplanations, setReviewAiExplanations] = useState<Record<number, any>>({});
@@ -171,7 +177,12 @@ export default function TakeTestPage() {
     }, [currentIdx]);
 
     const doSubmit = useCallback(async () => {
-        if (!attemptId || submitted) return;
+        // In-flight guard: the confirm button and the timer's auto-submit
+        // could previously both fire while a submit was pending.
+        if (!attemptId || submitted || submittingRef.current) return;
+        submittingRef.current = true;
+        setSubmitting(true);
+        setSubmitError(null);
         if (timerRef.current) clearInterval(timerRef.current);
 
         // Record final time for current question
@@ -201,8 +212,11 @@ export default function TakeTestPage() {
             console.error('Submit failed:', err);
             // Surface the error so the user can recover instead of being stuck.
             const message = extractApiErrorMessage(err) || 'Failed to submit test. Please check your connection and try again.';
-            setError(message);
+            setSubmitError(message);
             setShowConfirm(false);
+        } finally {
+            submittingRef.current = false;
+            setSubmitting(false);
         }
     }, [attemptId, submitted, currentIdx, questions, answers, testId]);
 
@@ -800,13 +814,13 @@ export default function TakeTestPage() {
     // ─── RESULTS SCREEN ─────────────────────────────────
     if (submitted && result) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-8 bg-background">
-                <div className="glass-card p-8 max-w-lg w-full text-center animate-fadeInUp">
-                    <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10b981' }} />
+            <div className="min-h-screen flex items-center justify-center p-4 sm:p-8 bg-background">
+                <div className="glass-card p-5 sm:p-8 max-w-lg w-full text-center animate-fadeInUp">
+                    <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10b981' }} aria-hidden="true" />
                     <h1 className="text-2xl font-bold mb-2">Test Completed!</h1>
                     <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>{test?.title}</p>
 
-                    <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
                         <div className="stat-card text-center">
                             <div className="text-2xl font-bold" style={{ color: '#10b981' }}>{String(result.correct_count)}</div>
                             <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Correct</div>
@@ -862,11 +876,29 @@ export default function TakeTestPage() {
     return (
         <div className="min-h-screen flex flex-col bg-background lg:overflow-hidden lg:h-screen">
             {/* Confirm Dialog */}
+            {submitError && !showConfirm && (
+                <div role="alert" className="fixed bottom-4 left-1/2 z-100 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-xl border border-destructive/40 bg-card p-4 shadow-lg">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 shrink-0 text-destructive" aria-hidden="true" />
+                        <div className="flex-1 text-sm">
+                            <p className="font-semibold text-foreground">Your test was not submitted</p>
+                            <p className="text-muted-foreground">{submitError} Your answers are still here.</p>
+                        </div>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={() => setSubmitError(null)} className="btn-secondary">Dismiss</button>
+                        <button onClick={doSubmit} disabled={submitting} className="btn-primary justify-center disabled:opacity-60">
+                            {submitting ? 'Submitting…' : 'Retry submit'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {showConfirm && (
                 <div className="fixed inset-0 z-100 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
-                    <div className="glass-card p-8 max-w-sm w-full mx-4 text-center animate-fadeInUp">
-                        <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: '#f59e0b' }} />
-                        <h3 className="text-xl font-bold mb-2">Submit Test?</h3>
+                    <div role="dialog" aria-modal="true" aria-labelledby="submit-test-title" className="glass-card p-8 max-w-sm w-full mx-4 text-center animate-fadeInUp">
+                        <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: '#f59e0b' }} aria-hidden="true" />
+                        <h3 id="submit-test-title" className="text-xl font-bold mb-2">Submit Test?</h3>
                         <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
                             You have answered <strong style={{ color: 'var(--text-primary)' }}>{answeredCount}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{questions.length}</strong> questions.
                         </p>
@@ -876,9 +908,9 @@ export default function TakeTestPage() {
                             </p>
                         )}
                         <div className="flex gap-3">
-                            <button onClick={() => setShowConfirm(false)} className="btn-secondary flex-1">Go Back</button>
-                            <button onClick={doSubmit} className="btn-primary flex-1 justify-center" style={{ background: '#10b981' }}>
-                                <Send className="w-4 h-4" /> Confirm
+                            <button onClick={() => setShowConfirm(false)} disabled={submitting} className="btn-secondary flex-1">Go Back</button>
+                            <button onClick={doSubmit} disabled={submitting} className="btn-primary flex-1 justify-center disabled:opacity-60" style={{ background: '#10b981' }}>
+                                <Send className="w-4 h-4" aria-hidden="true" /> {submitting ? 'Submitting…' : 'Confirm'}
                             </button>
                         </div>
                     </div>

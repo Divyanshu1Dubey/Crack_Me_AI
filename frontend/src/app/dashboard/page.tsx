@@ -37,16 +37,30 @@ const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
 const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
 
 function getBonusEndTimestamp(): number {
-    if (typeof window === 'undefined') return Date.now() + BONUS_TOTAL_SECONDS * 1000;
-    const stored = window.localStorage.getItem(BONUS_END_KEY);
     const now = Date.now();
-    if (stored) {
-        const parsed = Number(stored);
-        if (Number.isFinite(parsed) && parsed > now) return parsed;
+    if (typeof window === 'undefined') return now + BONUS_TOTAL_SECONDS * 1000;
+    // localStorage can throw (Safari private mode, blocked storage) --
+    // never let a promo banner crash the dashboard.
+    try {
+        const stored = window.localStorage.getItem(BONUS_END_KEY);
+        if (stored) {
+            const parsed = Number(stored);
+            if (Number.isFinite(parsed) && parsed > now) return parsed;
+        }
+        const end = now + BONUS_TOTAL_SECONDS * 1000;
+        window.localStorage.setItem(BONUS_END_KEY, String(end));
+        return end;
+    } catch {
+        return now + BONUS_TOTAL_SECONDS * 1000;
     }
-    const end = now + BONUS_TOTAL_SECONDS * 1000;
-    window.localStorage.setItem(BONUS_END_KEY, String(end));
-    return end;
+}
+
+/** Local-time yyyy-mm-dd (matches the backend's IST activity dates). */
+function toLocalDateKey(d: Date): string {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 const BonusTimerBanner = () => {
@@ -60,10 +74,11 @@ const BonusTimerBanner = () => {
     // dashboard tree remounts (e.g., returning from another route, SWR
     // focus revalidation, or page visibility change) — which is what was
     // making the timer feel like it "starts again from 1 hour".
-    const [timeLeft, setTimeLeft] = useState<number>(() => {
-        const endTs = getBonusEndTimestamp();
-        return Math.max(0, Math.floor((endTs - Date.now()) / 1000));
-    });
+    // Starts as null and is computed after mount: reading localStorage /
+    // Date.now() during render made the server and client markup differ
+    // (hydration mismatch). Rendering nothing until the first tick also
+    // avoids the "60:00" flash described above.
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
     useEffect(() => {
         const endTs = getBonusEndTimestamp();
         const tick = () => {
@@ -74,6 +89,8 @@ const BonusTimerBanner = () => {
         const timer = setInterval(tick, 1000);
         return () => clearInterval(timer);
     }, []);
+
+    if (timeLeft === null) return null;
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
@@ -180,13 +197,7 @@ export default function DashboardPage() {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));
     }, [heatmap]);
 
-    const todayDateStr = useMemo(() => {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    }, []);
+    const todayDateStr = useMemo(() => toLocalDateKey(new Date()), []);
 
     const todayActivity = useMemo<HeatmapDay>(() => {
         const found = heatmapByDate.get(todayDateStr);
@@ -243,7 +254,9 @@ export default function DashboardPage() {
         for (let w = 0; w < 16; w++) {
             const weekDays: Array<{ date: string; isInRange: boolean; questions: number; tests: number; minutes: number; level: number; isToday: boolean }> = [];
             for (let d = 0; d < 7; d++) {
-                const dateStr = current.toISOString().split('T')[0];
+                // Local date (toISOString() is UTC and shifted every cell by a
+                // day for IST users between 00:00 and 05:30).
+                const dateStr = toLocalDateKey(current);
                 const dayActivityData = heatmapByDate.get(dateStr);
                 const qs = dayActivityData?.questions_attempted || 0;
                 const ts = dayActivityData?.tests_completed || 0;

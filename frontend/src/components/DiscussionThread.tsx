@@ -119,12 +119,13 @@ export default function DiscussionThread({ questionId }: { questionId: number })
                             type="text"
                             className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder="Share your thoughts on this question..."
+                            aria-label="Write a comment"
                             value={newComment}
                             onChange={e => setNewComment(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handlePost()}
                         />
-                        <Button size="sm" onClick={handlePost} disabled={submitting || !newComment.trim()}>
-                            <Send className="w-4 h-4" />
+                        <Button size="sm" onClick={handlePost} disabled={submitting || !newComment.trim()} aria-label="Post comment">
+                            <Send className="w-4 h-4" aria-hidden="true" />
                         </Button>
                     </div>
 

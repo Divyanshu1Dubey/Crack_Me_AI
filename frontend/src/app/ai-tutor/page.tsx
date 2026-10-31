@@ -309,6 +309,9 @@ export default function AITutorPage() {
         setMessages(prev => [...prev, { role: 'user', content: userMsg, type: mode }]);
         setLoading(true);
 
+        // The mode that actually answered (the textbook path can fall back
+        // to the tutor); `mode` from state would be stale inside this call.
+        let effectiveMode = mode;
         try {
             let response: string;
             let citations: Message['citations'] = undefined;
@@ -327,6 +330,7 @@ export default function AITutorPage() {
                 // If RAG backend has no indexed textbooks (e.g. fresh host),
                 // fall back to AI Tutor so the student always gets an answer.
                 if (res.data?.error === 'textbook_search_unavailable') {
+                    effectiveMode = 'tutor';
                     setMode('tutor');
                     const tutorRes = await aiAPI.askTutor({ question: userMsg });
                     response = tutorRes.data.response;
@@ -343,7 +347,7 @@ export default function AITutorPage() {
                 response = '⚠️ AI is temporarily unavailable right now. Please retry in a few seconds.';
             }
 
-            setMessages(prev => [...prev, { role: 'ai', content: response, type: mode, citations }]);
+            setMessages(prev => [...prev, { role: 'ai', content: response, type: effectiveMode, citations }]);
             // Scroll to show AI answer from top after it's added
             scrollToLatestAiMessage();
             // Refresh sessions to include the new one
@@ -369,7 +373,7 @@ export default function AITutorPage() {
                 setMessages(prev => [...prev, {
                     role: 'ai',
                     content: message,
-                    type: mode
+                    type: effectiveMode
                 }]);
                 scrollToLatestAiMessage();
             }
@@ -494,8 +498,8 @@ export default function AITutorPage() {
                                 <History className="w-4 h-4" style={{ color: '#0284c7' }} />
                                 Chat History
                             </h3>
-                            <button onClick={() => setShowHistory(false)} className="p-1 hover:bg-white/10 rounded">
-                                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                            <button onClick={() => setShowHistory(false)} aria-label="Close chat history" className="p-1 hover:bg-white/10 rounded">
+                                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} aria-hidden="true" />
                             </button>
                         </div>
                         {loadingSessions ? (
@@ -516,8 +520,18 @@ export default function AITutorPage() {
                                     return (
                                         <div
                                             key={session.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-current={isActive ? 'true' : undefined}
                                             onClick={() => loadSession(session.id)}
-                                            className={`group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all ${isActive ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
+                                            onKeyDown={(e) => {
+                                                if (e.target !== e.currentTarget) return;
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    loadSession(session.id);
+                                                }
+                                            }}
+                                            className={`group flex cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary items-center gap-3 rounded-xl p-3 transition-all ${isActive ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
                                             style={{
                                                 background: isActive ? 'rgba(14, 116, 144, 0.12)' : 'rgba(139, 149, 168, 0.05)',
                                                 border: `1px solid ${isActive ? 'rgba(14, 116, 144, 0.28)' : 'transparent'}`,
@@ -542,9 +556,10 @@ export default function AITutorPage() {
                                             </div>
                                             <button
                                                 onClick={(e) => deleteSession(session.id, e)}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all hover:bg-red-500/20"
+                                                aria-label={`Delete chat "${session.title || 'Untitled Chat'}"`}
+                                                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 p-1.5 rounded-lg transition-all hover:bg-red-500/20"
                                                 style={{ color: '#ef4444' }}>
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-4 h-4" aria-hidden="true" />
                                             </button>
                                         </div>
                                     );
@@ -703,6 +718,7 @@ export default function AITutorPage() {
                 <div className="glass-card p-3 flex items-center gap-3 sticky bottom-0">
                     <input
                         className="input-field flex-1"
+                        aria-label="Message the AI tutor"
                         placeholder={
                             mode === 'tutor' ? 'Ask a medical question...' :
                                 mode === 'mnemonic' ? 'Enter a topic for mnemonic...' :
@@ -715,8 +731,8 @@ export default function AITutorPage() {
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                         disabled={loading}
                     />
-                    <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary py-3 px-4 rounded-xl">
-                        <Send className="w-5 h-5" />
+                    <button onClick={handleSend} disabled={loading || !input.trim()} aria-label="Send message" className="btn-primary py-3 px-4 rounded-xl">
+                        <Send className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
             </div>

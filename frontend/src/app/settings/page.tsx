@@ -166,28 +166,28 @@ export default function SettingsPage() {
                         {editing ? (
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>First Name</label>
-                                    <input className="input-field" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
+                                    <label htmlFor="settings-first-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>First Name</label>
+                                    <input id="settings-first-name" className="input-field" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Last Name</label>
-                                    <input className="input-field" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
+                                    <label htmlFor="settings-last-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Last Name</label>
+                                    <input id="settings-last-name" className="input-field" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Email</label>
-                                    <input className="input-field" value={user?.email || ''} readOnly />
+                                    <label htmlFor="settings-email" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Email</label>
+                                    <input id="settings-email" className="input-field" value={user?.email || ''} readOnly />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Mobile Number</label>
-                                    <input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Enter 10-digit mobile number" />
+                                    <label htmlFor="settings-phone" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Mobile Number</label>
+                                    <input id="settings-phone" type="tel" inputMode="numeric" autoComplete="tel" maxLength={15} className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Enter 10-digit mobile number" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>College Name</label>
-                                    <input className="input-field" value={form.college} onChange={e => setForm({ ...form, college: e.target.value })} placeholder="Enter medical college name" />
+                                    <label htmlFor="settings-college" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>College Name</label>
+                                    <input id="settings-college" className="input-field" value={form.college} onChange={e => setForm({ ...form, college: e.target.value })} placeholder="Enter medical college name" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Target Exam</label>
-                                    <select className="input-field" value={form.target_exam} onChange={e => setForm({ ...form, target_exam: e.target.value })}>
+                                    <label htmlFor="settings-target-exam" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Target Exam</label>
+                                    <select id="settings-target-exam" className="input-field" value={form.target_exam} onChange={e => setForm({ ...form, target_exam: e.target.value })}>
                                         <option value="UPSC CMS">UPSC CMS</option>
                                         <option value="NEET PG">NEET PG</option>
                                         <option value="FMGE">FMGE</option>

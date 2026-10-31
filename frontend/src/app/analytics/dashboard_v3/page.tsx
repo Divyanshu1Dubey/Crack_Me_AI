@@ -35,10 +35,10 @@ export default function DashboardV3Page() {
   }, []);
 
   if (err) return <p className="p-6 text-rose-300">Dashboard error: {err}</p>;
-  if (!d) return <p className="p-6 text-slate-400">Loading dashboard…</p>;
+  if (!d) return <p className="p-6 text-muted-foreground">Loading dashboard…</p>;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 text-slate-100">
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 text-foreground">
       <h1 className="text-2xl font-semibold">Analytics — Phase 3</h1>
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -56,8 +56,8 @@ export default function DashboardV3Page() {
         />
       </section>
 
-      <section className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
-        <h2 className="mb-2 text-sm uppercase tracking-wider text-slate-400">Performance trend (60d)</h2>
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-2 text-sm uppercase tracking-wider text-muted-foreground">Performance trend (60d)</h2>
         <div className="flex h-32 items-end gap-1">
           {(d.performance_trend || []).map((p, i) => (
             <div key={i}
@@ -66,7 +66,7 @@ export default function DashboardV3Page() {
               className="w-2 rounded-t bg-emerald-500/70" />
           ))}
           {(d.performance_trend || []).length === 0 ? (
-            <p className="text-xs text-slate-500">No attempts yet.</p>
+            <p className="text-xs text-muted-foreground">No attempts yet.</p>
           ) : null}
         </div>
       </section>
@@ -78,15 +78,15 @@ export default function DashboardV3Page() {
           label: `${t.topic} · ${t.subject}`, value: `${t.mistake_rate_pct}%` }))} />
       </section>
 
-      <section className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
-        <h2 className="mb-2 text-sm uppercase tracking-wider text-slate-400">PYQ coverage</h2>
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-2 text-sm uppercase tracking-wider text-muted-foreground">PYQ coverage</h2>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-400">
+          <thead className="text-left text-xs uppercase text-muted-foreground">
             <tr><th>Exam</th><th>Attempted</th><th>Total</th><th>Coverage %</th></tr>
           </thead>
           <tbody>
             {Object.entries(d.pyq_coverage || {}).map(([k, v]) => (
-              <tr key={k} className="border-t border-slate-700/40">
+              <tr key={k} className="border-t border-border">
                 <td className="py-1">{k}</td>
                 <td>{v.attempted}</td>
                 <td>{v.total}</td>
@@ -97,17 +97,17 @@ export default function DashboardV3Page() {
         </table>
       </section>
 
-      <section className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
-        <h2 className="mb-2 text-sm uppercase tracking-wider text-slate-400">Revision progress</h2>
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-2 text-sm uppercase tracking-wider text-muted-foreground">Revision progress</h2>
         <ul className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
           {(d.revision_progress?.topics || []).slice(0, 12).map((t) => (
-            <li key={t.topic_id} className="rounded border border-slate-700/40 bg-slate-900/30 p-2 text-sm">
-              <p className="text-slate-200">{t.topic}</p>
-              <p className="text-xs text-slate-400">{t.total} attempts · conf {Object.entries(t.by_confidence).map(([k, v]) => `${k}:${v}`).join(", ")}</p>
+            <li key={t.topic_id} className="rounded border border-border bg-muted/40 p-2 text-sm">
+              <p className="text-foreground">{t.topic}</p>
+              <p className="text-xs text-muted-foreground">{t.total} attempts · conf {Object.entries(t.by_confidence).map(([k, v]) => `${k}:${v}`).join(", ")}</p>
             </li>
           ))}
           {(d.revision_progress?.topics || []).length === 0 ? (
-            <p className="text-slate-500 text-xs">No revision data yet.</p>
+            <p className="text-muted-foreground text-xs">No revision data yet.</p>
           ) : null}
         </ul>
       </section>
@@ -117,26 +117,26 @@ export default function DashboardV3Page() {
 
 function Card({ title, value, sub }: { title: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
-      <p className="text-xs uppercase tracking-wider text-slate-400">{title}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{title}</p>
       <p className="text-3xl font-semibold">{value}</p>
-      {sub ? <p className="mt-1 text-xs text-slate-400">{sub}</p> : null}
+      {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
     </div>
   );
 }
 
 function List({ title, rows }: { title: string; rows: { label: string; value: string }[] }) {
   return (
-    <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-4">
-      <h2 className="mb-2 text-sm uppercase tracking-wider text-slate-400">{title}</h2>
-      <ul className="divide-y divide-slate-700/40">
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-2 text-sm uppercase tracking-wider text-muted-foreground">{title}</h2>
+      <ul className="divide-y divide-border">
         {rows.slice(0, 6).map((r, i) => (
           <li key={i} className="flex items-center justify-between py-1 text-sm">
             <span className="truncate">{r.label}</span>
-            <span className="text-slate-300">{r.value}</span>
+            <span className="text-foreground/80">{r.value}</span>
           </li>
         ))}
-        {rows.length === 0 ? <li className="py-1 text-xs text-slate-500">None.</li> : null}
+        {rows.length === 0 ? <li className="py-1 text-xs text-muted-foreground">None.</li> : null}
       </ul>
     </div>
   );

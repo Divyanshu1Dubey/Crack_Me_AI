@@ -18,15 +18,16 @@ interface TopicNote {
     topic: number;
     topic_name: string;
     exam_type: string;
-    is_ai_generated: boolean;
+    ai_generated: boolean;
     source_question_count: number;
     created_at: string;
     updated_at: string;
 }
 
 export default function TopicNotesPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const router = useRouter();
+    const isAdmin = !!user && (user.role === 'admin' || !!user.is_admin);
     const [notes, setNotes] = useState<TopicNote[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -41,11 +42,17 @@ export default function TopicNotesPage() {
     });
 
     useEffect(() => {
-        topicNotesAPI.adminList().then(res => {
-            setNotes(res.data as TopicNote[]);
+        if (authLoading) return;
+        if (!isAdmin) {
             setLoading(false);
-        }).catch(() => setLoading(false));
-    }, []);
+            return;
+        }
+        topicNotesAPI.adminList().then(res => {
+            // The admin library endpoint is paginated ({count, results}).
+            const body: any = res.data;
+            setNotes(Array.isArray(body) ? body : (body?.results || []));
+        }).catch(() => setNotes([])).finally(() => setLoading(false));
+    }, [authLoading, isAdmin]);
 
     const handleCreate = async () => {
         if (!formData.title || !formData.subject || !formData.topic) return;
@@ -60,7 +67,8 @@ export default function TopicNotesPage() {
                     ? formData.source_question_ids.split(',').map(Number).filter(Boolean)
                     : [],
             });
-            setNotes(prev => [...prev, res.data as TopicNote]);
+            const created = res.data as TopicNote;
+            setNotes(prev => [created, ...prev.filter(n => n.id !== created.id)]);
             setFormData({ subject: '', topic: '', exam_type: 'cms', title: '', content: '', source_question_ids: '' });
             setShowCreate(false);
         } catch (err) {
@@ -73,7 +81,7 @@ export default function TopicNotesPage() {
         try {
             const res = await topicNotesAPI.adminGenerate(id);
             setNotes(prev => prev.map(n =>
-                n.id === id ? { ...n, ...res.data, is_ai_generated: true } : n
+                n.id === id ? { ...n, ...res.data, ai_generated: true } : n
             ));
         } catch (err) {
             console.error('Generate note failed:', err);
@@ -87,6 +95,22 @@ export default function TopicNotesPage() {
             <div className="max-w-4xl mx-auto p-6 space-y-4">
                 <Skeleton className="h-8 w-48" />
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="max-w-4xl mx-auto p-4 md:p-6">
+                <Card>
+                    <CardContent className="p-8 text-center text-muted-foreground">
+                        <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                        <p>Topic notes are curated by the CrackLabs team.</p>
+                        <Button variant="outline" className="mt-4" onClick={() => router.push('/dashboard')}>
+                            Back to dashboard
+                        </Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -213,7 +237,7 @@ export default function TopicNotesPage() {
                                             <Badge variant="outline" className="text-xs capitalize">
                                                 {note.exam_type}
                                             </Badge>
-                                            {note.is_ai_generated && (
+                                            {note.ai_generated && (
                                                 <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                                                     <Sparkles className="w-3 h-3 mr-1" />
                                                     AI
@@ -228,7 +252,7 @@ export default function TopicNotesPage() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        {!note.is_ai_generated && (
+                                        {!note.ai_generated && (
                                             <Button
                                                 variant="outline"
                                                 size="sm"

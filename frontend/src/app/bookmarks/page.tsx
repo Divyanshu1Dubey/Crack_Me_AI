@@ -101,8 +101,9 @@ export default function BookmarksPage() {
                                         {diffBadge(b.question_detail.difficulty)}
                                     </div>
                                     <button onClick={() => removeBookmark(b.question)}
+                                        aria-label="Remove bookmark" title="Remove bookmark"
                                         className="p-2 rounded-lg hover:bg-red-500/10" style={{ color: '#ef4444' }}>
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                                     </button>
                                 </div>
                                 <Link href={`/questions?q=${b.question}`} className="text-sm leading-relaxed hover:underline">

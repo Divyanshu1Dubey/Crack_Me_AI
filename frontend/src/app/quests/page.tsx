@@ -15,26 +15,27 @@ interface Quest {
     description: string;
     target_value: number;
     current_value: number;
-    reward_tokens: number;
-    reward_xp: number;
+    xp_reward: number;
+    progress_percent?: number;
     expires_at: string;
     is_completed: boolean;
-    icon: string;
 }
 
 interface StreakInfo {
     current_streak: number;
     longest_streak: number;
-    streak_freeze_available: boolean;
-    last_active_date: string;
+    streak_frozen: boolean;
+    last_quest_date: string | null;
 }
 
+// Keys match backend UserQuest.QUEST_TYPE_CHOICES.
 const QUEST_ICONS: Record<string, any> = {
-    'daily_practice': Target,
-    'daily_quiz': Zap,
-    'weekly_master': Star,
-    'streak_keep': Flame,
-    'special': Gift,
+    'solve_questions': Target,
+    'complete_tests': Zap,
+    'review_mistakes': Star,
+    'streak_maintain': Flame,
+    'speed_round': Zap,
+    'study_subject': Gift,
 };
 
 export default function QuestsPage() {
@@ -43,27 +44,33 @@ export default function QuestsPage() {
     const [streak, setStreak] = useState<StreakInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         Promise.all([
             questsAPI.list(),
             questsAPI.getStreak(),
         ]).then(([questsRes, streakRes]) => {
-            setQuests(questsRes.data as Quest[]);
+            const body: any = questsRes.data;
+            setQuests(Array.isArray(body) ? body : (body?.results || []));
             setStreak(streakRes.data as StreakInfo);
-            setLoading(false);
-        }).catch(() => setLoading(false));
+        }).catch(() => {
+            setError('Could not load your quests. Please refresh to try again.');
+        }).finally(() => setLoading(false));
     }, []);
 
     const handleComplete = async (questId: number) => {
         setCompleting(questId);
+        setError(null);
         try {
-            await questsAPI.complete(questId);
+            const res = await questsAPI.complete(questId);
+            const updated = res.data as Quest;
             setQuests(prev => prev.map(q =>
-                q.id === questId ? { ...q, is_completed: true } : q
+                q.id === questId ? { ...q, ...updated, is_completed: true } : q
             ));
-        } catch (err) {
-            console.error('Complete quest failed:', err);
+            questsAPI.getStreak().then(r => setStreak(r.data as StreakInfo)).catch(() => {});
+        } catch (err: any) {
+            setError(err?.response?.data?.error || 'Could not claim this quest. Please try again.');
         } finally {
             setCompleting(null);
         }
@@ -90,7 +97,7 @@ export default function QuestsPage() {
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold">Daily Quests</h1>
-                    <p className="text-sm text-muted-foreground">Complete quests to earn tokens and XP</p>
+                    <p className="text-sm text-muted-foreground">Complete today&apos;s quests to earn XP and keep your streak</p>
                 </div>
             </div>
 
@@ -109,13 +116,19 @@ export default function QuestsPage() {
                                 </div>
                             </div>
                         </div>
-                        {streak.streak_freeze_available && (
-                            <Badge variant="outline" className="border-blue-400 text-blue-600">
-                                Freeze Available
+                        {streak.streak_frozen && (
+                            <Badge variant="outline" className="border-blue-400 text-blue-600 dark:text-blue-300">
+                                Streak Freeze Active
                             </Badge>
                         )}
                     </CardContent>
                 </Card>
+            )}
+
+            {error && (
+                <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                </div>
             )}
 
             {/* Active Quests */}
@@ -124,7 +137,9 @@ export default function QuestsPage() {
                     <h2 className="text-lg font-semibold">Active Quests</h2>
                     {activeQuests.map(quest => {
                         const Icon = QUEST_ICONS[quest.quest_type] || Target;
-                        const progress = Math.min((quest.current_value / quest.target_value) * 100, 100);
+                        const progress = quest.target_value > 0
+                            ? Math.min((quest.current_value / quest.target_value) * 100, 100)
+                            : 0;
                         return (
                             <Card key={quest.id}>
                                 <CardContent className="p-4">
@@ -146,10 +161,7 @@ export default function QuestsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 mt-2">
                                                 <Badge variant="outline" className="text-xs">
-                                                    +{quest.reward_tokens} tokens
-                                                </Badge>
-                                                <Badge variant="outline" className="text-xs">
-                                                    +{quest.reward_xp} XP
+                                                    +{quest.xp_reward} XP
                                                 </Badge>
                                             </div>
                                         </div>
@@ -180,7 +192,7 @@ export default function QuestsPage() {
                                     <div className="font-medium line-through">{quest.title}</div>
                                 </div>
                                 <Badge variant="secondary" className="text-xs">
-                                    +{quest.reward_tokens} tokens
+                                    +{quest.xp_reward} XP
                                 </Badge>
                             </CardContent>
                         </Card>

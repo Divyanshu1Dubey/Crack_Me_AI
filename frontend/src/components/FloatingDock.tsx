@@ -131,14 +131,16 @@ export function FloatingDock() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
-                    api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: true });
-                    showStatus('Thanks for your feedback!');
+                    api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: true })
+                      .then(() => showStatus('Thanks for your feedback!'))
+                      .catch(() => showStatus('Could not send feedback. Please try again.'));
                   }}>
                     👍 Helpful
                   </Button>
                   <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => {
-                    api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: false, report_reason: 'User report from dock' });
-                    showStatus('Response flagged for review.');
+                    api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: false, report_reason: 'User report from dock' })
+                      .then(() => showStatus('Response flagged for review.'))
+                      .catch(() => showStatus('Could not send the report. Please try again.'));
                   }}>
                     👎 Report
                   </Button>

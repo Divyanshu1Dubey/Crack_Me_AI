@@ -251,31 +251,31 @@ export default function FlashcardsPage() {
 
                     {/* Stats */}
                     {mode !== 'review' && (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <Layers className="w-8 h-8 text-blue-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <Layers className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-blue-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{cards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Total Cards</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{cards.length}</p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Total Cards</p>
                                     </div>
                                 </CardContent>
                             </Card>
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <Clock className="w-8 h-8 text-amber-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-amber-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{dueCards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Due for Review</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{dueCards.length}</p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Due for Review</p>
                                     </div>
                                 </CardContent>
                             </Card>
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <CheckCircle className="w-8 h-8 text-emerald-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-emerald-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{cards.length - dueCards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Reviewed</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{cards.length - dueCards.length}</p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Reviewed</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -549,15 +549,18 @@ export default function FlashcardsPage() {
                                                                     setNoteText(card.personal_note || '');
                                                                 }}
                                                                 title="Add/Edit Note"
+                                                                aria-label="Add or edit note"
                                                             >
                                                                 <Edit3 className="w-3.5 h-3.5 text-blue-500" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost" size="icon"
-                                                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                                                                className="h-7 w-7 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 text-destructive"
                                                                 onClick={() => handleDelete(card.id)}
+                                                                aria-label="Delete flashcard"
+                                                                title="Delete flashcard"
                                                             >
-                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                             </Button>
                                                         </div>
                                                     </div>

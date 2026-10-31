@@ -465,7 +465,7 @@ export default function NeetPgPlayer({
 
                         {/* Image viewer */}
                         {images.length > 0 && (
-                            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
+                            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                                         <ImageIcon className="w-3.5 h-3.5" /> {images.length} {images.length === 1 ? 'Image' : 'Images'}
@@ -733,7 +733,7 @@ export default function NeetPgPlayer({
                                         </h3>
                                         <div className="flex flex-wrap gap-1.5">
                                             {(current as any).concept_keywords.slice(0, 12).map((k: string, idx: number) => (
-                                                <Badge key={idx} variant="outline" className="text-[11px] bg-white">
+                                                <Badge key={idx} variant="outline" className="text-[11px] bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                                     {k}
                                                 </Badge>
                                             ))}
@@ -796,7 +796,7 @@ export default function NeetPgPlayer({
                         )}
 
                         {/* Notes */}
-                        <details className="border-t border-slate-100 bg-slate-50/50 px-6 py-3">
+                        <details className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 px-6 py-3">
                             <summary className="text-xs font-bold uppercase tracking-wider text-slate-500 cursor-pointer flex items-center gap-1.5 select-none">
                                 <Highlighter className="w-3.5 h-3.5" /> Add personal note
                             </summary>
@@ -804,7 +804,7 @@ export default function NeetPgPlayer({
                                 value={state.notes}
                                 onChange={(e) => setState(s => ({ ...s, notes: e.target.value }))}
                                 placeholder="High-yield takeaway, mnemonic, revision priority…"
-                                className="mt-3 w-full min-h-20 p-3 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="mt-3 w-full min-h-20 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                             />
                         </details>
                     </div>
@@ -963,7 +963,7 @@ export default function NeetPgPlayer({
                                                                                 ? 'border-pink-300 text-pink-700 bg-pink-50'
                                                                                 : reason === 'same_topic'
                                                                                     ? 'border-teal-300 text-teal-700 bg-teal-50'
-                                                                                    : 'border-slate-300 text-slate-600 bg-slate-50',
+                                                                                    : 'border-slate-300 text-slate-600 bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:bg-slate-800',
                                                                     )}
                                                                     title={SIM_REASON_TITLE[reason] || ''}
                                                                 >
@@ -999,10 +999,10 @@ export default function NeetPgPlayer({
                     aria-modal="true"
                 >
                     <div
-                        className="bg-white rounded-2xl border border-teal-200 shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+                        className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100 rounded-2xl border border-teal-200 dark:border-slate-700 shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="sticky top-0 bg-white/95 backdrop-blur z-10 px-6 py-4 border-b border-teal-100 flex items-center justify-between">
+                        <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur z-10 px-6 py-4 border-b border-teal-100 dark:border-slate-800 flex items-center justify-between">
                             <h2 className="font-bold text-slate-800 flex items-center gap-2">
                                 <Stethoscope className="w-5 h-5 text-teal-600" />
                                 Question Palette — {title}
