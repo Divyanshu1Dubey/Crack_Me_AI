@@ -595,7 +595,13 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'true').lower() == 'true'
+    # Not inside the test runner: CI runs the suite with DEBUG=False and the
+    # test client speaks plain HTTP, so every API test got a 301 instead of
+    # its real response (the CI backend job could never pass).
+    SECURE_SSL_REDIRECT = (
+        not is_testing
+        and os.getenv('SECURE_SSL_REDIRECT', 'true').lower() == 'true'
+    )
     # Cloudflare + Railway terminate TLS at the edge; trust X-Forwarded-Proto
     # so SecurityMiddleware knows requests are already HTTPS and doesn't loop.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

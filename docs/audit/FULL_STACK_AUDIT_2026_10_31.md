@@ -48,6 +48,13 @@ verified by reading code, and fixed in code; regression tests live in
 - Dark mode (analytics pages, NEET PG / INI-CET players), responsive fixes, accessibility labels / keyboard support.
 - `BackendWarmup` used a hard-coded production host; image fallbacks used the frontend origin — both now use `lib/apiBase.ts`.
 
+## CI / dependencies
+
+- CI backend job could never pass: with `DEBUG=False` the HTTPS redirect turned every test-client request into a `301`. `SECURE_SSL_REDIRECT` is now off only inside the test runner (production unchanged).
+- Test discovery was broken (`questions/tests.py` + `questions/tests/` package) — the suite never actually ran in CI.
+- `npm audit --audit-level=high` failed (13 high, 1 critical). Fixed via non-breaking updates and `next` 16.1.6 → 16.4.3 (same major); `eslint-plugin-react-hooks` pinned to 7.0.1 via `overrides` to keep lint rules unchanged. Remaining: 16 moderate.
+- Tool pages showed component identifiers as titles/breadcrumbs ("CollegePredictor 2026"); one breadcrumb linked to a non-existent `/tools`.
+
 ## Verification
 
 - Backend: full Django suite green (see final run), `makemigrations --check` clean, `check --deploy` no issues.

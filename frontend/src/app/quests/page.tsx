@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { questsAPI } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,8 @@ const QUEST_ICONS: Record<string, any> = {
 };
 
 export default function QuestsPage() {
-    const { user } = useAuth();
+    // Member-only page: redirect logged-out visitors to /login?next=/quests.
+    const { ready } = useRequireAuth();
     const [quests, setQuests] = useState<Quest[]>([]);
     const [streak, setStreak] = useState<StreakInfo | null>(null);
     const [loading, setLoading] = useState(true);
@@ -47,6 +48,7 @@ export default function QuestsPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!ready) return;
         Promise.all([
             questsAPI.list(),
             questsAPI.getStreak(),
@@ -57,7 +59,7 @@ export default function QuestsPage() {
         }).catch(() => {
             setError('Could not load your quests. Please refresh to try again.');
         }).finally(() => setLoading(false));
-    }, []);
+    }, [ready]);
 
     const handleComplete = async (questId: number) => {
         setCompleting(questId);

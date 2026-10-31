@@ -1302,7 +1302,7 @@ class AITutorDailyUsageTests(TestCase):
         from django.db import IntegrityError, transaction
         from django.utils import timezone
         consume_ai_tutor_message(self.student)
-        today = timezone.now().date()
+        today = timezone.localdate()  # matches consume_ai_tutor_message (IST day)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AITutorDailyUsage.objects.create(
