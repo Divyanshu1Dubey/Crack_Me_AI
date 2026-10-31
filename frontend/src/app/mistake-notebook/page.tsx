@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { mistakeNotebookAPI } from '@/lib/api';
-import { extractAnalysisFromJson } from '@/lib/textCleanup';
+import { extractAnalysisFromJson, sanitizeOptionText, sanitizeQuestionText } from '@/lib/textCleanup';
 import { FormattedText, FormattedOptionText } from '@/components/FormattedText';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -303,7 +303,7 @@ export default function MistakeNotebookPage() {
                                     </div>
 
                                     <div className={`text-sm font-medium leading-relaxed ${open ? '' : 'line-clamp-3'}`}>
-                                        <FormattedOptionText text={withoutImageTokens(entry.question_text)} />
+                                        <FormattedOptionText text={withoutImageTokens(sanitizeQuestionText(entry.question_text))} />
                                     </div>
 
                                     {!open && (
@@ -333,7 +333,7 @@ export default function MistakeNotebookPage() {
                                                     >
                                                         <span className="font-semibold w-5 shrink-0">{o.letter}</span>
                                                         <div className="flex-1 min-w-0">
-                                                            <FormattedOptionText text={withoutImageTokens(o.text)} />
+                                                            <FormattedOptionText text={withoutImageTokens(sanitizeOptionText(o.text))} />
                                                         </div>
                                                         {isCorrect && <span className="text-xs font-medium text-green-700 dark:text-green-300 shrink-0">Correct</span>}
                                                         {isPicked && <span className="text-xs font-medium text-red-700 dark:text-red-300 shrink-0">Your answer</span>}
