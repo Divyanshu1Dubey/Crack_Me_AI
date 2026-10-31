@@ -7,12 +7,22 @@
  * in production builds (the env flag is unset there and the backend refuses).
  */
 import { apiUrl } from './apiBase';
+import { isLocalAuthBuild, LOCAL_ADMIN_COOKIE, LOCAL_SESSION_COOKIE } from './localSession';
 
 const ACCESS_KEY = 'crack_local_access';
 const REFRESH_KEY = 'crack_local_refresh';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
-export const isLocalAuthMode = (): boolean =>
-  (process.env.NEXT_PUBLIC_AUTH_MODE || '').trim().toLowerCase() === 'local';
+export const isLocalAuthMode = isLocalAuthBuild;
+
+/** Presence cookie read by the middleware to gate protected routes. */
+const setPresenceCookie = (name: string, on: boolean) => {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=${on ? '1' : ''}; Path=/; SameSite=Lax; Max-Age=${on ? COOKIE_MAX_AGE : 0}`;
+};
+
+const isAdminProfile = (user: Record<string, unknown> | null | undefined): boolean =>
+  !!user && (user.is_admin === true || String(user.role || '').toLowerCase() === 'admin');
 
 const storage = (): Storage | null => {
   if (typeof window === 'undefined') return null;
@@ -30,9 +40,12 @@ export const setLocalTokens = (access: string, refresh?: string | null) => {
   if (!s) return;
   s.setItem(ACCESS_KEY, access);
   if (refresh) s.setItem(REFRESH_KEY, refresh);
+  setPresenceCookie(LOCAL_SESSION_COOKIE, true);
 };
 
 export const clearLocalTokens = () => {
+  setPresenceCookie(LOCAL_SESSION_COOKIE, false);
+  setPresenceCookie(LOCAL_ADMIN_COOKIE, false);
   const s = storage();
   if (!s) return;
   s.removeItem(ACCESS_KEY);
@@ -70,6 +83,7 @@ export interface LocalAuthResult {
 export const localLogin = async (identifier: string, password: string): Promise<LocalAuthResult> => {
   const data = (await postJson('/auth/local/login/', { email: identifier.trim(), password })) as unknown as LocalAuthResult;
   setLocalTokens(data.access, data.refresh);
+  setPresenceCookie(LOCAL_ADMIN_COOKIE, isAdminProfile(data.user));
   return data;
 };
 
@@ -104,12 +118,22 @@ export const refreshLocalAccessToken = async (): Promise<string | null> => {
 /** Load the backend profile for the stored session (refreshing once on 401). */
 export const fetchLocalProfile = async (): Promise<Record<string, unknown> | null> => {
   let access = getLocalAccessToken();
-  if (!access) return null;
+  if (!access) {
+    setPresenceCookie(LOCAL_SESSION_COOKIE, false);
+    setPresenceCookie(LOCAL_ADMIN_COOKIE, false);
+    return null;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await fetch(apiUrl('/auth/profile/'), {
       headers: { Authorization: `Bearer ${access}` },
     });
-    if (response.ok) return (await response.json()) as Record<string, unknown>;
+    if (response.ok) {
+      const profile = (await response.json()) as Record<string, unknown>;
+      // Keep the middleware's presence cookies in step with the real session.
+      setPresenceCookie(LOCAL_SESSION_COOKIE, true);
+      setPresenceCookie(LOCAL_ADMIN_COOKIE, isAdminProfile(profile));
+      return profile;
+    }
     if (response.status !== 401 || attempt > 0) break;
     access = await refreshLocalAccessToken();
     if (!access) break;

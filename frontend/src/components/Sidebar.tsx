@@ -248,8 +248,8 @@ export default function Sidebar() {
                 </div>
 
                 {/* Desktop logo block */}
-                <div className="hidden md:block px-4 pt-4 pb-3">
-                    <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
+                <div className="sidebar-brand hidden md:block px-4 pt-4 pb-3">
+                    <div className="sidebar-brand-card rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
                         <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground dark:text-slate-300">
                             <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
@@ -310,6 +310,8 @@ export default function Sidebar() {
                                                     prefetch={false}
                                                     className={`sidebar-link ${isActive ? 'active' : ''}`}
                                                     aria-current={isActive ? 'page' : undefined}
+                                                    // Tooltip for the icon-only tablet rail.
+                                                    title={showLock ? `${item.label} (Premium)` : item.label}
                                                 >
                                                     <CustomIcon
                                                         name={item.iconName}
@@ -319,7 +321,13 @@ export default function Sidebar() {
                                                         variant={isActive ? 'active' : 'default'}
                                                     />
                                                     <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
-                                                    {showLock && <LockedBadge size="sm" />}
+                                                    {showLock && (
+                                                        <>
+                                                            {/* Full pill with labels; a dot in the 72px tablet rail. */}
+                                                            <span className="sidebar-label shrink-0"><LockedBadge size="sm" /></span>
+                                                            <span className="sidebar-rail-lock" aria-hidden="true" />
+                                                        </>
+                                                    )}
                                                     {item.badge && !showLock && (
                                                         <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
                                                             {item.badge}
@@ -384,6 +392,8 @@ export default function Sidebar() {
                     </div>
                     <button
                         onClick={handleLogout}
+                        aria-label="Sign out"
+                        title="Sign out"
                         className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                         <LogOut className="w-5 h-5 shrink-0" />

@@ -1255,11 +1255,42 @@ body.sidebar-hidden .main-content {
     justify-content: center;
     padding: 10px;
     margin: 0 6px;
+    position: relative;
   }
   .main-content {
     margin-left: 72px;
     padding: 16px;
   }
+  /* Logo only: the wordmark and card padding do not fit the 72px rail. */
+  .sidebar .sidebar-brand {
+    padding: 12px 8px 8px;
+  }
+  .sidebar .sidebar-brand-card {
+    display: flex;
+    justify-content: center;
+    padding: 4px;
+    border-color: transparent;
+    background: none;
+  }
+  .sidebar .brandmark-text {
+    display: none;
+  }
+  .sidebar .sidebar-rail-lock {
+    display: block;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px var(--color-card);
+  }
+}
+
+/* Premium dot only exists in the tablet rail. */
+.sidebar-rail-lock {
+  display: none;
 }
 
 /* Mobile menu overlay */

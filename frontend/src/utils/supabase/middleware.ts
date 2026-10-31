@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { assertSupabaseConfig } from './config';
+import { isLocalAuthBuild, LOCAL_ADMIN_COOKIE, LOCAL_SESSION_COOKIE } from '@/lib/localSession';
 
 const PROTECTED_ROUTE_PREFIXES = [
   '/admin',
@@ -66,7 +67,29 @@ const isAdminUser = (
   return metadataAdmin || (email ? ADMIN_EMAIL_ALLOWLIST.has(email) : false);
 };
 
+// Local development (NEXT_PUBLIC_AUTH_MODE=local; the backend only accepts
+// local logins with DEBUG on): there is no Supabase session, so gate on the
+// presence cookies kept by lib/localAuth.ts. Like the Supabase cookie check
+// below, this is a navigation guard only; the Django API authenticates and
+// authorises every request. No Supabase call is made in this mode.
+const localSessionGate = (request: NextRequest) => {
+  const pathname = request.nextUrl.pathname;
+  const signedIn = request.cookies.get(LOCAL_SESSION_COOKIE)?.value === '1';
+  if (isProtectedRoute(pathname) && !signedIn) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+  const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
+  if (isAdminPath && request.cookies.get(LOCAL_ADMIN_COOKIE)?.value !== '1') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  return NextResponse.next();
+};
+
 export const updateSession = async (request: NextRequest) => {
+  if (isLocalAuthBuild()) return localSessionGate(request);
+
   const { supabaseUrl, supabaseKey } = assertSupabaseConfig('middleware');
   let response = NextResponse.next({
     request: {
