@@ -81,7 +81,17 @@ if (Test-Port 55432) {
     Write-Host 'PostgreSQL already running on 55432'
 } else {
     Write-Host 'Starting PostgreSQL on 127.0.0.1:55432 ...'
-    Start-Process -FilePath (Join-Path $PgBin 'pg_ctl.exe') -ArgumentList @('-D', "`"$PgData`"", '-l', "`"$(Join-Path $Logs 'postgres.log')`"", '-w', 'start') -WindowStyle Hidden -Wait
+    # A server killed without a clean shutdown leaves postmaster.pid behind.
+    $pidFile = Join-Path $PgData 'postmaster.pid'
+    if (Test-Path $pidFile) {
+        $oldPid = (Get-Content $pidFile -TotalCount 1).Trim()
+        if (-not (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) { Remove-Item $pidFile -Force }
+    }
+    # No -Wait: Windows PowerShell waits for the whole process tree, and the
+    # postgres server is a child of pg_ctl. Poll the port instead.
+    Start-Process -FilePath (Join-Path $PgBin 'pg_ctl.exe') -ArgumentList @('-D', "`"$PgData`"", '-l', "`"$(Join-Path $Logs 'postgres.log')`"", 'start') -WindowStyle Hidden | Out-Null
+    $deadline = (Get-Date).AddSeconds(90)
+    while (-not (Test-Port 55432) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 700 }
     if (-not (Test-Port 55432)) { throw "PostgreSQL did not start; see $Logs\postgres.log" }
 }
 
