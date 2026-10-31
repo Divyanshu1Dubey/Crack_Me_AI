@@ -4,7 +4,8 @@ from django.http import Http404
 from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
-from accounts.local_auth import LocalDevJWTAuthentication, LocalLoginView, LocalRegisterView
+from accounts.local_auth import LocalLoginView, LocalRegisterView
+from accounts.local_auth_authentication import LocalDevJWTAuthentication
 
 User = get_user_model()
 PASSWORD = 'Local-Dev-Passw0rd!'

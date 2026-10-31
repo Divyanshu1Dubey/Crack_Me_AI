@@ -344,7 +344,7 @@ if _payments_mock_requested and not DEBUG:
 if LOCAL_DEV_AUTH:
     REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = (
         *REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'],
-        'accounts.local_auth.LocalDevJWTAuthentication',
+        'accounts.local_auth_authentication.LocalDevJWTAuthentication',
     )
 
 # SimpleJWT — refresh rotation + blacklist after rotation.

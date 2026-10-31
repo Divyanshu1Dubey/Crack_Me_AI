@@ -21,24 +21,13 @@ from django.http import Http404
 from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 User = get_user_model()
 
 
-def local_auth_enabled() -> bool:
-    return bool(getattr(settings, 'LOCAL_DEV_AUTH', False))
-
-
-class LocalDevJWTAuthentication(JWTAuthentication):
-    """SimpleJWT bearer auth, active only in local dev mode."""
-
-    def authenticate(self, request):
-        if not local_auth_enabled():
-            return None
-        return super().authenticate(request)
+from .local_auth_authentication import LocalDevJWTAuthentication, local_auth_enabled  # noqa: E402,F401
 
 
 class _LocalOnlyMixin:
