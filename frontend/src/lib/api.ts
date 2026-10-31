@@ -18,6 +18,7 @@ import {
   isInvalidRefreshTokenError,
   isSupabaseAuthEnabled,
 } from './supabase';
+import { getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
 
 import {
   USE_API_PROXY,
@@ -58,7 +59,10 @@ api.interceptors.request.use(async (config) => {
     config.headers['X-Session-ID'] = sessionId;
   }
 
-  if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
+  if (typeof window !== 'undefined' && isLocalAuthMode()) {
+    const localToken = getLocalAccessToken();
+    if (localToken) config.headers.Authorization = `Bearer ${localToken}`;
+  } else if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       try {
@@ -145,6 +149,21 @@ api.interceptors.response.use(
       status === 401 &&
       !originalRequest._tokenRefresh &&
       typeof window !== 'undefined' &&
+      isLocalAuthMode()
+    ) {
+      originalRequest._tokenRefresh = true;
+      const newToken = await refreshLocalAccessToken();
+      if (newToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        return api(originalRequest);
+      }
+    }
+
+    if (
+      status === 401 &&
+      !originalRequest._tokenRefresh &&
+      typeof window !== 'undefined' &&
       isSupabaseAuthEnabled()
     ) {
       originalRequest._tokenRefresh = true;
@@ -195,6 +214,8 @@ export const authAPI = {
     api.post('/auth/subscribe/order/', { plan, request_id: requestId }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
+  // Local mock payments only (backend mounts this when PAYMENTS_MODE=mock + DEBUG).
+  subscribeMockCheckout: (orderId: string) => api.post('/auth/subscribe/mock-checkout/', { order_id: orderId }),
   subscriptionStatus: () => api.get('/auth/subscribe/status/'),
   subscriptionHistory: () => api.get('/auth/subscribe/history/'),
   subscriptionInvoice: (subscriptionId: number) => api.get(`/auth/subscribe/invoice/${subscriptionId}/`),

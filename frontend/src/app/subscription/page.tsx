@@ -330,7 +330,10 @@ export default function SubscriptionPage() {
         setErrorMessage(null);
         setRetryData(null);
 
-        const scriptLoaded = await new Promise((resolve) => {
+        // Local development: PAYMENTS_MODE=mock on the backend + this flag on
+        // the frontend replace Razorpay's checkout with a local simulation.
+        const mockPayments = (process.env.NEXT_PUBLIC_PAYMENTS_MODE || '').trim().toLowerCase() === 'mock';
+        const scriptLoaded = mockPayments ? true : await new Promise((resolve) => {
             const script = document.createElement('script');
             script.src = 'https://checkout.razorpay.com/v1/checkout.js';
             script.onload = () => resolve(true);
@@ -439,6 +442,11 @@ export default function SubscriptionPage() {
                 }
             };
 
+            if (mockPayments) {
+                const mockRes = await authAPI.subscribeMockCheckout(order_id);
+                await options.handler(mockRes.data);
+                return;
+            }
             const rzp = new (window as unknown as { Razorpay: new (options: unknown) => { open: () => void } }).Razorpay(options);
             rzp.open();
         } catch (err: unknown) {

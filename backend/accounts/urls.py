@@ -44,3 +44,23 @@ urlpatterns = [
     path('admin/users/<int:user_id>/devices/', views.AdminDeviceManageView.as_view(), name='admin_device_manage'),
     path('admin/payments/', views.AdminPaymentHistoryView.as_view(), name='admin_payment_history'),
 ]
+
+# Dev-only local auth (see accounts/local_auth.py). Only mounted when
+# settings.LOCAL_DEV_AUTH is on, which requires DEBUG=True.
+from django.conf import settings as _settings  # noqa: E402
+
+if getattr(_settings, 'LOCAL_DEV_AUTH', False):
+    from . import local_auth  # noqa: E402
+
+    urlpatterns += [
+        path('local/login/', local_auth.LocalLoginView.as_view(), name='local_login'),
+        path('local/register/', local_auth.LocalRegisterView.as_view(), name='local_register'),
+        path('local/refresh/', local_auth.LocalRefreshView.as_view(), name='local_refresh'),
+    ]
+
+if getattr(_settings, 'PAYMENTS_MOCK', False):
+    from . import payments_mock  # noqa: E402
+
+    urlpatterns += [
+        path('subscribe/mock-checkout/', payments_mock.MockCheckoutView.as_view(), name='subscribe_mock_checkout'),
+    ]

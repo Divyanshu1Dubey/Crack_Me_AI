@@ -13,6 +13,13 @@ import {
     isInvalidRefreshTokenError,
     isSupabaseAuthEnabled,
 } from './supabase';
+import {
+    clearLocalTokens,
+    fetchLocalProfile,
+    isLocalAuthMode,
+    localLogin,
+    localRegister,
+} from './localAuth';
 
 interface SubscriptionInfo {
     plan: string;
@@ -96,6 +103,9 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
+// Dev-only: NEXT_PUBLIC_AUTH_MODE=local uses the backend's /auth/local/*
+// endpoints instead of Supabase (see lib/localAuth.ts).
+const LOCAL_AUTH_MODE = isLocalAuthMode();
 
 const getBackendProfileUrl = () => {
     const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
@@ -213,6 +223,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (LOCAL_AUTH_MODE) {
+            let mounted = true;
+            fetchLocalProfile()
+                .then((profile) => {
+                    if (mounted) setUserState((profile as User | null) ?? null);
+                })
+                .catch(() => {
+                    if (mounted) setUserState(null);
+                })
+                .finally(() => {
+                    if (mounted) setLoading(false);
+                });
+            return () => {
+                mounted = false;
+            };
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             setLoading(false);
             return;
@@ -289,6 +315,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (identifier: string, password: string) => {
+        if (LOCAL_AUTH_MODE) {
+            const result = await localLogin(identifier, password);
+            const profile = ((await fetchLocalProfile()) ?? result.user) as unknown as User;
+            setUserState(profile);
+            return profile;
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Authentication is not configured.');
         }
@@ -332,6 +364,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const register = async (formData: Record<string, string>) => {
+        if (LOCAL_AUTH_MODE) {
+            const result = await localRegister(formData);
+            setUserState(((await fetchLocalProfile()) ?? result.user) as unknown as User);
+            return;
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Authentication is not configured.');
         }
@@ -395,6 +432,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const resetPassword = async (email: string) => {
+        if (LOCAL_AUTH_MODE) {
+            throw new Error('Password reset is not available in local development mode. Use the seeded test accounts (see backend/.env.localdev).');
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Password reset is available only when Supabase auth is enabled.');
         }
@@ -436,6 +476,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = async () => {
+        if (LOCAL_AUTH_MODE) {
+            clearLocalTokens();
+            setUserState(null);
+            return;
+        }
         const supabase = getSupabaseBrowserClient();
         try {
             await supabase?.auth.signOut();
@@ -452,6 +497,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // and the user appeared unsubscribed forever. We now ALWAYS attempt
         // the profile fetch when there is a session, regardless of which
         // auth backend is enabled.
+        if (LOCAL_AUTH_MODE) {
+            const profile = await fetchLocalProfile();
+            setUserState((current) => (profile as User | null) ?? current);
+            return;
+        }
         const supabase = getSupabaseBrowserClient();
         if (!supabase) return;
 

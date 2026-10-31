@@ -276,6 +276,11 @@ class VerifyScholarshipView(APIView):
                 })
 
 
+# Plans a student can buy. 'legacy' (lifetime early-bird) and 'admin_grant'
+# are no longer sold and can only be granted by an admin.
+PURCHASABLE_PLANS = frozenset({'1_month', '3_months', '1_year', 'scholarship_1_month'})
+
+
 class SubscribeOrderView(APIView):
     """Create a Razorpay order for dynamic pricing plans."""
     permission_classes = [permissions.IsAuthenticated]
@@ -290,7 +295,15 @@ class SubscribeOrderView(APIView):
         if not key_id or not key_secret:
             return Response({'error': 'Razorpay is not configured on the server. Please add razorpayliveapi and razorpaylivekeysecret to .env'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        plan = request.data.get('plan', 'legacy')
+        # Only plans that are actually on sale can be bought. The previous
+        # default/fallback turned a missing or unknown plan into 'legacy' --
+        # a LIFETIME unlimited plan -- for Rs 199 (the 1-year plan is Rs 1999).
+        plan = str(request.data.get('plan') or '').strip()
+        if plan not in PURCHASABLE_PLANS:
+            return Response(
+                {'error': 'Unknown or unavailable plan.', 'available_plans': sorted(PURCHASABLE_PLANS)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user = request.user
 
         # Client idempotency key — prevents double-charge if the user
@@ -332,14 +345,11 @@ class SubscribeOrderView(APIView):
                 return Response({'error': 'You are not eligible for the scholarship rate. Please complete the scholarship test first.'}, status=status.HTTP_403_FORBIDDEN)
             amount_rs = float(user.scholarship_granted_price or 79.00)
             amount_paise = int(amount_rs * 100)
-        else:
-            # Fallback legacy early bird pass
-            plan = 'legacy'
-            amount_paise = 19900
-            amount_rs = 199.00
+        else:  # pragma: no cover - unreachable, plan validated above
+            return Response({'error': 'Unknown or unavailable plan.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        import razorpay
-        client = razorpay.Client(auth=(key_id, key_secret))
+        from .payments_mock import get_razorpay_client
+        client = get_razorpay_client(key_id, key_secret)
 
         try:
             order_notes = {
@@ -469,8 +479,8 @@ class SubscribeVerifyView(APIView):
         if not key_id or not key_secret:
             return Response({'error': 'Razorpay keys not configured on server'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        import razorpay
-        client = razorpay.Client(auth=(key_id, key_secret))
+        from .payments_mock import get_razorpay_client
+        client = get_razorpay_client(key_id, key_secret)
 
         try:
             client.utility.verify_payment_signature({

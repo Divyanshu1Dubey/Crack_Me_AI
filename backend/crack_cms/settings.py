@@ -13,9 +13,23 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file (does not override existing system env vars)
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Env file selection. Local development points DJANGO_ENV_FILE at a separate
+# file (e.g. `.env.localdev`, see `.env.localdev.example`) so the production
+# `.env` -- live payment, SMTP and Sentry credentials -- is never loaded
+# implicitly on a developer machine. Without the variable the historical
+# behaviour (load `.env` from the working directory) is unchanged.
+_env_file = os.getenv('DJANGO_ENV_FILE', '').strip()
+if _env_file:
+    _env_path = Path(_env_file)
+    if not _env_path.is_absolute():
+        _env_path = BASE_DIR / _env_path
+    if not _env_path.exists():
+        raise ImproperlyConfigured(f'DJANGO_ENV_FILE points to a missing file: {_env_path}')
+    load_dotenv(_env_path, override=False)
+else:
+    load_dotenv()  # Load .env file (does not override existing system env vars)
 
 # ── Sentry Error Tracking ────────────────────────────────────────────
 # Production-safe default. Local development can opt in through backend/.env.
@@ -310,8 +324,28 @@ REST_FRAMEWORK = {
         # unknown scope on every request to that view.
         'ai_heavy': os.getenv('DRF_THROTTLE_AI_HEAVY', '5/min'),
         'analytics_ingest': os.getenv('DRF_THROTTLE_ANALYTICS_INGEST', '120/min'),
+        'local_auth': os.getenv('DRF_THROTTLE_LOCAL_AUTH', '60/min'),
     },
 }
+
+# Dev-only local email/password auth (accounts/local_auth.py) for running the
+# stack without Supabase. Hard-disabled unless DEBUG is on, so a stray
+# LOCAL_DEV_AUTH=1 in a production environment has no effect.
+_local_dev_auth_requested = os.getenv('LOCAL_DEV_AUTH', '').strip().lower() in ('1', 'true', 'yes')
+LOCAL_DEV_AUTH = bool(DEBUG and _local_dev_auth_requested)
+if _local_dev_auth_requested and not DEBUG:
+    print('WARNING: LOCAL_DEV_AUTH ignored because DEBUG is off.', file=sys.stderr)
+# Local mock payment provider (accounts/payments_mock.py): no network, no
+# money. Like LOCAL_DEV_AUTH it is hard-disabled unless DEBUG is on.
+_payments_mock_requested = os.getenv('PAYMENTS_MODE', '').strip().lower() == 'mock'
+PAYMENTS_MOCK = bool(DEBUG and _payments_mock_requested)
+if _payments_mock_requested and not DEBUG:
+    print('WARNING: PAYMENTS_MODE=mock ignored because DEBUG is off.', file=sys.stderr)
+if LOCAL_DEV_AUTH:
+    REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = (
+        *REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'],
+        'accounts.local_auth.LocalDevJWTAuthentication',
+    )
 
 # SimpleJWT — refresh rotation + blacklist after rotation.
 # These apply to the DRF-issued JWT fallback only (Supabase users go through
@@ -432,7 +466,12 @@ STORAGES = {
     },
 }
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT').strip()) if os.getenv('MEDIA_ROOT', '').strip() else BASE_DIR / 'media'
+# Optional local mirror of the Supabase Storage buckets (an extracted
+# storage backup: <dir>/<bucket>/<path>). When set, question images whose
+# URL points at Supabase public storage are streamed from disk instead of
+# redirecting to Supabase. Unset in production.
+SUPABASE_STORAGE_MIRROR_DIR = os.getenv('SUPABASE_STORAGE_MIRROR_DIR', '').strip()
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -450,6 +489,12 @@ if EMAIL_HOST_PASSWORD and EMAIL_HOST_PASSWORD.strip():
 else:
     # Fallback to console output for development (passwords visible in console logs)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Explicit override (local dev uses the file backend so mail is captured to
+# disk and never sent).
+if os.getenv('EMAIL_BACKEND', '').strip():
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND').strip()
+    EMAIL_FILE_PATH = os.getenv('EMAIL_FILE_PATH', str(BASE_DIR / 'tmp_mail'))
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USER}>')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))

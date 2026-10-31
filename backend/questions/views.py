@@ -2947,6 +2947,34 @@ class ChatAssistantView(APIView):
             return Response({"reply": "AI service temporarily unavailable. Your token has been refunded. Please try again."})
 
 
+_SUPABASE_PUBLIC_URL_RE = re.compile(r'^https://[^/]+\.supabase\.co/storage/v1/object/public/(.+)$')
+
+
+def _supabase_storage_mirror_path(url: str):
+    """Map a Supabase public-storage URL onto ``SUPABASE_STORAGE_MIRROR_DIR``.
+
+    Returns an absolute file path inside the mirror, or None (mirror not
+    configured, URL not a Supabase public URL, traversal attempt, or file
+    missing). Used for local development on a restored storage backup.
+    """
+    from django.conf import settings as _dj_settings
+
+    mirror = getattr(_dj_settings, 'SUPABASE_STORAGE_MIRROR_DIR', '')
+    if not mirror or not url:
+        return None
+    match = _SUPABASE_PUBLIC_URL_RE.match(url.split('?', 1)[0])
+    if not match:
+        return None
+    parts = [p for p in match.group(1).split('/') if p]
+    if not parts or any(p in ('.', '..') for p in parts):
+        return None
+    root = os.path.realpath(mirror)
+    candidate = os.path.realpath(os.path.join(root, *parts))
+    if not candidate.startswith(root + os.sep):
+        return None
+    return candidate if os.path.isfile(candidate) else None
+
+
 class QuestionImageServeView(APIView):
     """Serve a `QuestionImage.file` binary through Django.
 
@@ -3019,8 +3047,10 @@ class QuestionImageServeView(APIView):
             if os.path.isfile(candidate):
                 serve_path = candidate
         if not serve_path and img.url and img.url.startswith(("http://", "https://")):
-            from django.http import HttpResponseRedirect
-            return HttpResponseRedirect(img.url)
+            serve_path = _supabase_storage_mirror_path(img.url)
+            if not serve_path:
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(img.url)
         if not serve_path:
             raise Http404("Question image not found")
 

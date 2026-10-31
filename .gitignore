@@ -104,3 +104,8 @@ _audit_session_notes.md
 *.dump
 *.sql.gz
 postgres/
+
+# Local development (generated, contains local secrets)
+.env.localdev
+backend/.env.localdev
+backend/tmp_mail/
