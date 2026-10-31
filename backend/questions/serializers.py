@@ -435,16 +435,26 @@ class QuestionListSerializer(serializers.ModelSerializer):
         from .models import DuplicateMember
         cluster_id = getattr(obj, '_cluster_id', None)
         if cluster_id is None:
-            m = DuplicateMember.objects.filter(question_id=obj.id).values_list('cluster_id', flat=True).first()
-            if m is None:
+            cluster_id = self.get_duplicate_cluster_id(obj)
+            if cluster_id is None:
                 return 0
-            cluster_id = m
         return DuplicateMember.objects.filter(cluster_id=cluster_id).count()
 
     def get_duplicate_cluster_id(self, obj):
         cached = getattr(obj, '_cluster_id', None)
         if cached is not None:
             return cached
+        # Use the `cluster_memberships` prefetch from QuestionViewSet when
+        # present -- the previous per-row query made the list endpoint
+        # O(page_size) queries (N+1). Unique questions (the common case)
+        # now cost zero extra queries.
+        prefetched = (getattr(obj, '_prefetched_objects_cache', None) or {}).get('cluster_memberships')
+        if prefetched is not None:
+            members = list(prefetched)
+            if not members:
+                return None
+            newest = max(members, key=lambda m: (m.cluster_id, m.similarity_score or 0))
+            return newest.cluster_id
         from .models import DuplicateMember
         return DuplicateMember.objects.filter(question_id=obj.id).values_list('cluster_id', flat=True).first()
 
@@ -874,11 +884,26 @@ class TopicNoteSerializer(serializers.ModelSerializer):
         model = TopicNote
         fields = [
             'id', 'subject', 'subject_name', 'topic', 'topic_name',
-            'exam_type', 'title', 'content', 'source_question_ids',
+            'exam_type', 'is_combined', 'is_active', 'title', 'content',
+            'content_preview', 'source_question_ids', 'source_question_count',
             'ai_generated', 'is_published',
             'created_by', 'created_by_username', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by',
+                            'content_preview', 'source_question_count', 'ai_generated']
+
+    def validate_source_question_ids(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Must be a list of question ids.')
+        cleaned = []
+        for item in value:
+            try:
+                cleaned.append(int(item))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError('Question ids must be integers.')
+        return sorted(set(cleaned))[:500]
 
 
 # ════════════════════════════════════════════════════════════════════════════

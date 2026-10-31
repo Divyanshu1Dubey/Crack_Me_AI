@@ -482,7 +482,7 @@ class Command(BaseCommand):
             # the "Remove from bank" action. The stem hash is the durable
             # identity for fixture-loaded rows. Apply the guard before
             # touching Subject/Topic or running image rewrites.
-            stem_for_skip = (clean.get("question_text") or "").strip()
+            stem_for_skip = (f.get("question_text") or "").strip()
             stem_hash_for_skip = compute_stem_hash(stem_for_skip) if stem_for_skip else ""
             if stem_hash_for_skip and stem_hash_for_skip in removed_hashes:
                 self.stdout.write(self.style.WARNING(

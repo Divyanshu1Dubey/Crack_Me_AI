@@ -180,8 +180,10 @@ class AuthApiTests(TestCase):
         self.assertFalse(user.is_superuser)
         self.assertFalse(user.is_staff)
 
-    def test_supabase_sync_demotes_user(self):
-        """Supabase sync should demote an admin when admin flags are removed."""
+    def test_supabase_sync_preserves_existing_admin(self):
+        """Fix P1 (2026-09-23): a Supabase login whose metadata lacks admin
+        flags must NOT demote an existing local admin (admins were losing
+        their role on every login). Revocation is done in Django admin."""
         user = User.objects.create_user(
             username="deeksha",
             email="demoted.user@example.com",
@@ -207,9 +209,9 @@ class AuthApiTests(TestCase):
         )
 
         user.refresh_from_db()
-        self.assertEqual(user.role, "student")
-        self.assertFalse(user.is_superuser)
-        self.assertFalse(user.is_staff)
+        self.assertEqual(user.role, "admin")
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
 
 
 class ProfileAndSubscriptionTests(TestCase):

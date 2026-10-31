@@ -305,6 +305,11 @@ REST_FRAMEWORK = {
         # but blocks scripted loops. See accounts.views.SubscriptionStatusView.
         'subscription_status': os.getenv('DRF_THROTTLE_SUBSCRIPTION_STATUS', '60/min'),
         'contact_us': os.getenv('DRF_THROTTLE_CONTACT_US', '5/min'),
+        # Every `throttle_scope` used by a view MUST have a rate here --
+        # ScopedRateThrottle raises ImproperlyConfigured (HTTP 500) for an
+        # unknown scope on every request to that view.
+        'ai_heavy': os.getenv('DRF_THROTTLE_AI_HEAVY', '5/min'),
+        'analytics_ingest': os.getenv('DRF_THROTTLE_ANALYTICS_INGEST', '120/min'),
     },
 }
 

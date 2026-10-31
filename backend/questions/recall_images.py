@@ -91,3 +91,7 @@ def parse_image_bool(raw):
     if s in ("0", "false", "no", "n", "off"):
         return False
     return None
+
+
+# Backwards-compatible name used by ``QuestionViewSet.images_facets``.
+list_images_facets = list_images_faceted

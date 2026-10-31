@@ -53,6 +53,24 @@ from .import_protection import pre_check_create as _pre_check_remove
 
 
 logger = logging.getLogger(__name__)
+
+
+def _question_list_cache_version(user_id) -> int:
+    try:
+        return int(cache.get(f'qlist_ver:{user_id}') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _bump_question_list_cache_version(user_id) -> None:
+    """Invalidate every cached question-list page for one user."""
+    key = f'qlist_ver:{user_id}'
+    try:
+        cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, None)
+    except Exception:  # pragma: no cover - cache backend hiccup
+        logger.debug('qlist cache version bump failed for %s', user_id)
 _QUESTION_BOOTSTRAP_LOCK = Lock()
 
 
@@ -301,6 +319,16 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 return text[len(prefix):].strip()
         return text
 
+    def _user_is_premium(self) -> bool:
+        """`is_premium` for the requesting user, evaluated once per request
+        (it costs a Subscription query and is consulted several times)."""
+        if not hasattr(self, '_cached_user_is_premium'):
+            user = getattr(self.request, 'user', None)
+            self._cached_user_is_premium = bool(
+                user is not None and getattr(user, 'is_authenticated', False) and _is_premium(user)
+            )
+        return self._cached_user_is_premium
+
     def get_queryset(self):
         queryset = super().get_queryset().order_by('-id')
         user = getattr(self.request, 'user', None)
@@ -359,7 +387,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             and user is not None
             and getattr(user, 'is_authenticated', False)
             and not is_admin
-            and not _is_premium(user)
+            and not self._user_is_premium()
         ):
             showcase_filter = FreeShowcaseQuestion.objects.filter(
                 question_id=OuterRef('pk'),
@@ -405,7 +433,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 user is not None
                 and getattr(user, 'is_authenticated', False)
                 and not is_admin
-                and not _is_premium(user)
+                and not self._user_is_premium()
             ):
                 queryset = queryset.annotate(
                     shuffle_slot=Case(
@@ -522,15 +550,29 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        # Per-user list cache: 5 min TTL. Questions change rarely;
-        # cache key includes page+size+filters+user so different users
-        # and filters get their own slot.
+        # Per-user list cache: 5 min TTL. Questions change rarely. The key
+        # includes the user, their access tier, a per-user version (bumped
+        # on bookmark / attempt so `is_bookmarked` and the user's answer
+        # state are fresh) and the full filter set (names AND values --
+        # hashing values alone made `?year=2024` collide with
+        # `?subject=2024`). Admins are never served from / written to it.
         import hashlib
-        user_id = request.user.id if getattr(request.user, 'is_authenticated', False) else 'anon'
-        filter_parts = [str(request.query_params.get(k, '')) for k in sorted(request.query_params.keys())]
-        cache_key = f'qlist:{user_id}:{hashlib.md5("|".join(filter_parts).encode()).hexdigest()}:{request.query_params.get("page", 1)}:{request.query_params.get("page_size", 25)}'
+        user = request.user
+        is_authenticated = getattr(user, 'is_authenticated', False)
+        is_staff_user = is_authenticated and (
+            getattr(user, 'is_admin', False) or getattr(user, 'is_staff', False)
+            or getattr(user, 'is_superuser', False)
+        )
+        if is_staff_user:
+            return super().list(request, *args, **kwargs)
+        user_id = user.id if is_authenticated else 'anon'
+        tier = 'premium' if (is_authenticated and self._user_is_premium()) else 'free'
+        version = _question_list_cache_version(user_id) if is_authenticated else 0
+        filter_parts = [f'{k}={request.query_params.get(k, "")}' for k in sorted(request.query_params.keys())]
+        digest = hashlib.md5('&'.join(filter_parts).encode()).hexdigest()
+        cache_key = f'qlist:{user_id}:{tier}:v{version}:{digest}'
         cached = cache.get(cache_key)
-        if cached is not None and not (getattr(request.user, 'is_staff', False) or getattr(request.user, 'is_superuser', False)):
+        if cached is not None:
             return Response(cached)
         response = super().list(request, *args, **kwargs)
         cache.set(cache_key, response.data, 300)
@@ -949,13 +991,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
             permission_classes=[permissions.AllowAny])
     def ai_concept(self, request, pk=None):
         q = self.get_object()
-        return Response({"concept": _ai_per_question.concept(q)})
+        return Response({"concept": _ai_per_question.concept(q, allow_ai=request.user.is_authenticated)})
 
     @action(detail=True, methods=['get'], url_path='ai/why_correct',
             permission_classes=[permissions.AllowAny])
     def ai_why_correct(self, request, pk=None):
         q = self.get_object()
-        return Response({"why_correct": _ai_per_question.why_correct(q)})
+        return Response({"why_correct": _ai_per_question.why_correct(q, allow_ai=request.user.is_authenticated)})
 
     @action(detail=True, methods=['get'], url_path='ai/why_incorrect',
             permission_classes=[permissions.AllowAny])
@@ -967,13 +1009,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
             permission_classes=[permissions.AllowAny])
     def ai_clinical(self, request, pk=None):
         q = self.get_object()
-        return Response({"clinical_significance": _ai_per_question.clinical_significance(q)})
+        return Response({"clinical_significance": _ai_per_question.clinical_significance(q, allow_ai=request.user.is_authenticated)})
 
     @action(detail=True, methods=['get'], url_path='ai/mnemonic',
             permission_classes=[permissions.AllowAny])
     def ai_mnemonic(self, request, pk=None):
         q = self.get_object()
-        return Response({"memory_trick": _ai_per_question.memory_trick(q)})
+        return Response({"memory_trick": _ai_per_question.memory_trick(q, allow_ai=request.user.is_authenticated)})
 
     @action(detail=True, methods=['get'], url_path='ai/related_pyqs',
             permission_classes=[permissions.AllowAny])
@@ -1013,7 +1055,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
             permission_classes=[permissions.IsAuthenticated])
     def practice_flag(self, request, pk=None):
         q = self.get_object()
-        flag = bool(request.data.get("flag", True))
+        raw_flag = request.data.get("flag", True)
+        flag = raw_flag if isinstance(raw_flag, bool) else str(raw_flag).strip().lower() in ("1", "true", "yes", "on")
         return Response(_practice_experience.set_flag(q, request.user, flag))
 
     @action(detail=True, methods=['post'], url_path='practice/confidence',
@@ -1058,12 +1101,123 @@ class QuestionViewSet(viewsets.ModelViewSet):
         except (TypeError, ValueError):
             confidence = None
         correct_answer = (q.correct_answer or "").upper()[:1]
-        is_correct = answer == correct_answer
+        is_correct = bool(answer) and answer == correct_answer
         return Response(_practice_experience.submit_attempt(
             q, request.user,
             answer=answer, correct=is_correct,
             time_spent=time_spent, confidence=confidence,
         ))
+
+    @action(detail=True, methods=["post"], url_path='generate-explanation',
+            permission_classes=[IsControlTowerAdmin])
+    def generate_explanation(self, request, pk=None):
+        """Generate an AI explanation for this question.
+
+        Admin workflow: open question → verify correct answer → click "AI
+        Generate Explanation" → AI fills ALL explanation fields → admin
+        reviews → makes corrections → saves → next question.
+
+        Request body:
+        {
+            "correct_answer": "A" | "B" | "C" | "D",   // which option is correct
+            "regenerate_if_exists": false                  // if true, overwrite existing explanation
+        }
+
+        The AI's prompt explicitly locks on the selected correct_answer as
+        the source of truth. It never silently changes the admin's choice.
+
+        If an explanation already exists and regenerate_if_exists is false,
+        the endpoint returns 409 with the existing data so the admin can
+        confirm before overwriting.
+        """
+        from ai_engine.services import AIService
+        question = self.get_object()
+        correct_answer = str(request.data.get('correct_answer', question.correct_answer or 'A')).upper()[:1]
+        regenerate = bool(request.data.get('regenerate_if_exists', False))
+
+        # Protection: don't silently overwrite existing manually-reviewed content
+        existing_fields = ['explanation', 'concept_explanation', 'mnemonic',
+                           'book_name', 'chapter', 'reference_text', 'shortcut_tip']
+        has_existing = any(getattr(question, f, '') for f in existing_fields)
+        if has_existing and not regenerate:
+            return Response({
+                'detail': 'This question already has an explanation. Set regenerate_if_exists=true to overwrite.',
+                'existing_fields': {f: getattr(question, f, '') for f in existing_fields if getattr(question, f, '')},
+                'requires_confirmation': True,
+            }, status=status.HTTP_409_CONFLICT)
+
+        # Collect images for AI context
+        image_descriptions = []
+        for img in question.images.filter(is_active=True).order_by('image_index_in_page', 'id')[:6]:
+            if img.caption:
+                image_descriptions.append(img.caption)
+            elif img.alt_text:
+                image_descriptions.append(img.alt_text)
+
+        options = {
+            'A': question.option_a or '',
+            'B': question.option_b or '',
+            'C': question.option_c or '',
+            'D': question.option_d or '',
+        }
+
+        try:
+            ai_service = AIService()
+            result = ai_service.generate_admin_explanation(
+                question_text=question.question_text or '',
+                options=options,
+                correct_answer=correct_answer,
+                subject=str(question.subject or ''),
+                topic=str(question.topic or ''),
+                exam_type=str(question.exam_type or 'cms'),
+                existing_explanation=question.explanation or '',
+                image_descriptions=image_descriptions if image_descriptions else None,
+            )
+
+            if not isinstance(result, dict) or result.get('_failed'):
+                return Response({
+                    'detail': 'AI generation failed. No changes were saved to the question.',
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Apply only the fields that were generated — never overwrite unrelated admin data
+            updatable_fields = [
+                'explanation', 'concept_explanation', 'mnemonic',
+                'book_name', 'chapter', 'page_number', 'reference_text',
+                'shortcut_tip', 'concept_keywords',
+                'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+            ]
+            for field in updatable_fields:
+                if field in result and result[field]:
+                    setattr(question, field, result[field])
+
+            # Optionally update correct_answer if admin changed it
+            if request.data.get('update_correct_answer', False) and correct_answer != question.correct_answer:
+                question.correct_answer = correct_answer
+
+            # Record who generated (without consuming user tokens — admin action)
+            try:
+                admin_user = request.user if request.user.is_authenticated else None
+                if admin_user and (getattr(admin_user, 'is_admin', False) or admin_user.is_staff):
+                    if hasattr(question, 'verified_by_id') and not question.verified_by_id:
+                        question.verified_by = admin_user
+                        question.verified_at = timezone.now()
+                        question.is_verified_by_admin = True
+            except Exception:
+                pass
+
+            question.save()
+            question.refresh_from_db()
+
+            return Response({
+                'detail': 'Explanation generated successfully.',
+                'generated_fields': {k: result.get(k, '') for k in updatable_fields if result.get(k, '')},
+                'question': QuestionAdminListSerializer(question, context={'request': request}).data,
+            })
+        except Exception:
+            logger.exception("Admin explanation generation failed for Q%s", question.id)
+            return Response({
+                'detail': 'AI generation failed. No changes were saved to the question.',
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
@@ -1573,7 +1727,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # Invalidate per-user caches so dashboard + question list stay fresh.
         cache.delete(f'dashboard:{request.user.id}')
         cache.delete(f'dashboard_bundle:{request.user.id}')
-        cache.delete(f'qlist:{request.user.id}:all:all:1')
+        _bump_question_list_cache_version(request.user.id)
         
         if created:
             # Update Subject/Topic performance
@@ -1636,6 +1790,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         bookmark, created = QuestionBookmark.objects.get_or_create(
             user=request.user, question=question
         )
+        _bump_question_list_cache_version(request.user.id)
         if not created:
             bookmark.delete()
             return Response({'bookmarked': False})
@@ -2410,10 +2565,10 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
 
     def get_throttles(self):
         """Rate-limit unauthenticated feedback to prevent spam."""
-        from rest_framework.throttles import AnonRateThrottle
+        from rest_framework.throttling import AnonRateThrottle
         if self.action == 'create' and not self.request.user.is_authenticated:
             return [AnonRateThrottle()]
-        return []
+        return super().get_throttles()
 
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:
@@ -3000,112 +3155,7 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=["post"], url_path='generate-explanation')
-    def generate_explanation(self, request, pk=None):
-        """Generate an AI explanation for this question.
-
-        Admin workflow: open question → verify correct answer → click "AI
-        Generate Explanation" → AI fills ALL explanation fields → admin
-        reviews → makes corrections → saves → next question.
-
-        Request body:
-        {
-            "correct_answer": "A" | "B" | "C" | "D",   // which option is correct
-            "regenerate_if_exists": false                  // if true, overwrite existing explanation
-        }
-
-        The AI's prompt explicitly locks on the selected correct_answer as
-        the source of truth. It never silently changes the admin's choice.
-
-        If an explanation already exists and regenerate_if_exists is false,
-        the endpoint returns 409 with the existing data so the admin can
-        confirm before overwriting.
-        """
-        from ai_engine.services import AIService
-        question = self.get_object()
-        correct_answer = str(request.data.get('correct_answer', question.correct_answer or 'A')).upper()[:1]
-        regenerate = bool(request.data.get('regenerate_if_exists', False))
-
-        # Protection: don't silently overwrite existing manually-reviewed content
-        existing_fields = ['explanation', 'concept_explanation', 'mnemonic',
-                           'book_name', 'chapter', 'reference_text', 'shortcut_tip']
-        has_existing = any(getattr(question, f, '') for f in existing_fields)
-        if has_existing and not regenerate:
-            return Response({
-                'detail': 'This question already has an explanation. Set regenerate_if_exists=true to overwrite.',
-                'existing_fields': {f: getattr(question, f, '') for f in existing_fields if getattr(question, f, '')},
-                'requires_confirmation': True,
-            }, status=status.HTTP_409_CONFLICT)
-
-        # Collect images for AI context
-        image_descriptions = []
-        for img in question.images.filter(is_active=True).order_by('image_index_in_page', 'id')[:6]:
-            if img.caption:
-                image_descriptions.append(img.caption)
-            elif img.alt_text:
-                image_descriptions.append(img.alt_text)
-
-        options = {
-            'A': question.option_a or '',
-            'B': question.option_b or '',
-            'C': question.option_c or '',
-            'D': question.option_d or '',
-        }
-
-        try:
-            ai_service = AIService()
-            result = ai_service.generate_admin_explanation(
-                question_text=question.question_text or '',
-                options=options,
-                correct_answer=correct_answer,
-                subject=str(question.subject or ''),
-                topic=str(question.topic or ''),
-                exam_type=str(question.exam_type or 'cms'),
-                existing_explanation=question.explanation or '',
-                image_descriptions=image_descriptions if image_descriptions else None,
-            )
-
-            # Apply only the fields that were generated — never overwrite unrelated admin data
-            updatable_fields = [
-                'explanation', 'concept_explanation', 'mnemonic',
-                'book_name', 'chapter', 'page_number', 'reference_text',
-                'shortcut_tip', 'concept_keywords',
-                'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
-            ]
-            for field in updatable_fields:
-                if field in result and result[field]:
-                    setattr(question, field, result[field])
-
-            # Optionally update correct_answer if admin changed it
-            if request.data.get('update_correct_answer', False) and correct_answer != question.correct_answer:
-                question.correct_answer = correct_answer
-
-            # Record who generated (without consuming user tokens — admin action)
-            try:
-                admin_user = request.user if request.user.is_authenticated else None
-                if admin_user and admin_user.is_staff:
-                    if hasattr(question, 'verified_by_id') and not question.verified_by_id:
-                        question.verified_by = admin_user
-                        question.verified_at = timezone.now()
-                        question.is_verified_by_admin = True
-            except Exception:
-                pass
-
-            question.save()
-            question.refresh_from_db()
-
-            return Response({
-                'detail': 'Explanation generated successfully.',
-                'generated_fields': {k: result.get(k, '') for k in updatable_fields if result.get(k, '')},
-                'question': QuestionAdminListSerializer(question, context={'request': request}).data,
-            })
-        except Exception as e:
-            logger.error(f"Admin explanation generation failed for Q{question.id}: {e}")
-            return Response({
-                'detail': f'AI generation failed: {str(e)}. No changes were saved to the question.',
-                'error': str(e),
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
+    @action(detail=True, methods=['post'], url_path='reorder')
     def reorder(self, request, pk=None):
         """Reorder images within a question. Body: `{question_id, new_index_in_page}`."""
         image = self.get_object()
@@ -3131,13 +3181,18 @@ class TopicNoteViewSet(viewsets.ModelViewSet):
     This viewset exposes the resulting notes for admin editing and publishing.
     """
     queryset = TopicNote.objects.select_related('subject', 'topic', 'created_by').order_by('-updated_at')
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
     serializer_class = TopicNoteSerializer
     filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated']
     search_fields = ['title', 'content']
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        note = serializer.save(created_by=self.request.user)
+        _refresh_topic_note_derived_fields(note)
+
+    def perform_update(self, serializer):
+        note = serializer.save()
+        _refresh_topic_note_derived_fields(note)
 
     @action(detail=True, methods=["post"], url_path="generate")
     def generate_from_topic(self, request, pk=None):
@@ -3179,13 +3234,18 @@ Respond with structured content in markdown format."""
 
         try:
             ai_service = AIService()
-            raw = ai_service._call_ai(prompt, max_tokens=3000, temperature=0.3)
-            note.content = raw.strip()
-            note.ai_generated = True
-            note.save()
-            return Response({'detail': 'Note generated.', 'content': note.content})
-        except Exception as e:
-            return Response({'detail': f'Generation failed: {e}'}, status=503)
+            content = _usable_ai_text(ai_service._call_ai(prompt, max_tokens=3000, temperature=0.3))
+        except Exception:
+            logger.exception('TopicNote generation failed (note=%s)', note.pk)
+            content = ''
+        if not content:
+            return Response({'detail': 'AI generation is temporarily unavailable. Please try again shortly.'}, status=503)
+        note.content = content
+        note.ai_generated = True
+        note.source_question_ids = [q.id for q in qs]
+        note.save()
+        _refresh_topic_note_derived_fields(note)
+        return Response({'detail': 'Note generated.', 'content': note.content})
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -3482,45 +3542,80 @@ class StudyTimeView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+def _usable_ai_text(raw) -> str:
+    """Return AI output, or '' when every provider failed (the rotation
+    returns a human-readable failure sentence that must never be saved)."""
+    from ai_engine.services import AIService
+    text = (raw or '').strip()
+    if (not text or AIService._looks_like_provider_error_response(text)
+            or text.lower().startswith('all ai services are temporarily unavailable')):
+        return ''
+    return text
+
+
+def _refresh_topic_note_derived_fields(note) -> None:
+    content = note.content or ''
+    preview = content if len(content) <= 300 else content[:300] + '...'
+    count = len(note.source_question_ids or [])
+    TopicNote.objects.filter(pk=note.pk).update(content_preview=preview, source_question_count=count)
+    note.content_preview = preview
+    note.source_question_count = count
+
+
 class TopicNoteCreateView(APIView):
-    """Create a topic note with optional AI generation."""
-    permission_classes = [permissions.IsAuthenticated]
+    """Create (or update by subject/topic/exam/title) an admin topic note."""
+    permission_classes = [IsControlTowerAdmin]
 
     def post(self, request):
         serializer = TopicNoteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         exam_type = serializer.validated_data.get('exam_type', 'cms')
-        subject = serializer.validated_data['subject']
-        topic = serializer.validated_data['topic']
+        subject = serializer.validated_data.get('subject')
+        topic = serializer.validated_data.get('topic')
         title = serializer.validated_data['title']
+        if not subject or not topic:
+            return Response({'error': 'subject and topic are required'}, status=400)
 
         note, created = TopicNote.objects.get_or_create(
             exam_type=exam_type,
             subject=subject,
             topic=topic,
             title=title,
-            defaults={'content': '', 'content_preview': '', 'source_question_count': 0},
+            defaults={
+                'content': serializer.validated_data.get('content', ''),
+                'is_combined': serializer.validated_data.get('is_combined', False),
+                'is_published': serializer.validated_data.get('is_published', False),
+                'source_question_ids': serializer.validated_data.get('source_question_ids', []),
+                'created_by': request.user,
+            },
         )
         if not created:
             note.content = serializer.validated_data.get('content', note.content)
             note.is_published = serializer.validated_data.get('is_published', note.is_published)
+            if 'source_question_ids' in serializer.validated_data:
+                note.source_question_ids = serializer.validated_data['source_question_ids']
             note.save()
+        _refresh_topic_note_derived_fields(note)
 
         out = TopicNoteSerializer(note)
         return Response(out.data, status=status.HTTP_201_CREATED if created else 200)
 
 
 class AITopicNoteGenerationView(APIView):
-    """Generate topic note from similar question explanations using AI."""
-    permission_classes = [permissions.IsAuthenticated]
+    """Generate topic note from similar question explanations using AI.
+
+    Routed as ``topic-notes/<pk>/generate/``; ``topic_note_id`` in the body
+    is still accepted for older clients.
+    """
+    permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'ai_heavy'
 
-    def post(self, request):
-        topic_note_id = request.data.get('topic_note_id')
+    def post(self, request, pk=None):
+        topic_note_id = pk or request.data.get('topic_note_id')
         if topic_note_id:
             try:
-                note = TopicNote.objects.get(pk=topic_note_id)
-            except TopicNote.DoesNotExist:
+                note = TopicNote.objects.select_related('subject', 'topic').get(pk=int(topic_note_id))
+            except (TopicNote.DoesNotExist, TypeError, ValueError):
                 return Response({'error': 'TopicNote not found'}, status=404)
         else:
             exam_type = request.data.get('exam_type', 'cms')
@@ -3534,8 +3629,11 @@ class AITopicNoteGenerationView(APIView):
                 subject_id=subject_id,
                 topic_id=topic_id,
                 title=title,
-                defaults={'content': '', 'content_preview': ''},
+                defaults={'content': '', 'content_preview': '', 'created_by': request.user},
             )
+
+        if not note.subject or not note.topic:
+            return Response({'error': 'This note has no subject/topic to generate from.'}, status=400)
 
         # Gather explanations from similar questions
         qs = Question.objects.filter(
@@ -3571,11 +3669,15 @@ class AITopicNoteGenerationView(APIView):
             f"Write comprehensive topic notes:"
         )
         try:
-            raw = ai_service._call_ai(prompt, max_tokens=4000, temperature=0.3)
-            note.content = raw.strip()
-            note.content_preview = note.content[:300] + '...' if len(note.content) > 300 else note.content
-            note.ai_generated = True
-            note.save(update_fields=['content', 'content_preview', 'ai_generated', 'source_question_count'])
-            return Response({'detail': 'Note generated.', 'content': note.content})
-        except Exception as e:
-            return Response({'detail': f'Generation failed: {e}'}, status=503)
+            content = _usable_ai_text(ai_service._call_ai(prompt, max_tokens=4000, temperature=0.3))
+        except Exception:
+            logger.exception('Topic note AI generation failed (note=%s)', note.pk)
+            content = ''
+        if not content:
+            return Response({'detail': 'AI generation is temporarily unavailable. Please try again shortly.'}, status=503)
+        note.content = content
+        note.ai_generated = True
+        note.source_question_ids = question_ids
+        note.save(update_fields=['content', 'ai_generated', 'source_question_ids', 'updated_at'])
+        _refresh_topic_note_derived_fields(note)
+        return Response(TopicNoteSerializer(note).data)

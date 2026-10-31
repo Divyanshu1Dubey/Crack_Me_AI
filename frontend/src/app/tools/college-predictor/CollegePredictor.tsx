@@ -89,6 +89,39 @@ const CATEGORY_OPTIONS = [
 
 const YEAR_OPTIONS = ['2026', '2025', '2024', '2023'];
 
+const RecommendationCard = ({ items, title, accent }: { items: HospitalEntry[]; title: string; accent: string }) => {
+    if (items.length === 0) {
+        return (
+            <div className="rounded-xl border border-border bg-muted/50 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+                <p className="mt-2 text-sm text-muted-foreground">No hospitals in this band for your rank.</p>
+            </div>
+        );
+    }
+    return (
+        <div className="rounded-xl border border-border bg-muted/50 overflow-hidden">
+            <div className="px-5 py-3 border-b border-border" style={{ background: accent }}>
+                <p className="text-xs font-bold uppercase tracking-wider text-white">{title}</p>
+                <p className="text-[11px] text-white/80 mt-0.5">{items.length} hospital{items.length > 1 ? 's' : ''}</p>
+            </div>
+            <div className="divide-y divide-border">
+                {items.map((h) => (
+                    <div key={h.name + h.department} className="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-foreground truncate">{h.name}</p>
+                            <p className="text-xs text-muted-foreground">{h.city}</p>
+                        </div>
+                        <div className="sm:text-right">
+                            <p className="text-xs font-semibold text-foreground">{h.department}</p>
+                            <p className="text-[11px] text-muted-foreground">UR cutoff ~{h.urClosingRank}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 export default function CollegePredictor() {
     const [rank, setRank] = useState('');
     const [category, setCategory] = useState('general');
@@ -130,39 +163,6 @@ export default function CollegePredictor() {
             reach,
             categoryLabel: categoryData.label,
         });
-    };
-
-    const RecommendationCard = ({ items, title, accent }: { items: HospitalEntry[]; title: string; accent: string }) => {
-        if (items.length === 0) {
-            return (
-                <div className="rounded-xl border border-border bg-muted/50 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">No hospitals in this band for your rank.</p>
-                </div>
-            );
-        }
-        return (
-            <div className="rounded-xl border border-border bg-muted/50 overflow-hidden">
-                <div className="px-5 py-3 border-b border-border" style={{ background: accent }}>
-                    <p className="text-xs font-bold uppercase tracking-wider text-white">{title}</p>
-                    <p className="text-[11px] text-white/80 mt-0.5">{items.length} hospital{items.length > 1 ? 's' : ''}</p>
-                </div>
-                <div className="divide-y divide-border">
-                    {items.map((h) => (
-                        <div key={h.name + h.department} className="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-foreground truncate">{h.name}</p>
-                                <p className="text-xs text-muted-foreground">{h.city}</p>
-                            </div>
-                            <div className="sm:text-right">
-                                <p className="text-xs font-semibold text-foreground">{h.department}</p>
-                                <p className="text-[11px] text-muted-foreground">UR cutoff ~{h.urClosingRank}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
     };
 
     return (

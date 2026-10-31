@@ -1433,7 +1433,8 @@ RULES:
                     except (json.JSONDecodeError, Exception):
                         pass
             return {
-                'explanation': f'AI generation failed: {str(e)}. Please edit manually.',
+                '_failed': True,
+                'explanation': '',
                 'concept_explanation': '', 'mnemonic': '', 'book_name': '', 'chapter': '',
                 'page_number': '', 'reference_text': '', 'shortcut_tip': '',
                 'concept_keywords': [], 'why_correct': '', 'why_wrong_a': '',

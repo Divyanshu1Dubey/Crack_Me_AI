@@ -10,6 +10,10 @@ router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
 router.register(r'exam-tracks', views.ExamTrackViewSet, basename='examtrack')
 router.register(r'images', views.QuestionImageViewSet, basename='question-image')
+# Admin TopicNote CRUD. The legacy `notes` prefix is shadowed for list /
+# detail by the personal-notes paths below (only `notes/<pk>/generate/`
+# reached it), so the admin pages use `topic-notes/library/`.
+router.register(r'topic-notes/library', views.TopicNoteViewSet, basename='topic-note-library')
 router.register(r'notes', views.TopicNoteViewSet, basename='topic-note')
 router.register(r'', views.QuestionViewSet, basename='question')
 

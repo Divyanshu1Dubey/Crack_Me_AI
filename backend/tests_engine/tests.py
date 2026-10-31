@@ -70,8 +70,22 @@ class TestStartFreemiumGateTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.locked = Test.objects.create(title='Locked test', test_type='mixed')
+        from questions.models import Question, Subject
+        # Business rule (2026-08-04): only small practice tests (daily or
+        # <=20 questions) are free; the lock is decided by the *actual*
+        # number of attached questions.
+        subject = Subject.objects.create(name='Gate Subject')
+        questions = [
+            Question.objects.create(
+                question_text=f'Gate Q{i}', option_a='A', option_b='B', year=2024,
+                option_c='C', option_d='D', correct_answer='A', subject=subject,
+            )
+            for i in range(21)
+        ]
+        cls.locked = Test.objects.create(title='Locked test', test_type='mixed', num_questions=21)
+        cls.locked.questions.set(questions)
         cls.preview = Test.objects.create(title='Free preview test', test_type='mixed', is_free_preview=True)
+        cls.preview.questions.set(questions[:5])
 
     def _user(self, *, is_admin=False, is_premium=False, suffix=''):
         user = User.objects.create(

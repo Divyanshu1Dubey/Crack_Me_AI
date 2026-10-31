@@ -734,6 +734,26 @@ class QuestionAttempt(models.Model):
     def __str__(self):
         return f"{self.user.username} | Q{self.question.id} | {'Correct' if self.is_correct else 'Incorrect'}"
 
+
+class QuestionPracticeState(models.Model):
+    """Per-user, per-question practice-mode state (flag, confidence, time
+    spent, eliminated options). Kept separate from ``QuestionBookmark`` so
+    flagging a question never shows up in the user's bookmark list."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='practice_states')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='practice_states')
+    flagged = models.BooleanField(default=False)
+    confidence = models.PositiveSmallIntegerField(default=0, help_text='0 = not rated, otherwise 1..5')
+    time_spent_seconds = models.PositiveIntegerField(default=0)
+    eliminated_options = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'question']
+
+    def __str__(self):
+        return f"{self.user_id} | Q{self.question_id} | flag={self.flagged}"
+
+
 class Announcement(models.Model):
     """Admin Notes / Announcements targeted at specific exam tracks."""
     VISIBILITY_CHOICES = [
@@ -1048,6 +1068,13 @@ class TopicNote(models.Model):
         help_text='True when this note covers the same topic across multiple exams.',
     )
     is_active = models.BooleanField(default=True, db_index=True)
+    # Fields used by the admin notes pipeline (serializers, views and the
+    # admin/topic-notes pages all read/write these).
+    content_preview = models.CharField(max_length=320, blank=True, default='')
+    source_question_ids = models.JSONField(default=list, blank=True)
+    source_question_count = models.PositiveIntegerField(default=0)
+    ai_generated = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='created_topic_notes',

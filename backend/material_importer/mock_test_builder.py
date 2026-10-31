@@ -305,4 +305,5 @@ def _safe_set_questions(test_obj, ids, max_per_test):
     )
     if pub_ids:
         test_obj.questions.set(pub_ids)
+        type(test_obj).objects.filter(pk=test_obj.pk).update(num_questions=len(pub_ids))
     return len(pub_ids)

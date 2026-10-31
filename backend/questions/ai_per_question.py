@@ -40,14 +40,28 @@ def _q_id(q):
 
 
 def _ai_call(prompt: str, max_tokens: int = 220) -> str:
-    """Wraps `ai_engine.services.generate_text`. Falls back to template."""
+    """Call the shared `AIService` provider rotation.
+
+    Returns ``""`` when every provider failed (or returned a provider-error
+    payload) so callers fall back to a template *without* persisting it.
+    """
     try:
-        from ai_engine.services import generate_text
-        out = generate_text(prompt=prompt, max_tokens=max_tokens, temperature=0.4)
-        return (out or "").strip()
+        from ai_engine.services import AIService
+        out = (AIService()._call_ai(prompt, temperature=0.4, max_tokens=max_tokens) or "").strip()
     except Exception as e:  # pragma: no cover - defensive
         LOG.warning("AI call failed, using template fallback: %s", e)
         return ""
+    if (not out or AIService._looks_like_provider_error_response(out)
+            or out.lower().startswith("all ai services are temporarily unavailable")):
+        return ""
+    return out
+
+
+def _stored(q, field: str) -> str:
+    """Return a non-empty stored AI/admin field for ``q`` (or ``""``)."""
+    if isinstance(q, dict):
+        return (q.get(field) or "").strip()
+    return (getattr(q, field, "") or "").strip()
 
 
 # ---------- template fallbacks (offline-safe) -----------------------------
@@ -75,28 +89,36 @@ def _stem_text(q):
 
 # ---------- per-feature impls --------------------------------------------
 
-def concept(q):
+def concept(q, allow_ai: bool = False):
     cid = _q_id(q)
     if cid is None:
         return _FALLBACK["concept"]
     cached = cache.get(_k(cid, "concept"))
     if cached:
         return cached
+    if not allow_ai:
+        return _FALLBACK["concept"]
     prompt = (f"In one short clause, name the underlying concept for this "
               f"NEET-PG question:\n\nQ: {_stem_text(q)}\n\nConcept:")
-    out = _ai_call(prompt, max_tokens=64) or _FALLBACK["concept"]
+    out = _ai_call(prompt, max_tokens=64)
+    if not out:
+        return _FALLBACK["concept"]
     cache.set(_k(cid, "concept"), out, CACHE_TTL)
-    _persist_ai_field(q, "ai_explanation", out)
     return out
 
 
-def why_correct(q, options: list[str] | None = None):
+def why_correct(q, options: list[str] | None = None, allow_ai: bool = False):
     cid = _q_id(q)
     if cid is None:
         return _FALLBACK["why_correct"]
+    stored = _stored(q, "ai_answer")
+    if stored:
+        return stored
     cached = cache.get(_k(cid, "why_correct"))
     if cached:
         return cached
+    if not allow_ai:
+        return _FALLBACK["why_correct"]
     correct = _correct_letter(q)
     opts = options or _options(q)
     correct_text = ""
@@ -106,9 +128,11 @@ def why_correct(q, options: list[str] | None = None):
     prompt = (f"Why is option {correct} correct for this NEET-PG question?\n\n"
               f"Q: {_stem_text(q)}\nOption {correct}: {correct_text}\n"
               f"Reason (2-3 lines):")
-    out = _ai_call(prompt, max_tokens=220) or _FALLBACK["why_correct"]
+    out = _ai_call(prompt, max_tokens=220)
+    if not out:
+        return _FALLBACK["why_correct"]
     cache.set(_k(cid, "why_correct"), out, CACHE_TTL)
-    _persist_ai_field(q, "ai_explanation", out)
+    _persist_ai_field(q, "ai_answer", out)
     return out
 
 
@@ -134,31 +158,45 @@ def why_incorrect(q, options: list[str] | None = None):
     return out
 
 
-def clinical_significance(q):
+def clinical_significance(q, allow_ai: bool = False):
     cid = _q_id(q)
     if cid is None:
         return _FALLBACK["clinical_significance"]
+    stored = _stored(q, "ai_clinical_pearl")
+    if stored:
+        return stored
     cached = cache.get(_k(cid, "clinical_significance"))
     if cached:
         return cached
+    if not allow_ai:
+        return _FALLBACK["clinical_significance"]
     prompt = (f"Explain the clinical significance of this NEET-PG concept in 2 sentences:\n\n"
               f"Q: {_stem_text(q)}\nSignificance:")
-    out = _ai_call(prompt, max_tokens=140) or _FALLBACK["clinical_significance"]
+    out = _ai_call(prompt, max_tokens=140)
+    if not out:
+        return _FALLBACK["clinical_significance"]
     cache.set(_k(cid, "clinical_significance"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_clinical_pearl", out)
     return out
 
 
-def memory_trick(q):
+def memory_trick(q, allow_ai: bool = False):
     cid = _q_id(q)
     if cid is None:
         return _FALLBACK["memory_trick"]
+    stored = _stored(q, "ai_mnemonic")
+    if stored:
+        return stored
     cached = cache.get(_k(cid, "memory_trick"))
     if cached:
         return cached
+    if not allow_ai:
+        return _FALLBACK["memory_trick"]
     prompt = (f"Give a 1-line mnemonic or memory trick to recall the answer "
               f"to:\n\nQ: {_stem_text(q)}\nMnemonic:")
-    out = _ai_call(prompt, max_tokens=80) or _FALLBACK["memory_trick"]
+    out = _ai_call(prompt, max_tokens=80)
+    if not out:
+        return _FALLBACK["memory_trick"]
     cache.set(_k(cid, "memory_trick"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_mnemonic", out)
     return out
@@ -245,23 +283,20 @@ def _options(q):
 
 
 def _persist_ai_field(q, field: str, value: str) -> None:
-    """Mirror AI output onto the Question row + emit an audit log row."""
+    """Store genuine AI output on the Question row -- only while the field
+    is still empty, so admin-curated or previously generated content is
+    never overwritten by a student-triggered request."""
+    if not value:
+        return
     try:
-        if isinstance(q, dict):
-            from questions.models import Question
-            Question.objects.filter(id=q.get("id")).update(**{field: value})
-            q_obj = Question.objects.filter(id=q.get("id")).first()
-        else:
-            q_obj = q
-            setattr(q_obj, field, value)
-            q_obj.save(update_fields=[field, "ai_generated_at", "ai_model"])
-        from questions.models import QuestionAIOperationLog
-        QuestionAIOperationLog.objects.create(
-            question=q_obj,
-            operation_type=field,
-            model_version="phase3",
-            success=True,
-            log={"at": timezone.now().isoformat()},
+        from questions.models import Question
+        qid = _q_id(q)
+        if qid is None:
+            return
+        updated = Question.objects.filter(pk=qid, **{field: ""}).update(
+            **{field: value, "ai_generated_at": timezone.now()}
         )
+        if updated and not isinstance(q, dict):
+            setattr(q, field, value)
     except Exception as e:  # pragma: no cover - defensive
         LOG.debug("Persist AI field failed (%s): %s", field, e)

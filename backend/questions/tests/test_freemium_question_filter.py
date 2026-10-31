@@ -99,32 +99,49 @@ class FreemiunQuestionListFilterTests(TestCase):
             return {row['id'] for row in data['results']}
         return {row['id'] for row in data}
 
-    def test_free_user_sees_only_showcase_for_year_2024(self):
-        """Free user + year=2024 → only the 10 curated questions."""
+    # UX update (2026-08-04, see QuestionViewSet.get_queryset): the LIST
+    # endpoint returns the full active catalog to free users with an
+    # `is_showcase` flag so the frontend can render locked overlays; the
+    # hard gate lives on retrieve / answer endpoints and the list
+    # serializer never exposes answers or explanations to non-admins.
+
+    def test_free_user_list_for_year_2024_flags_curated_rows(self):
+        """Free user + year=2024 -> the whole year, curated rows flagged."""
         free = self._user()
         response = self._list(free, year=2024)
         self.assertEqual(response.status_code, 200)
-        ids = self._ids(response)
-        expected = {q.id for q in self.questions_2024[:10]}
-        self.assertEqual(ids, expected)
+        rows = response.data['results']
+        self.assertEqual({r['id'] for r in rows}, {q.id for q in self.questions_2024})
+        curated = {q.id for q in self.questions_2024[:10]}
+        self.assertEqual({r['id'] for r in rows if r['is_showcase']}, curated)
 
-    def test_free_user_sees_only_showcase_for_year_2023(self):
-        """Free user + year=2023 → only the 5 curated questions."""
+    def test_free_user_list_for_year_2023_flags_curated_rows(self):
+        """Free user + year=2023 -> the whole year, 5 curated rows flagged."""
         free = self._user()
         response = self._list(free, year=2023)
         self.assertEqual(response.status_code, 200)
-        ids = self._ids(response)
-        expected = {q.id for q in self.questions_2023[:5]}
-        self.assertEqual(ids, expected)
+        rows = response.data['results']
+        self.assertEqual({r['id'] for r in rows}, {q.id for q in self.questions_2023})
+        curated = {q.id for q in self.questions_2023[:5]}
+        self.assertEqual({r['id'] for r in rows if r['is_showcase']}, curated)
 
-    def test_free_user_sees_all_showcase_across_years(self):
-        """Free user + no year filter → all curated (10 + 5 = 15)."""
+    def test_free_user_sees_curated_rows_first_across_years(self):
+        """Free user + no year filter -> the 15 curated rows lead the list."""
         free = self._user()
         response = self._list(free)
         self.assertEqual(response.status_code, 200)
-        ids = self._ids(response)
-        expected = {q.id for q in self.questions_2024[:10] + self.questions_2023[:5]}
-        self.assertEqual(ids, expected)
+        rows = response.data['results']
+        curated = {q.id for q in self.questions_2024[:10] + self.questions_2023[:5]}
+        self.assertEqual({r['id'] for r in rows[:len(curated)]}, curated)
+        self.assertTrue(all(r['is_showcase'] for r in rows[:len(curated)]))
+
+    def test_free_user_list_never_exposes_answers(self):
+        """Locked rows must not leak the answer / explanation via the list."""
+        free = self._user()
+        response = self._list(free, year=2024)
+        for row in response.data['results']:
+            self.assertIsNone(row.get('effective_answer'))
+            self.assertIsNone(row.get('effective_explanation'))
 
     def test_premium_user_sees_all_questions(self):
         """Premium user sees the full list."""
@@ -148,7 +165,9 @@ class FreemiunQuestionListFilterTests(TestCase):
         response = self._list(free, year=2024)
         data = response.data if hasattr(response, 'data') else response
         rows = data['results'] if isinstance(data, dict) and 'results' in data else data
-        self.assertTrue(all(row.get('is_showcase') is True for row in rows))
+        curated = {q.id for q in self.questions_2024[:10]}
+        for row in rows:
+            self.assertIs(row.get('is_showcase'), row['id'] in curated)
 
     def test_non_showcase_row_has_is_showcase_false(self):
         """Premium user sees non-showcase rows marked `is_showcase=False`."""

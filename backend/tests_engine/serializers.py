@@ -49,7 +49,10 @@ class TestSerializer(serializers.ModelSerializer):
         if getattr(obj, 'test_type', '') == 'daily':
             return True
         try:
-            return int(getattr(obj, 'num_questions', 0) or 0) <= 20
+            count = getattr(obj, '_question_count', None)
+            if count is None:
+                count = obj.questions.count()
+            return int(count or 0) <= 20
         except (TypeError, ValueError):
             return False
 

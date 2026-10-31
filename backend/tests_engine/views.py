@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 import random
 
 from .models import Test, TestAttempt, QuestionResponse
@@ -23,11 +23,29 @@ class TestViewSet(viewsets.ModelViewSet):
     filterset_fields = ['test_type', 'subject', 'topic', 'exam_type']
 
     def get_queryset(self):
-        queryset = Test.objects.select_related('subject', 'topic').all()
-        if self.action in ['list', 'retrieve']:
-            user = getattr(self.request, 'user', None)
-            if not user or not user.is_authenticated or (not getattr(user, 'is_admin', False) and not getattr(user, 'is_superuser', False)):
-                queryset = queryset.filter(is_published=True)
+        queryset = (
+            Test.objects.select_related('subject', 'topic')
+            .annotate(_question_count=Count('questions', distinct=True))
+        )
+        user = getattr(self.request, 'user', None)
+        is_staff_user = bool(
+            user and user.is_authenticated
+            and (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))
+        )
+        if not is_staff_user:
+            # Students see the official, published library (created by an
+            # admin / importer) plus the practice tests they generated
+            # themselves -- never other students' generated tests and never
+            # unpublished drafts. Applies to every action (list, retrieve,
+            # start, submit, results), not just list/retrieve.
+            visible = Q(is_published=True) & (
+                Q(created_by__isnull=True)
+                | Q(created_by__role='admin')
+                | Q(created_by__is_superuser=True)
+            )
+            if user and user.is_authenticated:
+                visible |= Q(created_by=user)
+            queryset = queryset.filter(visible)
         return queryset
 
     def get_serializer_class(self):
@@ -236,9 +254,15 @@ class TestViewSet(viewsets.ModelViewSet):
         if num_questions > 500:
             return Response({'error': 'num_questions must be less than or equal to 500'}, status=status.HTTP_400_BAD_REQUEST)
         year = request.data.get('year')
+        valid_exam_types = {code for code, _ in Test.EXAM_CHOICES}
+        exam_type = (request.data.get('exam_type') or '').strip()
+        if exam_type and exam_type not in valid_exam_types:
+            return Response({'error': 'Invalid exam_type'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Build query
         q_filter = Q(is_active=True)
+        if exam_type:
+            q_filter &= Q(exam_type=exam_type)
         title_parts = []
 
         if test_type == 'subject' and subject_id:
@@ -290,6 +314,7 @@ class TestViewSet(viewsets.ModelViewSet):
             num_questions=len(questions),
             time_limit_minutes=int(time_limit),
             created_by=request.user,
+            **({'exam_type': exam_type} if exam_type else {}),
         )
         test.questions.set(questions)
 
@@ -336,9 +361,16 @@ class TestViewSet(viewsets.ModelViewSet):
         # full-length CMS simulations) remain premium-only.
         # Premium and admin users bypass entirely.
         user = getattr(self.request, 'user', None)
+        # Use the *real* question count: `num_questions` defaults to 20 and
+        # is not maintained by every creator (e.g. the auto mock-test
+        # builder), which previously let free users start 100-question
+        # premium mocks.
+        question_count = getattr(test, '_question_count', None)
+        if question_count is None:
+            question_count = test.questions.count()
         is_small_practice = (
             getattr(test, 'test_type', '') == 'daily'
-            or int(getattr(test, 'num_questions', 0) or 0) <= 20
+            or int(question_count or 0) <= 20
         )
         if (
             user is not None
@@ -396,7 +428,7 @@ class TestViewSet(viewsets.ModelViewSet):
 
         try:
             attempt = TestAttempt.objects.get(id=attempt_id, user=request.user, test=test)
-        except TestAttempt.DoesNotExist:
+        except (TestAttempt.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'Invalid attempt'}, status=status.HTTP_400_BAD_REQUEST)
 
         if attempt.is_completed:
@@ -405,61 +437,86 @@ class TestViewSet(viewsets.ModelViewSet):
         serializer = SubmitAnswerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        correct = 0
-        incorrect = 0
-        unanswered = 0
+        def _opt_int(value, lo, hi):
+            try:
+                return max(lo, min(hi, int(value)))
+            except (TypeError, ValueError):
+                return None
 
-        # Pre-fetch all questions to avoid N+1 queries
-        question_ids = [ans.get('question_id') for ans in serializer.validated_data['answers']]
-        questions_map = Question.objects.in_bulk(question_ids)
-
-        responses_to_create = []
-
+        # The client-supplied answer list is untrusted: only score questions
+        # that belong to this test, each at most once. Foreign question ids,
+        # duplicates (which used to 500 on the unique constraint) and
+        # omitted wrong answers can no longer inflate score / accuracy / XP.
+        test_question_ids = set(test.questions.values_list('id', flat=True))
+        clean_answers = {}
         for ans_data in serializer.validated_data['answers']:
-            question_id = ans_data.get('question_id')
-            selected = ans_data.get('selected_answer', '')
-            time_taken = ans_data.get('time_taken_seconds')
-            confidence = ans_data.get('confidence_level')
-
-            question = questions_map.get(question_id)
-            if not question:
+            try:
+                qid = int(ans_data.get('question_id'))
+            except (TypeError, ValueError):
                 continue
+            if qid not in test_question_ids or qid in clean_answers:
+                continue
+            raw_selected = ans_data.get('selected_answer')
+            selected = raw_selected.strip().upper()[:1] if isinstance(raw_selected, str) else ''
+            clean_answers[qid] = {
+                'selected': selected,
+                'time_taken': _opt_int(ans_data.get('time_taken_seconds'), 0, 24 * 3600),
+                'confidence': _opt_int(ans_data.get('confidence_level'), 1, 5),
+            }
 
-            is_correct = None
-            if selected:
-                is_correct = (selected.upper() == question.correct_answer)
-                if is_correct:
-                    correct += 1
-                else:
-                    incorrect += 1
-            else:
-                unanswered += 1
+        questions_map = Question.objects.select_related('subject', 'topic').in_bulk(list(clean_answers))
 
-            responses_to_create.append(QuestionResponse(
-                attempt=attempt,
-                question=question,
-                selected_answer=selected.upper() if selected else None,
-                is_correct=is_correct,
-                time_taken_seconds=time_taken,
-                confidence_level=confidence,
-            ))
+        with transaction.atomic():
+            # Row lock: two concurrent submits (double click / timer firing
+            # during a manual submit) must not both score the attempt.
+            attempt = TestAttempt.objects.select_for_update().get(pk=attempt.pk)
+            if attempt.is_completed:
+                return Response({'error': 'Test already submitted'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if responses_to_create:
-            QuestionResponse.objects.bulk_create(responses_to_create)
+            correct = 0
+            incorrect = 0
+            responses_to_create = []
+            for qid, ans in clean_answers.items():
+                question = questions_map.get(qid)
+                if not question:
+                    continue
+                selected = ans['selected']
+                is_correct = None
+                if selected:
+                    is_correct = selected == (question.correct_answer or '').strip().upper()[:1]
+                    if is_correct:
+                        correct += 1
+                    else:
+                        incorrect += 1
+                ans['is_correct'] = is_correct
+                responses_to_create.append(QuestionResponse(
+                    attempt=attempt,
+                    question=question,
+                    selected_answer=selected or None,
+                    is_correct=is_correct,
+                    time_taken_seconds=ans['time_taken'],
+                    confidence_level=ans['confidence'],
+                ))
 
-        # Calculate score
-        score = correct - (incorrect * test.negative_mark_value if test.negative_marking else 0)
-        total_marks = correct + incorrect + unanswered
+            if responses_to_create:
+                QuestionResponse.objects.bulk_create(responses_to_create, ignore_conflicts=True)
 
-        attempt.score = score
-        attempt.total_marks = total_marks
-        attempt.correct_count = correct
-        attempt.incorrect_count = incorrect
-        attempt.unanswered_count = unanswered
-        attempt.is_completed = True
-        attempt.completed_at = timezone.now()
-        attempt.time_taken_seconds = (attempt.completed_at - attempt.started_at).total_seconds()
-        attempt.save()
+            # Calculate score against the full paper, not just the answers
+            # the client chose to send.
+            total_questions = len(test_question_ids)
+            unanswered = max(0, total_questions - correct - incorrect)
+            score = correct - (incorrect * test.negative_mark_value if test.negative_marking else 0)
+            total_marks = total_questions
+
+            attempt.score = score
+            attempt.total_marks = total_marks
+            attempt.correct_count = correct
+            attempt.incorrect_count = incorrect
+            attempt.unanswered_count = unanswered
+            attempt.is_completed = True
+            attempt.completed_at = timezone.now()
+            attempt.time_taken_seconds = (attempt.completed_at - attempt.started_at).total_seconds()
+            attempt.save()
 
         from django.core.cache import cache
         cache.delete(f'dashboard:{request.user.id}')
@@ -488,17 +545,13 @@ class TestViewSet(viewsets.ModelViewSet):
         # 3. Update Subject-wise Performance
         subject_counts = {}
         topic_counts = {}
-        for ans_data in serializer.validated_data['answers']:
-            question_id = ans_data.get('question_id')
-            selected = ans_data.get('selected_answer', '')
-            if not selected:
+        for question_id, ans in clean_answers.items():
+            if not ans['selected']:
                 continue
-                
             question = questions_map.get(question_id)
             if not question:
                 continue
-                
-            is_correct = (selected.upper() == question.correct_answer)
+            is_correct = bool(ans.get('is_correct'))
             subj = question.subject
             topic = question.topic
             
@@ -556,7 +609,7 @@ class TestViewSet(viewsets.ModelViewSet):
             attempt = TestAttempt.objects.get(
                 id=attempt_id, user=request.user, test=test, is_completed=True
             )
-        except TestAttempt.DoesNotExist:
+        except (TestAttempt.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'No completed attempt found'}, status=400)
 
         responses = QuestionResponse.objects.filter(attempt=attempt).select_related('question', 'question__subject', 'question__topic')
@@ -618,7 +671,11 @@ class TestViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='generate-adaptive')
     def generate_adaptive(self, request):
         """Generate an AI adaptive test that focuses on weak areas."""
-        num_questions = int(request.data.get('num_questions', 30))
+        try:
+            num_questions = int(request.data.get('num_questions', 30))
+        except (TypeError, ValueError):
+            return Response({'error': 'num_questions must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+        num_questions = max(1, min(num_questions, 200))
 
         # Find weak topics from user's attempt history
         from analytics.models import UserTopicPerformance
@@ -668,7 +725,10 @@ class TestViewSet(viewsets.ModelViewSet):
 
         q_filter = Q(is_active=True, year=year)
         if paper:
-            q_filter &= Q(paper=int(paper))
+            try:
+                q_filter &= Q(paper=int(paper))
+            except (TypeError, ValueError):
+                return Response({'error': 'paper must be 1 or 2'}, status=400)
 
         questions = list(Question.objects.filter(q_filter).values_list('id', flat=True))
 

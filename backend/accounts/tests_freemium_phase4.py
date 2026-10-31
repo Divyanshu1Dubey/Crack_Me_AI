@@ -411,16 +411,25 @@ class AnonymousAndFreeUserEndpointTests(TestCase):
     def test_free_user_403_on_non_free_preview_test_start(self):
         from rest_framework.test import APIClient
         from tests_engine.models import Test
-        creator = _make_user('creator-x')
+        from questions.models import Question, Subject
+        creator = _make_user('creator-x', role='admin')
         t = Test.objects.create(
             title='Premium-only Test',
             test_type='mixed',
-            num_questions=2,
+            num_questions=21,
             time_limit_minutes=5,
             created_by=creator,
             is_published=True,
             is_free_preview=False,
         )
+        subj = Subject.objects.create(name='Premium Gate Subject')
+        t.questions.set([
+            Question.objects.create(
+                question_text=f'PG{i}', option_a='A', option_b='B', option_c='C', year=2024,
+                option_d='D', correct_answer='A', subject=subj,
+            )
+            for i in range(21)
+        ])
         free = _make_user('free-x')
         c = APIClient()
         c.force_authenticate(user=free)
@@ -431,7 +440,7 @@ class AnonymousAndFreeUserEndpointTests(TestCase):
     def test_free_user_can_start_free_preview_test(self):
         from rest_framework.test import APIClient
         from tests_engine.models import Test
-        creator = _make_user('creator-y')
+        creator = _make_user('creator-y', role='admin')
         t = Test.objects.create(
             title='Free Preview Test',
             test_type='mixed',

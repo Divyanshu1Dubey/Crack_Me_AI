@@ -2,7 +2,7 @@
 import hashlib
 import unittest
 
-from backend.importers.neetpg import fingerprints as fp
+from importers.neetpg import fingerprints as fp
 
 
 class NormaliseTests(unittest.TestCase):

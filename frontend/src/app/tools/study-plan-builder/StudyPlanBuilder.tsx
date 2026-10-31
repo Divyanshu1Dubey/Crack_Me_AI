@@ -9,6 +9,10 @@ interface PlanDay {
     hours: number;
 }
 
+function daysUntilDate(dateStr: string): number {
+    return Math.max(1, Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+}
+
 export default function StudyPlanBuilder() {
     const [exam, setExam] = useState('neet-pg');
     const [examDate, setExamDate] = useState('');
@@ -32,7 +36,7 @@ export default function StudyPlanBuilder() {
         if (!examDate) return;
         const subjects = allSubjects[exam] || allSubjects['neet-pg'];
         const hrs = Number(dailyHours);
-        const daysUntil = Math.max(1, Math.ceil((new Date(examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        const daysUntil = daysUntilDate(examDate);
         const totalDays = Math.min(daysUntil, 180);
         const generated: PlanDay[] = [];
 
