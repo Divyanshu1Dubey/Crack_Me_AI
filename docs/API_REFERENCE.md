@@ -401,7 +401,26 @@ Response `201`: `{ "id": 12, "status": "pending" }`.
 |---|---|---|
 | GET | `/api/questions/notes/` | List current user's notes; `?question=35` |
 | POST | `/api/questions/notes/` | `{ "question_id": 35, "body": "UMN lesions show ↑tone, ↑reflexes, +Babinski" }` |
-| GET / PUT / DELETE | `/api/questions/notes/<id>/` | Detail |
+| GET / PUT / PATCH / DELETE | `/api/questions/notes/<id>/` | Detail (frontend uses PATCH for partial updates) |
+
+### Topic notes (admin) — added 2026-10-31
+
+| Method | Path | Description |
+|---|---|---|
+| GET / POST | `/api/questions/topic-notes/library/` | Admin CRUD (paginated). `notes/` is the personal-notes endpoint and shadowed the old registration. |
+| GET / PATCH / DELETE | `/api/questions/topic-notes/library/<id>/` | Detail |
+| POST | `/api/questions/topic-notes/library/<id>/generate/` | AI-compile from same-topic explanations (admin) |
+| POST | `/api/questions/topic-notes/` | Create-or-update by subject/topic/exam/title (admin) |
+| POST | `/api/questions/topic-notes/<id>/generate/` | AI generation (admin, `ai_heavy` throttle) |
+
+### Practice state & quests — added 2026-10-31
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/questions/<id>/practice/state/` | `{flag, confidence, time_spent, eliminated, bookmarked}` (auth) — stored in `QuestionPracticeState` |
+| POST | `/api/questions/<id>/practice/{flag,confidence,eliminate,time,attempt}/` | Update practice state (auth) |
+| GET | `/api/analytics/quests/` | Lists quests; today's daily quests are generated server-side with progress from real activity |
+| PATCH | `/api/analytics/quests/<id>/` | `{"is_completed": true}` claims a finished quest once; XP is server-defined. Other fields are read-only. DELETE is admin-only. |
 
 ---
 
