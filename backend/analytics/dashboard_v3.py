@@ -24,7 +24,7 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Q
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
@@ -33,135 +33,159 @@ from rest_framework.views import APIView
 LOG = logging.getLogger(__name__)
 
 
-def _attempts_for(user, days: int = 90):
-    from tests_engine.models import TestAttempt
-    return TestAttempt.objects.filter(
-        user=user,
-        created_at__gte=timezone.now() - timedelta(days=days),
-    )
+def _answer_events(user, days: int | None = 90) -> list[dict]:
+    """Every answered question for the user in the window: test answers
+    (``QuestionResponse`` on completed attempts, skipped ones excluded) and
+    question-bank answers (``QuestionAttempt``).
+
+    This module used to query ``TestAttempt`` for per-question fields it does
+    not have (``created_at``, ``is_correct``, ``question``…), so every
+    endpoint here returned HTTP 500.
+    """
+    from questions.models import QuestionAttempt, QuestionPracticeState
+    from tests_engine.models import QuestionResponse
+
+    since = timezone.now() - timedelta(days=days) if days else None
+    fields = ("question_id", "question__subject_id", "question__subject__name",
+              "question__topic_id", "question__topic__name", "is_correct")
+    events: list[dict] = []
+
+    responses = QuestionResponse.objects.filter(
+        attempt__user=user, attempt__is_completed=True, is_correct__isnull=False)
+    if since:
+        responses = responses.filter(attempt__started_at__gte=since)
+    for r in responses.values(*fields, "time_taken_seconds", "confidence_level",
+                              "attempt__completed_at", "attempt__started_at").iterator():
+        events.append({
+            **{k: r[k] for k in fields},
+            "when": r["attempt__completed_at"] or r["attempt__started_at"],
+            "seconds": r["time_taken_seconds"] or None,
+            "confidence": r["confidence_level"] or None,
+        })
+
+    state = {
+        qid: (conf, secs) for qid, conf, secs in QuestionPracticeState.objects.filter(user=user)
+        .values_list("question_id", "confidence", "time_spent_seconds")
+    }
+    attempts = QuestionAttempt.objects.filter(user=user)
+    if since:
+        attempts = attempts.filter(attempted_at__gte=since)
+    for a in attempts.values(*fields, "attempted_at").iterator():
+        conf, secs = state.get(a["question_id"], (None, None))
+        events.append({
+            **{k: a[k] for k in fields},
+            "when": a["attempted_at"],
+            "seconds": secs or None,
+            "confidence": conf or None,
+        })
+    return events
 
 
-def _accuracy(user) -> dict:
-    rows = _attempts_for(user).aggregate(
-        n=Count("id"),
-        correct=Count("id", filter=Q(is_correct=True)),
-    )
-    n, c = rows["n"] or 0, rows["correct"] or 0
+def _accuracy(user, events: list[dict] | None = None) -> dict:
+    events = _answer_events(user) if events is None else events
+    n = len(events)
+    c = sum(1 for e in events if e["is_correct"])
     pct = round((c / n) * 100, 1) if n else 0.0
     return {"total": n, "correct": c, "accuracy_pct": pct}
 
 
-def _average_time(user) -> dict:
-    rows = _attempts_for(user).aggregate(avg=Avg("time_spent_seconds"))
-    return {"average_seconds": int(rows["avg"] or 0)}
+def _average_time(user, events: list[dict] | None = None) -> dict:
+    events = _answer_events(user) if events is None else events
+    timed = [e["seconds"] for e in events if e["seconds"]]
+    return {"average_seconds": int(sum(timed) / len(timed)) if timed else 0}
 
 
-def _weak_subjects(user, limit: int = 6) -> list:
-    rows = (
-        _attempts_for(user)
-        .values("question__subject_id", "question__subject__name")
-        .annotate(
-            n=Count("id"),
-            mistakes=Count("id", filter=Q(is_correct=False)),
-        )
-        .filter(n__gte=3)
-        .order_by("-mistakes")[:limit]
-    )
+def _weak_groups(events: list[dict], key: str, limit: int) -> list[tuple]:
+    groups: dict = {}
+    for e in events:
+        k = e[key]
+        if k is None:
+            continue
+        g = groups.setdefault(k, {"n": 0, "mistakes": 0, "first": e})
+        g["n"] += 1
+        g["mistakes"] += 0 if e["is_correct"] else 1
+    rows = [(k, g) for k, g in groups.items() if g["n"] >= 3]
+    rows.sort(key=lambda kg: (-kg[1]["mistakes"], -(kg[1]["mistakes"] / kg[1]["n"])))
+    return rows[:limit]
+
+
+def _weak_subjects(user, limit: int = 6, events: list[dict] | None = None) -> list:
+    events = _answer_events(user) if events is None else events
     out = []
-    for r in rows:
-        rate = round((r["mistakes"] / r["n"]) * 100, 1) if r["n"] else 0
+    for sid, g in _weak_groups(events, "question__subject_id", limit):
         out.append({
-            "subject_id": r["question__subject_id"],
-            "subject": r["question__subject__name"],
-            "attempts": r["n"],
-            "mistakes": r["mistakes"],
-            "mistake_rate_pct": rate,
+            "subject_id": sid,
+            "subject": g["first"]["question__subject__name"],
+            "attempts": g["n"],
+            "mistakes": g["mistakes"],
+            "mistake_rate_pct": round((g["mistakes"] / g["n"]) * 100, 1),
         })
     return out
 
 
-def _weak_topics(user, limit: int = 6) -> list:
-    rows = (
-        _attempts_for(user)
-        .values("question__topic_id", "question__topic__name", "question__subject__name")
-        .annotate(
-            n=Count("id"),
-            mistakes=Count("id", filter=Q(is_correct=False)),
-        )
-        .filter(n__gte=3)
-        .order_by("-mistakes")[:limit]
-    )
+def _weak_topics(user, limit: int = 6, events: list[dict] | None = None) -> list:
+    events = _answer_events(user) if events is None else events
     out = []
-    for r in rows:
-        rate = round((r["mistakes"] / r["n"]) * 100, 1) if r["n"] else 0
+    for tid, g in _weak_groups(events, "question__topic_id", limit):
         out.append({
-            "topic_id": r["question__topic_id"],
-            "topic": r["question__topic__name"],
-            "subject": r["question__subject__name"],
-            "attempts": r["n"],
-            "mistakes": r["mistakes"],
-            "mistake_rate_pct": rate,
+            "topic_id": tid,
+            "topic": g["first"]["question__topic__name"],
+            "subject": g["first"]["question__subject__name"],
+            "attempts": g["n"],
+            "mistakes": g["mistakes"],
+            "mistake_rate_pct": round((g["mistakes"] / g["n"]) * 100, 1),
         })
     return out
 
 
 def _performance_trend(user, days: int = 60) -> list:
-    """Daily accuracy pct — last 60 days."""
-    from tests_engine.models import TestAttempt
-    since = timezone.now() - timedelta(days=days)
-    rows = (
-        TestAttempt.objects
-        .filter(user=user, created_at__gte=since)
-        .extra(select={"d": "date(created_at)"})
-        .values("d")
-        .annotate(n=Count("id"), correct=Count("id", filter=Q(is_correct=True)))
-        .order_by("d")
-    )
+    """Daily accuracy pct — last 60 days (local dates)."""
+    per_day: dict = defaultdict(lambda: {"n": 0, "correct": 0})
+    for e in _answer_events(user, days=days):
+        if not e["when"]:
+            continue
+        day = timezone.localdate(e["when"])
+        per_day[day]["n"] += 1
+        per_day[day]["correct"] += 1 if e["is_correct"] else 0
     out = []
-    for r in rows:
-        pct = round((r["correct"] / r["n"]) * 100, 1) if r["n"] else 0
-        out.append({"date": r["d"], "attempts": r["n"],
-                    "correct": r["correct"], "accuracy_pct": pct})
+    for day in sorted(per_day):
+        r = per_day[day]
+        out.append({"date": day.isoformat(), "attempts": r["n"], "correct": r["correct"],
+                    "accuracy_pct": round((r["correct"] / r["n"]) * 100, 1) if r["n"] else 0})
     return out
 
 
 def _revision_progress(user) -> dict:
     """Topic × confidence rating coverage.
 
-    For every (topic, confidence=1..5), how many distinct questions the
-    user has practised.  Used by the revision schedule UI.
+    For every (topic, confidence=1..5; 0 = not rated), how many distinct
+    questions the user has practised.  Used by the revision schedule UI.
     """
-    from tests_engine.models import TestAttempt
-    rows = (
-        TestAttempt.objects.filter(user=user)
-        .values("question__topic_id", "question__topic__name",
-                "confidence_rating")
-        .annotate(n=Count("id", distinct=True))
-    )
-    buckets: dict = defaultdict(lambda: defaultdict(int))
-    topics: dict[int, str] = {}
-    for r in rows:
-        tid = r["question__topic_id"]
+    seen: dict = defaultdict(dict)  # topic -> {question_id: confidence}
+    topics: dict = {}
+    for e in _answer_events(user, days=None):
+        tid = e["question__topic_id"]
         if tid is None:
             continue
-        topics[tid] = r["question__topic__name"]
-        conf = r["confidence_rating"] or 0
-        buckets[tid][conf] += r["n"]
+        topics[tid] = e["question__topic__name"]
+        conf = int(e["confidence"] or 0)
+        # Keep the highest confidence seen for the question.
+        seen[tid][e["question_id"]] = max(conf, seen[tid].get(e["question_id"], 0))
     out = []
     for tid, name in topics.items():
-        out.append({
-            "topic_id": tid,
-            "topic": name,
-            "by_confidence": dict(buckets[tid]),
-            "total": sum(buckets[tid].values()),
-        })
+        buckets: dict = defaultdict(int)
+        for conf in seen[tid].values():
+            buckets[conf] += 1
+        out.append({"topic_id": tid, "topic": name, "by_confidence": dict(buckets),
+                    "total": len(seen[tid])})
+    out.sort(key=lambda t: -t["total"])
     return {"topics": out}
 
 
 def _pyq_coverage(user) -> dict:
     """Exam × year grid showing attempted/total questions."""
     from questions.models import Question
-    attempted_qids = set(_attempts_for(user, days=365).values_list("question_id", flat=True))
+    attempted_qids = {e["question_id"] for e in _answer_events(user, days=365)}
     grid: dict = defaultdict(lambda: {"attempted": 0, "total": 0, "years": defaultdict(lambda: {"a": 0, "t": 0})})
     qs = Question.objects.filter(is_active=True, exam_type__in=["cms", "neet_pg", "ini_cet", "aiims_pg"])
     rows = qs.values("exam_type", "year").annotate(t=Count("id"))
@@ -187,22 +211,21 @@ def _pyq_coverage(user) -> dict:
 
 
 def _heatmap_subject(user) -> dict:
-    """Subject × day-of-week accuracy matrix (last 60 days)."""
-    from tests_engine.models import TestAttempt
-    since = timezone.now() - timedelta(days=60)
-    rows = (
-        TestAttempt.objects
-        .filter(user=user, created_at__gte=since)
-        .extra(select={"dow": "strftime('%w', created_at)",
-                       "subject": "question__subject_id"})
-        .values("dow", "subject")
-        .annotate(n=Count("id"), correct=Count("id", filter=Q(is_correct=True)))
-    )
-    matrix = defaultdict(lambda: defaultdict(lambda: {"n": 0, "correct": 0}))
-    for r in rows:
-        s = r["subject"] or "0"
-        matrix[str(s)][str(r["dow"])] = {"n": r["n"], "correct": r["correct"]}
-    return {s: dict(matrix[s]) for s in matrix}
+    """Subject × day-of-week accuracy matrix (last 60 days).
+
+    Keys: subject id (string) → day of week as a string, 0 = Sunday … 6 =
+    Saturday (the frontend's DAYS order) → {n, correct}.
+    """
+    matrix: dict = defaultdict(lambda: defaultdict(lambda: {"n": 0, "correct": 0}))
+    for e in _answer_events(user, days=60):
+        if not e["when"] or e["question__subject_id"] is None:
+            continue
+        local = timezone.localtime(e["when"])
+        dow = str((local.weekday() + 1) % 7)  # Python: Monday=0 → Sunday=0
+        cell = matrix[str(e["question__subject_id"])][dow]
+        cell["n"] += 1
+        cell["correct"] += 1 if e["is_correct"] else 0
+    return {s: dict(days) for s, days in matrix.items()}
 
 
 # ─── DRF views ────────────────────────────────────────────────────────────
@@ -227,11 +250,12 @@ class DashboardV3View(APIView):
                     return Response(payload)
             except Exception:  # pragma: no cover - defensive
                 pass
+        events = _answer_events(user)
         payload = {
-            "accuracy": _accuracy(user),
-            "average_time": _average_time(user),
-            "weak_subjects": _weak_subjects(user),
-            "weak_topics": _weak_topics(user),
+            "accuracy": _accuracy(user, events),
+            "average_time": _average_time(user, events),
+            "weak_subjects": _weak_subjects(user, events=events),
+            "weak_topics": _weak_topics(user, events=events),
             "performance_trend": _performance_trend(user),
             "revision_progress": _revision_progress(user),
             "pyq_coverage": _pyq_coverage(user),
