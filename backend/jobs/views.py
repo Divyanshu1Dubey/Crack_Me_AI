@@ -23,6 +23,10 @@ class JobViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
+        # Students may bookmark jobs; this override previously ignored the
+        # decorator and returned IsAdminUser (403 for everyone else).
+        if self.action == 'bookmark':
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
 
     def get_queryset(self):

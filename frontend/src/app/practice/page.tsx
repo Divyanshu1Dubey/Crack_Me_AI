@@ -34,6 +34,7 @@ import api, { questionsAPI } from "@/lib/api";
 import { Loader2, Settings2, ChevronDown, ChevronUp, Filter, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { useRequireAuth } from "@/lib/hooks/useRequireAuth";
 
 interface QRow {
   id: number;
@@ -85,6 +86,10 @@ function PracticeInner() {
     const initialMode = params.get("mode") || "random";
     const initialId = Number(params.get("id")) || null;
     const { user } = useAuth();
+    // Practice endpoints (queue, state, attempts) require an account; send
+    // logged-out visitors to /login?next=... instead of loading a queue
+    // the API will refuse.
+    const { ready } = useRequireAuth();
 
     const [mode, setMode] = useState(initialMode);
     const [count, setCount] = useState<number>(30);
@@ -156,6 +161,7 @@ function PracticeInner() {
 
     // Re-build queue when mode or filter scope changes.
     useEffect(() => {
+        if (!ready) return;
         let alive = true;
         setLoading(true);
         setQueue([]);
@@ -182,7 +188,7 @@ function PracticeInner() {
         })();
         return () => { alive = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [JSON.stringify(buildParams())]);
+    }, [ready, JSON.stringify(buildParams())]);
 
     const qid = queue[idx];
 

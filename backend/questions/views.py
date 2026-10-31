@@ -589,10 +589,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return QuestionDetailSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix']:
+        # SECURITY: this override used to ignore the `permission_classes=`
+        # declared on @action decorators, so every action missing from the
+        # lists below was AllowAny -- anonymous users could remove questions
+        # from the bank, merge duplicates and rewrite correct answers
+        # (resolve-dispute). Admin actions are listed explicitly; any other
+        # action now honours its decorator; the remainder stays public.
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix', 'merge_duplicates', 'remove_from_bank', 'unremove_from_bank', 'resolve_dispute', 'generate_explanation']:
             return [IsControlTowerAdmin()]
         if self.action in ['bookmark', 'my_bookmarks', 'attempt', 'submit_feedback']:
             return [permissions.IsAuthenticated()]
+        handler = getattr(self, self.action, None) if self.action else None
+        declared = getattr(handler, 'kwargs', {}).get('permission_classes') if handler is not None else None
+        if declared:
+            return [permission() for permission in declared]
         return [permissions.AllowAny()]
 
     # ── Phase 2: recall-aware endpoints (additive) ──────────────────────

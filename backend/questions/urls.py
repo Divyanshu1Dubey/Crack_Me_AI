@@ -47,6 +47,9 @@ urlpatterns = [
     # render container doesn't ship the local PNGs in git. This view
     # streams the QuestionImage.file binary through Django instead.
     path('images/<int:image_id>/serve/', views.QuestionImageServeView.as_view(), name='question-image-serve'),
+    # Public image facet counts. Without this explicit route the admin-only
+    # `images/` router prefix captured `facets` as an image pk (HTTP 403).
+    path('images/facets/', views.QuestionViewSet.as_view({'get': 'images_facets'}), name='question-image-facets'),
     # Mistake Notebook
     path('mistake-notebook/', views.MistakeNotebookStudentView.as_view(), name='mistake-notebook-list'),
     path('mistake-notebook/due/', views.MistakeNotebookDueView.as_view(), name='mistake-notebook-due'),

@@ -4,6 +4,31 @@ import uuid
 from django.db import migrations, models
 
 
+def assign_unique_uuids(apps, schema_editor):
+    """Give every question its own UUID before the column becomes unique.
+
+    0018 added ``uuid`` with ``default=uuid.uuid4``; Django evaluates a
+    callable default only ONCE for pre-existing rows, so every question that
+    existed at that point received the same UUID and the unique AlterField
+    below failed (``UNIQUE constraint failed: questions_question.uuid``).
+    Databases that already applied this migration are unaffected.
+    """
+    Question = apps.get_model("questions", "Question")
+    seen = set()
+    to_fix = []
+    for pk, value in Question.objects.order_by("pk").values_list("pk", "uuid").iterator():
+        if value is None or value in seen:
+            to_fix.append(pk)
+        else:
+            seen.add(value)
+    for pk in to_fix:
+        new_value = uuid.uuid4()
+        while new_value in seen:
+            new_value = uuid.uuid4()
+        seen.add(new_value)
+        Question.objects.filter(pk=pk).update(uuid=new_value)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +36,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(assign_unique_uuids, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="question",
             name="uuid",

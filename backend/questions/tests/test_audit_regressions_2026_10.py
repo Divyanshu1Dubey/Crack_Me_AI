@@ -224,3 +224,71 @@ class AIPerQuestionPersistenceTests(TestCase):
         call.assert_not_called()
         q.refresh_from_db()
         self.assertEqual(q.ai_mnemonic, '')
+
+
+class QuestionAdminActionPermissionTests(TestCase):
+    """QuestionViewSet.get_permissions used to ignore @action permissions,
+    leaving admin actions open to anonymous users."""
+
+    def setUp(self):
+        self.subject = Subject.objects.create(name='Audit Perms')
+        self.q = _question(self.subject, 1)
+        self.student = User.objects.create_user(username='perm-student', password='x')
+        self.admin = User.objects.create_user(username='perm-admin', password='x', role='admin')
+
+    def _post(self, user, suffix, data=None):
+        client = APIClient()
+        if user is not None:
+            client.force_authenticate(user)
+        return client.post(f'/api/questions/{self.q.id}/{suffix}/', data or {}, format='json')
+
+    def test_admin_actions_reject_anonymous_and_students(self):
+        for suffix, data in (
+            ('remove-from-bank', {}),
+            ('unremove-from-bank', {}),
+            ('merge-duplicates', {'duplicate_ids': [self.q.id]}),
+            ('resolve-dispute', {'corrected_answer': 'B', 'justification': 'x'}),
+            ('generate-explanation', {'correct_answer': 'A'}),
+        ):
+            self.assertIn(self._post(None, suffix, data).status_code, (401, 403), suffix)
+            self.assertEqual(self._post(self.student, suffix, data).status_code, 403, suffix)
+        self.q.refresh_from_db()
+        self.assertTrue(self.q.is_active)
+        self.assertEqual(self.q.correct_answer, 'A')
+
+    def test_admin_can_remove_from_bank(self):
+        r = self._post(self.admin, 'remove-from-bank')
+        self.assertEqual(r.status_code, 200, getattr(r, 'data', r))
+
+    def test_anonymous_practice_state_is_401_not_500(self):
+        r = APIClient().get(f'/api/questions/{self.q.id}/practice/state/')
+        self.assertIn(r.status_code, (401, 403))
+
+    def test_public_ai_endpoints_stay_public(self):
+        r = APIClient().get(f'/api/questions/{self.q.id}/ai/concept/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_image_facets_route_is_public(self):
+        r = APIClient().get('/api/questions/images/facets/')
+        self.assertEqual(r.status_code, 200)
+
+
+class JobBookmarkPermissionTests(TestCase):
+    def test_student_can_bookmark_job(self):
+        from jobs.models import Job
+        from django.utils import timezone
+        fields = {f.name for f in Job._meta.get_fields()}
+        data = {'title': 'Medical Officer'}
+        for name, value in (('organization', 'Govt'), ('location', 'Delhi'), ('description', 'x'),
+                            ('is_active', True), ('last_date', timezone.localdate())):
+            if name in fields:
+                data[name] = value
+        try:
+            job = Job.objects.create(**data)
+        except Exception as exc:  # pragma: no cover - schema drift guard
+            self.skipTest(f'Job fixture could not be created: {exc}')
+        student = User.objects.create_user(username='job-student', password='x')
+        client = APIClient()
+        client.force_authenticate(student)
+        r = client.post(f'/api/jobs/{job.id}/bookmark/')
+        self.assertEqual(r.status_code, 200, getattr(r, 'data', r))

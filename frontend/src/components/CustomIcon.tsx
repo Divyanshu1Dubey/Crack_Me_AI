@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -23,6 +22,10 @@ import {
   Crown,
   PhoneCall,
   Briefcase,
+  Clock,
+  FileText,
+  Flame,
+  Circle,
 } from 'lucide-react';
 
 interface CustomIconProps {
@@ -37,12 +40,6 @@ const variantClasses: Record<NonNullable<CustomIconProps['variant']>, string> = 
   default: 'opacity-95 text-muted-foreground',
   active: 'opacity-100 text-primary',
   subtle: 'opacity-75 text-muted-foreground',
-};
-
-const imageVariantClasses: Record<NonNullable<CustomIconProps['variant']>, string> = {
-  default: 'opacity-95',
-  active: 'opacity-100 saturate-150',
-  subtle: 'opacity-75',
 };
 
 const iconMap: Record<string, LucideIcon> = {
@@ -68,6 +65,12 @@ const iconMap: Record<string, LucideIcon> = {
   'trends-graph': Gauge,
   'upload-train': Upload,
   'contact-support': PhoneCall,
+  // Used by the sidebar / dashboard but previously unmapped: they fell back
+  // to /icons/custom/<name>.png files that do not exist (broken images).
+  'book-open': BookOpen,
+  'clock': Clock,
+  'file-text': FileText,
+  'flame': Flame,
 };
 
 export default function CustomIcon({
@@ -78,30 +81,18 @@ export default function CustomIcon({
   variant = 'default',
 }: CustomIconProps) {
   const safeName = name.replace(/[^a-z0-9-_]+/gi, '').toLowerCase();
-  const src = `/icons/custom/${safeName}.png`;
-  const IconComponent = iconMap[safeName];
-
-  if (IconComponent) {
-    return (
-      <span
-        className={cn('inline-flex shrink-0 items-center justify-center', variantClasses[variant], className)}
-        style={{ width: size, height: size }}
-        {...(label ? { role: 'img' as const, 'aria-label': label } : { 'aria-hidden': true as const })}
-      >
-        <IconComponent className="h-full w-full" aria-hidden="true" />
-      </span>
-    );
-  }
+  // Every icon is rendered from lucide. The old PNG fallback pointed at
+  // /icons/custom/<name>.png, and every PNG that exists already has a lucide
+  // mapping above, so the fallback could only ever render a broken image.
+  const IconComponent = iconMap[safeName] || Circle;
 
   return (
-    <span className={cn('relative inline-flex shrink-0', className)} style={{ width: size, height: size }}>
-      <Image
-        src={src}
-        alt={label || safeName.replace(/-/g, ' ')}
-        fill
-        sizes={`${size}px`}
-        className={cn('object-contain', imageVariantClasses[variant])}
-      />
+    <span
+      className={cn('inline-flex shrink-0 items-center justify-center', variantClasses[variant], className)}
+      style={{ width: size, height: size }}
+      {...(label ? { role: 'img' as const, 'aria-label': label } : { 'aria-hidden': true as const })}
+    >
+      <IconComponent className="h-full w-full" aria-hidden="true" />
     </span>
   );
 }
