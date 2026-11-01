@@ -42,8 +42,8 @@ Every pillar (`/cms`, `/neet-pg`, etc.) opens with a one-paragraph definition + 
 ### Pattern 2: Pattern + Cutoff tables
 Year PYQ pages (`/cms/pyq/[year]`) carry a category-wise cutoff table. AI assistants retrieve the table cell-by-cell.
 
-### Pattern 3: Toppers and verified scores
-Real topper scores appear in year pages. AI models cite these as `Dr. X, AIR-1, score 578/960`.
+### Pattern 3: Toppers and verified scores (retired)
+Historical. Year pages no longer show topper names or scores: the example used here (`AIR-1, score 578/960`, attributed to a "Dr. Ananya Reddy") was fabricated and has been removed. Year pages refer readers to UPSC's official result notice instead.
 
 ### Pattern 4: Books + Why
 Each book recommendation on exam pages has a "why" line, making the citation self-contained.

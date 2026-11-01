@@ -75,8 +75,8 @@ These patterns should be applied in a 1-pass review of every page:
 ### Textbook chapter reference
 > "Covered in Harrison's Chapter 273, page 1453-1460. See [textbooks/harrisons](/textbooks)."
 
-### Topper reference
-> "**Dr. Ananya Reddy (AIR-1, 578/960)** [→ `/about#team`]. See [year `/cms/pyq/2024`](/cms/pyq/2024) for full topper list."
+### Topper reference (retired)
+Historical: this pattern quoted a fabricated topper ("Dr. Ananya Reddy (AIR-1, 578/960)"), which has been removed from the site; year pages carry no topper list. Do not reintroduce named toppers without UPSC's official result notice as the source.
 
 ### Subject reference
 > "High-yield cardiology MCQs are aggregated in [CMS subject hub `/cms/subject/cardiology`](/cms/subject/cardiology) (Phase 2)."

@@ -15,8 +15,10 @@ and return JSON.
 - All ids are integers.
 - All timestamps are ISO 8601 strings.
 - All counts are non-negative integers.
-- Pagination uses `?page=N&page_size=M` on every list endpoint (default 50,
-  max 200).
+- List endpoints (`batches/`, `questions/`) use the project pagination:
+  `?page=N&page_size=M`, 20 per page by default, `page_size` up to 100,
+  response `{count, next, previous, results}`. The batch `audit/` endpoint
+  has its own `page` / `page_size` (default 50, max 200).
 
 Standard response codes:
 
@@ -28,7 +30,7 @@ Standard response codes:
 | 401 | Unauthenticated |
 | 403 | Authenticated but not an admin |
 | 404 | Batch or question not found |
-| 409 | Invalid state transition (e.g. cancelling a completed batch) |
+| 409 | Invalid state transition (e.g. cancelling a completed batch), or a publish / test rebuild already running for the batch |
 
 ---
 
@@ -140,6 +142,13 @@ Multipart upload. Form fields:
 
 - `files` *(one or more required)* — `.docx`, `.pdf`, `.pptx`, `.txt`, `.md`, or
   `.zip`. ZIPs are auto-extracted.
+  Each file is checked by its **content**, not only its extension: PDF /
+  DOCX / PPTX by their magic bytes (`accounts.upload_validation`), a ZIP must
+  carry the ZIP signature, and TXT / MD must not contain binary (NUL) bytes.
+  A renamed file is rejected (listed in `files_rejected`). ZIP members get the
+  same check (a member with the wrong content, an unsupported extension or an
+  unsafe path is skipped), and an archive may hold at most 500 files and
+  expand to at most 1 GiB. Max 200 MB per upload.
 - `source_label` *(optional)* — up to 255 chars.
 - `use_ai` *(optional, default 0)* — call the AI round-robin classifier per question.
 - `force` *(optional, default 0)* — bypass the cross-batch dedup detector.
@@ -178,7 +187,9 @@ downloadable CSV / PDF conversion.
 
 ### `POST /api/admin/import/batches/{id}/cancel/`
 
-Stop parsing if possible (only while `queued` / `processing`).
+Stop parsing (only while `queued` / `processing`, else `409`). Parsing stops
+after the current file. Questions already staged stay in the review queue and
+can still be published.
 
 ### `POST /api/admin/import/batches/{id}/publish/`
 
@@ -192,18 +203,31 @@ Body:
 }
 ```
 
-Publishes approved rows to the live `Question` table, then auto-builds per-
-subject, per-topic, mixed, and PYQ-year `Test` rows.
-
-Response:
+Publishes `approved` rows to the live `Question` table, then auto-builds per-
+subject, per-topic, mixed, and PYQ-year `Test` rows. It runs in a background
+thread and answers at once:
 
 ```json
-{ "batch_id": 12, "published": 1023, "tests_built": 7 }
+{ "batch_id": 12, "publish": { "state": "running", "started_at": "...", "heartbeat_at": "...", "by": "admin" } }
 ```
+
+with status `202`. Progress is `summary["publish"]` on the batch detail
+(`running` → `done` with `published` / `tests_built`, or `failed` with
+`error`); a run that stops heartbeating for 30 minutes is reported as stale
+and can be started again (publishing is idempotent).
+
+Allowed for a `completed` / `partial` batch, and for a **cancelled** batch that
+staged questions before the cancel (not for a rolled-back batch: `409`). `409`
+while a publish or a test rebuild (`republish`) runs for the batch.
 
 ### `POST /api/admin/import/batches/{id}/republish/`
 
-Rebuild only the auto-tests (no DB writes to `Question`).
+Rebuild only the auto-tests (no writes to `Question`), synchronously →
+`{ "batch_id": 12, "tests_built": 7 }`. The rebuild holds
+`summary["rebuild"]` while it runs, which blocks a publish; `409` while a
+publish or another rebuild runs. If the request dies (gunicorn's 120 s
+timeout, a worker restart) the slot goes stale after 5 minutes instead of
+blocking publish.
 
 ### `POST /api/admin/import/batches/{id}/rollback/`
 
@@ -213,8 +237,16 @@ Body:
 { "delete_published": false, "confirm": true }
 ```
 
-Default `delete_published=false` cascades on the staging tables and the
-auto-tests but leaves the live `Question` rows intact.
+`confirm: true` is required (`400`). `409` while the batch is still parsing
+(cancel it first) or while a publish or test rebuild runs. The rollback
+deletes the staging rows (materials, extracted questions / theory / images)
+and retires the batch's auto-tests: tests nobody attempted are deleted, tests
+with student attempts are unpublished and kept. Default
+`delete_published=false` leaves the live `Question` rows intact;
+`delete_published=true` removes them from the bank the way "Remove from bank"
+does (inactive + dropped + a `RemovedQuestion` tombstone; never a hard
+delete). Response: `{ "batch_id": 12, "rolled_back": { "materials", "questions", "tests", "tests_unpublished", "published_question_ids", "published_questions_removed" } }`;
+the batch becomes `cancelled` with `summary["rollback"]` set.
 
 ### `POST /api/admin/import/batches/{id}/generate-mock/`
 
@@ -319,6 +351,39 @@ touched batch.
 
 ---
 
+## Related APIs and commands
+
+These are separate from the Import Center (`IsControlTowerAdmin`: `role='admin'`
+or superuser). Full tables: [`API_REFERENCE.md`](./API_REFERENCE.md#import-endpoints-admin-only).
+
+- **Recall importers** — `GET /api/imports/neetpg/jobs/` and
+  `GET /api/imports/inicet/jobs/` are paginated (`count` / `next` /
+  `results`, 20 per page, `?page_size=` up to 100). Each job records its
+  importer in `summary["importer"]`; each mount lists, shows and retries only
+  its own jobs (jobs without one are NEET PG's). `manage.py neetpg_status
+  --importer inicet` lists INI-CET jobs; `neetpg_retry --job-id N` re-runs a
+  job with the importer that created it.
+- **Ingestion platform** — `GET /api/ingestion/jobs/counts/` →
+  `{counts: {queued, processing, completed, failed, cancelled, crashed}, total}`
+  over every job. Job rows carry `exam`, `exam_label` and `material_filename`;
+  batch status and job counts are computed from the batch's jobs. Stale jobs:
+  see [`BATCH_SYSTEM.md`](./BATCH_SYSTEM.md#ingestion-platform-jobs).
+- **`manage.py import_docx_fidelity <path> --rollback`** first rolls back
+  every earlier batch that imported the same file (matched by sha256). Their
+  published questions **stay live**; add `--remove-published` to also take
+  them out of the bank (soft delete + `RemovedQuestion` tombstone). They are
+  not replaced until the re-import is approved and published.
+- **`manage.py ingestion_sweep_stale [--dry-run] [--older-than-minutes N]`**
+  marks `processing` ingestion jobs whose worker died as `crashed` (no
+  re-queue).
+- **`manage.py cleanup_seed_samples [--apply] [--deactivate]`** finds the 15
+  `seed_data` demo questions that older releases stored as UPSC CMS PYQs of
+  2019–2023 and sets `year=0` ("Expert Curated"). Dry run without `--apply`;
+  admin-edited / verified / answer-locked rows are left alone unless
+  `--include-admin-edited`.
+
+---
+
 ## Error responses
 
 All endpoints may return:
@@ -335,10 +400,10 @@ shape with field-level keys.
 ## Example: end-to-end import
 
 ```bash
-# 1. Get a JWT
-TOKEN=$(curl -s -X POST "$API/auth/login/" \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"..."}' | jq -r .access)
+# 1. An admin's Supabase access token (POST /api/auth/login/ is disabled, 410).
+#    Copy it from a signed-in admin browser session, or use the dev-only
+#    /api/auth/local/login/ when running locally with LOCAL_DEV_AUTH=1.
+TOKEN="<supabase access token of a staff user>"
 
 # 2. Upload three files in one request
 BATCH_ID=$(curl -s -X POST "$API/admin/import/upload/" \

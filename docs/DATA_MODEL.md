@@ -33,8 +33,9 @@
 | `role` | `CharField` | `student` / `admin` |
 | `phone` | `CharField(15)` | optional |
 | `college` | `CharField(200)` | optional |
-| `session_key` | `CharField(255)` | Single active session enforcement |
-| `current_session_id` | `CharField(255)` | mirrors active device session |
+| `supabase_uid` | `CharField(64)`, unique, nullable | Supabase Auth user id linked to this account; sign-ins are matched by it (migration `accounts.0023`, set on first sign-in or by `manage.py link_supabase_identity`) |
+| `session_key` | `CharField(255)` | Unused legacy field (devices are tracked in `UserDevice`) |
+| `current_session_id` | `CharField(255)` | Unused legacy field |
 | `profile_bonus_rewarded` | `BooleanField` | First-time profile completion flag |
 | `is_subscribed` | `BooleanField` | Mirror of latest active subscription |
 | `target_exam` | `CharField(50)` | Default `UPSC CMS` |
@@ -50,7 +51,8 @@
 **Properties**: `is_admin` → `role=='admin' or is_superuser` (used to bypass token checks).
 
 **Business rules**:
-- Single-active-session enforcement via `session_key` + `UserDevice`.
+- Device limit via `UserDevice`: 2 active devices on a free plan, 4 with a subscription (admins exempt); `session_key` / `current_session_id` are not used.
+- A Supabase identity is linked by `supabase_uid`; admin / staff rows link automatically only for a trusted admin identity or the identity they were created from (see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.1).
 - Admin/staff bypass token metering (`TokenBalance.consume_token` checks `user.is_admin`).
 - `active_exam_track` SET_NULL on ExamTrack delete (preserves user).
 
@@ -636,9 +638,9 @@ Approx. 5,000 chunks (4972+ per existing reports).
    - Admins/staff bypass (`CustomUser.is_admin`).
    - Refund on AI failure (`TokenBalance.refund_token`).
 
-2. **Single-device session**:
-   - `CustomUser.session_key` + `UserDevice` enforce one active session.
-   - Backend can return `code: 'session_invalid'` to force logout on the older device.
+2. **Device limit**:
+   - `UserDevice` (one row per `X-Session-ID`) caps a user at 2 devices (free) / 4 (subscribed); a new device beyond the cap gets `401 device_limit_reached`, a logged-out device `401 device_inactive`.
+   - `CustomUser.session_key` / `current_session_id` are unused; `session_invalid` is no longer emitted.
 
 3. **Subscription mirror**:
    - `CustomUser.is_subscribed` is a denormalized mirror of `Subscription.status=='active'`.
@@ -663,11 +665,11 @@ Approx. 5,000 chunks (4972+ per existing reports).
 ```
 Source PDFs / MD / TXT
     │
-    ▼ (_train_all.py, KnowledgeUploadView)
-RAG store (SQLite TF-IDF)
+    ▼ (manage.py train_ai, KnowledgeUploadView)
+RAG store (SQLite chunk store)
     │
     ▼
-User query → cosine top-K → AI prompt → answer
+User query → BM25 top-K (in-memory index) → AI prompt → answer
     │
     ▼
 ChatSession → ChatMessage (immutable per turn)
@@ -675,9 +677,8 @@ ChatSession → ChatMessage (immutable per turn)
 Question lifecycle:
   Source → Import scripts → Django DB
     → AI Enrichment (correct_answer via 3-vote, explanation, mnemonic)
-    → validate_questions.py
-    → _export_fixture.py → questions_fixture.json
-    → build.sh → loaddata → production DB
+    → (fresh database only) fixtures/cms_fixture.json → build.sh seed_question_bank
+    → production DB (the source of truth once it has questions)
     → DRF API → student UI
     → QuestionAttempt per attempt
     → UserTopicPerformance aggregated
@@ -713,11 +714,11 @@ Question lifecycle:
 - **Fix**: cap conversation length per session (e.g. last 50 messages) or summarize old ones.
 
 ### 6. AI quota starvation
-- Single backend instance (`gunicorn --workers 1 --threads 4`) means **4 concurrent AI requests max**. Long AI calls block threads.
+- One backend instance (`gunicorn --workers 3 --threads 4`, `backend/Procfile`) serves **at most 12 concurrent requests**. Long AI calls (up to `AI_CALL_DEADLINE_SECONDS`, default 90 s) block threads.
 - **Fix**: scale to 2–4 instances behind a load balancer; or move AI calls to a queue (django-q2 already present).
 
 ### 7. Fixture churn
-- `questions_fixture.json` is 5+ MB and grows. Every `loaddata` is a full table overwrite.
+- `backend/fixtures/cms_fixture.json` is several MB and grows. `seed_question_bank` loads it only into an empty bank, but a manual `load_exam_fixture cms` over a live bank overwrites the rows it contains.
 - **Fix**: for >10k questions, switch to `manage.py loaddata --format=jsonl` or move to a proper migration seed.
 
 ### 8. Password reset token table growth
@@ -744,7 +745,7 @@ Question lifecycle:
 | `Subscription` | `/auth/subscribe/status/`, `/auth/admin/users/<id>/subscription/` | `/auth/subscribe/verify/`, `/auth/admin/users/<id>/subscription/` |
 | `UserDevice` | `/auth/devices/` | `/auth/devices/logout/`, `/auth/admin/users/<id>/devices/` |
 | `ExamTrack`, `Subject`, `Topic` | `/questions/exam-tracks/`, `/questions/subjects/`, `/questions/topics/` | (admin) |
-| `Question` | `/questions/`, `/questions/<id>/` | admin / `_export_fixture.py` |
+| `Question` | `/questions/`, `/questions/<id>/` | admin (REST API / Django admin), importers |
 | `QuestionBookmark` | `/questions/bookmarks/` | `/questions/<id>/bookmark/` |
 | `QuestionFeedback` | `/questions/feedback/` | `/questions/feedback/` |
 | `Discussion` | `/questions/discussions/` | `/questions/discussions/`, `/discussions/<id>/replies/`, `/discussions/<id>/vote/` |

@@ -49,7 +49,7 @@ cd backend
 ..\.venv\Scripts\Activate.ps1     # Windows venv activation
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py loaddata questions_fixture.json
+python manage.py seed_question_bank   # loads fixtures/cms_fixture.json into an EMPTY CMS bank only
 python manage.py runserver 8000
 python manage.py createsuperuser
 ```
@@ -67,12 +67,11 @@ python test_all.py                               # Comprehensive suite (DB, fixt
 python test_all.py --quick                       # Skip slow AI tests
 python test_all.py --endpoints-only
 python test_all.py --auth-only
-python test_api_keys.py                          # Verify all AI provider keys
-python validate_questions.py                     # Question-bank QA
+python test_all.py --keys-only                   # Verify all AI provider keys (test_api_keys.py no longer exists)
 python manage.py train_ai                         # Index Medura_Train/ into the RAG store (_train_all.py no longer exists)
-python _export_fixture.py                        # DB → questions_fixture.json
-python _review_and_fix_answers.py export --year 2018
+python manage.py load_exam_fixture cms --dry-run  # Check a fixture edit (backend/fixtures/README.md); without --dry-run it overwrites a live bank
 ```
+(`validate_questions.py`, `_export_fixture.py`, `_review_and_fix_answers.py` and `questions_fixture.json` no longer exist.)
 
 ### Frontend (Next.js)
 
@@ -83,6 +82,7 @@ npm run dev -- --webpack      # Dev server on :3000 (note: uses --webpack, not t
 npm run build                 # Production build
 npm run start                 # Serve production build
 npm run lint                  # ESLint (eslint-config-next)
+npm run test:unit             # Unit tests in tests/unit (node --test; needs Node >= 22.18 — CI job `frontend-unit` runs on Node 22)
 npm run icons:download        # Fetch icon set from manifest
 npx playwright test           # E2E (Playwright configured in playwright.config.ts)
 ```
@@ -90,7 +90,7 @@ npx playwright test           # E2E (Playwright configured in playwright.config.
 ### Pre-commit / Security
 
 ```bash
-bandit -r backend/ -x backend/__pycache__,backend/migrations --skip B101
+bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -lll -iii   # the CI gate (no baseline: hashes for keys pass usedforsecurity=False)
 safety check -r backend/requirements.txt
 npm audit --audit-level=high
 python scripts/scan_secrets.py   # Local pre-commit hook (see .pre-commit-config.yaml)
@@ -111,12 +111,13 @@ frontend/ (Next.js App Router, src/ directory)
 backend/
   crack_cms/        Django project — settings.py (env loading, Sentry, app registry,
                     CORS, middleware), urls.py, wsgi/asgi, cache_middleware
-  accounts/         CustomUser, JWT views, token wallet, device-session tracking,
-                    Supabase auth bridge, password reset, admin token management
+  accounts/         CustomUser, Supabase auth bridge (supabase_uid linking, 2/4 device
+                    limit), token wallet, subscriptions, admin token management
+                    (local login/register/password-reset endpoints answer 410)
   questions/        PYQ questions, bookmarks, discussions, notes, SM-2 flashcards
   tests_engine/     Adaptive tests, PYQ simulator, attempt tracking
   analytics/        Dashboard stats, topic performance, streaks, badges, roadmap
-  ai_engine/        11-provider orchestrator (services.py), RAG pipeline
+  ai_engine/        10-entry provider rotation (services.py), RAG pipeline
                     (rag_pipeline.py + sqlite_rag.py), document processor,
                     PYQ extractor, knowledge base scan
   textbooks/        Indexed textbook library + chapter list
@@ -134,15 +135,15 @@ backend/
 
 2. **RAG Pipeline** — `ai_engine/rag_pipeline.py` ingests PDFs/MD/TXT from `Medura_Train/{textbooks,PYQ,web_knowledge}/` into `chroma_db/rag_store.sqlite3`. Retrieval is BM25 over the **whole** store from an in-memory index (`ai_engine/lexical_index.py`: Greek/diacritic folding, one indexing pass per source file, personal/admin documents excluded, raw question papers only on request); constructing the pipeline is read-only. Benchmark and methodology: `docs/audit/RAG_BENCHMARK.md` (`python -m ai_eval.rag_benchmark`). RAG is on by default; `DISABLE_RAG=1` / `DISABLE_RAG_IN_PRODUCTION=1` turn it off. There is no automatic size limit on PDFs.
 
-3. **Fixture-First Question Management** — `backend/questions_fixture.json` is the production source of truth (loaded by `build.sh` on Render). DB edits via Django admin / REST API / `_review_and_fix_answers.py` CSV workflow → run `_export_fixture.py` → commit JSON → push.
+3. **Fixture seeds, live DB is the truth** — `backend/fixtures/cms_fixture.json` (plus `neet_pg_fixture.json`, `inicet_fixture.json`) seeds a **fresh** database: `build.sh` runs `seed_question_bank`, which loads it only while the CMS bank is empty, so a deploy never overwrites a live bank (AI explanations, answer fixes, deactivations). Edits on a running deployment go through Django admin / the REST API; fixture edits follow `backend/fixtures/README.md` (`load_exam_fixture <exam> --dry-run`). `questions_fixture.json`, `_export_fixture.py` and `_review_and_fix_answers.py` no longer exist.
 
 4. **Token Economy** — Each AI call costs 1 token. Daily (10/day, midnight reset) + Weekly (50/week, Sunday reset) + Purchased + Feedback reward (+2). Consumption priority: Free → Feedback → Purchased. Admin/staff bypass. Per-provider quota noted in `ai_engine/services.py` header.
 
-5. **Auth Flow** — Hybrid Supabase-first with Django JWT backup. `frontend/src/lib/api.ts` attaches Supabase access token via interceptor; auto-clears local session on `session_invalid` (single-device enforcement). Backend `accounts/supabase_auth.py` + `supabase_rest_auth.py` bridge Supabase identities. `django-axes` locks accounts after 5 failed attempts (30 min).
+5. **Auth Flow** — Supabase Auth only in production (local `/api/auth/login/`, `/register/`, `/password-reset/` answer 410; Django JWTs exist only for the dev-only `LOCAL_DEV_AUTH`). `frontend/src/lib/api.ts` attaches the Supabase access token and `X-Session-ID`. `accounts/supabase_rest_auth.py` matches identities by `CustomUser.supabase_uid`; an admin/staff row links automatically only for a trusted admin identity or the identity it was created from, otherwise `401 account_link_required` until `python manage.py link_supabase_identity` links it (run `--all-privileged` dry run, then `--apply`, once after `accounts.0023`). Supabase "Confirm email" and "Secure email change" must be ON (`check --deploy` warns `accounts.W001` until `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true`). Device limit: 2 devices free / 4 subscribed (`UserDevice` by `X-Session-ID`; `device_limit_reached` opens `/settings?deviceLimit=1`, `device_inactive` signs out); `session_key` / `session_invalid` are no longer used. Admin pages gate on the backend profile's `role` / `is_admin`, never Supabase `user_metadata`. `django-axes` locks accounts after 5 failed attempts (30 min). Details: `docs/AUTHENTICATION.md`.
 
-6. **Multi-Base API Failover** — `api.ts` resolves base URL from `NEXT_PUBLIC_API_URL` (or localhost for dev) with automatic failover to `NEXT_PUBLIC_API_FALLBACK_URL` on 502/503/504. The legacy Render URL `crackcms-backend.onrender.com` is intentionally blacklisted as unhealthy; production uses the DigitalOcean URL `crackcms-vsthc.ondigitalocean.app/api` baked into `DEFAULT_PRODUCTION_API_URL`.
+6. **Multi-Base API Failover** — `api.ts` resolves base URL from `NEXT_PUBLIC_API_URL` (or localhost for dev) with automatic failover to `NEXT_PUBLIC_API_FALLBACK_URL` on 502/503/504 (idempotent GET/HEAD/OPTIONS requests only, once). The legacy Render URL `crackcms-backend.onrender.com` is intentionally blacklisted as unhealthy; production uses the DigitalOcean URL `crackcms-vsthc.ondigitalocean.app/api` baked into `DEFAULT_PRODUCTION_API_URL`.
 
-7. **Background Tasks** — `django-q2` broker for async work; `video_engine/tasks.py` and `questions/tasks.py` schedule enrichment + video generation.
+7. **Background Tasks** — `django-q2` broker for async work; `video_engine/tasks.py` and `questions/tasks.py` schedule enrichment + video generation. Jobs, the daily renewal-reminder schedule and the `ingestion_recover_stale_jobs` sweeper (every 10 min; both schedules are created by `migrate`) run only while `python manage.py qcluster` is up — on DigitalOcean a separate Worker component (`backend/Procfile` `worker:` is not started automatically).
 
 ## Conventions & Rules (from .github/copilot-instructions.md)
 
@@ -159,28 +160,29 @@ backend/
 |---|---|
 | Backend settings, env loading, middleware | `backend/crack_cms/settings.py` |
 | API URL routing | `backend/crack_cms/urls.py` |
-| AI orchestration (11 providers, RAG) | `backend/ai_engine/services.py`, `rag_pipeline.py`, `sqlite_rag.py` |
+| AI orchestration (10-entry rotation, RAG) | `backend/ai_engine/services.py`, `rag_pipeline.py`, `sqlite_rag.py` |
 | Question models + views (largest app) | `backend/questions/models.py`, `views.py` |
 | Token wallet + admin grants | `backend/accounts/views.py` |
 | Frontend Axios client (auth, failover, session) | `frontend/src/lib/api.ts` |
 | Auth provider (React context) | `frontend/src/lib/auth.tsx` |
 | Page routes | `frontend/src/app/*` |
-| Build for Render | `backend/build.sh` |
+| Build / deploy contract | `backend/build.sh`, `backend/Procfile` (release / web / worker) |
 | Vercel config + security headers | `frontend/vercel.json` |
 | CI workflow (Python 3.12 / Node 20) | `.github/workflows/ci.yml` |
 | AI API keys reference | `docs/setup/API_KEYS.md`, `backend/.env.example` |
 | RAG training sources | `backend/Medura_Train/{textbooks,PYQ,web_knowledge}/` |
 | RAG SQLite store | `backend/chroma_db/rag_store.sqlite3` |
-| Production fixture | `backend/questions_fixture.json` |
+| Question-bank seed (empty bank only) | `backend/fixtures/cms_fixture.json` (+ `neet_pg_fixture.json`, `inicet_fixture.json`) |
 | Mobile app | `mobile-app/` |
 
 ## Setup Gotchas
 
 - **Frontend dev server uses `--webpack`** (not turbopack) — see `package.json` `dev` script.
-- **`build.sh` is the deploy contract** — installs deps, migrates, runs `collectstatic`, imports NEET PG data via `python manage.py import_neet_pg`. Add new one-shot deploy steps there.
+- **`build.sh` is the deploy contract** — installs deps, runs `collectstatic`, migrates, prints the `link_supabase_identity --all-privileged` dry run, seeds an empty CMS bank (`seed_question_bank`), then the idempotent blog / KB / image-relink steps. It no longer runs `import_neet_pg` and never runs destructive data commands; one-time owner steps (`import_neet_pg --replace --dry-run` → `--replace`, `cleanup_seed_samples`, `link_supabase_identity --apply`, setting `NUM_PROXIES` / `TRUSTED_CLIENT_IP_HEADER` after checking `GET /api/health/client-ip/` as an admin) are listed in `docs/ARCHITECTURE.md` §7. Add new idempotent deploy steps there.
+- **Media in production**: Django serves `/media/` only with `DEBUG=True`; MEDIA-linked files (e.g. textbook page screenshots from `/api/ai/screenshot/<id>/`) need the platform to serve `MEDIA_ROOT` or a bucket.
 - **Venv path**: project uses both `.venv\` (root) and `backend/.venv\` — README activates root, then `cd backend`. Backend pip installs go in root venv.
 - **AI provider env vars** in `backend/.env`: `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `GEMINI_API_KEY`, `GITHUB_TOKEN`, `OPENROUTER_API_KEY`, `OPENROUTER_API_KEY2`, `COHERE_API_KEY`, `HUGGINGFACE_API_KEY`, `MISTRAL_API_KEY`, `NVIDIA_MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `TOGETHER_API_KEY`, `AIML_API_KEY`. Missing keys = silent skip in round-robin.
-- **Required backend env** in production: `DJANGO_SECRET_KEY`, all AI keys above, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `FRONTEND_URL` (for password-reset links).
+- **Required backend env** in production: `DJANGO_SECRET_KEY`, all AI keys above, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `FRONTEND_URL` (default CORS/CSRF origin and links in backend emails; password reset goes through Supabase), `SUPABASE_URL` + `SUPABASE_ANON_KEY`, `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true` (once Supabase "Confirm email" and "Secure email change" are on), `CORE_DATA_BACKUP_PATH` (persistent volume), `NUM_PROXIES` / `TRUSTED_CLIENT_IP_HEADER`. `python manage.py check --deploy` reports missing auth/backup settings as `accounts.W001`–`W003`.
 - **Required frontend env**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_FALLBACK_URL`, `NEXT_PUBLIC_USE_API_PROXY` (optional), Supabase keys.
 - **PDF handling**: `**/textbooks/*.pdf` and `*.sqlite3` are tracked via **Git LFS** (see `.gitattributes`).
 - **`.gitignore` exceptions**: `db.sqlite3`, `chroma_db/rag_store.sqlite3`, and `chroma_db/chroma.sqlite3` ARE committed (deployment needs them); other `*.sqlite3` are ignored.

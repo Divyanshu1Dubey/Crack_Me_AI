@@ -32,21 +32,13 @@ The codebase is functional and ships, but has accumulated debt in three areas: (
 
 | Path | Reason suspected dead |
 |---|---|
-| `backend/_import_pyq_md.py` | Superseded by fixture-first workflow |
-| `backend/_import_pyq_txt.py` | Same |
-| `backend/_import_sample.py` | Sample loading — only useful for initial dev |
-| `backend/_fix_and_enrich_answers.py` | Not referenced in any management command |
-| `backend/_manual_fix_answers.py` | Not in current workflow |
-| `backend/_check_db.py` | May be a one-off script |
-| `backend/_compact.py` | Not referenced |
-| `backend/load_chunks.py`, `load_chunks.ps1` | One-off data migration |
-| `backend/split_dump.py` | One-off |
-| `backend/fix_db.py`, `seed_jobs.py`, `check_qs.py` (root) | One-off utilities |
+| `fix_db.py`, `check_qs.py` (repo root) | One-off utilities |
+| `seed_jobs.py` (repo root) | Seeds nothing now; only reports (or, with `--delete-placeholders`, deletes) the old placeholder job rows |
 | `backend/jobs_backup.json`, `q_debug.json`, `audit_report.csv` | Left-over data dumps |
-| `backend/data_dump*.json` (root too) | Snapshot dumps; should be git-ignored except for tagged releases |
 | `backend/Medura_Train/PYQ/cms_pyq_database_2018_2024.md` | Legacy one-off |
-| `backend/RECOVERED_KEYS.txt` | Should NOT exist (per `SECURITY_SECRETS.md`) |
 | `frontend/src/app/admin/` (verify) | Check if current |
+
+(Removed since this list was written: `backend/_import_pyq_md.py`, `_import_pyq_txt.py`, `_import_sample.py`, `_fix_and_enrich_answers.py`, `_manual_fix_answers.py`, `_check_db.py`, `_compact.py`, the `load_chunks.py` / `load_chunks.ps1` / `split_dump.py` loaders, the `data_dump*.json` dumps and `RECOVERED_KEYS.txt`.)
 
 ### Verification needed
 

@@ -11,9 +11,24 @@ DigitalOcean App Platform (backup).
 ### Backend (Render / DigitalOcean)
 
 - [x] `backend/requirements.txt` is pinned (no `>=` for pinned libs).
-- [x] `backend/build.sh` installs deps, migrates, runs
-      `collectstatic --noinput`, loads NEET PG fixture.
-- [x] `Procfile` (root) defines `web: gunicorn crack_cms.wsgi --log-file -`.
+- [x] `backend/build.sh` installs deps, runs `collectstatic --no-input`,
+      migrates, prints the `link_supabase_identity --all-privileged` dry run,
+      seeds an empty CMS bank (`seed_question_bank`) and runs the idempotent
+      KB / blog steps. It no longer runs `import_neet_pg` and never runs
+      destructive data commands (full order: [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §7).
+- [x] `backend/Procfile` defines `release: python manage.py migrate --no-input`,
+      `web: gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 4 --timeout 120 --log-file -`
+      and `worker: python manage.py qcluster`.
+- [ ] **Worker component** running `python manage.py qcluster` with the web
+      component's environment. DigitalOcean App Platform does not start the
+      Procfile `worker` (or run `release`) by itself. Without it, ingestion /
+      recall imports and video jobs stay queued, renewal reminders are never
+      sent and the `ingestion_recover_stale_jobs` sweeper (django-q Schedule,
+      every 10 min, created by `migrate`) never runs.
+- [ ] Media: Django serves `/media/` only with `DEBUG=True`. Serve
+      `MEDIA_ROOT` at `/media/` from the platform (persistent volume) or move
+      media to a bucket, or MEDIA-linked files such as textbook page
+      screenshots (`/api/ai/screenshot/<id>/` → `screenshot_url`) do not load.
 - [ ] Production secrets configured in the platform dashboard:
   - [x] `DJANGO_SECRET_KEY` (50+ chars)
   - [x] `DATABASE_URL` (Supabase Postgres)
@@ -23,7 +38,33 @@ DigitalOcean App Platform (backup).
   - [x] `ALLOWED_HOSTS`
   - [x] `SENTRY_DSN`
   - [x] AI keys (Groq, Gemini, Cerebras, ...)
+  - [ ] `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public key for token
+        verification; `accounts.W002` without it), `SUPABASE_SERVICE_ROLE_KEY`
+        (admin tooling)
+  - [ ] `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true` — only after Supabase
+        → Authentication → Sign In / Providers → Email has **"Confirm email"
+        ON and "Secure email change" ON** (`accounts.W001` until then)
+  - [ ] `CORE_DATA_BACKUP_PATH` on a persistent volume (`accounts.W003`;
+        admin Backup / Restore answer `503 backup_not_configured` without it)
+  - [ ] `NUM_PROXIES` and `TRUSTED_CLIENT_IP_HEADER` (DigitalOcean:
+        `DO-Connecting-IP`): check as an admin with `GET /api/health/client-ip/`
+        which headers reach Django, and that a forged one does not
+- [ ] `python manage.py check --deploy` shows no `accounts.W00x` warning.
 - [x] Database migrations applied via `build.sh`.
+
+### One-time owner steps (never run by `build.sh`)
+
+- [ ] After `accounts.0023` (Supabase uid linking):
+      `python manage.py link_supabase_identity --all-privileged` (dry run),
+      review the `CHECK` rows, then `--all-privileged --apply`
+      (see [`../AUTHENTICATION.md`](../AUTHENTICATION.md) §4.1).
+- [ ] Databases that ran the old `import_neet_pg` deploy step:
+      `python manage.py import_neet_pg --replace --dry-run`, review, then
+      `python manage.py import_neet_pg --replace`.
+- [ ] Databases from releases before the `seed_data` fix:
+      `python manage.py cleanup_seed_samples`, review, then `--apply`.
+- [ ] Leftover placeholder job listings: `python seed_jobs.py`
+      (report), then `python seed_jobs.py --delete-placeholders`.
 - [x] `MEDIA_ROOT` storage (currently local disk — see
       `TECHNICAL_DEBT.md` for the S3 migration).
 
@@ -39,8 +80,9 @@ DigitalOcean App Platform (backup).
 - [x] `DATABASE_URL` SSL mode `require` (production runtime sets
       `sslmode=require` automatically).
 - [x] `db_connect_timeout=5` enforced.
-- [x] Run `python manage.py loaddata questions_fixture.json` on first
-      deploy to bootstrap the bank.
+- [x] A fresh database gets its CMS bank automatically: `build.sh` runs
+      `seed_question_bank` (loads `backend/fixtures/cms_fixture.json` only
+      while the bank is empty). `questions_fixture.json` no longer exists.
 
 ---
 

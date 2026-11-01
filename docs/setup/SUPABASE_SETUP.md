@@ -120,19 +120,13 @@ Frontend `lib/supabase.ts::isSupabaseAuthEnabled()` returns true → `api.ts` at
 
 ## 4. Supabase Bridge (Backend)
 
-`backend/accounts/supabase_auth.py` validates Supabase tokens on the Django side:
+`backend/accounts/supabase_rest_auth.py` (`SupabaseJWTAuthentication`) validates Supabase tokens on the Django side: it calls `GET {SUPABASE_URL}/auth/v1/user` with the bearer token and the public key as `apikey`, then resolves the local `CustomUser` by `supabase_uid` (the first sign-in links the row with the same confirmed email; admin / staff rows only for a trusted admin identity or the identity they were created from). Details: [`../AUTHENTICATION.md`](../AUTHENTICATION.md) §4.1.
 
-```python
-# Pseudocode
-def validate_supabase_token(token):
-    response = httpx.get(
-        f"{SUPABASE_URL}/auth/v1/user",
-        headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},
-    )
-    if response.status_code == 200:
-        user_data = response.json()
-        return get_or_create_custom_user(user_data)
-```
+Required settings:
+
+- **Supabase dashboard → Authentication → Sign In / Providers → Email: "Confirm email" ON and "Secure email change" ON.** Linking and the admin email allowlist trust the email Supabase reports as confirmed; with either off, anyone can claim an address they do not own. Then set `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true` on the backend (`manage.py check --deploy` warns `accounts.W001` until then).
+- Backend `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_AUTH_VERIFY_KEY`; same value as `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Without the public key the service-role key is used (`accounts.W002`).
+- `SUPABASE_SERVICE_ROLE_KEY` only for admin tooling such as `manage.py link_supabase_identity`.
 
 ---
 
@@ -140,8 +134,10 @@ def validate_supabase_token(token):
 
 1. Set `DATABASE_URL` on backend host
 2. Run migrations (`build.sh` does this automatically)
-3. Set Supabase env vars on frontend
-4. Deploy frontend (from `main`)
+3. Turn on "Confirm email" and "Secure email change" in Supabase, then set `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true` and `SUPABASE_ANON_KEY` on the backend
+4. Once after migration `accounts.0023`: `python manage.py link_supabase_identity --all-privileged` (dry run; `build.sh` prints it), review, then `--all-privileged --apply`
+5. Set Supabase env vars on frontend
+6. Deploy frontend (from `main`)
 5. Smoke test:
    - Register a new user
    - Login
@@ -150,14 +146,14 @@ def validate_supabase_token(token):
 
 ---
 
-## 6. Single-Device Sessions with Supabase
+## 6. Device Limit with Supabase
 
-Supabase Auth tokens are JWTs that can be used directly with the Django bridge. `CustomUser.session_key` + `UserDevice` still enforce single-device — the Supabase JWT is just the auth mechanism.
+Supabase Auth tokens are JWTs that can be used directly with the Django bridge. The bridge also enforces the device limit: 2 devices on a free plan, 4 with a subscription, counted by `UserDevice` rows keyed by the `X-Session-ID` header (`CustomUser.session_key` is unused). A new device beyond the cap gets `401 {code: 'device_limit_reached'}` and the frontend opens `/settings?deviceLimit=1`.
 
-If you need to invalidate a Supabase session:
-1. Mark `UserDevice.is_active = False` on backend
-2. Next request from that device returns `code: 'session_invalid'`
-3. Frontend `api.ts` interceptor calls `supabase.auth.signOut()` to clear the Supabase session
+If you need to sign a device out:
+1. Mark `UserDevice.is_active = False` on backend (Settings → remove device, or the admin device view)
+2. Next request from that device returns `401 {code: 'device_inactive'}`
+3. Frontend `api.ts` drops the device id and clears the local Supabase session
 
 ---
 
@@ -180,7 +176,7 @@ CREATE POLICY user_self ON accounts_customuser
 | What | Backup |
 |---|---|
 | Supabase Postgres | Automatic daily (Pro plan); on-demand via Supabase dashboard |
-| Question fixture | `backend/questions_fixture.json` (committed) |
+| Question fixture | `backend/fixtures/cms_fixture.json` (committed; seeds an empty bank only) |
 | RAG store | `backend/chroma_db/rag_store.sqlite3` (committed) |
 
 ---

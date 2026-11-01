@@ -12,10 +12,10 @@
 3. **AI provider rotation is round-robin** — do not add hardcoded provider preferences.
 4. **Tokens are always metered** — every AI endpoint checks `TokenBalance.consume_token()` before provider call.
 5. **All admin mutations write `AdminAuditLog`** — never bypass.
-6. **Question fixtures are the source of truth** — DB → `_export_fixture.py` → commit JSON → push.
-7. **RAG ingestion is via `_train_all.py` or `KnowledgeScanView`** — never write directly to `rag_store.sqlite3`.
+6. **Question fixtures seed an empty bank only** — `backend/fixtures/<exam>_fixture.json` (workflow: `backend/fixtures/README.md`, verify with `load_exam_fixture <exam> --dry-run`). `build.sh` runs `seed_question_bank`, which never loads a fixture over a live bank; on a running deployment the database is the source of truth.
+7. **RAG ingestion is via `python manage.py train_ai` or `KnowledgeScanView`** — never write directly to `rag_store.sqlite3`.
 8. **Subscription activation goes through `Subscription.activate_from_payment()`** — never write the Subscription row directly.
-9. **Single-device enforcement via `CustomUser.session_key` + `UserDevice`** — do not introduce alternative session mechanisms.
+9. **Devices are limited via `UserDevice` (2 free / 4 subscribed), keyed by `X-Session-ID`, in `accounts/supabase_rest_auth.py`** — do not introduce alternative session mechanisms. `CustomUser.session_key` is an unused legacy field.
 10. **CSP and security headers are set in `vercel.json`** — modify with care.
 
 ---
@@ -72,18 +72,18 @@
 - One concern per commit
 - Branch names: `feature/...`, `fix/...`, `chore/...`
 - Never force-push to main
-- Always update `questions_fixture.json` in the same commit as DB changes
+- When a fixture changes, commit `backend/fixtures/<exam>_fixture.json` together with its images
 
 ---
 
 ## 3. Business Rules
 
 1. **Token economy is the growth lever** — every AI feature must be token-metered; admin/staff bypass.
-2. **Single-device prevents account sharing** — `session_invalid` → force logout.
+2. **The device limit prevents account sharing** — a new device beyond 2 (free) / 4 (subscribed) gets `device_limit_reached` and is sent to Settings; a logged-out device gets `device_inactive` and is signed out.
 3. **Free tier is intentionally limited** — 10/day, 50/week. Do not increase without product approval.
 4. **All payment changes go through Razorpay** — no alternative gateways without CFO sign-off.
 5. **Question content is medical** — every correction must be reviewed by a subject-matter expert.
-6. **Fixture is the deploy contract** — `build.sh` loads it; if broken, build fails.
+6. **`build.sh` is the deploy contract** — it seeds an empty bank from the fixture (`seed_question_bank`) and never runs destructive data commands; one-time cleanups are owner actions (see [`ARCHITECTURE.md`](./ARCHITECTURE.md) §7).
 7. **Free-tier users get all features but rate-limited** — never gate features behind paywall without PM approval.
 8. **Admin actions are audited** — `AdminAuditLog` is append-only.
 9. **Subscriptions extend existing subscriptions** — never silently create parallel subscriptions.
@@ -100,8 +100,8 @@
 | `backend/ai_engine/services.py` | AI provider orchestration — affects every AI call |
 | `backend/accounts/models.py` | User + token models — affects every authenticated request |
 | `backend/questions/models.py` | Question schema — affects every MCQ + fixture |
-| `backend/questions_fixture.json` | Production seed |
-| `backend/build.sh` | Render deploy contract |
+| `backend/fixtures/*_fixture.json` | Seed for an empty bank |
+| `backend/build.sh` | Deploy contract |
 | `frontend/src/lib/api.ts` | Centralized HTTP client — touches every API call |
 | `frontend/src/lib/auth.tsx` | Auth context — touches every authenticated route |
 | `frontend/next.config.ts` | Build config (output file tracing root) |
@@ -117,9 +117,9 @@ If you must modify a critical file, **explain why in the PR description and tag 
 
 | Path | Reason |
 |---|---|
-| `backend/chroma_db/rag_store.sqlite3` | RAG cache — regenerate via `_train_all.py`, never edit |
+| `backend/chroma_db/rag_store.sqlite3` | RAG cache — regenerate via `python manage.py train_ai`, never edit |
 | `backend/db.sqlite3` (when committed) | Production seed — only via `loaddata` |
-| `backend/questions_fixture.json` | Only via `_export_fixture.py` |
+| `backend/fixtures/*_fixture.json` | Edit per `backend/fixtures/README.md`; verify with `load_exam_fixture <exam> --dry-run` |
 | `backend/RECOVERED_KEYS.txt` | Should not exist; if it does, do not commit |
 | `backend/.env` | Git-ignored secrets — never commit |
 | Git LFS objects | Don't manually edit |
@@ -136,9 +136,9 @@ If you must modify a critical file, **explain why in the PR description and tag 
    - cd backend && python manage.py makemigrations --check --dry-run
    - cd backend && python manage.py test
    - cd frontend && npm run lint && npm run build
-4. If question content changed:
-   - cd backend && python _export_fixture.py
-   - git add questions_fixture.json
+4. If a fixture changed:
+   - cd backend && python manage.py load_exam_fixture <exam> --dry-run
+   - git add backend/fixtures/<exam>_fixture.json (+ images)
 5. git commit -m "feat: ..."
 6. Push branch + open PR
 7. CI runs: lint, test, bandit, safety, build
@@ -213,7 +213,7 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 npx playwright test --workers=1   # E2E
 | Mistake | Why it's wrong |
 |---|---|
 | Adding an AI provider without updating `services.py` round-robin | Won't be used |
-| Editing `questions_fixture.json` by hand without re-exporting | DB drift |
+| Running `load_exam_fixture` against a live bank to "sync" it | Overwrites AI explanations, answer fixes and deactivations made since the export |
 | Returning 200 with error body | Use proper status codes |
 | Using `print()` for logging | Use `logger` |
 | Storing API keys in `frontend/.env.local` | Use backend env only |
@@ -241,14 +241,16 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 npx playwright test --workers=1   # E2E
 | **Free tokens** | Daily (10) + Weekly (50) quota |
 | **Purchased tokens** | Bought via Razorpay, never expire |
 | **Feedback credits** | +2 tokens for verified feedback |
-| **Single-device** | One active session per user (enforced via `UserDevice`) |
-| **Fixture** | `questions_fixture.json` — production seed |
-| **Round-robin** | Provider rotation pattern (11 providers + Ollama) |
+| **Device limit** | 2 signed-in devices on a free plan, 4 with a subscription (`UserDevice`, keyed by `X-Session-ID`) |
+| **Fixture** | `backend/fixtures/<exam>_fixture.json` — seed for an empty bank |
+| **Round-robin** | Provider rotation pattern (10 rotation entries in `AIService._call_ai`) |
 | **CrackLabs** | The company |
 | **CrackCMS** | The product (UPSC CMS prep platform) |
 | **Crack_Me_AI** | Brand name of the product |
-| **`session_invalid`** | Error code emitted when single-device check fails |
-| **`insufficient_tokens`** | Error code for 402 Payment Required |
+| **`device_limit_reached` / `device_inactive`** | 401 codes of the device limit (new device over the cap / device logged out) |
+| **`upgrade_required`** | 402 paywall code (`feature`: `PYQ answers`, `Mock Tests`, `AI Tutor`, ...) |
+| **`insufficient_tokens`** | 429: AI token balance below the action's cost |
+| **`ai_unavailable`** | 503: no AI provider answered; nothing charged |
 | **CMS_SYSTEM_PROMPT** | The system prompt that grounds AI responses in CMS exam context |
 
 ---

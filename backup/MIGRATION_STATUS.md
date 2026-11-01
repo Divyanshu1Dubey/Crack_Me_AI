@@ -35,9 +35,14 @@
 - `backup/supabase_storage_videos/` — 62 educational videos (248 MB)
 - `backup/supabase_storage_images/` — question images (1 found via API)
 
-**Export scripts:**
-- `backend/scripts/_export_tables.py` — re-runnable export for all key tables
+**Export scripts** (run from `backend/`):
+- `backend/scripts/_export_tables.py --output-dir <dir>` — re-runnable export for all key tables
+- `backend/scripts/_export_questions.py`, `_backup_export.py` and `_export_all_tables.py` — the same `--output-dir <dir>` contract
 - `backend/scripts/_download_storage.py` — re-runnable storage download
+
+`--output-dir` is required and must be **outside the repository** (and outside
+any git working tree): the dumps hold user data, and the scripts refuse a path
+inside a checkout (`backend/scripts/_safe_paths.py`).
 
 ### Phase 2: Railway Postgres Setup
 
@@ -67,9 +72,10 @@
 
 **Next: Load backup data into Railway Postgres**
 ```bash
-# After migrations complete:
+# After migrations complete (the dump directory is outside the repository):
 cd backend
-railway run -s Crack_Me_AI -- python scripts/_export_tables.py  # Will need import script instead
+python scripts/_export_tables.py --output-dir <dump dir outside the repo>
+railway run -s Crack_Me_AI -- python scripts/_import_to_railway.py --input-dir <same dump dir>
 ```
 
 ## 📋 REMAINING WORK (when you want to cut over)
@@ -87,12 +93,20 @@ MEDIA_ROOT = '/app/media/'
 ```
 
 ### 3. Load Backup Data to Railway Postgres
-Write an import script that reads the JSON files and loads them:
+`backend/scripts/_import_to_railway.py` reads the `<app>.<model>.json` dumps
+(parents before children, skipping FK violations). `--input-dir` is required:
+the directory `_export_tables.py --output-dir` wrote, outside the repository.
 ```bash
 cd backend
-railway run -s Crack_Me_AI -- python manage.py loaddata backup/db_dumps/questions.question.json
-# Repeat for all tables
+railway run -s Crack_Me_AI -- python scripts/_import_to_railway.py --input-dir <dump dir outside the repo>
 ```
+
+To restore a questions backup (Django fixture JSON) instead, pass its path:
+```bash
+python scripts/restore_backup.py <path to the backup file, outside the repository>
+```
+It leaves admin-edited questions alone. (It used to read
+`backend/questions_backup.json`, a tracked copy of a dump with student data.)
 
 ### 4. Point Railway Domain to Railway Postgres (Cutover)
 When ready to switch from Supabase to Railway:
@@ -135,11 +149,16 @@ If Supabase restricts your account:
 4. **Railway is now 100% independent of Supabase**
 
 ## 📁 Backup Location
-All backups are in: `C:\Users\DIVYANSHU\Desktop\crack_cms\backup\`
-- `db_dumps/` — 38 MB of JSON database exports
-- `supabase_auth_users.json` — 143 KB of Supabase Auth users
-- `supabase_storage_videos/` — 248 MB of educational videos
-- `supabase_storage_images/` — question images (empty, API returned 1 object with error)
+In the repository's `backup/` folder only:
+- `supabase_storage_videos/` — 62 educational videos (248 MB)
+- `sql/` — `copy_questionimage.sql` + `questionimage.csv` (question-image rows; the user-table dumps were removed)
+
+(`supabase_storage_images/` is not in the repository.)
+
+The database dumps (`db_dumps/`) and `supabase_auth_users.json` were removed
+from the repository on 2026-11-01 (personal data). New dumps go to the
+`--output-dir` given to the export scripts, outside the repository, kept
+encrypted.
 
 ## 🔑 Important Credentials (saved for reference)
 

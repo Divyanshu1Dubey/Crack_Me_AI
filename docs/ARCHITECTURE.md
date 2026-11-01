@@ -20,7 +20,7 @@ flowchart LR
     DD[[Datadog RUM]]
     Razorpay[[Razorpay]]
     SMTP[[Gmail SMTP]]
-    AI{Round-Robin\n11 Providers + Ollama}
+    AI{Round-Robin\n10 rotation entries}
 
     Browser <--> Vercel
     Vercel -->|REST + JWT| Render
@@ -60,8 +60,8 @@ flowchart TD
 
 | Module | Path | Responsibility |
 |---|---|---|
-| API Client | `frontend/src/lib/api.ts` | Axios instance, base-URL failover, Supabase JWT injection, single-device logout on `session_invalid` |
-| Auth Context | `frontend/src/lib/auth.tsx` | `AuthProvider`, `useAuth` |
+| API Client | `frontend/src/lib/api.ts` | Axios instance, base-URL failover, Supabase JWT + `X-Session-ID` injection, sign-out on session-ending codes (`account_blocked`, `device_inactive`, `account_link_required`, ...), `/settings?deviceLimit=1` on `device_limit_reached` |
+| Auth Context | `frontend/src/lib/auth.tsx` | `AuthProvider`, `useAuth`; the user (and admin role) comes from the backend profile |
 | Supabase Client | `frontend/src/lib/supabase.ts` | Browser-side Supabase session helpers, refresh-token error detection |
 | SEO | `frontend/src/lib/seo.ts` | Brand constants, OG image defaults, metadata helpers |
 | UI Primitives | `frontend/src/components/ui/*` | Radix-wrapped buttons, dialogs, dropdowns, tabs, tooltips |
@@ -143,17 +143,19 @@ Order (top → bottom):
 
 ```mermaid
 flowchart LR
-    Request[AI Request\nfrom views.py] --> Counter[Round-Robin Counter\n_call_counter % 9]
-    Counter --> P1[1 Groq\nllama-3.3-70b-versatile]
-    Counter --> P2[2 Cerebras\ngemma-4-31b]
-    Counter --> P3[3 Gemini x2 models]
-    Counter --> P4[4 Cohere\ncommand-a-03-2025]
-    Counter --> P5[5 OpenRouter\n4 free models]
-    Counter --> P6[6 GitHub Models\ngpt-4o-mini]
-    Counter --> P7[7 HuggingFace\nvia Novita router]
-    Counter --> P8[8 Mistral\nmistral-small-latest]
-    Counter --> P9[9 OpenRouter2\n2 free models]
-    P1 -.fail/timeout.-> P2
+    Request[AI Request\nfrom views.py] --> Counter[Round-Robin Counter\n_call_counter % 10]
+    Counter --> P0[1 OmniRoute]
+    Counter --> P1[2 Groq\nllama-3.3-70b-versatile]
+    Counter --> P2[3 Cerebras\ngemma-4-31b]
+    Counter --> P3[4 Gemini x2 models]
+    Counter --> P4[5 Cohere\ncommand-a-03-2025]
+    Counter --> P5[6 OpenRouter\n4 free models]
+    Counter --> P6[7 GitHub Models\ngpt-4o-mini]
+    Counter --> P7[8 HuggingFace\nvia Novita router]
+    Counter --> P8[9 Mistral\nmistral-small-latest]
+    Counter --> P9[10 OpenRouter2\n2 free models]
+    P0 -.fail/timeout.-> P1
+    P1 -.fail.-> P2
     P2 -.fail.-> P3
     P3 -.fail.-> P4
     P4 -.fail.-> P5
@@ -161,23 +163,23 @@ flowchart LR
     P6 -.fail.-> P7
     P7 -.fail.-> P8
     P8 -.fail.-> P9
-    P9 -.fail/timeout.-> Fallback[Fallback:\nAll 503 or\ngeneric message]
+    P9 -.fail/timeout.-> Fallback[AIUnavailable:\nrefund + offline answer\nor 503 ai_unavailable]
 ```
 
 **Verified from `backend/ai_engine/services.py`**:
-- `_call_ai()` rotation list has **9 entries** (verified at lines 686–694)
-- **Per-request deadline 120 s** (line 701)
-- **Per-provider timeout 15–20 s** (each `_call_*` method uses ThreadPoolExecutor with `result(timeout=15)`)
-- **`NVIDIA Mistral` and `DeepSeek` clients are initialized but NOT in the runtime rotation** (only direct-call via `ai.nvidia_mistral` would reach them)
+- `_call_ai()` rotation list has **10 entries** (OmniRoute first); a global counter picks the starting provider
+- **Per-call deadline**: `AI_CALL_DEADLINE_SECONDS` (default 90 s) and `AI_CALL_MAX_ATTEMPTS`; each attempt's SDK timeout is cut to what is left of the deadline
+- **`NVIDIA Mistral` is initialised but NOT in the rotation**; DeepSeek and Ollama are not implemented
+- When every provider fails, `_call_ai()` raises `AIUnavailable`; views refund tokens / free slots and answer with an offline extract or `503 {code: 'ai_unavailable'}`. `AI_OFFLINE_MODE=1` makes no external call at all.
 - `_PROVIDER_ERROR_PHRASES` filter prevents provider-internal error strings from reaching users
 - Per-provider self-disable: if a provider returns 401/403, `self.<provider> = None` to skip it for the rest of the session
-- **RAG is disabled when `settings.DEBUG=False`** (production) — line 282 `if not getattr(settings, 'DEBUG', False): return None`
+- **RAG is on by default**; only `DISABLE_RAG=1` or `DISABLE_RAG_IN_PRODUCTION=1` turn it off (there is no `DEBUG` gate)
 
 ### 4.2 RAG Pipeline
 
 ```mermaid
 flowchart LR
-    Sources[Medura_Train/\ntextbooks, PYQ, web_knowledge] --> Ingest[Train Pipeline\n_train_all.py]
+    Sources[Medura_Train/\ntextbooks, PYQ, web_knowledge] --> Ingest[Train Pipeline\nmanage.py train_ai]
     Ingest --> Chunk[Chunk\n~200-500 tok]
     Chunk --> TFIDF[(SQLite\nchunks + idf_cache)]
     Query[User Query] --> Tokenize[TF-IDF Tokenize]
@@ -189,7 +191,7 @@ flowchart LR
     AIProviders --> Answer[RAG Answer\nwith citations]
 ```
 
-**Implementation**: `backend/ai_engine/rag_pipeline.py` + `backend/ai_engine/sqlite_rag.py`. Set `DISABLE_RAG=1` to skip on memory-constrained hosts. PDFs >50 MB auto-skipped — use `.md` summaries.
+**Implementation**: `backend/ai_engine/rag_pipeline.py` + `backend/ai_engine/sqlite_rag.py`; retrieval is BM25 over the whole store from an in-memory index (`ai_engine/lexical_index.py`, see [`audit/RAG_BENCHMARK.md`](./audit/RAG_BENCHMARK.md)). Set `DISABLE_RAG=1` to skip on memory-constrained hosts. There is no automatic PDF size limit.
 
 ### 4.3 AI Endpoints (`/api/ai/`)
 
@@ -203,7 +205,7 @@ flowchart LR
 | POST | `/rag-search/` | RAG top-K chunks (no LLM) |
 | POST | `/rag-answer/` | RAG-grounded answer with citations |
 | POST | `/textbook-reference/` | Get textbook reference for a question |
-| GET | `/screenshot/<question_id>/` | Page screenshot of textbook |
+| GET | `/screenshot/<question_id>/` | Cited textbook page as JSON `{screenshot_url}` (`202` while rendering, `402` when the caller may not see the answer, `404` when no page exists); the render is a MEDIA file (`Question.page_screenshot`), see §7 |
 | POST | `/study-plan/` | Personalized study roadmap |
 | GET | `/high-yield/` | High-yield topics list |
 | POST | `/generate-questions/` | AI-generated MCQs |
@@ -219,7 +221,7 @@ flowchart LR
 
 ## 5. Authentication Flow
 
-CrackCMS uses a **hybrid Supabase-first / Django-JWT-fallback** auth model. The frontend attaches a Supabase access token when Supabase is configured; otherwise it falls back to Django SimpleJWT.
+CrackCMS signs users in with **Supabase Auth**. The frontend attaches the Supabase access token and the `X-Session-ID` device id; the backend links the identity to a `CustomUser` by `supabase_uid` and enforces the 2 / 4 device limit. Django JWTs are used only by the dev-only local auth (`LOCAL_DEV_AUTH`, `DEBUG=True`).
 
 ```mermaid
 sequenceDiagram
@@ -235,11 +237,11 @@ sequenceDiagram
     U->>FE: Make authenticated request
     FE->>FE: api.ts interceptor reads Supabase session
     FE->>API: Authorization: Bearer <supabase_token>
-    API->>API: accounts.middleware validates token
-    API->>DB: Resolve CustomUser
+    API->>API: SupabaseJWTAuthentication validates token (Supabase /auth/v1/user)
+    API->>DB: Resolve CustomUser by supabase_uid, check device limit
     DB-->>API: user row
     API-->>FE: 200 OK + payload
-    Note over FE,API: On session_invalid → clear local session + redirect /login?authError=
+    Note over FE,API: account_blocked / device_inactive / account_link_required → clear local session + /login?authError=… · device_limit_reached → /settings?deviceLimit=1
 ```
 
 See [`AUTHENTICATION.md`](./AUTHENTICATION.md) for the full auth spec (JWT, refresh, roles, protected routes).
@@ -257,9 +259,10 @@ Three role tiers:
 | **Staff / Superuser** | Django admin, admin token grant/transfer, system reset, weak-area control, campaigns, backups |
 
 **Enforcement points**:
-- DRF permissions (`accounts/permissions.py`, per-view `IsAdminUser` / `IsAuthenticated`).
+- DRF permissions (`accounts/permissions.py` `IsControlTowerAdmin`, per-view `IsAdminUser` / `IsAuthenticated`).
 - Django Admin (`/admin/`) requires `is_staff`.
-- Admin token endpoints (`/api/auth/tokens/admin/*`) require `is_superuser`.
+- REST admin endpoints (`/api/auth/admin/*`, `/api/auth/tokens/admin/*`, `/api/analytics/admin/*`, `/api/imports/*`, `/api/ingestion/*`) require `IsControlTowerAdmin`: `role='admin'` or `is_superuser`.
+- The frontend's `/admin` pages decide access from the backend profile (`role` / `is_admin`), never from Supabase `user_metadata`.
 - Token-metered AI features check balance in middleware/service layer before provider call.
 
 See [`ADMIN_SYSTEM.md`](./ADMIN_SYSTEM.md) for the admin permission matrix.
@@ -283,12 +286,20 @@ flowchart LR
     LiveAPI --> Razorpay
 ```
 
-### Backend Deploy (Render)
+### Backend Deploy (DigitalOcean App Platform; Render is legacy)
 
-- **Build**: `backend/build.sh` runs `pip install → collectstatic → migrate → import_neet_pg`
-- **Start**: `gunicorn crack_cms.wsgi:application --workers 1 --threads 4 --timeout 180`
-- **Config**: `render.yaml` (env vars referenced by `crack_cms/settings.py`)
-- **Required env**: `DJANGO_SECRET_KEY`, all AI keys, `CORS_ALLOWED_ORIGINS=https://cracklabs.app`, `CSRF_TRUSTED_ORIGINS=…`, `FRONTEND_URL`
+- **Build** (`backend/build.sh`, the deploy contract): `pip install` → `collectstatic` → `migrate` (also (re)creates the django-q schedules: the daily renewal-reminder schedule and the `ingestion_recover_stale_jobs` sweeper, every 10 min) → `link_supabase_identity --all-privileged` (**dry-run report only**) → `seed_question_bank` (loads `fixtures/cms_fixture.json` only while the CMS bank is empty; a live bank is never overwritten) → `seed_blogs` → create `MEDIA_ROOT/recall_images` → `load_ontology` → `ingest_source internal-notes` → embedding backfill → optional KB network ingest (`KB_INGEST_NETWORK=1`) → optional AI backfill (`BACKFILL_AI_ON_DEPLOY=1`) → `relink_fixture_images --apply`. It no longer runs `import_neet_pg` (that used to delete every NEET PG question and its user history on each build) and never runs destructive data commands.
+- **Process types** (`backend/Procfile`): `release: python manage.py migrate --no-input`, `web: gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 4 --timeout 120`, `worker: python manage.py qcluster`.
+- **Worker**: background jobs (ingestion / recall imports, video generation), the renewal-reminder schedule and the stale-job sweeper run only while a django-q worker is up. DigitalOcean App Platform does not start a Procfile worker (or run `release`) on its own: add a **Worker component** with run command `python manage.py qcluster` and the web component's environment, or queued jobs stay queued and no reminder is sent.
+- **Media**: Django serves `/media/` only with `DEBUG=True` (`crack_cms/urls.py`). Question images go through `GET /api/questions/images/<id>/serve/`, but files linked by MEDIA URL, such as the textbook page screenshots (`Question.page_screenshot`, returned by `/api/ai/screenshot/<id>/`), are reachable in production only if the platform serves `MEDIA_ROOT` at `/media/` (or the storage is moved to a bucket). Container disk is wiped on redeploy.
+- **Required env**: `DJANGO_SECRET_KEY`, AI keys, `CORS_ALLOWED_ORIGINS=https://cracklabs.app`, `CSRF_TRUSTED_ORIGINS=…`, `FRONTEND_URL`, `SUPABASE_URL` + `SUPABASE_ANON_KEY` (and `SUPABASE_SERVICE_ROLE_KEY` for admin tooling), `SUPABASE_EMAIL_CONFIRMATION_ENABLED=true` once Supabase "Confirm email" and "Secure email change" are on, `CORE_DATA_BACKUP_PATH` (persistent volume), `NUM_PROXIES` / `TRUSTED_CLIENT_IP_HEADER`. `manage.py check --deploy` reports the missing auth/backup settings as `accounts.W001`–`W003` (see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.2).
+
+**One-time operator steps** (never run by `build.sh`):
+1. After deploying `accounts.0023`: `python manage.py link_supabase_identity --all-privileged` (dry run), review, then `--all-privileged --apply` ([`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.1).
+2. Once per database that ever ran the old `import_neet_pg` deploy step: `python manage.py import_neet_pg --replace --dry-run`, review the counts, then `python manage.py import_neet_pg --replace` (repairs the 2025 rows, hides the 2020 paper that has no answer key; admin-edited rows are skipped).
+3. Once per database from releases before the `seed_data` fix: `python manage.py cleanup_seed_samples` (dry run), then `--apply` (moves the 15 demo questions stored as 2019–2023 UPSC CMS PYQs to year 0).
+4. Client IP: as an admin, `GET /api/health/client-ip/` on the deployed site shows which address headers reach Django. On DigitalOcean set `TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP` (not `CF-Connecting-IP`: the `*.ondigitalocean.app` hostname stays reachable around Cloudflare) and `NUM_PROXIES=<n>` (usually 1) so DRF's throttles key on the client too; check that a forged header does not reach Django. Unset, all anonymous traffic shares the proxy's rate-limit bucket.
+5. Optional: `python manage.py ingestion_run_pending` after a worker outage (it runs the stale-job recovery pass first, then dispatches queued jobs that have no task); the scheduled sweeper already covers stalled jobs while the worker runs.
 
 ### Frontend Deploy (Vercel)
 
@@ -302,7 +313,9 @@ Runs on push to `main`/`develop` and PRs to `main`:
 
 1. **Backend** (Python 3.12): `pip install` → `manage.py check --deploy` → `makemigrations --check` → `manage.py test --verbosity=2`
 2. **Frontend** (Node 20): `npm ci` → `npm run lint` → `npm audit --audit-level=high` → `npm run build`
-3. **Security**: `bandit -r backend/` + `safety check -r backend/requirements.txt`
+3. **Frontend unit** (Node 22, `check-latest`): `npm ci` → `npm run test:unit` (`node --test` runs the TypeScript tests directly; needs Node ≥ 22.18)
+4. **Secret scan** (blocking): `python scripts/scan_secrets.py --all-tracked` (credentials and personal-data dumps in any tracked file)
+5. **Security**: Bandit report (`bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -f json`, never fails) + Bandit gate (`... --skip B101 -lll -iii`: fails on any high-severity, high-confidence finding; there is no baseline, non-security hashes pass usedforsecurity=False) + `safety check -r backend/requirements.txt` (non-blocking)
 
 ### Pre-commit Hook (`.pre-commit-config.yaml`)
 
@@ -356,9 +369,9 @@ CREATE INDEX IF NOT EXISTS idx_chunks_book ON chunks(book);
 
 ### Backup Strategy
 
-- Fixture file `backend/questions_fixture.json` is the canonical question-bank snapshot.
-- `data_dump*.json` + `data_versions/` retain periodic dumps.
-- Admin endpoint `/api/auth/admin/system/backup-data/` and `/restore-data/` provide runtime backup/restore.
+- `backend/fixtures/cms_fixture.json` (plus `neet_pg_fixture.json`, `inicet_fixture.json`) is the seed for a **fresh** database: `seed_question_bank` loads it only while the CMS bank is empty, so a live bank (with its AI explanations, answer fixes and deactivations) is never overwritten; re-sync on purpose with `manage.py load_exam_fixture <exam>`.
+- Admin endpoints `/api/auth/admin/system/backup-data/` and `/restore-data/` write / read the core configuration fixture at `CORE_DATA_BACKUP_PATH` (a persistent volume; `503 backup_not_configured` without it in production).
+- Ad-hoc table dumps (`backend/scripts/_export_tables.py` etc.) hold user data and must be written outside the repository (`--output-dir`); see [`backup/MIGRATION_STATUS.md`](../backup/MIGRATION_STATUS.md).
 
 ---
 
@@ -416,11 +429,13 @@ flowchart LR
     API --> FE[Next.js UI]
 ```
 
+Current state: `validate_questions.py`, `_export_fixture.py` and `backend/questions_fixture.json` no longer exist. The seed is `backend/fixtures/cms_fixture.json`, and `build.sh` (`seed_question_bank`) loads it only into an empty bank; on a running deployment the live database is the source of truth.
+
 ### RAG Ingestion Flow
 
 ```mermaid
 flowchart LR
-    A[Medura_Train/textbooks/] --> C{_train_all.py}
+    A[Medura_Train/textbooks/] --> C{manage.py train_ai}
     B[Medura_Train/PYQ/] --> C
     C2[Medura_Train/web_knowledge/] --> C
     C --> Chunk[Chunk ~200 words]
@@ -448,8 +463,10 @@ flowchart LR
 ### Frontend
 
 - `api.ts` response interceptor:
-  - On `code: 'session_invalid'` → clear Supabase local session + redirect to `/login?authError=…`.
-  - On 502/503/504 → automatic base-URL failover (production fallback URL).
+  - On a session-ending `code` (`account_blocked`, `email_not_confirmed`, `email_required`, `account_link_required`, `device_inactive`) → clear the local session + redirect to `/login?authError=…`.
+  - On `device_limit_reached` → open `/settings?deviceLimit=1` (not from `/settings` or `/subscription`).
+  - On `upgrade_required` (402) → open the upgrade modal.
+  - On 502/503/504 → automatic base-URL failover for idempotent requests (production fallback URL).
   - Other errors → `Promise.reject` to caller.
 
 ### Backend
@@ -458,7 +475,7 @@ flowchart LR
 - DRF exception handler returns structured `{ "error": "...", "code": "..." }`.
 - Sentry captures unhandled exceptions (gated by `SENTRY_DSN` env var).
 - `_PROVIDER_ERROR_PHRASES` filter prevents AI provider error strings from reaching users.
-- 120 s request deadline; per-provider 15–20 s timeout.
+- `AI_CALL_DEADLINE_SECONDS` (default 90 s) per AI call; when no provider answers, `AIUnavailable` → refund + offline answer or `503 ai_unavailable`.
 - All admin token grants/transfers write `AdminAuditLog` rows.
 
 ### Logging
@@ -480,14 +497,20 @@ flowchart LR
 | `DEBUG` | No | `True`/`False` |
 | `ALLOWED_HOSTS` | Yes (prod) | Comma-separated |
 | `DATABASE_URL` | No | Postgres override of SQLite |
-| `GROQ_API_KEY` … `DEEPSEEK_API_KEY` | No (graceful skip) | All 11 AI providers |
+| `GROQ_API_KEY` … `OPENROUTER_API_KEY2` | No (graceful skip) | AI provider keys (10 rotation entries) |
+| `AI_OFFLINE_MODE` | No | `1` = no external LLM call anywhere (extractive offline answers) |
 | `CORS_ALLOWED_ORIGINS` | Yes (prod) | `https://cracklabs.app` |
 | `CSRF_TRUSTED_ORIGINS` | Yes (prod) | `https://cracklabs.app` |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Yes (prod) | Gmail App Password |
-| `FRONTEND_URL` | Yes (prod) | Used in password-reset emails |
+| `FRONTEND_URL` | Yes (prod) | Links in backend emails |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Yes (prod) | Token verification (`accounts.W002` without the public key) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Admin tooling | Supabase admin API (`link_supabase_identity`, admin cleanups) |
+| `SUPABASE_EMAIL_CONFIRMATION_ENABLED` | Yes (prod) | `true` once Supabase "Confirm email" and "Secure email change" are on (`accounts.W001`) |
+| `CONTROL_TOWER_ADMIN_EMAILS` / `BOOTSTRAP_ADMIN_EMAIL` | No | Confirmed addresses that sign in as admin |
+| `CORE_DATA_BACKUP_PATH` | Yes (prod) | Persistent file for admin backup / restore (`accounts.W003`) |
+| `NUM_PROXIES` / `TRUSTED_CLIENT_IP_HEADER` | Yes (prod) | Client IP behind the edge (throttles, question-bank limiter); check `GET /api/health/client-ip/` |
 | `SENTRY_DSN` | No | Enables Sentry init |
-| `DISABLE_RAG` | No | Set to `1` to skip RAG init |
-| `OLLAMA_MODEL` | No | Default `llama3.2:3b` |
+| `DISABLE_RAG` / `DISABLE_RAG_IN_PRODUCTION` | No | Set to `1` to skip RAG init |
 
 ### Frontend `.env.local`
 
@@ -508,12 +531,12 @@ flowchart LR
 | Decision | Rationale |
 |---|---|
 | **SQLite default** | Zero infra cost at low traffic; `dj_database_url` allows painless Postgres upgrade |
-| **11-provider AI pool** | No single-vendor dependency; combined free tier ~35K req/day |
-| **Ollama fallback** | Guarantees platform availability even with zero internet |
+| **10-entry AI provider rotation** | No single-vendor dependency; combined free tier ~35K req/day |
+| **Typed AI failure (`AIUnavailable`)** | No provider-error text is shown or stored; charges are refunded; `AI_OFFLINE_MODE` answers extractively without any provider |
 | **TF-IDF over vector embeddings** | No extra runtime cost, no model downloads |
 | **Fixture-first question workflow** | Reproducible deploys; PRs reviewed as JSON diffs |
 | **Token economy** | Aligns free-tier users with growth loop; pays for AI cost |
-| **Hybrid Supabase + Django JWT** | Modern Supabase auth UX + battle-tested Django permissions |
-| **Single-device session enforcement** | Anti-account-sharing for paid content |
+| **Supabase Auth + Django permissions** | Modern Supabase auth UX + battle-tested Django permissions; identities linked by `supabase_uid` |
+| **Device limit (2 free / 4 subscribed)** | Anti-account-sharing for paid content |
 | **Git LFS for PDFs + sqlite** | Avoids bloating git history with binary content |
 | **App-per-bounded-context** | Easy to spin out into microservices later if scale demands |
