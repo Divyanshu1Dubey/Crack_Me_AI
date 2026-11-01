@@ -17,6 +17,15 @@ Endpoints:
   subject/topic/exam.
 * `GET /api/analytics/search_analytics/` — top search queries
   (falls back to empty list if no log table exists).
+
+Cost: every endpoint reads one user's answer history (``_answer_events``).
+A request loads it once, for the widest window it needs, and derives the
+narrower windows from that load (``_window``); the dashboard used to load
+the whole history four times per request. Every result is cached per user
+for ``CACHE_TTL`` seconds, so a new answer shows up within a minute, and a
+dashboard miss also fills the sub-endpoints' entries it has computed.
+``?nocache=1`` recomputes only for admins / staff (it let anyone skip the
+cache). ``invalidate_user_cache`` drops one user's entries at once.
 """
 from __future__ import annotations
 
@@ -24,16 +33,43 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from questions.serializers import public_subject_name
+
 LOG = logging.getLogger(__name__)
 
+# Seconds a computed result is served from the cache: a new answer shows up
+# within a minute.
+CACHE_TTL = 60
+# The active bank's exam x year question counts (PYQ coverage totals) are
+# the same for every user: computed once per BANK_TOTALS_TTL seconds instead
+# of on every user's cache miss.
+BANK_TOTALS_TTL = 300
+PYQ_EXAMS = ("cms", "neet_pg", "ini_cet", "aiims_pg")
 
-def _answer_events(user, days: int | None = 90) -> list[dict]:
+# Answer-history windows, in days (None: all time).
+DASHBOARD_DAYS = 90   # accuracy, average time, weak subjects / topics
+TREND_DAYS = 60       # performance trend, subject heatmap
+PYQ_DAYS = 365        # PYQ coverage
+
+# One user's cached results: dashboard_v3:<name>:<user id>.
+CACHED_RESULTS = ("dashboard", "heatmap_subject", "revision_progress", "pyq_coverage", "average_time")
+_BANK_TOTALS_KEY = "dashboard_v3:bank_totals"
+
+_EVENT_FIELDS = ("question_id", "question__subject_id", "question__subject__name",
+                 "question__topic_id", "question__topic__name", "is_correct")
+# Read with the events (same join) for the PYQ coverage: no second query
+# with an IN list of every attempted question id.
+_QUESTION_FIELDS = ("question__exam_type", "question__year", "question__is_active")
+
+
+def _answer_events(user, days: int | None = 90, now=None) -> list[dict]:
     """Every answered question for the user in the window: test answers
     (``QuestionResponse`` on completed attempts, skipped ones excluded) and
     question-bank answers (``QuestionAttempt``).
@@ -41,44 +77,71 @@ def _answer_events(user, days: int | None = 90) -> list[dict]:
     This module used to query ``TestAttempt`` for per-question fields it does
     not have (``created_at``, ``is_correct``, ``question``…), so every
     endpoint here returned HTTP 500.
+
+    Besides the public keys each event carries ``_at``, the time the window
+    filters on (the test attempt's start / the bank answer's time), so a
+    narrower window can be cut from a wider load (``_window``), and
+    ``_question``, the question's (exam_type, year, is_active).
+
+    Events come in a fixed order -- test answers by attempt start, then
+    question; bank answers by question -- the order the queries' indexes
+    gave: ties between weak subjects / topics and a topic's subject name
+    (taken from its first event) no longer depend on the query plan.
     """
     from questions.models import QuestionAttempt, QuestionPracticeState
     from tests_engine.models import QuestionResponse
 
-    since = timezone.now() - timedelta(days=days) if days else None
-    fields = ("question_id", "question__subject_id", "question__subject__name",
-              "question__topic_id", "question__topic__name", "is_correct")
+    now = now or timezone.now()
+    since = now - timedelta(days=days) if days else None
+    fields = _EVENT_FIELDS
     events: list[dict] = []
 
     responses = QuestionResponse.objects.filter(
         attempt__user=user, attempt__is_completed=True, is_correct__isnull=False)
     if since:
         responses = responses.filter(attempt__started_at__gte=since)
-    for r in responses.values(*fields, "time_taken_seconds", "confidence_level",
+    responses = responses.order_by("attempt__started_at", "attempt_id", "question_id")
+    for r in responses.values(*fields, *_QUESTION_FIELDS, "time_taken_seconds", "confidence_level",
                               "attempt__completed_at", "attempt__started_at").iterator():
         events.append({
             **{k: r[k] for k in fields},
             "when": r["attempt__completed_at"] or r["attempt__started_at"],
             "seconds": r["time_taken_seconds"] or None,
             "confidence": r["confidence_level"] or None,
+            "_at": r["attempt__started_at"],
+            "_question": (r["question__exam_type"], r["question__year"], r["question__is_active"]),
         })
 
-    state = {
-        qid: (conf, secs) for qid, conf, secs in QuestionPracticeState.objects.filter(user=user)
-        .values_list("question_id", "confidence", "time_spent_seconds")
-    }
     attempts = QuestionAttempt.objects.filter(user=user)
     if since:
         attempts = attempts.filter(attempted_at__gte=since)
-    for a in attempts.values(*fields, "attempted_at").iterator():
+    # Practice state (confidence, time) only of the questions answered here:
+    # it used to load every practice-state row of the user, whatever the window.
+    state = {
+        qid: (conf, secs) for qid, conf, secs in QuestionPracticeState.objects
+        .filter(user=user, question_id__in=attempts.values("question_id"))
+        .values_list("question_id", "confidence", "time_spent_seconds")
+    }
+    for a in attempts.order_by("question_id").values(*fields, *_QUESTION_FIELDS, "attempted_at").iterator():
         conf, secs = state.get(a["question_id"], (None, None))
         events.append({
             **{k: a[k] for k in fields},
             "when": a["attempted_at"],
             "seconds": secs or None,
             "confidence": conf or None,
+            "_at": a["attempted_at"],
+            "_question": (a["question__exam_type"], a["question__year"], a["question__is_active"]),
         })
     return events
+
+
+def _window(events: list[dict], days: int | None, now) -> list[dict]:
+    """The events of the last ``days`` days of a wider load, in load order:
+    what ``_answer_events(user, days)`` returns, without another query."""
+    if not days:
+        return events
+    since = now - timedelta(days=days)
+    return [e for e in events if e["_at"] is not None and e["_at"] >= since]
 
 
 def _accuracy(user, events: list[dict] | None = None) -> dict:
@@ -115,7 +178,7 @@ def _weak_subjects(user, limit: int = 6, events: list[dict] | None = None) -> li
     for sid, g in _weak_groups(events, "question__subject_id", limit):
         out.append({
             "subject_id": sid,
-            "subject": g["first"]["question__subject__name"],
+            "subject": public_subject_name(g["first"]["question__subject__name"]),
             "attempts": g["n"],
             "mistakes": g["mistakes"],
             "mistake_rate_pct": round((g["mistakes"] / g["n"]) * 100, 1),
@@ -130,7 +193,7 @@ def _weak_topics(user, limit: int = 6, events: list[dict] | None = None) -> list
         out.append({
             "topic_id": tid,
             "topic": g["first"]["question__topic__name"],
-            "subject": g["first"]["question__subject__name"],
+            "subject": public_subject_name(g["first"]["question__subject__name"]),
             "attempts": g["n"],
             "mistakes": g["mistakes"],
             "mistake_rate_pct": round((g["mistakes"] / g["n"]) * 100, 1),
@@ -138,10 +201,10 @@ def _weak_topics(user, limit: int = 6, events: list[dict] | None = None) -> list
     return out
 
 
-def _performance_trend(user, days: int = 60) -> list:
-    """Daily accuracy pct — last 60 days (local dates)."""
+def _performance_trend(user, days: int = TREND_DAYS, events: list[dict] | None = None) -> list:
+    """Daily accuracy pct — last 60 days (local dates); ``events``: that window."""
     per_day: dict = defaultdict(lambda: {"n": 0, "correct": 0})
-    for e in _answer_events(user, days=days):
+    for e in (_answer_events(user, days=days) if events is None else events):
         if not e["when"]:
             continue
         day = timezone.localdate(e["when"])
@@ -155,15 +218,16 @@ def _performance_trend(user, days: int = 60) -> list:
     return out
 
 
-def _revision_progress(user) -> dict:
+def _revision_progress(user, events: list[dict] | None = None) -> dict:
     """Topic × confidence rating coverage.
 
     For every (topic, confidence=1..5; 0 = not rated), how many distinct
     questions the user has practised.  Used by the revision schedule UI.
+    ``events``: the whole history.
     """
     seen: dict = defaultdict(dict)  # topic -> {question_id: confidence}
     topics: dict = {}
-    for e in _answer_events(user, days=None):
+    for e in (_answer_events(user, days=None) if events is None else events):
         tid = e["question__topic_id"]
         if tid is None:
             continue
@@ -182,23 +246,40 @@ def _revision_progress(user) -> dict:
     return {"topics": out}
 
 
-def _pyq_coverage(user) -> dict:
-    """Exam × year grid showing attempted/total questions."""
+def _bank_totals() -> list[tuple]:
+    """``(exam_type, year, questions)`` of the active bank's PYQ exams, in
+    database order. The same for every user: cached for BANK_TOTALS_TTL."""
     from questions.models import Question
-    attempted_qids = {e["question_id"] for e in _answer_events(user, days=365)}
+
+    rows = _cache_get(_BANK_TOTALS_KEY)
+    if rows is None:
+        rows = [
+            (r["exam_type"], r["year"], r["t"])
+            for r in Question.objects.filter(is_active=True, exam_type__in=PYQ_EXAMS)
+            .values("exam_type", "year").annotate(t=Count("id"))
+        ]
+        _cache_set_many({_BANK_TOTALS_KEY: rows}, BANK_TOTALS_TTL)
+    return rows
+
+
+def _pyq_coverage(user, events: list[dict] | None = None) -> dict:
+    """Exam × year grid showing attempted/total questions (questions
+    answered in the last 365 days; ``events``: that window)."""
+    events = _answer_events(user, days=PYQ_DAYS) if events is None else events
     grid: dict = defaultdict(lambda: {"attempted": 0, "total": 0, "years": defaultdict(lambda: {"a": 0, "t": 0})})
-    qs = Question.objects.filter(is_active=True, exam_type__in=["cms", "neet_pg", "ini_cet", "aiims_pg"])
-    rows = qs.values("exam_type", "year").annotate(t=Count("id"))
-    for r in rows:
-        grid[r["exam_type"]]["total"] += r["t"]
-        grid[r["exam_type"]]["years"][r["year"]]["t"] += r["t"]
-    if attempted_qids:
-        a_rows = (qs.filter(id__in=attempted_qids)
-                    .values("exam_type", "year")
-                    .annotate(a=Count("id")))
-        for r in a_rows:
-            grid[r["exam_type"]]["attempted"] += r["a"]
-            grid[r["exam_type"]]["years"][r["year"]]["a"] += r["a"]
+    for exam, year, total in _bank_totals():
+        grid[exam]["total"] += total
+        grid[exam]["years"][year]["t"] += total
+    # Distinct answered questions that are active and of a PYQ exam (it was
+    # a second GROUP BY with `id IN (<every answered question id>)`).
+    answered = {e["question_id"]: e["_question"] for e in events}
+    attempted: dict = defaultdict(int)
+    for exam, year, is_active in answered.values():
+        if is_active and exam in PYQ_EXAMS:
+            attempted[(exam, year)] += 1
+    for (exam, year), count in attempted.items():
+        grid[exam]["attempted"] += count
+        grid[exam]["years"][year]["a"] += count
     serial = {}
     for exam, payload in grid.items():
         serial[exam] = {
@@ -210,14 +291,14 @@ def _pyq_coverage(user) -> dict:
     return serial
 
 
-def _heatmap_subject(user) -> dict:
-    """Subject × day-of-week accuracy matrix (last 60 days).
+def _heatmap_subject(user, events: list[dict] | None = None) -> dict:
+    """Subject × day-of-week accuracy matrix (last 60 days; ``events``: that window).
 
     Keys: subject id (string) → day of week as a string, 0 = Sunday … 6 =
     Saturday (the frontend's DAYS order) → {n, correct}.
     """
     matrix: dict = defaultdict(lambda: defaultdict(lambda: {"n": 0, "correct": 0}))
-    for e in _answer_events(user, days=60):
+    for e in (_answer_events(user, days=TREND_DAYS) if events is None else events):
         if not e["when"] or e["question__subject_id"] is None:
             continue
         local = timezone.localtime(e["when"])
@@ -226,6 +307,74 @@ def _heatmap_subject(user) -> dict:
         cell["n"] += 1
         cell["correct"] += 1 if e["is_correct"] else 0
     return {s: dict(days) for s, days in matrix.items()}
+
+
+def _dashboard(user) -> tuple[dict, dict]:
+    """The dashboard payload, and the sub-endpoint results it computes on
+    the way (by cache name), from one load of the whole history."""
+    now = timezone.now()
+    events = _answer_events(user, days=None, now=now)
+    recent = _window(events, DASHBOARD_DAYS, now)
+    trend_window = _window(events, TREND_DAYS, now)
+    average_time = _average_time(user, recent)
+    revision_progress = _revision_progress(user, events)
+    pyq_coverage = _pyq_coverage(user, _window(events, PYQ_DAYS, now))
+    payload = {
+        "accuracy": _accuracy(user, recent),
+        "average_time": average_time,
+        "weak_subjects": _weak_subjects(user, events=recent),
+        "weak_topics": _weak_topics(user, events=recent),
+        "performance_trend": _performance_trend(user, events=trend_window),
+        "revision_progress": revision_progress,
+        "pyq_coverage": pyq_coverage,
+        "generated_at": timezone.now().isoformat(),
+        "cache": "miss",
+    }
+    parts = {
+        "heatmap_subject": _heatmap_subject(user, trend_window),
+        "revision_progress": revision_progress,
+        "pyq_coverage": pyq_coverage,
+        "average_time": average_time,
+    }
+    return payload, parts
+
+
+# ─── Cache ────────────────────────────────────────────────────────────────
+
+
+def _cache_key(user_id, name: str) -> str:
+    return f"dashboard_v3:{name}:{user_id}"
+
+
+def _cache_get(key: str):
+    try:
+        return cache.get(key)
+    except Exception:  # pragma: no cover - cache backend hiccup
+        return None
+
+
+def _cache_set_many(values: dict, timeout: int = CACHE_TTL) -> None:
+    try:
+        cache.set_many(values, timeout)
+    except Exception:  # pragma: no cover - cache backend hiccup
+        pass
+
+
+def invalidate_user_cache(user_id) -> None:
+    """Drop every cached result of one user here (e.g. after a new answer)."""
+    try:
+        cache.delete_many([_cache_key(user_id, name) for name in CACHED_RESULTS])
+    except Exception:  # pragma: no cover - cache backend hiccup
+        LOG.debug("dashboard_v3 cache invalidation failed for user %s", user_id)
+
+
+def _fresh_requested(request) -> bool:
+    """``?nocache=1`` from an admin / staff user: recompute (for debugging).
+    Anyone else is served from the cache."""
+    user = request.user
+    return request.query_params.get("nocache") == "1" and bool(
+        getattr(user, "is_admin", False) or getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False))
 
 
 # ─── DRF views ────────────────────────────────────────────────────────────
@@ -237,65 +386,64 @@ class DashboardV3View(APIView):
 
     def get(self, request):
         user = request.user
-        # 60-second per-user cache — keeps the dashboard snappy when a
-        # user refreshes the page repeatedly.  Bypassed via
-        # `?nocache=1` for tests / debugging.
-        if request.query_params.get("nocache") != "1":
-            try:
-                from django.core.cache import cache
-                key = f"dashboard_v3:{user.id}"
-                payload = cache.get(key)
-                if payload is not None:
-                    payload["cache"] = "hit"
-                    return Response(payload)
-            except Exception:  # pragma: no cover - defensive
-                pass
-        events = _answer_events(user)
-        payload = {
-            "accuracy": _accuracy(user, events),
-            "average_time": _average_time(user, events),
-            "weak_subjects": _weak_subjects(user, events=events),
-            "weak_topics": _weak_topics(user, events=events),
-            "performance_trend": _performance_trend(user),
-            "revision_progress": _revision_progress(user),
-            "pyq_coverage": _pyq_coverage(user),
-            "generated_at": timezone.now().isoformat(),
-            "cache": "miss",
-        }
-        try:
-            from django.core.cache import cache
-            cache.set(f"dashboard_v3:{user.id}", payload, 60)
-        except Exception:  # pragma: no cover
-            pass
+        # Per-user cache (CACHE_TTL) — keeps the dashboard snappy when a
+        # user refreshes the page repeatedly; `cache` says "hit" / "miss".
+        key = _cache_key(user.id, "dashboard")
+        if not _fresh_requested(request):
+            payload = _cache_get(key)
+            if payload is not None:
+                payload["cache"] = "hit"
+                return Response(payload)
+        payload, parts = _dashboard(user)
+        _cache_set_many({key: payload, **{_cache_key(user.id, name): value for name, value in parts.items()}})
         return Response(payload)
 
 
-class HeatmapSubjectView(APIView):
+class _CachedUserResultView(APIView):
+    """A per-user result cached for CACHE_TTL under ``cache_name``."""
     permission_classes = [permissions.IsAuthenticated]
+    cache_name = ""
+
+    def compute(self, user):  # pragma: no cover - abstract
+        raise NotImplementedError
 
     def get(self, request):
-        return Response(_heatmap_subject(request.user))
+        key = _cache_key(request.user.id, self.cache_name)
+        if not _fresh_requested(request):
+            result = _cache_get(key)
+            if result is not None:
+                return Response(result)
+        result = self.compute(request.user)
+        _cache_set_many({key: result})
+        return Response(result)
 
 
-class RevisionProgressView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class HeatmapSubjectView(_CachedUserResultView):
+    cache_name = "heatmap_subject"
 
-    def get(self, request):
-        return Response(_revision_progress(request.user))
-
-
-class PYQCoverageView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        return Response(_pyq_coverage(request.user))
+    def compute(self, user):
+        return _heatmap_subject(user)
 
 
-class AverageTimeView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class RevisionProgressView(_CachedUserResultView):
+    cache_name = "revision_progress"
 
-    def get(self, request):
-        return Response(_average_time(request.user))
+    def compute(self, user):
+        return _revision_progress(user)
+
+
+class PYQCoverageView(_CachedUserResultView):
+    cache_name = "pyq_coverage"
+
+    def compute(self, user):
+        return _pyq_coverage(user)
+
+
+class AverageTimeView(_CachedUserResultView):
+    cache_name = "average_time"
+
+    def compute(self, user):
+        return _average_time(user)
 
 
 class SearchAnalyticsView(APIView):

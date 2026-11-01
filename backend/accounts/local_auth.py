@@ -8,7 +8,7 @@ production.
 
 Endpoints (mounted under /api/auth/local/ only when enabled):
   POST login/     {email|username, password}  -> {access, refresh, user}
-  POST register/  {email, username, password, first_name?, last_name?}
+  POST register/  {email, username?, password, first_name?, last_name?}
   POST refresh/   {refresh}                    -> {access, refresh?}
 """
 from __future__ import annotations
@@ -90,13 +90,14 @@ class _LocalRegisterSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
-        username = (data.get('username') or '').strip() or data['email'].split('@')[0]
-        base, suffix = username[:140], 1
-        while User.objects.filter(username=username).exists():
-            suffix += 1
-            username = f'{base}_{suffix}'
-        data['username'] = username
+        from .handles import username_for_new_account
+
         validate_password(data['password'])
+        # Public (discussions, leaderboard): the chosen name when it follows the
+        # Settings rules (3-30 letters, digits, _ or ., not a team name), made
+        # unique, or a generated learner_<hex> handle -- never the email's
+        # local part. Accounts made here are always students.
+        data['username'] = username_for_new_account(User, data.get('username'), data['email'])
         return data
 
 
