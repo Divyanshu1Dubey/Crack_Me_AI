@@ -50,6 +50,9 @@ export default function BatchDetail() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
+      <Link href="/admin/ingestion/batches" className="text-sm text-muted-foreground hover:text-foreground">
+        ← Batches
+      </Link>
       <h1 className="text-2xl font-bold break-words">
         Batch #{batch.id} — {batch.name}
       </h1>
@@ -57,7 +60,7 @@ export default function BatchDetail() {
         {batch.total_jobs} jobs · {batch.completed_jobs} completed · {batch.failed_jobs} failed
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full whitespace-nowrap text-sm">
           <thead>
             <tr className="text-left border-b">
               <th className="p-2">Job</th>
@@ -74,7 +77,11 @@ export default function BatchDetail() {
                     #{j.id}
                   </Link>
                 </td>
-                <td className="p-2 font-mono text-xs">{j.material_asset}</td>
+                <td className="p-2">
+                  <span className="block max-w-[18rem] truncate" title={j.material_filename || undefined}>
+                    {j.material_filename || `#${j.material_asset}`}
+                  </span>
+                </td>
                 <td className="p-2">{j.status}</td>
                 <td className="p-2">
                   {j.qa_v2_production_ready_pct ?? 0} / {j.qa_v2_needs_review_pct ?? 0} / {j.qa_v2_extraction_failure_pct ?? 0}

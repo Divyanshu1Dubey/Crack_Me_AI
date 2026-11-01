@@ -70,20 +70,21 @@ def _retire_test(test) -> str:
 def _record_batch_test_ids(batch_id: int, key: str, ids: Iterable[int], *, replace: bool) -> None:
     """Persist the ids of tests built for a batch in ``ImportBatch.summary[key]``.
 
-    Uses a queryset ``update`` so it never overwrites other batch fields
-    (status, counters) that a concurrent writer may have changed.
+    Read-modify-write under the batch row lock (``batch_state``), so it
+    never overwrites other batch fields (status, counters) or summary keys
+    (e.g. a running publish's heartbeat) that a concurrent writer changed.
     """
-    from .models import ImportBatch
+    from .batch_state import update_batch_summary
 
-    batch = ImportBatch.objects.filter(id=batch_id).only("id", "summary").first()
-    if batch is None:
-        return
-    summary = dict(batch.summary or {})
     new_ids = {int(i) for i in ids}
-    if not replace:
-        new_ids |= {int(i) for i in (summary.get(key) or []) if str(i).isdigit()}
-    summary[key] = sorted(new_ids)
-    ImportBatch.objects.filter(id=batch_id).update(summary=summary)
+
+    def _merge(summary: dict) -> None:
+        merged = set(new_ids)
+        if not replace:
+            merged |= {int(i) for i in (summary.get(key) or []) if str(i).isdigit()}
+        summary[key] = sorted(merged)
+
+    update_batch_summary(batch_id, _merge)
 
 
 def _published_question_ids(eq_ids: Iterable[int], limit: int | None = None) -> list[int]:

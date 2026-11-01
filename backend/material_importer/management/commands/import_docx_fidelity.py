@@ -2,17 +2,33 @@
 
 Usage:
     python manage.py import_docx_fidelity <file_or_folder> [--publish] [--report PATH]
+        [--rollback [--remove-published]]
 
 Wraps:
     1. `ingest_path(...)` — parse DOCX/PDF/PPTX/TXT, persist staging rows.
     2. `publish_batch_and_build_tests(batch_id)` — promote approved rows
        into the live `Question` bank and build auto-tests.
 
+``--rollback`` first rolls back every earlier batch that imported the same
+file(s) (matched by sha256): their staging rows and auto-tests are removed,
+but the questions they already published STAY LIVE in the bank (only the
+staging link is dropped). That was this command's behaviour before the
+Import Center rollback learnt to remove published questions; a re-import
+publishes only rows that are approved again, so removing the old questions
+here would empty the bank until the replacement is reviewed.
+
+``--remove-published`` (with ``--rollback``) also takes the old batches'
+published questions out of the bank (soft delete + RemovedQuestion
+tombstone, like the admin "Remove from bank" action). The tombstones make
+the recall importers and ``load_exam_fixture`` skip those stems from then
+on. Use it only when the old questions must disappear now.
+
 Writes a JSON report. Backward-compatible: doesn't replace the existing
 ``questions/import_mocktests`` command.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -23,6 +39,7 @@ from django.core.management.base import BaseCommand, CommandError
 from material_importer.ingest_service import ingest_path
 from material_importer.mock_test_builder import (
     delete_batch,
+    publish_batch,
     publish_batch_and_build_tests,
 )
 
@@ -38,39 +55,81 @@ class Command(BaseCommand):
         parser.add_argument("--use-ai", action="store_true", help="Run AI classification per question.")
         parser.add_argument("--max-files", type=int, default=None, help="Cap on number of files to ingest.")
         parser.add_argument("--report", default="import_docx_fidelity_report.json", help="Path to write the JSON report.")
-        parser.add_argument("--rollback", action="store_true", help="If a previous batch exists for this path (by sha256), delete it before re-importing.")
+        parser.add_argument(
+            "--rollback", action="store_true",
+            help=("Before re-importing, roll back every earlier batch that imported the same file(s) "
+                  "(matched by sha256). Their published questions stay live; see --remove-published."),
+        )
+        parser.add_argument(
+            "--remove-published", action="store_true",
+            help=("With --rollback: also remove the rolled-back batches' published questions from the bank "
+                  "(soft delete + tombstone). They are NOT replaced until the re-import is approved and published."),
+        )
         parser.add_argument("--force", action="store_true", help="Bypass cross-batch dedup (P1 escape hatch). Use for fidelity upgrades or deliberate re-imports.")
+
+    @staticmethod
+    def _sha256(path: str) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _rollback_previous(self, path: str, *, remove_published: bool) -> list[dict]:
+        """Roll back every earlier batch that imported one of the files at ``path``."""
+        from material_importer.models import ImportMaterial
+
+        if os.path.isfile(path):
+            files = [path]
+        else:
+            files = [os.path.join(root, fn) for root, _dirs, names in os.walk(path) for fn in names]
+        batch_ids: dict[int, str] = {}
+        for fp in files:
+            try:
+                sha = self._sha256(fp)
+            except OSError:
+                continue
+            for batch_id in (ImportMaterial.objects.filter(file_sha256=sha)
+                             .values_list("batch_id", flat=True).distinct()):
+                batch_ids.setdefault(batch_id, os.path.basename(fp))
+
+        from django.utils import timezone
+        from material_importer.batch_state import set_summary_key
+        from material_importer.models import ImportAuditLog, ImportBatch
+
+        results = []
+        for batch_id, fn in sorted(batch_ids.items()):
+            result = delete_batch(batch_id, delete_published=remove_published)
+            # Mark the old batch rolled back, as the Import Center rollback does.
+            set_summary_key(batch_id, "rollback", result)
+            now = timezone.now()
+            ImportBatch.objects.filter(pk=batch_id).update(status="cancelled", finished_at=now, updated_at=now)
+            ImportAuditLog.objects.create(
+                batch_id=batch_id, level="warning", code="rollback",
+                message=f"Rolled back by import_docx_fidelity --rollback: {result}",
+            )
+            kept = len(result.get("published_question_ids") or [])
+            if remove_published:
+                note = f"{result.get('published_questions_removed', 0)} published question(s) removed from the bank"
+            else:
+                note = f"{kept} published question(s) kept live"
+            self.stdout.write(self.style.WARNING(f"Rolled back batch {batch_id} (file {fn}): {note}"))
+            results.append({"batch_id": batch_id, **result})
+        return results
 
     def handle(self, *args, **opts):
         path = os.path.abspath(opts["path"])
         if not os.path.exists(path):
             raise CommandError(f"Path not found: {path}")
+        if opts["remove_published"] and not opts["rollback"]:
+            raise CommandError("--remove-published only applies together with --rollback.")
 
         started = time.time()
         self.stdout.write(self.style.NOTICE(f"Ingesting: {path}"))
 
+        rollbacks: list[dict] = []
         if opts["rollback"]:
-            from material_importer.models import ImportBatch, ImportMaterial
-            import hashlib as _hl
-            if os.path.isfile(path):
-                fp = path
-                sha = _hl.sha256(open(fp, "rb").read()).hexdigest()
-                mat = ImportMaterial.objects.filter(file_sha256=sha).first()
-                if mat:
-                    self.stdout.write(self.style.WARNING(f"Rolling back batch {mat.batch_id} (matched by file_sha256)"))
-                    delete_batch(mat.batch_id, delete_published=True)
-            elif os.path.isdir(path):
-                for root, _dirs, files in os.walk(path):
-                    for fn in files:
-                        fp = os.path.join(root, fn)
-                        try:
-                            sha = _hl.sha256(open(fp, "rb").read()).hexdigest()
-                        except OSError:
-                            continue
-                        mat = ImportMaterial.objects.filter(file_sha256=sha).first()
-                        if mat:
-                            self.stdout.write(self.style.WARNING(f"Rolling back batch {mat.batch_id} (file {fn})"))
-                            delete_batch(mat.batch_id, delete_published=True)
+            rollbacks = self._rollback_previous(path, remove_published=opts["remove_published"])
 
         batch = ingest_path(
             path,
@@ -96,11 +155,15 @@ class Command(BaseCommand):
             "duration_ms": int((time.time() - started) * 1000),
             "warnings": [],
             "errors": batch.error_report or [],
+            "rolled_back": rollbacks,
         }
 
         if opts["publish"]:
             pub_started = time.time()
-            res = publish_batch_and_build_tests(batch.id)
+            if opts["no_build"]:  # publish only (the flag used to be ignored)
+                res = {"published": publish_batch(batch.id), "tests_built": 0}
+            else:
+                res = publish_batch_and_build_tests(batch.id)
             report["tests_built"] = res.get("tests_built", 0)
             report["published"] = res.get("published", 0)
             report["publish_duration_ms"] = int((time.time() - pub_started) * 1000)

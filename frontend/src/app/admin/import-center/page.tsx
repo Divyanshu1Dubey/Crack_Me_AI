@@ -28,12 +28,12 @@ type Dashboard = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: 'bg-yellow-100 text-yellow-800',
-  processing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  partial: 'bg-orange-100 text-orange-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  queued: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  partial: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export default function ImportCenterHome() {
@@ -64,7 +64,7 @@ export default function ImportCenterHome() {
   }
   if (error) {
     return (
-      <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+      <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
         {error}
       </div>
     );
@@ -81,7 +81,12 @@ export default function ImportCenterHome() {
         <Tile label="Duplicate Rate" value={`${(stats.duplicate_rate * 100).toFixed(1)}%`} accent="text-purple-600" />
         <Tile label="Image Questions" value={stats.image_questions} />
         <Tile label="Subjects" value={stats.subjects_count} />
-        <Tile label="Pending Reviews" value={stats.pending_reviews} accent="text-rose-600" />
+        <Tile
+          label="Awaiting Decision"
+          hint="pending + needs review"
+          value={stats.pending_reviews}
+          accent="text-rose-600"
+        />
       </section>
 
       <section className="rounded border border-border bg-card p-4">
@@ -99,7 +104,7 @@ export default function ImportCenterHome() {
             href="/admin/import-center/review"
             className="rounded border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
           >
-            ✅ Review Queue ({stats.pending_reviews})
+            ✅ Review Queue ({stats.total_needs_review})
           </Link>
           <Link
             href="/admin/import-center/batches"
@@ -122,7 +127,7 @@ export default function ImportCenterHome() {
           <div className="text-sm text-muted-foreground">No uploads yet — start by uploading a DOCX file.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3">
               <thead>
                 <tr className="border-b text-left">
                   <th className="py-2">Batch</th>
@@ -159,11 +164,12 @@ export default function ImportCenterHome() {
   );
 }
 
-function Tile({ label, value, accent }: { label: string; value: string | number; accent?: string }) {
+function Tile({ label, value, accent, hint }: { label: string; value: string | number; accent?: string; hint?: string }) {
   return (
     <div className="rounded border border-border bg-card p-4">
       <div className="text-xs uppercase text-muted-foreground">{label}</div>
       <div className={`mt-1 text-2xl font-bold ${accent || ''}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }

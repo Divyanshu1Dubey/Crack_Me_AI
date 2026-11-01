@@ -10,6 +10,7 @@ type Result = {
   id: number;
   material: number;
   material_filename: string;
+  batch_id: number;
   question_text: string;
   correct_answer: string;
   inferred_subject: string;
@@ -58,29 +59,39 @@ export default function SearchPage() {
       </header>
 
       <input
-        type="text"
+        type="search"
         value={term}
         onChange={(e) => setTerm(e.target.value)}
         placeholder="Search the staging area…"
+        aria-label="Search imported questions"
         className="block w-full rounded border border-border bg-background px-4 py-2 text-sm"
         autoFocus
       />
 
-      {error && <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+          {error}
+        </div>
+      )}
 
-      {loading ? (
+      {!term.trim() ? (
+        <div className="text-sm text-muted-foreground">Type to search imported questions.</div>
+      ) : loading ? (
         <div className="text-sm text-muted-foreground">Searching…</div>
-      ) : term && results.length === 0 ? (
+      ) : error ? null : results.length === 0 ? (
         <div className="text-sm text-muted-foreground">No matches.</div>
       ) : (
         <section className="rounded border border-border bg-card p-4">
-          <div className="mb-3 text-xs text-muted-foreground">{count} match(es)</div>
+          <div className="mb-3 text-xs text-muted-foreground">
+            {count} {count === 1 ? 'match' : 'matches'}
+            {count > results.length ? ` (showing the newest ${results.length})` : ''}
+          </div>
           <ul className="space-y-2">
             {results.map((r) => (
               <li key={r.id} className="rounded border border-border bg-background p-3 text-sm">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    Batch <Link href={`/admin/import-center/batches/${r.material}`} className="hover:underline">#{r.material}</Link>
+                    Batch <Link href={`/admin/import-center/batches/${r.batch_id}`} className="hover:underline">#{r.batch_id}</Link>
                     {' · '}
                     {r.inferred_subject || '—'}
                     {' → '}

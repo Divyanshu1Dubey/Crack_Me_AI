@@ -6,10 +6,15 @@ queue and is skipped (re-dispatching it would let two tasks process the
 same job); pass ``--redispatch`` to dispatch those again as well, e.g.
 after the queue was purged. The orchestrator also claims each job
 atomically, so a duplicate task is a no-op.
+
+Before dispatching, processing jobs whose worker died (no update for longer
+than the django-q timeout) are marked ``crashed`` — see
+``ingestion_sweep_stale``; pass ``--no-sweep`` to skip that.
 """
 from django.core.management.base import BaseCommand
 
 from ingestion.models import ImportJob
+from ingestion.orchestrator import sweep_stale_processing_jobs
 from ingestion.tasks import dispatch_job
 
 
@@ -21,8 +26,19 @@ class Command(BaseCommand):
             "--redispatch", action="store_true",
             help="Also re-dispatch queued jobs that already have a task id.",
         )
+        parser.add_argument(
+            "--no-sweep", action="store_true",
+            help="Do not mark stale processing jobs (worker lost) as crashed first.",
+        )
 
     def handle(self, *args, **options):
+        if not options["no_sweep"]:
+            swept = sweep_stale_processing_jobs()
+            if swept:
+                self.stdout.write(self.style.WARNING(
+                    f"Marked {len(swept)} stale processing job(s) crashed: "
+                    + ", ".join(f"#{i}" for i in swept)
+                ))
         pending = ImportJob.objects.filter(status="queued").order_by("created_at")[:200]
         count = skipped = 0
         for job in pending:

@@ -2,6 +2,7 @@
 
 // /admin/ingestion/batches — batch list.
 // Client component so the request carries the admin's auth token.
+// Status and the job counts are computed by the API from the batch's jobs.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -32,14 +33,19 @@ export default function BatchesPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Batches</h1>
+      <div>
+        <Link href="/admin/ingestion" className="text-sm text-muted-foreground hover:text-foreground">
+          ← Ingestion
+        </Link>
+        <h1 className="mt-1 text-2xl font-bold">Batches</h1>
+      </div>
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading batches…</p>
       ) : batches.length === 0 ? (
         <p className="text-sm text-muted-foreground">No batches yet.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full whitespace-nowrap text-sm">
             <thead>
               <tr className="text-left border-b">
                 <th className="p-2">ID</th>
@@ -48,6 +54,7 @@ export default function BatchesPage() {
                 <th className="p-2">Total</th>
                 <th className="p-2">Completed</th>
                 <th className="p-2">Failed</th>
+                <th className="p-2">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -58,11 +65,16 @@ export default function BatchesPage() {
                       #{b.id}
                     </Link>
                   </td>
-                  <td className="p-2">{b.name}</td>
+                  <td className="p-2">
+                    <span className="block max-w-[18rem] truncate" title={b.name}>{b.name}</span>
+                  </td>
                   <td className="p-2">{b.status}</td>
                   <td className="p-2">{b.total_jobs}</td>
                   <td className="p-2">{b.completed_jobs}</td>
                   <td className="p-2">{b.failed_jobs}</td>
+                  <td className="p-2 text-muted-foreground">
+                    {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

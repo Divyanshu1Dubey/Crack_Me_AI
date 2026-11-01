@@ -4,6 +4,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { importCenterAPI } from '@/lib/api';
@@ -72,12 +73,24 @@ type Material = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: 'bg-yellow-100 text-yellow-800',
-  processing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  partial: 'bg-orange-100 text-orange-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  queued: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  partial: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  // material parse_status values
+  parsed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  skipped: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+};
+
+// Alert boxes, light + dark.
+const ALERT = {
+  error: 'border-red-300 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300',
+  warn: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300',
+  info: 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300',
+  ok: 'border-green-300 bg-green-50 text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300',
 };
 
 export default function BatchDetailPage() {
@@ -169,6 +182,14 @@ export default function BatchDetailPage() {
   const publishStale =
     publishState?.state === 'running' && !!lastBeat && Date.now() - new Date(lastBeat).getTime() > 30 * 60 * 1000;
   const publishing = publishState?.state === 'running' && !publishStale;
+  // A cancelled batch can still publish what it staged before the cancel;
+  // a rolled-back one has nothing left (the API answers 409 for both cases
+  // when there is nothing to publish).
+  const rolledBack = Boolean(batch.summary?.rollback);
+  const canPublish =
+    batch.status === 'completed' ||
+    batch.status === 'partial' ||
+    (batch.status === 'cancelled' && !rolledBack && batch.materials_count > 0);
 
   return (
     <div className="space-y-6">
@@ -190,7 +211,7 @@ export default function BatchDetailPage() {
           </button>
           <button
             type="button"
-            disabled={(batch.status !== 'completed' && batch.status !== 'partial') || publishing || actionPending === 'publish'}
+            disabled={!canPublish || publishing || actionPending === 'publish'}
             onClick={() => doAction('publish')}
             className="rounded bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
@@ -220,11 +241,11 @@ export default function BatchDetailPage() {
       </header>
 
       {actionError && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{actionError}</div>
+        <div className={`rounded border p-3 text-sm ${ALERT.error}`}>{actionError}</div>
       )}
 
       {live && batch.is_stale && (
-        <div className="rounded border border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
+        <div className={`rounded border p-3 text-sm ${ALERT.warn}`}>
           No progress for over 30 minutes — the background parse has probably stopped (for example after a
           server restart). Cancel this batch and upload the files again.
         </div>
@@ -233,11 +254,7 @@ export default function BatchDetailPage() {
       {publishState && (
         <div
           className={`rounded border p-3 text-sm ${
-            publishState.state === 'failed' || publishStale
-              ? 'border-red-300 bg-red-50 text-red-800'
-              : publishing
-                ? 'border-blue-300 bg-blue-50 text-blue-800'
-                : 'border-green-300 bg-green-50 text-green-800'
+            publishState.state === 'failed' || publishStale ? ALERT.error : publishing ? ALERT.info : ALERT.ok
           }`}
         >
           {publishing && (
@@ -298,7 +315,7 @@ export default function BatchDetailPage() {
           <div className="text-sm text-muted-foreground">No materials recorded yet.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3">
               <thead>
                 <tr className="border-b text-left">
                   <th className="py-2">Filename</th>
@@ -383,9 +400,9 @@ export default function BatchDetailPage() {
       </section>
 
       {batch.error_report && batch.error_report.length > 0 && (
-        <section className="rounded border border-red-300 bg-red-50 p-4">
-          <h3 className="mb-2 font-semibold text-red-700">Errors ({batch.error_report.length})</h3>
-          <ul className="space-y-1 text-xs text-red-800">
+        <section className={`rounded border p-4 ${ALERT.error}`}>
+          <h3 className="mb-2 font-semibold">Errors ({batch.error_report.length})</h3>
+          <ul className="space-y-1 text-xs">
             {batch.error_report.slice(0, 20).map((e: any, i: number) => (
               <li key={i}>
                 <code>{e.file}</code>: {e.error}
@@ -441,13 +458,15 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
     }
   };
 
-  return (
+  // Portal: the app shell's .main-content has `contain: layout`, which would
+  // make this fixed overlay position against the content box, not the viewport.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded border border-border bg-card p-6">
         <h3 className="mb-4 text-lg font-semibold">Generate Mock Test</h3>
         {result ? (
           <div className="space-y-3">
-            <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+            <div className={`rounded border p-3 text-sm ${ALERT.ok}`}>
               Created <strong>{result.test_title}</strong> with {result.question_count} questions.
             </div>
             <div className="flex justify-end gap-2">
@@ -493,7 +512,7 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
                 <option value="hard">Hard</option>
               </select>
             </label>
-            {err && <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{err}</div>}
+            {err && <div className={`rounded border p-2 text-sm ${ALERT.error}`}>{err}</div>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="rounded border border-border px-4 py-1.5 text-sm">
                 Cancel
@@ -505,6 +524,7 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -82,17 +82,21 @@ def validate_source_dir(raw) -> Path | None:
 
 
 class ImportJobListView(generics.ListAPIView):
-    """List recall PDF import jobs (GET) and start an import run (POST)."""
+    """List recall PDF import jobs (GET) and start an import run (POST).
+
+    GET is paginated with the project default (``count`` / ``next`` /
+    ``results``; 20 per page, ``?page_size=`` up to 100), newest first.
+    The serializer leaves out ``stored_file_path`` and ``created_by``.
+    """
     permission_classes = [IsControlTowerAdmin]
     serializer_class = QuestionImportJobSerializer
-    pagination_class = None  # simple list, paginate client-side if needed
     task_path = NEETPG_TASK
 
     def get_queryset(self):
         return (
             QuestionImportJob.objects
             .filter(job_type="pdf")
-            .order_by("-created_at")[:200]
+            .order_by("-created_at", "-id")
         )
 
     def post(self, request, *args, **kwargs):

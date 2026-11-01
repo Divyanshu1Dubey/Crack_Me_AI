@@ -4,6 +4,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { importCenterAPI } from '@/lib/api';
 
@@ -11,6 +12,7 @@ type Question = {
   id: number;
   material: number;
   material_filename: string;
+  batch_id: number;
   position_index: number;
   question_text: string;
   option_a: string;
@@ -29,12 +31,12 @@ type Question = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-  published: 'bg-blue-100 text-blue-800',
-  duplicate: 'bg-gray-100 text-gray-800',
-  needs_review: 'bg-orange-100 text-orange-800',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  rejected: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  published: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+  duplicate: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  needs_review: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
 };
 
 export default function ReviewQueuePage() {
@@ -150,7 +152,7 @@ export default function ReviewQueuePage() {
           <div className="text-sm text-muted-foreground">No questions match these filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3">
               <thead>
                 <tr className="border-b text-left">
                   <th className="py-2 w-8">
@@ -178,8 +180,8 @@ export default function ReviewQueuePage() {
                       {q.image_count > 0 && <span className="ml-1 text-xs">🖼️ {q.image_count}</span>}
                     </td>
                     <td className="py-2 text-xs">
-                      <Link href={`/admin/import-center/batches/${q.material}`} className="hover:underline">
-                        #{q.material}
+                      <Link href={`/admin/import-center/batches/${q.batch_id}`} className="hover:underline">
+                        Batch #{q.batch_id}
                       </Link>
                       <div className="truncate text-muted-foreground" title={q.material_filename}>{q.material_filename}</div>
                     </td>
@@ -194,9 +196,9 @@ export default function ReviewQueuePage() {
                     </td>
                     <td className="py-2 text-right">
                       <div className="flex justify-end gap-1">
-                        <button type="button" title="Approve" onClick={() => decideOne(q.id, 'approve')} className="rounded border border-green-300 px-2 py-0.5 text-xs text-green-700 hover:bg-green-50">✓</button>
-                        <button type="button" title="Reject" onClick={() => decideOne(q.id, 'reject')} className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50">✕</button>
-                        <button type="button" title="Reset" onClick={() => decideOne(q.id, 'reset')} className="rounded border border-border px-2 py-0.5 text-xs">↺</button>
+                        <button type="button" title="Approve" aria-label={`Approve question ${q.id}`} onClick={() => decideOne(q.id, 'approve')} className="rounded border border-green-300 px-2 py-0.5 text-xs text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-500/10">✓</button>
+                        <button type="button" title="Reject" aria-label={`Reject question ${q.id}`} onClick={() => decideOne(q.id, 'reject')} className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">✕</button>
+                        <button type="button" title="Reset" aria-label={`Reset question ${q.id}`} onClick={() => decideOne(q.id, 'reset')} className="rounded border border-border px-2 py-0.5 text-xs">↺</button>
                       </div>
                     </td>
                   </tr>
@@ -230,7 +232,9 @@ function PreviewDrawer({ id, onClose, onDecide }: { id: number; onClose: () => v
     return () => { mounted = false; };
   }, [id]);
 
-  return (
+  // Portal: the app shell's .main-content has `contain: layout`, which would
+  // make this fixed drawer position against the content box, not the viewport.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div className="h-full w-full max-w-2xl overflow-y-auto bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         {!data ? (
@@ -251,9 +255,9 @@ function PreviewDrawer({ id, onClose, onDecide }: { id: number; onClose: () => v
                 if (!text) return null;
                 const isCorrect = data.correct_answer?.toUpperCase() === opt.toUpperCase();
                 return (
-                  <div key={opt} className={`rounded border p-2 text-sm ${isCorrect ? 'border-green-500 bg-green-50' : 'border-border'}`}>
+                  <div key={opt} className={`rounded border p-2 text-sm ${isCorrect ? 'border-green-500! bg-green-50 dark:bg-green-500/10' : 'border-border'}`}>
                     <span className="font-bold uppercase">{opt}.</span> {text}
-                    {isCorrect && <span className="ml-1 text-xs text-green-700">✓ correct</span>}
+                    {isCorrect && <span className="ml-1 text-xs text-green-700 dark:text-green-400">✓ correct</span>}
                   </div>
                 );
               })}
@@ -275,6 +279,7 @@ function PreviewDrawer({ id, onClose, onDecide }: { id: number; onClose: () => v
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

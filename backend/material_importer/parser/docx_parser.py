@@ -235,14 +235,25 @@ def _docx_read(path: str):
          we have seen in the wild for ``merged_notes-document (1).docx`` and
          similar — retry with a hand-rolled XML extractor that only walks
          ``<w:p>`` / ``<w:tbl>`` and tolerates unknown namespace prefixes.
-      3. Anything else propagates and turns into a ParsedDocument.errors entry.
+      3. If ``python-docx`` is not installed at all, use that same XML
+         extractor (plain paragraphs + tables) instead of failing every DOCX.
+      4. Anything else propagates and turns into a ParsedDocument.errors entry.
     """
     with open(path, "rb") as fh:
         raw = fh.read()
     try:
         from docx import Document  # python-docx is heavy — import lazily
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"python-docx is required for DOCX parsing ({exc})") from exc
+    except ImportError:
+        # The XML extractor returns nothing (rather than raising) for a file
+        # that is not a DOCX, so check the container first.
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                if "word/document.xml" not in z.namelist():
+                    raise RuntimeError("not a DOCX file: word/document.xml is missing")
+        except zipfile.BadZipFile as exc:
+            raise RuntimeError(f"not a DOCX file ({exc})") from exc
+        paragraphs, tables = _docx_read_xml_fallback(raw)
+        return paragraphs, tables, raw, True
 
     try:
         doc = Document(io.BytesIO(raw))
@@ -835,7 +846,10 @@ class DOCXParser:
         fidelity_table_block_indexes: List[int] = [b.paragraph_index for b in fidelity_blocks if b.table is not None]
         doc.meta["fidelity_block_count"] = len(fidelity_blocks)
         if used_xml_fallback:
-            doc.warnings.append("xml_fallback_used: namespace-tolerant XML extractor used (python-docx could not parse)")
+            doc.warnings.append(
+                "xml_fallback_used: plain XML extractor used "
+                "(python-docx is not installed or could not parse this file)"
+            )
             doc.parser_used = "docx.xml_fallback"
         if detected == "mcq_boxed":
             doc.questions = self.boxed_fidelity.extract(fidelity_tables, warnings_out=doc.warnings, block_paragraph_indexes=fidelity_table_block_indexes)

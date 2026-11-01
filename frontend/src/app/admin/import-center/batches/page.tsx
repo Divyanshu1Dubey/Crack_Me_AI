@@ -1,4 +1,5 @@
 // /admin/import-center/batches — paginated list of every import batch.
+// The API pages by 20 (DRF PageNumberPagination: count / next / results).
 
 'use client';
 
@@ -26,32 +27,42 @@ type Batch = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: 'bg-yellow-100 text-yellow-800',
-  processing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  partial: 'bg-orange-100 text-orange-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  queued: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  partial: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
 };
+
+const PAGE_SIZE = 20;
 
 export default function BatchesListPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       setLoading(true);
       try {
-        const params: Record<string, string> = {};
+        const params: Record<string, string | number> = { page, page_size: PAGE_SIZE };
         if (status) params.status = status;
         const r = await importCenterAPI.listBatches(params);
         const data = r.data;
         const list = Array.isArray(data) ? data : data.results || [];
-        if (mounted) setBatches(list);
+        if (mounted) {
+          setBatches(list);
+          setCount(Array.isArray(data) ? list.length : data.count ?? list.length);
+        }
       } catch {
-        if (mounted) setBatches([]);
+        if (mounted) {
+          setBatches([]);
+          setCount(0);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -60,15 +71,19 @@ export default function BatchesListPage() {
     return () => {
       mounted = false;
     };
-  }, [status]);
+  }, [status, page]);
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold">Import Batches</h2>
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+          aria-label="Filter by status"
           className="rounded border border-border bg-background px-3 py-1.5 text-sm"
         >
           <option value="">All statuses</option>
@@ -88,7 +103,7 @@ export default function BatchesListPage() {
           <div className="text-sm text-muted-foreground">No batches match this filter.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3">
               <thead>
                 <tr className="border-b text-left">
                   <th className="py-2">ID</th>
@@ -130,6 +145,32 @@ export default function BatchesListPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {count > PAGE_SIZE && (
+          <div className="mt-3 flex items-center justify-between text-xs">
+            <span>
+              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, count)} of {count}
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => p - 1)}
+                className="rounded border border-border px-2 py-1 disabled:opacity-50"
+              >
+                ‹ Prev
+              </button>
+              <button
+                type="button"
+                disabled={page * PAGE_SIZE >= count || loading}
+                onClick={() => setPage((p) => p + 1)}
+                className="rounded border border-border px-2 py-1 disabled:opacity-50"
+              >
+                Next ›
+              </button>
+            </div>
           </div>
         )}
       </section>

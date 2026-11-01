@@ -157,7 +157,7 @@ export default function TextbooksPage() {
                         <div className="relative mb-6">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
                             <input
-                                className="input-field pl-10 w-full"
+                                className="input-field pl-10! w-full"
                                 placeholder="Search textbooks..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
@@ -220,7 +220,9 @@ export default function TextbooksPage() {
                                                 <div>
                                                     <h3 className="font-bold text-sm leading-tight">{book.name}</h3>
                                                     <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{book.author}</p>
-                                                    <span className="badge text-xs mt-2" style={{ background: `${book.color}10`, color: book.color }}>
+                                                    {/* Text mixed halfway toward the foreground: the raw -400/-500 accent
+                                                        failed contrast on its own 6% tint (light mode; slate in dark). */}
+                                                    <span className="badge text-xs mt-2" style={{ background: `${book.color}10`, color: `color-mix(in srgb, ${book.color} 50%, var(--color-foreground))` }}>
                                                         {book.subject}
                                                     </span>
                                                 </div>

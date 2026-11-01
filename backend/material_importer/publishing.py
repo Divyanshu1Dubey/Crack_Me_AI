@@ -81,7 +81,12 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
         return False
     # Lock the staging row and re-check: two overlapping publishes (a re-click
     # on a slow batch, admin action + API) must not both create a Question.
+    # The no-op UPDATE takes the row lock on PostgreSQL and the database write
+    # lock on SQLite, where select_for_update is ignored; a concurrent publish
+    # of the same row waits here and then sees the committed link.
+    from django.db.models import F
     from .models import ExtractedQuestion as _EQ
+    _EQ.objects.filter(pk=eq.pk).update(status=F("status"))
     locked = _EQ.objects.select_for_update().filter(pk=eq.pk).values_list(
         "published_question_id", flat=True,
     ).first()

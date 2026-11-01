@@ -184,7 +184,10 @@ class RecallApiTests(TestCase):
         self.client.force_authenticate(self.admin)
         r = self.client.get("/api/imports/neetpg/jobs/")
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.data[0]["id"], self.job.id)
+        # Paginated (count / next / results); /admin/recall reads `results`.
+        self.assertEqual(r.data["count"], 1)
+        self.assertEqual(r.data["results"][0]["id"], self.job.id)
+        self.assertNotIn("stored_file_path", r.data["results"][0])
         r = self.client.get(f"/api/imports/neetpg/jobs/{self.job.id}/")
         self.assertEqual(r.status_code, 200)
         self.assertNotIn("stored_file_path", r.data)

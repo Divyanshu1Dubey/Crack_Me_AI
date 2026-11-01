@@ -74,6 +74,9 @@ class ExtractedQuestionListSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True, default="")
     topic_name = serializers.CharField(source="topic.name", read_only=True, default="")
     material_filename = serializers.CharField(source="material.original_filename", read_only=True)
+    # The batch the row belongs to (``material`` is the file id, not a batch
+    # id; the review / search pages link to the batch page with this).
+    batch_id = serializers.IntegerField(source="material.batch_id", read_only=True)
     image_count = serializers.SerializerMethodField()
     needs_review_marker = serializers.SerializerMethodField()
 
@@ -83,6 +86,7 @@ class ExtractedQuestionListSerializer(serializers.ModelSerializer):
             "id",
             "material",
             "material_filename",
+            "batch_id",
             "position_index",
             "question_text",
             "option_a",

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ingestionAPI } from "@/lib/api";
 import JobActions from "./JobActions";
+import { examLabel, stageLabel } from "../../labels";
 
 export default function JobDetail() {
   const params = useParams<{ id: string }>();
@@ -63,16 +64,22 @@ export default function JobDetail() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-bold break-words">
-          Job #{job.id} — {job.parent_exam} v{job.version}
+        <Link href="/admin/ingestion/jobs" className="text-sm text-muted-foreground hover:text-foreground">
+          ← Jobs
+        </Link>
+        <h1 className="mt-1 text-2xl font-bold break-words">
+          Job #{job.id} — {examLabel(job)} v{job.version}
         </h1>
+        {job.material_filename && (
+          <p className="text-sm text-muted-foreground break-words">{job.material_filename}</p>
+        )}
         <p className="text-sm text-muted-foreground">
-          status: <b>{job.status}</b> · stage: <b>{job.current_stage || "—"}</b> · progress: {job.progress_pct}%
+          status: <b>{job.status}</b> · stage: <b title={job.current_stage || undefined}>{stageLabel(job.current_stage)}</b> · progress: {job.progress_pct}%
         </p>
       </header>
 
       {job.waiting_for_worker && (
-        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
           This job has been queued for more than 5 minutes. Ingestion jobs run on the background worker
           (<code>python manage.py qcluster</code>); nothing will happen until a worker is running.
         </div>

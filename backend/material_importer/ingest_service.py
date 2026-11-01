@@ -605,10 +605,12 @@ def ingest_path(
     else:
         batch.status = "partial" if error_log else "completed"
     batch.finished_at = timezone.now()
-    # Merge, never replace: the upload view stores uploaded_files here and
-    # the publish / test builder keep their own keys in the same dict.
-    current = ImportBatch.objects.filter(pk=batch.pk).values_list("summary", flat=True).first() or {}
-    batch.summary = {**current, **summary_total}
+    # Merge, never replace, under the batch row lock: the upload view stores
+    # uploaded_files here and the publish / test builder keep their own keys
+    # in the same dict (a cancelled batch may already be publishing).
+    from .batch_state import update_batch_summary
+    update_batch_summary(batch.pk, lambda summary: summary.update(summary_total))
     batch.error_report = error_log[:200]
-    batch.save(update_fields=["status", "finished_at", "summary", "error_report", "updated_at"])
+    batch.save(update_fields=["status", "finished_at", "error_report", "updated_at"])
+    batch.refresh_from_db(fields=["summary"])
     return batch

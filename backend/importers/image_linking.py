@@ -52,7 +52,10 @@ def link_images_by_page(writer, written: Iterable, image_records: Iterable, reca
 
     linked = 0
     decorative = 0
+    # ``unlinked`` is the detail list (capped at MAX_REPORTED_UNLINKED for the
+    # run summary); ``unlinked_count`` is the real total.
     unlinked: list[dict] = []
+    unlinked_count = 0
     flag_ids: set[int] = set()
     for img in images:
         sha = getattr(img, "sha256_short", "") or ""
@@ -68,6 +71,7 @@ def link_images_by_page(writer, written: Iterable, image_records: Iterable, reca
             target = candidates[0][1]
         if target is None:
             flag_ids.update(r.id for _p, r in image_based)
+            unlinked_count += 1
             if len(unlinked) < MAX_REPORTED_UNLINKED:
                 unlinked.append({
                     "page_number": img.page_number,
@@ -87,13 +91,14 @@ def link_images_by_page(writer, written: Iterable, image_records: Iterable, reca
             .exclude(is_verified_by_admin=True)
             .update(needs_review=True)
         )
-    if unlinked:
-        LOG.warning("%d image(s) left unlinked for review (ambiguous page owner)", len(unlinked))
+    if unlinked_count:
+        LOG.warning("%d image(s) left unlinked for review (ambiguous page owner)", unlinked_count)
     return {
         "images_linked": linked,
         "images_decorative_skipped": decorative,
-        "images_unlinked": len(unlinked),
+        "images_unlinked": unlinked_count,
         "unlinked_images": unlinked,
+        "unlinked_images_truncated": unlinked_count > len(unlinked),
         "questions_flagged_for_image_review": len(flag_ids),
     }
 

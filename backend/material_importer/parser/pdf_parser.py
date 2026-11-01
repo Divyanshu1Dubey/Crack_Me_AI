@@ -1,5 +1,7 @@
-"""PDF parser (lazy). Imports pypdf or pdfplumber at call time so the
-rest of the module loads even when those libs are missing.
+"""PDF parser (lazy). Imports its PDF library at call time so the rest of
+the module loads even when one is missing: PyMuPDF (``fitz``, already a
+hard requirement of the ingestion pipeline) first, then pypdf, then
+pdfplumber.
 
 The implementation here is intentionally minimal — extract every page's
 text, run heuristic MCQ detection, and store page screenshots under
@@ -35,7 +37,7 @@ class PDFParser:
         except Exception as exc:
             doc.errors.append(f"Failed to read PDF: {exc}")
             return doc
-        if not pages:
+        if not any((p or "").strip() for p in pages):
             doc.warnings.append("PDF contained no extractable text (likely scanned). OCR required.")
             return doc
         # Flatten pages into paragraph stream for the same extractors.
@@ -60,23 +62,39 @@ class PDFParser:
         year = extract_year_hint(all_text)
         if year:
             doc.meta["year"] = year
-        doc.meta["sha256"] = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        with open(path, "rb") as fh:
+            doc.meta["sha256"] = hashlib.sha256(fh.read()).hexdigest()
         doc.duration_ms = int((time.time() - start) * 1000)
         return doc
 
     @staticmethod
     def _extract_pages(path: str) -> List[str]:
-        """Try pypdf first, then pdfplumber. Both are optional."""
+        """Text of every page: PyMuPDF first, then pypdf, then pdfplumber.
+
+        PyMuPDF is already required by the ingestion pipeline, so a missing
+        optional library (pypdf is not in requirements) no longer makes every
+        PDF upload fail with "Install pypdf or pdfplumber".
+        """
+        errors: list[str] = []
+        try:
+            import fitz  # type: ignore  # PyMuPDF
+            with fitz.open(path) as pdf:
+                return [(page.get_text() or "") for page in pdf]
+        except Exception as exc:  # noqa: BLE001 - try the next library
+            errors.append(f"PyMuPDF: {exc}")
         try:
             from pypdf import PdfReader  # type: ignore
             reader = PdfReader(path)
             return [(p.extract_text() or "") for p in reader.pages]
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"pypdf: {exc}")
         try:
             import pdfplumber  # type: ignore
             with pdfplumber.open(path) as pdf:
                 return [(p.extract_text() or "") for p in pdf.pages]
-        except Exception:
-            pass
-        raise RuntimeError("Install pypdf or pdfplumber to parse PDFs.")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"pdfplumber: {exc}")
+        raise RuntimeError(
+            "No PDF library could read this file (install PyMuPDF, pypdf or pdfplumber): "
+            + "; ".join(errors)
+        )

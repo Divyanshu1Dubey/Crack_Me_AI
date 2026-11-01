@@ -48,8 +48,10 @@ from datetime import timedelta
 from pathlib import Path, PurePosixPath
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files import File
 from django.db import transaction
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -57,8 +59,10 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.upload_validation import DOCX_MIME, PPTX_MIME, ZIP_MAGIC, validate_uploaded_file
 from questions.models import Question, Subject, Topic
 
+from .batch_state import set_summary_key, update_batch_summary
 from .ingest_service import ingest_path
 from .mock_test_builder import (
     build_for_batch,
@@ -105,6 +109,16 @@ MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024  # 1 GiB
 # long is reported as stale: its thread most likely died with the process.
 STALE_AFTER = timedelta(minutes=30)
 
+# Content (magic-byte) check per extension: a renamed file is rejected
+# before it reaches a parser. TXT / MD have no signature; they only have to
+# be text (no NUL bytes).
+EXPECTED_CONTENT = {
+    ".pdf": "application/pdf",
+    ".docx": DOCX_MIME,
+    ".pptx": PPTX_MIME,
+}
+ZIP_EMPTY_MAGIC = b"PK\x05\x06"  # an archive with no members
+
 
 # ---------------------------------------------------------------------------
 # Permission helpers
@@ -150,13 +164,53 @@ def _safe_member_path(dest_dir: Path, member_name: str) -> Path | None:
     return target
 
 
+def _content_error(fobj, ext: str) -> str | None:
+    """Why the bytes of ``fobj`` do not match ``ext``, or None if they do.
+
+    ``fobj`` is an UploadedFile or a ``django.core.files.File`` (it needs
+    ``size``, ``name``, ``read`` and ``seek``). PDF / DOCX / PPTX go through
+    the shared magic-byte check (``accounts.upload_validation``), a ZIP must
+    carry the ZIP signature, and TXT / MD must not contain binary data.
+    """
+    if ext in EXPECTED_CONTENT:
+        try:
+            detected = validate_uploaded_file(
+                fobj, allowed_types={"document", "presentation"}, max_bytes=MAX_UPLOAD_BYTES,
+            )
+        except DjangoValidationError as exc:
+            return " ".join(exc.messages)
+        if detected != EXPECTED_CONTENT[ext]:
+            return f"content is not a {ext[1:].upper()} file"
+        return None
+    try:
+        head = fobj.read(8192)
+        fobj.seek(0)
+    except Exception as exc:  # noqa: BLE001 - unreadable upload
+        return f"could not be read ({exc})"
+    if ext == ".zip":
+        if head.startswith(ZIP_MAGIC) or head.startswith(ZIP_EMPTY_MAGIC):
+            return None
+        return "not a valid zip"
+    if b"\x00" in head:
+        return "not a text file"
+    return None
+
+
+def _path_content_error(path: Path) -> str | None:
+    """``_content_error`` for a file on disk (a member extracted from a zip)."""
+    with open(path, "rb") as fh:
+        return _content_error(File(fh, name=str(path)), path.suffix.lower())
+
+
 def _safe_extract_zip(zip_path: Path, dest_dir: Path) -> list[str]:
     """Extract the allowed members of ``zip_path`` into ``dest_dir``.
 
     Enforces MAX_ZIP_MEMBERS and MAX_ZIP_UNCOMPRESSED_BYTES on the declared
     sizes before writing anything, and again on the bytes actually written
-    (a forged header cannot inflate past the budget). Returns the names of
-    members that were skipped (disallowed type / unsafe path).
+    (a forged header cannot inflate past the budget). Every extracted member
+    gets the same content check as a direct upload; a member whose bytes do
+    not match its extension is deleted again. Returns the names of members
+    that were skipped (disallowed type / unsafe path / wrong content).
     Raises ``ValueError`` when a limit is exceeded and ``zipfile.BadZipFile``
     for a corrupt archive.
     """
@@ -191,6 +245,10 @@ def _safe_extract_zip(zip_path: Path, dest_dir: Path) -> list[str]:
                             f"archive expands past the {MAX_ZIP_UNCOMPRESSED_BYTES}-byte limit"
                         )
                     out.write(chunk)
+            problem = _path_content_error(target)
+            if problem:
+                target.unlink(missing_ok=True)
+                skipped.append(f"{info.filename}: {problem}")
     return skipped
 
 
@@ -207,13 +265,36 @@ def _is_stale(ts) -> bool:
 
 
 def _set_publish_state(batch_id: int, state: dict) -> dict:
-    """Write ``summary["publish"]`` with a queryset update (no stale overwrite)."""
-    summary = dict(
-        ImportBatch.objects.filter(pk=batch_id).values_list("summary", flat=True).first() or {}
-    )
-    summary["publish"] = state
-    ImportBatch.objects.filter(pk=batch_id).update(summary=summary, updated_at=timezone.now())
+    """Write ``summary["publish"]`` under the batch row lock (other keys kept)."""
+    set_summary_key(batch_id, "publish", state)
     return state
+
+
+def _publish_running(state: dict | None) -> bool:
+    """True while a publish (or test rebuild) is running and still reporting."""
+    state = state or {}
+    return state.get("state") == "running" and not _is_stale(
+        state.get("heartbeat_at") or state.get("started_at")
+    )
+
+
+def _claim_publish(batch_id: int, state: dict) -> tuple[bool, dict]:
+    """Atomically mark a publish as running for this batch.
+
+    The "is one already running?" check and the write happen under the batch
+    row lock, so two near-simultaneous requests can never both start a
+    publish. Returns ``(True, previous_state)`` when claimed and
+    ``(False, running_state)`` when another live publish holds the batch.
+    """
+    def _claim(summary: dict):
+        current = summary.get("publish") or {}
+        if _publish_running(current):
+            return False, current
+        summary["publish"] = state
+        return True, current
+
+    outcome = update_batch_summary(batch_id, _claim)
+    return outcome if outcome is not None else (False, {})
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +341,10 @@ class UploadCreateBatchView(APIView):
                 continue
             if f.size > MAX_UPLOAD_BYTES:
                 too_big.append(f"{f.name}: {f.size} bytes > {MAX_UPLOAD_BYTES}")
+                continue
+            problem = _content_error(f, ext)
+            if problem:
+                rejected.append(f"{f.name}: {problem}")
                 continue
             safe_name = Path(f.name).name  # strip any path traversal
             dest = work_dir / safe_name
@@ -393,7 +478,9 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, id=None):
         """Stop a queued / processing parse. The ingest loop checks the
-        status between files and stops; already-parsed files stay staged."""
+        status between files and stops. Questions from files parsed before
+        the cancel stay staged: they can still be reviewed and published
+        (see ``publish``)."""
         batch = self.get_object()
         if batch.status not in {"queued", "processing"}:
             return Response(
@@ -408,7 +495,14 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"error": f"Batch already finished (status={batch.status})."}, status=409)
         ImportAuditLog.objects.create(batch=batch, level="warning", code="cancelled",
                                       message=f"Cancelled by {request.user.username}")
-        return Response({"status": "cancelled", "batch_id": batch.id})
+        return Response({
+            "status": "cancelled",
+            "batch_id": batch.id,
+            "detail": (
+                "Parsing stops after the current file. Questions already staged stay in "
+                "the review queue and can still be published."
+            ),
+        })
 
     @action(detail=True, methods=["post"], url_path="publish")
     def publish(self, request, id=None):
@@ -418,6 +512,11 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         (``running`` → ``done`` / ``failed``), which the batch page polls.
         Publishing synchronously used to run past the 120 s gunicorn timeout
         on large batches, killing the worker mid-way.
+
+        A cancelled batch can publish the questions it staged before the
+        cancel (only ``approved`` rows are ever published, and rows a
+        still-running parse adds after the cancel are never approved). A
+        rolled-back batch has nothing left to publish.
         """
         batch = self.get_object()
         s = BatchPublishSerializer(data=request.data)
@@ -425,27 +524,39 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         max_per_test = s.validated_data["max_per_test"]
         only_publish = s.validated_data["only_publish"] or not s.validated_data["build_tests"]
 
-        if batch.status not in {"completed", "partial"}:
+        if batch.status == "cancelled":
+            if (batch.summary or {}).get("rollback"):
+                return Response(
+                    {"error": "This batch was rolled back; there is nothing left to publish."},
+                    status=409,
+                )
+            if not ExtractedQuestion.objects.filter(material__batch_id=batch.id).exists():
+                return Response(
+                    {"error": "This batch was cancelled before any question was staged; nothing to publish."},
+                    status=409,
+                )
+        elif batch.status not in {"completed", "partial"}:
             return Response(
                 {"error": f"Batch is {batch.status}; publish once parsing has finished."},
                 status=409,
             )
-        current = (batch.summary or {}).get("publish") or {}
-        if current.get("state") == "running" and not _is_stale(current.get("heartbeat_at") or current.get("started_at")):
+
+        username = request.user.username
+        now_iso = timezone.now().isoformat()
+        state = {
+            "state": "running",
+            "started_at": now_iso,
+            "heartbeat_at": now_iso,
+            "by": username,
+            "only_publish": only_publish,
+            "max_per_test": max_per_test,
+        }
+        claimed, current = _claim_publish(batch.id, state)
+        if not claimed:
             return Response(
                 {"error": "A publish is already running for this batch.", "publish": current},
                 status=409,
             )
-
-        username = request.user.username
-        state = _set_publish_state(batch.id, {
-            "state": "running",
-            "started_at": timezone.now().isoformat(),
-            "heartbeat_at": timezone.now().isoformat(),
-            "by": username,
-            "only_publish": only_publish,
-            "max_per_test": max_per_test,
-        })
         batch_id = batch.id
 
         def _run():
@@ -504,18 +615,16 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 {"error": "This batch is still parsing. Cancel it first, then roll back."},
                 status=409,
             )
-        publish_state = (batch.summary or {}).get("publish") or {}
-        if publish_state.get("state") == "running" and not _is_stale(
-            publish_state.get("heartbeat_at") or publish_state.get("started_at")
-        ):
+        if _publish_running((batch.summary or {}).get("publish")):
             return Response({"error": "A publish is running for this batch; wait for it to finish."},
                             status=409)
 
         result = delete_batch(batch.id, delete_published=s.validated_data["delete_published"])
-        batch.status = "cancelled"
-        batch.finished_at = timezone.now()
-        batch.summary = {**(batch.summary or {}), "rollback": result}
-        batch.save()
+        # Queryset updates + a locked summary-key write: a full save() would
+        # overwrite summary keys and counters other writers changed meanwhile.
+        set_summary_key(batch.id, "rollback", result)
+        now = timezone.now()
+        ImportBatch.objects.filter(pk=batch.pk).update(status="cancelled", finished_at=now, updated_at=now)
         ImportAuditLog.objects.create(
             batch=batch, level="warning", code="rollback",
             message=f"Rolled back: {result}",
@@ -525,8 +634,36 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="republish")
     def republish(self, request, id=None):
+        """Rebuild this batch's auto-tests (synchronous).
+
+        Refused with 409 while a background publish runs (that publish builds
+        the same tests). The rebuild holds the same ``summary["publish"]``
+        slot while it runs, so a publish cannot start half-way through it;
+        the previous publish state is restored afterwards.
+        """
         batch = self.get_object()
-        n = build_for_batch(batch.id, max_per_test=100)
+        now_iso = timezone.now().isoformat()
+        claimed, previous = _claim_publish(batch.id, {
+            "state": "running", "kind": "republish", "started_at": now_iso,
+            "heartbeat_at": now_iso, "by": request.user.username,
+        })
+        if not claimed:
+            return Response(
+                {"error": "A publish is running for this batch; wait for it to finish.",
+                 "publish": previous},
+                status=409,
+            )
+
+        def _restore(summary: dict) -> None:
+            if previous:
+                summary["publish"] = previous
+            else:
+                summary.pop("publish", None)
+
+        try:
+            n = build_for_batch(batch.id, max_per_test=100)
+        finally:
+            update_batch_summary(batch.id, _restore)
         ImportAuditLog.objects.create(
             batch=batch, level="info", code="republished_tests",
             message=f"Rebuilt {n} mock tests.",
@@ -852,11 +989,13 @@ def dashboard(request):
     total_questions_imported = batches.aggregate(s=Count("materials__extracted_questions"))["s"] or 0
     total_published = ExtractedQuestion.objects.filter(published_question__isnull=False).count()
     total_needs_review = ExtractedQuestion.objects.filter(status="needs_review").count()
-    duplicate_rate = 0.0
-    if total_questions_imported:
-        dup_count = batches.aggregate(s=Count("materials__extracted_questions",
-                                              filter=Q(materials__extracted_questions__duplicate_of__isnull=False)))["s"] or 0
-        duplicate_rate = round(dup_count / max(1, total_questions_imported), 4)
+    # Share of the questions found in the files that were duplicates. Uses the
+    # same per-batch counters as the Batches page ("Found" / "Dupes"): most
+    # duplicates are skipped, not staged, so counting staged rows with
+    # ``duplicate_of`` set always read ~0%.
+    totals = batches.aggregate(found=Sum("questions_found"), dupes=Sum("duplicates_skipped"))
+    found_total = totals["found"] or 0
+    duplicate_rate = round((totals["dupes"] or 0) / found_total, 4) if found_total else 0.0
     image_questions = ExtractedQuestion.objects.exclude(image_refs=[]).count()
     subjects_count = Subject.objects.count()
     topics_count = Topic.objects.count()
@@ -890,7 +1029,7 @@ def search(request):
     term = (request.query_params.get("q") or "").strip()
     if not term:
         return Response({"error": "Pass ?q=<text>"}, status=400)
-    qs = ExtractedQuestion.objects.filter(
+    matches = ExtractedQuestion.objects.filter(
         Q(question_text__icontains=term)
         | Q(explanation__icontains=term)
         | Q(option_a__icontains=term)
@@ -899,11 +1038,13 @@ def search(request):
         | Q(option_d__icontains=term)
         | Q(inferred_topic__icontains=term)
         | Q(material__original_filename__icontains=term)
-    ).select_related("material", "subject", "topic").order_by("-created_at")[:200]
+    )
+    items = matches.select_related("material", "subject", "topic").order_by("-created_at")[:200]
     return Response({
         "term": term,
-        "count": qs.count() if hasattr(qs, "count") else len(qs),
-        "items": ExtractedQuestionListSerializer(qs, many=True).data,
+        # Total matches; ``items`` holds at most the 200 newest.
+        "count": matches.count(),
+        "items": ExtractedQuestionListSerializer(items, many=True).data,
     })
 
 
@@ -935,7 +1076,12 @@ def health(request):
     libraries = {
         "docx": bool(importlib.util.find_spec("docx")),
         "pptx": bool(importlib.util.find_spec("pptx")),
-        "pdf": bool(importlib.util.find_spec("pypdf") or importlib.util.find_spec("pdfplumber")),
+        # The PDF parser tries PyMuPDF, then pypdf, then pdfplumber.
+        "pdf": bool(
+            importlib.util.find_spec("fitz")
+            or importlib.util.find_spec("pypdf")
+            or importlib.util.find_spec("pdfplumber")
+        ),
         "pillow": bool(importlib.util.find_spec("PIL")),
     }
     info["checks"]["parser_libraries"] = libraries
