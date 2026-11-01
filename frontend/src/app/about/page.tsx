@@ -27,8 +27,8 @@ const stats = [
 
 const values = [
     { icon: Heart, title: 'Patient-first thinking', body: 'Every feature is designed with the ultimate bedside reality in mind. We teach concepts that will actually save lives.' },
-    { icon: Brain, title: 'AI + human review', body: 'Large language models draft explanations at scale; clinicians verify them. The result: depth of a textbook, speed of AI.' },
-    { icon: ShieldCheck, title: 'Evidence over opinion', body: 'Every claim cites a Tier-1 source. Outdated teaching is rejected, even if it appears in popular MCQ books.' },
+    { icon: Brain, title: 'AI + human review', body: 'Large language models draft explanations at scale; the editorial team checks them against standard textbooks and fixes what learners report. The result: depth of a textbook, speed of AI.' },
+    { icon: ShieldCheck, title: 'Evidence over opinion', body: 'Explanations cite standard textbooks and official sources. Outdated teaching is rejected, even if it appears in popular MCQ books.' },
     { icon: Sparkles, title: 'Modern learner-first design', body: 'Mobile-first, dark-mode-friendly, keyboard-shortcut-powered. Studying should feel like a flow state, not a chore.' },
 ];
 
@@ -61,7 +61,7 @@ export default function AboutPage() {
             <LegalLayout
                 title={title}
                 description={description}
-                lastUpdated="July 21, 2026"
+                lastUpdated="November 1, 2026"
                 canonical={canonical}
                 schemaType="AboutPage"
                 badge="Our story"
@@ -71,7 +71,7 @@ export default function AboutPage() {
                 <p>
                     CrackCMS exists to give every medical aspirant in India and around the world a fair
                     shot at cracking competitive exams — regardless of which medical college they attend
-                    or how much they can afford to spend on coaching. We combine clinical-grade content
+                    or how much they can afford to spend on coaching. We combine textbook-based content
                     with the latest advances in generative AI to deliver a study experience that&apos;s
                     faster, deeper, and more personal than any printed book or offline class.
                 </p>

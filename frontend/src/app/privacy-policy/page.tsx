@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
         <LegalLayout
             title={title}
             description={description}
-            lastUpdated="July 21, 2026"
+            lastUpdated="November 1, 2026"
             effectiveDate="January 1, 2025"
             canonical={canonical}
             schemaType="PrivacyPolicy"
@@ -73,9 +73,9 @@ export default function PrivacyPolicyPage() {
             <h2>4. Sharing of Information</h2>
             <p>
                 We <strong>do not sell</strong> your personal data. We share data only with vetted vendors:
-                cloud hosting (Render, AWS, Supabase), analytics (Datadog, GA4), AI providers (Groq,
-                Cerebras, Gemini, OpenRouter, Cohere, HuggingFace, Mistral, DeepSeek, Together, AI/ML API),
-                and payment gateways. Each vendor is bound by confidentiality and data-processing
+                cloud hosting (Render, AWS, Supabase), analytics (Datadog, GA4), AI providers (an
+                OmniRoute AI gateway, Groq, Cerebras, Google Gemini, Cohere, OpenRouter, GitHub Models,
+                Hugging Face and Mistral), and payment gateways. Each vendor is bound by confidentiality and data-processing
                 agreements.
             </p>
 

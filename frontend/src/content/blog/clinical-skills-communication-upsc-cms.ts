@@ -10,7 +10,7 @@ const post: BlogPost = {
     subcategory: 'Communication',
     tags: ['Communication', 'Breaking Bad News', 'Consent', 'Counseling', 'UPSC CMS'],
     difficulty: 'beginner',
-    authorId: 'dr-aarav-mehta',
+    authorId: 'crackcms-editorial',
     reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',

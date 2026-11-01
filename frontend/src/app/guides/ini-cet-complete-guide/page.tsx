@@ -27,7 +27,7 @@ export default function INICETGuide() {
             slug={slug}
             heading="INI-CET Complete Guide 2026"
             lede="Crack INI-CET for AIIMS, PGIMER, JIPMER, and NIMHANS. Exam pattern, subject-wise strategy, cutoffs, and 4-month preparation plan."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="10 min"
             faqs={faqs}

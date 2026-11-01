@@ -417,7 +417,7 @@ export default function LandingPage() {
               },
               {
                 title: 'Performance Analytics',
-                description: 'Granular weak-area identification and real-time rank predictions.',
+                description: 'Weak-area identification by subject and topic, plus a predicted paper score from your recent accuracy.',
                 label: 'Analytics',
                 icon: TrendingUp,
                 color: 'from-rose-500/10 to-pink-500/10',
@@ -497,7 +497,7 @@ export default function LandingPage() {
                 <ul className="space-y-3 font-semibold text-foreground text-sm">
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-                    Double-verified medical consensus answer keys
+                    AI-cross-checked answer keys; mismatches flagged for review
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
@@ -1204,7 +1204,7 @@ export default function LandingPage() {
                   <div className="grid gap-4 sm:grid-cols-3">
                     {[
                       { icon: FileText, title: "20 Free PYQs", desc: "Hand-picked high-yield questions across subjects. Admin-curated." },
-                      { icon: Brain, title: "Full Explanations", desc: "Every free question comes with a detailed, medically-reviewed explanation." },
+                      { icon: Brain, title: "Full Explanations", desc: "Every free question comes with a detailed explanation." },
                       { icon: ShieldCheck, title: "Track Progress", desc: "Bookmarks, streaks, and topic analytics — all free." }
                     ].map((item, i) => (
                       <div key={i} className="flex gap-3 rounded-2xl border-2 border-border/60 bg-muted/20 p-4">
@@ -1252,7 +1252,7 @@ export default function LandingPage() {
                     One Place for Complete UPSC CMS & NEET PG
                   </h2>
                   <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-                    Unlock the full question bank, the mock-test simulator and analytics. Every plan adds AI tutor
+                    Unlock answers and explanations across the full question bank and the mock-test simulator. Every plan adds AI tutor
                     credits; the 1-year plan includes unlimited AI explanations.
                   </p>
 
@@ -1260,7 +1260,7 @@ export default function LandingPage() {
                     {[
                       { title: "AI Tutor", desc: "AI credits on every plan; unlimited AI explanations on the 1-year plan." },
                       { title: "Full QBank & Simulations", desc: `${CMS_PYQ_PHRASE} by year, the NEET PG bank (${NEET_PG_QUESTION_COUNT} questions) and full-length mock tests.` },
-                      { title: "Analytics & Weak Areas", desc: "Subject and topic accuracy, streaks and mistake review." },
+                      { title: "Answers & Explanations", desc: "Correct answers, explanations and mnemonics for every question, not just the free showcase." },
                       { title: "Spaced-Repetition Flashcards", desc: "SM-2 flashcards for high-yield facts and mnemonics." }
                     ].map((item, i) => (
                       <div key={i} className="flex gap-3">

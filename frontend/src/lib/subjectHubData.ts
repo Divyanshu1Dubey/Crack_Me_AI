@@ -17,9 +17,9 @@ import type { SubjectHubContent } from '@/components/SubjectHubLayout';
 
 type CmsSubject = Omit<SubjectHubContent, 'examSlug' | 'examName' | 'examLandingPath'>;
 
-// Same reviewer as cutoffData.ts. SubjectHubLayout shows this as "Medically
-// reviewed by" and in reviewedBy JSON-LD, so it must be a verifiable reviewer;
-// the previous named "AIR-1" reviewer could not be verified.
+// Same reviewer as cutoffData.ts. SubjectHubLayout shows this as "Reviewed
+// by" and in reviewedBy JSON-LD, so it must be a verifiable reviewer; the
+// previous named "AIR-1" reviewer could not be verified.
 const REVIEWER = { name: 'CrackCMS Editorial Team', credentials: 'Editorial team — CrackCMS' };
 
 const cmsSubjects: Record<string, CmsSubject> = {

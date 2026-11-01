@@ -36,7 +36,8 @@ function walk(dir) {
 // Public/marketing sources this group owns (other groups' files are checked by their own tests).
 const PUBLIC_SOURCES = [
     ...['about', 'cms', 'exams', 'neet-pg', 'ini-cet', 'fmge', 'usmle', 'guides', 'tools', 'blog',
-        'government-doctor-jobs', 'medical-officer', 'resources', 'privacy-policy', 'terms', 'cookie-policy', '_landing']
+        'government-doctor-jobs', 'medical-officer', 'resources', 'privacy-policy', 'terms', 'cookie-policy', '_landing',
+        'ai-attribution-policy', 'editorial-policy', 'medical-review-policy', 'disclaimer', 'refund-policy']
         .flatMap((d) => walk(path.join(FRONTEND, 'src/app', d))),
     ...['src/app/page.tsx', 'src/app/layout.tsx'].map((f) => path.join(FRONTEND, f)),
     ...['ExamLandingLayout.tsx', 'GuideLayout.tsx', 'ComparisonLayout.tsx', 'Footer.tsx', 'BlogPostLayout.tsx',
@@ -195,6 +196,26 @@ test('blog: UPSC CMS posts use the real marking (one-third of 2.08) and the CBT 
     const omr = blog.getPostBySlug('omr-filling-mistakes-upsc-cms');
     assert.match(omr.body, /computer-based test/);
     assert.doesNotMatch(blog.getPostBySlug('time-management-upsc-cms-paper').body, /OMR Bubbling|Paper I \(General Medicine \+ Surgery\)/);
+
+    // No OMR-sheet advice for UPSC CMS unless the same sentence says there is
+    // none ("no OMR sheet", "not pen-and-paper"). A stray "do not skip" in the
+    // sentence does not count. The OMR-mistakes post is about pen-and-paper
+    // exams (its CBT banner is checked above).
+    const OMR = /pen-and-paper OMR|OMR (sheet|transfer)|transfer sheet|pencil \+ eraser|erasures? on OMR|\bbubbl/i;
+    const SAYS_NONE = /\bno (OMR|answer[- ]sheet|answer-transfer|transfer)|\bnot (a )?pen-and-paper|\bwithout (an )?OMR/i;
+    const offenders = [];
+    for (const post of blog.getAllPosts().filter((p) => /upsc-cms|cms-/.test(p.slug) && p.slug !== omr.slug)) {
+        const text = [post.title, post.description, post.excerpt, post.body ?? '', ...(post.faqs ?? []).flatMap((f) => [f.q, f.a])].join('\n');
+        for (const sentence of text.split(/(?<=[.!?])\s+|\n/)) {
+            const s = sentence.trim();
+            if (!s || s.endsWith('?')) continue;
+            if (OMR.test(s) && !SAYS_NONE.test(s)) offenders.push(`${post.slug}: ${s.slice(0, 100)}`);
+            // One-third of 2.08 marks, not "-0.33 per wrong".
+            if (/[-–−]\s?0\.33 per wrong/i.test(s)) offenders.push(`${post.slug}: ${s.slice(0, 100)}`);
+        }
+    }
+    assert.deepEqual(offenders, []);
+    assert.match(blog.getPostBySlug('upsc-cms-last-5-days-strategy').body, /Practise the CBT review flow/);
 });
 
 test('blog: social images use the generated per-post card, never a missing /blog/og file', () => {
@@ -313,6 +334,8 @@ test('reviewers: no unverifiable "AIR-1" medical reviewer on strategy, book or s
     assert.doesNotMatch(read('src/lib/cutoffData.ts'), /has not yet been held|is scheduled for 02 August 2026/);
     // keyTrends: no per-year counts that contradict the fixed split, no unsourced "firsts".
     assert.doesNotMatch(read('src/lib/pyqYearData.ts'), /PSM continued to gain weight|PSM had 40 questions|Multiple-best-answer \(MBA\)|top 50 rankers|0\.33 negative marking|\d+ direct (STEMI|trauma|questions)/);
+    // Uncited per-year specifics (wave 3): no source, and no image-based CMS rows back the first.
+    assert.doesNotMatch(read('src/lib/pyqYearData.ts'), /'Image-based radiology questions|'Included questions on (national COVID-19|geriatric)/);
 });
 
 function pngSize(file) {

@@ -74,9 +74,10 @@ function shouldEmitMedicalWebPage(post: BlogPost): boolean {
  *
  * EEAT signals emitted:
  *   • Article (or MedicalWebPage) JSON-LD with citation[] + reviewedBy
- *   • Person JSON-LD for author + clinical reviewer
+ *   • Person JSON-LD for author + reviewer
  *   • speakable[] xpaths for voice assistants
- *   • Visible "Medically reviewed by …" badge in the byline
+ *   • Visible "Reviewed by …" badge in the byline (an editorial review: no
+ *     reviewer profile is a confirmed doctor; see /medical-review-policy)
  *   • References section rendered at the bottom + revision log
  *   • Author profile link to `/blog/author/<slug>` (when archive exists)
  */
@@ -174,7 +175,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 {difficultyLabel(post.difficulty)}
                             </span>
                             {post.tags.slice(0, 4).map((tag) => (
-                                <span key={tag} className="blog-tag-chip">
+                                <span key={tag} className="inline-flex items-center rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
                                     #{tag.replace(/\s+/g, '')}
                                 </span>
                             ))}
@@ -201,7 +202,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                             {reviewer ? (
                                 <span className="inline-flex items-center gap-1.5">
                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                    Medically reviewed by{' '}
+                                    Reviewed by{' '}
                                     <strong className="text-foreground">{reviewer.name}</strong>
                                 </span>
                             ) : null}
@@ -452,7 +453,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 {reviewer && reviewer.slug !== author.slug ? (
                                     <div className="rounded-2xl border border-border bg-card p-5">
                                         <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                                            Medically reviewed by
+                                            Reviewed by
                                         </h2>
                                         <p className="text-sm font-semibold text-foreground">{reviewer.name}</p>
                                         <p className="text-xs text-muted-foreground">{reviewer.credential}</p>

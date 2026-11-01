@@ -18,6 +18,9 @@ import { UPSC_CMS_PATTERN } from '@/lib/examPatterns';
 // (the split is fixed by the notice — PSM is 40 every year — so counts such
 // as "PSM had 38 questions" contradicted the table on the same page), and no
 // claims about firsts, rankers or new question formats without a source.
+// Nor uncited specifics such as image-based radiology in 2024, COVID-19
+// protocols in 2022 or geriatrics in 2021 (none had a source, and the bank
+// did not back the image-based one).
 type CmsYear = Omit<
     PyqYearContent,
     'examSlug' | 'examName' | 'examLandingPath' | 'topSubjects' | 'totalQuestions' | 'totalSubjects'
@@ -29,7 +32,6 @@ const cmsYears: Record<number, CmsYear> = {
         year: 2024,
         keyTrends: [
             'Cardiovascular emergencies (STEMI, ACLS) were a recurring theme across Paper I and Paper II.',
-            'Image-based radiology questions (CT chest, MRI brain) appeared in the Surgery section of Paper II.',
             'Preventive & Social Medicine included newer National Health Programme topics (PMJAY, TB-Mukt Bharat).',
             'Standard pharmacology questions on antimicrobial stewardship were a recurring theme.',
         ],
@@ -66,7 +68,6 @@ const cmsYears: Record<number, CmsYear> = {
         keyTrends: [
             'Community medicine leaned on biostatistics.',
             'Cardiology — arrhythmias and heart failure — featured prominently in Paper I.',
-            'Included questions on national COVID-19 management protocols.',
         ],
         faqs: [
         ],
@@ -75,7 +76,6 @@ const cmsYears: Record<number, CmsYear> = {
         year: 2021,
         keyTrends: [
             'Surgery paper heavily tested GI bleeding and operative emergencies.',
-            'Included questions on geriatric medicine.',
         ],
         faqs: [
         ],

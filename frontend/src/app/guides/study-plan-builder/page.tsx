@@ -21,7 +21,7 @@ export default function StudyPlanBuilderGuide() {
             slug={slug}
             heading="Build a Personalised Study Plan"
             lede="A step-by-step framework to build a 6-month UPSC CMS or NEET PG study plan using PYQs, AI tutor, and spaced repetition."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="6 min"
             faqs={faqs}

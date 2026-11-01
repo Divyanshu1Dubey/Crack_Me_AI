@@ -68,7 +68,7 @@ export const pageMetadata: Record<string, { title: string; description: string }
   },
   "/subscription": {
     title: "CrackCMS Premium Plans for UPSC CMS Preparation",
-    description: "Compare CrackCMS premium plans (1 month, 3 months, 1 year) for UPSC CMS preparation: AI tutor credits (unlimited on the yearly plan), exam-style mock tests, analytics and high-yield study tools.",
+    description: "Compare CrackCMS premium plans (1 month, 3 months, 1 year) for UPSC CMS preparation: AI tutor credits (unlimited on the yearly plan), answers and explanations across the whole question bank, and exam-style mock tests.",
   },
   "/resources": {
     title: "UPSC CMS Resources, Syllabus, Booklist and Exam Guide",

@@ -1,9 +1,37 @@
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from resources import views
+
+
+class ExamGuideAttemptsTests(TestCase):
+    """UPSC CMS has no attempt cap (only the age limit); the guide used to
+    serve the Civil Services 6 / 9 / unlimited rule."""
+
+    def test_eligibility_states_no_fixed_attempt_limit(self):
+        res = self.client.get(reverse('exam-guide'))
+        self.assertEqual(res.status_code, 200)
+        attempts = res.json()['eligibility']['attempts']
+        self.assertEqual(attempts, {'all': 'No fixed limit; subject to age ceiling'})
+
+    def test_attempts_faq_matches_the_age_limit_rule(self):
+        faq = {row['q']: row['a'] for row in self.client.get(reverse('exam-guide')).json()['faq']}
+        answer = faq['How many attempts are allowed?']
+        self.assertTrue(answer.startswith('There is no fixed limit on the number of attempts for UPSC CMS.'))
+        self.assertIn('below 32 years on 1 August', answer)
+
+    def test_no_civil_services_attempt_counts_anywhere_in_the_guide(self):
+        body = json.dumps(self.client.get(reverse('exam-guide')).json())
+        for stale in ('6 attempts', '9 attempts', 'Unlimited (up to age limit)'):
+            self.assertNotIn(stale, body)
+
+    def test_guide_is_public(self):
+        # Anonymous visitors read it on /resources.
+        self.assertEqual(self.client.get(reverse('exam-guide')).status_code, 200)
 
 
 class ResourceResolverTests(TestCase):

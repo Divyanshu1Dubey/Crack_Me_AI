@@ -138,7 +138,7 @@ export function ExamMicrosite({ cfg }: Props) {
       </section>
 
       {/* ── SUBJECTS ─────────────────────────────────────── */}
-      <section id="subjects" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 lg:pb-16">
+      <section id="subjects" className="scroll-mt-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 lg:pb-16">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
@@ -182,7 +182,7 @@ export function ExamMicrosite({ cfg }: Props) {
       </section>
 
       {/* ── HIGH-YIELD ───────────────────────────────────── */}
-      <section id="high-yield" className={`${cfg.theme.tint} border-y border-border/40`}>
+      <section id="high-yield" className={`scroll-mt-20 ${cfg.theme.tint} border-y border-border/40`}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
           <div className="flex items-center gap-3 mb-6">
             <Sparkles className={`w-6 h-6 ${cfg.theme.primary}`} />
@@ -215,7 +215,7 @@ export function ExamMicrosite({ cfg }: Props) {
                 <Calendar className={`w-6 h-6 ${cfg.theme.primary}`} /> PYQ year-wise practice
               </h2>
               <p className="text-sm md:text-base text-muted-foreground mt-1.5">
-                Click a year to attempt the full paper in Practice or Exam mode.
+                {cfg.pyqYearsNote ?? 'Click a year to attempt the full paper in Practice or Exam mode.'}
               </p>
             </div>
             <Badge variant="secondary" className="text-xs">

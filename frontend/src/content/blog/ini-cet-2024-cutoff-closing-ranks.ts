@@ -31,7 +31,7 @@ const post: BlogPost = {
     ],
     difficulty: 'beginner',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-08-05',

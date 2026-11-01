@@ -3,7 +3,8 @@
  * subdomain, per the user's spec).
  *
  * Uses the same ExamMicrosite shell as CMS/USMLE but with the NEET PG theme
- * (emerald/teal), 19 PG subjects, and 5 years of NEET PG PYQs (2020-2025).
+ * (emerald/teal), 19 PG subjects, and year tiles only for the years with a
+ * paper's worth of NEET PG recall questions (see _data.ts).
  */
 import type { Metadata } from 'next';
 import { ExamMicrosite } from '@/components/exams/ExamMicrosite';

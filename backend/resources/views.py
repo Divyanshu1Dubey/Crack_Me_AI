@@ -131,6 +131,16 @@ class ResourceDownloadView(APIView):
         raise Http404('Resource not found')
 
 
+# Same wording as frontend/src/lib/examPatterns.ts (UPSC_CMS_PATTERN
+# .attemptsRule / .attemptsFaq).
+ATTEMPTS_RULE = 'No fixed limit; subject to age ceiling'
+ATTEMPTS_FAQ = (
+    'There is no fixed limit on the number of attempts for UPSC CMS. You can appear every year '
+    'until you cross the upper age limit (below 32 years on 1 August of the exam year, with '
+    'relaxations for reserved categories as per UPSC rules).'
+)
+
+
 class ExamGuideView(APIView):
     """Return comprehensive UPSC CMS exam guide data."""
     permission_classes = [permissions.AllowAny]
@@ -151,10 +161,10 @@ class ExamGuideView(APIView):
                     'pwd': '42 years (10 years relaxation)',
                 },
                 'nationality': 'Indian citizen (also Nepal/Bhutan subjects, Tibetan refugees pre-1962)',
+                # UPSC CMS caps attempts only through the age limit. The old
+                # 6 / 9 / unlimited rows were the Civil Services rule.
                 'attempts': {
-                    'general': '6 attempts',
-                    'obc': '9 attempts',
-                    'sc_st': 'Unlimited (up to age limit)',
+                    'all': ATTEMPTS_RULE,
                 },
             },
             'paper_pattern': {
@@ -213,7 +223,7 @@ class ExamGuideView(APIView):
                 {'q': 'What documents are required for DAF?', 'a': 'Passport-size photo, signature, ID proof, MBBS degree/provisional certificate, internship certificate, category certificate (if applicable), date of birth proof (matriculation certificate).'},
                 {'q': 'Can I choose my posting location?', 'a': 'You can fill preferences during counseling. Posts are allotted based on your rank, category, and availability. Top ranks get better choices.'},
                 {'q': 'What is the expected salary?', 'a': 'Starting salary is approximately ₹80,000-1,00,000 per month (Pay Level 10) including DA, HRA and other allowances. This varies by posting location.'},
-                {'q': 'How many attempts are allowed?', 'a': 'General: 6 attempts, OBC: 9 attempts, SC/ST: unlimited (within age limit). Each appearance counts as one attempt.'},
+                {'q': 'How many attempts are allowed?', 'a': ATTEMPTS_FAQ},
                 {'q': 'Is there negative marking?', 'a': 'Yes, 1/3 of marks assigned to a question are deducted for each wrong answer. So approximately -0.69 marks per wrong answer.'},
                 {'q': 'When does UPSC release the notification?', 'a': 'Usually in March-April. The exam is typically held in July-August. Check the official UPSC website for exact dates.'},
                 {'q': 'Can foreign medical graduates apply?', 'a': 'Yes, but they must have cleared the FMGE (Foreign Medical Graduate Examination) conducted by NBE before document verification.'},

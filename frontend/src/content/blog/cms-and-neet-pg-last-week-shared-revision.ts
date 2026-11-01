@@ -36,13 +36,13 @@ const post: BlogPost = {
         'Exam Strategy',
     ],
     difficulty: 'advanced',
-    authorId: 'dr-aarav-mehta',
+    authorId: 'crackcms-editorial',
     reviewedBy: 'crackcms-editorial',
-    author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
-    authorRole: 'Senior Editor — Medicine, CrackCMS',
+    author: 'CrackCMS Editorial Team',
+    authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-07-28',
-    dateModified: '2026-07-29',
-    updatedAt: '2026-07-29',
+    dateModified: '2026-11-01',
+    updatedAt: '2026-11-01',
     readingTime: '18 min',
     toc: [
         { id: 'why-this-post-is-different', label: 'Why this post is different' },
@@ -104,6 +104,7 @@ const post: BlogPost = {
     revisionLog: [
         { date: '2026-07-28', note: 'Initial publication' },
         { date: '2026-07-29', note: 'Added NBE NEET-PG reference, Surviving Sepsis 2021 citation, NFHS-5 link; updated 25-topic table with current Surviving Sepsis hour-1 bundle; clarified OMR vs online transfer timing for CMS.' },
+        { date: '2026-11-01', note: 'Credited the CrackCMS Editorial Team; described the AI provider rotation without a provider count.' },
     ],
     faqs: [
         {
@@ -124,7 +125,7 @@ const post: BlogPost = {
         },
         {
             q: 'Which AI tool is most useful for a dual aspirant in the last 7 days?',
-            a: 'The [CrackCMS AI tutor](/ai-tutor) is purpose-built for this. Paste any PYQ (CMS or NEET PG), ask “explain the answer choice in 30 seconds with a clinical pearl” — it returns text-grounded reasoning across both syllabi. The 11-provider round-robin means it works even at 2 AM when other AI tools fail or rate-limit.',
+            a: 'The [CrackCMS AI tutor](/ai-tutor) is purpose-built for this. Paste any PYQ (CMS or NEET PG), ask “explain the answer choice in 30 seconds with a clinical pearl” — it returns text-grounded reasoning across both syllabi. Requests rotate across several AI providers, so one provider rate-limiting at 2 AM does not stop it.',
         },
         {
             q: 'Is there a topic list for the 60% overlap I should prioritise?',
@@ -352,9 +353,9 @@ The [CMS question bank](/questions?exam=cms) + [NEET PG question bank](/question
 
 You have everything you need. Now go pass both.
 
-— [Dr. Aarav Mehta, MBBS, MD (Internal Medicine)](/blog/author/dr-aarav-mehta) · Senior Editor — Medicine, CrackCMS
+— [CrackCMS Editorial Team](/blog/author/crackcms-editorial)
 
-*Medically reviewed by the CrackCMS content team. See our [editorial policy](/editorial-policy) and [medical review policy](/medical-review-policy). Past performance is not a guarantee of future rank; treat this as a high-quality preparation framework, not a substitute for individual judgement. If you are in distress during exam week, please reach out: [iCall 9152987821](https://icallhelpline.org/), [Vandrevala Foundation 1860-2662-345](https://www.vandrevalafoundation.com/).*
+*Reviewed by the CrackCMS Editorial Team against standard textbooks. See our [editorial policy](/editorial-policy) and [medical review policy](/medical-review-policy). Past performance is not a guarantee of future rank; treat this as a high-quality preparation framework, not a substitute for individual judgement. If you are in distress during exam week, please reach out: [iCall 9152987821](https://icallhelpline.org/), [Vandrevala Foundation 1860-2662-345](https://www.vandrevalafoundation.com/).*
 
 ---
 

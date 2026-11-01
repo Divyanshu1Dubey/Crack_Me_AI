@@ -161,7 +161,7 @@ export function LegalLayout({
                 <aside className="mt-16 rounded-2xl border border-border bg-card p-6 sm:p-8">
                     <h2 className="text-lg font-bold">Related resources</h2>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        Continue exploring CrackCMS — a free study desk built by clinicians for MBBS graduates sitting UPSC CMS, NEET PG and similar exams.
+                        Continue exploring CrackCMS — a free study desk for MBBS graduates sitting UPSC CMS, NEET PG and similar exams.
                     </p>
                     <ul className="mt-4 grid gap-2 sm:grid-cols-2">
                         {RELATED_LINKS.filter((l) => l.href !== canonical).map((l) => (

@@ -22,7 +22,7 @@ export default function USMLEGuide() {
             slug={slug}
             heading="USMLE Step 1 Guide for Indian MBBS Students"
             lede="A comprehensive Step 1 roadmap — eligibility, ECFMG registration, study materials (First Aid, Pathoma, UWorld, Sketchy), 6-9 month study plan, and IMG-specific advice."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="10 min"
             faqs={faqs}

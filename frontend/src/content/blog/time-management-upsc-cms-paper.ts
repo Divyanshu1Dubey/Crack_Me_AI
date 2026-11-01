@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Time Management', 'UPSC CMS', 'Speed', 'CBT', 'Strategy'],
     difficulty: 'beginner',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-11-01',
     readingTime: '7 min',
     wordCount: 2200,
-    primaryCta: { label: 'Try Timed Mock Test (free)', href: '/simulator' },
+    primaryCta: { label: 'Try a Timed Mock Test', href: '/simulator' },
     relatedExamPaths: ['/cms'],
     faqs: [
         { q: 'How much time per question in UPSC CMS?', a: '120 questions in 120 minutes = exactly 1 minute per question. However, image-based and long clinical vignettes may need 1.5 minutes, while one-liners need 30 seconds.' },

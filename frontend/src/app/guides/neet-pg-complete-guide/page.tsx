@@ -3,8 +3,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
-const title = 'NEET PG Complete Guide 2026 — Pattern, Syllabus, Books, AIR Prediction, Strategy';
-const description = 'Complete NEET PG 2026 guide — exam pattern (200 MCQs, -1 negative marking), subject-wise syllabus, topper-recommended books, AIR prediction, image-based questions, and a 6-month study plan.';
+const title = 'NEET PG Complete Guide 2026 — Pattern, Syllabus, Books, Strategy';
+const description = 'Complete NEET PG 2026 guide — exam pattern (200 MCQs, -1 negative marking), subject-wise syllabus, topper-recommended books, image-based questions, and a 6-month study plan.';
 const slug = 'neet-pg-complete-guide';
 
 export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
@@ -24,8 +24,8 @@ export default function NEETPGGuide() {
             description={description}
             slug={slug}
             heading="NEET PG Complete Guide 2026"
-            lede="Crack NEET PG in 6 months — exam pattern, subject-wise syllabus, topper books, AIR prediction, image-based MCQs, and a week-by-week study plan."
-            author="Dr. CrackCMS Editorial Team"
+            lede="Crack NEET PG in 6 months — exam pattern, subject-wise syllabus, topper books, image-based MCQs, and a week-by-week study plan."
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="11 min"
             faqs={faqs}
@@ -180,7 +180,7 @@ export default function NEETPGGuide() {
 
             <h2>NEET PG vs UPSC CMS — Which is better?</h2>
             <p>
-                <strong>NEET PG</strong> leads to MD/MS clinical specialisation (private practice, faculty, superspecialty).
+                <strong>NEET PG</strong> leads to MD/MS clinical specialisation (private practice, faculty, superspecialty).{' '}
                 <strong>UPSC CMS</strong> leads to a central government Medical Officer post with stable salary and job security.
                 The two exams overlap ~70% in syllabus. See <Link href="/cms/vs-neet-pg" className="text-primary underline">UPSC CMS vs NEET PG</Link> for a detailed side-by-side comparison.
             </p>

@@ -23,7 +23,7 @@ export interface StrategyContent {
     examLandingPath: string;
     strategySlug: '6-month' | '3-month' | 'last-week';
     strategyTitle: string;        // '6-Month UPSC CMS Study Plan'
-    strategySubtitle: string;     // 'Built by UPSC CMS AIR-1'
+    strategySubtitle: string;     // 'Month-by-month plan'
     /** SEO description */
     description: string;
     /** Total study hours expected */

@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Toppers', 'Daily Routine', 'NEET PG', 'Study Plan', 'Time Table'],
     difficulty: 'beginner',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',

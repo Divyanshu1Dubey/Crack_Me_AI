@@ -29,8 +29,10 @@ export interface AuthorProfile {
 }
 
 export const authors: Record<string, AuthorProfile> = {
-    // Now also the reviewer on posts whose named author would otherwise have
-    // reviewed his own work, so it carries no credential we cannot show.
+    // The only author profile. It carries no credential we cannot show. A
+    // named, credentialed author is added here only once the owner has
+    // confirmed the person is real, consents, has a verifiable credential and
+    // is listed on /about.
     'crackcms-editorial': {
         slug: 'crackcms-editorial',
         name: 'CrackCMS Editorial Team',
@@ -53,18 +55,16 @@ export const authors: Record<string, AuthorProfile> = {
             'https://www.cracklabs.app/editorial-policy',
         ],
     },
-    'dr-aarav-mehta': {
-        slug: 'dr-aarav-mehta',
-        name: 'Dr. Aarav Mehta',
-        credential: 'MBBS, MD (Internal Medicine)',
-        role: 'Senior Editor — Medicine, CrackCMS',
-        // No "AIIMS-trained": an institution claim we cannot verify.
-        bio:
-            'Internist who runs the UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making NEET PG recall stick. Believes 7-hour sleep is the single highest-yield revision tool a candidate owns.',
-        expertise: ['Internal Medicine', 'ECG interpretation', 'Acid-base', 'UPSC CMS Medicine'],
-        // The author archive that exists (/authors/... was a 404).
-        sameAs: ['https://www.cracklabs.app/blog/author/dr-aarav-mehta'],
-    },
+};
+
+/**
+ * Author archive slugs that no longer have a profile, mapped to the profile
+ * now credited with their posts. 'dr-aarav-mehta' (an MBBS, MD byline on
+ * 105 posts) could not be verified as a real, consenting clinician, so those
+ * posts are credited to the editorial team and the old archive URL redirects.
+ */
+export const RETIRED_AUTHOR_SLUGS: Record<string, string> = {
+    'dr-aarav-mehta': 'crackcms-editorial',
 };
 
 /** Lookup helper. Falls back to the editorial team if slug is unknown. */

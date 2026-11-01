@@ -22,7 +22,7 @@ export default function TermsPage() {
         <LegalLayout
             title={title}
             description={description}
-            lastUpdated="July 21, 2026"
+            lastUpdated="November 1, 2026"
             effectiveDate="January 1, 2025"
             canonical={canonical}
             schemaType="TermsOfService"
@@ -68,8 +68,8 @@ export default function TermsPage() {
             </p>
             <h3>5.2 Premium plans</h3>
             <p>
-                Premium subscriptions unlock advanced analytics, exam simulations, and full textbook
-                access. AI tutor use depends on the plan: {creditPlansText}; only the {unlimitedPlanNames}{' '}
+                Premium subscriptions unlock answers and explanations across the full question bank, exam
+                simulations, and full textbook access. AI tutor use depends on the plan: {creditPlansText}; only the {unlimitedPlanNames}{' '}
                 plan includes unlimited AI explanations. Pricing is displayed on the{' '}
                 <Link href="/subscription">/subscription</Link> page.
             </p>
@@ -83,7 +83,7 @@ export default function TermsPage() {
 
             <h2>6. Content &amp; Intellectual Property</h2>
             <p>
-                CrackCMS content, including question banks curated by our medical team, UI designs, AI
+                CrackCMS content, including question banks curated by our editorial team, UI designs, AI
                 prompts, and brand assets, is owned by CrackLabs AI and protected under the Copyright
                 Act, 1957. You may use content for personal study only.
             </p>

@@ -22,7 +22,7 @@ export default function MedicalOfficerJobsGuide() {
             slug={slug}
             heading="Government Medical Officer Jobs After MBBS"
             lede="Every central and state MBBS doctor post in one place — UPSC CMS, AIIMS, PGIMER, state PSCs, NHM, ESIC, Railways, Defence. Salary breakdowns, eligibility, and how to apply."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="8 min"
             faqs={faqs}

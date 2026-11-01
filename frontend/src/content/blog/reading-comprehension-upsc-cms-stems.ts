@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Reading Speed', 'Long Stems', 'UPSC CMS', 'NEET PG', 'Time Management'],
     difficulty: 'intermediate',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',

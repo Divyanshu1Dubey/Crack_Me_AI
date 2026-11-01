@@ -8,6 +8,7 @@ import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
 import { jsonLdString } from '@/lib/metadata';
+import { cutoffMetaDescription, cutoffSummary } from '@/lib/cutoffCopy';
 
 export interface CutoffContent {
     examSlug: 'cms' | 'neet-pg';
@@ -30,7 +31,9 @@ export interface CutoffContent {
 
 export function buildCutoffMetadata(c: CutoffContent, path: string): Metadata {
     const title = `${c.examName} ${c.year} Cutoff Marks — Category-wise Qualifying Marks`;
-    const description = `Category-wise ${c.examName} ${c.year} cutoff marks, topper scores, year-over-year trends, and FAQs. See if you would have qualified.`;
+    // Copy promises only what the page shows (no topper scores or trends
+    // without data, no cutoff table before the result): lib/cutoffCopy.ts.
+    const description = cutoffMetaDescription(c);
     return {
         title,
         description,
@@ -43,13 +46,14 @@ export function buildCutoffMetadata(c: CutoffContent, path: string): Metadata {
 
 export default function CutoffLayout(c: CutoffContent) {
     const path = `/${c.examSlug}/cutoff/${c.year}`;
+    const summary = cutoffSummary(c);
     const jsonLd = {
         '@context': 'https://schema.org',
         '@graph': [
             {
                 '@type': 'Article',
                 headline: `${c.examName} ${c.year} Cutoff Marks`,
-                description: `Category-wise ${c.examName} ${c.year} cutoff, topper scores, and year-over-year trends.`,
+                description: summary,
                 inLanguage: 'en-IN',
                 datePublished: `${c.year}-09-01`,
                 dateModified: '2026-07-21',
@@ -100,8 +104,7 @@ export default function CutoffLayout(c: CutoffContent) {
                             {c.examName} {c.year} Cutoff Marks — Category-wise
                         </h1>
                         <p className="mt-4 max-w-3xl text-base text-white/85 sm:text-lg">
-                            Category-wise qualifying marks for {c.examName} {c.year}, topper scores, and
-                            year-over-year cutoff trend analysis.
+                            {summary}
                         </p>
                     </div>
                 </section>
@@ -112,17 +115,24 @@ export default function CutoffLayout(c: CutoffContent) {
                         <Target className="mr-1 inline h-3 w-3" /> Category-wise Cutoff
                     </Badge>
                     <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">Qualifying marks by category</h2>
-                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        {c.cutoffs.map((row) => (
-                            <div key={row.category} className="rounded-2xl border border-border bg-card p-5 text-center">
-                                <p className="text-3xl font-black text-foreground">{row.cutoff}</p>
-                                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{row.category}</p>
-                                {typeof row.seats === 'number' && (
-                                    <p className="mt-1 text-[10px] text-muted-foreground">{row.seats} seats</p>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                    {c.cutoffs.length === 0 ? (
+                        <p className="mt-6 rounded-2xl border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+                            No verified {c.examName} {c.year} cutoff here yet. UPSC publishes the category-wise cutoff with
+                            the final result on upsc.gov.in, and we add the figures once it is out.
+                        </p>
+                    ) : (
+                        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                            {c.cutoffs.map((row) => (
+                                <div key={row.category} className="rounded-2xl border border-border bg-card p-5 text-center">
+                                    <p className="text-3xl font-black text-foreground">{row.cutoff}</p>
+                                    <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{row.category}</p>
+                                    {typeof row.seats === 'number' && (
+                                        <p className="mt-1 text-[10px] text-muted-foreground">{row.seats} seats</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </section>
 
                 {/* Toppers */}

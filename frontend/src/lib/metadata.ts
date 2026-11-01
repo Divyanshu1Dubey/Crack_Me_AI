@@ -210,7 +210,7 @@ export function articleSchema({
     speakable?: string[];
     /** If true, emits @type `MedicalWebPage` (extends `WebPage` with
      *  medical-specialty metadata) instead of plain `Article`. Use for
-     *  clinically-reviewed medical content. */
+     *  medical content that cites references. */
     medicalPageType?: boolean;
 }) {
     const baseAuthor = {
@@ -498,7 +498,7 @@ export function medicalWebPageSchema({
 }
 
 /**
- * `CriticReview` — for content that has been medically reviewed.
+ * `CriticReview` — for content a named, verifiable reviewer has reviewed.
  * Signals E-E-A-T to AI search engines.
  */
 export function criticReviewSchema({

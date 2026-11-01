@@ -45,7 +45,7 @@ export default function CMSSalaryPage() {
                         UPSC CMS Salary 2026 — Complete Pay, Allowances &amp; Career Growth
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
-                        UPSC CMS recruits Medical Officers, Specialists, and Assistant Divisional Medical Officers
+                        UPSC CMS recruits General Duty Medical Officers and Assistant Divisional Medical Officers
                         under the 7th Pay Commission. Here is the complete salary breakdown, allowance structure,
                         promotion hierarchy, and in-hand pay for 2026.
                     </p>

@@ -150,7 +150,7 @@ import psmCommunityMedicine from '@/content/blog/psm-community-medicine-upsc-cms
  *   - `authorId`     → resolves to an AuthorProfile and is emitted as a
  *                      `Person` JSON-LD node (with `knowsAbout[]`,
  *                      `worksFor`, `sameAs`) on every post.
- *   - `reviewedBy`   → a separate, named clinician reviewer with their
+ *   - `reviewedBy`   → a separate, named reviewer profile with their
  *                      own Person block. Distinguishes writer from
  *                      reviewer — required for YMYL medical content.
  *   - `references`   → first-class source list rendered at the bottom

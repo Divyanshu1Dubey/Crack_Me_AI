@@ -36,7 +36,8 @@ export const PAGE_TITLES: Readonly<Record<string, string>> = {
   '/practice': 'Practice',
   '/topic-notes': 'Topic Notes',
   '/recall/search': 'Recall Search',
-  '/subscription': 'Subscription',
+  // The page heading is "Premium Membership Hub" (the nav item says Subscription).
+  '/subscription': 'Premium Membership',
   '/contact': 'Contact Us',
   '/jobs': 'Jobs Portal',
   '/admin': 'Admin Panel',

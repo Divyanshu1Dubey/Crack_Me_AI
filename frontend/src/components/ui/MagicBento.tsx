@@ -73,7 +73,7 @@ const defaultCardData: BentoCardProps[] = [
   {
     color: '#120F17',
     title: 'Performance Analytics',
-    description: 'Granular weak-area identification and real-time rank predictions.',
+    description: 'Weak-area identification by subject and topic, plus a predicted paper score from your recent accuracy.',
     label: 'Analytics'
   }
 ];

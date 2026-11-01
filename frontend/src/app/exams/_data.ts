@@ -77,6 +77,8 @@ export type ExamConfig = {
   highYield: ExamHighYield[];
   /** Recent PYQ year list (shown in the year grid). */
   pyqYears: number[];
+  /** Line under the year-grid heading (defaults to the full-paper wording). */
+  pyqYearsNote?: string;
   /** Stats row shown in the hero. */
   stats: Array<{ value: string; label: string }>;
 };
@@ -88,7 +90,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     fullName: 'UPSC Combined Medical Services',
     tagline: `Crack the UPSC CMS exam with ${CMS_PYQ_COUNT} PYQs, mock tests & AI tutoring.`,
     description:
-      `UPSC CMS is the gateway to Central Govt medical officer posts — Railways, CGHS, Ordnance Factories. CrackCMS gives you ${CMS_PYQ_COUNT} PYQs from ${CMS_PYQ_YEARS}, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.`,
+      `UPSC CMS is the gateway to central government medical officer posts — the Central Health Service, Railways, NDMC and MCD. CrackCMS gives you ${CMS_PYQ_COUNT} PYQs from ${CMS_PYQ_YEARS}, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.`,
     // theme.badgeText ('UPSC') is rendered first, so it is not repeated here.
     tags: ['Govt Job', 'Permanent', 'Class-I Officer'],
     primaryCta: { label: 'Start Year-wise PYQ', href: questionBankHref('cms') },
@@ -190,7 +192,12 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
       { topic: 'Biostatistics / Research methodology', reason: 'High-scoring, predictable pattern.', code: 'PSM' },
       { topic: 'Embryology dates & genes', reason: 'High-yield, exact-match recall.', code: 'ANA' },
     ],
-    pyqYears: [2025, 2024, 2023, 2022, 2021, 2020],
+    // Years with a paper's worth (50+) of NEET PG recall questions in the
+    // bank (Nov 2026 review; 2022–2024 hold only a handful each). /neet-pg
+    // derives its tiles from live stats; this unlinked page (canonical:
+    // /neet-pg) lists the same years.
+    pyqYears: [2025, 2021, 2020, 2018],
+    pyqYearsNote: "Click a year to practise that year's NEET PG recall questions.",
     stats: [
       { value: NEET_PG_QUESTION_COUNT, label: 'NEET PG questions' },
       { value: '19', label: 'PG Subjects' },

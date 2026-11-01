@@ -266,7 +266,7 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
                         </div>
                     </div>
                     <p className="mt-6 text-center text-xs text-muted-foreground">
-                        Medically reviewed by <span className="font-semibold text-foreground">{c.reviewer.name}</span>, {c.reviewer.credentials}. Last reviewed 21 July 2026.
+                        Reviewed by <span className="font-semibold text-foreground">{c.reviewer.name}</span>, {c.reviewer.credentials}. Last reviewed 21 July 2026.
                     </p>
                 </section>
             </div>

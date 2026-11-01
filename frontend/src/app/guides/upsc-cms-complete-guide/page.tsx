@@ -40,18 +40,18 @@ export default function UPSCCMSGuide() {
             slug={slug}
             heading="UPSC CMS Complete Guide 2026"
             lede="Everything you need to crack the Combined Medical Services Examination — eligibility, syllabus, pattern, books, salary, cutoff, and a 6-month study plan. Updated for the 2026 cycle."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="12 min"
             faqs={faqs}
         >
             <h2>What is UPSC CMS?</h2>
             <p>
-                The <strong>Union Public Service Commission (UPSC) Combined Medical Services (CMS) Examination</strong>
+                The <strong>Union Public Service Commission (UPSC) Combined Medical Services (CMS) Examination</strong>{' '}
                 is one of India&apos;s most prestigious recruitment exams for MBBS graduates. Conducted annually by UPSC,
-                CMS recruits Medical Officers (GDMOs), Specialists, and Assistant Divisional Medical Officers for central
-                government services including the Central Health Service, Railways, Municipal Corporation of Delhi,
-                and Defence.
+                CMS recruits General Duty Medical Officers and Assistant Divisional Medical Officers for central
+                government services: the Central Health Service, Railways, the New Delhi Municipal Council and the
+                Municipal Corporation of Delhi.
             </p>
 
             <h3>Key facts</h3>

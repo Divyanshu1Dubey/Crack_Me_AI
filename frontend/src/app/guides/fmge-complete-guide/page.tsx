@@ -22,7 +22,7 @@ export default function FMGEGuide() {
             slug={slug}
             heading="FMGE Complete Guide 2026"
             lede="Pass the MCI Screening Test on your first attempt. Eligibility, syllabus, Indian-context preparation strategy, and a 3-month study plan."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="9 min"
             faqs={faqs}

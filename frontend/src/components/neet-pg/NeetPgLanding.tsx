@@ -249,7 +249,7 @@ export default function NeetPgLanding() {
       </section>
 
       {/* ════════════════ YEAR GRID ════════════════ */}
-      <section id="years" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <section id="years" className="scroll-mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
           <div>
             <h2 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
@@ -312,7 +312,7 @@ export default function NeetPgLanding() {
 
 
       {/* ════════════════ SUBJECT GRID ════════════════ */}
-      <section id="subjects" className="bg-linear-to-br from-emerald-50/40 via-background to-teal-50/40 dark:from-emerald-950/30 dark:via-background dark:to-teal-950/20 border-y border-border/60">
+      <section id="subjects" className="scroll-mt-20 bg-linear-to-br from-emerald-50/40 via-background to-teal-50/40 dark:from-emerald-950/30 dark:via-background dark:to-teal-950/20 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
           <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
             <div>
@@ -401,7 +401,7 @@ export default function NeetPgLanding() {
       </section>
 
       {/* ════════════════ HIGH-YIELD ════════════════ */}
-      <section id="high-yield" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <section id="high-yield" className="scroll-mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="flex items-center gap-3 mb-6">
           <Sparkles className="w-7 h-7 text-emerald-600" />
           <h2 className="text-2xl md:text-4xl font-bold">High-yield topics that show up every year</h2>
@@ -562,7 +562,7 @@ export default function NeetPgLanding() {
             <Button asChild size="lg" className="bg-white text-emerald-800 hover:bg-white/95 font-bold shadow-xl">
               <Link href={practiceHref}>
                 <Zap className="w-4 h-4 mr-2 fill-emerald-700" />
-                {featuredYear ? `Start ${featuredYear} Paper` : 'Start practising'}
+                {featuredYear ? `Start ${featuredYear} recalls` : 'Start practising'}
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 font-semibold">
@@ -601,22 +601,6 @@ export default function NeetPgLanding() {
           </Link>
         </div>
       </section>
-
-      {/* ════════════════ FOOTER ════════════════ */}
-      <footer className="border-t border-border/40 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} CrackCMS · NEET PG microsite</span>
-          <span className="flex items-center gap-3">
-            <Link href="/cms" className="hover:text-primary">UPSC CMS</Link>
-            <span>·</span>
-            <Link href="/neet-pg" className="hover:text-primary font-semibold">NEET PG</Link>
-            <span>·</span>
-            <Link href="/usmle" className="hover:text-primary">USMLE</Link>
-            <span>·</span>
-            <Link href="/ini-cet" className="hover:text-primary">INI-CET</Link>
-          </span>
-        </div>
-      </footer>
     </div>
   );
 }
