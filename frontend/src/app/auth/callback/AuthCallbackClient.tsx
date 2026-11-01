@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { authAPI } from '@/lib/api';
+import { consumePostAuthPath } from '@/lib/auth';
 import { safeInternalPath } from '@/lib/auth-redirect';
 
 const decodeUrlFragment = () => {
@@ -80,20 +81,30 @@ export default function AuthCallbackClient() {
           }
         }
 
+        // Destination remembered by auth.tsx before the OAuth / email-link
+        // redirect (read now so it is cleared either way).
+        const rememberedPath = consumePostAuthPath();
+        const isRecovery = type === 'recovery' || fragment.get('type') === 'recovery';
+
         setStatusText('Loading your profile...');
+        let isAdmin = false;
         try {
-          await authAPI.getProfile();
+          const profile = (await authAPI.getProfile()).data as { is_admin?: boolean; role?: string } | undefined;
+          isAdmin = profile?.is_admin === true || String(profile?.role || '').toLowerCase() === 'admin';
         } catch {
           // Profile fetch failed, but continue with redirect
         }
 
-        const safeNextPath = safeInternalPath(nextPath, '');
-        if (safeNextPath) {
-          router.replace(safeNextPath);
-          return;
-        }
-
-        router.replace('/admin');
+        // Explicit ?next=, then a password-recovery link, then the page the
+        // user started from; otherwise students go to the dashboard and only
+        // admins (per the backend profile) to /admin. Everyone used to be
+        // sent to /admin, which bounced students and dropped deep links.
+        const destination =
+          safeInternalPath(nextPath, '')
+          || (isRecovery ? '/reset-password' : '')
+          || rememberedPath
+          || (isAdmin ? '/admin' : '/dashboard');
+        router.replace(destination);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Authentication callback failed.';
         router.replace(`/login?authError=${encodeURIComponent(message)}`);

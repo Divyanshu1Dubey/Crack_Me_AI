@@ -486,6 +486,9 @@ class AIQuotaPayloadTests(TestCase):
         ExamTrack.objects.get_or_create(code='cms', defaults={'name': 'CMS'})
         Subject.objects.get_or_create(code='med', defaults={'name': 'Medicine'})
 
+    # No real LLM calls from the test suite: without this the tutor requests
+    # below reached the AI providers with whatever keys backend/.env holds.
+    @mock.patch.dict('os.environ', {'AI_OFFLINE_MODE': '1'})
     def test_402_payload_has_required_keys(self):
         from rest_framework.test import APIClient
         u = _make_user('payload-u')
@@ -505,9 +508,12 @@ class AIQuotaPayloadTests(TestCase):
         else:
             # If AI service is unavailable in test env, the 402 path
             # may have been short-circuited — but the cap check itself
-            # runs before the AI call. Verify via direct helper.
-            from ai_engine.models_usage import check_and_consume
-            check_and_consume(u, cap=2)  # already at 2 from above
+            # runs before the AI call. Verify via direct helper. (A failed
+            # AI call now gives its slot back -- release_ai_tutor_message --
+            # so burn whatever is left of the cap first.)
+            from ai_engine.models_usage import check_and_consume, get_today_usage
+            for _ in range(max(0, 2 - get_today_usage(u))):
+                check_and_consume(u, cap=2)
             allowed, _ = check_and_consume(u, cap=2)
             self.assertFalse(allowed)
 

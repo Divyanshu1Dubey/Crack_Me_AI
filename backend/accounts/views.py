@@ -7,13 +7,7 @@ Admin users bypass token limits.
 
 import logging
 
-from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import EmailMultiAlternatives
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -59,60 +53,6 @@ def create_admin_audit_log(*, actor, action, resource_type, resource_id='', deta
         logger.exception('Failed to write admin audit log')
 
 
-def send_password_reset_email(user, reset_link):
-    """Send a branded password reset email."""
-    display_name = user.first_name or user.username
-    subject = "CrackCMS | Reset your password"
-    text_body = (
-        f"Hi {display_name},\n\n"
-        "We received a request to reset your CrackCMS password.\n\n"
-        f"Reset your password here:\n{reset_link}\n\n"
-        "If you did not request this, you can ignore this email.\n\n"
-        "CrackCMS Team"
-    )
-    html_body = f"""
-    <div style="background:#e8f0fe;padding:32px 16px;font-family:Arial,sans-serif;color:#142334;">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #d5e0eb;border-radius:24px;overflow:hidden;">
-        <div style="padding:32px;background:linear-gradient(135deg,#0b728f 0%,#0f766e 55%,#f59e0b 100%);color:#ffffff;">
-          <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.8;">CrackCMS Account Security</p>
-          <h1 style="margin:0;font-size:28px;line-height:1.1;">Reset your password</h1>
-          <p style="margin:14px 0 0;font-size:15px;line-height:1.6;opacity:0.9;">
-            Keep your UPSC CMS preparation moving with a secure reset link.
-          </p>
-        </div>
-        <div style="padding:32px;">
-          <p style="margin:0 0 16px;font-size:15px;line-height:1.7;">Hi {display_name},</p>
-          <p style="margin:0 0 20px;font-size:15px;line-height:1.7;">
-            We received a request to reset your CrackCMS password. Use the button below to choose a new one.
-          </p>
-          <p style="margin:0 0 24px;">
-            <a href="{reset_link}" style="display:inline-block;padding:14px 20px;border-radius:14px;background:#0b728f;color:#ffffff;text-decoration:none;font-weight:700;">
-              Reset Password
-            </a>
-          </p>
-          <p style="margin:0 0 12px;font-size:13px;line-height:1.7;color:#5b6f85;">
-            If the button does not open, copy this link into your browser:
-          </p>
-          <p style="margin:0 0 20px;font-size:13px;line-height:1.7;word-break:break-word;color:#14586a;">
-            {reset_link}
-          </p>
-          <p style="margin:0;font-size:13px;line-height:1.7;color:#5b6f85;">
-            If you did not request this reset, you can safely ignore this email.
-          </p>
-        </div>
-      </div>
-    </div>
-    """
-    email = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=django_settings.DEFAULT_FROM_EMAIL,
-        to=[user.email],
-    )
-    email.attach_alternative(html_body, "text/html")
-    email.send(fail_silently=False)
-
-
 class RegisterView(generics.CreateAPIView):
     """Legacy local registration endpoint disabled in favor of Supabase Auth."""
 
@@ -151,27 +91,34 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    PROFILE_BONUS_TOKENS = 10
+
     def perform_update(self, serializer):
+        # UserSerializer.update() saves only the edited fields.
         user = serializer.save()
-        # Reward 10 tokens once when BOTH phone and college are filled
+        # Reward 10 tokens once when BOTH phone and college are filled.
         if user.phone and user.college and not user.profile_bonus_rewarded:
-            user.profile_bonus_rewarded = True
-            user.save(update_fields=['profile_bonus_rewarded'])
-            
-            # Get or create token balance
-            balance, _ = TokenBalance.objects.get_or_create(user=user)
-            # Reward tokens as feedback_credits
-            balance.feedback_credits += 10
-            balance.save(update_fields=['feedback_credits'])
-            
-            # Create transaction audit record
-            TokenTransaction.objects.create(
-                user=user,
-                transaction_type="feedback_reward",
-                amount=10,
-                price_paid=0.00,
-                note="Bonus for completing profile with mobile number and college name"
-            )
+            with transaction.atomic():
+                # Compare-and-set claim: of N concurrent PATCHes exactly one
+                # flips the flag and pays out. The old check-then-set read a
+                # stale flag, so parallel requests each added 10 tokens.
+                claimed = (
+                    User.objects
+                    .filter(pk=user.pk, profile_bonus_rewarded=False)
+                    .update(profile_bonus_rewarded=True)
+                )
+                if not claimed:
+                    return
+                user.profile_bonus_rewarded = True
+                balance, _ = TokenBalance.objects.get_or_create(user=user)
+                balance.add_feedback_credit(self.PROFILE_BONUS_TOKENS)
+                TokenTransaction.objects.create(
+                    user=user,
+                    transaction_type="feedback_reward",
+                    amount=self.PROFILE_BONUS_TOKENS,
+                    price_paid=0.00,
+                    note="Bonus for completing profile with mobile number and college name"
+                )
 
 
 class SubscribeView(APIView):
@@ -200,18 +147,90 @@ class SubscribeView(APIView):
         )
 
 
-class VerifyScholarshipView(APIView):
-    """Verify scholarship test answers and mark user profile as eligible for promo pricing."""
+SCHOLARSHIP_QUESTION_COUNT = 5
+SCHOLARSHIP_MAX_ATTEMPTS = 2
+SCHOLARSHIP_CHALLENGE_MAX_AGE = 60 * 60  # seconds a started challenge stays valid
+_SCHOLARSHIP_SIGNING_SALT = 'accounts.scholarship-challenge.v1'
+_SCHOLARSHIP_LOCKED_MESSAGE = "Max attempts reached. Scholarship challenge is locked."
+
+
+def _issue_scholarship_challenge(user_id, question_ids, attempt_number):
+    """Signed, expiring record of the question set the server chose for this attempt."""
+    from django.core import signing
+
+    return signing.dumps(
+        {'u': user_id, 'q': sorted(question_ids), 'n': attempt_number},
+        salt=_SCHOLARSHIP_SIGNING_SALT,
+        compress=True,
+    )
+
+
+class ScholarshipStartView(APIView):
+    """Start a scholarship attempt: the SERVER picks the five questions.
+
+    POST -> {questions: [{id, question_text, option_a..option_d}],
+             challenge_token, expires_in}
+
+    The token is signed and bound to the user, the chosen question ids and
+    the current attempt number, so /verify-scholarship/ only scores this
+    exact set, once. (The client used to pick any five eligible questions
+    itself, e.g. ones whose answers it had already looked up.)
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        import random
+
         user = request.user
-        
-        if user.scholarship_test_attempts >= 2 and not user.scholarship_test_passed:
-            return Response({"error": "Max attempts reached. Scholarship challenge is locked."}, status=status.HTTP_403_FORBIDDEN)
+        passed, attempts = (
+            User.objects.filter(pk=user.pk)
+            .values_list('scholarship_test_passed', 'scholarship_test_attempts')
+            .get()
+        )
+        if passed:
+            return Response({"error": "You have already unlocked the scholarship price."}, status=status.HTTP_400_BAD_REQUEST)
+        if attempts >= SCHOLARSHIP_MAX_ATTEMPTS:
+            return Response({"error": _SCHOLARSHIP_LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
+
+        eligible_ids = list(
+            Question.objects.filter(is_scholarship_eligible=True, is_active=True).values_list('id', flat=True)
+        )
+        if len(eligible_ids) < SCHOLARSHIP_QUESTION_COUNT:
+            # The subscription page shows its "no scholarship questions" state.
+            return Response({'questions': [], 'challenge_token': None, 'expires_in': 0})
+
+        chosen = random.SystemRandom().sample(eligible_ids, SCHOLARSHIP_QUESTION_COUNT)
+        rows = {
+            q['id']: q for q in Question.objects.filter(id__in=chosen).values(
+                'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+            )
+        }
+        return Response({
+            'questions': [rows[qid] for qid in chosen if qid in rows],
+            'challenge_token': _issue_scholarship_challenge(user.pk, chosen, attempts),
+            'expires_in': SCHOLARSHIP_CHALLENGE_MAX_AGE,
+        })
+
+
+class VerifyScholarshipView(APIView):
+    """Verify scholarship test answers and mark user profile as eligible for promo pricing.
+
+    POST {answers: {<question_id>: 'A'|'B'|'C'|'D'|''}, challenge_token}
+    The answered ids must be exactly the set issued by ScholarshipStartView.
+    The attempt counter is checked and incremented under a row lock.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.core import signing
+
+        user = request.user
+
+        if user.scholarship_test_attempts >= SCHOLARSHIP_MAX_ATTEMPTS and not user.scholarship_test_passed:
+            return Response({"error": _SCHOLARSHIP_LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
 
         answers = request.data.get('answers', {})
-        if not isinstance(answers, dict) or len(answers) != 5:
+        if not isinstance(answers, dict) or len(answers) != SCHOLARSHIP_QUESTION_COUNT:
             return Response({"error": "Invalid test submission. Must submit 5 answers."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate the submission before counting an attempt: exactly five
@@ -230,12 +249,35 @@ class VerifyScholarshipView(APIView):
                 return Response({"error": "Invalid test submission."}, status=status.HTTP_400_BAD_REQUEST)
             normalized[qid_int] = letter
 
+        # The question set must be the one the server issued for this user
+        # and attempt (ScholarshipStartView), not one the client chose.
+        token = str(request.data.get('challenge_token') or '')
+        try:
+            challenge = signing.loads(token, salt=_SCHOLARSHIP_SIGNING_SALT, max_age=SCHOLARSHIP_CHALLENGE_MAX_AGE)
+        except signing.SignatureExpired:
+            return Response(
+                {"error": "This scholarship challenge has expired. Please start it again.", "code": "scholarship_expired"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except signing.BadSignature:
+            return Response(
+                {"error": "Please start the scholarship challenge again from the subscription page.", "code": "scholarship_not_started"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            not isinstance(challenge, dict)
+            or challenge.get('u') != user.pk
+            or sorted(normalized) != challenge.get('q')
+        ):
+            return Response({"error": "Submission contains questions that are not part of the scholarship challenge."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         questions = {
             q.id: q for q in Question.objects.filter(
                 id__in=list(normalized), is_scholarship_eligible=True, is_active=True,
             )
         }
-        if len(questions) != 5:
+        if len(questions) != SCHOLARSHIP_QUESTION_COUNT:
             return Response({"error": "Submission contains questions that are not part of the scholarship challenge."},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -245,35 +287,46 @@ class VerifyScholarshipView(APIView):
             if correct_ans and correct_ans == letter:
                 correct_count += 1
 
-        user.scholarship_test_attempts += 1
+        with transaction.atomic():
+            # Row lock: parallel submissions used to read the same counter
+            # and each get a "first attempt", getting around the 2-attempt cap.
+            locked = User.objects.select_for_update().get(pk=user.pk)
+            if locked.scholarship_test_passed:
+                return Response({"error": "You have already unlocked the scholarship price."}, status=status.HTTP_400_BAD_REQUEST)
+            if locked.scholarship_test_attempts >= SCHOLARSHIP_MAX_ATTEMPTS:
+                return Response({"error": _SCHOLARSHIP_LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
+            if challenge.get('n') != locked.scholarship_test_attempts:
+                # Each started challenge can be submitted once.
+                return Response(
+                    {"error": "This scholarship challenge was already submitted. Please start it again.", "code": "scholarship_not_started"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        if correct_count == 5:
-            user.scholarship_test_passed = True
-            if user.scholarship_test_attempts == 1:
-                user.scholarship_granted_price = 79
-            else:
-                user.scholarship_granted_price = 99
-                
-            user.save(update_fields=['scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price'])
+            locked.scholarship_test_attempts += 1
+            update_fields = ['scholarship_test_attempts']
+            if correct_count == SCHOLARSHIP_QUESTION_COUNT:
+                locked.scholarship_test_passed = True
+                locked.scholarship_granted_price = 79 if locked.scholarship_test_attempts == 1 else 99
+                update_fields += ['scholarship_test_passed', 'scholarship_granted_price']
+            locked.save(update_fields=update_fields)
+
+        if correct_count == SCHOLARSHIP_QUESTION_COUNT:
             return Response({
                 "status": "passed",
-                "score": 5,
-                "message": f"Congratulations! You scored 100% and unlocked the ₹{user.scholarship_granted_price} special offer!"
+                "score": SCHOLARSHIP_QUESTION_COUNT,
+                "message": f"Congratulations! You scored 100% and unlocked the ₹{locked.scholarship_granted_price} special offer!"
             })
-        else:
-            user.save(update_fields=['scholarship_test_attempts'])
-            if user.scholarship_test_attempts == 1:
-                return Response({
-                    "status": "failed",
-                    "score": correct_count,
-                    "message": f"You scored {correct_count}/5. You need 5/5. You have 1 attempt remaining for the ₹99 offer."
-                })
-            else:
-                return Response({
-                    "status": "failed",
-                    "score": correct_count,
-                    "message": f"You scored {correct_count}/5. Challenge Failed. No attempts remaining."
-                })
+        if locked.scholarship_test_attempts == 1:
+            return Response({
+                "status": "failed",
+                "score": correct_count,
+                "message": f"You scored {correct_count}/5. You need 5/5. You have 1 attempt remaining for the ₹99 offer."
+            })
+        return Response({
+            "status": "failed",
+            "score": correct_count,
+            "message": f"You scored {correct_count}/5. Challenge Failed. No attempts remaining."
+        })
 
 
 # Plans a student can buy. 'legacy' (lifetime early-bird) and 'admin_grant'
@@ -325,12 +378,7 @@ class SubscribeOrderView(APIView):
                     'idempotent_replay': True,
                 })
 
-        # Plan routing & amount lookup — pulled from PLAN_FEATURES so the
-        # source of truth is the same model the subscription uses.
-        from .models import PLAN_FEATURES
-        plan_features = PLAN_FEATURES.get(plan, PLAN_FEATURES['legacy'])
-        description = f'CrackLabs Premium {plan_features["display_name"]}'
-
+        # Plan routing & amount lookup.
         if plan == '1_year':
             amount_paise = 199900
             amount_rs = 1999.00
@@ -378,35 +426,11 @@ class SubscribeOrderView(APIView):
                 status='initiated',
                 error_message=error_marker,  # reuse field for idempotency tag
             )
-            
-            # Send initiated checkout email
-            try:
-                from django.core.mail import send_mail
-                from django.conf import settings as django_settings
-                subject = f"⚠️ Complete your {description} Checkout"
-                message = (
-                    f"Dear Dr. {user.first_name or user.username},\n\n"
-                    f"We noticed that you initiated the checkout for our {description} (₹{amount_rs}) but haven't completed it yet.\n\n"
-                    f"Here is what you are missing out on:\n"
-                    f"- Unlimited AI Tutor usage (no token limits)\n"
-                    f"- Top-Teacher curated handwritten study sheets\n"
-                    f"- Direct doubt clearance portal with renowned CMS faculty\n"
-                    f"- Complete UPSC CMS & NEET PG PYQ bank (2018-2025)\n\n"
-                    f"Please complete your subscription payment on your dashboard to claim your premium membership.\n\n"
-                    f"If you experienced any issues during payment, please reply directly to this email.\n\n"
-                    f"Best regards,\n"
-                    f"The CrackLabs Team\n"
-                    f"https://www.cracklabs.app"
-                )
-                send_mail(
-                    subject=subject,
-                    message=message,
-                    from_email=django_settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                pass
+            # No "complete your checkout" email here: this runs before the
+            # user has even seen the payment popup, so every buyer got a nag
+            # mail mid-checkout (promising unlimited AI on metered plans). An
+            # abandoned-checkout reminder belongs in a scheduled job that
+            # mails attempts still 'initiated' hours later.
 
             return Response({
                 'order_id': order['id'],
@@ -457,22 +481,9 @@ class SubscribeVerifyView(APIView):
             )
 
         if existing_attempt is not None and existing_attempt.status == 'successful':
-            # Already verified — return success without re-processing.
-            # Still respect ownership: a free user can't see another user's
-            # subscription status by guessing an order_id.
-            if existing_attempt.user_id == request.user.id:
-                sub = Subscription.get_active_subscription(request.user)
-                return Response({
-                    'message': 'Subscription is already active!',
-                    'is_subscribed': True,
-                    'subscription': _serialize_subscription(sub) if sub else None,
-                })
-            # If a different user already successfully verified this order,
-            # we treat it as a replay attempt and reject.
-            return Response(
-                {'error': 'This payment belongs to a different account.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            # Already verified (ownership was checked above) — report the
+            # real subscription state without re-processing.
+            return _already_processed_response(request.user, existing_attempt)
 
         key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
         key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
@@ -489,11 +500,13 @@ class SubscribeVerifyView(APIView):
                 'razorpay_signature': signature
             })
         except Exception as e:
-            # Mark attempt as failed
+            # Mark attempt as failed -- unless the webhook claimed it
+            # meanwhile: overwriting 'successful' would let a later verify
+            # claim (and activate) the same payment a second time.
             if existing_attempt:
-                existing_attempt.status = 'failed'
-                existing_attempt.error_message = str(e)
-                existing_attempt.save(update_fields=['status', 'error_message'])
+                PaymentAttempt.objects.filter(pk=existing_attempt.pk).exclude(status='successful').update(
+                    status='failed', error_message=str(e), updated_at=timezone.now(),
+                )
             logger.warning('SubscribeVerify: signature verification failed for order %s: %s', order_id, e)
             return Response({'error': 'Payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -515,102 +528,183 @@ class SubscribeVerifyView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Atomic compare-and-set: exactly one of {this verify call, the
-        # webhook, a duplicate verify} flips the attempt to successful and
-        # activates; the others see 0 rows updated. Prevents stacking two
-        # subscription periods for one payment.
-        claimed = (
-            PaymentAttempt.objects
-            .filter(pk=existing_attempt.pk, user_id=user.id)
-            .exclude(status='successful')
-            .update(status='successful', razorpay_payment_id=payment_id, updated_at=timezone.now())
-        )
-        if not claimed:
-            sub = Subscription.get_active_subscription(user)
-            return Response({
-                'message': 'Subscription is already active!',
-                'is_subscribed': True,
-                'subscription': _serialize_subscription(sub) if sub else None,
-            })
+        # Atomic compare-and-set claim AND activation in ONE transaction:
+        # exactly one of {this verify call, the webhook, a duplicate verify}
+        # flips the attempt to successful and activates; the others see 0
+        # rows updated. Before, the claim committed on its own, so a failure
+        # in activation left a paid order marked successful with no plan,
+        # and later verify calls reported "already active".
+        try:
+            sub = _claim_and_activate(existing_attempt, payment_id, user=user, source='verify')
+        except Exception:
+            logger.exception('SubscribeVerify: activation failed for order %s (user_id=%s); claim rolled back', order_id, user.id)
+            return Response(
+                {'error': "Your payment was received but we couldn't activate your plan yet. Please click 'Retry Verification' or contact support with your payment ID."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        if sub is None:
+            return _already_processed_response(user, existing_attempt)
+
         price_paid = float(existing_attempt.amount)
-        plan = existing_attempt.plan or 'legacy'
-
-        # Create proper Subscription record with plan + expiry
-        sub = Subscription.activate_from_payment(
-            user=user,
-            plan=plan,
-            amount_paid=price_paid,
-            razorpay_order_id=order_id,
-            razorpay_payment_id=payment_id,
-        )
-
-        # Log transaction
-        TokenTransaction.objects.create(
-            user=user,
-            transaction_type="purchase",
-            amount=0,
-            price_paid=price_paid,
-            note=f"Razorpay Premium {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}"
-        )
-
-        # Send customized successful payment / membership email
-        try:
-            from django.core.mail import send_mail
-            from django.conf import settings as django_settings
-            expires_str = sub.expires_at.strftime('%d %b %Y') if sub.expires_at else 'Lifetime'
-            subject = "🎉 Welcome to CrackLabs Premium, Dr. {}! 🩺".format(user.first_name or user.username)
-            message = (
-                f"Dear Dr. {user.first_name or user.username},\n\n"
-                f"Congratulations! Your payment of ₹{price_paid} was successfully verified, and your Premium Membership is now fully active.\n\n"
-                f"Details of your Transaction:\n"
-                f"- Plan: {sub.plan_display_name}\n"
-                f"- Amount Paid: ₹{price_paid}\n"
-                f"- Valid Until: {expires_str}\n"
-                f"- Razorpay Order ID: {order_id}\n"
-                f"- Razorpay Payment ID: {payment_id}\n\n"
-                f"You now have full access to all CrackLabs Premium features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and unlimited AI Tutor interactions.\n\n"
-                f"Best of luck with your preparation!\n\n"
-                f"Best regards,\n"
-                f"The CrackLabs Team\n"
-                f"https://www.cracklabs.app"
-            )
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=django_settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        except Exception:
-            pass
-
-        # Send email notification to admin
-        try:
-            from analytics.views import send_admin_notification_email
-            send_admin_notification_email(
-                subject=f"[PREMIUM PURCHASE] {user.username} subscribed to {sub.plan_display_name}",
-                message=(
-                    f"A user has successfully paid and upgraded to {sub.plan_display_name}.\n\n"
-                    f"User Details:\n"
-                    f"  Username: {user.username}\n"
-                    f"  Email: {user.email}\n"
-                    f"  Phone: {getattr(user, 'phone', 'Not provided')}\n"
-                    f"  College: {getattr(user, 'college', 'Not provided')}\n\n"
-                    f"Payment Details:\n"
-                    f"  Plan: {sub.plan_display_name}\n"
-                    f"  Amount: ₹{price_paid}\n"
-                    f"  Razorpay Order ID: {order_id}\n"
-                    f"  Razorpay Payment ID: {payment_id}\n"
-                )
-            )
-        except Exception:
-            logger.exception("Failed to send admin payment notification email")
+        _send_purchase_emails(user, sub, price_paid, order_id, payment_id)
 
         return Response({
             'message': 'Subscription verified and activated successfully!',
             'is_subscribed': True,
             'subscription': _serialize_subscription(sub),
         })
+
+
+def _record_razorpay_purchase(user, attempt, payment_id, *, source):
+    """Activate the plan bought by ``attempt`` and log the purchase.
+
+    Must run inside the transaction that claimed the attempt.
+    """
+    price_paid = float(attempt.amount)
+    order_id = attempt.razorpay_order_id
+    sub = Subscription.activate_from_payment(
+        user=user,
+        plan=attempt.plan or 'legacy',
+        amount_paid=price_paid,
+        razorpay_order_id=order_id,
+        razorpay_payment_id=payment_id,
+    )
+    label = {'verify': 'Razorpay Premium', 'webhook': 'Razorpay Webhook:'}.get(source, f'Razorpay ({source})')
+    TokenTransaction.objects.create(
+        user=user,
+        transaction_type="purchase",
+        amount=0,
+        price_paid=price_paid,
+        note=f"{label} {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}",
+    )
+    return sub
+
+
+def _claim_and_activate(attempt, payment_id, *, user, source):
+    """Claim ``attempt`` (compare-and-set) and activate it, atomically.
+
+    Returns the new Subscription, or None when another request already
+    claimed the order. Any exception rolls the claim back so the order can
+    be verified again (or delivered again by the webhook).
+    """
+    from .models import PaymentAttempt
+
+    with transaction.atomic():
+        claimed = (
+            PaymentAttempt.objects
+            .filter(pk=attempt.pk, user_id=user.id)
+            .exclude(status='successful')
+            .update(status='successful', razorpay_payment_id=payment_id, updated_at=timezone.now())
+        )
+        if not claimed:
+            return None
+        return _record_razorpay_purchase(user, attempt, payment_id, source=source)
+
+
+def _heal_stranded_payment(attempt):
+    """Activate an order that is marked successful but has no subscription.
+
+    Before the claim and the activation shared a transaction, a failure in
+    between left exactly this state and nothing ever recovered it. Locks the
+    attempt so concurrent callers activate it at most once.
+    """
+    from .models import PaymentAttempt
+
+    with transaction.atomic():
+        locked = (
+            PaymentAttempt.objects.select_for_update()
+            .select_related('user')
+            .filter(pk=attempt.pk, status='successful')
+            .first()
+        )
+        if locked is None:
+            return None
+        if Subscription.objects.filter(user_id=locked.user_id, razorpay_order_id=locked.razorpay_order_id).exists():
+            return None
+        logger.error(
+            'Payment order %s (user_id=%s) was marked successful without a subscription; activating it now',
+            locked.razorpay_order_id, locked.user_id,
+        )
+        return _record_razorpay_purchase(locked.user, locked, locked.razorpay_payment_id or '', source='recovered')
+
+
+def _already_processed_response(user, attempt):
+    """Response for an order that was already claimed: the REAL subscription state."""
+    try:
+        _heal_stranded_payment(attempt)
+    except Exception:
+        logger.exception('Could not recover stranded payment order %s', attempt.razorpay_order_id)
+    sub = Subscription.get_active_subscription(user)
+    if sub is None:
+        logger.error(
+            'Payment order %s (user_id=%s) is marked successful but the user has no active subscription',
+            attempt.razorpay_order_id, user.id,
+        )
+        return Response(
+            {
+                'error': 'This payment was already processed, but no active subscription was found. Please contact support with your payment ID.',
+                'is_subscribed': False,
+                'subscription': None,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    return Response({
+        'message': 'Subscription is already active!',
+        'is_subscribed': True,
+        'subscription': _serialize_subscription(sub),
+    })
+
+
+def _send_purchase_emails(user, sub, price_paid, order_id, payment_id):
+    """Receipt for the student and a notification for the admin, sent off the request path."""
+    from .emails import run_in_background, send_mail_in_background
+
+    name = user.first_name or user.username
+    expires_str = sub.expires_at.strftime('%d %b %Y') if sub.expires_at else 'Lifetime'
+    if sub.unlimited_ai:
+        ai_line = "unlimited AI Tutor interactions"
+    elif sub.monthly_tokens_grant:
+        ai_line = f"{sub.monthly_tokens_grant} AI Tutor tokens added to your wallet (on top of the free daily allowance)"
+    else:
+        ai_line = "the AI Tutor"
+    send_mail_in_background(
+        subject=f"🎉 Welcome to CrackLabs Premium, Dr. {name}! 🩺",
+        message=(
+            f"Dear Dr. {name},\n\n"
+            f"Congratulations! Your payment of ₹{price_paid} was successfully verified, and your Premium Membership is now fully active.\n\n"
+            f"Details of your Transaction:\n"
+            f"- Plan: {sub.plan_display_name}\n"
+            f"- Amount Paid: ₹{price_paid}\n"
+            f"- Valid Until: {expires_str}\n"
+            f"- Razorpay Order ID: {order_id}\n"
+            f"- Razorpay Payment ID: {payment_id}\n\n"
+            f"You now have full access to all CrackLabs Premium features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and {ai_line}.\n\n"
+            f"Best of luck with your preparation!\n\n"
+            f"Best regards,\n"
+            f"The CrackLabs Team\n"
+            f"https://www.cracklabs.app"
+        ),
+        recipient_list=[user.email],
+    )
+
+    from analytics.views import send_admin_notification_email
+    run_in_background(
+        send_admin_notification_email,
+        subject=f"[PREMIUM PURCHASE] {user.username} subscribed to {sub.plan_display_name}",
+        message=(
+            f"A user has successfully paid and upgraded to {sub.plan_display_name}.\n\n"
+            f"User Details:\n"
+            f"  Username: {user.username}\n"
+            f"  Email: {user.email}\n"
+            f"  Phone: {getattr(user, 'phone', 'Not provided')}\n"
+            f"  College: {getattr(user, 'college', 'Not provided')}\n\n"
+            f"Payment Details:\n"
+            f"  Plan: {sub.plan_display_name}\n"
+            f"  Amount: ₹{price_paid}\n"
+            f"  Razorpay Order ID: {order_id}\n"
+            f"  Razorpay Payment ID: {payment_id}\n"
+        ),
+    )
 
 
 def _serialize_subscription(sub):
@@ -639,8 +733,10 @@ class SubscriptionStatusView(APIView):
     throttle_scope = 'subscription_status'
 
     def get(self, request):
+        from .models import SUBSCRIPTION_STATUS_CACHE_KEY
+
         user = request.user
-        cache_key = f'sub_status:{user.id}'
+        cache_key = SUBSCRIPTION_STATUS_CACHE_KEY.format(user_id=user.id)
         cached = cache.get(cache_key)
         if cached is not None:
             return Response(cached)
@@ -650,8 +746,10 @@ class SubscriptionStatusView(APIView):
         # they are a grandfathered lifetime user. Route through
         # _serialize_subscription so the response shape is identical to a
         # real Subscription row (was missing `id`, `razorpay_order_id`,
-        # `created_at` before — broke downstream consumers).
-        if not sub and user.is_subscribed:
+        # `created_at` before — broke downstream consumers). A user whose
+        # dated rows just expired is NOT grandfathered (it used to get a
+        # cached "Legacy Early Bird (Lifetime)" stub for that request).
+        if not sub and user.is_subscribed and not Subscription.objects.filter(user=user).exists():
             legacy_stub = Subscription(
                 user=user,
                 plan='legacy',
@@ -836,40 +934,24 @@ class RazorpayWebhookView(APIView):
                     'Razorpay webhook: order %s already credited with payment %s; ignoring payment %s',
                     order_id, attempt.razorpay_payment_id, payment_id,
                 )
-            return Response({'status': 'already_processed'})
-
-        claimed = (
-            PaymentAttempt.objects
-            .filter(pk=attempt.pk)
-            .exclude(status='successful')
-            .update(razorpay_payment_id=payment_id, status='successful', updated_at=timezone.now())
-        )
-        if not claimed:
+            try:
+                _heal_stranded_payment(attempt)
+            except Exception:
+                logger.exception('Razorpay webhook: could not recover stranded order %s', order_id)
             return Response({'status': 'already_processed'})
 
         user = attempt.user
-        plan = attempt.plan or 'legacy'
-        price_paid = float(attempt.amount)
+        # Claim + activation in one transaction (see SubscribeVerifyView). On
+        # failure the claim is rolled back and the 500 makes Razorpay retry.
+        try:
+            sub = _claim_and_activate(attempt, payment_id, user=user, source='webhook')
+        except Exception:
+            logger.exception('Razorpay webhook: activation failed for order %s; claim rolled back', order_id)
+            return Response({'status': 'error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if sub is None:
+            return Response({'status': 'already_processed'})
 
-        sub = Subscription.activate_from_payment(
-            user=user,
-            plan=plan,
-            amount_paid=price_paid,
-            razorpay_order_id=order_id,
-            razorpay_payment_id=payment_id,
-        )
-
-        # Log transaction
-        TokenTransaction.objects.create(
-            user=user,
-            transaction_type="purchase",
-            amount=0,
-            price_paid=price_paid,
-            note=f"Razorpay Webhook: {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}"
-        )
-
-        logger.info(f'Webhook activated subscription for {user.username}: {sub.plan_display_name}')
-        cache.delete(f'sub_status:{user.id}')
+        logger.info('Webhook activated subscription for %s: %s', user.username, sub.plan_display_name)
         return Response({'status': 'activated'})
 
 
@@ -939,6 +1021,9 @@ class AdminTokenOverviewView(APIView):
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'admin_control_tower'
 
+    DEFAULT_LIMIT = 1000
+    MAX_LIMIT = 5000
+
     def get(self, request):
         create_admin_audit_log(
             actor=request.user,
@@ -946,18 +1031,41 @@ class AdminTokenOverviewView(APIView):
             resource_type='token_overview',
             detail='Viewed platform token overview',
         )
-        balances = TokenBalance.objects.select_related("user").all()
-        serializer = AdminUserTokenSerializer(balances, many=True)
-        config = TokenConfig.get_config()
+        try:
+            limit = min(max(int(request.query_params.get('limit', self.DEFAULT_LIMIT)), 1), self.MAX_LIMIT)
+            offset = max(int(request.query_params.get('offset', 0)), 0)
+        except (TypeError, ValueError):
+            return Response({'error': 'limit and offset must be integers'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # A fixed number of queries and NO writes, whatever the user count.
+        # The old code serialised every TokenBalance through the
+        # available_tokens property, i.e. a TokenConfig get_or_create plus a
+        # possible counter-reset UPDATE per row (twice: serializer + sum).
+        config = TokenConfig.get_config()
+        today = timezone.localdate()
+        total_purchased = total_feedback = total_consumed = total_available = 0
+        balance_count = 0
+        # (No .iterator(): server-side cursors break behind a transaction-mode
+        # connection pooler.)
+        for row in TokenBalance.objects.only(
+            'daily_tokens_used', 'weekly_tokens_used', 'last_daily_reset', 'last_weekly_reset',
+            'purchased_tokens', 'feedback_credits', 'total_tokens_used',
+        ):
+            balance_count += 1
+            total_purchased += row.purchased_tokens
+            total_feedback += row.feedback_credits
+            total_consumed += row.total_tokens_used
+            total_available += row.available_tokens_readonly(config, today)
+
+        page = TokenBalance.objects.select_related("user").order_by('id')[offset:offset + limit]
+        serializer = AdminUserTokenSerializer(page, many=True, context={'token_config': config})
         total_users = User.objects.count()
-        total_purchased = sum(b.purchased_tokens for b in balances)
-        total_feedback = sum(b.feedback_credits for b in balances)
-        total_consumed = sum(b.total_tokens_used for b in balances)
-        total_available = sum(b.available_tokens for b in balances)
 
         return Response(
             {
+                "count": balance_count,
+                "limit": limit,
+                "offset": offset,
                 "platform_stats": {
                     "total_users": total_users,
                     "total_purchased_tokens": total_purchased,
@@ -1153,32 +1261,27 @@ class AdminTokenTransferView(APIView):
         )
 
 
+_PASSWORD_RESET_GONE = {
+    'detail': 'Password reset is handled by Supabase Auth. Use "Forgot password" on the sign-in page.',
+    'error': 'endpoint_gone',
+}
+
+
 class PasswordResetRequestView(APIView):
-    """Request a password reset email. Sends a link with uid and token."""
+    """Disabled: password reset goes through Supabase (resetPasswordForEmail).
+
+    This endpoint used to email a Django uid/token link that the
+    /reset-password page ignores (it calls supabase.auth.updateUser), so the
+    mail could never work, and anyone could trigger it for any address.
+    Returns 410 like the disabled local login/register endpoints.
+    """
 
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'password_reset'
 
     def post(self, request):
-        email = request.data.get("email", "").strip().lower()
-        if not email:
-            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            user = User.objects.get(email=email)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:3000")
-            reset_link = f"{frontend_url}/reset-password?uid={uid}&token={token}"
-            try:
-                send_password_reset_email(user, reset_link)
-            except Exception as exc:
-                logger.warning("Password reset email failed for user_id=%s: %s", user.pk, exc)
-        except User.DoesNotExist:
-            logger.info("Password reset requested for unknown email=%s", email)
-
-        return Response({"message": "If an account with that email exists, a reset link has been sent."})
+        return Response(_PASSWORD_RESET_GONE, status=status.HTTP_410_GONE)
 
 
 class AdminAuditLogListView(APIView):
@@ -1261,11 +1364,15 @@ class AdminUserLifecycleListView(APIView):
         }
         
         now = timezone.now()
+        # One config lookup and no writes for the whole page (the property
+        # did a get_or_create + possible UPDATE per user).
+        token_config = TokenConfig.get_config()
+        today = timezone.localdate()
 
         results = []
         for u in users:
             bal = balances.get(u.id)
-            available = bal.available_tokens if bal else 0
+            available = bal.available_tokens_readonly(token_config, today) if bal else 0
             
             last_seen = u.last_seen or device_last_login_map.get(u.id) or u.last_login
             is_online = False
@@ -1364,8 +1471,13 @@ class AdminUserRoleUpdateView(APIView):
 
         old_role = target.role
         target.role = role
-        target.is_superuser = role == 'admin'
+        # Promotion grants API admin rights (role) and is_staff (needed by
+        # DRF IsAdminUser endpoints), but never Django superuser: superusers
+        # are only created from trusted sources (Supabase app_metadata, the
+        # admin email allowlist, createsuperuser). Demotion removes all three.
         target.is_staff = role == 'admin'
+        if role != 'admin':
+            target.is_superuser = False
         target.save(update_fields=['role', 'is_superuser', 'is_staff'])
 
         create_admin_audit_log(
@@ -1440,6 +1552,22 @@ class AdminUserResetProgressView(APIView):
         return Response({'message': 'User progress reset completed', 'user_id': target.id, 'results': payload})
 
 
+def _system_action_scope(request):
+    """Return (scope, None) for an explicit 'all' / 'user' scope, else (None, 400 response).
+
+    A missing or misspelled scope used to default to 'all', so a call like
+    {"user_id": 5} wiped every user's attempts or analytics.
+    """
+    raw_scope = request.data.get('scope')
+    scope = raw_scope.strip().lower() if isinstance(raw_scope, str) else ''
+    if scope not in ('all', 'user'):
+        return None, Response(
+            {'error': "scope is required and must be 'all' or 'user'"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return scope, None
+
+
 class AdminSystemResetAttemptsView(APIView):
     """Reset test attempts either scoped to one user or globally."""
 
@@ -1449,7 +1577,9 @@ class AdminSystemResetAttemptsView(APIView):
     def post(self, request):
         from tests_engine.models import QuestionResponse, TestAttempt
 
-        scope = (request.data.get('scope') or 'all').strip().lower()
+        scope, error_response = _system_action_scope(request)
+        if error_response is not None:
+            return error_response
         user_id = request.data.get('user_id')
         parsed_user_id = None
 
@@ -1493,7 +1623,9 @@ class AdminSystemClearAnalyticsView(APIView):
     def post(self, request):
         from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance
 
-        scope = (request.data.get('scope') or 'all').strip().lower()
+        scope, error_response = _system_action_scope(request)
+        if error_response is not None:
+            return error_response
         user_id = request.data.get('user_id')
         parsed_user_id = None
 
@@ -1556,7 +1688,9 @@ class AdminSystemRerunEvaluationView(APIView):
         from analytics.models import UserTopicPerformance
         from tests_engine.models import QuestionResponse
 
-        scope = (request.data.get('scope') or 'all').strip().lower()
+        scope, error_response = _system_action_scope(request)
+        if error_response is not None:
+            return error_response
         user_id = request.data.get('user_id')
         parsed_user_id = None
 
@@ -1627,21 +1761,21 @@ class AdminSystemBackupDataView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
-        from django.core.management import call_command
-        import io
+        from .core_data_backup import CoreDataBackupError, backup_core_data
+
         try:
-            # We just call the management command we created
-            call_command('backup_core_data')
-            create_admin_audit_log(
-                actor=request.user,
-                action='system_backup',
-                resource_type='system',
-                detail='Initiated core data backup to JSON',
-            )
-            return Response({'message': 'Core data structure backup completed successfully'})
-        except Exception:
-            logger.exception('Admin system data operation failed')
-            return Response({'error': 'Operation failed; see server logs for details.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            _path, count = backup_core_data()
+        except CoreDataBackupError as exc:
+            logger.exception('Admin core data backup failed')
+            return Response({'error': f'Backup failed: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        create_admin_audit_log(
+            actor=request.user,
+            action='system_backup',
+            resource_type='system',
+            detail=f'Backed up {count} core data records to JSON',
+            metadata={'records': count},
+        )
+        return Response({'message': f'Core data backup completed: {count} records saved.', 'records': count})
 
 
 class AdminSystemRestoreDataView(APIView):
@@ -1651,56 +1785,33 @@ class AdminSystemRestoreDataView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
-        from django.core.management import call_command
+        from .core_data_backup import CoreDataBackupError, restore_core_data
+
         try:
-            call_command('restore_core_data')
-            create_admin_audit_log(
-                actor=request.user,
-                action='system_restore',
-                resource_type='system',
-                detail='Restored core data structure from JSON',
-            )
-            return Response({'message': 'Core data structure restore completed successfully'})
-        except Exception:
-            logger.exception('Admin system data operation failed')
-            return Response({'error': 'Operation failed; see server logs for details.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            count = restore_core_data()
+        except CoreDataBackupError as exc:
+            logger.exception('Admin core data restore failed')
+            return Response({'error': f'Restore failed: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        create_admin_audit_log(
+            actor=request.user,
+            action='system_restore',
+            resource_type='system',
+            detail=f'Restored {count} core data records from JSON',
+            metadata={'records': count},
+        )
+        return Response({'message': f'Core data restore completed: {count} records loaded.', 'records': count})
 
 class PasswordResetConfirmView(APIView):
-    """Confirm password reset with uid, token, and new password."""
+    """Disabled (410): see PasswordResetRequestView.
+
+    It set a Django password that no login path uses (sign-in is Supabase
+    only) and could give staff a usable Django-admin password.
+    """
 
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        uid = request.data.get("uid", "")
-        token = request.data.get("token", "")
-        new_password = request.data.get("new_password", "")
-        if not uid or not token or not new_password:
-            return Response(
-                {"error": "uid, token, and new_password are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            user_id = force_str(urlsafe_base64_decode(uid))
-            user = User.objects.get(pk=user_id)
-        except (User.DoesNotExist, ValueError, TypeError):
-            return Response({"error": "Invalid reset link."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not default_token_generator.check_token(user, token):
-            return Response(
-                {"error": "Reset link has expired or is invalid."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            validate_password(new_password, user=user)
-        except Exception as exc:
-            message = exc.messages[0] if getattr(exc, "messages", None) else "Password is too weak."
-            return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
-
-        user.set_password(new_password)
-        user.save()
-        return Response({"message": "Password has been reset successfully."})
+        return Response(_PASSWORD_RESET_GONE, status=status.HTTP_410_GONE)
 
 
 class UserDeviceListView(APIView):
@@ -1748,12 +1859,21 @@ class AdminSubscriptionManageView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
             
+        from .models import PLAN_FEATURES, invalidate_subscription_status_cache
+
         action = request.data.get('action') # 'grant', 'revoke'
         plan = request.data.get('plan') # '1_month', '3_months', '1_year', 'legacy'
-        
+
         if action == 'grant':
             if not plan:
                 return Response({'error': 'Plan is required for granting'}, status=status.HTTP_400_BAD_REQUEST)
+            # An unknown code used to become a never-expiring premium
+            # subscription with an invalid plan code.
+            if not isinstance(plan, str) or plan not in PLAN_FEATURES:
+                return Response(
+                    {'error': 'Unknown plan.', 'available_plans': sorted(PLAN_FEATURES)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             # Create a manual subscription payment log
             Subscription.activate_from_payment(
                 user=user,
@@ -1782,6 +1902,7 @@ class AdminSubscriptionManageView(APIView):
             ).update(status='cancelled')
             user.is_subscribed = False
             user.save(update_fields=['is_subscribed'])
+            invalidate_subscription_status_cache(user.id)
 
             create_admin_audit_log(
                 actor=request.user,

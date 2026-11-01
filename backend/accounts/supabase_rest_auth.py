@@ -5,12 +5,61 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import timedelta
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
-from rest_framework import authentication
+from django.utils import timezone
+from rest_framework import authentication, exceptions
 
 from .models import TokenBalance
+
+# Requests an over-the-limit device may still make, so the user can open
+# Settings and free a slot (list / log out devices, load the profile).
+_DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/')
+# A device's last_login is refreshed at most this often (one write per
+# request per user was the old behaviour).
+_DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
+# Devices unseen for this long no longer hold a slot for a NEW device (the
+# cap was never enforced before, so many accounts carry long-dead rows, e.g.
+# one per old incognito session). They stay listed in Settings.
+_DEVICE_STALE_AFTER = timedelta(days=30)
+
+
+def _auth_failed(code: str, detail: str) -> exceptions.AuthenticationFailed:
+    """AuthenticationFailed with a machine-readable ``code`` the frontend acts on."""
+    return exceptions.AuthenticationFailed({"detail": detail, "code": code})
+
+
+def _supabase_email_confirmed(supabase_user: dict) -> bool:
+    """True when Supabase has verified that this identity owns its email.
+
+    ``email_confirmed_at`` is the field current GoTrue builds return. Older
+    builds only expose ``confirmed_at``, which can also be set by a *phone*
+    confirmation, so it only counts when no phone was confirmed.
+    """
+    if supabase_user.get("email_confirmed_at"):
+        return True
+    return bool(supabase_user.get("confirmed_at")) and not supabase_user.get("phone_confirmed_at")
+
+
+def _name_parts_from_metadata(metadata: dict) -> tuple[str, str]:
+    """first/last name from Supabase user_metadata (OAuth providers only send full_name/name)."""
+    first = str(metadata.get("first_name") or "").strip()
+    last = str(metadata.get("last_name") or "").strip()
+    if not first and not last:
+        full = str(metadata.get("full_name") or metadata.get("name") or "").strip()
+        if full:
+            first, _, last = full.partition(" ")
+    return first[:150], last.strip()[:150]
+
+
+def _avatar_from_metadata(metadata: dict) -> str:
+    url = str(metadata.get("avatar_url") or metadata.get("picture") or "").strip()
+    # CustomUser.avatar_url is a URLField(max_length=200).
+    if url.startswith(("https://", "http://")) and len(url) <= 200:
+        return url
+    return ""
 
 # SECURITY (Fix #3): The X-Session-ID header is trusted by this backend as a
 # device fingerprint. Without validation, any attacker can rotate the header
@@ -49,8 +98,20 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
     Flow:
     1) Read Authorization: Bearer <supabase_access_token>
     2) Validate token by calling Supabase `/auth/v1/user`
-    3) Upsert local Django user by email and return it as request.user
+    3) Upsert local Django user by (confirmed) email and return it as request.user
+    4) Reject blocked accounts (``is_active=False``) and enforce the device cap
+
+    Failures that the frontend must act on raise AuthenticationFailed with a
+    ``code``: ``account_blocked``, ``email_not_confirmed``, ``email_required``,
+    ``device_inactive`` and ``device_limit_reached``.
     """
+
+    def authenticate_header(self, request_obj):
+        # DRF only answers 401 (instead of 403) for NotAuthenticated /
+        # AuthenticationFailed when the FIRST authenticator returns a
+        # WWW-Authenticate value. Without it, expired or unverifiable tokens
+        # came back as 403 and the frontend's refresh-on-401 never ran.
+        return 'Bearer realm="api"'
 
     def authenticate(self, request_obj):
         auth_header = authentication.get_authorization_header(request_obj).split()
@@ -69,79 +130,105 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
         user = self._upsert_local_user(supabase_user)
 
-        # ── Device Management & Limits ──
-        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
+        # Admin "Block user" sets is_active=False. DRF's IsAuthenticated only
+        # looks at is_authenticated (True for inactive users), so without this
+        # check a blocked user kept full API access.
+        if not user.is_active:
+            raise _auth_failed(
+                "account_blocked",
+                "This account has been blocked. Contact support if you think this is a mistake.",
+            )
 
-        # Premium student exception: ensure they never get locked out due to device limits/race conditions
+        # Admins are exempt from device tracking and limits.
         if user.role == 'admin':
             return (user, None)
+
+        self._enforce_device_limits(request_obj, user)
+        return (user, token)
+
+    def _enforce_device_limits(self, request_obj, user):
+        """Track the X-Session-ID device and enforce the 2 (free) / 4 (subscribed) cap.
+
+        * A device the user (or an admin) logged out raises ``device_inactive``;
+          the frontend then drops its device id and signs out, so the next
+          sign-in enrols a fresh device.
+        * A NEW device is enrolled only while the user has fewer active devices
+          (seen in the last 30 days) than the cap; otherwise
+          ``device_limit_reached`` (except on the device-management paths, so
+          Settings can free a slot).
+        * Existing devices beyond the cap (e.g. after a 4 -> 2 downgrade): the
+          ones used most recently win, judged on last_login values from BEFORE
+          this request. (The old code refreshed last_login first, so the
+          current device always ranked newest and the cap never triggered.)
+        """
+        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
 
         # SECURITY (Fix #3): reject any X-Session-ID that doesn't match a
         # known device-token shape. Without this, an attacker can enumerate
         # X-Session-ID: 1, 2, 3, ... and spawn unlimited parallel sessions,
-        # bypassing the per-user device limit.
+        # bypassing the per-user device limit. The request stays
+        # authenticated; the spoofed fingerprint is simply not enrolled.
         if incoming_session_id and not _is_valid_session_id(incoming_session_id):
-            # Drop the spoofed header; behave as if no device tracker was
-            # attached for this request. We don't fail authentication — the
-            # user is still legitimately authenticated via Supabase — but
-            # we won't enroll this fingerprint as a "device", so any later
-            # attempt with a valid-looking session will be the one that
-            # counts toward the limit.
             incoming_session_id = None
+        if not incoming_session_id:
+            return
 
-        if incoming_session_id:
-            from .models import UserDevice
+        from .models import UserDevice
 
-            # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
-            # bookkeeping. X-Forwarded-For is attacker-controlled when the
-            # client can reach the backend directly, so honoring it lets
-            # anyone spoof their IP for rate-limit / geo / device bookkeeping.
-            # Render sits behind a known proxy; we still capture the raw
-            # socket address.
-            ip = request_obj.META.get('REMOTE_ADDR', '').strip()
+        # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
+        # bookkeeping. X-Forwarded-For is attacker-controlled when the
+        # client can reach the backend directly.
+        ip = request_obj.META.get('REMOTE_ADDR', '').strip() or None
+        user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
+        limit = 4 if getattr(user, 'is_subscribed', False) else 2
+        management_request = any(p in request_obj.path for p in _DEVICE_MANAGEMENT_PATHS)
 
-            user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
-
-            device, created = UserDevice.objects.get_or_create(
-                user=user,
-                device_fingerprint=incoming_session_id,
-                defaults={
-                    'device_name': user_agent,
-                    'ip_address': ip,
-                    'is_active': True
-                }
+        def _limit_reached():
+            return _auth_failed(
+                "device_limit_reached",
+                f"Maximum device limit reached ({limit} devices). Please manage devices in Settings.",
             )
 
-            if not created:
-                # Update last login
-                device.device_name = user_agent
-                device.ip_address = ip
-                device.save(update_fields=['device_name', 'ip_address', 'last_login'])
+        now = timezone.now()
+        device = UserDevice.objects.filter(user=user, device_fingerprint=incoming_session_id).first()
+        if device is None:
+            slots_taken = UserDevice.objects.filter(
+                user=user, is_active=True, last_login__gte=now - _DEVICE_STALE_AFTER,
+            ).count()
+            if slots_taken >= limit:
+                if management_request:
+                    return  # let it reach Settings without taking a slot
+                raise _limit_reached()
+            UserDevice.objects.get_or_create(
+                user=user,
+                device_fingerprint=incoming_session_id,
+                defaults={'device_name': user_agent, 'ip_address': ip, 'is_active': True},
+            )
+            return
 
-            if not device.is_active:
-                from rest_framework import exceptions
-                raise exceptions.AuthenticationFailed({
-                    "detail": "This device has been logged out or blocked.",
-                    "code": "device_inactive"
-                })
+        if not device.is_active:
+            raise _auth_failed("device_inactive", "This device has been logged out or blocked.")
 
-            # Enforce limits if it's a new device or checking limits
-            limit = 4 if getattr(user, 'is_subscribed', False) else 2
+        more_recent = (
+            UserDevice.objects
+            .filter(user=user, is_active=True, last_login__gt=device.last_login)
+            .exclude(pk=device.pk)
+            .count()
+        )
+        if more_recent >= limit:
+            if management_request:
+                return  # do not refresh last_login, or it would win its slot back
+            raise _limit_reached()
 
-            active_devices = UserDevice.objects.filter(user=user, is_active=True).order_by('-last_login')
-            if active_devices.count() > limit:
-                # If this device isn't in the allowed top N devices, reject
-                allowed_ids = list(active_devices.values_list('id', flat=True)[:limit])
-                if device.id not in allowed_ids:
-                    allowed_paths = ['/auth/profile/', '/auth/devices/', '/auth/logout/']
-                    if not any(p in request_obj.path for p in allowed_paths):
-                        from rest_framework import exceptions
-                        raise exceptions.AuthenticationFailed({
-                            "detail": f"Maximum device limit reached ({limit} devices). Please manage devices in Settings.",
-                            "code": "device_limit_reached"
-                        })
-
-        return (user, token)
+        if (
+            device.last_login is None
+            or now - device.last_login >= _DEVICE_TOUCH_INTERVAL
+            or device.device_name != user_agent
+            or (device.ip_address or None) != ip
+        ):
+            UserDevice.objects.filter(pk=device.pk).update(
+                device_name=user_agent, ip_address=ip, last_login=now,
+            )
 
     def _fetch_supabase_user(self, token: str):
         # Cache Supabase JWT validation for the token's remaining lifetime
@@ -189,6 +276,9 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip(),
             os.getenv("SUPABASE_ANON_KEY", "").strip(),
             os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip(),
+            # New-style Supabase publishable keys are as safe as the anon key.
+            os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip(),
+            os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "").strip(),
         ]
         verify_key = next((k for k in anon_keys if k), "")
 
@@ -240,6 +330,18 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         User = get_user_model()
 
         email = (supabase_user.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            # Phone-only / anonymous Supabase identities have no email. Linking
+            # them "by email" would map all of them onto one local row (the
+            # one with email='', e.g. a createsuperuser account).
+            raise _auth_failed("email_required", "Sign in with an email address to use CrackLabs.")
+        if not _supabase_email_confirmed(supabase_user):
+            # SECURITY: local accounts are linked by email. Without a verified
+            # email anyone could sign up in Supabase with an address that only
+            # exists locally (bootstrap admin, legacy users, an allowlisted
+            # admin email) and be signed in as that account.
+            raise _auth_failed("email_not_confirmed", "Please confirm your email address, then sign in again.")
+
         metadata = supabase_user.get("user_metadata") or {}
         app_metadata = supabase_user.get("app_metadata") or {}
         username = (metadata.get("username") or "").strip()
@@ -276,108 +378,92 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             return configured
 
         # ── Fix P1 (2026-09-23): admin-role loss bug ─────────────────────
-        # `is_admin_user` is the authoritative privilege level for THIS login
-        # from trusted sources (Supabase app_metadata or env allowlist).
+        # `trusted_admin` is the privilege level for THIS login from trusted
+        # sources: Supabase app_metadata (only settable with the service-role
+        # key) or the env allowlist. The email is confirmed at this point
+        # (checked above), so an allowlisted address can't be claimed by an
+        # unverified sign-up. user_metadata is user-editable and never counts.
         admin_allowlist = _admin_email_allowlist()
         is_admin_from_metadata = _is_admin_from_metadata(app_metadata)
         is_admin_from_allowlist = email in admin_allowlist
-        is_admin_user = is_admin_from_metadata or is_admin_from_allowlist
+        trusted_admin = is_admin_from_metadata or is_admin_from_allowlist
 
-        # NOTE: we cannot check the DB yet because `get_or_create` happens
-        # below.  For new users, `is_admin_user` is the sole authority.
-        # For existing users, the `else` branch preserves admin if the DB
-        # already has it — never demote, regardless of metadata/allowlist.
-
-        desired_role = "admin" if is_admin_user else "student"
+        first_name, last_name = _name_parts_from_metadata(metadata)
+        avatar_url = _avatar_from_metadata(metadata)
 
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
                 "username": username_candidate,
-                "first_name": str(metadata.get("first_name") or ""),
-                "last_name": str(metadata.get("last_name") or ""),
-                "target_exam": str(metadata.get("target_exam") or "UPSC CMS"),
+                "first_name": first_name,
+                "last_name": last_name,
+                "target_exam": str(metadata.get("target_exam") or "UPSC CMS")[:50],
+                "avatar_url": avatar_url,
                 "is_active": True,
-                "role": "admin" if is_admin_user else "student",
-                "is_superuser": is_admin_user,
-                "is_staff": is_admin_user,
+                "role": "admin" if trusted_admin else "student",
+                "is_superuser": trusted_admin,
+                "is_staff": trusted_admin,
             },
         )
 
         if created:
             user.set_unusable_password()
             user.save(update_fields=["password"])
-            
-            # Send personalized welcome email
-            try:
-                from django.core.mail import send_mail
-                from django.conf import settings
-                subject = f"Welcome to CrackLabs, Dr. {user.first_name or user.username}! 🩺"
-                message = (
-                    f"Dear Dr. {user.first_name or user.username},\n\n"
-                    f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
-                    f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
-                    f"Here is what you get access to:\n"
-                    f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
-                    f"- Spaced Repetition flashcards based on SM-2\n"
-                    f"- Unlimited AI Tutor to break down complex medical guidelines\n"
-                    f"- Dynamic leaderboard to compete with medical peers across the country\n\n"
-                    f"Let's start your prep today! Head over to your dashboard and complete your first clinical drill.\n\n"
-                    f"Best regards,\n"
-                    f"The CrackLabs Team\n"
-                    f"https://www.cracklabs.app"
-                )
-                send_mail(
-                    subject=subject,
-                    message=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                pass
+            self._send_welcome_email(user)
         else:
-            # Never demote an existing admin.  If the DB already has admin
-            # privileges, keep them regardless of metadata/allowlist state
-            # for this particular login.
-            db_is_admin = bool(user.is_admin or user.is_superuser)
-            if db_is_admin:
-                is_admin_user = True
+            if trusted_admin:
+                desired = {"role": "admin", "is_superuser": True, "is_staff": True}
+            elif user.role == "admin" or user.is_superuser:
+                # Never demote an existing admin here (revocation is done in
+                # the admin panel), but don't mint a superuser either: an admin
+                # granted in the DB (in-app role toggle) keeps API admin rights
+                # and is_staff, and only trusted sources grant is_superuser.
+                desired = {"role": "admin", "is_staff": True}
+            else:
+                desired = {"role": "student", "is_superuser": False, "is_staff": False}
 
-            desired_role = "admin" if is_admin_user else "student"
-            updates: list[str] = []
+            # Profile fields are filled from Supabase metadata only when the
+            # local value is empty. They used to be overwritten on EVERY
+            # request, which reverted name / avatar edits made in Settings and
+            # forced every target_exam back to "UPSC CMS" (target_exam is now
+            # only set when the account is created).
+            if first_name and not user.first_name:
+                desired["first_name"] = first_name
+            if last_name and not user.last_name:
+                desired["last_name"] = last_name
+            if avatar_url and not user.avatar_url:
+                desired["avatar_url"] = avatar_url
 
-            if user.role != desired_role:
-                user.role = desired_role
-                updates.append("role")
-            if user.is_superuser != is_admin_user:
-                user.is_superuser = is_admin_user
-                updates.append("is_superuser")
-            if user.is_staff != is_admin_user:
-                user.is_staff = is_admin_user
-                updates.append("is_staff")
-            if user.first_name != str(metadata.get("first_name") or ""):
-                user.first_name = str(metadata.get("first_name") or "")
-                updates.append("first_name")
-            if user.last_name != str(metadata.get("last_name") or ""):
-                user.last_name = str(metadata.get("last_name") or "")
-                updates.append("last_name")
-            target_exam = str(metadata.get("target_exam") or "UPSC CMS")
-            if user.target_exam != target_exam:
-                user.target_exam = target_exam
-                updates.append("target_exam")
-            avatar_url = str(metadata.get("avatar_url") or "")
-            if hasattr(user, "avatar_url") and user.avatar_url != avatar_url:
-                user.avatar_url = avatar_url
-                updates.append("avatar_url")
-
+            updates = [field for field, value in desired.items() if getattr(user, field) != value]
+            for field in updates:
+                setattr(user, field, desired[field])
             if updates:
-                if "is_staff" not in updates and "is_superuser" not in updates and "role" in updates:
-                    updates.extend([field for field in ["is_superuser", "is_staff"] if field not in updates])
-                user.role = "admin" if is_admin_user else "student"
-                user.is_superuser = is_admin_user
-                user.is_staff = is_admin_user
-                user.save(update_fields=sorted(set(updates)))
+                user.save(update_fields=updates)
 
         TokenBalance.objects.get_or_create(user=user)
         return user
+
+    @staticmethod
+    def _send_welcome_email(user):
+        """Welcome mail for a first sign-in, sent off the request path."""
+        from .emails import send_mail_in_background
+
+        name = user.first_name or user.username
+        send_mail_in_background(
+            subject=f"Welcome to CrackLabs, Dr. {name}! 🩺",
+            message=(
+                f"Dear Dr. {name},\n\n"
+                f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
+                f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
+                f"Here is what you get access to:\n"
+                f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
+                f"- Spaced Repetition flashcards based on SM-2\n"
+                f"- An AI Tutor to break down complex medical guidelines\n"
+                f"- Dynamic leaderboard to compete with medical peers across the country\n\n"
+                f"Let's start your prep today! Head over to your dashboard and complete your first clinical drill.\n\n"
+                f"Best regards,\n"
+                f"The CrackLabs Team\n"
+                f"https://www.cracklabs.app"
+            ),
+            recipient_list=[user.email],
+        )

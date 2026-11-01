@@ -74,6 +74,19 @@ PLAN_PRICES = {
     'legacy': 19900,
 }
 
+# Cached GET /auth/subscribe/status/ payload (accounts.views.SubscriptionStatusView).
+SUBSCRIPTION_STATUS_CACHE_KEY = 'sub_status:{user_id}'
+
+
+def invalidate_subscription_status_cache(user_id) -> None:
+    """Drop the cached subscription status after any subscription change."""
+    from django.core.cache import cache
+
+    try:
+        cache.delete(SUBSCRIPTION_STATUS_CACHE_KEY.format(user_id=user_id))
+    except Exception:  # pragma: no cover - cache outages must not break payments
+        pass
+
 
 class CustomUser(AbstractUser):
     """Extended user model for CMS aspirants."""
@@ -186,6 +199,29 @@ class TokenBalance(models.Model):
         free_weekly_remaining = max(0, config.free_weekly_tokens - self.weekly_tokens_used)
         # Free tokens are the minimum of daily and weekly remaining
         free_tokens = min(free_daily_remaining, free_weekly_remaining)
+        return free_tokens + self.purchased_tokens + self.feedback_credits
+
+    def available_tokens_readonly(self, config, today=None):
+        """Same value as ``available_tokens`` without any query or write.
+
+        For list views (admin overview, admin user list, Django admin): the
+        property runs ``TokenConfig.get_config()`` and may ``save()`` a
+        counter reset for every row. Here a counter whose reset date is in a
+        past period simply counts as 0 used, which is exactly what the reset
+        would have written.
+        """
+        today = today or timezone.localdate()
+
+        def _as_date(value):
+            return value.date() if hasattr(value, 'date') else value
+
+        week_start = today - timedelta(days=today.weekday())
+        daily_used = self.daily_tokens_used if _as_date(self.last_daily_reset) >= today else 0
+        weekly_used = self.weekly_tokens_used if _as_date(self.last_weekly_reset) >= week_start else 0
+        free_tokens = min(
+            max(0, config.free_daily_tokens - daily_used),
+            max(0, config.free_weekly_tokens - weekly_used),
+        )
         return free_tokens + self.purchased_tokens + self.feedback_credits
 
     def consume_token(self, amount=1):
@@ -706,8 +742,15 @@ class Subscription(models.Model):
             if expired_ids:
                 # Idempotent under concurrent flips.
                 cls.objects.filter(pk__in=expired_ids, status='active').update(status='expired')
+                transaction.on_commit(lambda: invalidate_subscription_status_cache(user.pk))
             if not live:
                 CustomUser.objects.filter(pk=user.pk).update(is_subscribed=False)
+                # Keep the caller's instance in step: code that reads
+                # user.is_subscribed later in the same request (the
+                # "grandfathered lifetime" fallbacks) must not see the stale
+                # True and report a lifetime plan that just expired.
+                if hasattr(user, 'is_subscribed'):
+                    user.is_subscribed = False
                 return None
 
             far_future = timezone.now() + timedelta(days=365 * 100)
@@ -728,10 +771,19 @@ class Subscription(models.Model):
 
         Behavior:
           1. Determine expiry using PLAN_FEATURES (or NONE for lifetime plans).
-          2. If user already has an ACTIVE paid sub, EXTEND from
-             existing.expires_at (stacking behavior is intentional).
-          3. Flip user.is_subscribed=True via filter-update (no User lock).
-          4. For plans with ``monthly_tokens``, credit those tokens via
+             Unknown plan codes raise ``ValueError`` (they used to become a
+             never-expiring subscription with an invalid plan code).
+          2. A grandfathered lifetime user (``is_subscribed`` with no
+             Subscription rows) first gets their implicit lifetime plan
+             recorded as a 'legacy' row, so a dated purchase stacks next to
+             it instead of replacing it (they used to lose premium when the
+             dated row expired).
+          3. Dated plans EXTEND from the latest expiry among the user's live
+             dated rows (stacking is intentional). The old code extended from
+             get_active_subscription()'s "best" row, which can expire before
+             a stacked one, so a purchase could add no time at all.
+          4. Flip user.is_subscribed=True via filter-update (no User lock).
+          5. For plans with ``monthly_tokens``, credit those tokens via
              ``add_purchased_tokens`` + a TokenTransaction.
 
         Concurrency:
@@ -742,27 +794,34 @@ class Subscription(models.Model):
             the same user.
         """
         from django.db import transaction
+        from django.db.models import Max
         from .models import TokenBalance, TokenTransaction  # local import to avoid cycle
 
-        plan_features = PLAN_FEATURES.get(plan, {})
+        if plan not in PLAN_FEATURES:
+            raise ValueError(f'Unknown subscription plan: {plan!r}')
+        plan_features = PLAN_FEATURES[plan]
         duration = plan_features.get('duration')
         monthly_grant = plan_features.get('monthly_tokens')
 
         now = timezone.now()
 
         with transaction.atomic():
-            # Re-acquire the existing active sub inside this transaction so
-            # the read is consistent with the upcoming write. If the user
-            # already paid in another tab between request entry and here,
-            # we'll stack onto that sub rather than creating a duplicate.
-            existing = cls.get_active_subscription(user)
-            if existing is not None and duration:
-                base_date = existing.expires_at if existing.expires_at else now
-                if base_date < now:
-                    base_date = now
+            if duration:
+                cls._record_grandfathered_lifetime(user)
+
+            # Re-acquire the active subs inside this transaction (row locks +
+            # lazy expiry) so the read is consistent with the upcoming write.
+            # If the user already paid in another tab between request entry
+            # and here, we stack onto that sub rather than overlapping it.
+            cls.get_active_subscription(user)
+            if duration:
+                latest_expiry = (
+                    cls.objects
+                    .filter(user=user, status='active', expires_at__gt=now)
+                    .aggregate(latest=Max('expires_at'))['latest']
+                )
+                base_date = latest_expiry if latest_expiry and latest_expiry > now else now
                 expires_at = base_date + duration
-            elif duration:
-                expires_at = now + duration
             else:
                 expires_at = None  # lifetime
 
@@ -798,7 +857,39 @@ class Subscription(models.Model):
                     note=f'Subscription grant: {display_name} (+{monthly_grant} tokens)',
                 )
 
+            # The status endpoint caches its answer for 2 minutes.
+            transaction.on_commit(lambda: invalidate_subscription_status_cache(user.pk))
+
+        if hasattr(user, 'is_subscribed'):
+            user.is_subscribed = True
         return sub
+
+    @classmethod
+    def _record_grandfathered_lifetime(cls, user):
+        """Materialise an implicit lifetime plan as a 'legacy' row.
+
+        Users who were ``is_subscribed`` before the Subscription model existed
+        have no rows and are treated as lifetime members (accounts.utils,
+        UserSerializer, SubscriptionStatusView). The first dated row would end
+        that: once it expired, get_active_subscription() cleared
+        is_subscribed. Call inside an atomic block.
+        """
+        is_subscribed = (
+            CustomUser.objects.filter(pk=user.pk).values_list('is_subscribed', flat=True).first()
+        )
+        if not is_subscribed or cls.objects.filter(user=user).exists():
+            return None
+        features = PLAN_FEATURES['legacy']
+        return cls.objects.create(
+            user=user,
+            plan='legacy',
+            plan_display_name=features['display_name'],
+            amount_paid=0,
+            razorpay_order_id='legacy',
+            status='active',
+            starts_at=getattr(user, 'created_at', None) or timezone.now(),
+            expires_at=None,
+        )
 
 
 class UserDevice(models.Model):

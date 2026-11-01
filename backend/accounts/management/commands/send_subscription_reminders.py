@@ -2,10 +2,15 @@
 send_subscription_reminders.py
 Management command to send renewal reminder emails to subscribed users.
 
-Schedule via django-q2 cron, e.g.:
-    python manage.py qcluster    # in one process, then schedule below
+NOTHING runs this automatically yet: schedule it once a day, either with a
+plain cron / platform job
 
-    python manage.py qcron --schedule daily  --command 'accounts.management.commands.send_subscription_reminders.Command' --name 'subscription_reminders'
+    python manage.py send_subscription_reminders --days 7,3,1
+
+or with django-q2 (requires a running ``python manage.py qcluster`` worker):
+
+    from accounts.management.commands.send_subscription_reminders import schedule_subscription_reminders
+    schedule_subscription_reminders()   # schedules run_subscription_reminders daily
 
 Or run manually:
     python manage.py send_subscription_reminders                # default T-7
@@ -61,7 +66,7 @@ def _send_reminder_email(user_email: str, user_name: str, plan_name: str, expire
         f'Hi {user_name or "there"},\n\n'
         f'Your CrackCMS premium subscription ({plan_name}) expires on {expiry_str} '
         f'- that\'s only {days_left} day{"s" if days_left != 1 else ""} away.\n\n'
-        f'Renew now to keep your unlimited AI tutor, mock tests, and study materials uninterrupted:\n'
+        f'Renew now to keep your premium question bank, AI tutor, mock tests, and study materials uninterrupted:\n'
         f'  https://www.cracklabs.app/subscription\n\n'
         f'Need help or want to switch plans? Reply to this email and we\'ll assist within 24 hours.\n\n'
         f'- The CrackCMS team\n'
@@ -149,14 +154,31 @@ class Command(BaseCommand):
 #
 #     0 9 * * *  cd /app && python manage.py send_subscription_reminders --days 7,3,1
 #
+REMINDER_THRESHOLDS = '7,3,1'  # matches the promise on /subscription
+
+
+def run_subscription_reminders(days: str = REMINDER_THRESHOLDS) -> None:
+    """Callable entry point for schedulers (django-q, cron wrappers).
+
+    django-q calls the scheduled ``func`` path; pointing it at the Command
+    *class* only constructed a Command and never ran handle().
+    """
+    from django.core.management import call_command
+
+    call_command('send_subscription_reminders', days=days)
+
+
 def schedule_subscription_reminders(schedule_type='D'):
-    """Schedule this command via django-q2 if the broker is configured. No-op otherwise."""
+    """Schedule this command via django-q2 if the broker is configured. No-op otherwise.
+
+    The schedule only fires while a ``python manage.py qcluster`` worker runs.
+    """
     try:
         from django_q.models import Schedule
         Schedule.objects.update_or_create(
             name='subscription_renewal_reminders',
             defaults={
-                'func': 'accounts.management.commands.send_subscription_reminders.Command',
+                'func': 'accounts.management.commands.send_subscription_reminders.run_subscription_reminders',
                 'schedule_type': schedule_type,  # 'D' = daily
                 'repeats': -1,
             },

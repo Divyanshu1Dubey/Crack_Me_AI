@@ -38,7 +38,10 @@ class AuthApiTests(TestCase):
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         FRONTEND_URL="http://localhost:3000",
     )
-    def test_password_reset_request_sends_reset_link(self):
+    def test_password_reset_request_is_gone(self):
+        """ACC-17: password reset is Supabase-only. The Django endpoint used to
+        mail a uid/token link the /reset-password page ignores; it is now 410
+        and sends nothing."""
         user = User.objects.create_user(
             username="reset_user",
             email="reset@example.com",
@@ -52,14 +55,12 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(mail.outbox), 1)
-        message = mail.outbox[0]
-        self.assertIn(user.email, message.to)
-        self.assertIn("/reset-password?uid=", message.body)
-        self.assertIn("token=", message.body)
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response.json().get("error"), "endpoint_gone")
+        self.assertEqual(len(mail.outbox), 0)
 
-    def test_password_reset_confirm_updates_password(self):
+    def test_password_reset_confirm_is_gone(self):
+        """ACC-17: a valid Django reset token no longer sets a Django password."""
         user = User.objects.create_user(
             username="confirm_user",
             email="confirm@example.com",
@@ -83,9 +84,9 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         user.refresh_from_db()
-        self.assertTrue(user.check_password("NewPass123!"))
+        self.assertTrue(user.check_password("OldPass123!"))
 
     def test_login_endpoint_disabled_regardless_of_identifier(self):
         """Local login is disabled whether using email or username."""
@@ -134,6 +135,7 @@ class AuthApiTests(TestCase):
         auth_backend._upsert_local_user(
             {
                 "email": "meduraa.web@gmail.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",
@@ -165,6 +167,7 @@ class AuthApiTests(TestCase):
         auth_backend._upsert_local_user(
             {
                 "email": "attacker@example.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "attacker",
                     "first_name": "Attacker",
@@ -197,6 +200,7 @@ class AuthApiTests(TestCase):
         auth_backend._upsert_local_user(
             {
                 "email": "demoted.user@example.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",

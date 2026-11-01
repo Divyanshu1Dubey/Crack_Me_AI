@@ -13,6 +13,7 @@ urlpatterns = [
     path('subscribe/history/', views.SubscriptionHistoryView.as_view(), name='subscribe_history'),
     path('subscribe/invoice/<int:subscription_id>/', views.SubscriptionInvoiceView.as_view(), name='subscribe_invoice'),
     path('subscribe/webhook/', views.RazorpayWebhookView.as_view(), name='razorpay_webhook'),
+    path('scholarship/start/', views.ScholarshipStartView.as_view(), name='scholarship_start'),
     path('verify-scholarship/', views.VerifyScholarshipView.as_view(), name='verify_scholarship'),
     # Password reset
     path('password-reset/', views.PasswordResetRequestView.as_view(), name='password_reset'),

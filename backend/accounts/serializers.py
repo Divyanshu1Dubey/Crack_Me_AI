@@ -77,6 +77,21 @@ class UserSerializer(serializers.ModelSerializer):
                   'showcase_questions_remaining', 'is_premium']
         read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
 
+    def update(self, instance, validated_data):
+        """Write only the fields this request edited.
+
+        ModelSerializer.update() calls instance.save() with no update_fields,
+        rewriting the whole row from the snapshot loaded at the start of the
+        request. A concurrent change (payment webhook flipping
+        is_subscribed, an admin block, the profile bonus flag) was silently
+        undone by any profile edit.
+        """
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if validated_data:
+            instance.save(update_fields=list(validated_data))
+        return instance
+
     def get_is_online(self, obj):
         from django.utils import timezone
         from datetime import timedelta
@@ -105,8 +120,10 @@ class UserSerializer(serializers.ModelSerializer):
                 'days_remaining': sub.days_remaining,
                 'amount_paid': float(sub.amount_paid),
             }
-        # Backward compat: grandfathered lifetime user
-        if obj.is_subscribed:
+        # Backward compat: grandfathered lifetime user (is_subscribed from
+        # before the Subscription model, so no rows at all). A user whose
+        # dated rows just expired is not one of them.
+        if obj.is_subscribed and not Subscription.objects.filter(user=obj).exists():
             return {
                 'plan': 'legacy',
                 'plan_display_name': 'Legacy Early Bird (Lifetime)',
@@ -276,12 +293,21 @@ class AdminTokenGrantSerializer(serializers.Serializer):
 
 
 class AdminUserTokenSerializer(serializers.ModelSerializer):
-    """Shows a user's token info for the admin dashboard."""
+    """Shows a user's token info for the admin dashboard.
+
+    Pass ``context={'token_config': TokenConfig.get_config()}``: availability
+    is computed without per-row queries or writes (see
+    TokenBalance.available_tokens_readonly).
+    """
     user_id = serializers.IntegerField(source='user.id')
     username = serializers.CharField(source='user.username')
     email = serializers.CharField(source='user.email')
     is_admin = serializers.BooleanField(source='user.is_admin')
-    available = serializers.IntegerField(source='available_tokens', read_only=True)
+    available = serializers.SerializerMethodField()
+
+    def get_available(self, obj):
+        config = self.context.get('token_config') or TokenConfig.get_config()
+        return obj.available_tokens_readonly(config)
 
     class Meta:
         model = TokenBalance

@@ -18,30 +18,112 @@ import {
   isInvalidRefreshTokenError,
   isSupabaseAuthEnabled,
 } from './supabase';
-import { getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
+import { clearLocalTokens, getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
 
 import {
   USE_API_PROXY,
-  DEFAULT_PRODUCTION_API_URL,
-  normalizeApiBaseUrl,
-  shouldIgnoreConfiguredApiUrl,
   API_BASE_URL,
+  resolveFallbackApiBaseUrl,
 } from './apiBase';
-const configuredFallback = normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
-const FALLBACK_API_BASE_URL = USE_API_PROXY
-  ? API_BASE_URL
-  : (shouldIgnoreConfiguredApiUrl(configuredFallback) ? DEFAULT_PRODUCTION_API_URL : configuredFallback);
+// Never a remote (production) API for a local run -- see resolveFallbackApiBaseUrl.
+const FALLBACK_API_BASE_URL = resolveFallbackApiBaseUrl();
 
-// Helper for generating page-session tracking ID
+// Last Supabase session seen by the request interceptor.
+let cachedSession: { access_token: string } | null = null;
+
+// Device id sent as X-Session-ID; the backend counts devices by it.
+const DEVICE_ID_KEY = 'crack_device_id';
+let memoryDeviceId: string | null = null;
+
+const newDeviceId = () => 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+
+// Storage access can throw (site data blocked, some privacy modes / webviews);
+// that used to reject every request before it was sent. Fall back to an
+// in-memory id for the page's lifetime.
 const getOrCreateSessionId = (): string => {
   if (typeof window === 'undefined') return '';
-  let id = localStorage.getItem('crack_device_id');
-  if (!id) {
-    id = 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-    localStorage.setItem('crack_device_id', id);
+  try {
+    let id = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = newDeviceId();
+      window.localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    if (!memoryDeviceId) memoryDeviceId = newDeviceId();
+    return memoryDeviceId;
   }
-  return id;
 };
+
+/** Forget this browser's device id, so the next sign-in enrols a new device. */
+const resetDeviceId = () => {
+  memoryDeviceId = null;
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DEVICE_ID_KEY);
+  } catch {
+    // Storage unavailable: the in-memory id was reset above.
+  }
+};
+
+/**
+ * Backend error codes that end this browser's session
+ * (accounts/supabase_rest_auth.py; `user_inactive` is SimpleJWT's code for a
+ * blocked account in local dev auth). `session_invalid` is the legacy
+ * single-session code, kept for older backends.
+ */
+const SESSION_ENDING_MESSAGES: Record<string, string> = {
+  account_blocked: 'Your account has been blocked. Contact support if you think this is a mistake.',
+  user_inactive: 'Your account has been blocked. Contact support if you think this is a mistake.',
+  device_inactive: 'This device was signed out. Please sign in again.',
+  email_not_confirmed: 'Please confirm your email address, then sign in again.',
+  email_required: 'Sign in with an email address to use CrackLabs.',
+  session_invalid: "You're logged in on another device",
+};
+
+/** `code` field of a backend error response, if any. */
+export const getApiErrorCode = (error: unknown): string | undefined => {
+  const data = (error as { response?: { data?: unknown } } | null)?.response?.data;
+  const code = data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined;
+  return typeof code === 'string' ? code : undefined;
+};
+
+/** User-facing message when `error` means the session is over (blocked account, logged-out device, ...). */
+export const getSessionEndingMessage = (error: unknown): string | null => {
+  const code = getApiErrorCode(error);
+  return code && Object.prototype.hasOwnProperty.call(SESSION_ENDING_MESSAGES, code)
+    ? SESSION_ENDING_MESSAGES[code]
+    : null;
+};
+
+let sessionEndRedirecting = false;
+
+/**
+ * Sign this browser out locally after the backend ended the session, then
+ * show the reason on /login. Returns true while the page is navigating away.
+ * On /login itself it does not navigate, so the login form can show the error.
+ */
+export const endSessionAfterApiError = async (error: unknown): Promise<boolean> => {
+  const message = getSessionEndingMessage(error);
+  if (!message || typeof window === 'undefined') return false;
+  if (sessionEndRedirecting) return true;
+  if (getApiErrorCode(error) === 'device_inactive') resetDeviceId();
+  cachedSession = null;
+  if (isLocalAuthMode()) {
+    clearLocalTokens();
+  } else {
+    await clearSupabaseLocalSession();
+  }
+  if (window.location.pathname.startsWith('/login')) return false;
+  sessionEndRedirecting = true;
+  window.location.href = '/login?authError=' + encodeURIComponent(message);
+  return true;
+};
+
+// Only these are replayed against the fallback base URL: a 502/503/504 can
+// arrive after the backend already processed a POST/PATCH (order creation,
+// test submission, AI generation), and replaying it would run it twice.
+const IDEMPOTENT_METHODS = new Set(['get', 'head', 'options']);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -51,15 +133,16 @@ const api = axios.create({
 });
 
 // Add auth token and session tracking to requests
-let cachedSession: { access_token: string } | null = null;
-
 api.interceptors.request.use(async (config) => {
   const sessionId = getOrCreateSessionId();
   if (sessionId) {
     config.headers['X-Session-ID'] = sessionId;
   }
 
-  if (typeof window !== 'undefined' && isLocalAuthMode()) {
+  if (config.headers.Authorization) {
+    // The caller passed a token explicitly (e.g. AuthProvider's profile
+    // fetch right after sign-in): keep it.
+  } else if (typeof window !== 'undefined' && isLocalAuthMode()) {
     const localToken = getLocalAccessToken();
     if (localToken) config.headers.Authorization = `Bearer ${localToken}`;
   } else if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
@@ -87,7 +170,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle token refresh on 401 and single session logout on session_invalid
+// Handle session-ending codes, token refresh on 401, and 5xx failover
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -96,19 +179,31 @@ api.interceptors.response.use(
       _apiBaseFailover?: boolean;
       _tokenRefresh?: boolean;
       baseURL?: string;
+      method?: string;
       headers?: Record<string, string>;
     };
     const status = error.response?.status as number | undefined;
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
+    const errorCode = getApiErrorCode(error);
 
-    // Single session validation check
-    const errorCode = error.response?.data?.code;
-    if (errorCode === 'session_invalid') {
-      if (typeof window !== 'undefined') {
-        await clearSupabaseLocalSession();
-        window.location.href = '/login?authError=' + encodeURIComponent("You're logged in on another device");
-        return new Promise(() => {}); // Stop request chain
+    // Blocked account, device logged out (Settings / admin), unconfirmed
+    // email: sign out locally and explain on /login. Must run before the
+    // 401 refresh below -- a fresh token does not change these answers.
+    if (getSessionEndingMessage(error)) {
+      if (await endSessionAfterApiError(error)) {
+        return new Promise(() => {}); // page is navigating to /login
       }
+      return Promise.reject(error);
+    }
+
+    // Too many devices: keep the session but open Settings, where the
+    // device list and "remove device" still work for this device.
+    if (errorCode === 'device_limit_reached') {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/settings')) {
+        window.location.href = '/settings?deviceLimit=1';
+        return new Promise(() => {});
+      }
+      return Promise.reject(error);
     }
 
     // Freemium conversion layer (Task 9) — backend gates free users with
@@ -191,6 +286,7 @@ api.interceptors.response.use(
       !USE_API_PROXY &&
       !originalRequest._apiBaseFailover &&
       currentBaseUrl !== FALLBACK_API_BASE_URL &&
+      IDEMPOTENT_METHODS.has((originalRequest.method || 'get').toLowerCase()) &&
       (status === 502 || status === 503 || status === 504);
 
     if (shouldFailover) {
@@ -219,11 +315,13 @@ export const authAPI = {
   subscriptionStatus: () => api.get('/auth/subscribe/status/'),
   subscriptionHistory: () => api.get('/auth/subscribe/history/'),
   subscriptionInvoice: (subscriptionId: number) => api.get(`/auth/subscribe/invoice/${subscriptionId}/`),
-  verifyScholarship: (answers: Record<string, string>) => api.post('/auth/verify-scholarship/', { answers }),
-  // Password reset
-  requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
-  confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
-    api.post('/auth/password-reset/confirm/', data),
+  // Scholarship: the server picks the five questions and returns a signed
+  // challenge_token that verifyScholarship must send back.
+  startScholarship: () => api.post('/auth/scholarship/start/'),
+  verifyScholarship: (answers: Record<string, string>, challengeToken?: string | null) =>
+    api.post('/auth/verify-scholarship/', { answers, challenge_token: challengeToken || undefined }),
+  // Password reset is Supabase-only (auth.tsx resetPassword); the old Django
+  // /auth/password-reset/ endpoints now return 410.
   // Device management
   getDevices: () => api.get('/auth/devices/'),
   logoutDevice: (device_id: number) => api.post('/auth/devices/logout/', { device_id }),

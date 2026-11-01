@@ -20,6 +20,8 @@ import {
     localLogin,
     localRegister,
 } from './localAuth';
+import api, { getSessionEndingMessage } from './api';
+import { safeInternalPath } from './auth-redirect';
 
 interface SubscriptionInfo {
     plan: string;
@@ -107,62 +109,65 @@ const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
 // endpoints instead of Supabase (see lib/localAuth.ts).
 const LOCAL_AUTH_MODE = isLocalAuthMode();
 
-const getBackendProfileUrl = () => {
-    const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-    if (configuredApiUrl) {
-        const base = configuredApiUrl.replace(/\/+$/, '');
-        // If NEXT_PUBLIC_API_URL already ends in /api, just append the path;
-        // otherwise treat it as the API root and prepend /api.
-        return base.endsWith('/api')
-            ? `${base}/auth/profile/`
-            : `${base}/api/auth/profile/`;
-    }
-
-    if (process.env.NODE_ENV === 'production') {
-        return 'https://api.cracklabs.app/api/auth/profile/';
-    }
-
-    return 'http://localhost:8000/api/auth/profile/';
-};
-
-const fetchBackendProfile = async (accessToken: string) => {
-    const response = await fetch(getBackendProfileUrl(), {
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-        },
+/**
+ * Fetch the backend profile (role, is_premium, subscription_info).
+ *
+ * Goes through the shared Axios client, so it gets the same base URL as
+ * every other call (API proxy, localhost guard, unhealthy-host blacklist),
+ * GET failover on 502/503/504, the X-Session-ID device header, the
+ * session-ending codes (blocked account, logged-out device) and the
+ * refresh-once-on-401 retry. It used to build its own URL with a hard-coded
+ * production host and plain fetch(), so entitlements could come from a
+ * different backend than the rest of the app.
+ */
+const fetchBackendProfile = async (accessToken: string): Promise<unknown> => {
+    const response = await api.get('/auth/profile/', {
+        headers: { Authorization: `Bearer ${accessToken}` },
     });
-
-    if (!response.ok) {
-        throw new Error(`Profile request failed with ${response.status}`);
-    }
-
-    return response.json();
+    return response.data;
 };
 
 /**
- * Fetch the backend profile with automatic Supabase session refresh on 401.
- *
- * Why this exists: Supabase access tokens are short-lived (default 1 hour).
- * If the user has a long-lived frontend session and the access token expires
- * mid-flow, the old code would silently fall through to `mapSupabaseUser`
- * which has NO `subscription_info`, `is_subscribed`, or `token_info` — making
- * a paying user appear unsubscribed. We now try-refresh-once on 401 so the
- * common case (token expired during a session, not a leaked credential) is
- * self-healing.
+ * Supabase access tokens are short-lived (default 1 hour); an expired token
+ * gets a 401 and the api.ts interceptor refreshes the session and retries
+ * once. Kept as a named step so the call sites read the same as before.
  */
-const fetchBackendProfileWithRefresh = async (accessToken: string): Promise<unknown> => {
+const fetchBackendProfileWithRefresh = (accessToken: string): Promise<unknown> =>
+    fetchBackendProfile(accessToken);
+
+// Where to land after an OAuth / email-link round trip. Stored locally
+// rather than added to redirectTo, so the Supabase redirect allow-list
+// (often an exact /auth/callback entry) keeps matching.
+const POST_AUTH_PATH_KEY = 'crack_auth_next';
+const POST_AUTH_PATH_MAX_AGE_MS = 60 * 60 * 1000;
+
+const rememberPostAuthPath = (path?: string | null) => {
+    if (typeof window === 'undefined') return;
+    const requested = path ?? new URLSearchParams(window.location.search).get('next');
+    const target = safeInternalPath(requested, '');
     try {
-        return await fetchBackendProfile(accessToken);
-    } catch (err: unknown) {
-        const is401 = err instanceof Error && /401/.test(err.message);
-        if (!is401) throw err;
-        const supabase = getSupabaseBrowserClient();
-        if (!supabase) throw err;
-        const { data, error: refreshErr } = await supabase.auth.refreshSession();
-        if (refreshErr || !data.session?.access_token) {
-            throw err;
+        if (target) {
+            window.localStorage.setItem(POST_AUTH_PATH_KEY, JSON.stringify({ path: target, at: Date.now() }));
+        } else {
+            window.localStorage.removeItem(POST_AUTH_PATH_KEY);
         }
-        return await fetchBackendProfile(data.session.access_token);
+    } catch {
+        // Storage blocked: the callback falls back to the default landing page.
+    }
+};
+
+/** Read and clear the path remembered before an OAuth / magic-link / recovery redirect. */
+export const consumePostAuthPath = (): string => {
+    if (typeof window === 'undefined') return '';
+    try {
+        const raw = window.localStorage.getItem(POST_AUTH_PATH_KEY);
+        window.localStorage.removeItem(POST_AUTH_PATH_KEY);
+        if (!raw) return '';
+        const { path, at } = JSON.parse(raw) as { path?: string; at?: number };
+        if (typeof at !== 'number' || Date.now() - at > POST_AUTH_PATH_MAX_AGE_MS) return '';
+        return safeInternalPath(path, '');
+    } catch {
+        return '';
     }
 };
 
@@ -183,13 +188,12 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const usernameFromEmail = supabaseUser.email?.split('@')[0] || 'student';
     const email = String(supabaseUser.email || '').trim().toLowerCase();
 
-    // Client-side and build-time admin email allowlist matching.
-    // Admin emails must be supplied via NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS
-    // (comma-separated). We previously hard-coded two personal Gmail addresses
-    // here so the admin portal worked during local development; that hard-coded
-    // list was removed for the public release — admins are now declared via
-    // the environment variable and Supabase user_metadata (`is_admin` or
-    // `role: admin`).
+    // Fallback mapping, used only when the backend profile is unavailable.
+    // Admin = a confirmed email on NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS
+    // (comma-separated) or Supabase app_metadata (`is_admin` / `role: admin`,
+    // settable only with the service-role key). user_metadata is editable by
+    // the user (supabase.auth.updateUser) and is NOT trusted, matching the
+    // backend (accounts/supabase_rest_auth.py).
     const envEmails = (
         process.env.NEXT_PUBLIC_CONTROL_TOWER_ADMIN_EMAILS ||
         process.env.CONTROL_TOWER_ADMIN_EMAILS ||
@@ -199,12 +203,10 @@ const mapSupabaseUser = (supabaseUser: SupabaseUser): User => {
     const adminEmails = new Set(envEmails);
 
     const isAdmin =
-        adminEmails.has(email) ||
+        (adminEmails.has(email) && Boolean(supabaseUser.email_confirmed_at)) ||
         String(appMetadata.is_admin || '').toLowerCase() === 'true' ||
-        String(appMetadata.role || '').toLowerCase() === 'admin' ||
-        String(metadata.is_admin || '').toLowerCase() === 'true' ||
-        String(metadata.role || '').toLowerCase() === 'admin';
-    const role = isAdmin ? 'admin' : String(metadata.role || 'student');
+        String(appMetadata.role || '').toLowerCase() === 'admin';
+    const role = isAdmin ? 'admin' : 'student';
 
     return {
         id: supabaseUser.id,
@@ -268,10 +270,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
                     if (!mounted) return;
                     setUserState(profileRes as User);
-                } catch {
-                    // Fallback to mapped Supabase user
+                } catch (error: unknown) {
+                    // Fallback to mapped Supabase user -- unless the backend
+                    // ended the session (blocked account, logged-out device):
+                    // api.ts has already signed this browser out.
                     if (mounted) {
-                        setUserState(mapSupabaseUser(data.session.user));
+                        setUserState(getSessionEndingMessage(error) ? null : mapSupabaseUser(data.session.user));
                     }
                 } finally {
                     if (mounted) setLoading(false);
@@ -301,9 +305,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     if (!mounted) return;
                     setUserState(profileRes as User);
                 })
-                .catch(() => {
+                .catch((error: unknown) => {
                     if (mounted) {
-                        setUserState(mapSupabaseUser(session.user));
+                        setUserState(getSessionEndingMessage(error) ? null : mapSupabaseUser(session.user));
                     }
                 });
         });
@@ -355,7 +359,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const profileRes = await fetchBackendProfileWithRefresh(accessToken);
             setUserState(profileRes as User);
             return profileRes as User;
-        } catch {
+        } catch (error: unknown) {
+            // Blocked account / unconfirmed email: api.ts signed this browser
+            // out again; surface the reason on the login form.
+            const sessionEnded = getSessionEndingMessage(error);
+            if (sessionEnded) {
+                setUserState(null);
+                throw new Error(sessionEnded);
+            }
             // Fallback to mapped Supabase user if profile sync fails
             const mapped = mapSupabaseUser(signedInUser);
             setUserState(mapped);
@@ -399,7 +410,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
                 const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
                 setUserState(profileRes as User);
-            } catch {
+            } catch (profileError: unknown) {
+                const sessionEnded = getSessionEndingMessage(profileError);
+                if (sessionEnded) {
+                    setUserState(null);
+                    throw new Error(sessionEnded);
+                }
                 setUserState(mapSupabaseUser(data.session.user));
             }
         }
@@ -420,6 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Enter a valid email address.');
         }
 
+        rememberPostAuthPath();
         const { error } = await supabase.auth.signInWithOtp({
             email: normalizedEmail,
             options: {
@@ -449,6 +466,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Enter a valid email address.');
         }
 
+        // The recovery link signs the user in on /auth/callback; send them on
+        // to the page that sets the new password.
+        rememberPostAuthPath('/reset-password');
         const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
             redirectTo: getAuthRedirectTo(),
         });
@@ -466,6 +486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Supabase auth is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
         }
 
+        rememberPostAuthPath();
         const { error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
@@ -483,7 +504,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const supabase = getSupabaseBrowserClient();
         try {
-            await supabase?.auth.signOut();
+            // 'local' ends only this browser's session. The default scope
+            // ('global') revoked every session, logging the user out on all
+            // devices although 2-4 devices are allowed.
+            await supabase?.auth.signOut({ scope: 'local' });
         } catch {
             // Silent fail in production — user state is cleared below
         } finally {
@@ -505,51 +529,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const supabase = getSupabaseBrowserClient();
         if (!supabase) return;
 
+        let accessToken: string | undefined;
         try {
-            const { data } = await supabase.auth.getSession();
-            const accessToken = data.session?.access_token;
-            if (!accessToken) {
-                throw new Error('Missing Supabase access token');
+            const { data, error } = await supabase.auth.getSession();
+            if (error) {
+                if (isInvalidRefreshTokenError(error)) {
+                    await clearSupabaseLocalSession();
+                    setUserState(null);
+                }
+                return; // transient (e.g. offline): keep the current user
             }
-
-            const profileRes = await fetchBackendProfileWithRefresh(accessToken);
-            setUserState(profileRes as User);
+            accessToken = data.session?.access_token;
         } catch (error: unknown) {
             if (isInvalidRefreshTokenError(error)) {
                 await clearSupabaseLocalSession();
+                setUserState(null);
             }
-            // SECURITY / UX (Fix #8): do NOT overwrite a known-good user
-            // (one that already has subscription_info / is_premium populated)
-            // with a degraded mapSupabaseUser fallback. The previous
-            // behaviour silently demoted a paying user to a free user
-            // whenever the profile endpoint returned a transient 5xx,
-            // because mapSupabaseUser returns a User with no
-            // subscription_info and is_premium=false. Instead, keep the
-            // existing user state intact on transient failures.
-            setUserState((current) => {
-                if (current && (current.subscription_info || current.is_premium)) {
-                    // Known-good paying/admin user — keep them.
-                    return current;
-                }
-                // No existing user state OR current user is already
-                // unsubscribed (free tier). Try the Supabase fallback.
-                return null;
-            });
-            // Try the Supabase fallback outside of setUserState so we don't
-            // mix functional updates with side effects. Only adopt the
-            // fallback if we still have no user in state.
+            return;
+        }
+        if (!accessToken) {
+            setUserState(null); // signed out
+            return;
+        }
+
+        try {
+            const profileRes = await fetchBackendProfileWithRefresh(accessToken);
+            setUserState(profileRes as User);
+        } catch (error: unknown) {
+            // Clear the user only when the session is definitively over.
+            if (isInvalidRefreshTokenError(error)) {
+                await clearSupabaseLocalSession();
+                setUserState(null);
+                return;
+            }
+            if (getSessionEndingMessage(error)) {
+                setUserState(null); // api.ts already signed this browser out
+                return;
+            }
+            // SECURITY / UX (Fix #8, AUTH-06): a transient failure (5xx, 429,
+            // network, cold start) keeps the current user as is. The old code
+            // set free users to null first, so useRequireAuth bounced them to
+            // /login mid-session (losing the deep link / an in-progress test)
+            // every time the 5-minute auto-refresh hit a blip. Only when there
+            // is no user yet, adopt the Supabase identity -- in one update.
+            let fallback: User | null = null;
             try {
                 const { data } = await supabase.auth.getUser();
-                if (data.user) {
-                    setUserState((current) => {
-                        if (current) return current; // keep priority user
-                        return mapSupabaseUser(data.user);
-                    });
-                    return;
-                }
+                fallback = data.user ? mapSupabaseUser(data.user) : null;
             } catch {
                 // Ignore fallback getUser errors.
             }
+            setUserState((current) => current ?? fallback);
         }
     };
 
