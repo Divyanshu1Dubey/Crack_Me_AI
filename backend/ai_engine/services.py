@@ -34,7 +34,7 @@ from typing import Optional
 
 from django.conf import settings
 
-from .offline import ai_offline_mode, is_unusable_text
+from .offline import ai_offline_mode, is_unusable_text, public_subject, with_public_subject
 
 logger = logging.getLogger(__name__)
 
@@ -1441,7 +1441,9 @@ Analyze:
                                correct_answer: str = "", question_id=None,
                                cache_scope: str = "") -> Optional[dict]:
         """The cached explanation for this exact question, or None. Lets
-        callers serve a cache hit before charging for a generation."""
+        callers serve a cache hit before charging for a generation. Its
+        ``category`` is the label students see (an entry cached before the
+        display rule can still say "Imported")."""
         from django.core.cache import cache
         try:
             cached = cache.get(cls.explanation_cache_key(
@@ -1449,7 +1451,7 @@ Analyze:
         except Exception:
             return None
         if cls.is_valid_explanation(cached):
-            return dict(cached)
+            return with_public_subject(dict(cached))
         return None
 
     def explain_after_answer(self, question_text: str, options: dict = None,
@@ -1496,6 +1498,11 @@ Analyze:
         options_str = ""
         if options:
             options_str = "\n".join([f"  {k}: {v}" for k, v in options.items()])
+        # The model echoes the subject back as "category", which students
+        # see, so the prompt carries the student-facing label: the loader's
+        # "Imported" bucket is "Expert Curated" (the search above keeps the
+        # stored name). Batch callers pass the raw Subject.name.
+        subject_label = public_subject(subject or '')
 
         prompt = f"""A UPSC CMS aspirant just answered a question. Your job is to provide an ACCURATE, POWERFUL explanation.
 
@@ -1506,7 +1513,7 @@ Options:
 {options_str}
 Official Answer Key says: {correct_answer}
 Student Selected: {selected_answer} ({'CORRECT ✅' if is_correct else 'WRONG ❌'} according to answer key)
-{f'Subject: {subject}' if subject else ''}
+{f'Subject: {subject_label}' if subject_label else ''}
 {f'Topic: {topic}' if topic else ''}
 {rag_context}
 
@@ -1534,7 +1541,7 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
   "key_differentiators": [
     "5-7 one-line comparisons that help differentiate commonly confused conditions/drugs/values in this topic. Format: 'X vs Y — key difference'. These should be HIGH YIELD comparisons."
   ],
-  "category": "{subject or 'General'}",
+  "category": "{subject_label or 'General'}",
   "sub_category": "{topic or 'General'}",
   "question_type": "One of: Factual Recall / Clinical Scenario / Calculation / Image-based / Conceptual / Pharmacology / Differential Diagnosis",
   "around_concepts": [
@@ -1569,12 +1576,15 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
         result['is_correct'] = is_correct
         for key, default in (
             ('why_correct', ''), ('why_wrong', {}), ('mnemonic', ''), ('core_concept', ''),
-            ('category', subject or ''), ('sub_category', topic or ''), ('question_type', ''),
+            ('category', subject_label or ''), ('sub_category', topic or ''), ('question_type', ''),
             ('around_concepts', []), ('high_yield_points', []), ('clinical_pearl', ''),
             ('exam_tip', ''), ('topic_deep_dive', ''), ('key_differentiators', []),
             ('quick_revision', ''), ('pyq_frequency', ''), ('similar_pyq', ''),
         ):
             result.setdefault(key, default)
+        # A model that still writes "Imported" is not echoed to students
+        # (nor cached or stored by the callers).
+        with_public_subject(result)
         if not self.is_valid_explanation(result):
             raise AIOutputUnusable('The AI explanation has no usable body', passages=results)
         # Cache the result for 24 hours (keyed by question, not user)

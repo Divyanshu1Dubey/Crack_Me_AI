@@ -40,8 +40,10 @@ from .offline import (
     compose_offline_answer,
     is_unusable_text,
     offline_notice,
+    public_subject,
     pyq_summary,
     stored_rich_explanation,
+    with_public_subject,
 )
 from .services import AIService, AIUnavailable
 from accounts.models import TokenBalance
@@ -720,9 +722,11 @@ def _parse_stored_json(raw):
 
 def _stored_ai_explanation(q):
     """The question's stored rich explanation if it is a valid one (not
-    failed, not an outage sentence, not the markdown shape), else None."""
+    failed, not an outage sentence, not the markdown shape), else None.
+    Its subject labels are the ones students see (rows stored before the
+    display rule say "Imported")."""
     data = _parse_stored_json(getattr(q, 'ai_explanation', ''))
-    return dict(data) if AIService.is_valid_explanation(data) else None
+    return with_public_subject(dict(data)) if AIService.is_valid_explanation(data) else None
 
 
 def _stored_analysis_markdown(q):
@@ -776,7 +780,9 @@ def _persist_rich_explanation(q, result: dict, service) -> list:
             # next to the new rich JSON instead of discarding it.
             previous = _parse_stored_json(getattr(q, 'ai_explanation', '')) or {}
             stored.update({k: previous[k] for k in _ANALYSIS_KEYS if k in previous})
-        q.ai_explanation = json.dumps(stored, ensure_ascii=False)
+        # The question detail payload carries this JSON: student-facing
+        # subject labels only (a kept ``context`` may predate the rule).
+        q.ai_explanation = json.dumps(with_public_subject(stored), ensure_ascii=False)
         q.ai_generated_at = timezone.now()
         q.ai_model = _ai_model_label(service)
         q.ai_version = 'v2-verify'
@@ -822,7 +828,7 @@ def _empty_rich_explanation(subject: str = '', topic: str = '') -> dict:
         'why_correct': '', 'why_wrong': {},
         'textbook_reference': {'book': '', 'chapter': '', 'page': '', 'section': ''},
         'mnemonic': '', 'core_concept': '', 'topic_deep_dive': '', 'key_differentiators': [],
-        'category': subject, 'sub_category': topic, 'question_type': '',
+        'category': public_subject(subject), 'sub_category': topic, 'question_type': '',
         'around_concepts': [], 'high_yield_points': [], 'clinical_pearl': '', 'exam_tip': '',
         'quick_revision': '', 'pyq_frequency': '', 'similar_pyq': '', 'citations': [],
     }
@@ -941,6 +947,7 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             refund_ai_token(request, amount=10)
             return _ai_unavailable_response()
 
+        with_public_subject(result)
         if db_question is not None:
             try:
                 _persist_rich_explanation(db_question, result, service)
@@ -1152,7 +1159,8 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
                     stored = {
                         "analysis": analysis,
                         "context": {
-                            "subject": getattr(q.subject, 'name', '') if q.subject_id else '',
+                            # The question detail payload carries this JSON.
+                            "subject": public_subject(getattr(q.subject, 'name', '') if q.subject_id else ''),
                             "topic": getattr(q.topic, 'name', '') if q.topic_id else '',
                             "year": q.year,
                             "exam_type": q.exam_type,
@@ -1329,7 +1337,7 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
     if not parts:
         # Last resort: if the cached dict has no known keys, dump as JSON
         # so we at least surface *something* (shouldn't normally happen).
-        parts.append(json.dumps(cached, indent=2, ensure_ascii=False))
+        parts.append(json.dumps(with_public_subject(dict(cached)), indent=2, ensure_ascii=False))
     return "\n".join(parts)
 
 
@@ -1601,15 +1609,35 @@ def _question_bank_high_yield(subject: str, reason: str):
         return None
     by_subject: dict = {}
     for row in rows:
-        by_subject.setdefault(row['subject__name'] or 'General', []).append(row)
+        # Grouped by the label students see, so the loader's "Imported" and
+        # an "Expert Curated" subject form one section.
+        by_subject.setdefault(public_subject(row['subject__name']) or 'General', []).append(row)
     lines = [f'> {offline_notice(reason)} Ranked by how often each topic appeared in past CMS papers.', '']
     for name, topics in by_subject.items():
         lines.append(f'## {name}')
+        # Re-ranked across the subjects of a merged section (stable: a single
+        # subject keeps the query's order).
+        topics = sorted(topics, key=lambda row: (-row['years'], -row['n']))
         for i, row in enumerate(topics[:10], 1):
             stars = '★★★' if row['years'] >= 4 else ('★★' if row['years'] >= 2 else '★')
             lines.append(f"{i}. **{row['topic__name']}** ({row['n']} PYQs in {row['years']} years) ({stars})")
         lines.append('')
     return '\n'.join(lines).strip()
+
+
+def _public_subject_headings(markdown):
+    """High-yield markdown with every ``## <subject>`` heading as students
+    see it (``public_subject``): a list cached before the display rule can
+    still say ``## Imported``. Anything that is not text is returned as is."""
+    if not isinstance(markdown, str):
+        return markdown
+    lines = markdown.split('\n')
+    for i, line in enumerate(lines):
+        if line.startswith('## '):
+            label = public_subject(line[3:])
+            if label != line[3:]:
+                lines[i] = f'## {label}'
+    return '\n'.join(lines)
 
 
 class HighYieldTopicsView(AITutorThrottleMixin, APIView):
@@ -1635,7 +1663,8 @@ class HighYieldTopicsView(AITutorThrottleMixin, APIView):
         except Exception:
             cached = None
         if isinstance(cached, dict) and cached.get('predictions'):
-            return Response({**cached, 'cached': True})
+            return Response({**cached, 'predictions': _public_subject_headings(cached['predictions']),
+                             'cached': True})
 
         if ai_offline_mode():
             return self._from_question_bank(subject, cache_key, REASON_OFFLINE_MODE)
@@ -1657,7 +1686,7 @@ class HighYieldTopicsView(AITutorThrottleMixin, APIView):
             return _ai_unavailable_response()
 
         payload = {
-            'predictions': predictions,
+            'predictions': _public_subject_headings(predictions),
             'subject': subject or None,
             'generated_at': timezone.now().isoformat(),
         }

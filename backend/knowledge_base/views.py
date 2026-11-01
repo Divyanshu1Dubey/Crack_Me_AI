@@ -159,6 +159,8 @@ class SearchView(APIView):
         return _public_perm()
 
     def post(self, request):
+        from ai_engine.offline import public_subject
+
         query = str(request.data.get("query", "") or "").strip()
         subject = str(request.data.get("subject") or "").strip()[:100] or None
         source_slugs = request.data.get("source_slugs") or None
@@ -189,7 +191,7 @@ class SearchView(APIView):
                         "chunk_id": c.chunk_id,
                         "text": c.text[:500],
                         "score": round(c.final_score, 4),
-                        "subject": c.subject,
+                        "subject": public_subject(c.subject),
                         "topic": c.topic,
                         "citation": c.citation,
                     } for c in results

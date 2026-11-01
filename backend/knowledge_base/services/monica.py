@@ -211,6 +211,10 @@ class Monica:
 
     def _build_context(self, chunks: list[RetrievedChunk],
                         max_chars: int) -> tuple[str, list[dict]]:
+        # Citation subjects are shown as students see them (the loader's
+        # "Imported" bucket is "Expert Curated").
+        from ai_engine.offline import public_subject
+
         parts = []
         citations = []
         used = 0
@@ -234,7 +238,7 @@ class Monica:
                 "locator": c.locator,
                 "url": c.source_url,
                 "excerpt": excerpt[:300],
-                "subject": c.subject,
+                "subject": public_subject(c.subject),
                 "topic": c.topic,
                 "score": round(c.final_score, 4),
                 "citation_text": (

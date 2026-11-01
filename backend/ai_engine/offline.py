@@ -23,6 +23,7 @@ import math
 import os
 import re
 from dataclasses import dataclass, field
+from itertools import islice
 from typing import Iterable, Optional
 
 from ai_engine.lexical_index import iter_sentences, tokenize
@@ -61,6 +62,19 @@ MAX_SENTENCES = 5
 MIN_PYQ_SIMILARITY = 0.5
 MIN_PYQ_SHARED_TERMS = 3
 MAX_EXPLANATION_CHARS = 1200
+# The question-bank prefilter searches for the question's longest few words.
+PYQ_PROBE_TERMS = 4
+# Distinct words considered for that probe. A real question has far fewer
+# distinct words of five letters or more; the cap only bounds pathological input.
+MAX_PROBE_CANDIDATES = 500
+
+# Longest text the composer tokenises, matches and searches with (defence in
+# depth: every API caller already caps its input). A question stem is capped
+# at ai_engine.views.MAX_AI_INPUT_CHARS (4000) and the explain views append
+# the correct option (MAX_OPTION_CHARS, 1000) after a space, so legitimate
+# queries are never cut. ai_engine.views imports this module, so the limit is
+# restated here; a test keeps the two in step.
+MAX_QUERY_CHARS = 4000 + 1 + 1000
 
 # Text that providers or older code paths returned *instead of* an answer.
 # Stored explanations containing these are not shown as answers.
@@ -115,6 +129,40 @@ def offline_notice(reason: str) -> str:
     return OFFLINE_NOTICES.get(reason, OFFLINE_NOTICES[REASON_OFFLINE_MODE])
 
 
+def _bounded_query(text) -> str:
+    """``text`` stripped and cut to MAX_QUERY_CHARS."""
+    return (text or '').strip()[:MAX_QUERY_CHARS]
+
+
+# ─── Display rule ───────────────────────────────────────────────────────
+
+def public_subject(name):
+    """A subject label as students see it: the loader's "Imported" bucket
+    reads "Expert Curated" (``questions.serializers.public_subject_name``);
+    every other value comes back unchanged. Imported lazily: ai_engine.services
+    imports this module."""
+    from questions.serializers import public_subject_name
+    return public_subject_name(name)
+
+
+def with_public_subject(payload):
+    """An explain-after-answer dict with its subject labels as students see
+    them: ``category`` and the ``context.subject`` that explain-question
+    stores next to it. Changed in place and returned (``context`` is
+    replaced, not mutated); anything that is not a dict is returned as is.
+
+    Stored, cached and model-written explanations can carry the raw
+    "Imported" (it was the prompt's subject), so every exit applies this."""
+    if not isinstance(payload, dict):
+        return payload
+    if 'category' in payload:
+        payload['category'] = public_subject(payload['category'])
+    context = payload.get('context')
+    if isinstance(context, dict) and 'subject' in context:
+        payload['context'] = {**context, 'subject': public_subject(context['subject'])}
+    return payload
+
+
 @dataclass
 class _Candidate:
     score: float
@@ -131,7 +179,8 @@ def retrieve_passages(query: str, k: int = 8) -> list[dict]:
 
     Returns RAGPipeline.search dicts: ``{text, book, page, score, source_file}``.
     """
-    if not (query or '').strip():
+    query = _bounded_query(query)
+    if not query:
         return []
     try:
         from ai_engine import services
@@ -388,6 +437,18 @@ def _user_sees_full_bank(user) -> bool:
         return False
 
 
+def _pyq_probe_terms(question_text: str) -> list[str]:
+    """The question's longest distinct words (five letters or more, longest
+    first, ties in order of appearance) for the question-bank prefilter.
+
+    Linear in the input: de-duplicated with a dict (a list-membership test
+    was quadratic) and capped at MAX_PROBE_CANDIDATES distinct words.
+    """
+    distinct = dict.fromkeys(tok for tok in tokenize(question_text or '', stem=False) if len(tok) >= 5)
+    candidates = list(islice(distinct, MAX_PROBE_CANDIDATES))
+    return sorted(candidates, key=len, reverse=True)[:PYQ_PROBE_TERMS]
+
+
 def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optional[dict]:
     """The closest active past question with a stored explanation, or None.
 
@@ -395,13 +456,10 @@ def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optio
     the question bank applies to its retrieve endpoint, and never a
     scholarship-test question (its answer would leak to test takers).
     """
-    raw_terms = []
-    for tok in tokenize(question_text or '', stem=False):
-        if len(tok) >= 5 and tok not in raw_terms:
-            raw_terms.append(tok)
-    if not raw_terms:
+    question_text = _bounded_query(question_text)
+    probe = _pyq_probe_terms(question_text)
+    if not probe:
         return None
-    probe = sorted(raw_terms, key=len, reverse=True)[:4]
 
     try:
         from django.db.models import Exists, OuterRef, Q
@@ -517,7 +575,7 @@ def compose_offline_answer(
     skips the textbook search when the caller already has them. The result is
     ``grounded`` only when a sentence or past question matched strongly.
     """
-    question_text = (question_text or '').strip()
+    question_text = _bounded_query(question_text)
     if passages is None:
         passages = retrieve_passages(question_text, k=k)
     chosen = _select_sentences(question_text, passages)
@@ -596,7 +654,7 @@ def stored_rich_explanation(question, *, selected_answer: str = '') -> Optional[
         'core_concept': '',
         'topic_deep_dive': (getattr(question, 'concept_explanation', '') or '').strip(),
         'key_differentiators': [],
-        'category': getattr(subject, 'name', '') or '',
+        'category': public_subject(getattr(subject, 'name', '') or ''),
         'sub_category': getattr(topic, 'name', '') or '',
         'question_type': '',
         'around_concepts': [],
