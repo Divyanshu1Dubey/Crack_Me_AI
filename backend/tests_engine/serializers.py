@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Test, TestAttempt, QuestionResponse
+from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
 from questions.serializers import QuestionListSerializer, QuestionDetailSerializer
 
 
@@ -8,24 +8,40 @@ class TestSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
     attempt_count = serializers.SerializerMethodField()
     # Derived flag (2026-08-04): a test is free for the current user if it
-    # is admin-marked OR it is a small practice test (test_type='daily' OR
-    # num_questions <= 20). Mirrors the gate in views.py so the UI badge
-    # matches the actual server-side enforcement.
+    # has at most FREE_TEST_MAX_QUESTIONS questions. Mirrors the gate in
+    # views.start_attempt so the UI badge matches the server-side check.
     is_free_for_current_user = serializers.SerializerMethodField()
 
     class Meta:
         model = Test
-        fields = ['id', 'title', 'test_type', 'description', 'subject',
+        fields = ['id', 'title', 'test_type', 'exam_type', 'description', 'subject',
                   'subject_name', 'topic', 'topic_name', 'num_questions',
                   'time_limit_minutes', 'negative_marking', 'negative_mark_value',
                   'is_published', 'is_free_preview', 'is_free_for_current_user',
                   'version', 'attempt_count', 'created_at', 'updated_at']
 
     def get_attempt_count(self, obj):
+        # TestViewSet.get_queryset annotates the viewer's attempt count; the
+        # per-row COUNT is only a fallback for unannotated instances.
+        annotated = getattr(obj, '_user_attempt_count', None)
+        if annotated is not None:
+            return int(annotated)
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return obj.attempts.filter(user=request.user).count()
         return 0
+
+    def _viewer_is_premium(self, user):
+        """is_premium(user), evaluated once per serializer call (it costs one
+        or two Subscription queries and used to run for every listed test)."""
+        cache = self.context  # shared by every row of a many=True serializer
+        if '_viewer_is_premium' not in cache:
+            try:
+                from accounts.utils import is_premium as _is_premium
+                cache['_viewer_is_premium'] = bool(_is_premium(user))
+            except Exception:
+                cache['_viewer_is_premium'] = False
+        return cache['_viewer_is_premium']
 
     def get_is_free_for_current_user(self, obj):
         request = self.context.get('request')
@@ -35,24 +51,16 @@ class TestSerializer(serializers.ModelSerializer):
             return True
         if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
             return True
-        try:
-            from accounts.utils import is_premium as _is_premium
-            if _is_premium(user):
-                return True
-        except Exception:
-            pass
-        # Free user: free iff SMALL practice test (daily OR ≤20 Qs). The
-        # `is_free_preview` admin-flag is no longer honoured — admin should
-        # never mark a big premium test (Paper 1/2 mock, full PYQ-year
-        # simulation) as free. Mirrors the gate in views.py exactly so the
-        # UI badge never disagrees with the backend's 402 response.
-        if getattr(obj, 'test_type', '') == 'daily':
+        if self._viewer_is_premium(user):
             return True
+        # Free user: free iff the test has at most FREE_TEST_MAX_QUESTIONS
+        # questions. Neither the test_type (a client-chosen 'daily' used to
+        # be exempt) nor the retired `is_free_preview` flag counts.
         try:
             count = getattr(obj, '_question_count', None)
             if count is None:
                 count = obj.questions.count()
-            return int(count or 0) <= 20
+            return int(count or 0) <= FREE_TEST_MAX_QUESTIONS
         except (TypeError, ValueError):
             return False
 

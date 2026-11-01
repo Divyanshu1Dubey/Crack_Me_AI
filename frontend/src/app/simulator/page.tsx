@@ -10,6 +10,20 @@ import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar }
 
 interface Subject { id: number; name: string; code: string; }
 
+// This page simulates UPSC CMS only; the backend scopes the questions with it.
+const SIMULATOR_EXAM = 'cms';
+
+// Years that have UPSC CMS questions. Prefers the per-exam stats (the global
+// /questions/years/ list mixes every exam and includes the 0 "unknown year"
+// bucket); falls back to that list without the non-years.
+function cmsYears(stats: unknown, allYears: unknown): number[] {
+    const byYear = (stats as { by_year?: { year?: unknown; count?: unknown }[] } | null)?.by_year;
+    const source = Array.isArray(byYear)
+        ? byYear.filter(row => Number(row?.count) > 0).map(row => Number(row?.year))
+        : (Array.isArray(allYears) ? allYears.map(Number) : []);
+    return Array.from(new Set(source.filter(y => Number.isInteger(y) && y >= 1900))).sort((a, b) => b - a);
+}
+
 export default function SimulatorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -27,9 +41,10 @@ export default function SimulatorPage() {
             Promise.all([
                 questionsAPI.getSubjects(),
                 questionsAPI.getYears(),
-            ]).then(([sRes, yRes]) => {
+                questionsAPI.getStats({ exam_source: 'UPSC CMS' }).catch(() => null),
+            ]).then(([sRes, yRes, statsRes]) => {
                 setSubjects(sRes.data.results || sRes.data || []);
-                setYears(yRes.data.results || yRes.data || []);
+                setYears(cmsYears(statsRes?.data ?? null, yRes.data.results || yRes.data || []));
             }).catch(() => { }).finally(() => setLoading(false));
         }
     }, [authLoading, isAuthenticated, router]);
@@ -38,7 +53,7 @@ export default function SimulatorPage() {
         setGenerating(true);
         setError(null);
         try {
-            const res = await testsAPI.generate({ test_type: paper, num_questions: 120 });
+            const res = await testsAPI.generate({ test_type: paper, num_questions: 120, exam_type: SIMULATOR_EXAM });
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
             const msg = err && typeof err === 'object' && 'response' in err
@@ -55,7 +70,10 @@ export default function SimulatorPage() {
         setGenerating(true);
         setError(null);
         try {
-            const res = await testsAPI.pyqSimulation({ year: pyqYear });
+            // exam_type keeps NEET PG / INI-CET questions of the same year out
+            // of a "UPSC CMS {year}" paper (the backend also defaults to CMS).
+            const payload = { year: pyqYear, exam_type: SIMULATOR_EXAM };
+            const res = await testsAPI.pyqSimulation(payload);
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
             const msg = err && typeof err === 'object' && 'response' in err
@@ -167,7 +185,7 @@ export default function SimulatorPage() {
                         <div className="mb-6">
                             <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--text-secondary)' }}>Select Year</label>
                             <div className="flex flex-wrap gap-2">
-                                {years.sort((a, b) => b - a).map(y => (
+                                {years.map(y => (
                                     <button key={y} onClick={() => setPyqYear(y)}
                                         className="px-4 py-2 rounded-lg text-sm font-bold transition-all"
                                         style={{

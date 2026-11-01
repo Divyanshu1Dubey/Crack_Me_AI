@@ -29,8 +29,8 @@ interface TestItem {
     // an active subscription. Surfaced by TestSerializer.
     is_free_preview?: boolean;
     // Derived from backend (2026-08-04): true if this test is free for
-    // the CURRENT requester (admin-marked OR test_type=daily OR
-    // num_questions <= 20). Mirrors the gate in tests_engine/views.py.
+    // the CURRENT requester (at most 20 questions, counted server-side).
+    // Mirrors the gate in tests_engine/views.py.
     is_free_for_current_user?: boolean;
 }
 
@@ -40,12 +40,51 @@ interface Subject {
     code: string;
 }
 
+type ListScope = 'library' | 'mine';
+
+// How many of the student's own practice tests are shown before "Show all".
+const PRACTICE_PREVIEW = 4;
+
+// One page of /tests/ (paginated `{results, next}`, or a bare array).
+function pageOf(data: any): { results: TestItem[]; hasNext: boolean } {
+    if (Array.isArray(data)) return { results: data, hasNext: false };
+    return { results: Array.isArray(data?.results) ? data.results : [], hasNext: Boolean(data?.next) };
+}
+
+// Library: collapse duplicate published rows of the same template, keeping
+// the newest. The API returns `subject` / `topic` ids; the old key read
+// non-existent `subject_id` / `topic_id`, collapsing every test of one type
+// (all subjects, all PYQ years) into a single card.
+function dedupeLibrary(tests: TestItem[]): TestItem[] {
+    const seen = new Set<string>();
+    const unique: TestItem[] = [];
+    for (const t of tests) {
+        const key = `${t.test_type}:${t.subject ?? 'none'}:${t.topic ?? 'none'}:${t.title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(t);
+    }
+    return unique;
+}
+
+function uniqueById(tests: TestItem[]): TestItem[] {
+    const seen = new Set<number>();
+    return tests.filter(t => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+}
+
 export default function TestsPage() {
     const { ready } = useRequireAuth();
     const { user } = useAuth();
     const { show: showPaywall } = usePaywall();
     const router = useRouter();
-    const [tests, setTests] = useState<TestItem[]>([]);
+    // The official library and the student's own generated tests are listed
+    // separately (and paginated): in one newest-first list, every "Generate"
+    // click pushed the library further down until it fell off page 1.
+    const [libraryTests, setLibraryTests] = useState<TestItem[]>([]);
+    const [myTests, setMyTests] = useState<TestItem[]>([]);
+    const [nextPage, setNextPage] = useState<Record<ListScope, number | null>>({ library: null, mine: null });
+    const [loadingMore, setLoadingMore] = useState<ListScope | null>(null);
+    const [showAllMine, setShowAllMine] = useState(false);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -71,32 +110,43 @@ export default function TestsPage() {
         return () => window.removeEventListener('exam_changed', syncExam);
     }, [examType]);
 
+    const fetchTests = (scope: ListScope, page: number) =>
+        testsAPI.list({ exam_type: examType, scope, page: String(page) });
+
     useEffect(() => {
         if (ready) {
+            setShowAllMine(false);
             Promise.all([
-                testsAPI.list({ exam_type: examType }),
+                fetchTests('library', 1),
+                fetchTests('mine', 1),
                 questionsAPI.getSubjects({ exam_type: examType }),
-            ]).then(([tRes, sRes]) => {
-                const rawTests = tRes.data.results || tRes.data || [];
-                // Deduplicate by (test_type, subject_id, topic_id) keeping the
-                // newest first. Prevents duplicate paper1/subject cards when the
-                // backend returns multiple published rows for the same template.
-                const seen = new Set<string>();
-                const unique: TestItem[] = [];
-                for (const t of rawTests) {
-                    // The API returns `subject` / `topic` (ids). The old key read
-                    // non-existent `subject_id` / `topic_id`, collapsing every test
-                    // of one type (all subjects, all PYQ years) into a single card.
-                    const key = `${t.test_type}:${t.subject ?? 'none'}:${t.topic ?? 'none'}:${t.title}`;
-                    if (seen.has(key)) continue;
-                    seen.add(key);
-                    unique.push(t);
-                }
-                setTests(unique);
+            ]).then(([libRes, mineRes, sRes]) => {
+                const lib = pageOf(libRes.data);
+                const mine = pageOf(mineRes.data);
+                setLibraryTests(dedupeLibrary(lib.results));
+                setMyTests(uniqueById(mine.results));
+                setNextPage({ library: lib.hasNext ? 2 : null, mine: mine.hasNext ? 2 : null });
                 setSubjects(sRes.data.results || sRes.data || []);
             }).catch(() => { }).finally(() => setLoading(false));
         }
     }, [ready, examType]);
+
+    const loadMore = async (scope: ListScope) => {
+        const page = nextPage[scope];
+        if (!page || loadingMore) return;
+        setLoadingMore(scope);
+        try {
+            const res = await fetchTests(scope, page);
+            const { results, hasNext } = pageOf(res.data);
+            if (scope === 'library') setLibraryTests(prev => dedupeLibrary([...prev, ...results]));
+            else setMyTests(prev => uniqueById([...prev, ...results]));
+            setNextPage(prev => ({ ...prev, [scope]: hasNext ? page + 1 : null }));
+        } catch {
+            /* keep what is shown; the button stays available for a retry */
+        } finally {
+            setLoadingMore(null);
+        }
+    };
 
     const generateTest = async (type: string, subjectId?: number) => {
         setGenerating(true);
@@ -110,7 +160,7 @@ export default function TestsPage() {
             if (type === 'paper1' || type === 'paper2') data.num_questions = 120;
             if (type === 'daily') data.num_questions = 20;
             const res = await testsAPI.generate(data);
-            setTests(prev => [res.data, ...prev]);
+            setMyTests(prev => uniqueById([res.data, ...prev]));
         } catch (err: any) {
             console.error('Failed to generate test:', err);
             setGenerateError(
@@ -126,16 +176,45 @@ export default function TestsPage() {
     const startTest = async (test: TestItem) => {
         // Freemium gate (Task 7/11, updated 2026-08-04): free users can
         // only start tests that are free for THEM — backend defines this
-        // as admin-marked is_free_preview OR a small practice test
-        // (test_type=daily OR num_questions<=20). Backend enforces the
-        // same rule with a 403 upgrade_required; we open the modal
-        // proactively here so the user sees the same nudge the backend
-        // would otherwise deliver via the api.ts interceptor.
+        // as a small practice test (at most 20 questions, counted on the
+        // server). Backend enforces the same rule with a 402
+        // upgrade_required; we open the modal proactively here so the user
+        // sees the same nudge the backend would otherwise deliver via the
+        // api.ts interceptor.
         if (!isPremium && !test.is_free_for_current_user) {
             showPaywall('Mock Tests');
             return;
         }
         router.push(`/tests/${test.id}`);
+    };
+
+    const renderTestCard = (test: TestItem) => {
+        const isFreeForUser = isPremium || test.is_free_for_current_user;
+        return (
+            <Card key={test.id}>
+                <CardContent className="p-5">
+                    <div className="flex justify-between items-start mb-3 gap-2">
+                        <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {!isFreeForUser && <LockedBadge size="sm" />}
+                            <Badge variant="secondary" className="whitespace-nowrap">{test.test_type}</Badge>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs mb-4 text-muted-foreground">
+                        <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {test.num_questions} Qs</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {test.time_limit_minutes} min</span>
+                        <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
+                    </div>
+                    <Button variant="neon" onClick={() => startTest(test)} className="w-full" size="sm">
+                        {isFreeForUser ? (
+                            <>Start Test <ChevronRight className="w-4 h-4 ml-1" /></>
+                        ) : (
+                            <>Unlock Test <Lock className="w-4 h-4 ml-1" /></>
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
+        );
     };
 
     const testTypes = [
@@ -195,7 +274,34 @@ export default function TestsPage() {
                     </div>
                 </div>
 
-                {/* Test List */}
+                {/* The student's own generated tests */}
+                {!loading && myTests.length > 0 && (
+                    <div className="mb-8">
+                        <h2 className="section-title flex items-center gap-2 mb-4">
+                            <Sparkles className="w-4 h-4 text-violet-500" />
+                            Your Practice Tests
+                        </h2>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {(showAllMine ? myTests : myTests.slice(0, PRACTICE_PREVIEW)).map(renderTestCard)}
+                        </div>
+                        {!showAllMine && (myTests.length > PRACTICE_PREVIEW || nextPage.mine) && (
+                            <div className="mt-4 flex justify-center">
+                                <Button variant="outline" size="sm" onClick={() => setShowAllMine(true)}>
+                                    Show all your practice tests
+                                </Button>
+                            </div>
+                        )}
+                        {showAllMine && nextPage.mine && (
+                            <div className="mt-4 flex justify-center">
+                                <Button variant="outline" size="sm" onClick={() => loadMore('mine')} disabled={loadingMore !== null}>
+                                    {loadingMore === 'mine' ? 'Loading…' : 'Load more'}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Test List (official library) */}
                 <div>
                     <h2 className="section-title flex items-center gap-2 mb-4">
                         <Award className="w-4 h-4 text-amber-500" />
@@ -205,41 +311,23 @@ export default function TestsPage() {
                         <div className="grid md:grid-cols-2 gap-4">
                             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
                         </div>
-                    ) : tests.length === 0 ? (
+                    ) : libraryTests.length === 0 ? (
                         <Card className="p-8 text-center text-muted-foreground">
                             No tests yet. Generate one above to get started!
                         </Card>
                     ) : (
-                        <div className="grid md:grid-cols-2 gap-4">
-                            {tests.map(test => {
-                                const isFreeForUser = isPremium || test.is_free_for_current_user;
-                                return (
-                                <Card key={test.id}>
-                                    <CardContent className="p-5">
-                                        <div className="flex justify-between items-start mb-3 gap-2">
-                                            <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                {!isFreeForUser && <LockedBadge size="sm" />}
-                                                <Badge variant="secondary" className="whitespace-nowrap">{test.test_type}</Badge>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-xs mb-4 text-muted-foreground">
-                                            <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {test.num_questions} Qs</span>
-                                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {test.time_limit_minutes} min</span>
-                                            <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
-                                        </div>
-                                        <Button variant="neon" onClick={() => startTest(test)} className="w-full" size="sm">
-                                            {isFreeForUser ? (
-                                                <>Start Test <ChevronRight className="w-4 h-4 ml-1" /></>
-                                            ) : (
-                                                <>Unlock Test <Lock className="w-4 h-4 ml-1" /></>
-                                            )}
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                                );
-                            })}
-                        </div>
+                        <>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {libraryTests.map(renderTestCard)}
+                            </div>
+                            {nextPage.library && (
+                                <div className="mt-4 flex justify-center">
+                                    <Button variant="outline" size="sm" onClick={() => loadMore('library')} disabled={loadingMore !== null}>
+                                        {loadingMore === 'library' ? 'Loading…' : 'Load more tests'}
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
                 </div>

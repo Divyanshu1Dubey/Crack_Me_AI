@@ -2,6 +2,11 @@ from django.db import models
 from django.conf import settings
 
 
+# Freemium rule: a non-premium user may start a test only if it has at most
+# this many questions (counted on the server, never taken from the client).
+FREE_TEST_MAX_QUESTIONS = 20
+
+
 class Test(models.Model):
     """A test/quiz configuration."""
     TEST_TYPES = [

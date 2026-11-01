@@ -68,6 +68,93 @@ interface TestData {
     time_limit_minutes: number;
     num_questions: number;
     negative_marking: boolean;
+    exam_type?: string;
+}
+
+const EXAM_LABELS: Record<string, string> = {
+    cms: 'UPSC CMS',
+    neet_pg: 'NEET PG',
+    ini_cet: 'INI-CET',
+    usmle: 'USMLE',
+    fmge: 'FMGE',
+};
+
+// Must match QuestionFeedback.CATEGORY_CHOICES (backend/questions/models.py);
+// any other value is rejected with a 400.
+const FEEDBACK_CATEGORIES: [string, string][] = [
+    ['wrong_answer', 'Wrong Answer'],
+    ['discrepancy', 'Discrepancy in Options'],
+    ['out_of_syllabus', 'Out of Syllabus'],
+    ['typo', 'Typo/Formatting Issue'],
+    ['explanation_needed', 'Better Explanation Needed'],
+    ['other', 'Other'],
+];
+
+// In-progress answers are kept in localStorage per attempt, so a reload or a
+// network blip resumes the attempt with its answers instead of wiping them.
+const ATTEMPT_STORAGE_PREFIX = 'crack_test_attempt_';
+const ATTEMPT_STORAGE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+interface SavedAttemptState {
+    answers: Record<string, string>;
+    marked: number[];                  // question ids
+    visited: number[];                 // question ids
+    timeSpent: Record<string, number>; // question id -> seconds
+    currentQuestionId: number | null;
+    savedAt: number;
+}
+
+function readSavedAttempt(attemptId: number): SavedAttemptState | null {
+    try {
+        const raw = window.localStorage.getItem(`${ATTEMPT_STORAGE_PREFIX}${attemptId}`);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed as SavedAttemptState : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeSavedAttempt(attemptId: number, state: SavedAttemptState) {
+    try {
+        window.localStorage.setItem(`${ATTEMPT_STORAGE_PREFIX}${attemptId}`, JSON.stringify(state));
+    } catch { /* storage full or blocked: answers stay in memory */ }
+}
+
+function clearSavedAttempt(attemptId: number) {
+    try {
+        window.localStorage.removeItem(`${ATTEMPT_STORAGE_PREFIX}${attemptId}`);
+    } catch { /* ignore */ }
+}
+
+function pruneSavedAttempts() {
+    try {
+        const now = Date.now();
+        for (let i = window.localStorage.length - 1; i >= 0; i--) {
+            const key = window.localStorage.key(i);
+            if (!key || !key.startsWith(ATTEMPT_STORAGE_PREFIX)) continue;
+            let savedAt = 0;
+            try { savedAt = Number(JSON.parse(window.localStorage.getItem(key) || '{}').savedAt) || 0; } catch { /* corrupt: prune */ }
+            if (now - savedAt > ATTEMPT_STORAGE_MAX_AGE_MS) window.localStorage.removeItem(key);
+        }
+    } catch { /* ignore */ }
+}
+
+// Result-card fields derived from a /review/ payload (used when the submit
+// response was lost and the server reports the attempt as already submitted).
+function resultFromReview(review: any): Record<string, any> | null {
+    if (!review || typeof review !== 'object') return null;
+    const correct = Number(review.correct) || 0;
+    const incorrect = Number(review.incorrect) || 0;
+    const unanswered = Number(review.unanswered) || 0;
+    return {
+        correct_count: correct,
+        incorrect_count: incorrect,
+        unanswered_count: unanswered,
+        accuracy: review.accuracy ?? 0,
+        score: review.score ?? 0,
+        total_marks: review.total_marks ?? (correct + incorrect + unanswered),
+    };
 }
 
 export default function TakeTestPage() {
@@ -95,16 +182,24 @@ export default function TakeTestPage() {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const submittingRef = useRef(false);
+    // Set when a resumed attempt's time had already run out: it is then
+    // submitted straight away with the answers saved on this device.
+    const [expiredOnLoad, setExpiredOnLoad] = useState(false);
+    const [autoSubmitPending, setAutoSubmitPending] = useState(false);
+    // True when the result shown is the one the server already had (an
+    // earlier submit went through but its response was lost).
+    const [storedResult, setStoredResult] = useState(false);
     const [reviewMode, setReviewMode] = useState(false);
     const [reviewIdx, setReviewIdx] = useState(0);
     const [reviewAiExplanations, setReviewAiExplanations] = useState<Record<number, any>>({});
     const [reviewAiLoading, setReviewAiLoading] = useState(false);
     const [reviewTokenError, setReviewTokenError] = useState(false);
     const [flagOpen, setFlagOpen] = useState(false);
-    const [flagCategory, setFlagCategory] = useState('incomplete_question');
+    const [flagCategory, setFlagCategory] = useState('wrong_answer');
     const [flagComment, setFlagComment] = useState('');
     const [flagSubmitting, setFlagSubmitting] = useState(false);
     const [flagSuccess, setFlagSuccess] = useState(false);
+    const [flagError, setFlagError] = useState<string | null>(null);
     const [zoomImg, setZoomImg] = useState<any>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimes = useRef<Record<number, number>>({});
@@ -127,15 +222,91 @@ export default function TakeTestPage() {
         if (!ready || !testId) return;
         setError(null);
         testsAPI.start(testId).then(res => {
-            setTest(res.data.test);
-            setQuestions(res.data.questions);
-            setAttemptId(res.data.attempt_id);
-            setTimeLeft(res.data.test.time_limit_minutes * 60);
-            startTimes.current[0] = Date.now();
+            const data = res.data;
+            const qs: Question[] = Array.isArray(data.questions) ? data.questions : [];
+            const attempt = Number(data.attempt_id);
+
+            // The clock runs from the attempt's server-side start, so a
+            // reload resumes the remaining time instead of a fresh timer.
+            const limitSeconds = Number(data.time_limit_seconds ?? (Number(data.test?.time_limit_minutes) || 0) * 60) || 0;
+            let remaining = limitSeconds;
+            if (typeof data.remaining_seconds === 'number') {
+                remaining = Math.max(0, Math.floor(data.remaining_seconds));
+            } else if (data.started_at) {
+                const startedMs = Date.parse(data.started_at);
+                if (Number.isFinite(startedMs)) {
+                    remaining = Math.max(0, limitSeconds - Math.floor((Date.now() - startedMs) / 1000));
+                }
+            }
+
+            // Restore answers saved on this device for this attempt.
+            pruneSavedAttempts();
+            const saved = readSavedAttempt(attempt);
+            const indexById = new Map(qs.map((q, i) => [q.id, i]));
+            const restoredAnswers: Record<number, string> = {};
+            const restoredMarked = new Set<number>();
+            let startIdx = 0;
+            const now = Date.now();
+            startTimes.current = {};
+            timeSpent.current = {};
+            if (saved) {
+                for (const [key, value] of Object.entries(saved.answers || {})) {
+                    const qid = Number(key);
+                    if (indexById.has(qid) && typeof value === 'string' && /^[A-E]$/.test(value)) {
+                        restoredAnswers[qid] = value;
+                    }
+                }
+                for (const qid of saved.marked || []) {
+                    const idx = indexById.get(Number(qid));
+                    if (idx !== undefined) restoredMarked.add(idx);
+                }
+                for (const qid of saved.visited || []) {
+                    const idx = indexById.get(Number(qid));
+                    if (idx !== undefined) startTimes.current[idx] = now;
+                }
+                for (const [key, seconds] of Object.entries(saved.timeSpent || {})) {
+                    const idx = indexById.get(Number(key));
+                    if (idx !== undefined && Number.isFinite(Number(seconds))) timeSpent.current[idx] = Math.max(0, Number(seconds));
+                }
+                const savedIdx = saved.currentQuestionId != null ? indexById.get(Number(saved.currentQuestionId)) : undefined;
+                if (savedIdx !== undefined) startIdx = savedIdx;
+            }
+            startTimes.current[startIdx] = now;
+
+            setTest(data.test);
+            setQuestions(qs);
+            setAttemptId(attempt);
+            setAnswers(restoredAnswers);
+            setMarked(restoredMarked);
+            setCurrentIdx(startIdx);
+            setTimeLeft(remaining);
+            if (limitSeconds > 0 && remaining <= 0 && qs.length > 0) {
+                setExpiredOnLoad(true);
+                setAutoSubmitPending(true);
+            }
         }).catch(err => {
             setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
         }).finally(() => setLoading(false));
     }, [ready, testId]);
+
+    // Persist in-progress state for this attempt (cleared after submit).
+    useEffect(() => {
+        if (!attemptId || submitted || questions.length === 0) return;
+        const idOf = (idx: number) => questions[idx]?.id;
+        const spent: Record<string, number> = {};
+        for (const [idx, seconds] of Object.entries(timeSpent.current)) {
+            const qid = idOf(Number(idx));
+            if (qid !== undefined) spent[String(qid)] = seconds;
+        }
+        writeSavedAttempt(attemptId, {
+            answers: Object.fromEntries(Object.entries(answers).map(([qid, value]) => [String(qid), value])),
+            marked: Array.from(marked).map(idOf).filter((qid): qid is number => qid !== undefined),
+            visited: Object.keys(startTimes.current).map(i => idOf(Number(i))).filter((qid): qid is number => qid !== undefined),
+            timeSpent: spent,
+            currentQuestionId: idOf(currentIdx) ?? null,
+            savedAt: Date.now(),
+        });
+    }, [attemptId, submitted, questions, answers, marked, currentIdx]);
 
     // Timer — uses ref to avoid stale closure
     useEffect(() => {
@@ -200,6 +371,7 @@ export default function TakeTestPage() {
 
         try {
             const res = await testsAPI.submit(testId, { attempt_id: attemptId, answers: answerList });
+            clearSavedAttempt(attemptId);
             setResult(res.data);
             setSubmitted(true);
             setShowConfirm(false);
@@ -208,10 +380,33 @@ export default function TakeTestPage() {
                 const reviewRes = await testsAPI.review(testId, attemptId);
                 setReviewData(reviewRes.data.questions || []);
             } catch { /* review fetch is non-critical */ }
-        } catch (err) {
+        } catch (err: any) {
+            const data = err?.response?.data;
+            const alreadySubmitted = err?.response?.status === 400 && (
+                data?.code === 'already_submitted' || /already submitted/i.test(String(data?.error || ''))
+            );
+            if (alreadySubmitted) {
+                // The server already scored this attempt (an earlier submit
+                // went through but its response was lost). Retrying can never
+                // succeed, so show the stored result and the review instead.
+                let stored: Record<string, any> | null = data?.result && typeof data.result === 'object' ? data.result : null;
+                try {
+                    const reviewRes = await testsAPI.review(testId, attemptId);
+                    setReviewData(reviewRes.data.questions || []);
+                    if (!stored) stored = resultFromReview(reviewRes.data);
+                } catch { /* fall through to the error below if nothing usable */ }
+                if (stored) {
+                    clearSavedAttempt(attemptId);
+                    setResult(stored);
+                    setStoredResult(true);
+                    setSubmitted(true);
+                    setShowConfirm(false);
+                    return;
+                }
+            }
             console.error('Submit failed:', err);
             // Surface the error so the user can recover instead of being stuck.
-            const message = extractApiErrorMessage(err) || 'Failed to submit test. Please check your connection and try again.';
+            const message = extractApiErrorMessage(data, '') || 'Failed to submit test. Please check your connection and try again.';
             setSubmitError(message);
             setShowConfirm(false);
         } finally {
@@ -222,6 +417,15 @@ export default function TakeTestPage() {
 
     // Keep ref in sync so timer always calls latest doSubmit
     useEffect(() => { doSubmitRef.current = doSubmit; }, [doSubmit]);
+
+    // A resumed attempt whose time had already run out is submitted at once
+    // (as the timer would have), with the answers saved on this device.
+    // Declared after the ref sync above so it calls the current doSubmit.
+    useEffect(() => {
+        if (!autoSubmitPending || !attemptId || submitted || questions.length === 0) return;
+        setAutoSubmitPending(false);
+        doSubmitRef.current();
+    }, [autoSubmitPending, attemptId, submitted, questions.length]);
 
     // NOTE: AI explanation is NO LONGER auto-fetched.
     // Students must click "Generate AI Analysis" to save API tokens.
@@ -461,7 +665,7 @@ export default function TakeTestPage() {
 
                             {/* Flag Question Button */}
                             <div className="flex justify-end mt-4">
-                                <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); }}
+                                <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}
                                     className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                                     <Flag className="w-3.5 h-3.5" /> Report Issue
                                 </button>
@@ -475,14 +679,13 @@ export default function TakeTestPage() {
                                         <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted.</p>
                                     ) : (
                                         <>
+                                            {flagError && <p role="alert" className="text-sm text-red-500">{flagError}</p>}
                                             <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                aria-label="Issue category"
                                                 value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
-                                                <option value="incomplete_question">Incomplete Question</option>
-                                                <option value="wrong_answer">Wrong Answer</option>
-                                                <option value="discrepancy">Discrepancy in Options</option>
-                                                <option value="missing_options">Missing Options</option>
-                                                <option value="typo">Typo/Formatting Issue</option>
-                                                <option value="other">Other</option>
+                                                {FEEDBACK_CATEGORIES.map(([value, label]) => (
+                                                    <option key={value} value={value}>{label}</option>
+                                                ))}
                                             </select>
                                             <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
                                                 placeholder="Describe the issue (e.g., question text is incomplete, options are cut off...)"
@@ -493,20 +696,26 @@ export default function TakeTestPage() {
                                                     onClick={() => {
                                                         if (!flagComment.trim() || !rq) return;
                                                         setFlagSubmitting(true);
+                                                        setFlagError(null);
                                                         questionsAPI.submitFeedback({
                                                             question: rq.id,
                                                             category: flagCategory,
                                                             comment: flagComment.trim(),
                                                         }).then(() => {
                                                             setFlagSuccess(true);
-                                                            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); }, 2000);
-                                                        }).catch(() => {})
+                                                            setTimeout(() => { setFlagOpen(false); setFlagSuccess(false); setFlagComment(''); setFlagError(null); }, 2000);
+                                                        }).catch((err: any) => {
+                                                            setFlagError(
+                                                                extractApiErrorMessage(err?.response?.data, '')
+                                                                || 'Unable to submit feedback right now. Please try again.'
+                                                            );
+                                                        })
                                                         .finally(() => setFlagSubmitting(false));
                                                     }}
                                                     disabled={flagSubmitting || !flagComment.trim()}>
                                                     {flagSubmitting ? 'Submitting...' : 'Submit'}
                                                 </button>
-                                                <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => setFlagOpen(false)}>Cancel</button>
+                                                <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => { setFlagOpen(false); setFlagError(null); }}>Cancel</button>
                                             </div>
                                         </>
                                     )}
@@ -818,7 +1027,14 @@ export default function TakeTestPage() {
                 <div className="glass-card p-5 sm:p-8 max-w-lg w-full text-center animate-fadeInUp">
                     <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10b981' }} aria-hidden="true" />
                     <h1 className="text-2xl font-bold mb-2">Test Completed!</h1>
-                    <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>{test?.title}</p>
+                    <p className={expiredOnLoad || storedResult ? 'mb-3' : 'mb-6'} style={{ color: 'var(--text-secondary)' }}>{test?.title}</p>
+                    {(expiredOnLoad || storedResult) && (
+                        <p role="status" className="mb-6 text-sm rounded-lg px-3 py-2" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+                            {storedResult
+                                ? 'This attempt had already been submitted, so your saved result is shown.'
+                                : 'Time had run out on this attempt, so it was submitted with the answers saved on this device.'}
+                        </p>
+                    )}
 
                     <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
                         <div className="stat-card text-center">
@@ -868,6 +1084,7 @@ export default function TakeTestPage() {
         setAnswers(prev => { const next = { ...prev }; delete next[currentQ.id]; return next; });
     };
 
+    const examLabel = EXAM_LABELS[test?.exam_type || 'cms'] || EXAM_LABELS.cms;
     const answeredCount = Object.keys(answers).length;
     const markedCount = marked.size;
     const notVisitedCount = questions.length - Math.max(currentIdx + 1, Object.keys(startTimes.current).length);
@@ -921,7 +1138,7 @@ export default function TakeTestPage() {
             <div className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between"
                 style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
                 <div className="flex items-center gap-4">
-                    <div className="font-bold text-lg gradient-text">UPSC CMS SIMULATOR</div>
+                    <div className="font-bold text-lg gradient-text">{examLabel.toUpperCase()} SIMULATOR</div>
                     <div className="text-sm px-3 py-1 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{test?.title}</div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -1037,7 +1254,7 @@ export default function TakeTestPage() {
                         </div>
                         <div>
                             <div className="font-bold text-sm">{test?.title}</div>
-                            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>UPSC CMS Mock</div>
+                            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{examLabel} Mock</div>
                         </div>
                     </div>
 
