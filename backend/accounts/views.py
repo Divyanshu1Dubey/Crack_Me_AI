@@ -512,6 +512,16 @@ class SubscribeOrderView(APIView):
             )
         user = request.user
 
+        # A lifetime plan never expires and already includes unlimited AI:
+        # any further period would be paid for and add nothing. The page
+        # hides the buy buttons for these members; the API refuses too.
+        active = Subscription.get_active_subscription(user)
+        if active is not None and active.expires_at is None and active.unlimited_ai:
+            return Response(
+                {'code': 'lifetime_member', 'error': 'Your account already has lifetime access, so there is nothing to buy.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         # Client idempotency key — prevents double-charge if the user
         # double-clicks "Renew" before the modal dismisses. Same key within
         # 5 minutes returns the original order instead of creating a new one.

@@ -203,11 +203,10 @@ test.describe('payments (mock provider)', () => {
             expect(st.is_subscribed).toBe(true);
             expect(st.subscription?.expires_at ?? null).toBeNull();
             expect((await api(request, user, 'GET', `/questions/${locked}/`)).status).toBe(200);
-            // What the server does when a lifetime member starts another purchase
-            // (the UI hides the buy buttons for them); recorded for the report.
+            // A lifetime member cannot be sold another period (it would add nothing).
             const extra = await order(request, user, '1_month');
-            expect(extra.status).toBeLessThan(500);
-            test.info().annotations.push({ type: 'lifetime-member-order-status', description: String(extra.status) });
+            expect(extra.status, JSON.stringify(extra.body)).toBe(409);
+            expect(extra.body?.code).toBe('lifetime_member');
         });
 
         test('AI entitlement follows the plan: capped tutor for free, uncapped for premium', async ({ request }) => {
