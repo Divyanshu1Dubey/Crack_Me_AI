@@ -60,9 +60,16 @@ class RowsForTestSubmissionTests(SimpleTestCase):
 
 class QuestionBankCaptureTests(TestCase):
     def setUp(self):
+        from accounts.models import Subscription
+
         self.subject = Subject.objects.create(name='Mistake Subject')
         self.q = _question(self.subject, 1)
         self.user = User.objects.create_user(username='mistake-u', password='x')
+        # Answers to non-showcase questions are a paid feature (402 for free
+        # users, covered by test_wave1_g2_entitlement); these tests are about
+        # mistake capture and study time, so the student is a subscriber.
+        Subscription.objects.create(user=self.user, plan='1_year', status='active',
+                                    expires_at=timezone.now() + timedelta(days=365))
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 

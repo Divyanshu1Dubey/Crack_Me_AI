@@ -157,10 +157,23 @@ class RagPipelineTests(SimpleTestCase):
 
     def test_generated_answer_is_flagged(self):
         rag = self._rag()
-        with mock.patch.object(type(rag), '_generate_answer', return_value='IVIG plus aspirin.'):
+        with mock.patch.dict(os.environ, {'AI_OFFLINE_MODE': ''}), \
+                mock.patch.object(type(rag), '_generate_answer', return_value='IVIG plus aspirin.'):
             res = rag.rag_answer('treatment of Kawasaki disease')
         self.assertTrue(res['generated'])
         self.assertEqual(res['answer'], 'IVIG plus aspirin.')
+
+
+class HermeticTestRunTests(SimpleTestCase):
+    """The test runner must never inherit live credentials from backend/.env."""
+
+    def test_external_service_secrets_are_blank_under_the_test_runner(self):
+        from django.conf import settings
+        for name in ('GROQ_API_KEY', 'GEMINI_API_KEY', 'CEREBRAS_API_KEY', 'OPENROUTER_API_KEY',
+                     'OMNIROUTE_API_KEY', 'MISTRAL_API_KEY', 'GITHUB_TOKEN'):
+            self.assertEqual(getattr(settings, name, ''), '', name)
+        for name in ('SENTRY_DSN', 'OPENROUTER_API_KEY2', 'DEEPSEEK_API_KEY', 'RAZORPAY_KEY_SECRET'):
+            self.assertEqual(os.environ.get(name, ''), '', name)
 
 
 class ExtractiveAnswerTests(SimpleTestCase):
