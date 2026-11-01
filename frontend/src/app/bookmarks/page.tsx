@@ -8,6 +8,8 @@ import { questionsAPI } from '@/lib/api';
 import { Bookmark, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import EngagingLoader from '@/components/EngagingLoader';
+import { stripMarkdown } from '@/components/FormattedText';
+import { sanitizeQuestionText } from '@/lib/textCleanup';
 
 interface BookmarkItem {
     id: number;
@@ -49,7 +51,7 @@ export default function BookmarksPage() {
     const removeBookmark = (questionId: number) => {
         questionsAPI.bookmark(questionId).then(() => {
             setBookmarks(prev => prev.filter(b => b.question !== questionId));
-        });
+        }).catch(() => { /* toggle failed: the bookmark stays listed */ });
     };
 
     const diffBadge = (d: string) => {
@@ -95,8 +97,9 @@ export default function BookmarksPage() {
                             <div key={b.id} className="glass-card p-4">
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
+                                        {/* year 0 is the Expert Curated sentinel ("0 • …" before). */}
                                         <span className="badge" style={{ background: 'rgba(139, 149, 168, 0.1)', color: 'var(--text-secondary)' }}>
-                                            {b.question_detail.year} • {b.question_detail.subject_name}
+                                            {b.question_detail.year > 0 ? `${b.question_detail.year} • ` : ''}{b.question_detail.subject_name}
                                         </span>
                                         {diffBadge(b.question_detail.difficulty)}
                                     </div>
@@ -106,8 +109,10 @@ export default function BookmarksPage() {
                                         <Trash2 className="w-4 h-4" aria-hidden="true" />
                                     </button>
                                 </div>
-                                <Link href={`/questions?q=${b.question}`} className="text-sm leading-relaxed hover:underline">
-                                    {b.question_detail.question_text}
+                                {/* Same preview cleanup as the bank's list cards (raw
+                                    markdown / leaked options and answer keys in imported stems). */}
+                                <Link href={`/questions?q=${b.question}`} className="text-sm leading-relaxed hover:underline line-clamp-3">
+                                    {stripMarkdown(sanitizeQuestionText(b.question_detail.question_text))}
                                 </Link>
                                 {b.question_detail.topic_name && (
                                     <span className="badge mt-2 block w-fit" style={{ background: 'rgba(6, 182, 212, 0.1)', color: 'var(--accent-primary)', fontSize: '11px' }}>

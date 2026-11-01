@@ -109,9 +109,32 @@ export function answerLetter(value: unknown): string {
 }
 
 /**
+ * The explanation to show from an attempt response or a question detail
+ * payload: the curated `explanation`, else the backend's
+ * `effective_explanation` (admin override / AI explanation). A blank string
+ * counts as missing — the attempt endpoint always sends `explanation: ''`
+ * for rows that only have an AI explanation or an admin override, and `??`
+ * kept that '' (no explanation shown).
+ *
+ * Returns '' when the payload has the fields but no text, and undefined
+ * when it carries neither field (e.g. a redacted detail payload).
+ */
+export function pickExplanation(data: unknown): string | undefined {
+    const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+    let sawField = false;
+    for (const key of ['explanation', 'effective_explanation']) {
+        const value = d[key];
+        if (typeof value !== 'string') continue;
+        sawField = true;
+        if (value.trim()) return value;
+    }
+    return sawField ? '' : undefined;
+}
+
+/**
  * Build the reveal from the POST /questions/<id>/attempt/ response
- * (`{is_correct, correct_answer, ...}`; entitled users may also get
- * `explanation` / `mnemonic`).
+ * (`{is_correct, correct_answer, explanation, effective_explanation, ...}`;
+ * entitled users may also get `mnemonic`).
  */
 export function revealFromAttempt(picked: string, data: unknown): AnswerReveal {
     const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
@@ -123,7 +146,7 @@ export function revealFromAttempt(picked: string, data: unknown): AnswerReveal {
     return {
         correctAnswer: correct,
         isCorrect: serverVerdict ?? (correct && pick ? correct === pick : null),
-        explanation: typeof d.explanation === 'string' ? d.explanation : undefined,
+        explanation: pickExplanation(d),
         mnemonic: typeof d.mnemonic === 'string' ? d.mnemonic : undefined,
     };
 }
@@ -138,16 +161,63 @@ export function mergeRevealWithDetail(picked: string, reveal: AnswerReveal, deta
     const d = (detail && typeof detail === 'object' ? detail : {}) as Record<string, unknown>;
     const pick = answerLetter(picked);
     const correct = reveal.correctAnswer || answerLetter(d.correct_answer);
-    const detailExplanation =
-        (typeof d.explanation === 'string' && d.explanation.trim() ? d.explanation : '') ||
-        (typeof d.effective_explanation === 'string' ? d.effective_explanation : '');
+    // A blank explanation from the attempt response is a gap the detail can fill.
+    const explanation = reveal.explanation?.trim()
+        ? reveal.explanation
+        : (pickExplanation(d) ?? reveal.explanation ?? '');
     return {
         correctAnswer: correct,
         isCorrect: reveal.isCorrect ?? (correct && pick ? correct === pick : null),
-        explanation: reveal.explanation ?? detailExplanation,
+        explanation,
         mnemonic: reveal.mnemonic ?? (typeof d.mnemonic === 'string' ? d.mnemonic : ''),
         images: Array.isArray(d.images) ? d.images : reveal.images,
     };
+}
+
+/**
+ * What the practice player shows once the requests behind a pick settled:
+ *  - 'ready':  the key is known — grade the pick and show the explanation.
+ *  - 'locked': the server would not disclose the answer (free plan).
+ *  - 'no-key': the server answered but has no answer key for the question.
+ *              Retrying cannot help, and re-posting the attempt would record
+ *              another mistake and more study time, so there is no Retry.
+ *  - 'error':  the requests failed — Retry is worthwhile.
+ */
+export type RevealOutcome = 'ready' | 'locked' | 'no-key' | 'error';
+
+export function classifyReveal(input: {
+    reveal: AnswerReveal;
+    /** The attempt POST returned 2xx. */
+    attemptOk: boolean;
+    /** A 2xx attempt / unredacted detail response carried an empty answer key. */
+    serverHasNoKey: boolean;
+    /** The detail refused the answer (answer_locked, 402/403/404 or upgrade_required). */
+    gated: boolean;
+}): RevealOutcome {
+    if (input.reveal.correctAnswer) return 'ready';
+    if (input.gated && input.attemptOk) return 'locked';
+    if (input.serverHasNoKey) return 'no-key';
+    return 'error';
+}
+
+/**
+ * True when a response states the question's answer key and it is empty
+ * (`correct_answer: ''`): the key does not exist, as opposed to a payload
+ * that simply does not include the field.
+ */
+export function hasBlankAnswerKey(data: unknown): boolean {
+    const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+    return typeof d.correct_answer === 'string' && !answerLetter(d.correct_answer);
+}
+
+/**
+ * Seconds to send again when the student retries a failed attempt POST.
+ * Without an HTTP response the outcome is unknown (the server may already
+ * have recorded the attempt), so the retry sends 0 instead of counting the
+ * study time twice.
+ */
+export function retryTimeSpent(err: unknown, timeSpent: number): number {
+    return errorStatus(err) === null ? 0 : Math.max(0, timeSpent);
 }
 
 /**
@@ -165,6 +235,17 @@ export function upgradeRequiredFeature(err: unknown): string | null {
 export function errorStatus(err: unknown): number | null {
     const status = (err as { response?: { status?: unknown } })?.response?.status;
     return typeof status === 'number' ? status : null;
+}
+
+/**
+ * Seconds to wait before retrying a rate-limited (429) request: the
+ * `Retry-After` header when the browser can read it (cross-origin it is
+ * only visible when the API exposes it), else 5; capped at 30.
+ */
+export function retryAfterSeconds(err: unknown): number {
+    const header = (err as { response?: { headers?: Record<string, unknown> } })?.response?.headers?.['retry-after'];
+    const seconds = Number(header);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.min(30, Math.ceil(seconds)) : 5;
 }
 
 /** Mirrors backend `is_premium`: active plan, or admin/staff. */
@@ -282,6 +363,133 @@ export function normaliseTextbookReferences(data: unknown): TextbookReference[] 
         if (ref.book || ref.excerpt) out.push(ref);
     }
     return out;
+}
+
+// ── Exam / subject URL parameters ─────────────────────────────────────
+
+/** Normalised URL value (`NEET_PG`, `neet pg`, `Neet-PG` → `neet-pg`) → `Question.exam_type`. */
+const EXAM_PARAM_TO_TYPE: Record<string, string> = {
+    'cms': 'cms',
+    'upsc-cms': 'cms',
+    'upsc': 'cms',
+    'neet-pg': 'neet_pg',
+    'neetpg': 'neet_pg',
+    'ini-cet': 'ini_cet',
+    'inicet': 'ini_cet',
+    'ini-cet-pg': 'ini_cet',
+    'fmge': 'fmge',
+    'usmle': 'usmle',
+    // No Medical Officer rows yet: the CMS bank stands in.
+    'medical-officer': 'cms',
+};
+
+const EXAM_TYPE_LABEL: Record<string, string> = {
+    cms: 'UPSC CMS',
+    neet_pg: 'NEET PG',
+    ini_cet: 'INI-CET',
+    fmge: 'FMGE',
+    usmle: 'USMLE',
+};
+
+function normaliseExamParam(raw: string | null | undefined): string {
+    return typeof raw === 'string' ? raw.trim().toLowerCase().replace(/[\s_+]+/g, '-') : '';
+}
+
+/**
+ * `?exam=` / `?exam_type=` value → backend `exam_type`, matched
+ * case-insensitively and accepting slugs (`neet-pg`), enum values
+ * (`neet_pg`, `NEET_PG`) and labels (`NEET PG`, `UPSC CMS`). Unknown → null.
+ */
+export function examTypeFromParam(raw: string | null | undefined): string | null {
+    return EXAM_PARAM_TO_TYPE[normaliseExamParam(raw)] ?? null;
+}
+
+/** Display label (`Question.exam_source` prefix) for a URL exam value; null when unknown. */
+export function examLabelFromParam(raw: string | null | undefined): string | null {
+    if (normaliseExamParam(raw) === 'medical-officer') return 'Medical Officer';
+    const type = examTypeFromParam(raw);
+    return type ? EXAM_TYPE_LABEL[type] : null;
+}
+
+/** Display label for an `exam_type` enum value (falls back to the value itself). */
+export function examTypeLabel(examType: string): string {
+    return EXAM_TYPE_LABEL[examType] || examType;
+}
+
+/**
+ * Chip text for a question's exam + year, from `exam_source`
+ * ("NEET PG (recall)" → "NEET PG 2025"). Without a source: "PYQ 2025".
+ */
+export function examYearChip(examSource: unknown, year: unknown): string {
+    const label = typeof examSource === 'string' ? examSource.replace(/\s*\(.*\)\s*$/, '').trim() : '';
+    const y = typeof year === 'number' && year > 0 ? String(year) : '';
+    if (!y) return label;
+    return `${label || 'PYQ'} ${y}`;
+}
+
+/** A subject row as the question bank's subject filter shows it. */
+export interface SubjectOption {
+    id: number;
+    name: string;
+    code?: string;
+    count: number;
+}
+
+/**
+ * Names public pages / blog posts use in `?subject=` that differ from the
+ * Subject rows (compared after `subjectKey`).
+ */
+const SUBJECT_ALIASES: Record<string, string> = {
+    medicine: 'generalmedicine',
+    internalmedicine: 'generalmedicine',
+    surgery: 'generalsurgery',
+    obg: 'obstetricsgynaecology',
+    obgyn: 'obstetricsgynaecology',
+    obstetricsandgynaecology: 'obstetricsgynaecology',
+    gynaecology: 'obstetricsgynaecology',
+    psm: 'communitymedicine',
+    preventivesocialmedicine: 'communitymedicine',
+    preventiveandsocialmedicine: 'communitymedicine',
+    communitymedicinepsm: 'communitymedicine',
+    pediatrics: 'paediatrics',
+    anesthesia: 'anaesthesia',
+    anesthesiology: 'anaesthesia',
+    anaesthesiology: 'anaesthesia',
+    orthopedics: 'orthopaedics',
+    radiology: 'radiodiagnosis',
+    biochemistrygenetics: 'biochemistry',
+    microbiologyimmunology: 'microbiology',
+    forensic: 'forensicmedicine',
+    fmt: 'forensicmedicine',
+    eye: 'ophthalmology',
+    skin: 'dermatology',
+};
+
+/** Lower-case letters and digits only; '&' and 'and' are dropped. */
+function subjectKey(value: string): string {
+    return value.toLowerCase().replace(/&/g, ' ').replace(/\band\b/g, ' ').replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * Resolve a `?subject=` value — a subject id, name, code or public-page
+ * slug such as `medicine`, `obg`, `psm` or `General%20Medicine` — to the id
+ * of one of `options`. Returns null when nothing matches (the filter is
+ * then left empty instead of sending an id the API would reject).
+ */
+export function resolveSubjectParam(raw: string | null | undefined, options: SubjectOption[]): number | null {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    if (!value || options.length === 0) return null;
+    if (/^\d+$/.test(value)) {
+        const id = Number(value);
+        return options.some((o) => o.id === id) ? id : null;
+    }
+    const key = subjectKey(value);
+    if (!key) return null;
+    const wanted = SUBJECT_ALIASES[key] ?? key;
+    const byName = options.find((o) => subjectKey(o.name) === wanted);
+    if (byName) return byName.id;
+    const byCode = options.find((o) => o.code && subjectKey(o.code) === key);
+    return byCode ? byCode.id : null;
 }
 
 // ── /practice queue deep links ────────────────────────────────────────

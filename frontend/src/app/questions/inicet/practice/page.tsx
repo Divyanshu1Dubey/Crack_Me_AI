@@ -65,6 +65,7 @@ function IniCetPracticeInner() {
             examType="ini_cet"
             examSource="INI-CET"
             defaultYear={searchParams.get('year')}
+            initialSubject={searchParams.get('subject')}
             initialQueryId={searchParams.get('q')}
             initialBookmarkOnly={searchParams.get('bookmarked') === '1'}
         />

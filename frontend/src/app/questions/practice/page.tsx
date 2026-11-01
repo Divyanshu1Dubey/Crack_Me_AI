@@ -17,42 +17,25 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI, aiAPI } from '@/lib/api';
+import { analytics } from '@/lib/analytics';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
-    appendUniqueById, errorStatus, mergeRevealWithDetail, readPage, revealFromAttempt,
+    appendUniqueById, classifyReveal, errorStatus, examLabelFromParam, examTypeFromParam, examTypeLabel,
+    hasBlankAnswerKey, mergeRevealWithDetail, readPage, retryTimeSpent, revealFromAttempt,
     revealNeedsDetail, upgradeRequiredFeature, type AnswerReveal,
 } from '@/components/question/practiceData';
 import {
     BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
     CheckCircle, X, Bookmark, ArrowLeft, Target, Lightbulb, Flag,
-    AlertTriangle, RefreshCw, Lock
+    AlertTriangle, RefreshCw, Lock, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-
-// Maps frontend URL slug → backend `exam_type` enum. Mirrors the table in
-// /questions/page.tsx so practice and bank views filter the same way.
-const PRACTICE_SLUG_TO_EXAM_TYPE: Record<string, string> = {
-    'cms': 'cms',
-    'neet-pg': 'neet_pg',
-    'neet_pg': 'neet_pg',
-    'ini-cet': 'ini_cet',
-    'ini_cet': 'ini_cet',
-    'inicet': 'ini_cet',
-    'fmge': 'fmge',
-    'usmle': 'usmle',
-    'medical-officer': 'cms',  // no Medical Officer rows yet — fall back to cms
-    'medical_officer': 'cms',
-};
-function practiceSlugToExamType(slug: string | null): string | undefined {
-    if (!slug) return undefined;
-    return PRACTICE_SLUG_TO_EXAM_TYPE[slug];
-}
 
 // Rows per list request. The backend caps page_size; when it ignores the
 // parameter it sends its default page instead, which the `next`-link
@@ -66,6 +49,10 @@ type RevealState =
     | { status: 'loading' }
     | { status: 'ready'; data: AnswerReveal; saveFailed: boolean; explanationLocked: boolean }
     | { status: 'locked' }
+    // The server answered but the question has no answer key: nothing to
+    // retry (a retry would re-post the attempt and record another mistake).
+    | { status: 'no-key'; explanation: string; saveFailed: boolean }
+    // `timeSpent` is what a Retry re-sends (0 when the first POST may have landed).
     | { status: 'error'; picked: string; timeSpent: number };
 
 export default function PracticePage() {
@@ -90,21 +77,14 @@ function PracticeContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const year = searchParams.get('year');
-    // `exam` URL slug may use hyphen (neet-pg) or underscore (neet_pg);
-    // convert hyphen to underscore so backend enum match works.
-    const rawExam = searchParams.get('exam');
-    const examParam = (rawExam ? rawExam.replace(/-/g, '_') : null) || activeTrack || 'cms';
-    const resolvedExamType = practiceSlugToExamType(rawExam) || practiceSlugToExamType(examParam) || examParam;
+    // `?exam=` (or `?exam_type=`) is matched case-insensitively and may be a
+    // slug (neet-pg), an enum value (neet_pg / NEET_PG) or a label
+    // (NEET PG). Unknown values fall back to the student's track, then CMS.
+    const rawExam = searchParams.get('exam') || searchParams.get('exam_type');
+    const resolvedExamType = examTypeFromParam(rawExam) || examTypeFromParam(activeTrack) || 'cms';
     // Human-readable label for the top-bar badge so NEET PG doesn't show
     // as a slug.
-    const examLabel: Record<string, string> = {
-        cms: 'UPSC CMS',
-        neet_pg: 'NEET PG',
-        ini_cet: 'INI-CET',
-        usmle: 'USMLE',
-        fmge: 'FMGE',
-    };
-    const currentExamLabel = examLabel[resolvedExamType] || resolvedExamType;
+    const currentExamLabel = examTypeLabel(resolvedExamType);
 
     // Where "Exit Practice" / "Back" lead: the bank this session came from.
     const bankHref = (() => {
@@ -112,7 +92,7 @@ function PracticeContent() {
         if (resolvedExamType === 'neet_pg') return `/questions/neet-pg/practice${yearQuery ? `?${yearQuery}` : ''}`;
         if (resolvedExamType === 'ini_cet') return `/questions/inicet/practice${yearQuery ? `?${yearQuery}` : ''}`;
         const query = [
-            rawExam && resolvedExamType !== 'cms' ? `exam=${encodeURIComponent(rawExam)}` : '',
+            resolvedExamType !== 'cms' ? `exam=${encodeURIComponent(resolvedExamType)}` : '',
             yearQuery,
         ].filter(Boolean).join('&');
         return `/questions${query ? `?${query}` : ''}`;
@@ -157,7 +137,9 @@ function PracticeContent() {
 
     useEffect(() => {
         if (!ready) return;
-        if (!year) { router.push(bankHref); return; }
+        // replace, not push: a history entry for this redirect made Back
+        // return here and immediately bounce to the bank again.
+        if (!year) { router.replace(bankHref); return; }
         const seq = ++loadSeq.current;
         setLoading(true);
         setLoadError(null);
@@ -165,6 +147,9 @@ function PracticeContent() {
         setTotalCount(0);
         setNextPage(null);
         setLoadMoreFailed(false);
+        // A loadMore still in flight belongs to the old session; its
+        // seq-guarded finally won't clear this.
+        setLoadingMore(false);
         setCurrentIdx(0);
         setAnswers({});
         setReveals({});
@@ -219,7 +204,7 @@ function PracticeContent() {
     // track isn't yet populated in our DB. Surface a warning so students
     // know they're seeing a different exam's questions.
     const slug = rawExam;
-    const isSlugFallback = slug === 'medical-officer' || slug === 'medical_officer';
+    const isSlugFallback = examLabelFromParam(rawExam) === 'Medical Officer';
     const examType = resolvedExamType;
 
     const currentQ = questions[currentIdx];
@@ -284,7 +269,10 @@ function PracticeContent() {
     const revealAnswer = async (questionId: number, opt: string, timeSpent: number) => {
         setReveals(prev => ({ ...prev, [questionId]: { status: 'loading' } }));
         let reveal: AnswerReveal = { correctAnswer: '', isCorrect: null };
-        let saveFailed = false;
+        let attemptOk = false;
+        // A 2xx response said the question has no answer key at all.
+        let serverHasNoKey = false;
+        let retryTime = timeSpent;
         try {
             // Log attempt (time spent feeds study-time tracking)
             const res = await questionsAPI.attempt(questionId, {
@@ -292,6 +280,8 @@ function PracticeContent() {
                 time_spent_seconds: timeSpent,
             });
             reveal = revealFromAttempt(opt, res.data);
+            attemptOk = true;
+            serverHasNoKey = hasBlankAnswerKey(res.data);
         } catch (err) {
             const feature = upgradeRequiredFeature(err);
             if (feature) {
@@ -307,7 +297,9 @@ function PracticeContent() {
                 showPaywall(feature);
                 return;
             }
-            saveFailed = true;
+            // A lost response may still have been recorded: don't send the
+            // same time again on Retry.
+            retryTime = retryTimeSpent(err, timeSpent);
         }
 
         let gated = false;
@@ -317,6 +309,7 @@ function PracticeContent() {
                 reveal = mergeRevealWithDetail(opt, reveal, res.data);
                 // A redacted detail payload (answer fields nulled) is a paywall, not an error.
                 if (res.data?.answer_locked === true) gated = true;
+                else if (hasBlankAnswerKey(res.data)) serverHasNoKey = true;
             } catch (err) {
                 const status = errorStatus(err);
                 gated = !!upgradeRequiredFeature(err) || status === 402 || status === 403 || status === 404;
@@ -324,17 +317,23 @@ function PracticeContent() {
         }
 
         let next: RevealState;
-        if (reveal.correctAnswer) {
-            next = {
-                status: 'ready',
-                data: reveal,
-                saveFailed,
-                explanationLocked: gated && !reveal.explanation,
-            };
-        } else if (gated && !saveFailed) {
-            next = { status: 'locked' };
-        } else {
-            next = { status: 'error', picked: opt, timeSpent };
+        switch (classifyReveal({ reveal, attemptOk, serverHasNoKey, gated })) {
+            case 'ready':
+                next = {
+                    status: 'ready',
+                    data: reveal,
+                    saveFailed: !attemptOk,
+                    explanationLocked: gated && !reveal.explanation,
+                };
+                break;
+            case 'locked':
+                next = { status: 'locked' };
+                break;
+            case 'no-key':
+                next = { status: 'no-key', explanation: reveal.explanation || '', saveFailed: !attemptOk };
+                break;
+            default:
+                next = { status: 'error', picked: opt, timeSpent: retryTime };
         }
         setReveals(prev => ({ ...prev, [questionId]: next }));
     };
@@ -360,6 +359,8 @@ function PracticeContent() {
         setAiError(null);
         setTokenError(false);
         setShowPalette(false);
+        // The report form belongs to the question it was opened on.
+        setFlagOpen(false);
     }, [answers, questions]);
 
     const handleNext = () => goToQuestion(currentIdx + 1);
@@ -380,7 +381,13 @@ function PracticeContent() {
         const reqQuestionId = currentQ.id;
         let cancelled = false;
         aiAbortRef.current = () => { cancelled = true; };
-        aiAPI.explainAfterAnswer({
+        // `question_id` lets the server use the stored question (its own
+        // answer key, stored explanation, cached analysis) and check the
+        // student's entitlement; the text fields are a fallback only.
+        // (Built as a variable so it type-checks before api.ts declares
+        // `question_id` on this call.)
+        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] & { question_id?: number } = {
+            question_id: currentQ.id,
             question_text: sanitizeQuestionText(currentQ.question_text),
             options: {
                 A: sanitizeOptionText(currentQ.option_a || currentQ.option_A || ''),
@@ -392,13 +399,17 @@ function PracticeContent() {
             selected_answer: answers[currentQ.id] || '',
             subject: currentQ.subject_name || '',
             topic: currentQ.topic_name || '',
-        }).then(res => {
+        };
+        aiAPI.explainAfterAnswer(payload).then(res => {
             if (cancelled || reqQuestionId !== currentQIdRef.current) return;
             setAiExplanation(res.data);
             setAiLoading(false);
         }).catch(err => {
             if (cancelled || reqQuestionId !== currentQIdRef.current) return;
-            if (err?.response?.status === 429) {
+            if (upgradeRequiredFeature(err)) {
+                // Premium question on the free plan: the api.ts interceptor
+                // already opened the paywall; this isn't an AI outage.
+            } else if (err?.response?.status === 429) {
                 setTokenError(true);
             } else {
                 setAiError('AI service unavailable. Please try again.');
@@ -508,6 +519,53 @@ function PracticeContent() {
     const isCorrect = revealData ? (revealData.isCorrect ?? selectedAnswer === correctLetter) : false;
     const explanationImages = (revealData?.images ?? currentQ.images) as any;
     const atLoadedEnd = currentIdx >= questions.length - 1;
+
+    // 🚩 Flag Wrong Answer — under the answer analysis, and on questions
+    // without an answer key (so the missing key can be reported).
+    const flagSection = (
+        <>
+            <div className="flex justify-end mt-4">
+                <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                    <Flag className="w-3.5 h-3.5" /> Flag Issue
+                </button>
+            </div>
+            {flagOpen && (
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl mt-2 space-y-3 animate-fadeInUp">
+                    <h5 className="text-sm font-bold flex items-center gap-2 text-red-500">
+                        <Flag className="w-4 h-4" /> Report an Issue
+                    </h5>
+                    {flagSuccess ? (
+                        <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted. You'll earn 2 tokens if accepted.</p>
+                    ) : (
+                        <>
+                            {flagError && <p className="text-sm text-red-500">{flagError}</p>}
+                            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
+                                <option value="wrong_answer">Wrong Answer</option>
+                                <option value="discrepancy">Discrepancy in Options</option>
+                                <option value="out_of_syllabus">Out of Syllabus</option>
+                                <option value="typo">Typo/Formatting Issue</option>
+                                <option value="explanation_needed">Better Explanation Needed</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
+                                placeholder="Describe the issue (e.g., correct answer should be B because...)"
+                                value={flagComment} onChange={e => setFlagComment(e.target.value)}
+                                maxLength={500} />
+                            <div className="text-right text-[10px] text-muted-foreground">{flagComment.length}/500</div>
+                            <div className="flex gap-2">
+                                <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
+                                    {flagSubmitting ? 'Submitting...' : 'Submit'}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setFlagOpen(false); setFlagError(null); }}>Cancel</Button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+        </>
+    );
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
@@ -652,6 +710,34 @@ function PracticeContent() {
                             </Card>
                         )}
 
+                        {/* Graded by the server, but there is no answer key to show. */}
+                        {showAnswer && currentReveal?.status === 'no-key' && (
+                            <div className="space-y-3 animate-fadeInUp">
+                                <Card className="border-border bg-muted/40">
+                                    <CardContent className="p-4 space-y-2">
+                                        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                            <Info className="w-4 h-4 text-muted-foreground shrink-0" />
+                                            Answer key not available for this question.
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Your pick can&apos;t be graded until the key is added. Use “Flag Issue” to let us know.
+                                        </p>
+                                        {currentReveal.explanation && (
+                                            <div className="rounded-lg bg-card p-3 text-sm leading-relaxed text-foreground prose prose-sm max-w-none">
+                                                <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(currentReveal.explanation)), explanationImages)} />
+                                            </div>
+                                        )}
+                                        {currentReveal.saveFailed && (
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                Your answer couldn&apos;t be saved to your progress — check your connection.
+                                            </p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                {flagSection}
+                            </div>
+                        )}
+
                         {/* Answer Analysis */}
                         {answerShown && revealData && (
                             <div className="space-y-4 animate-fadeInUp">
@@ -701,54 +787,14 @@ function PracticeContent() {
                                     </div>
                                 )}
 
-                                {/* 🚩 Flag Wrong Answer */}
-                                <div className="flex justify-end mt-4">
-                                    <button onClick={() => { setFlagOpen(!flagOpen); setFlagSuccess(false); setFlagError(null); }}
-                                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-                                        <Flag className="w-3.5 h-3.5" /> Flag Issue
-                                    </button>
-                                </div>
-                                {flagOpen && (
-                                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl mt-2 space-y-3 animate-fadeInUp">
-                                        <h5 className="text-sm font-bold flex items-center gap-2 text-red-500">
-                                            <Flag className="w-4 h-4" /> Report an Issue
-                                        </h5>
-                                        {flagSuccess ? (
-                                            <p className="text-sm text-emerald-500 font-medium">✓ Thanks! Your feedback has been submitted. You'll earn 2 tokens if accepted.</p>
-                                        ) : (
-                                            <>
-                                                {flagError && <p className="text-sm text-red-500">{flagError}</p>}
-                                                <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                                    value={flagCategory} onChange={e => setFlagCategory(e.target.value)}>
-                                                    <option value="wrong_answer">Wrong Answer</option>
-                                                    <option value="discrepancy">Discrepancy in Options</option>
-                                                    <option value="out_of_syllabus">Out of Syllabus</option>
-                                                    <option value="typo">Typo/Formatting Issue</option>
-                                                    <option value="explanation_needed">Better Explanation Needed</option>
-                                                    <option value="other">Other</option>
-                                                </select>
-                                                <textarea className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-15 resize-none"
-                                                    placeholder="Describe the issue (e.g., correct answer should be B because...)"
-                                                    value={flagComment} onChange={e => setFlagComment(e.target.value)}
-                                                    maxLength={500} />
-                                                <div className="text-right text-[10px] text-muted-foreground">{flagComment.length}/500</div>
-                                                <div className="flex gap-2">
-                                                    <Button size="sm" onClick={handleFlagSubmit} disabled={flagSubmitting || !flagComment.trim()}>
-                                                        {flagSubmitting ? 'Submitting...' : 'Submit'}
-                                                    </Button>
-                                                    <Button size="sm" variant="ghost" onClick={() => { setFlagOpen(false); setFlagError(null); }}>Cancel</Button>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
+                                {flagSection}
 
                                 {/* Generate AI Analysis button */}
                                 {!aiExplanation && !aiLoading && !tokenError && (
                                     <button onClick={() => {
-                                        if (typeof window !== 'undefined' && (window as any).gtag) {
-                                            (window as any).gtag('event', 'ai_explain_request', { source: 'practice' });
-                                        }
+                                        // Consent-gated analytics (the direct window.gtag
+                                        // call fired before consent was given).
+                                        analytics.aiExplanationOpen(currentQ.id, String(currentQ.subject_name || ''));
                                         fetchAiExplanation();
                                     }}
                                         className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20">

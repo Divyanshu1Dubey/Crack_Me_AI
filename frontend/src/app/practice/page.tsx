@@ -22,6 +22,9 @@
  * `?id=N` (recall search "Practice →", related-PYQ links) opens question N
  * first, even when the mode's random queue doesn't contain it.
  *
+ * The pick is graded from the `practice/attempt/` response (`correct_answer`,
+ * explanation) when it carries one, else from the question detail.
+ *
  * Colours come from the theme tokens (bg-card, text-foreground, …) so the
  * page reads correctly in both light and dark themes.
  */
@@ -36,9 +39,12 @@ import QuestionTimer from "@/components/question/QuestionTimer";
 import PracticeExamTimer from "@/components/question/PracticeExamTimer";
 import RevealExplanation from "@/components/question/RevealExplanation";
 import RelatedPanel from "@/components/question/RelatedPYQs";
-import { errorStatus, isPremiumUser, openInQueue, placeInQueue, upgradeRequiredFeature } from "@/components/question/practiceData";
+import {
+    answerLetter, errorStatus, examYearChip, isPremiumUser, openInQueue, pickExplanation,
+    placeInQueue, retryTimeSpent, upgradeRequiredFeature,
+} from "@/components/question/practiceData";
 import api, { questionsAPI } from "@/lib/api";
-import { Loader2, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Filter, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useRequireAuth } from "@/lib/hooks/useRequireAuth";
@@ -52,6 +58,8 @@ interface QRow {
   option_d?: string;
   correct_answer?: string;
   explanation?: string;
+  effective_explanation?: string | null;
+  exam_source?: string;
   page_screenshot?: string | null;
   recall_status?: string;
   year?: number;
@@ -121,8 +129,17 @@ function PracticeInner() {
     const [revealed, setRevealed] = useState(false);
     const [picked, setPicked] = useState<string>("");
     const [loading, setLoading] = useState(true);
+    // The queue request failed (shown as an error, not as "no questions").
+    const [queueError, setQueueError] = useState(false);
+    // Server-reported free plan (queue limited to the curated showcase).
+    const [freemium, setFreemium] = useState(false);
+    // Bumped by the queue error's Retry button to rebuild the queue.
+    const [reloadKey, setReloadKey] = useState(0);
     const [busy, setBusy] = useState(false);
-    const [submitError, setSubmitError] = useState<string | null>(null);
+    // A failed save of the current pick; `retryTime` is re-sent on Retry.
+    const [submitError, setSubmitError] = useState<{ answer: string; retryTime: number } | null>(null);
+    // What the practice/attempt response said about the current pick.
+    const [attemptResult, setAttemptResult] = useState<{ key: string; explanation?: string } | null>(null);
     const [showFilters, setShowFilters] = useState(false);
     // The id from the URL when the page opened (a deep link). Consumed by
     // the first queue build.
@@ -175,11 +192,12 @@ function PracticeInner() {
         return p;
     }, [mode, count, year, subjectId, topicId, difficulty, imageOnly, aiOnly, modeSpec]);
 
-    // Re-build queue when mode or filter scope changes.
+    // Re-build queue when mode or filter scope changes (or on Retry).
     useEffect(() => {
         if (!ready) return;
         let alive = true;
         setLoading(true);
+        setQueueError(false);
         setQueue([]);
         setIdx(0);
         (async () => {
@@ -196,16 +214,14 @@ function PracticeInner() {
                 const placed = placeInQueue(ids, deepLink ?? initialId, deepLink !== null);
                 setQueue(placed.ids);
                 setIdx(placed.index);
-                // Freemium hint: show remaining free count if server reported it
-                if (r.data?.freemium && ids.length > 0) {
-                    console.info(`[practice] Free tier: showing ${ids.length} curated questions`);
-                }
+                setFreemium(r.data?.freemium === true);
             } catch (err) {
                 if (alive) {
                     // Still open a deep-linked question when the queue fails.
                     const deepLink = deepLinkRef.current;
                     deepLinkRef.current = null;
                     setQueue(deepLink ? [deepLink] : []);
+                    setQueueError(true);
                     console.error('[practice] Failed to load practice queue:', err);
                 }
             } finally {
@@ -214,7 +230,7 @@ function PracticeInner() {
         })();
         return () => { alive = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ready, JSON.stringify(buildParams())]);
+    }, [ready, reloadKey, JSON.stringify(buildParams())]);
 
     // A link to /practice?id=N while this page is open (related PYQs):
     // jump to N, inserting it after the current question when it isn't
@@ -267,6 +283,7 @@ function PracticeInner() {
             }
         })();
         setRevealed(false); setPicked(""); setEliminated([]);
+        setAttemptResult(null); setSubmitError(null);
         if (typeof window !== "undefined") {
             const u = new URL(window.location.href);
             u.searchParams.set("id", String(qid));
@@ -277,15 +294,21 @@ function PracticeInner() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [qid, mode]);
 
-    const submit = useCallback(async (answer: string) => {
-        if (!q) return;
+    /** Save the pick; `retryTime` (seconds) replaces the measured time on a Retry. */
+    const submit = useCallback(async (answer: string, retryTime?: number) => {
+        // `q` still holds the previous question until the next one's detail
+        // arrives; never record a pick against it.
+        if (!q || q.id !== qid) return;
         setPicked(answer);
         setBusy(true);
+        const timeSpent = retryTime ?? Math.max(0, Math.round((Date.now() - shownAt.current) / 1000));
         try {
-            await api.post(`/questions/${q.id}/practice/attempt/`, {
+            const r = await api.post(`/questions/${q.id}/practice/attempt/`, {
                 answer,
-                time_spent: Math.max(0, Math.round((Date.now() - shownAt.current) / 1000)),
+                time_spent: timeSpent,
             });
+            // Grade from the server's answer when the response carries it.
+            setAttemptResult({ key: answerLetter(r.data?.correct_answer), explanation: pickExplanation(r.data) });
             setRevealed(true);
             setSubmitError(null);
         } catch (err) {
@@ -297,20 +320,19 @@ function PracticeInner() {
                 setSubmitError(null);
                 return;
             }
-            // Don't swallow errors — the user needs to know their attempt
-            // didn't persist so they can retry. The answer is still
-            // visually chosen (setPicked above) so the explanation flow
-            // can proceed, but the analytics row will be missing.
-            // Re-throwing here would let the caller choose to revert; we
-            // just keep the picked state and flag the failure.
-            const message = err instanceof Error ? err.message : 'Could not save your attempt.';
-            setSubmitError(message);
+            // The save failed, but the question detail already carries the
+            // answer: reveal it anyway (the options were disabled with no way
+            // forward before) and offer a Retry for the save. Without an HTTP
+            // response the server may have stored the attempt already, so the
+            // retry sends 0 seconds instead of counting the time twice.
+            setRevealed(true);
+            setSubmitError({ answer, retryTime: retryTimeSpent(err, timeSpent) });
             // eslint-disable-next-line no-console
             console.error('practice attempt failed', err);
         } finally {
             setBusy(false);
         }
-    }, [q]);
+    }, [q, qid]);
 
     const onState = useCallback((s: QuestionState) => {
         setEliminated(s.eliminated || []);
@@ -328,6 +350,13 @@ function PracticeInner() {
 
     const total = queue.length;
     const showScopePanel = modeSpec.scopes.some((s) => s !== "count") || mode === "custom";
+    // The key from the attempt response, else from the question detail.
+    const answerKey = attemptResult?.key || answerLetter(q?.correct_answer);
+    // Curated explanation, else the effective (admin / AI) one; a blank
+    // string no longer hides an explanation that exists.
+    const explanationText = attemptResult?.explanation?.trim()
+        ? attemptResult.explanation
+        : (pickExplanation(q) || undefined);
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-6 text-foreground">
@@ -343,16 +372,22 @@ function PracticeInner() {
                     className={SELECT_CLS}>
                     {COUNTS.map((c) => <option key={c} value={c}>{c} questions</option>)}
                 </select>
-                <button
-                    type="button"
-                    onClick={() => setShowFilters((s) => !s)}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-1 text-sm text-foreground hover:bg-muted/70"
-                >
-                    <Filter className="h-3.5 w-3.5" />
-                    {showFilters ? "Hide" : "Scope"}
-                    {showFilters ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
-                <span className="text-xs text-muted-foreground">{total} questions</span>
+                {/* Modes whose only scope is the count have nothing to open. */}
+                {showScopePanel ? (
+                    <button
+                        type="button"
+                        onClick={() => setShowFilters((s) => !s)}
+                        aria-expanded={showFilters}
+                        className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-1 text-sm text-foreground hover:bg-muted/70"
+                    >
+                        <Filter className="h-3.5 w-3.5" />
+                        {showFilters ? "Hide" : "Scope"}
+                        {showFilters ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                ) : null}
+                {!loading && !queueError ? (
+                    <span className="text-xs text-muted-foreground">{total} {total === 1 ? "question" : "questions"}</span>
+                ) : null}
                 {mode === "timed" ? (
                     <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-200">⏱ Timed — 1 min / question</span>
                 ) : null}
@@ -427,7 +462,8 @@ function PracticeInner() {
                 <article className="rounded-lg border border-border bg-card p-4">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                         <RecallBadge status={q.recall_status} />
-                        {q.year ? <span className={CHIP_CLS}>NEET PG {q.year}</span> : null}
+                        {/* Was hard-coded "NEET PG" for every question. */}
+                        {q.year ? <span className={CHIP_CLS}>{examYearChip(q.exam_source, q.year)}</span> : null}
                         {q.session ? <span className={CHIP_CLS}>{q.session}</span> : null}
                         {q.subject_name ? <span className={CHIP_CLS}>{q.subject_name}</span> : null}
                         {q.topic_name ? <span className="rounded bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground">{q.topic_name}</span> : null}
@@ -445,28 +481,41 @@ function PracticeInner() {
                     {submitError ? (
                         <div
                             role="alert"
-                            className="mt-3 rounded border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100"
+                            className="mt-3 flex flex-col gap-2 rounded border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 sm:flex-row sm:items-center dark:text-amber-100"
                         >
-                            Couldn't save your attempt: {submitError}. The answer is still selected
-                            but the analytics row may be missing — try Submit again or check your
-                            connection.
+                            <span className="flex-1">
+                                Your answer couldn&apos;t be saved to your progress. Check your connection and try again.
+                            </span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="shrink-0 text-foreground"
+                                disabled={busy}
+                                onClick={() => { void submit(submitError.answer, submitError.retryTime); }}
+                            >
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                            </Button>
                         </div>
                     ) : null}
 
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
                         {opts.map((o) => {
-                            const isCorrect = (q.correct_answer || "").toUpperCase() === o.k;
+                            const isCorrect = answerKey === o.k;
                             const isElim = eliminated.includes(o.k);
                             const wasPicked = picked === o.k;
+                            // Without an answer key the pick can't be marked wrong.
+                            const pickedCls = !answerKey
+                                ? (wasPicked ? "border-primary bg-primary/5" : "border-border")
+                                : isCorrect ? "border-emerald-500 bg-emerald-500/10"
+                                : wasPicked ? "border-rose-500 bg-rose-500/10" : "border-border";
                             return (
                                 <button
                                     key={o.k}
                                     onClick={() => submit(o.k)}
-                                    disabled={busy || !!picked}
+                                    disabled={busy || !!picked || q.id !== qid}
                                     className={`flex w-full items-start gap-3 rounded border p-3 text-left
                                                 ${isElim ? "opacity-40 line-through" : ""}
-                                                ${picked ? (isCorrect ? "border-emerald-500 bg-emerald-500/10" :
-                                                            wasPicked ? "border-rose-500 bg-rose-500/10" : "border-border") : "border-border hover:bg-muted/60"}`}
+                                                ${picked ? pickedCls : "border-border hover:bg-muted/60"}`}
                                 >
                                     <span className="rounded bg-muted px-2 py-0.5 text-sm font-bold">{o.k}</span>
                                     <FormattedOptionText text={o.v} images={qImages} />
@@ -475,9 +524,15 @@ function PracticeInner() {
                         })}
                     </div>
 
+                    {revealed && picked && !answerKey ? (
+                        <p className="mt-3 rounded border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+                            No answer key is available for this question yet.
+                        </p>
+                    ) : null}
+
                     <RevealExplanation
                         questionId={q.id}
-                        fallbackExplanation={q.explanation}
+                        fallbackExplanation={explanationText}
                         open={revealed}
                         images={qImages}
                     />
@@ -514,6 +569,17 @@ function PracticeInner() {
                 <p className="flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Building queue…
                 </p>
+            ) : queueError && total === 0 ? (
+                // The queue request failed: say so instead of "no questions"
+                // plus an upgrade pitch. (A deep-linked question still opens.)
+                <div role="alert" className="rounded-lg border border-border bg-card p-6 text-center">
+                    <p className="mb-3 text-sm text-foreground">
+                        Couldn&apos;t load questions. Check your connection and try again.
+                    </p>
+                    <Button size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                    </Button>
+                </div>
             ) : qError && total > 0 ? (
                 <div className="rounded-lg border border-border bg-card p-6 text-center">
                     <p className="mb-3 text-sm text-foreground">{qError}</p>
@@ -537,15 +603,29 @@ function PracticeInner() {
                     {user ? (
                         <div className="space-y-3">
                             <p className="text-xs text-muted-foreground">
-                                Free users see a curated set of questions per year.
-                                Try switching to <strong>Random</strong> mode or a different year.
+                                {freemium ? (
+                                    <>
+                                        Free users see a curated set of questions per year.
+                                        {mode !== 'random' ? <> Try switching to <strong>Random</strong> mode or a different year.</> : null}
+                                    </>
+                                ) : (
+                                    "Try adjusting your filters or switching to a different mode."
+                                )}
                             </p>
-                            <Button onClick={() => setMode('random')} variant="default" size="sm" className="mr-2">
-                                Switch to Random Mode
-                            </Button>
-                            <Button onClick={() => router.push('/subscription')} variant="outline" size="sm">
-                                Upgrade for Full Access
-                            </Button>
+                            {mode !== 'random' || freemium ? (
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {mode !== 'random' ? (
+                                        <Button onClick={() => setMode('random')} variant="default" size="sm">
+                                            Switch to Random Mode
+                                        </Button>
+                                    ) : null}
+                                    {freemium ? (
+                                        <Button onClick={() => router.push('/subscription')} variant="outline" size="sm">
+                                            Upgrade for Full Access
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
                     ) : (
                         <p className="text-xs text-muted-foreground mb-4">
@@ -565,10 +645,9 @@ function PracticeInner() {
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading question…
                 </p>
             )}
-
-            <p className="mt-6 text-center text-xs text-muted-foreground">
-                Press <kbd className="rounded border border-border bg-muted px-1">Esc</kbd> to clear reveals.
-            </p>
+            {/* The "Press Esc to clear reveals" hint was removed: no Esc
+                handler exists on this page, so it advertised a shortcut that
+                did nothing (and showed under empty / error states too). */}
         </div>
     );
 }

@@ -65,6 +65,7 @@ function NeetPgPracticeInner() {
             examType="neet_pg"
             examSource="NEET PG"
             defaultYear={searchParams.get('year')}
+            initialSubject={searchParams.get('subject')}
             initialQueryId={searchParams.get('q')}
             initialBookmarkOnly={searchParams.get('bookmarked') === '1'}
         />

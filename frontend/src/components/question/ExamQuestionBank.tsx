@@ -18,14 +18,14 @@
  * `examType`   → backend `exam_type` enum (filters `Question.exam_type`)
  * `examSource` → backend `exam_source` label (filters `Question.exam_source`)
  *                and is shown in the page title / sticky year banner.
- * `defaultYear`, `initialQueryId`, `initialBookmarkOnly` pre-seed the
- * initial filter state from URL params so links like
- * `/questions/neet-pg/practice?year=2025&q=12345` open the right
- * question immediately.
+ * `defaultYear`, `initialSubject`, `initialQueryId`, `initialBookmarkOnly`
+ * pre-seed the initial filter state from URL params so links like
+ * `/questions/neet-pg/practice?year=2025&q=12345` or
+ * `/questions?exam=cms&subject=medicine` open the right view immediately.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
@@ -53,7 +53,37 @@ import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
-import { collectPages, normaliseTextbookReferences, type TextbookReference } from '@/components/question/practiceData';
+import {
+    collectPages, errorStatus, normaliseTextbookReferences, pickExplanation, resolveSubjectParam,
+    retryAfterSeconds, upgradeRequiredFeature, type SubjectOption, type TextbookReference,
+} from '@/components/question/practiceData';
+
+// The global `.input-field` rule is unlayered CSS (10px vertical padding,
+// 14px font), so it beat these selects' Tailwind utilities and clipped
+// their text inside the 36px height. Same look, from theme tokens.
+const FILTER_SELECT_CLS =
+    'h-9 w-full min-w-0 rounded-[var(--radius)] border border-input bg-card px-3 text-[11px] text-foreground ' +
+    'transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20';
+
+/**
+ * Every subject row. The endpoint used to page at 20 rows (clipping
+ * 'Expert Curated', alphabetically last, into page 2), so follow `next`;
+ * a bare array (unpaginated) ends the loop after one request. The hard cap
+ * protects against a backend that returns an unbounded `next` pointer.
+ */
+async function fetchAllSubjects(): Promise<Subject[]> {
+    const collected: Subject[] = [];
+    let page = 1;
+    while (page <= 10) {
+        const res = await questionsAPI.getSubjects({ page, page_size: 100 });
+        const results = res.data?.results || res.data || [];
+        if (!Array.isArray(results) || results.length === 0) break;
+        collected.push(...results);
+        if (!res.data?.next) break;
+        page += 1;
+    }
+    return collected;
+}
 
 /** Color-swatch chip used inside the exam-mode palette legend. */
 function LegendChip({ color, label }: { color: string; label: string }) {
@@ -115,6 +145,12 @@ interface ExamQuestionBankProps {
     examSource: string;
     /** Optional year to pre-select from `?year=` URL param. */
     defaultYear?: string | null;
+    /**
+     * Optional subject to pre-select from `?subject=` — an id, name, code or
+     * public-page slug (`medicine`, `obg`, `General Medicine`); resolved
+     * against the subject list once it loads.
+     */
+    initialSubject?: string | null;
     /** Optional question id to auto-open from `?q=` URL param. */
     initialQueryId?: string | null;
     /** Optional bookmarked-only filter from `?bookmarked=1` URL param. */
@@ -127,6 +163,7 @@ export default function ExamQuestionBank({
     examType,
     examSource,
     defaultYear = null,
+    initialSubject = null,
     initialQueryId = null,
     initialBookmarkOnly = false,
 }: ExamQuestionBankProps) {
@@ -136,6 +173,7 @@ export default function ExamQuestionBank({
                 examType={examType}
                 examSource={examSource}
                 defaultYear={defaultYear}
+                initialSubject={initialSubject}
                 initialQueryId={initialQueryId}
                 initialBookmarkOnly={initialBookmarkOnly}
             />
@@ -147,6 +185,7 @@ function ExamQuestionBankInner({
     examType,
     examSource,
     defaultYear,
+    initialSubject,
     initialQueryId,
     initialBookmarkOnly,
 }: ExamQuestionBankProps) {
@@ -190,6 +229,11 @@ function ExamQuestionBankInner({
     const [qbankStats, setQbankStats] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [listError, setListError] = useState<string | null>(null);
+    // Shown over the list skeleton while a rate-limited (429) list request
+    // waits to retry.
+    const [listNotice, setListNotice] = useState<string | null>(null);
+    // 'failed' lets a `?subject=` link stop waiting for the subject list.
+    const [subjectsStatus, setSubjectsStatus] = useState<'loading' | 'ok' | 'failed'>('loading');
     const [selectedQuestion, setSelectedQuestion] = useState<number | null>(
         initialQueryId ? Number(initialQueryId) : null,
     );
@@ -227,6 +271,59 @@ function ExamQuestionBankInner({
         setSeededBookmarkOnly(!!initialBookmarkOnly);
         setBookmarkedOnly(!!initialBookmarkOnly);
     }
+
+    // The subject filter's options. Three display-side improvements over
+    // the raw API payload:
+    //   1. The loader's "Expert Curated" Subject row exists in duplicate
+    //      (id=291 with 1285 questions, id=309 with 541 questions) because
+    //      the management command to merge them has not been run in
+    //      production. Collapse display duplicates by name, summing the
+    //      question_count so users see ONE "Expert Curated (1826)" entry.
+    //   2. Track-specific rows that own 0 questions are not useful as
+    //      filter chips — selecting them would always return an empty
+    //      result. Hide them.
+    //   3. The "(INI-CET)" / "(NEET PG)" / … suffixed rows would confuse a
+    //      CMS student, so they are hidden too — the dedicated INI-CET
+    //      player at /questions/inicet/practice renders its own subject
+    //      filter from the same source.
+    // Real medical subjects come first (alphabetical); "Expert Curated" is
+    // pinned last so the practice pool is clearly opt-in.
+    const subjectOptions = useMemo<SubjectOption[]>(() => {
+        const byName = new Map<string, SubjectOption>();
+        for (const s of subjects) {
+            const count = s.question_count || 0;
+            if (s.name.includes('(INI-CET)')) continue;
+            if (s.name.includes('(NEET PG)')) continue;
+            if (s.name.includes('(USMLE)')) continue;
+            if (s.name.includes('(FMGE)')) continue;
+            if (count <= 0) continue;
+            const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
+            const existing = byName.get(displayName);
+            if (!existing) {
+                byName.set(displayName, { id: s.id, name: displayName, code: s.code, count });
+            } else {
+                existing.count += count;
+            }
+        }
+        return Array.from(byName.values()).sort((a, b) => {
+            if (a.name === 'Expert Curated') return 1;
+            if (b.name === 'Expert Curated') return -1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [subjects]);
+
+    // `?subject=` (public pages link /questions?exam=<slug>&subject=<slug>)
+    // becomes the subject filter once the subject list is known, and again
+    // whenever the URL value changes. Until then the first list request
+    // waits, so the unfiltered bank doesn't flash first.
+    const subjectParam = (initialSubject ?? '').trim();
+    const [appliedSubjectParam, setAppliedSubjectParam] = useState('');
+    if (subjectParam !== appliedSubjectParam && (subjectsStatus !== 'loading' || !subjectParam)) {
+        setAppliedSubjectParam(subjectParam);
+        const subjectId = subjectParam ? resolveSubjectParam(subjectParam, subjectOptions) : null;
+        setSelectedSubject(subjectId ? String(subjectId) : '');
+    }
+    const subjectPending = subjectParam !== appliedSubjectParam;
     // Image viewer modal state — null when closed. Clicking a thumbnail
     // in the question image carousel opens ImageViewer at the right index,
     // the same viewer the timed test player (/tests/[id]) uses.
@@ -248,6 +345,8 @@ function ExamQuestionBankInner({
     // Question id the in-flight textbook lookup belongs to; a response for
     // a question the student has since left is dropped.
     const textbookRequestFor = useRef<number | null>(null);
+    // Same for the AI analysis request.
+    const aiRequestFor = useRef<number | null>(null);
 
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -309,11 +408,41 @@ function ExamQuestionBankInner({
         return () => clearInterval(interval);
     }, [aiLoading]);
 
-    // Stats + subjects + years. The question list itself is loaded by the
-    // filter effect below so the first request already carries ?year= /
-    // ?bookmarked=1 — previously this effect fetched an unfiltered page
-    // that usually resolved last (it also waited for /stats/) and replaced
-    // the filtered list.
+    // Stats + subjects + years ("meta"). Each request settles on its own so
+    // a slow or failing /stats/ never blocks the filters or the list; the
+    // list error's Retry reloads whichever part is still missing (a 429
+    // used to leave the strip and the dropdowns empty until a full reload).
+    // Subjects are NOT filtered by exam_type: the Question → Subject FK
+    // model uses the same medical subject names across CMS / NEET PG /
+    // INI-CET tracks, and the loader's "Imported" bucket is itself tagged
+    // exam_type='cms'. Filtering by exam_type=cms therefore hides every real
+    // medical subject (Anatomy, Surgery, etc.) and leaves only the two
+    // "Expert Curated" rows.
+    const loadMeta = useCallback((parts: { subjects?: boolean; years?: boolean; stats?: boolean } = {
+        subjects: true, years: true, stats: true,
+    }) => {
+        if (parts.subjects) {
+            setSubjectsStatus(prev => (prev === 'ok' ? prev : 'loading'));
+            fetchAllSubjects()
+                .then(list => { setSubjects(list); setSubjectsStatus('ok'); })
+                .catch(() => setSubjectsStatus(prev => (prev === 'ok' ? prev : 'failed')));
+        }
+        if (parts.years) {
+            questionsAPI.getYears()
+                .then(yRes => setYears(yRes.data.results || yRes.data || []))
+                .catch(() => { /* year dropdown stays empty until Retry */ });
+        }
+        if (parts.stats) {
+            questionsAPI.getStats({ exam_source: examSource })
+                .then(statsRes => setQbankStats(statsRes.data))
+                .catch(() => { /* stats panel stays hidden until Retry */ });
+        }
+    }, [examSource]);
+
+    // The question list itself is loaded by the filter effect below so the
+    // first request already carries ?year= / ?bookmarked=1 — previously this
+    // effect fetched an unfiltered page that usually resolved last (it also
+    // waited for /stats/) and replaced the filtered list.
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             // Keep the deep link (path + query) so login returns here.
@@ -322,46 +451,9 @@ function ExamQuestionBankInner({
             router.replace(`/login?next=${encodeURIComponent(next)}`);
             return;
         }
-        if (isAuthenticated) {
-            // Fetch every page of subjects — the DRF default page_size=20 caps the
-            // response at 20 rows, so a single fetch was clipping 'Expert Curated'
-            // (id=291 + id=309, alphabetically last) into page 2 and dropping it
-            // from the dropdown. Subject count is small (~40 rows total) so a
-            // short loop is cheap.
-            const fetchAllSubjects = async () => {
-                const collected: Subject[] = [];
-                let page = 1;
-                // Hard cap protects against a misconfigured backend that returns
-                // an unbounded `next` pointer; in practice there are < 50 subjects.
-                while (page <= 10) {
-                    const res = await questionsAPI.getSubjects({ page, page_size: 100 });
-                    const results = res.data?.results || res.data || [];
-                    if (!Array.isArray(results) || results.length === 0) break;
-                    collected.push(...results);
-                    if (!res.data?.next) break;
-                    page += 1;
-                }
-                return collected;
-            };
-            // Subjects are NOT filtered by exam_type: the Question → Subject FK
-            // model uses the same medical subject names across CMS / NEET PG /
-            // INI-CET tracks, and the loader's "Imported" bucket is itself
-            // tagged exam_type='cms'. Filtering by exam_type=cms therefore
-            // hides every real medical subject (Anatomy, Surgery, etc.) and
-            // leaves only the two "Expert Curated" rows, which is what users
-            // were seeing before this fix.
-            // Each request settles on its own so a slow or failing /stats/
-            // never blocks the filters or the list.
-            fetchAllSubjects().then(setSubjects).catch(() => { /* filter dropdown stays empty */ });
-            questionsAPI.getYears()
-                .then(yRes => setYears(yRes.data.results || yRes.data || []))
-                .catch(() => { /* year dropdown stays empty */ });
-            questionsAPI.getStats({ exam_source: examSource })
-                .then(statsRes => setQbankStats(statsRes.data))
-                .catch(() => { /* stats panel stays hidden */ });
-        }
+        if (isAuthenticated) loadMeta();
         // searchParams / pathname only shape the login redirect.
-    }, [authLoading, isAuthenticated, router, examSource]);
+    }, [authLoading, isAuthenticated, router, loadMeta]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Honour `?q=ID` from the URL on first mount after questions load.
     useEffect(() => {
@@ -377,10 +469,22 @@ function ExamQuestionBankInner({
     // Only the newest list request may write the list: a slower response
     // for an older filter set must not replace the current one.
     const listRequestSeq = useRef(0);
-    const fetchQuestions = (params: Record<string, string | number>) => {
+    // Pending automatic retry after a 429; any newer list request cancels it.
+    const listRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (listRetryTimer.current) clearTimeout(listRetryTimer.current);
+    }, []);
+    const fetchQuestions = (params: Record<string, string | number>, isRetry = false) => {
+        if (listRetryTimer.current) {
+            clearTimeout(listRetryTimer.current);
+            listRetryTimer.current = null;
+        }
         const seq = ++listRequestSeq.current;
+        let retryScheduled = false;
         setLoading(true);
         setListError(null);
+        // A new filter / page request replaces a pending "busy, retrying" note.
+        if (!isRetry) setListNotice(null);
         questionsAPI.list(params).then(res => {
             if (seq !== listRequestSeq.current) return;
             const d = res.data;
@@ -388,6 +492,22 @@ function ExamQuestionBankInner({
             setTotalCount(d.count || (d.results || d || []).length);
         }).catch((err: unknown) => {
             if (seq !== listRequestSeq.current) return;
+            if (errorStatus(err) === 429) {
+                // The question-bank rate limiter: not the student's fault and
+                // usually gone in seconds, so wait and retry once.
+                if (!isRetry) {
+                    const wait = retryAfterSeconds(err);
+                    retryScheduled = true;
+                    setListNotice(`The question bank is busy right now. Retrying in ${wait}s…`);
+                    listRetryTimer.current = setTimeout(() => {
+                        listRetryTimer.current = null;
+                        fetchQuestions(params, true);
+                    }, wait * 1000);
+                    return;
+                }
+                setListError('The question bank is busy right now. Please wait a few seconds and try again.');
+                return;
+            }
             const apiError = err as { response?: { data?: unknown } };
             if (apiError.response?.data) {
                 setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
@@ -395,14 +515,17 @@ function ExamQuestionBankInner({
             }
             setListError('Unable to load questions right now. Please refresh and try again.');
         }).finally(() => {
-            if (seq === listRequestSeq.current) setLoading(false);
+            if (seq !== listRequestSeq.current || retryScheduled) return;
+            setLoading(false);
+            setListNotice(null);
         });
     };
 
-    // List load: runs once auth resolves (so ?year= / ?bookmarked=1 apply
-    // to the very first request) and again whenever a filter changes.
+    // List load: runs once auth resolves (so ?year= / ?subject= /
+    // ?bookmarked=1 apply to the very first request) and again whenever a
+    // filter changes.
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || subjectPending) return;
         const params: Record<string, string | number> = { page: 1, page_size: PAGE_SIZE };
         if (selectedSubject) params.subject = selectedSubject;
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
@@ -413,7 +536,7 @@ function ExamQuestionBankInner({
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated, selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
+    }, [isAuthenticated, subjectPending, selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
 
     const handlePageChange = (newPage: number) => {
         setPage(newPage);
@@ -495,6 +618,7 @@ function ExamQuestionBankInner({
         setTextbookScreenshot(null);
         setTextbookLoading(false);
         textbookRequestFor.current = null;
+        aiRequestFor.current = null;
         Promise.all([
             questionsAPI.get(id),
             questionsAPI.getSimilar(id),
@@ -564,15 +688,22 @@ function ExamQuestionBankInner({
         setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
     };
 
-    const fetchAiExplanation = (retryCount: number = 0) => {
+    const fetchAiExplanation = () => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
+        // Consent-gated (the button used to also call window.gtag directly,
+        // which fired before analytics consent).
         analytics.aiExplanationOpen(d.id, String(d.subject_name || ''));
         setAiLoading(true);
         setAiExplanation(null);
         setTokenError(false);
         setAiError(null);
-        aiAPI.explainAfterAnswer({
+        // `question_id` lets the server use the stored question (its answer
+        // key, stored explanation and the cached analysis) and check the
+        // student's entitlement; the text fields are a fallback only. (A
+        // variable so it type-checks before api.ts declares the field.)
+        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] & { question_id?: number } = {
+            question_id: d.id,
             question_text: sanitizeQuestionText(d.question_text),
             options: {
                 A: sanitizeOptionText(d.option_a || d.option_A || ''),
@@ -584,16 +715,26 @@ function ExamQuestionBankInner({
             selected_answer: selectedAnswer || '',
             subject: d.subject_name || '',
             topic: d.topic_name || '',
-        }).then(res => {
+        };
+        const reqId = d.id;
+        aiRequestFor.current = reqId;
+        aiAPI.explainAfterAnswer(payload).then(res => {
+            // The student opened another question meanwhile: drop it.
+            if (aiRequestFor.current !== reqId) return;
             setAiExplanation(res.data);
             setAiLoading(false);
         }).catch((err) => {
-            if (err?.response?.status === 429) {
+            if (aiRequestFor.current !== reqId) return;
+            if (upgradeRequiredFeature(err)) {
+                // Free plan on a premium question: the api.ts interceptor
+                // opened the paywall — not an AI outage.
+                setAiLoading(false);
+            } else if (err?.response?.status === 429) {
                 setTokenError(true);
                 setAiLoading(false);
-            } else if (retryCount < 1 && !err?.response?.status) {
-                setTimeout(() => fetchAiExplanation(retryCount + 1), 2000);
             } else {
+                // No silent automatic retry: an AI call can take up to the
+                // full timeout, and the card below offers a Retry button.
                 setAiError(err?.response?.data?.error || 'AI service unavailable. Please try again.');
                 setAiExplanation(null);
                 setAiLoading(false);
@@ -608,7 +749,7 @@ function ExamQuestionBankInner({
             if (questionDetail?.id === id) {
                 setQuestionDetail((prev: any) => prev ? { ...prev, is_bookmarked: !prev.is_bookmarked } : prev);
             }
-        });
+        }).catch(() => { /* toggle failed: the icon keeps its current state */ });
     };
 
     const handleSearch = () => {
@@ -621,6 +762,20 @@ function ExamQuestionBankInner({
         params.exam_type = selectedExam;
         setPage(1);
         fetchQuestions(params);
+    };
+
+    // List error "Retry": the list plus whatever bank metadata (subjects,
+    // years, stats strip) failed with it — the same burst that fails the
+    // list usually fails those too.
+    const retryListAndMeta = () => {
+        // A `?subject=` link whose subject list never loaded gets resolved again.
+        if (subjectsStatus === 'failed' && subjectParam) setAppliedSubjectParam('');
+        loadMeta({
+            subjects: subjectsStatus === 'failed' || subjects.length === 0,
+            years: years.length === 0,
+            stats: !qbankStats,
+        });
+        handleSearch();
     };
 
     const handleFlagSubmit = () => {
@@ -660,6 +815,13 @@ function ExamQuestionBankInner({
 
     const detail = questionDetail as any;
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    // Curated explanation, else the effective (admin override / AI) one.
+    const detailExplanation = detail ? (pickExplanation(detail) || '') : '';
+    // PYQs = rows with a real year (year 0 is the Expert Curated sentinel).
+    const pyqCount: number = Array.isArray(qbankStats?.by_year)
+        ? qbankStats.by_year.reduce((n: number, b: any) => n + (Number(b?.year) > 0 ? Number(b?.count) || 0 : 0), 0)
+        : Number(qbankStats?.total) || 0;
+    const filtersActive = !!(selectedSubject || selectedDifficulty || selectedYear || searchQuery || bookmarkedOnly);
 
     // ── Render ────────────────────────────────────────────
     // NOTE: do NOT add the shell's `main-content` class here. The page
@@ -751,8 +913,15 @@ function ExamQuestionBankInner({
                                             🎯 Your {examSource} Prep
                                         </h2>
                                     </div>
+                                    {/* The stats count PYQs by exam_source while the list
+                                        below (exam_type) also holds the Expert Curated pool, so
+                                        say which number is which instead of "2277 MCQs and
+                                        PYQs" above a 277-page list of curated cards. */}
                                     <p className="text-xs text-muted-foreground">
-                                        {qbankStats.total} high-yield clinical MCQs and PYQs across every {examSource} subject.
+                                        {pyqCount.toLocaleString('en-IN')} {examSource} PYQs
+                                        {!filtersActive && totalCount > pyqCount
+                                            ? ` · ${totalCount.toLocaleString('en-IN')} questions incl. Expert Curated`
+                                            : ''}
                                     </p>
                                 </div>
 
@@ -761,7 +930,7 @@ function ExamQuestionBankInner({
                                         <div className="flex justify-between text-xs font-semibold gap-2">
                                             <span className="truncate">Overall Progress</span>
                                             <span className="text-primary font-bold shrink-0">
-                                                {qbankStats.total_solved} / {qbankStats.total} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
+                                                {Number(qbankStats.total_solved || 0).toLocaleString('en-IN')} / {Number(qbankStats.total || 0).toLocaleString('en-IN')} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
                                             </span>
                                         </div>
                                         <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-1.5" />
@@ -891,64 +1060,20 @@ function ExamQuestionBankInner({
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-2 items-center">
                                 <select
                                     aria-label="Filter by subject"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0 truncate"
+                                    className={`${FILTER_SELECT_CLS} truncate`}
                                     value={selectedSubject}
                                     onChange={e => setSelectedSubject(e.target.value)}
                                 >
                                     <option value="">All Subjects</option>
-                                    {(() => {
-                                        // Three display-side improvements over the raw API payload:
-                                        //   1. The loader's "Expert Curated" Subject row exists in
-                                        //      duplicate (id=291 with 1285 questions, id=309 with 541
-                                        //      questions) because the management command to merge
-                                        //      them has not been run in production. Collapse display
-                                        //      duplicates by name, summing the question_count so users
-                                        //      see ONE "Expert Curated (1826)" entry instead of two
-                                        //      redundant rows.
-                                        //   2. INI-CET rows that own 0 questions are not useful as
-                                        //      filter chips for the CMS bank — selecting them would
-                                        //      always return an empty result. Hide them.
-                                        //   3. The "(INI-CET)" suffix on rows that actually own
-                                        //      questions would confuse a CMS student, so we hide them
-                                        //      too — the dedicated INI-CET player at
-                                        //      /questions/inicet/practice renders its own subject
-                                        //      filter from the same source.
-                                        const byName = new Map<string, { id: number; name: string; count: number }>();
-                                        for (const s of subjects) {
-                                            const count = s.question_count || 0;
-                                            // Skip non-CMS tracks entirely on the CMS bank.
-                                            if (s.name.includes('(INI-CET)')) continue;
-                                            if (s.name.includes('(NEET PG)')) continue;
-                                            if (s.name.includes('(USMLE)')) continue;
-                                            if (s.name.includes('(FMGE)')) continue;
-                                            if (count <= 0) continue;
-                                            const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
-                                            const existing = byName.get(displayName);
-                                            if (!existing) {
-                                                byName.set(displayName, { id: s.id, name: displayName, count });
-                                            } else {
-                                                existing.count += count;
-                                            }
-                                        }
-                                        // Stable sort: real medical subjects first (alphabetical),
-                                        // "Expert Curated" pinned last so the brand-new / practice pool
-                                        // is clearly opt-in.
-                                        return Array.from(byName.values())
-                                            .sort((a, b) => {
-                                                if (a.name === 'Expert Curated') return 1;
-                                                if (b.name === 'Expert Curated') return -1;
-                                                return a.name.localeCompare(b.name);
-                                            })
-                                            .map(s => (
-                                                <option key={s.id} value={s.id}>
-                                                    {s.name} ({s.count})
-                                                </option>
-                                            ));
-                                    })()}
+                                    {subjectOptions.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name} ({s.count.toLocaleString('en-IN')})
+                                        </option>
+                                    ))}
                                 </select>
                                 <select
                                     aria-label="Filter by difficulty"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
+                                    className={FILTER_SELECT_CLS}
                                     value={selectedDifficulty}
                                     onChange={e => setSelectedDifficulty(e.target.value)}
                                 >
@@ -959,7 +1084,7 @@ function ExamQuestionBankInner({
                                 </select>
                                 <select
                                     aria-label="Filter by year"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
+                                    className={FILTER_SELECT_CLS}
                                     value={selectedYear}
                                     onChange={e => setSelectedYear(e.target.value)}
                                 >
@@ -987,13 +1112,19 @@ function ExamQuestionBankInner({
                         <div className="space-y-3 px-1 py-0.5">
                             {loading ? (
                                 <div className="space-y-3">
+                                    {listNotice && (
+                                        <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> {listNotice}
+                                        </p>
+                                    )}
                                     {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                                 </div>
                             ) : listError ? (
                                 <Card className="p-8 text-center">
                                     <p className="text-destructive text-sm mb-3">{listError}</p>
                                     <button
-                                      onClick={() => handleSearch()}
+                                      type="button"
+                                      onClick={retryListAndMeta}
                                       className="text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg transition-colors"
                                     >
                                       Retry
@@ -1042,9 +1173,13 @@ function ExamQuestionBankInner({
                                                         </span>
                                                     )}
                                                     {diffBadge(q.difficulty)}
+                                                    {/* p-2 -m-2: a 32px tap target (the bare 16px icon
+                                                        sat inside a clickable card, so near misses
+                                                        opened the question) without shifting layout. */}
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => handleBookmark(q.id, e)}
-                                                        className="hover:scale-110 transition-transform"
+                                                        className="p-2 -m-2 rounded-full hover:scale-110 transition-transform"
                                                         aria-label={q.is_bookmarked ? `Remove bookmark for question ${q.id}` : `Add bookmark for question ${q.id}`}
                                                         aria-pressed={q.is_bookmarked}
                                                     >
@@ -1393,9 +1528,11 @@ function ExamQuestionBankInner({
                                                 <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
                                                     <CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}
                                                 </h4>
-                                                {detail.explanation && (
+                                                {/* A blank curated explanation falls back to the
+                                                    effective (admin override / AI) explanation. */}
+                                                {detailExplanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                        <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(detail.explanation)), detail.images)} />
+                                                        <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
                                                     </div>
                                                 )}
                                             </CardContent>
@@ -1455,12 +1592,7 @@ function ExamQuestionBankInner({
                                         )}
 
                                         {!aiExplanation && !aiLoading && !tokenError && (
-                                            <button onClick={() => {
-                                                if (typeof window !== 'undefined' && (window as any).gtag) {
-                                                    (window as any).gtag('event', 'ai_explain_request', { exam_slug: selectedExam });
-                                                }
-                                                fetchAiExplanation();
-                                            }}
+                                            <button onClick={() => fetchAiExplanation()}
                                                 className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-1">
                                                 <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                                 <div className="text-left">
@@ -1792,21 +1924,14 @@ function ExamQuestionBankInner({
                                                             if (textbookRequestFor.current !== qid) return;
                                                             // The endpoint returns {references: [{book, page, excerpt, …}]}.
                                                             setTextbookRef({ references: normaliseTextbookReferences(res.data) });
-                                                            // A stored page screenshot is already on the detail payload;
-                                                            // otherwise ask the endpoint, and only accept a URL from it
-                                                            // (`screenshot_path` is a server filesystem path).
+                                                            // Only a page screenshot stored on the question can be
+                                                            // shown. Without one, /ai/screenshot/ renders the PDF
+                                                            // page on the server and answers with a filesystem path
+                                                            // (`screenshot_path`) the browser can't load — every
+                                                            // click paid for a render that was never displayed — so
+                                                            // it is no longer called here.
                                                             const storedShot = typeof detail.page_screenshot === 'string' ? detail.page_screenshot : '';
-                                                            if (storedShot) {
-                                                                setTextbookScreenshot(storedShot);
-                                                                return;
-                                                            }
-                                                            aiAPI.getScreenshot(qid)
-                                                                .then(sRes => {
-                                                                    if (textbookRequestFor.current !== qid) return;
-                                                                    const url = sRes.data?.screenshot_url;
-                                                                    if (typeof url === 'string' && url) setTextbookScreenshot(url);
-                                                                })
-                                                                .catch(() => {});
+                                                            if (storedShot) setTextbookScreenshot(storedShot);
                                                         })
                                                         .catch(() => {
                                                             if (textbookRequestFor.current !== qid) return;
@@ -1952,7 +2077,14 @@ function ExamQuestionBankInner({
                                         if (startingSimulation) return;
                                         setStartingSimulation(true);
                                         setSimulationError(null);
-                                        testsAPI.pyqSimulation({ year: Number(modalYear) })
+                                        // The backend defaults to a CMS paper; the NEET PG and
+                                        // INI-CET banks must ask for their own exam. (A variable
+                                        // so it type-checks before api.ts declares exam_type.)
+                                        const simulation: Parameters<typeof testsAPI.pyqSimulation>[0] & { exam_type?: string } = {
+                                            year: Number(modalYear),
+                                            exam_type: selectedExam,
+                                        };
+                                        testsAPI.pyqSimulation(simulation)
                                             .then(res => {
                                                 router.push(`/tests/${res.data.id}`);
                                             })
