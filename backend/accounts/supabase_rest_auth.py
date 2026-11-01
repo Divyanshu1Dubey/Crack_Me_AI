@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import timedelta
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import authentication, exceptions
 
 from .models import TokenBalance
 
+logger = logging.getLogger(__name__)
+
 # Requests an over-the-limit device may still make, so the user can open
-# Settings and free a slot (list / log out devices, load the profile).
-_DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/')
+# Settings and free a slot (list / log out devices, load the profile) or buy
+# the 4-device plan from this device (/auth/subscribe/...).
+_DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/', '/auth/subscribe/')
 # A device's last_login is refreshed at most this often (one write per
 # request per user was the old behaviour).
 _DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
@@ -98,12 +103,14 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
     Flow:
     1) Read Authorization: Bearer <supabase_access_token>
     2) Validate token by calling Supabase `/auth/v1/user`
-    3) Upsert local Django user by (confirmed) email and return it as request.user
+    3) Find the local Django user by the Supabase user id (CustomUser.supabase_uid;
+       the first sign-in links a row by its confirmed email, see
+       _link_existing_row_by_email) or create one, and return it as request.user
     4) Reject blocked accounts (``is_active=False``) and enforce the device cap
 
     Failures that the frontend must act on raise AuthenticationFailed with a
     ``code``: ``account_blocked``, ``email_not_confirmed``, ``email_required``,
-    ``device_inactive`` and ``device_limit_reached``.
+    ``account_link_required``, ``device_inactive`` and ``device_limit_reached``.
     """
 
     def authenticate_header(self, request_obj):
@@ -336,26 +343,18 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             # one with email='', e.g. a createsuperuser account).
             raise _auth_failed("email_required", "Sign in with an email address to use CrackLabs.")
         if not _supabase_email_confirmed(supabase_user):
-            # SECURITY: local accounts are linked by email. Without a verified
-            # email anyone could sign up in Supabase with an address that only
-            # exists locally (bootstrap admin, legacy users, an allowlisted
-            # admin email) and be signed in as that account.
+            # SECURITY: a row is linked by email the first time. Without a
+            # verified email anyone could sign up in Supabase with an address
+            # that only exists locally (bootstrap admin, legacy users, an
+            # allowlisted admin email) and be signed in as that account.
             raise _auth_failed("email_not_confirmed", "Please confirm your email address, then sign in again.")
+
+        # The Supabase user id. GoTrue always returns it; once stored on a row
+        # (CustomUser.supabase_uid) sign-ins are matched by it, not by email.
+        supabase_uid = str(supabase_user.get("id") or "").strip()[:64] or None
 
         metadata = supabase_user.get("user_metadata") or {}
         app_metadata = supabase_user.get("app_metadata") or {}
-        username = (metadata.get("username") or "").strip()
-
-        if not username:
-            username = (email.split("@")[0] if "@" in email else "supabase_user").strip() or "supabase_user"
-
-        # Ensure unique username for local user table.
-        base_username = username[:140]
-        username_candidate = base_username
-        suffix = 1
-        while User.objects.filter(username=username_candidate).exclude(email=email).exists():
-            suffix += 1
-            username_candidate = f"{base_username[:130]}_{suffix}"
 
         def _is_true(value):
             return str(value).strip().lower() == "true"
@@ -391,24 +390,30 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         first_name, last_name = _name_parts_from_metadata(metadata)
         avatar_url = _avatar_from_metadata(metadata)
 
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={
-                "username": username_candidate,
-                "first_name": first_name,
-                "last_name": last_name,
-                "target_exam": str(metadata.get("target_exam") or "UPSC CMS")[:50],
-                "avatar_url": avatar_url,
-                "is_active": True,
-                "role": "admin" if trusted_admin else "student",
-                "is_superuser": trusted_admin,
-                "is_staff": trusted_admin,
-            },
-        )
+        user = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
+        linked_by_uid = user is not None
+        if user is None:
+            user = self._link_existing_row_by_email(User, email, supabase_uid, trusted_admin)
+        created = False
+        if user is None:
+            user, created = self._create_local_user(
+                User,
+                email=email,
+                supabase_uid=supabase_uid,
+                metadata=metadata,
+                defaults={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "target_exam": str(metadata.get("target_exam") or "UPSC CMS")[:50],
+                    "avatar_url": avatar_url,
+                    "is_active": True,
+                    "role": "admin" if trusted_admin else "student",
+                    "is_superuser": trusted_admin,
+                    "is_staff": trusted_admin,
+                },
+            )
 
         if created:
-            user.set_unusable_password()
-            user.save(update_fields=["password"])
             self._send_welcome_email(user)
         else:
             if trusted_admin:
@@ -433,6 +438,14 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 desired["last_name"] = last_name
             if avatar_url and not user.avatar_url:
                 desired["avatar_url"] = avatar_url
+            # The linked identity changed its (confirmed) email in Supabase:
+            # follow it, unless another account already uses that address.
+            if (
+                linked_by_uid
+                and (user.email or "").lower() != email
+                and not User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
+            ):
+                desired["email"] = email
 
             updates = [field for field, value in desired.items() if getattr(user, field) != value]
             for field in updates:
@@ -442,6 +455,111 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
         TokenBalance.objects.get_or_create(user=user)
         return user
+
+    @staticmethod
+    def _is_privileged(user) -> bool:
+        return user.role == "admin" or user.is_superuser or user.is_staff
+
+    def _link_existing_row_by_email(self, User, email, supabase_uid, trusted_admin):
+        """First sign-in of a Supabase identity: link the local row with its email.
+
+        Returns the linked row, or None when no row has this email (the caller
+        creates one). The email is confirmed by Supabase at this point.
+
+        SECURITY (ACC-05): with "Confirm email" off, GoTrue marks every new
+        sign-up as confirmed, so a confirmed email alone does not prove the
+        person owns the local account. An admin / staff / superuser row is
+        therefore linked automatically only for a trusted admin identity
+        (Supabase app_metadata, which needs the service-role key, or the env
+        admin allowlist -- both would grant admin anyway). Any other identity
+        is refused until an operator links it with
+        ``manage.py link_supabase_identity`` (or sets supabase_uid in Django
+        admin). Once linked, the row is only ever matched by supabase_uid, so
+        a row already linked to another identity is never re-linked by email.
+        """
+        row = User.objects.filter(email=email).order_by("id").first()
+        if row is None:
+            return None
+        if not row.is_active:
+            # Never link a blocked account.
+            raise _auth_failed(
+                "account_blocked",
+                "This account has been blocked. Contact support if you think this is a mistake.",
+            )
+        if row.supabase_uid and row.supabase_uid != supabase_uid:
+            # Linked to another Supabase identity, which has since lost this
+            # email (deleted and re-created account, email change, project
+            # migration). Re-linking by email would reopen the takeover.
+            reason = "linked to another Supabase identity"
+        elif self._is_privileged(row) and not trusted_admin:
+            reason = "an admin/staff account without a linked Supabase identity"
+        else:
+            reason = ""
+        if reason:
+            logger.warning(
+                "Refusing to link Supabase identity %s to account id=%s (%s); link it explicitly "
+                "with `manage.py link_supabase_identity --email <email>`.",
+                supabase_uid or "<no id>", row.pk, reason,
+            )
+            raise _auth_failed(
+                "account_link_required",
+                "This account must be verified by an administrator before it can sign in. Please contact support.",
+            )
+        if not supabase_uid or row.supabase_uid == supabase_uid:
+            return row
+        try:
+            with transaction.atomic():
+                claimed = (
+                    User.objects.filter(pk=row.pk, supabase_uid__isnull=True)
+                    .update(supabase_uid=supabase_uid)
+                )
+        except IntegrityError:
+            claimed = 0
+        if claimed:
+            row.supabase_uid = supabase_uid
+            return row
+        # A concurrent request for the same identity linked it first.
+        winner = User.objects.filter(supabase_uid=supabase_uid).first()
+        if winner is not None:
+            return winner
+        raise _auth_failed(
+            "account_link_required",
+            "This account must be verified by an administrator before it can sign in. Please contact support.",
+        )
+
+    @staticmethod
+    def _create_local_user(User, *, email, supabase_uid, metadata, defaults):
+        """Create the local row for a new Supabase identity. Returns (user, created)."""
+        username = (metadata.get("username") or "").strip()
+        if not username:
+            username = (email.split("@")[0] if "@" in email else "supabase_user").strip() or "supabase_user"
+
+        # Ensure unique username for local user table.
+        base_username = username[:140]
+        username_candidate = base_username
+        suffix = 1
+        while User.objects.filter(username=username_candidate).exists():
+            suffix += 1
+            username_candidate = f"{base_username[:130]}_{suffix}"
+
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username_candidate,
+                    email=email,
+                    password=None,  # unusable: sign-in is Supabase only
+                    supabase_uid=supabase_uid,
+                    **defaults,
+                )
+            return user, True
+        except IntegrityError:
+            # A concurrent first request for the same identity created it.
+            existing = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
+            if existing is None:
+                existing = User.objects.filter(email=email).order_by("id").first()
+            if existing is None:
+                raise
+            return existing, False
 
     @staticmethod
     def _send_welcome_email(user):

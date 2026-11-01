@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth';
  *
  * Behavior:
  * - While `authLoading` is true, render the caller's `loading` JSX (or nothing).
- * - If the user is unauthenticated, `router.replace` to `/login?next=<current path>`
+ * - If the user is unauthenticated, `router.replace` to `/login?next=<current path + query>`
  *   (replace so the back button doesn't return to a gated page). The login
  *   page already honours `?next=` via LoginClient.tsx.
  * - If `requireAdmin` is true, non-admin users are bounced to `/dashboard`.
@@ -38,7 +38,12 @@ export function useRequireAuth(options?: {
         if (authLoading) return;
 
         if (!isAuthenticated) {
-            const next = pathname || '/dashboard';
+            // Keep the query string (e.g. /questions/practice?year=2020&exam=cms,
+            // /practice?id=N). Read from window.location rather than
+            // useSearchParams(), which would force a Suspense boundary on
+            // every statically rendered page that uses this hook.
+            const search = typeof window !== 'undefined' ? window.location.search : '';
+            const next = pathname ? `${pathname}${search}` : '/dashboard';
             router.replace(`/login?next=${encodeURIComponent(next)}`);
             return;
         }

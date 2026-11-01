@@ -170,3 +170,24 @@ def freemium_post_migrate(sender, **kwargs):
     except LookupError:
         return
     ensure_freemium_seed()
+
+
+@receiver(post_migrate)
+def renewal_reminders_post_migrate(sender, **kwargs):
+    """Keep the daily renewal-reminder schedule in place (ACC-20).
+
+    /subscription promises reminder emails 7, 3 and 1 day before a plan
+    expires, but nothing ever created the django-q schedule, so none were
+    sent. The release step runs ``migrate``, so this (idempotent
+    update_or_create) runs on every deploy. The schedule fires while a
+    ``qcluster`` worker runs (Procfile ``worker``). Once per migrate run
+    (sender = this app), never during test runs.
+    """
+    if getattr(sender, 'label', '') != 'accounts' or _running_tests():
+        return
+    try:
+        from accounts.management.commands.send_subscription_reminders import schedule_subscription_reminders
+
+        schedule_subscription_reminders()
+    except Exception as exc:  # noqa: BLE001 -- must never block migrate
+        logger.warning('Renewal reminder schedule not created (%s)', exc)

@@ -19,6 +19,7 @@ import {
   isSupabaseAuthEnabled,
 } from './supabase';
 import { clearLocalTokens, getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
+import { createRefreshGate } from './sessionRefreshGate';
 
 import {
   USE_API_PROXY,
@@ -33,13 +34,34 @@ let cachedSession: { access_token: string } | null = null;
 
 // Device id sent as X-Session-ID; the backend counts devices by it.
 const DEVICE_ID_KEY = 'crack_device_id';
-let memoryDeviceId: string | null = null;
+const DEVICE_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const newDeviceId = () => 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
 
-// Storage access can throw (site data blocked, some privacy modes / webviews);
-// that used to reject every request before it was sent. Fall back to an
-// in-memory id for the page's lifetime.
+const readDeviceIdCookie = (): string | null => {
+  try {
+    const match = document.cookie.match(new RegExp(`(?:^|; )${DEVICE_ID_KEY}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDeviceIdCookie = (id: string | null) => {
+  try {
+    document.cookie = id
+      ? `${DEVICE_ID_KEY}=${encodeURIComponent(id)}; Path=/; SameSite=Lax; Max-Age=${DEVICE_ID_COOKIE_MAX_AGE}`
+      : `${DEVICE_ID_KEY}=; Path=/; SameSite=Lax; Max-Age=0`;
+  } catch {
+    // Cookies blocked as well.
+  }
+};
+
+// Storage access can throw (site data blocked, some privacy modes / webviews).
+// Then keep the id in a first-party cookie. If that cannot be persisted
+// either, send no X-Session-ID at all (the backend skips device tracking):
+// a new id per page load used to enrol a new device on every visit and use
+// up the 2-device allowance within two page loads.
 const getOrCreateSessionId = (): string => {
   if (typeof window === 'undefined') return '';
   try {
@@ -50,27 +72,32 @@ const getOrCreateSessionId = (): string => {
     }
     return id;
   } catch {
-    if (!memoryDeviceId) memoryDeviceId = newDeviceId();
-    return memoryDeviceId;
+    let id = readDeviceIdCookie();
+    if (!id) {
+      writeDeviceIdCookie(newDeviceId());
+      id = readDeviceIdCookie();
+    }
+    return id || '';
   }
 };
 
 /** Forget this browser's device id, so the next sign-in enrols a new device. */
 const resetDeviceId = () => {
-  memoryDeviceId = null;
   if (typeof window === 'undefined') return;
+  writeDeviceIdCookie(null);
   try {
     window.localStorage.removeItem(DEVICE_ID_KEY);
   } catch {
-    // Storage unavailable: the in-memory id was reset above.
+    // Storage unavailable: the cookie was cleared above.
   }
 };
 
 /**
  * Backend error codes that end this browser's session
- * (accounts/supabase_rest_auth.py; `user_inactive` is SimpleJWT's code for a
- * blocked account in local dev auth). `session_invalid` is the legacy
- * single-session code, kept for older backends.
+ * (accounts/supabase_rest_auth.py; local dev auth also answers a blocked
+ * account with `account_blocked`, `user_inactive` is SimpleJWT's own code,
+ * kept for older backends). `session_invalid` is the legacy single-session
+ * code, kept for older backends.
  */
 const SESSION_ENDING_MESSAGES: Record<string, string> = {
   account_blocked: 'Your account has been blocked. Contact support if you think this is a mistake.',
@@ -78,6 +105,8 @@ const SESSION_ENDING_MESSAGES: Record<string, string> = {
   device_inactive: 'This device was signed out. Please sign in again.',
   email_not_confirmed: 'Please confirm your email address, then sign in again.',
   email_required: 'Sign in with an email address to use CrackLabs.',
+  account_link_required:
+    'This account must be verified by an administrator before it can sign in. Please contact support.',
   session_invalid: "You're logged in on another device",
 };
 
@@ -124,6 +153,46 @@ export const endSessionAfterApiError = async (error: unknown): Promise<boolean> 
 // arrive after the backend already processed a POST/PATCH (order creation,
 // test submission, AI generation), and replaying it would run it twice.
 const IDEMPOTENT_METHODS = new Set(['get', 'head', 'options']);
+
+// ── Supabase session refresh after a 401 ─────────────────────────────────
+// Bounded on purpose (see sessionRefreshGate.ts): when the backend rejects a
+// session that is actually valid, an unbounded refresh-per-401 looped with
+// the auth listener until Supabase rate-limited token refreshes for the IP.
+
+/** Bearer token a request was sent with (AxiosHeaders or a plain object). */
+const bearerTokenOf = (headers: unknown): string | null => {
+  if (!headers || typeof headers !== 'object') return null;
+  const h = headers as { get?: (name: string) => unknown } & Record<string, unknown>;
+  const raw = typeof h.get === 'function' ? h.get('Authorization') : (h.Authorization ?? h.authorization);
+  const value = typeof raw === 'string' ? raw : '';
+  return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() || null : null;
+};
+
+const refreshSupabaseAccessToken = async (): Promise<string | null> => {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      if (isInvalidRefreshTokenError(error)) {
+        await clearSupabaseLocalSession();
+        cachedSession = null;
+      }
+      return null;
+    }
+    if (data.session?.access_token) cachedSession = data.session;
+    return data.session?.access_token || null;
+  } catch (refreshError) {
+    if (isInvalidRefreshTokenError(refreshError)) {
+      await clearSupabaseLocalSession();
+      cachedSession = null;
+    }
+    return null;
+  }
+};
+
+/** A fresh access token to retry with after `failedToken` got a 401, or null. */
+const supabaseTokenAfter401 = createRefreshGate(refreshSupabaseAccessToken);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -232,14 +301,14 @@ api.interceptors.response.use(
       });
     }
 
-    // SECURITY / UX (Fix #7): on 401, attempt a one-shot Supabase session
-    // refresh and retry the original request once. Supabase access tokens
-    // are short-lived (default 1h). Without this, a paying user who keeps
-    // a long-lived frontend session tab open for >1h starts seeing 401s
-    // on every API call and has to manually reload — and the profile
-    // refresh in auth.tsx falls back to mapSupabaseUser which has NO
-    // subscription_info, so the paying user appears unsubscribed until
-    // a hard reload. One refresh attempt + one retry closes both loops.
+    // SECURITY / UX (Fix #7): on 401, refresh the Supabase session and retry
+    // the original request once. Supabase access tokens are short-lived
+    // (default 1h). Without this, a paying user who keeps a long-lived tab
+    // open for >1h starts seeing 401s on every API call and has to reload --
+    // and the profile refresh in auth.tsx falls back to mapSupabaseUser,
+    // which has NO subscription_info. The refresh itself is bounded (see
+    // supabaseTokenAfter401) so a backend that rejects valid sessions
+    // cannot drive a refresh loop.
     if (
       status === 401 &&
       !originalRequest._tokenRefresh &&
@@ -259,27 +328,17 @@ api.interceptors.response.use(
       status === 401 &&
       !originalRequest._tokenRefresh &&
       typeof window !== 'undefined' &&
+      !isLocalAuthMode() &&
       isSupabaseAuthEnabled()
     ) {
       originalRequest._tokenRefresh = true;
-      try {
-        const supabase = getSupabaseBrowserClient();
-        if (supabase) {
-          const { data, error: refreshErr } = await supabase.auth.refreshSession();
-          if (!refreshErr && data.session?.access_token) {
-            const newToken = data.session.access_token;
-            originalRequest.headers = originalRequest.headers || {};
-            (originalRequest.headers as Record<string, string>)['Authorization'] =
-              `Bearer ${newToken}`;
-            return api(originalRequest);
-          }
-        }
-      } catch (refreshError) {
-        if (isInvalidRefreshTokenError(refreshError)) {
-          await clearSupabaseLocalSession();
-        }
-        // fall through to reject so the caller can render its own UI
+      const newToken = await supabaseTokenAfter401(bearerTokenOf(originalRequest.headers));
+      if (newToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        return api(originalRequest);
       }
+      // fall through to reject so the caller can render its own UI
     }
 
     const shouldFailover =
@@ -299,6 +358,27 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Admin system actions. scope 'all' rewrites every user's data, so the backend
+ * also requires confirm === 'RESET ALL' (the phrase the admin types in the
+ * UI before the call is made). Callers should pass the typed phrase; until
+ * the admin page does, scope 'all' calls default to the phrase here.
+ */
+type SystemActionPayload = { scope: 'all' | 'user'; user_id?: number; confirm?: string };
+const PLATFORM_WIDE_CONFIRM_PHRASE = 'RESET ALL';
+const withPlatformConfirm = (data: SystemActionPayload): SystemActionPayload =>
+  data.scope === 'all' && data.confirm === undefined ? { ...data, confirm: PLATFORM_WIDE_CONFIRM_PHRASE } : data;
+
+/** Scholarship challenge question as served by POST /auth/scholarship/start/ (no answer). */
+export interface ScholarshipChallengeQuestion {
+  id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+}
+
 // Auth API
 export const authAPI = {
   register: (data: Record<string, string>) => api.post('/auth/register/', data),
@@ -317,7 +397,10 @@ export const authAPI = {
   subscriptionInvoice: (subscriptionId: number) => api.get(`/auth/subscribe/invoice/${subscriptionId}/`),
   // Scholarship: the server picks the five questions and returns a signed
   // challenge_token that verifyScholarship must send back.
-  startScholarship: () => api.post('/auth/scholarship/start/'),
+  startScholarship: () =>
+    api.post<{ questions: ScholarshipChallengeQuestion[]; challenge_token: string | null; expires_in: number }>(
+      '/auth/scholarship/start/',
+    ),
   verifyScholarship: (answers: Record<string, string>, challengeToken?: string | null) =>
     api.post('/auth/verify-scholarship/', { answers, challenge_token: challengeToken || undefined }),
   // Password reset is Supabase-only (auth.tsx resetPassword); the old Django
@@ -338,9 +421,9 @@ export const authAPI = {
   adminToggleUserBlock: (userId: number, blocked: boolean) => api.patch(`/auth/admin/users/${userId}/block/`, { blocked }),
   adminUpdateUserRole: (userId: number, role: 'admin' | 'student') => api.patch(`/auth/admin/users/${userId}/role/`, { role }),
   adminResetUserProgress: (userId: number) => api.post(`/auth/admin/users/${userId}/reset-progress/`),
-  adminResetAttempts: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/reset-attempts/', data),
-  adminClearAnalytics: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/clear-analytics/', data),
-  adminRerunEvaluation: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/rerun-evaluation/', data),
+  adminResetAttempts: (data: SystemActionPayload) => api.post('/auth/admin/system/reset-attempts/', withPlatformConfirm(data)),
+  adminClearAnalytics: (data: SystemActionPayload) => api.post('/auth/admin/system/clear-analytics/', withPlatformConfirm(data)),
+  adminRerunEvaluation: (data: SystemActionPayload) => api.post('/auth/admin/system/rerun-evaluation/', withPlatformConfirm(data)),
   
   adminBackupData: () => api.post('/auth/admin/system/backup-data/'),
   adminRestoreData: () => api.post('/auth/admin/system/restore-data/'),
@@ -424,7 +507,8 @@ export const ingestionAPI = {
     material_sha16: string;
     parent_exam: string;
     batch_id?: number;
-    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+    // 'auto-all' is no longer accepted by the API (400).
+    strategy?: 'auto-pr-only' | 'manual';
   }) => api.post('/ingestion/jobs/', data),
   retryJob: (id: number) => api.post(`/ingestion/jobs/${id}/retry/`, {}),
   cancelJob: (id: number) => api.post(`/ingestion/jobs/${id}/cancel/`, {}),
@@ -456,7 +540,8 @@ export const ingestionAPI = {
     name: string;
     material_sha16s: string[];
     parent_exam: string;
-    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+    // 'auto-all' is no longer accepted by the API (400).
+    strategy?: 'auto-pr-only' | 'manual';
   }) => api.post('/ingestion/batches/', data),
 };
 // Questions API
@@ -577,8 +662,9 @@ export const testsAPI = {
   start: (id: number) => api.post(`/tests/${id}/start/`),
   submit: (id: number, data: Record<string, unknown>) => api.post(`/tests/${id}/submit/`, data),
   review: (id: number, attemptId: number) => api.get(`/tests/${id}/review/`, { params: { attempt_id: attemptId } }),
-  generateAdaptive: (data: { num_questions?: number }) => api.post('/tests/generate-adaptive/', data),
-  pyqSimulation: (data: { year: number; paper?: number }) => api.post('/tests/pyq-simulation/', data),
+  // exam_type scopes the paper / adaptive pool (e.g. 'cms', 'neet_pg').
+  generateAdaptive: (data: { num_questions?: number; exam_type?: string }) => api.post('/tests/generate-adaptive/', data),
+  pyqSimulation: (data: { year: number; paper?: number; exam_type?: string }) => api.post('/tests/pyq-simulation/', data),
   getAttempts: () => api.get('/tests/attempts/'),
   getAttempt: (id: number) => api.get(`/tests/attempts/${id}/`),
 };
@@ -604,8 +690,8 @@ export const analyticsAPI = {
     api.post('/analytics/contact/', data),
   exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
   exportCSV: (type: string) => api.get('/analytics/export/csv/', { params: { type }, responseType: 'blob' }),
-  // Announcements
-  getAnnouncements: () => api.get('/analytics/announcements/'),
+  // Announcements ({scope: 'all'} lets admins include expired / inactive ones)
+  getAnnouncements: (params?: Record<string, string | number>) => api.get('/analytics/announcements/', { params }),
   createAnnouncement: (data: { title: string; message: string; priority: string; expires_at?: string }) =>
     api.post('/analytics/announcements/', data),
   updateAnnouncement: (id: number, data: Record<string, unknown>) =>
@@ -638,6 +724,9 @@ export const aiAPI = {
   explain: (data: { concept: string; level?: string }) => api.post('/ai/explain/', data, { timeout: AI_TIMEOUT }),
   analyzeQuestion: (data: Record<string, string>) => api.post('/ai/analyze/', data, { timeout: AI_TIMEOUT }),
   explainAfterAnswer: (data: {
+    // Bank question id: lets the backend use (and store) the question's own
+    // explanation and apply its answer-access rules.
+    question_id?: number;
     question_text: string;
     options?: Record<string, string>;
     correct_answer?: string;
@@ -761,6 +850,8 @@ export const questsAPI = {
   remove: (id: number) => api.delete(`/analytics/quests/${id}/`),
   getStreak: () => api.get('/analytics/quests/streak/'),
   toggleFreeze: () => api.post('/analytics/quests/streak/freeze/'),
+  // Explicit state: a double click cannot flip it back.
+  setFreeze: (frozen: boolean) => api.post('/analytics/quests/streak/freeze/', { streak_frozen: frozen }),
 };
 
 // Notes API — user personal notes
@@ -774,7 +865,7 @@ export const notesAPI = {
 // Flashcards API
 export const flashcardsAPI = {
   list: (params?: { subject?: number; due?: string }) => api.get('/questions/flashcards/', { params }),
-  create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string }) =>
+  create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string; personal_note?: string }) =>
     api.post('/questions/flashcards/', data),
   update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/flashcards/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/flashcards/${id}/`),

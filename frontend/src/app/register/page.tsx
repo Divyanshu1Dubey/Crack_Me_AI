@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, MailCheck, UserPlus } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,9 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | ''>('');
+    // Set when Supabase "Confirm email" is on: the account exists but there
+    // is no session until the emailed link is opened.
+    const [confirmationSentTo, setConfirmationSentTo] = useState('');
     const { register, oauthLogin, isSupabaseAuth } = useAuth();
     const router = useRouter();
 
@@ -33,7 +36,11 @@ export default function RegisterPage() {
         }
         setLoading(true);
         try {
-            await register(form);
+            const { needsEmailConfirmation } = await register(form);
+            if (needsEmailConfirmation) {
+                setConfirmationSentTo(form.email.trim());
+                return;
+            }
             router.push('/dashboard');
         } catch (err: unknown) {
             const error = err as { response?: { data?: unknown } };
@@ -72,6 +79,23 @@ export default function RegisterPage() {
                 </div>
             )}
 
+            {confirmationSentTo ? (
+                <div role="status" className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-6 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                        <MailCheck className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <p className="text-base font-semibold text-foreground">Check your inbox</p>
+                        <p className="text-sm text-muted-foreground break-words">
+                            We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
+                            Open it to activate your account, then sign in.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full rounded-2xl">
+                        <Link href="/login">Go to sign in</Link>
+                    </Button>
+                </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -197,6 +221,7 @@ export default function RegisterPage() {
                 </Button>
                 </>)}
             </form>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}

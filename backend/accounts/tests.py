@@ -186,7 +186,11 @@ class AuthApiTests(TestCase):
     def test_supabase_sync_preserves_existing_admin(self):
         """Fix P1 (2026-09-23): a Supabase login whose metadata lacks admin
         flags must NOT demote an existing local admin (admins were losing
-        their role on every login). Revocation is done in Django admin."""
+        their role on every login). Revocation is done in Django admin.
+
+        The admin row is linked to its Supabase identity (supabase_uid); an
+        UNLINKED admin row is never linked by email to an untrusted identity
+        (accounts.tests_wave2_auth)."""
         user = User.objects.create_user(
             username="deeksha",
             email="demoted.user@example.com",
@@ -194,11 +198,13 @@ class AuthApiTests(TestCase):
             role="admin",
             is_superuser=True,
             is_staff=True,
+            supabase_uid="9b2f4c1e-0000-4000-8000-000000000001",
         )
 
         auth_backend = SupabaseJWTAuthentication()
         auth_backend._upsert_local_user(
             {
+                "id": "9b2f4c1e-0000-4000-8000-000000000001",
                 "email": "demoted.user@example.com",
                 "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {

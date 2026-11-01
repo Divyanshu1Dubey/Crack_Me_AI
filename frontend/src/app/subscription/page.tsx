@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { authAPI, questionsAPI } from '@/lib/api';
+import { authAPI, getApiErrorCode, type ScholarshipChallengeQuestion } from '@/lib/api';
 import { PREMIUM_PLANS, SCHOLARSHIP_PRICE_INR, type PurchasablePlanId } from './plans';
 import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
 import {
@@ -61,15 +61,15 @@ interface SubscriptionRow {
     created_at: string | null;
 }
 
-interface ScholarshipQuestion {
-    id: number;
-    question_text: string;
-    option_a: string;
-    option_b: string;
-    option_c: string;
-    option_d: string;
-    correct_answer?: string;
-}
+// Served by POST /auth/scholarship/start/ -- never includes the answer.
+type ScholarshipQuestion = ScholarshipChallengeQuestion;
+
+// Scholarship price after a perfect score: Rs 79 on the first attempt, Rs 99
+// on the second (accounts.views.VerifyScholarshipView).
+const SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR = 99;
+
+// Plan order for the "Upgrade to" / "Add" label on stacked purchases.
+const PLAN_TIER: Record<string, number> = { scholarship_1_month: 1, '1_month': 1, '3_months': 2, '1_year': 3 };
 
 export default function SubscriptionPage() {
     const { user, refreshProfile, setUser } = useAuth();
@@ -105,6 +105,10 @@ export default function SubscriptionPage() {
     const [showTestModal, setShowTestModal] = useState(false);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [scholarshipQuestions, setScholarshipQuestions] = useState<ScholarshipQuestion[]>([]);
+    // Signed by the server for exactly these five questions; verify sends it back.
+    const [challengeToken, setChallengeToken] = useState<string | null>(null);
+    // Shown inside the modal (the page-level error banner sits behind it).
+    const [scholarshipError, setScholarshipError] = useState<string | null>(null);
     const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [testSubmitting, setTestSubmitting] = useState(false);
@@ -236,22 +240,27 @@ export default function SubscriptionPage() {
         setAiAnalysis(null);
         setSelectedAnswers({});
         setCurrentQuestionIdx(0);
+        setScholarshipQuestions([]);
+        setChallengeToken(null);
+        setScholarshipError(null);
 
         try {
-            // Fetch eligible questions for scholarship test
-            const res = await questionsAPI.list({ is_scholarship_eligible: 'true', limit: 50 });
-            let allQuestions = res.data?.results || res.data || [];
-            
-            if (allQuestions.length === 0) {
-                console.warn("No scholarship eligible questions found. Please flag some in admin panel.");
-                allQuestions = []; 
-            }
-            
-            // Shuffle and pick 5
-            const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-            setScholarshipQuestions(shuffled.slice(0, 5));
+            // The server picks the five questions and signs that set; the
+            // submission must carry the token (it used to be chosen here from
+            // the question list, which the backend no longer accepts).
+            const res = await authAPI.startScholarship();
+            setScholarshipQuestions(res.data?.questions || []);
+            setChallengeToken(res.data?.challenge_token || null);
         } catch (err) {
-            logAxiosError('Failed to load scholarship questions:', err);
+            logAxiosError('Failed to start the scholarship challenge:', err);
+            const error = err as { response?: { status?: number; data?: { error?: string } } };
+            setScholarshipError(
+                error.response?.status === 429
+                    ? 'The challenge was started too many times. Please wait a while and try again.'
+                    : error.response?.data?.error || 'Could not start the scholarship challenge. Please try again.'
+            );
+            // Attempts / passed state may have changed (e.g. locked): keep the banner in step.
+            void refreshProfile();
         } finally {
             setLoadingQuestions(false);
         }
@@ -268,6 +277,7 @@ export default function SubscriptionPage() {
         setTestSubmitting(true);
         setSuccessMessage(null);
         setErrorMessage(null);
+        setScholarshipError(null);
 
         // Build answers dict (ID -> option letter)
         const submissionAnswers: Record<string, string> = {};
@@ -276,8 +286,8 @@ export default function SubscriptionPage() {
         });
 
         try {
-            // Call backend validation
-            const res = await authAPI.verifyScholarship(submissionAnswers);
+            // Call backend validation (scores only the set the server issued)
+            const res = await authAPI.verifyScholarship(submissionAnswers, challengeToken);
             const data = res.data;
             setTestResult({
                 status: data.status,
@@ -293,7 +303,11 @@ export default function SubscriptionPage() {
 
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
-            setErrorMessage(error.response?.data?.error || "Failed to submit scholarship test. Please try again.");
+            setScholarshipError(error.response?.data?.error || "Failed to submit scholarship test. Please try again.");
+            // Expired / already-submitted challenge: the next start issues a new one.
+            const code = getApiErrorCode(err);
+            if (code === 'scholarship_expired' || code === 'scholarship_not_started') setChallengeToken(null);
+            void refreshProfile();
         } finally {
             setTestSubmitting(false);
         }
@@ -507,6 +521,13 @@ export default function SubscriptionPage() {
 
     const isSubscribed = user?.is_subscribed;
 
+    // Monthly Pass price the scholarship unlocks: the granted price once
+    // passed, otherwise the price the next attempt would unlock.
+    const scholarshipAttempts = user?.scholarship_test_attempts || 0;
+    const scholarshipOfferPrice = user?.scholarship_test_passed
+        ? (user?.scholarship_granted_price || SCHOLARSHIP_PRICE_INR)
+        : scholarshipAttempts === 0 ? SCHOLARSHIP_PRICE_INR : SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR;
+
     // ── Plan-comparison helpers (B3 + B20) ────────────────────────────
     // 'legacy' and 'admin_grant' are lifetime subscriptions — they never
     // expire and the user should NEVER see a "Renew Now" button or a
@@ -647,7 +668,7 @@ export default function SubscriptionPage() {
                             <p className="text-muted-foreground text-sm mt-1">Unlock expert guidance, textbooks, and interactive mock series.</p>
                         </div>
                         {isSubscribed && (
-                            <Badge className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/15 border border-amber-500/30 px-3 py-1 font-bold">
+                            <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 border border-amber-500/30 px-3 py-1 font-bold">
                                 ACTIVE MEMBER
                             </Badge>
                         )}
@@ -878,8 +899,8 @@ export default function SubscriptionPage() {
                     {!isSubscribed && (
                         <div className="rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                             <div className="text-left space-y-2">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                    <Sparkles className="w-3.5 h-3.5" /> 100% Scholarship Discount Offer
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                    <Sparkles className="w-3.5 h-3.5" /> Scholarship Offer · ₹{SCHOLARSHIP_PRICE_INR} Monthly Pass
                                 </span>
                                 <h3 className="text-xl font-extrabold text-foreground">
                                     Diagnose 5/5 Correctly to Get Monthly Pass for ₹{SCHOLARSHIP_PRICE_INR}
@@ -945,7 +966,7 @@ export default function SubscriptionPage() {
 
                                     {/* B20 fix — show yearly savings vs current short-term plan */}
                                     {savings !== null && savings > 0 && (
-                                        <div className="mb-4 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                                        <div className={`mb-4 px-3 py-2 rounded-xl border text-xs font-bold ${isRecommended ? 'bg-emerald-400/15 border-emerald-400/40 text-emerald-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'}`}>
                                             💰 Save ₹{savings}/yr by switching from your current plan
                                         </div>
                                     )}
@@ -960,8 +981,10 @@ export default function SubscriptionPage() {
                                     </ul>
 
                                     {isCurrentPlan ? (
-                                        /* B20 fix — distinguish "you already have this" from "buy now" */
-                                        <div className="w-full py-2.5 rounded-xl font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-sm">
+                                        /* B20 fix — distinguish "you already have this" from "buy now".
+                                           The recommended card is navy in both themes, so it needs the
+                                           light emerald text (emerald-700 on navy was ~2.5:1). */
+                                        <div className={`w-full py-2.5 rounded-xl font-bold border flex items-center justify-center gap-1.5 text-sm ${isRecommended ? 'bg-emerald-400/15 border-emerald-400/40 text-emerald-300' : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'}`}>
                                             <Check className="w-4 h-4" /> Your Active Plan
                                         </div>
                                     ) : isSubscribed && !isCurrentLifetime ? (
@@ -976,16 +999,22 @@ export default function SubscriptionPage() {
                                                     <span className="flex items-center justify-center gap-2">
                                                         <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Payment...
                                                     </span>
-                                                ) : subscribing ? 'Opening Payment...' : `Switch to ${plan.name}`}
+                                                ) : subscribing ? 'Opening Payment...' : (
+                                                    // Purchases stack: a higher tier is an upgrade, anything
+                                                    // else adds time ("Switch to" read like a downgrade).
+                                                    (PLAN_TIER[plan.id] ?? 0) > (PLAN_TIER[currentPlanId ?? ''] ?? 0)
+                                                        ? `Upgrade to ${plan.name}`
+                                                        : `Add ${plan.name}`
+                                                )}
                                             </button>
-                                            <p className="text-center text-[11px] text-muted-foreground">
+                                            <p className={`text-center text-[11px] ${isRecommended ? 'text-slate-300' : 'text-muted-foreground'}`}>
                                                 Stacks on top of your remaining {subscriptionInfo?.days_remaining ?? 0} day{(subscriptionInfo?.days_remaining ?? 0) === 1 ? '' : 's'}
                                             </p>
                                         </div>
                                     ) : isSubscribed && isCurrentLifetime ? (
                                         /* Lifetime users: don't show "Active Member" on a plan they don't have.
                                            Show a disabled "Already Lifetime" message instead. */
-                                        <div className="w-full py-2.5 rounded-xl font-bold bg-amber-500/10 text-amber-500 border border-amber-500/25 flex items-center justify-center gap-1.5 text-sm">
+                                        <div className={`w-full py-2.5 rounded-xl font-bold bg-amber-500/10 border border-amber-500/25 flex items-center justify-center gap-1.5 text-sm ${isRecommended ? 'text-amber-400' : 'text-amber-700 dark:text-amber-400'}`}>
                                             <Crown className="w-4 h-4" /> Lifetime Member
                                         </div>
                                     ) : (
@@ -1003,7 +1032,7 @@ export default function SubscriptionPage() {
                                             </button>
                                             {plan.id === '1_month' && !hasScholarshipDiscount && ((user?.scholarship_test_attempts || 0) < 2) && (
                                                 <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">
-                                                    ✨ Get this at just ₹{(user?.scholarship_test_attempts || 0) === 0 ? 79 : 99} today!
+                                                    ✨ Get this at just ₹{scholarshipOfferPrice} today!
                                                 </p>
                                             )}
                                         </div>
@@ -1206,7 +1235,9 @@ export default function SubscriptionPage() {
                                             <Brain className="w-5 h-5 text-amber-500" />
                                             Clinical Scholarship Challenge
                                         </h3>
-                                        <p className="text-xs text-muted-foreground mt-1">Get 5/5 correct to unlock the ₹79 Monthly Pass</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Get 5/5 correct to unlock the ₹{scholarshipOfferPrice} Monthly Pass
+                                        </p>
                                     </div>
 
                                     {loadingQuestions ? (
@@ -1318,23 +1349,35 @@ export default function SubscriptionPage() {
                                                         }}
                                                         className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm py-2.5 px-5 rounded-xl transition-all shadow-md active:scale-98"
                                                     >
-                                                        Claim ₹79 Offer Now
+                                                        Claim ₹{user?.scholarship_granted_price || SCHOLARSHIP_PRICE_INR} Offer Now
                                                     </button>
-                                                ) : (
+                                                ) : scholarshipAttempts < 2 ? (
                                                     <button
                                                         onClick={startScholarshipTest}
                                                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-sm py-2.5 px-5 rounded-xl transition-all shadow-md active:scale-98"
                                                     >
                                                         Try Challenge Again
                                                     </button>
-                                                )}
+                                                ) : null}
                                                 <Button variant="ghost" onClick={() => setShowTestModal(false)} className="rounded-xl text-xs px-5">Close</Button>
                                             </div>
                                         </div>
                                     ) : (
                                         /* Question-by-Question Flow */
                                         <div className="space-y-6 text-left">
-                                            {scholarshipQuestions.length === 0 ? (
+                                            {scholarshipQuestions.length === 0 && scholarshipError ? (
+                                                /* The challenge could not be started (rate limited, locked, network). */
+                                                <div role="alert" className="py-10 flex flex-col items-center justify-center gap-4 text-center">
+                                                    <AlertTriangle className="w-10 h-10 text-amber-500" />
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-sm font-bold text-foreground">The challenge could not be started</p>
+                                                        <p className="text-xs text-muted-foreground max-w-sm">{scholarshipError}</p>
+                                                    </div>
+                                                    <Button variant="outline" onClick={() => setShowTestModal(false)} className="rounded-xl text-xs px-5 mt-2">
+                                                        Close
+                                                    </Button>
+                                                </div>
+                                            ) : scholarshipQuestions.length === 0 ? (
                                                 /* Empty-state when no scholarship-eligible questions exist yet.
                                                    Without this branch the modal renders a blank body and the
                                                    user can't tell what happened (the API returns 0 because
@@ -1384,6 +1427,21 @@ export default function SubscriptionPage() {
                                                         })}
                                                     </div>
 
+                                                    {scholarshipError && (
+                                                        <div role="alert" className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-medium flex flex-wrap items-center justify-between gap-2">
+                                                            <span>{scholarshipError}</span>
+                                                            {!challengeToken && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={startScholarshipTest}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold transition-all"
+                                                                >
+                                                                    <RefreshCw className="w-3.5 h-3.5" /> Start again
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
                                                     {/* Navigation buttons */}
                                                     <div className="flex justify-between items-center pt-4 border-t border-border">
                                                         <Button
@@ -1406,7 +1464,7 @@ export default function SubscriptionPage() {
                                                         ) : (
                                                             <button
                                                                 onClick={submitScholarshipTest}
-                                                                disabled={testSubmitting || Object.keys(selectedAnswers).length < 5}
+                                                                disabled={testSubmitting || !challengeToken || Object.keys(selectedAnswers).length < 5}
                                                                 className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs py-2 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50"
                                                             >
                                                                 {testSubmitting ? 'Submitting...' : 'Submit Scholarship Test'}

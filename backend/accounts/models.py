@@ -95,16 +95,30 @@ class CustomUser(AbstractUser):
         ('admin', 'Admin'),
     ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
+    # Supabase Auth user id (the token's `sub` / `id` from /auth/v1/user).
+    # Once stored, sign-ins are matched by this id, never by email again; see
+    # accounts.supabase_rest_auth.SupabaseJWTAuthentication._upsert_local_user.
+    supabase_uid = models.CharField(
+        max_length=64, unique=True, null=True, blank=True, default=None,
+        help_text='Supabase Auth user id linked to this account (set on first sign-in).',
+    )
     phone = models.CharField(max_length=15, blank=True)
     college = models.CharField(max_length=200, blank=True, default='')
-    session_key = models.CharField(max_length=255, blank=True, null=True, help_text="Used to enforce single active session")
+    session_key = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text='Unused legacy field. Sessions are not limited to one device; '
+                  'devices are tracked in UserDevice (2 free / 4 subscribed).',
+    )
     profile_bonus_rewarded = models.BooleanField(default=False)
     is_subscribed = models.BooleanField(default=False)
     target_exam = models.CharField(max_length=50, default='UPSC CMS')
     active_exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     target_year = models.IntegerField(null=True, blank=True)
     avatar_url = models.URLField(blank=True)
-    current_session_id = models.CharField(max_length=255, blank=True, default='')
+    current_session_id = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Unused legacy field (see session_key); devices live in UserDevice.',
+    )
     scholarship_test_passed = models.BooleanField(default=False)
     scholarship_test_attempts = models.IntegerField(default=0)
     last_seen = models.DateTimeField(null=True, blank=True)

@@ -196,12 +196,16 @@ class UserSerializer(serializers.ModelSerializer):
             return 0
 
     def get_ai_tutor_daily_cap(self, obj):
-        """Daily AI tutor cap for this user. Premium and admin → None (unlimited)."""
+        """Daily AI tutor cap for this user. Premium and admin → None (unlimited).
+
+        Same source as the enforcement (ai_engine.views._ai_tutor_cap, i.e.
+        TokenConfig.ai_tutor_daily_cap), so the usage banner shows the real cap.
+        """
         try:
-            from ai_engine.views import AI_TUTOR_DAILY_FREE_CAP
+            from ai_engine.views import _ai_tutor_cap
             if self.get_is_premium(obj):
                 return None
-            return int(AI_TUTOR_DAILY_FREE_CAP)
+            return int(_ai_tutor_cap())
         except Exception:
             return 2
 

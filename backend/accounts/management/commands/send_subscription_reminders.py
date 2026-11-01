@@ -2,15 +2,12 @@
 send_subscription_reminders.py
 Management command to send renewal reminder emails to subscribed users.
 
-NOTHING runs this automatically yet: schedule it once a day, either with a
-plain cron / platform job
+Scheduled daily through django-q2: every ``migrate`` (the release step) calls
+schedule_subscription_reminders() from accounts.signals, and the schedule runs
+while a ``python manage.py qcluster`` worker is up (Procfile ``worker``).
+Without a worker, run it from a plain cron / platform job instead:
 
     python manage.py send_subscription_reminders --days 7,3,1
-
-or with django-q2 (requires a running ``python manage.py qcluster`` worker):
-
-    from accounts.management.commands.send_subscription_reminders import schedule_subscription_reminders
-    schedule_subscription_reminders()   # schedules run_subscription_reminders daily
 
 Or run manually:
     python manage.py send_subscription_reminders                # default T-7
@@ -53,6 +50,20 @@ def _mark_reminded(sub_id: int, threshold: int) -> None:
         REMINDER_DEDUP_KEY.format(sub_id=sub_id, threshold=threshold),
         timezone.now().isoformat(),
         REMINDER_DEDUP_TTL,
+    )
+
+
+def _outlasted_by_another_plan(sub) -> bool:
+    """True when the user holds another active plan that ends later (or never)."""
+    from django.db.models import Q
+
+    from accounts.models import Subscription
+
+    return (
+        Subscription.objects.filter(user_id=sub.user_id, status='active')
+        .exclude(pk=sub.pk)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=sub.expires_at))
+        .exists()
     )
 
 
@@ -122,6 +133,10 @@ class Command(BaseCommand):
             ).select_related('user')
             for sub in qs:
                 if _already_reminded(sub.id, threshold):
+                    continue
+                if _outlasted_by_another_plan(sub):
+                    # Stacked purchases: a later (or lifetime) plan keeps the
+                    # user premium, so "your plan expires" would be wrong.
                     continue
                 days_left = max(0, (sub.expires_at - now).days)
                 if dry_run:

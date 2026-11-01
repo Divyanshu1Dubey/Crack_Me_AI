@@ -6,7 +6,7 @@
  */
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import {
     clearSupabaseLocalSession,
     getSupabaseBrowserClient,
@@ -61,13 +61,18 @@ interface User {
 
 export type { User };
 
+/** register() outcome: with Supabase "Confirm email" on there is no session yet. */
+export interface RegisterResult {
+    needsEmailConfirmation: boolean;
+}
+
 interface AuthContextType {
     user: User | null;
     loading: boolean;
     login: (identifier: string, password: string) => Promise<User>;
     magicLinkLogin: (email: string) => Promise<void>;
     oauthLogin: (provider: Provider) => Promise<void>;
-    register: (data: Record<string, string>) => Promise<void>;
+    register: (data: Record<string, string>) => Promise<RegisterResult>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     /**
@@ -95,7 +100,9 @@ const AuthContext = createContext<AuthContextType>({
     },
     magicLinkLogin: async () => undefined,
     oauthLogin: async () => undefined,
-    register: async () => undefined,
+    register: async () => {
+        throw new Error('AuthProvider is not mounted');
+    },
     logout: async () => undefined,
     refreshProfile: async () => undefined,
     setUser: () => undefined,
@@ -127,13 +134,43 @@ const fetchBackendProfile = async (accessToken: string): Promise<unknown> => {
     return response.data;
 };
 
+// Several triggers ask for the profile of the same session at nearly the same
+// time (the initial getSession(), the SIGNED_IN that supabase-js emits on load
+// and on every tab focus, login()). Requests for the same access token share
+// one fetch for a short window; a failed fetch is not reused.
+const PROFILE_REUSE_MS = 30_000;
+let recentProfileFetch: { token: string; at: number; promise: Promise<unknown> } | null = null;
+
 /**
  * Supabase access tokens are short-lived (default 1 hour); an expired token
- * gets a 401 and the api.ts interceptor refreshes the session and retries
- * once. Kept as a named step so the call sites read the same as before.
+ * gets a 401 and the api.ts interceptor refreshes the session (bounded) and
+ * retries once. `force` skips the reuse window (explicit refreshProfile()).
  */
-const fetchBackendProfileWithRefresh = (accessToken: string): Promise<unknown> =>
-    fetchBackendProfile(accessToken);
+const fetchBackendProfileWithRefresh = (accessToken: string, force = false): Promise<unknown> => {
+    const now = Date.now();
+    if (
+        !force &&
+        recentProfileFetch &&
+        recentProfileFetch.token === accessToken &&
+        now - recentProfileFetch.at < PROFILE_REUSE_MS
+    ) {
+        return recentProfileFetch.promise;
+    }
+    const promise = fetchBackendProfile(accessToken);
+    const entry = { token: accessToken, at: now, promise };
+    recentProfileFetch = entry;
+    promise.catch(() => {
+        if (recentProfileFetch === entry) recentProfileFetch = null;
+    });
+    return promise;
+};
+
+// Auth events after which the backend profile can differ. TOKEN_REFRESHED
+// is deliberately absent: a new access token does not change the profile,
+// and re-fetching on it looped with the api.ts refresh-on-401 whenever the
+// backend rejected a valid session. INITIAL_SESSION is handled by the
+// getSession() call in AuthProvider's effect.
+const PROFILE_SYNC_EVENTS = new Set<AuthChangeEvent>(['SIGNED_IN', 'USER_UPDATED', 'PASSWORD_RECOVERY']);
 
 // Where to land after an OAuth / email-link round trip. Stored locally
 // rather than added to redirectTo, so the Supabase redirect allow-list
@@ -292,15 +329,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
         // Subscribe to auth state changes
-        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
             if (!mounted) return;
             if (!session?.user) {
                 setUserState(null);
                 return;
             }
+            if (!PROFILE_SYNC_EVENTS.has(event)) return;
 
-            // Sync profile after auth state change (with refresh-on-401)
-            fetchBackendProfileWithRefresh(session.access_token)
+            // Sync profile after sign-in / account changes (refresh-on-401 in api.ts)
+            fetchBackendProfileWithRefresh(session.access_token, event === 'USER_UPDATED')
                 .then((profileRes) => {
                     if (!mounted) return;
                     setUserState(profileRes as User);
@@ -374,11 +412,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const register = async (formData: Record<string, string>) => {
+    const register = async (formData: Record<string, string>): Promise<RegisterResult> => {
         if (LOCAL_AUTH_MODE) {
             const result = await localRegister(formData);
             setUserState(((await fetchLocalProfile()) ?? result.user) as unknown as User);
-            return;
+            return { needsEmailConfirmation: false };
         }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Authentication is not configured.');
@@ -406,19 +444,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) throw new Error(error.message || 'Registration failed');
-        if (data.session?.user) {
-            try {
-                const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
-                setUserState(profileRes as User);
-            } catch (profileError: unknown) {
-                const sessionEnded = getSessionEndingMessage(profileError);
-                if (sessionEnded) {
-                    setUserState(null);
-                    throw new Error(sessionEnded);
-                }
-                setUserState(mapSupabaseUser(data.session.user));
-            }
+        if (!data.session?.user) {
+            // Supabase "Confirm email" is on: no session until the link in
+            // the confirmation email is opened.
+            return { needsEmailConfirmation: true };
         }
+        try {
+            const profileRes = await fetchBackendProfileWithRefresh(data.session.access_token);
+            setUserState(profileRes as User);
+        } catch (profileError: unknown) {
+            const sessionEnded = getSessionEndingMessage(profileError);
+            if (sessionEnded) {
+                setUserState(null);
+                throw new Error(sessionEnded);
+            }
+            setUserState(mapSupabaseUser(data.session.user));
+        }
+        return { needsEmailConfirmation: false };
     };
 
     const magicLinkLogin = async (email: string) => {
@@ -553,7 +595,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-            const profileRes = await fetchBackendProfileWithRefresh(accessToken);
+            // Explicit refresh (e.g. after a payment): never reuse a recent fetch.
+            const profileRes = await fetchBackendProfileWithRefresh(accessToken, true);
             setUserState(profileRes as User);
         } catch (error: unknown) {
             // Clear the user only when the session is definitively over.

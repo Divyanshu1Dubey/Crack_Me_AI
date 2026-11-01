@@ -64,8 +64,40 @@ class SystemActionScopeTests(TestCase):
         r = self.client.post('/api/auth/admin/system/clear-analytics/', {'scope': 'user', 'user_id': self.student.id}, format='json')
         self.assertEqual(r.status_code, 200)
         self.assertEqual(DailyActivity.objects.count(), 0)
-        self.assertEqual(self.client.post('/api/auth/admin/system/rerun-evaluation/', {'scope': 'all'}, format='json').status_code, 200)
-        self.assertEqual(self.client.post('/api/auth/admin/system/reset-attempts/', {'scope': 'ALL'}, format='json').status_code, 200)
+        confirm = {'confirm': 'RESET ALL'}
+        self.assertEqual(self.client.post('/api/auth/admin/system/rerun-evaluation/', {'scope': 'all', **confirm}, format='json').status_code, 200)
+        self.assertEqual(self.client.post('/api/auth/admin/system/reset-attempts/', {'scope': 'ALL', **confirm}, format='json').status_code, 200)
+
+    def test_platform_wide_scope_needs_the_confirmation_phrase(self):
+        # ADM-01: scope=all rewrites every user's data; it must carry the
+        # same phrase the admin types in the UI.
+        from analytics.models import DailyActivity
+        for path in ('reset-attempts', 'clear-analytics', 'rerun-evaluation'):
+            for extra in ({}, {'confirm': ''}, {'confirm': 'reset all'}, {'confirm': ['RESET ALL']}):
+                r = self.client.post(f'/api/auth/admin/system/{path}/', {'scope': 'all', **extra}, format='json')
+                self.assertEqual(r.status_code, 400, (path, extra))
+                self.assertEqual(r.data['code'], 'confirmation_required')
+        self.assertEqual(DailyActivity.objects.count(), 1)
+        r = self.client.post('/api/auth/admin/system/clear-analytics/', {'scope': 'all', 'confirm': 'RESET ALL'}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(DailyActivity.objects.count(), 0)
+
+    def test_clear_analytics_and_progress_reset_drop_the_xp_ledger(self):
+        # AN-15: the dated XP ledger (weekly / monthly leaderboards) is
+        # cleared together with the XP totals.
+        from analytics.models import XPEvent
+        other = User.objects.create_user(username='s2', email='s2@local.test', password='x-Long-passw0rd')
+        XPEvent.objects.create(user=self.student, points=40)
+        XPEvent.objects.create(user=other, points=15)
+        r = self.client.post('/api/auth/admin/system/clear-analytics/', {'scope': 'user', 'user_id': self.student.id}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['results']['xp_events_deleted'], 1)
+        self.assertEqual(list(XPEvent.objects.values_list('user_id', flat=True)), [other.id])
+
+        r = self.client.post(f'/api/auth/admin/users/{other.id}/reset-progress/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['results']['xp_events_deleted'], 1)
+        self.assertFalse(XPEvent.objects.exists())
 
 
 class AdminTokenListTests(TestCase):

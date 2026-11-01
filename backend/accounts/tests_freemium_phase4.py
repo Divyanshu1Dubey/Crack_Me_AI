@@ -486,36 +486,32 @@ class AIQuotaPayloadTests(TestCase):
         ExamTrack.objects.get_or_create(code='cms', defaults={'name': 'CMS'})
         Subject.objects.get_or_create(code='med', defaults={'name': 'Medicine'})
 
-    # No real LLM calls from the test suite: without this the tutor requests
-    # below reached the AI providers with whatever keys backend/.env holds.
-    @mock.patch.dict('os.environ', {'AI_OFFLINE_MODE': '1'})
-    def test_402_payload_has_required_keys(self):
+    # No real LLM calls from the test suite: the AI service is replaced by a
+    # stub that answers, so each delivered answer uses one free slot (failed
+    # calls give their slot back, which made the old "provider down" branch
+    # of this test pass without ever reaching the 402).
+    @mock.patch.dict('os.environ', {'AI_OFFLINE_MODE': ''})
+    @mock.patch('ai_engine.views.AIService')
+    def test_402_payload_has_required_keys(self, service_cls):
         from rest_framework.test import APIClient
+        service_cls.return_value.ask_tutor.return_value = (
+            'Beta blockers reduce mortality after a myocardial infarction.'
+        )
         u = _make_user('payload-u')
         c = APIClient()
         c.force_authenticate(user=u)
-        r = c.post('/api/ai/tutor/', {'question': 'What is X?'}, format='json')
-        # Burn the free quota.
-        for _ in range(2):
-            c.post('/api/ai/tutor/', {'question': 'burn'}, format='json')
+        # Use the free quota (2/day).
+        for question in ('What is X?', 'And Y?'):
+            r = c.post('/api/ai/tutor/', {'question': question}, format='json')
+            self.assertEqual(r.status_code, 200, r.data)
         r = c.post('/api/ai/tutor/', {'question': 'over cap'}, format='json')
-        if r.status_code == 402:
-            for key in ('code', 'feature', 'message', 'remaining', 'cap'):
-                self.assertIn(key, r.data)
-            self.assertEqual(r.data['code'], 'upgrade_required')
-            self.assertEqual(r.data['feature'], 'AI Tutor')
-            self.assertEqual(r.data['remaining'], 0)
-        else:
-            # If AI service is unavailable in test env, the 402 path
-            # may have been short-circuited — but the cap check itself
-            # runs before the AI call. Verify via direct helper. (A failed
-            # AI call now gives its slot back -- release_ai_tutor_message --
-            # so burn whatever is left of the cap first.)
-            from ai_engine.models_usage import check_and_consume, get_today_usage
-            for _ in range(max(0, 2 - get_today_usage(u))):
-                check_and_consume(u, cap=2)
-            allowed, _ = check_and_consume(u, cap=2)
-            self.assertFalse(allowed)
+        self.assertEqual(r.status_code, 402, r.data)
+        for key in ('code', 'feature', 'message', 'remaining', 'cap'):
+            self.assertIn(key, r.data)
+        self.assertEqual(r.data['code'], 'upgrade_required')
+        self.assertEqual(r.data['feature'], 'AI Tutor')
+        self.assertEqual(r.data['remaining'], 0)
+        self.assertEqual(service_cls.return_value.ask_tutor.call_count, 2)
 
 
 class TokenConfigDynamicCapTests(TestCase):

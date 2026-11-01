@@ -216,6 +216,9 @@ class SuperuserMintingTests(_SupabaseAuthTestCase):
             role='admin', is_superuser=True, is_staff=True,
         )
         target = User.objects.create_user(username='promo', email='promo@example.com', password='x-Long-passw0rd')
+        # A student signs in (linking the row to their Supabase identity)
+        # before an admin promotes them in the app.
+        self.assertEqual(self.bearer('tok-promo', _identity('promo@example.com')).get('/api/auth/profile/').status_code, 200)
         client = APIClient()
         client.force_authenticate(boss)
         r = client.patch(f'/api/auth/admin/users/{target.id}/role/', {'role': 'admin'}, format='json')
@@ -340,6 +343,7 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
         self.assertFalse(UserDevice.objects.filter(user=self.user).exists())
 
     def test_admins_are_exempt(self):
-        User.objects.filter(pk=self.user.pk).update(role='admin')
+        # A linked admin row (unlinked admin rows are not linked by email).
+        User.objects.filter(pk=self.user.pk).update(role='admin', supabase_uid=self.payload['id'])
         for fp in (DEVICE_A, DEVICE_B, DEVICE_C):
             self.assertEqual(self.client_for(fp).get('/api/auth/tokens/').status_code, 200)

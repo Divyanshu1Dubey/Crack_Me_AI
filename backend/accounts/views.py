@@ -10,7 +10,7 @@ import logging
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
 from django.utils import timezone
@@ -165,6 +165,20 @@ def _issue_scholarship_challenge(user_id, question_ids, attempt_number):
     )
 
 
+class _ScholarshipStartThrottle(UserRateThrottle):
+    """Each start shows five scholarship questions: a few per hour is plenty.
+
+    The rate is set here (not in settings) so this scope never depends on a
+    DEFAULT_THROTTLE_RATES entry.
+    """
+    scope = 'scholarship_start'
+    rate = '10/hour'
+
+
+def _scholarship_set_cache_key(user_id, attempt_number):
+    return f'scholarship_challenge_set:{user_id}:{attempt_number}'
+
+
 class ScholarshipStartView(APIView):
     """Start a scholarship attempt: the SERVER picks the five questions.
 
@@ -175,8 +189,13 @@ class ScholarshipStartView(APIView):
     the current attempt number, so /verify-scholarship/ only scores this
     exact set, once. (The client used to pick any five eligible questions
     itself, e.g. ones whose answers it had already looked up.)
+
+    Starting again during the same attempt returns the same five questions
+    for an hour (best effort, via the cache), and starts are rate limited,
+    so a student cannot re-roll until a set they already know comes up.
     """
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [_ScholarshipStartThrottle]
 
     def post(self, request):
         import random
@@ -199,7 +218,16 @@ class ScholarshipStartView(APIView):
             # The subscription page shows its "no scholarship questions" state.
             return Response({'questions': [], 'challenge_token': None, 'expires_in': 0})
 
-        chosen = random.SystemRandom().sample(eligible_ids, SCHOLARSHIP_QUESTION_COUNT)
+        set_key = _scholarship_set_cache_key(user.pk, attempts)
+        chosen = cache.get(set_key)
+        eligible = set(eligible_ids)
+        if (
+            not isinstance(chosen, list)
+            or len(chosen) != SCHOLARSHIP_QUESTION_COUNT
+            or not eligible.issuperset(chosen)
+        ):
+            chosen = random.SystemRandom().sample(eligible_ids, SCHOLARSHIP_QUESTION_COUNT)
+            cache.set(set_key, chosen, SCHOLARSHIP_CHALLENGE_MAX_AGE)
         rows = {
             q['id']: q for q in Question.objects.filter(id__in=chosen).values(
                 'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
@@ -480,11 +508,6 @@ class SubscribeVerifyView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if existing_attempt is not None and existing_attempt.status == 'successful':
-            # Already verified (ownership was checked above) — report the
-            # real subscription state without re-processing.
-            return _already_processed_response(request.user, existing_attempt)
-
         key_id = os.getenv('RAZORPAY_KEY_ID', '') or os.getenv('razorpayliveapi', '')
         key_secret = os.getenv('RAZORPAY_KEY_SECRET', '') or os.getenv('razorpaylivekeysecret', '')
         if not key_id or not key_secret:
@@ -493,6 +516,10 @@ class SubscribeVerifyView(APIView):
         from .payments_mock import get_razorpay_client
         client = get_razorpay_client(key_id, key_secret)
 
+        # The signature is checked for EVERY call, including replays of an
+        # order that is already 'successful': replays may activate a stranded
+        # order (_already_processed_response), and an order id alone (any
+        # payment id / signature string) must never do that.
         try:
             client.utility.verify_payment_signature({
                 'razorpay_order_id': order_id,
@@ -509,6 +536,11 @@ class SubscribeVerifyView(APIView):
                 )
             logger.warning('SubscribeVerify: signature verification failed for order %s: %s', order_id, e)
             return Response({'error': 'Payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if existing_attempt is not None and existing_attempt.status == 'successful':
+            # Already verified (ownership was checked above) — report the
+            # real subscription state without re-processing.
+            return _already_processed_response(request.user, existing_attempt)
 
         # ── Activate subscription ──
         user = request.user
@@ -601,15 +633,27 @@ def _claim_and_activate(attempt, payment_id, *, user, source):
         return _record_razorpay_purchase(user, attempt, payment_id, source=source)
 
 
+# Plans whose orders predate the Subscription model (the old lifetime early-bird
+# pass) have no Subscription rows by design: never "recover" those.
+_NOT_RECOVERABLE_PLANS = frozenset({'', 'legacy'})
+
+
 def _heal_stranded_payment(attempt):
     """Activate an order that is marked successful but has no subscription.
 
     Before the claim and the activation shared a transaction, a failure in
     between left exactly this state and nothing ever recovered it. Locks the
     attempt so concurrent callers activate it at most once.
+
+    Callers must have authenticated the payment first: SubscribeVerifyView
+    after the Razorpay signature check, RazorpayWebhookView after the webhook
+    HMAC. Legacy (pre-Subscription) orders are skipped -- an admin may have
+    revoked those users since, and a replay must not restore a lifetime plan.
     """
     from .models import PaymentAttempt
 
+    if (attempt.plan or '') in _NOT_RECOVERABLE_PLANS:
+        return None
     with transaction.atomic():
         locked = (
             PaymentAttempt.objects.select_for_update()
@@ -617,7 +661,7 @@ def _heal_stranded_payment(attempt):
             .filter(pk=attempt.pk, status='successful')
             .first()
         )
-        if locked is None:
+        if locked is None or (locked.plan or '') in _NOT_RECOVERABLE_PLANS:
             return None
         if Subscription.objects.filter(user_id=locked.user_id, razorpay_order_id=locked.razorpay_order_id).exists():
             return None
@@ -629,20 +673,30 @@ def _heal_stranded_payment(attempt):
 
 
 def _already_processed_response(user, attempt):
-    """Response for an order that was already claimed: the REAL subscription state."""
+    """Response for an order that was already claimed: the REAL subscription state.
+
+    Only called for an authenticated payment (see _heal_stranded_payment).
+    """
     try:
         _heal_stranded_payment(attempt)
     except Exception:
         logger.exception('Could not recover stranded payment order %s', attempt.razorpay_order_id)
     sub = Subscription.get_active_subscription(user)
     if sub is None:
-        logger.error(
-            'Payment order %s (user_id=%s) is marked successful but the user has no active subscription',
-            attempt.razorpay_order_id, user.id,
-        )
+        # The plan this order bought has run out or was revoked: an ordinary
+        # answer, not an incident. Only an order with no subscription record
+        # at all (and not recoverable above) needs a human.
+        if not Subscription.objects.filter(user_id=user.id, razorpay_order_id=attempt.razorpay_order_id).exists():
+            logger.error(
+                'Payment order %s (user_id=%s) is marked successful but has no subscription record',
+                attempt.razorpay_order_id, user.id,
+            )
+            message = 'This payment was already processed, but no active subscription was found. Please contact support with your payment ID.'
+        else:
+            message = 'This payment was already processed. The plan it activated is no longer active.'
         return Response(
             {
-                'error': 'This payment was already processed, but no active subscription was found. Please contact support with your payment ID.',
+                'error': message,
                 'is_subscribed': False,
                 'subscription': None,
             },
@@ -1505,7 +1559,7 @@ class AdminUserResetProgressView(APIView):
 
         from questions.models import Discussion, Flashcard, Note, QuestionBookmark
         from tests_engine.models import QuestionResponse, TestAttempt
-        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance
+        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance, XPEvent
 
         with transaction.atomic():
             attempt_subquery = TestAttempt.objects.filter(user=target).values('id')
@@ -1519,6 +1573,9 @@ class AdminUserResetProgressView(APIView):
             topic_rows_deleted, _ = UserTopicPerformance.objects.filter(user=target).delete()
             daily_rows_deleted, _ = DailyActivity.objects.filter(user=target).delete()
             badges_deleted, _ = UserBadge.objects.filter(user=target).delete()
+            # The dated XP ledger behind weekly / monthly leaderboards goes
+            # with the all-time total reset below.
+            xp_events_deleted, _ = XPEvent.objects.filter(user=target).delete()
 
             StudyStreak.objects.filter(user=target).update(
                 current_streak=0,
@@ -1538,6 +1595,7 @@ class AdminUserResetProgressView(APIView):
             'topic_rows_deleted': topic_rows_deleted,
             'daily_rows_deleted': daily_rows_deleted,
             'badges_deleted': badges_deleted,
+            'xp_events_deleted': xp_events_deleted,
         }
         transaction.on_commit(
             lambda: create_admin_audit_log(
@@ -1552,11 +1610,19 @@ class AdminUserResetProgressView(APIView):
         return Response({'message': 'User progress reset completed', 'user_id': target.id, 'results': payload})
 
 
+# Phrase a platform-wide (scope=all) system action must carry as `confirm`;
+# the admin UI asks the admin to type the same phrase
+# (frontend/src/app/admin/_lib/adminHelpers.ts PLATFORM_WIDE_CONFIRM_PHRASE).
+PLATFORM_WIDE_CONFIRM_PHRASE = 'RESET ALL'
+
+
 def _system_action_scope(request):
     """Return (scope, None) for an explicit 'all' / 'user' scope, else (None, 400 response).
 
     A missing or misspelled scope used to default to 'all', so a call like
-    {"user_id": 5} wiped every user's attempts or analytics.
+    {"user_id": 5} wiped every user's attempts or analytics. scope=all also
+    needs confirm='RESET ALL', so no single mistaken field rewrites every
+    user's data.
     """
     raw_scope = request.data.get('scope')
     scope = raw_scope.strip().lower() if isinstance(raw_scope, str) else ''
@@ -1565,6 +1631,16 @@ def _system_action_scope(request):
             {'error': "scope is required and must be 'all' or 'user'"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if scope == 'all':
+        confirm = request.data.get('confirm')
+        if not isinstance(confirm, str) or confirm.strip() != PLATFORM_WIDE_CONFIRM_PHRASE:
+            return None, Response(
+                {
+                    'error': f"Platform-wide actions need confirm='{PLATFORM_WIDE_CONFIRM_PHRASE}'.",
+                    'code': 'confirmation_required',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     return scope, None
 
 
@@ -1621,7 +1697,7 @@ class AdminSystemClearAnalyticsView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
-        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance
+        from analytics.models import DailyActivity, StudyStreak, UserBadge, UserTopicPerformance, XPEvent
 
         scope, error_response = _system_action_scope(request)
         if error_response is not None:
@@ -1633,6 +1709,7 @@ class AdminSystemClearAnalyticsView(APIView):
         daily_qs = DailyActivity.objects.all()
         badge_qs = UserBadge.objects.all()
         streak_qs = StudyStreak.objects.all()
+        xp_qs = XPEvent.objects.all()
 
         if scope == 'user':
             if not user_id:
@@ -1645,11 +1722,14 @@ class AdminSystemClearAnalyticsView(APIView):
             daily_qs = daily_qs.filter(user_id=parsed_user_id)
             badge_qs = badge_qs.filter(user_id=parsed_user_id)
             streak_qs = streak_qs.filter(user_id=parsed_user_id)
+            xp_qs = xp_qs.filter(user_id=parsed_user_id)
 
         with transaction.atomic():
             topic_rows_deleted, _ = topic_qs.delete()
             daily_rows_deleted, _ = daily_qs.delete()
             badge_rows_deleted, _ = badge_qs.delete()
+            # XP totals are reset below; the dated ledger goes with them.
+            xp_events_deleted, _ = xp_qs.delete()
             streak_rows_reset = streak_qs.update(
                 current_streak=0,
                 longest_streak=0,
@@ -1664,6 +1744,7 @@ class AdminSystemClearAnalyticsView(APIView):
             'topic_rows_deleted': topic_rows_deleted,
             'daily_rows_deleted': daily_rows_deleted,
             'badge_rows_deleted': badge_rows_deleted,
+            'xp_events_deleted': xp_events_deleted,
             'streak_rows_reset': streak_rows_reset,
         }
         transaction.on_commit(

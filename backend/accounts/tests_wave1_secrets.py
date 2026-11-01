@@ -220,8 +220,11 @@ class CleanupSupabaseAdminsTests(_CleanEnvMixin, SimpleTestCase):
         self.addCleanup(patcher.stop)
 
     def _list_users(self, page=None, per_page=None):
-        if page is None:  # unpaginated call: Supabase returns the first page only
-            return self.users[:50]
+        if page is None:
+            # Unpaginated call: Supabase returns only its first page. Use the
+            # command's (possibly patched) PAGE_SIZE so a test with more users
+            # than one page fails if the command stops paginating.
+            return self.users[:importlib.import_module(self.module_name).PAGE_SIZE]
         start = (page - 1) * per_page
         return self.users[start:start + per_page]
 
@@ -257,6 +260,8 @@ class CleanupSupabaseAdminsTests(_CleanEnvMixin, SimpleTestCase):
         with mock.patch(f"{self.module_name}.PAGE_SIZE", 2):
             self._run("--confirm")
         self.assertEqual(self._deleted_ids(), ["u-late-admin"])
+        # The admin sits on page 2: the command must have asked for it.
+        self.assertIn(mock.call(page=2, per_page=2), self.supabase.auth.admin.list_users.call_args_list)
 
 
 class DownloadStorageScriptTests(_CleanEnvMixin, SimpleTestCase):
