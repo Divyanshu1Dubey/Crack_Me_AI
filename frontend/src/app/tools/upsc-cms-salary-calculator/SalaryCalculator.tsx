@@ -2,6 +2,20 @@
 
 import { useState } from 'react';
 
+// Entry basic pay per 7th CPC pay level (matches the /cms/salary table).
+const PAY_LEVELS: Record<string, { label: string; entryBasic: number }> = {
+    '10': { label: 'Level 10 (Medical Officer)', entryBasic: 56100 },
+    '11': { label: 'Level 11 (Senior Medical Officer)', entryBasic: 67700 },
+    '12': { label: 'Level 12 (ADMO / Specialist)', entryBasic: 78800 },
+    '13': { label: 'Level 13 (Chief Medical Officer)', entryBasic: 123100 },
+};
+
+/** 7th CPC: one 3% increment per year of service, rounded to the nearest 100. */
+export function basicAfterYears(startingBasic: number, years: number): number {
+    const y = Math.max(0, Math.floor(years));
+    return Math.round((startingBasic * Math.pow(1.03, y)) / 100) * 100;
+}
+
 export default function SalaryCalculator() {
     const [payLevel, setPayLevel] = useState('10');
     const [basicPay, setBasicPay] = useState('56100');
@@ -11,8 +25,8 @@ export default function SalaryCalculator() {
     const [result, setResult] = useState<{ monthly: number; annual: number; components: Record<string, number> } | null>(null);
 
     const calculate = () => {
-        const basic = Number(basicPay);
-        const yr = Number(years);
+        // Years of service add annual 3% increments to the starting basic pay.
+        const basic = basicAfterYears(Number(basicPay) || 0, Number(years) || 0);
         const npa = allowNPA ? basic * 0.20 : 0;
         const da = basic * 0.46;
         const hraRates: Record<string, number> = { metro: 0.24, tier2: 0.16, tier3: 0.08 };
@@ -35,28 +49,37 @@ export default function SalaryCalculator() {
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Pay Level (7th CPC)</label>
-                    <select value={payLevel} onChange={(e) => setPayLevel(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
-                        <option value="10">Level 10 (Medical Officer)</option>
-                        <option value="11">Level 11 (Senior Medical Officer)</option>
-                        <option value="12">Level 12 (Chief Medical Officer)</option>
+                    <label htmlFor="salary-pay-level-7th-cpc" className="block text-sm font-semibold mb-1">Pay Level (7th CPC)</label>
+                    <select
+                        id="salary-pay-level-7th-cpc"
+                        value={payLevel}
+                        onChange={(e) => {
+                            // Picking a level fills in that level's entry basic pay.
+                            setPayLevel(e.target.value);
+                            setBasicPay(String(PAY_LEVELS[e.target.value]?.entryBasic ?? 56100));
+                        }}
+                        className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
+                    >
+                        {Object.entries(PAY_LEVELS).map(([value, level]) => (
+                            <option key={value} value={value}>{level.label}</option>
+                        ))}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Basic Pay (₹)</label>
-                    <input type="number" value={basicPay} onChange={(e) => setBasicPay(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="salary-basic-pay" className="block text-sm font-semibold mb-1">Starting Basic Pay (₹)</label>
+                    <input id="salary-basic-pay" type="number" value={basicPay} onChange={(e) => setBasicPay(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">City Type (HRA)</label>
-                    <select value={cityClass} onChange={(e) => setCityClass(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
+                    <label htmlFor="salary-city-type-hra" className="block text-sm font-semibold mb-1">City Type (HRA)</label>
+                    <select id="salary-city-type-hra" value={cityClass} onChange={(e) => setCityClass(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
                         <option value="metro">Metro (X cities) — 24% HRA</option>
                         <option value="tier2">Tier-2 (Y cities) — 16% HRA</option>
                         <option value="tier3">Tier-3 (Z cities) — 8% HRA</option>
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Years of Service</label>
-                    <input type="number" value={years} onChange={(e) => setYears(e.target.value)} min="0" max="35" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="salary-years-of-service" className="block text-sm font-semibold mb-1">Years of Service</label>
+                    <input id="salary-years-of-service" type="number" value={years} onChange={(e) => setYears(e.target.value)} min="0" max="35" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                 </div>
                 <div className="flex items-center gap-2">
                     <input type="checkbox" id="npa" checked={allowNPA} onChange={(e) => setAllowNPA(e.target.checked)} className="h-4 w-4 rounded" />
@@ -88,7 +111,7 @@ export default function SalaryCalculator() {
                             </div>
                         ))}
                     </div>
-                    <p className="mt-3 text-xs text-muted-foreground">* Approximate calculation based on 7th CPC. Actual in-hand may vary based on deductions (NPS, IT, etc.).</p>
+                    <p className="mt-3 text-xs text-muted-foreground">* Approximate calculation based on 7th CPC (basic pay after {Number(years) || 0} year(s) of 3% increments, 46% DA). Actual in-hand may vary based on deductions (NPS, IT, etc.).</p>
                 </div>
             )}
         </div>

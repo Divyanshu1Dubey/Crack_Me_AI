@@ -8,7 +8,7 @@ const title = 'UPSC CMS College Predictor 2026 — Rank-wise Hospital & Departme
 const description = 'Predict likely government hospitals and departments for UPSC CMS 2026 based on your rank and category. Free interactive college predictor for Medical Officers.';
 const slug = 'college-predictor';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

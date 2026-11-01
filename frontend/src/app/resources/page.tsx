@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { resourcesAPI } from '@/lib/api';
+import { CMS_MARKING_LABEL, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
 import {
     FileText, Download, BookOpen, GraduationCap, HelpCircle,
     Clock, Target, DollarSign, Users, ChevronDown, ChevronUp,
@@ -33,15 +34,24 @@ export default function ResourcesPage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'documents' | 'guide' | 'faq' | 'books'>('guide');
     const [openFaq, setOpenFaq] = useState<number | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
 
-    useEffect(() => {
+    const loadResources = () => {
+        setLoading(true);
+        setLoadFailed(false);
+        let failed = false;
         Promise.all([
-            resourcesAPI.getCatalog().catch(() => ({ data: {} })),
-            resourcesAPI.getExamGuide().catch(() => ({ data: null })),
+            resourcesAPI.getCatalog().catch(() => { failed = true; return { data: {} }; }),
+            resourcesAPI.getExamGuide().catch(() => { failed = true; return { data: null }; }),
         ]).then(([catRes, guideRes]) => {
             setCatalog(catRes.data || {});
             setGuide(guideRes.data);
+            setLoadFailed(failed);
         }).finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        loadResources();
     }, []);
 
     const downloadResource = async (id: string) => {
@@ -85,6 +95,7 @@ export default function ResourcesPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container">
+                <h1 className="text-2xl font-bold mb-2">UPSC CMS Resources</h1>
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                     Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material
                 </p>
@@ -109,6 +120,45 @@ export default function ResourcesPage() {
                     <div className="glass-card p-8 text-center"><div className="animate-pulse gradient-text">Loading resources...</div></div>
                 ) : (
                     <>
+                        {loadFailed && (
+                            <div role="status" className="glass-card p-4 mb-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                    Some resources could not be loaded right now (the server may be waking up).
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={loadResources}
+                                    className="px-4 py-2 rounded-xl text-sm font-medium"
+                                    style={{ background: 'var(--accent-primary)', color: '#fff' }}
+                                >
+                                    Try again
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Static exam-pattern summary when the guide API is unavailable */}
+                        {activeTab === 'guide' && !guide && (
+                            <div className="glass-card p-6 space-y-3">
+                                <h2 className="text-lg font-bold flex items-center gap-2">
+                                    <Stethoscope className="w-5 h-5" style={{ color: '#06b6d4' }} />
+                                    {UPSC_CMS_PATTERN.fullName}
+                                </h2>
+                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                                    {UPSC_CMS_PATTERN.mode} · {UPSC_CMS_PATTERN.totalQuestions} questions in two papers ·{' '}
+                                    {UPSC_CMS_PATTERN.writtenMarks} written marks + {UPSC_CMS_PATTERN.personalityTestMarks}-mark Personality Test ·{' '}
+                                    {CMS_MARKING_LABEL} per question.
+                                </p>
+                                <ul className="text-sm space-y-1">
+                                    {UPSC_CMS_PATTERN.papers.map((paper) => (
+                                        <li key={paper.name}>
+                                            <strong>{paper.name}</strong> ({paper.questions} Qs, {paper.marks} marks, {paper.durationMinutes} min):{' '}
+                                            {paper.subjects.map((subject) => `${subject.name} ${subject.questions}`).join(', ')}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         {/* ===== CMS EXAM GUIDE ===== */}
                         {activeTab === 'guide' && guide && (
                             <div className="space-y-6">
@@ -166,11 +216,11 @@ export default function ResourcesPage() {
                                     </h3>
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                                            <div className="text-lg font-bold" style={{ color: '#10b981' }}>+2.08</div>
+                                            <div className="text-lg font-bold" style={{ color: '#10b981' }}>{CMS_MARKING_LABEL.split(' / ')[0]}</div>
                                             <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Correct Answer</div>
                                         </div>
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                            <div className="text-lg font-bold" style={{ color: '#ef4444' }}>−0.69</div>
+                                            <div className="text-lg font-bold" style={{ color: '#ef4444' }}>{CMS_MARKING_LABEL.split(' / ')[1]}</div>
                                             <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Wrong Answer (1/3 negative)</div>
                                         </div>
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(139, 149, 168, 0.08)', border: '1px solid rgba(139, 149, 168, 0.2)' }}>

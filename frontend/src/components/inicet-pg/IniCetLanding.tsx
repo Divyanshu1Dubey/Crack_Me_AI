@@ -156,7 +156,7 @@ export default function IniCetLanding() {
   }, [stats]);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
         <Breadcrumbs items={[{ name: 'INI-CET', path: '/inicet' }]} />
       </div>
@@ -585,7 +585,7 @@ export default function IniCetLanding() {
           </span>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
 

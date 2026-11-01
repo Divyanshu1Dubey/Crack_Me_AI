@@ -5,7 +5,7 @@ import { getAllCmsSubjects } from '@/lib/subjectHubData';
 import { getAllCmsCutoffYears } from '@/lib/cutoffData';
 import { getAllCmsBookSlugs } from '@/lib/bookDeepDiveData';
 import { getAllCmsStrategySlugs } from '@/lib/strategyData';
-import { getAllPosts, getAllCategories, getAllTags } from '@/lib/blog';
+import { MIN_INDEXABLE_TAG_POSTS, getAllPosts, getAllCategories, getAllTags } from '@/lib/blog';
 
 export default function sitemap(): MetadataRoute.Sitemap {
     const now = new Date();
@@ -63,10 +63,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: r.priority,
     }));
 
-    // Index hubs for the new programmatic sections
+    // Index hubs for the new programmatic sections. (/cms/cutoff is left
+    // out: it redirects to the latest cutoff year, which is listed above.)
     const hubRoutes = [
         { url: `${siteUrl}/cms/subject`, priority: 0.8 },
-        { url: `${siteUrl}/cms/cutoff`, priority: 0.8 },
         { url: `${siteUrl}/cms/books`, priority: 0.8 },
         { url: `${siteUrl}/cms/strategy`, priority: 0.8 },
     ].map((r) => ({
@@ -102,12 +102,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: 'weekly' as const,
             priority: 0.7,
         })),
-        ...getAllTags().map((t) => ({
-            url: `${siteUrl}/blog/tag/${t.slug}`,
-            lastModified: now,
-            changeFrequency: 'weekly' as const,
-            priority: 0.6,
-        })),
+        // Thin tag archives (fewer than MIN_INDEXABLE_TAG_POSTS posts) are
+        // noindex, so they are not submitted.
+        ...getAllTags()
+            .filter((t) => t.count >= MIN_INDEXABLE_TAG_POSTS)
+            .map((t) => ({
+                url: `${siteUrl}/blog/tag/${t.slug}`,
+                lastModified: now,
+                changeFrequency: 'weekly' as const,
+                priority: 0.6,
+            })),
         // Author archive pages — crawlable author profile nodes
         ...Array.from(
             new Set(
@@ -125,22 +129,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
     //   1.0  landing (root) — never overwrite
     //   0.95 exam landing hubs (high commercial + informational intent)
     //   0.9  guides + high-intent preparatory pages
-    //   0.85 jobs + gov-doctor-jobs + company
+    //   0.85 gov-doctor-jobs + company
     //   0.7  contact
     //   0.6-0.5 trust/legal
     //
     // changeFrequency is honest about what actually changes.
+    //
+    // Only public, indexable pages belong here. Login-only routes (/jobs,
+    // /practice, /subscription, the question bank, dashboards ...) are
+    // disallowed in robots.ts and must not be submitted.
     const publicRoutes = [
         // Top-level
         { path: '/', priority: 1.0, changeFrequency: 'weekly' as const },
         { path: '/register', priority: 0.9, changeFrequency: 'monthly' as const },
-        { path: '/subscription', priority: 0.85, changeFrequency: 'weekly' as const },
         { path: '/resources', priority: 0.8, changeFrequency: 'monthly' as const },
 
         // Company
         { path: '/about', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/contact', priority: 0.7, changeFrequency: 'monthly' as const },
-        { path: '/jobs', priority: 0.85, changeFrequency: 'daily' as const },
 
         // Exam landing pages — primary SEO targets
         { path: '/cms', priority: 0.95, changeFrequency: 'weekly' as const },
@@ -150,9 +156,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/usmle', priority: 0.9, changeFrequency: 'weekly' as const },
         { path: '/medical-officer', priority: 0.9, changeFrequency: 'weekly' as const },
         { path: '/government-doctor-jobs', priority: 0.85, changeFrequency: 'weekly' as const },
-
-        // /exams microsites (already linked from landing)
-        { path: '/exams', priority: 0.8, changeFrequency: 'weekly' as const },
 
         // Guides hub + canonical guides
         { path: '/guides', priority: 0.9, changeFrequency: 'weekly' as const },
@@ -179,8 +182,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: '/cms/pyq', priority: 0.85, changeFrequency: 'weekly' as const },
         { path: '/cms/salary', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/cms/exam-pattern', priority: 0.85, changeFrequency: 'monthly' as const },
-        { path: '/practice', priority: 0.8, changeFrequency: 'weekly' as const },
-        { path: '/neet-pg/vs-upsc-cms', priority: 0.85, changeFrequency: 'monthly' as const },
+        // /neet-pg/vs-upsc-cms permanently redirects to /cms/vs-neet-pg
+        // (same comparison), which is listed with the comparison routes.
         { path: '/neet-pg/vs-ini-cet', priority: 0.85, changeFrequency: 'monthly' as const },
         { path: '/tools/upsc-cms-eligibility-checker', priority: 0.8, changeFrequency: 'monthly' as const },
         { path: '/tools/upsc-cms-salary-calculator', priority: 0.75, changeFrequency: 'monthly' as const },
@@ -204,7 +207,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: r.priority,
     }));
 
-    return [
+    const all = [
         ...staticEntries,
         ...yearRoutes,
         ...subjectRoutes,
@@ -215,4 +218,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
         ...hubRoutes,
         ...blogRoutes,
     ];
+
+    // Each URL once (first entry wins) — duplicates make the sitemap invalid
+    // in Search Console's eyes and split lastModified signals.
+    const seen = new Set<string>();
+    return all.filter((entry) => {
+        if (seen.has(entry.url)) return false;
+        seen.add(entry.url);
+        return true;
+    });
 }

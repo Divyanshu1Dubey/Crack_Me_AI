@@ -2,11 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { siteName, siteUrl } from '@/lib/seo';
 import { Mail, MapPin, MessageCircle, Phone, Github, Twitter, Linkedin } from 'lucide-react';
+import { jsonLdString } from '@/lib/metadata';
 
 /**
  * Site-wide Footer with rich internal linking for SEO. Renders on every
@@ -41,7 +41,7 @@ export default function Footer() {
             links: [
                 { label: 'UPSC CMS', href: '/cms' },
                 { label: 'NEET PG', href: '/neet-pg' },
-                { label: 'INI-CET', href: '/inicet' },
+                { label: 'INI-CET', href: '/ini-cet' },
                 { label: 'FMGE', href: '/fmge' },
                 { label: 'USMLE Step 1', href: '/usmle' },
                 { label: 'Medical Officer', href: '/medical-officer' },
@@ -121,8 +121,7 @@ export default function Footer() {
 
     return (
         <>
-            <Script id="footer-nav-schema" type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(navSchema) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(navSchema) }} />
 
             <footer className="border-t border-border bg-card/40 backdrop-blur-sm mt-16">
                 {/* Top: link grid */}
@@ -142,10 +141,10 @@ export default function Footer() {
                                 <span className="text-base font-black tracking-tight">{siteName}</span>
                             </Link>
                             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                                A free study desk for every MBBS graduate preparing for UPSC CMS, NEET PG,
-                                INI-CET, FMGE, USMLE or a Medical Officer post. Built by clinicians who
-                                sat these exams, shaped by 3,300+ previous-year questions, and used by
-                                candidates across India to study smarter — not longer.
+                                A study desk for every MBBS graduate preparing for UPSC CMS, NEET PG,
+                                INI-CET, FMGE, USMLE or a Medical Officer post — built around 2,000+
+                                UPSC CMS previous-year questions and a NEET PG bank, to help you study
+                                smarter, not longer.
                             </p>
 
                             {/* Contact strip — email + WhatsApp + location */}

@@ -5,6 +5,8 @@ import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI, questionsAPI } from '@/lib/api';
+import { PREMIUM_PLANS, SCHOLARSHIP_PRICE_INR, type PurchasablePlanId } from './plans';
+import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
 import {
     Crown, BookOpen, FileText, Clock,
     Sparkles, MessageSquare, ShieldCheck,
@@ -297,24 +299,22 @@ export default function SubscriptionPage() {
         }
     };
 
-    const generateAiTestAnalysis = (score: number, answers: Record<string, string>, testResultMsg: string) => {
-        setGeneratingAnalysis(true);
-        
-        // Simulate writing rich AI analysis report
-        setTimeout(() => {
-            const correctCount = score;
-            const incorrectCount = 5 - correctCount;
-            const points = (correctCount * 2.08) - (incorrectCount * 0.69);
-            const percentage = Math.round((correctCount / 5) * 100);
+    // Instant score breakdown (computed locally from the server's score with
+    // UPSC CMS-style marking). It used to fake an "AI analysis" with a 1.5 s
+    // setTimeout; nothing here calls an AI model, so it is labelled honestly.
+    const generateAiTestAnalysis = (score: number, _answers: Record<string, string>, testResultMsg: string) => {
+        const correctCount = score;
+        const incorrectCount = 5 - correctCount;
+        const points = (correctCount * CMS_MARKS_PER_QUESTION) - (incorrectCount * CMS_PENALTY_PER_WRONG);
+        const percentage = Math.round((correctCount / 5) * 100);
 
-            setAiAnalysis({
-                correctCount,
-                percentage,
-                points,
-                testResultMsg
-            });
-            setGeneratingAnalysis(false);
-        }, 1500);
+        setAiAnalysis({
+            correctCount,
+            percentage,
+            points,
+            testResultMsg
+        });
+        setGeneratingAnalysis(false);
     };
 
     const handleSubscribe = async (plan: string) => {
@@ -544,85 +544,81 @@ export default function SubscriptionPage() {
         return Math.round((curPerMonth - targetPerMonth) * 12);
     };
 
-    const plans = [
-        {
-            id: '1_month',
-            name: '1 Month Pass',
-            price: 129,
-            originalPrice: 499,
-            period: 'month',
+    const planCopy: Record<PurchasablePlanId, {
+        description: string;
+        features: string[];
+        badge: string | null;
+        cta: string;
+        scholarshipPromo: boolean;
+    }> = {
+        '1_month': {
             description: 'Essential premium features for short-term quick revision.',
             features: [
                 'Complete Year-wise & Subject-wise CMS/NEET QBank',
-                'Basic AI explanations (Daily limits apply)',
+                '100 AI credits added on purchase (plus your free daily tokens)',
                 'SM-2 Active Spaced Flashcards',
                 'Community updates & discussion boards',
             ],
             badge: null,
             cta: 'Unlock Monthly Access',
-            action: () => handleSubscribe('1_month'),
-            scholarshipPromo: true
+            scholarshipPromo: true,
         },
-        {
-            id: '3_months',
-            name: '3 Months Pass',
-            price: 449,
-            originalPrice: 1499,
-            period: '3 months',
+        '3_months': {
             description: 'Highly recommended for final month revisions & mock prep.',
             features: [
                 'Everything in 1 Month Pass',
-                'Advanced AI explanations (300 monthly credits)',
+                '300 AI credits added on purchase (plus your free daily tokens)',
                 'Full mock simulator with negative marking',
                 'Access to standard textbook screenshots/mappings',
             ],
             badge: 'Popular',
             cta: 'Unlock 3 Months Access',
-            action: () => handleSubscribe('3_months'),
-            scholarshipPromo: false
+            scholarshipPromo: false,
         },
-        {
-            id: '1_year',
-            name: '1 Year Unlimited',
-            price: 1999,
-            originalPrice: 10000,
-            period: 'year',
+        '1_year': {
             description: 'Ultimate comprehensive bundle for NEET PG and UPSC CMS prep.',
             features: [
                 'Full Premium NEET PG QBank & CMS QBank',
-                'Demanded expert notes & topic summaries',
-                'Video lecture archives & doubt-solving board',
+                'Topic notes & summaries',
                 '100% UNLIMITED AI explanations (No tokens)',
+                'Discussion threads on every question',
                 'Personalized checklist roadmap & progress audit',
-                'Priority support & direct teacher consultations',
             ],
             badge: 'Best Value',
             cta: 'Claim Full VIP Pass',
-            action: () => handleSubscribe('1_year'),
-            scholarshipPromo: false
-        }
-    ];
+            scholarshipPromo: false,
+        },
+    };
+
+    const plans = PREMIUM_PLANS.map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        price: plan.priceInr,
+        period: plan.period,
+        ...planCopy[plan.id],
+        action: () => handleSubscribe(plan.id),
+    }));
 
     const premiumFeatures = [
         {
             icon: <Sparkles className="w-6 h-6 text-amber-500" />,
-            title: "Unlimited AI Tutor Usage",
-            desc: "Zero token limits. Ask unlimited medical questions. Access full clinical analyses, mnemonics, and study shortcuts instantly."
+            title: "AI Tutor",
+            desc: "AI credits on every plan and unlimited AI explanations on the 1-year plan. Clinical analyses, mnemonics and study shortcuts on demand."
         },
         {
             icon: <FileText className="w-6 h-6 text-cyan-400" />,
-            title: "Top-Teacher Curated Notes",
-            desc: "Access premium handwritten study material, cheat sheets, and subject summaries designed by top-ranked medical experts."
+            title: "Topic Notes & Summaries",
+            desc: "Subject and topic notes, cheat sheets and summaries to revise high-yield areas quickly."
         },
         {
             icon: <MessageSquare className="w-6 h-6 text-emerald-400" />,
-            title: "Direct Faculty Doubt Solving",
-            desc: "Get in touch with renowned instructors of UPSC CMS, State CMS, and NEET PG to resolve complex clinical doubts."
+            title: "Discussion Threads",
+            desc: "Discuss any question with other aspirants and compare reasoning on tricky clinical stems."
         },
         {
             icon: <BookOpen className="w-6 h-6 text-blue-400" />,
-            title: "All Textbooks & Reference Editions",
-            desc: "Unlock comprehensive libraries containing all standard medical textbooks and reference guides required for your prep."
+            title: "Textbook References",
+            desc: "Explanations linked to the standard textbook chapters and pages they draw on."
         },
         {
             icon: <Clock className="w-6 h-6 text-purple-400" />,
@@ -778,7 +774,7 @@ export default function SubscriptionPage() {
                                             : `⏰ Only ${subscriptionInfo.days_remaining} day${subscriptionInfo.days_remaining === 1 ? '' : 's'} left on your plan`}
                                     </p>
                                     <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-1">
-                                        Renew now to keep your unlimited AI tutor, mock tests, and study materials uninterrupted.
+                                        Renew now to keep your AI tutor credits, mock tests, and study materials uninterrupted.
                                     </p>
                                 </div>
                             </div>
@@ -886,10 +882,10 @@ export default function SubscriptionPage() {
                                     <Sparkles className="w-3.5 h-3.5" /> 100% Scholarship Discount Offer
                                 </span>
                                 <h3 className="text-xl font-extrabold text-foreground">
-                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹79
+                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹{SCHOLARSHIP_PRICE_INR}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+2.08</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-0.69</strong>) applies. Get free AI-powered test analysis. Score a perfect 5/5 to claim the ₹79/month scholarship price!
+                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Get an instant score breakdown. Score a perfect 5/5 to claim the ₹{SCHOLARSHIP_PRICE_INR}/month scholarship price!
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (
@@ -942,10 +938,7 @@ export default function SubscriptionPage() {
                                                 <span className="text-sm line-through text-muted-foreground">₹{plan.price}</span>
                                             </>
                                         ) : (
-                                            <>
-                                                <span className="text-4xl font-black">₹{plan.price}</span>
-                                                <span className="text-sm line-through text-muted-foreground">₹{plan.originalPrice}</span>
-                                            </>
+                                            <span className="text-4xl font-black">₹{plan.price.toLocaleString('en-IN')}</span>
                                         )}
                                         <span className={`text-xs ${isRecommended ? 'text-slate-300' : 'text-muted-foreground'}`}>/ {plan.period}</span>
                                     </div>
@@ -1057,14 +1050,14 @@ export default function SubscriptionPage() {
                         <div className="mt-12 p-6 rounded-4xl border border-emerald-500/20 bg-emerald-950/5 flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="text-left space-y-1">
                                 <h4 className="text-base font-bold text-foreground">Your Premium account is active!</h4>
-                                <p className="text-xs text-muted-foreground">Start using your unlimited features and materials right now.</p>
+                                <p className="text-xs text-muted-foreground">Start using your premium features and materials right now.</p>
                             </div>
                             <div className="flex flex-wrap gap-3">
                                 <Button asChild className="rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs py-2.5 px-5">
                                     <Link href="/questions">Go to Question Bank</Link>
                                 </Button>
                                 <Button asChild variant="outline" className="rounded-xl text-xs py-2.5 px-5">
-                                    <Link href="/ai-tutor">Open Unlimited AI Tutor</Link>
+                                    <Link href="/ai-tutor">Open AI Tutor</Link>
                                 </Button>
                             </div>
                         </div>
@@ -1141,7 +1134,7 @@ export default function SubscriptionPage() {
                                         <div className="space-y-2">
                                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Switch</p>
                                             {plans
-                                                .filter(p => p.id !== subscriptionInfo.plan && p.id !== 'scholarship_1_month')
+                                                .filter(p => p.id !== subscriptionInfo.plan)
                                                 .map(p => (
                                                     <button
                                                         key={p.id}
@@ -1241,13 +1234,13 @@ export default function SubscriptionPage() {
                                             {generatingAnalysis ? (
                                                 <div className="py-6 flex flex-col items-center justify-center gap-3">
                                                     <RefreshCw className="w-6 h-6 text-primary animate-spin" />
-                                                    <p className="text-xs text-muted-foreground">AI is generating your detailed skill diagnostics...</p>
+                                                    <p className="text-xs text-muted-foreground">Preparing your score breakdown...</p>
                                                 </div>
                                             ) : aiAnalysis ? (
                                                 <div className="p-6 rounded-3xl border border-border bg-card shadow-sm space-y-6 text-sm leading-relaxed text-foreground overflow-y-auto max-h-100 custom-scrollbar">
                                                     <div className="flex items-center gap-3 border-b border-border pb-4">
                                                         <Brain className="w-6 h-6 text-purple-500" />
-                                                        <h3 className="text-lg font-bold text-foreground">AI Clinical Skill Diagnosis Report</h3>
+                                                        <h3 className="text-lg font-bold text-foreground">Clinical Skill Score Breakdown</h3>
                                                     </div>
                                                     
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1259,7 +1252,7 @@ export default function SubscriptionPage() {
                                                         <div className="p-4 rounded-2xl bg-muted/50 border border-border/50">
                                                             <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Scholarship Marking</div>
                                                             <div className={`text-2xl font-black ${aiAnalysis.points > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{aiAnalysis.points > 0 ? '+' : ''}{aiAnalysis.points.toFixed(2)} <span className="text-base font-medium text-muted-foreground">pts</span></div>
-                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">+2.08 for correct, -0.69 for incorrect</div>
+                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)} for correct, -{round2(CMS_PENALTY_PER_WRONG).toFixed(2)} for incorrect</div>
                                                         </div>
                                                     </div>
 
@@ -1453,7 +1446,7 @@ function FAQ() {
         },
         {
             q: 'What happens to my data if my plan expires?',
-            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (unlimited AI tutor, full mock simulator, textbook screenshots) re-light automatically.',
+            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (AI tutor credits — unlimited on the 1-year plan — full mock simulator, textbook screenshots) re-light automatically.',
         },
         {
             q: 'Do you issue invoices?',

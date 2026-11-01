@@ -2,9 +2,19 @@
  * exams/_data.ts — Shared exam microsite config.
  *
  * Each exam gets its own theme, color tokens, hero copy, subject list,
- * high-yield topics, and CTAs. The /exams/[slug]/page.tsx dispatcher
- * routes by slug to a per-exam page renderer (see /exams/_renders/*.tsx).
+ * high-yield topics, and CTAs. /exams/cms, /exams/neet-pg and /exams/usmle
+ * render it through components/exams/ExamMicrosite.tsx.
  */
+import { questionBankHref } from '@/lib/seo';
+import { CMS_MARKS_PER_QUESTION, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
+
+/** "96 Qs · ≈200 marks" from the official UPSC CMS split. */
+function cmsWeightage(subjectName: string): string {
+  const subject = UPSC_CMS_PATTERN.papers.flatMap((p) => p.subjects).find((s) => s.name === subjectName);
+  if (!subject) return '';
+  return `${subject.questions} Qs · ≈${Math.round(subject.questions * CMS_MARKS_PER_QUESTION)} marks`;
+}
+
 export type ExamTheme = {
   /** Tailwind gradient classes for the hero background. */
   heroGradient: string;
@@ -79,7 +89,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     description:
       'UPSC CMS is the gateway to Central Govt medical officer posts — Railways, CGHS, Ordnance Factories. CrackCMS gives you every PYQ from 2018-2025, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.',
     tags: ['Govt Job', 'Permanent', 'Class-I Officer', 'UPSC'],
-    primaryCta: { label: 'Start Year-wise PYQ', href: '/questions?exam_type=cms' },
+    primaryCta: { label: 'Start Year-wise PYQ', href: questionBankHref('cms') },
     secondaryCta: { label: 'Take Mock Test', href: '/tests' },
     theme: {
       heroGradient: 'from-cyan-600 via-sky-600 to-blue-700',
@@ -100,11 +110,11 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
       { label: 'Nationality', value: 'Citizen of India / specified subjects / refugees.' },
     ],
     subjects: [
-      { code: 'MED', name: 'General Medicine', weightage: '96 Qs · 192 marks', blurb: 'Cardiology, Resp, GI, Endo, Neuro, Infectious Disease.' },
-      { code: 'PED', name: 'Paediatrics', weightage: '24 Qs · 48 marks', blurb: 'Neonatology, growth, immunization, common paediatric emergencies.' },
-      { code: 'SUR', name: 'Surgery', weightage: '40 Qs · 80 marks', blurb: 'General surgery, orthopaedics, anaesthesia, radiology basics.' },
-      { code: 'OBG', name: 'Obstetrics & Gynaecology', weightage: '40 Qs · 80 marks', blurb: 'Antenatal care, labour, gynae oncology, contraception.' },
-      { code: 'PSM', name: 'Preventive & Social Medicine', weightage: '40 Qs · 80 marks', blurb: 'Epidemiology, biostatistics, NHM, national health programmes.' },
+      { code: 'MED', name: 'General Medicine', weightage: cmsWeightage('General Medicine'), blurb: 'Cardiology, Resp, GI, Endo, Neuro, Dermatology, Psychiatry, Infectious Disease.' },
+      { code: 'PED', name: 'Paediatrics', weightage: cmsWeightage('Paediatrics'), blurb: 'Neonatology, growth, immunization, common paediatric emergencies.' },
+      { code: 'SUR', name: 'Surgery', weightage: cmsWeightage('Surgery'), blurb: 'General surgery incl. ENT, ophthalmology, traumatology and orthopaedics.' },
+      { code: 'OBG', name: 'Obstetrics & Gynaecology', weightage: cmsWeightage('Gynaecology & Obstetrics'), blurb: 'Antenatal care, labour, gynae oncology, contraception.' },
+      { code: 'PSM', name: 'Preventive & Social Medicine', weightage: cmsWeightage('Preventive & Social Medicine'), blurb: 'Epidemiology, biostatistics, NHM, national health programmes.' },
     ],
     highYield: [
       { topic: 'ECG / Cardiology emergencies', reason: 'Asked 3-4 times every paper since 2018.', code: 'MED' },
@@ -129,7 +139,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     description:
       'NEET PG is the single window for MD / MS / PG Diploma admissions across India. CrackCMS brings you the last 5 years of NEET PG PYQs (2020-2025), 19-subject high-yield maps, and an AI tutor trained on standard PG reference books.',
     tags: ['Postgraduate', 'NBE', 'All India 50% Quota', 'NEET PG'],
-    primaryCta: { label: 'Start NEET PG PYQ', href: '/questions?exam_type=neet-pg' },
+    primaryCta: { label: 'Start NEET PG PYQ', href: questionBankHref('neet-pg') },
     secondaryCta: { label: 'Browse NEET PG Subjects', href: '/exams/neet-pg#subjects' },
     theme: {
       heroGradient: 'from-emerald-600 via-teal-600 to-cyan-700',
@@ -237,14 +247,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     stats: [
       { value: 'Beta', label: 'Access' },
       { value: 'Step 1+2', label: 'CK Coverage' },
-      { value: '∞', label: 'Free Trial' },
+      { value: 'Waitlist', label: 'Early Access' },
     ],
   },
 };
-
-export function getExamConfig(slug: string): ExamConfig | null {
-  if (slug === 'upsc-cms' || slug === 'cms') return EXAM_CONFIGS.cms;
-  if (slug === 'neet-pg' || slug === 'neetpg') return EXAM_CONFIGS['neet-pg'];
-  if (slug === 'usmle') return EXAM_CONFIGS.usmle;
-  return null;
-}

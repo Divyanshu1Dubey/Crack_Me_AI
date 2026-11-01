@@ -1,29 +1,28 @@
 import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { Brain, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { siteName, siteUrl } from '@/lib/seo';
 
-const title = 'About CrackCMS — Built by Doctors, Powered by AI';
-const description = 'CrackCMS (by CrackLabs AI) is the highest-rated AI medical exam preparation platform for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and medical officer exams. Meet our team, mission, and story.';
+const title = 'About CrackCMS — AI-Assisted Medical Exam Preparation';
+const description = 'CrackCMS (by CrackLabs AI) is an AI-assisted preparation platform for UPSC CMS and NEET PG, with guides for INI-CET, FMGE, USMLE and medical officer exams. Our mission, team, and story.';
 const canonical = '/about';
 
 export const metadata: Metadata = buildLegalMetadata({ title, description, canonical });
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { jsonLdString } from '@/lib/metadata';
 
 const team = [
     { role: 'Founder & CEO', name: 'Divyanshu Dubey', bio: 'Engineer & AI researcher focused on healthcare education. Built CrackCMS after seeing first-hand how scattered medical-prep resources are.' },
-    { role: 'Chief Medical Officer', name: 'MBBS, MD (Internal Medicine)', bio: 'Practising clinician with 10+ years of teaching experience; oversees medical-review board.' },
-    { role: 'Head of Content', name: 'MBBS, MD (Pediatrics)', bio: 'Curates question banks and ensures every explanation meets editorial standards.' },
-    { role: 'Lead AI Engineer', name: 'MS (Computer Science)', bio: 'Designs the multi-provider AI pipeline that powers the AI tutor.' },
+    { role: 'Editorial & content', name: 'CrackCMS Editorial Team', bio: 'Curates the question banks and explanations against standard textbooks, following our editorial and medical-review policies.' },
 ];
 
+// Counts from the live question bank (UPSC CMS ~2,277, NEET PG ~4,202, Nov 2026).
 const stats = [
-    { number: '1.92 lakh+', label: 'PYQs & curated MCQs' },
-    { number: '47,000+', label: 'Active medical aspirants' },
-    { number: '11+', label: 'AI providers in rotation' },
-    { number: '4.8 / 5', label: 'Average user rating' },
+    { number: '2,000+', label: 'UPSC CMS PYQs (2018–2025)' },
+    { number: '4,000+', label: 'NEET PG questions' },
+    { number: '5', label: 'Core CMS subjects covered' },
+    { number: 'Multi-model', label: 'AI tutor with provider fallback' },
 ];
 
 const values = [
@@ -57,8 +56,7 @@ export default function AboutPage() {
 
     return (
         <>
-            <Script id="about-schema" type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(orgSchema) }} />
 
             <LegalLayout title={title} description={description} lastUpdated="July 21, 2026" canonical={canonical} schemaType="AboutPage">
                 <h2>Our mission</h2>
@@ -72,11 +70,10 @@ export default function AboutPage() {
 
                 <h2>What we&apos;ve built</h2>
                 <p>
-                    <strong>1,920+ previous-year questions</strong> across UPSC CMS, NEET PG, INI-CET and
-                    FMGE, paired with AI-generated explanations, mnemonics, clinical pearls, textbook
-                    references, and similar-PYQ links. Eleven large-language-model providers rotate behind
-                    the scenes so the AI tutor is always available, never rate-limited, and always cites
-                    its sources.
+                    <strong>2,000+ UPSC CMS previous-year questions</strong> (2018–2025) and a 4,000+ question
+                    NEET PG bank, paired with AI-generated explanations, mnemonics, clinical pearls, textbook
+                    references, and similar-PYQ links. Several large-language-model providers rotate behind
+                    the scenes so the AI tutor stays available when one provider is slow or down.
                 </p>
 
                 <h2>By the numbers</h2>
@@ -104,7 +101,9 @@ export default function AboutPage() {
 
                 <h2>Meet the team</h2>
                 <p>
-                    CrackCMS is built by a small team of doctors, AI engineers, and medical educators.
+                    CrackCMS is built by a small team. Medical content follows our{' '}
+                    <Link href="/editorial-policy" className="text-primary underline">editorial</Link> and{' '}
+                    <Link href="/medical-review-policy" className="text-primary underline">medical-review</Link> policies.
                     We&apos;re proudly independent, bootstrapped, and focused on long-term learner
                     outcomes — not short-term engagement metrics.
                 </p>

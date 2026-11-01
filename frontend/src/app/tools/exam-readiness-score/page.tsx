@@ -8,7 +8,7 @@ const title = 'UPSC CMS Exam Readiness Score 2026 — How Prepared Are You?';
 const description = 'Calculate your UPSC CMS 2026 exam readiness with our interactive tool. Assess syllabus completion, mock test performance, revision cycles, and study hours to get a personalised readiness score.';
 const slug = 'exam-readiness-score';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -64,7 +64,7 @@ export default function ExamReadinessScorePage() {
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
                         Assess your UPSC CMS preparation with a personalised readiness score.
                         Track syllabus completion, mock test performance, revision cycles, and daily study hours
-                        to understand where you stand and what to improve before <strong>02 August 2026</strong>.
+                        to understand where you stand and what to improve before <strong>exam day</strong>.
                     </p>
                 </section>
 

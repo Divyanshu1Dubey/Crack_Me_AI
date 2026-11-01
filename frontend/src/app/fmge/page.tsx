@@ -2,25 +2,27 @@ import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { questionBankHref } from '@/lib/seo';
+import { FMGE_PATTERN } from '@/lib/examPatterns';
 
 const content: ExamLandingContent = {
     slug: 'fmge',
     name: 'FMGE',
     fullName: 'Foreign Medical Graduate Examination',
     title: 'FMGE Preparation 2026 — MCI Screening Test for Foreign MBBS | CrackCMS',
-    description: 'Crack FMGE 2026 (MCI Screening Test) with 8,000+ previous MCQs, AI tutor, mock tests and clinical case drills for foreign MBBS graduates on CrackCMS.',
-    tagline: 'Pass FMGE on your first attempt with 8,000+ MCI-aligned MCQs, AI tutor, and full mock tests.',
+    description: 'Prepare for FMGE 2026 (Screening Test for foreign MBBS graduates) with an AI tutor, mock tests and practice questions from our NEET PG bank, which covers the same MBBS subjects.',
+    tagline: 'Prepare for FMGE with an AI tutor, timed mock tests and practice from our NEET PG question bank (same 19 MBBS subjects).',
     heroBullets: [
-        '8,000+ FMGE-aligned MCQs covering all 19 subjects',
+        'Practise all 19 MBBS subjects in our NEET PG bank (a dedicated FMGE bank is being added)',
         'AI tutor trained on Indian medical textbooks',
-        'Mock tests with the exact NBEMS CBT interface',
+        'Timed mock tests in a computer-based exam interface',
         'Personalised analytics to identify weak topics',
     ],
     stats: [
-        { number: '8,000+', label: 'FMGE MCQs' },
-        { number: '4.7/5', label: 'User rating' },
-        { number: '47k+', label: 'Active aspirants' },
-        { number: 'NBEMS', label: 'Aligned syllabus' },
+        { number: String(FMGE_PATTERN.totalQuestions), label: `MCQs (${FMGE_PATTERN.parts} parts)` },
+        { number: `${FMGE_PATTERN.passMarks}/${FMGE_PATTERN.totalQuestions}`, label: 'Pass mark' },
+        { number: 'None', label: 'Negative marking' },
+        { number: 'NBEMS', label: 'Conducting body' },
     ],
     pattern: [
         { label: 'Mode', value: 'Computer-Based Test (CBT)' },
@@ -56,12 +58,13 @@ const content: ExamLandingContent = {
         { q: 'What is the FMGE pass mark?', a: '50% aggregate (150 out of 300). There is no negative marking.' },
         { q: 'Who conducts FMGE?', a: 'The National Board of Examinations in Medical Sciences (NBEMS) conducts FMGE twice a year — June and December sessions.' },
         { q: 'Can FMGE preparation be done in 3 months?', a: 'Yes, with disciplined study: solve 4,000+ MCQs, take one full mock every Sunday, focus on Indian-context epidemiology and pharmacology, and use AI tutor for weak subjects.' },
-        { q: 'Does CrackCMS follow FMGE pattern?', a: 'Yes. Our mock tests use 300 MCQs in the two-part format (Part A + Part B), 150 minutes each, with no negative marking.' },
+        { q: 'Does CrackCMS have an FMGE question bank?', a: 'A dedicated FMGE bank is not live yet. Until it is, practise with our NEET PG bank, which covers the same MBBS subjects, and use the AI tutor for weak topics.' },
     ],
     accentFrom: 'from-amber-600',
     accentTo: 'to-orange-700',
     emoji: '🌍',
-    pyqCount: '8,000+',
+    pyqCount: '4,000+ NEET PG',
+    pyqHref: questionBankHref('neet-pg'),
 };
 
 export const metadata = buildExamMetadata(content);

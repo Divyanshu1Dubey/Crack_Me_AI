@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
+import { consent } from '@/lib/consent';
 
 interface TrackedLinkProps extends ComponentProps<typeof Link> {
     eventName?: string;
@@ -13,7 +14,9 @@ export function TrackedLink({ eventName, eventParams, onClick, children, ...prop
         <Link
             {...props}
             onClick={(e) => {
-                if (eventName && typeof window !== 'undefined' && (window as any).gtag) {
+                // Only with analytics consent (the gtag stub exists before
+                // consent, and queued events would be sent once gtag.js loads).
+                if (eventName && typeof window !== 'undefined' && (window as any).gtag && consent.isAllowed('analytics')) {
                     (window as any).gtag('event', eventName, eventParams);
                 }
                 if (onClick) {

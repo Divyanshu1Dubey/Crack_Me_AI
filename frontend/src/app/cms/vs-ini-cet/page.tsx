@@ -15,7 +15,7 @@ export const metadata: Metadata = {
         title: 'UPSC CMS vs INI-CET — Which is Better for MD/MS After MBBS?',
         description: 'Compare government MO posts vs AIIMS/PGI PG seats. Salary, pattern, difficulty, career growth.',
         siteName,
-        images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: 'UPSC CMS vs INI-CET' }],
+        images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: 'UPSC CMS vs INI-CET' }],
     },
     twitter: { card: 'summary_large_image', title: 'UPSC CMS vs INI-CET', description: 'Compare government MO posts vs AIIMS/PGI PG seats.' },
     robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
@@ -86,9 +86,9 @@ export default function CMSVsINICETPage() {
                             <tbody>
                                 <tr><td className="border border-border px-4 py-3 font-semibold">Conducting body</td><td className="border border-border px-4 py-3">UPSC</td><td className="border border-border px-4 py-3">AIIMS New Delhi</td></tr>
                                 <tr><td className="border border-border px-4 py-3 font-semibold">Frequency</td><td className="border border-border px-4 py-3">Once a year (Aug)</td><td className="border border-border px-4 py-3">Twice a year (Jan + Jul)</td></tr>
-                                <tr><td className="border border-border px-4 py-3 font-semibold">Pattern</td><td className="border border-border px-4 py-3">240 MCQs, 2 papers, 2 hrs each, 960 marks</td><td className="border border-border px-4 py-3">200 MCQs, 1 paper, 3 hours, 200 marks</td></tr>
-                                <tr><td className="border border-border px-4 py-3 font-semibold">Negative marking</td><td className="border border-border px-4 py-3">-0.33 per wrong answer</td><td className="border border-border px-4 py-3">-1/3 per wrong answer</td></tr>
-                                <tr><td className="border border-border px-4 py-3 font-semibold">Mode</td><td className="border border-border px-4 py-3">Offline (pen-and-paper OMR)</td><td className="border border-border px-4 py-3">CBT (online)</td></tr>
+                                <tr><td className="border border-border px-4 py-3 font-semibold">Pattern</td><td className="border border-border px-4 py-3">240 MCQs, 2 papers, 2 hrs each, 500 written marks + 100-mark Personality Test</td><td className="border border-border px-4 py-3">200 MCQs, 1 paper, 3 hours, 200 marks</td></tr>
+                                <tr><td className="border border-border px-4 py-3 font-semibold">Negative marking</td><td className="border border-border px-4 py-3">One-third of the question's marks (≈ −0.69 of +2.08)</td><td className="border border-border px-4 py-3">One-third of a mark (−1/3 of +1)</td></tr>
+                                <tr><td className="border border-border px-4 py-3 font-semibold">Mode</td><td className="border border-border px-4 py-3">Computer-Based Test (CBT)</td><td className="border border-border px-4 py-3">CBT (online)</td></tr>
                                 <tr><td className="border border-border px-4 py-3 font-semibold">Outcome</td><td className="border border-border px-4 py-3">Medical Officer / GDMO post</td><td className="border border-border px-4 py-3">MD/MS seat at INIs</td></tr>
                                 <tr><td className="border border-border px-4 py-3 font-semibold">Starting income</td><td className="border border-border px-4 py-3">₹80k-₹1.2L from day one</td><td className="border border-border px-4 py-3">₹90k-₹1.1L stipend during residency</td></tr>
                                 <tr><td className="border border-border px-4 py-3 font-semibold">Long-term earnings</td><td className="border border-border px-4 py-3">₹1.5L-₹2L (govt peak)</td><td className="border border-border px-4 py-3">₹5L-₹50L+ (clinical + academic)</td></tr>
@@ -104,7 +104,7 @@ export default function CMSVsINICETPage() {
                             { q: 'Which is better, UPSC CMS or INI-CET?', a: 'UPSC CMS gives you a central government Medical Officer post with stable salary from day one. INI-CET gives you an MD/MS at AIIMS, PGI, JIPMER with higher brand value. Choose CMS for job security; choose INI-CET for academic/research careers and long-term earning potential.' },
                             { q: 'Can I prepare for UPSC CMS and INI-CET together?', a: 'Yes — both exams overlap ~60% in syllabus (Medicine, Surgery, OBG, PSM). INI-CET is more conceptual and image-based, while CMS is more memory-based. Many candidates use CMS prep as a base and add INI-CET-specific image-based practice.' },
                             { q: 'Which pays more, UPSC CMS or INI-CET?', a: 'UPSC CMS gives ₹80k-₹1.2L/month from day one. INI-CET (MD/MS at AIIMS) gives ₹90k-₹1.1L/month stipend during 3-year residency, with much higher long-term earnings as a specialist in private practice or academia.' },
-                            { q: 'Is UPSC CMS easier than INI-CET?', a: 'UPSC CMS is generally considered easier — 240 MCQs across 2 papers with mild negative marking (-0.33). INI-CET has 200 MCQs in 3 hours with -1/3 negative marking and more conceptual/image-based questions. CMS can be prepared in 6 months; INI-CET typically needs 6-12 months.' },
+                            { q: 'Is UPSC CMS easier than INI-CET?', a: 'UPSC CMS is generally considered easier — 240 MCQs across 2 papers. Both exams deduct one-third of the marks for a question answered wrongly; INI-CET has 200 MCQs in 3 hours with more conceptual/image-based questions. CMS can be prepared in 6 months; INI-CET typically needs 6-12 months.' },
                         ].map((faq) => (
                             <div key={faq.q} className="rounded-xl border border-border bg-card p-5">
                                 <h3 className="font-bold text-sm">{faq.q}</h3>
@@ -117,12 +117,12 @@ export default function CMSVsINICETPage() {
                         <Link href="/cms" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">UPSC CMS</p>
                             <p className="mt-2 font-semibold group-hover:underline">Prepare for UPSC CMS <ArrowRight className="inline ml-1 h-4 w-4" /></p>
-                            <p className="mt-1 text-sm text-muted-foreground">1,920+ PYQs, AI tutor, mock tests, exam simulator for central government MO posts.</p>
+                            <p className="mt-1 text-sm text-muted-foreground">2,000+ PYQs, AI tutor, mock tests, exam simulator for central government MO posts.</p>
                         </Link>
                         <Link href="/ini-cet" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">INI-CET</p>
                             <p className="mt-2 font-semibold group-hover:underline">Prepare for INI-CET <ArrowRight className="inline ml-1 h-4 w-4" /></p>
-                            <p className="mt-1 text-sm text-muted-foreground">12,000+ PYQs for AIIMS, PGI, JIPMER, NIMHANS. CBT mocks, rank predictor, AI tutor.</p>
+                            <p className="mt-1 text-sm text-muted-foreground">Pattern, eligibility and strategy for AIIMS, PGI, JIPMER, NIMHANS. AI tutor and CBT-style mocks.</p>
                         </Link>
                     </div>
                 </section>

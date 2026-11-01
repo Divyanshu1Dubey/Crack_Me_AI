@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TrackedLink } from '@/components/TrackedLink';
-import Script from 'next/script';
 import { CheckCircle2, Sparkles, Target, BookOpen, Brain, FileText, Trophy, Zap, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { questionBankHref, siteName, siteUrl, type QuestionBankExam } from '@/lib/seo';
+import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
+import { premiumAggregateOffer } from '@/app/subscription/plans';
+import { getPostBySlug } from '@/lib/blog';
 
 export interface ExamLandingContent {
     /** URL slug, e.g. 'cms' -> /cms */
@@ -44,9 +46,18 @@ export interface ExamLandingContent {
     pyqCount: string;
     /** Optional: hand-picked blog posts to surface at the bottom of the
      *  landing page (max 4). Builds the internal-link cluster between
-     *  high-authority landing pages and the /blog content silo. */
+     *  high-authority landing pages and the /blog content silo. Each slug
+     *  is resolved through getPostBySlug: unknown slugs are dropped (they
+     *  used to 404) and the post's own title/excerpt are shown. */
     relatedBlogPosts?: { slug: string; title: string; excerpt: string }[];
+    /**
+     * Where the hero "Try PYQs" button goes. Defaults to this exam's bank;
+     * pass null for exams that have no question bank yet (hides the button).
+     */
+    pyqHref?: string | null;
 }
+
+const BANK_EXAMS: QuestionBankExam[] = ['cms', 'neet-pg', 'ini-cet', 'fmge', 'usmle'];
 
 export type ExamLandingLayoutProps =
     | { content: ExamLandingContent; children?: React.ReactNode }
@@ -55,7 +66,8 @@ export type ExamLandingLayoutProps =
 export function buildExamMetadata(c: ExamLandingContent): Metadata {
     const canonical = `/${c.slug}`;
     return {
-        title: c.title,
+        // The root template appends " | CrackCMS"; drop any own suffix.
+        title: stripBrandSuffix(c.title),
         description: c.description,
         keywords: [
             `${c.name} preparation`,
@@ -81,7 +93,7 @@ export function buildExamMetadata(c: ExamLandingContent): Metadata {
             title: c.title,
             description: c.description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: `${c.name} preparation on CrackCMS` }],
+            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: `${c.name} preparation on CrackCMS` }],
         },
         twitter: {
             card: 'summary_large_image',
@@ -96,6 +108,13 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
     const c = 'content' in props && props.content ? props.content : (props as ExamLandingContent);
     const children = props.children;
     const canonical = `/${c.slug}`;
+    const relatedPosts = (c.relatedBlogPosts ?? []).flatMap((p) => {
+        const post = getPostBySlug(p.slug);
+        return post ? [{ slug: post.slug, title: post.title, excerpt: post.excerpt || p.excerpt }] : [];
+    });
+    const pyqHref = c.pyqHref === undefined
+        ? questionBankHref(BANK_EXAMS.includes(c.slug as QuestionBankExam) ? (c.slug as QuestionBankExam) : 'cms')
+        : c.pyqHref;
 
     // JSON-LD: Course + FAQPage + BreadcrumbList
     const jsonLd = {
@@ -106,7 +125,7 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                 name: `${c.name} Complete Preparation Course`,
                 description: c.description,
                 provider: { '@type': 'Organization', name: siteName, url: siteUrl },
-                url: canonical,
+                url: `${siteUrl}${canonical}`,
                 educationalLevel: 'Postgraduate',
                 inLanguage: 'en-IN',
                 hasCourseInstance: {
@@ -114,12 +133,9 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                     courseMode: 'online',
                     courseSchedule: { '@type': 'Schedule', repeatFrequency: 'P1D' },
                 },
-                offers: {
-                    '@type': 'Offer',
-                    price: '199',
-                    priceCurrency: 'INR',
-                    availability: 'https://schema.org/InStock',
-                },
+                // The plans actually sold (subscription/plans.ts); the old
+                // Rs 199 offer was a retired lifetime pass.
+                offers: premiumAggregateOffer(),
             },
             {
                 '@type': 'FAQPage',
@@ -141,8 +157,7 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
 
     return (
         <>
-            <Script id={`exam-schema-${c.slug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 {/* ─── HERO ─── */}
@@ -166,19 +181,17 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                                 ))}
                             </ul>
                             <div className="mt-8 flex flex-wrap gap-3">
-                                <Link href="/register">
-                                    <Button size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
-                                        Start Free <ArrowRight className="h-4 w-4" />
+                                <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
+                                    <Link href="/register">Start Free <ArrowRight className="h-4 w-4" /></Link>
+                                </Button>
+                                {pyqHref && (
+                                    <Button asChild size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
+                                        <Link href={pyqHref}><BookOpen className="h-4 w-4" /> Try PYQs</Link>
                                     </Button>
-                                </Link>
-                                <Link href="/questions">
-                                    <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
-                                        <BookOpen className="h-4 w-4" /> Try PYQs
-                                    </Button>
-                                </Link>
+                                )}
                             </div>
                             <p className="mt-4 text-xs text-white/70">
-                                No credit card needed · 10 free AI tokens daily · Cancel anytime
+                                No credit card needed · 10 free AI tokens daily
                             </p>
                         </div>
 
@@ -219,11 +232,13 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {[
                             { icon: Brain, title: 'AI tutor', body: `Personalised explanations, mnemonics and clinical pearls for every ${c.name} question.` },
-                            { icon: FileText, title: `${c.pyqCount} PYQs`, body: 'Previous-year questions with step-by-step solutions, sorted by subject, topic and year.' },
+                            pyqHref === null
+                                ? { icon: FileText, title: 'Question bank coming soon', body: `A dedicated ${c.name} question bank is in development; the AI tutor and guides are available now.` }
+                                : { icon: FileText, title: `${c.pyqCount} PYQs`, body: 'Previous-year questions with step-by-step solutions, sorted by subject, topic and year.' },
                             { icon: Target, title: 'Adaptive tests', body: 'Mock tests that mirror the real exam pattern, with negative marking and real-time ranking.' },
                             { icon: BookOpen, title: 'Textbook-linked', body: 'Every answer links to Harrison, Bailey & Love, Ghai, Park, Nelson and other standard texts.' },
                             { icon: Trophy, title: 'Gamified streaks', body: 'Daily streaks, badges, leaderboards and XP to keep you consistent for 6 months.' },
-                            { icon: Zap, title: 'Offline-friendly', body: 'PWAs and an Android wrapper let you revise PYQs even without internet.' },
+                            { icon: Zap, title: 'Works on any device', body: 'Install it as an app on your phone (PWA) or use it in any browser.' },
                         ].map(f => (
                             <Card key={f.title} className="border-border/60 bg-card">
                                 <CardContent className="p-6">
@@ -253,11 +268,9 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                                     CrackCMS mock tests follow the official {c.name} pattern so you practise
                                     in the exact format you&apos;ll face on exam day.
                                 </p>
-                                <Link href="/simulator">
-                                    <Button className="mt-6 gap-2">
-                                        Try the simulator <ArrowRight className="h-4 w-4" />
-                                    </Button>
-                                </Link>
+                                <Button asChild className="mt-6 gap-2">
+                                    <Link href="/simulator">Try the simulator <ArrowRight className="h-4 w-4" /></Link>
+                                </Button>
                             </div>
                             <div className="rounded-2xl border border-border bg-card overflow-hidden">
                                 <table className="w-full text-sm">
@@ -351,7 +364,7 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                 </section>
 
                 {/* ─── FROM THE BLOG (internal-link cluster) ─── */}
-                {c.relatedBlogPosts && c.relatedBlogPosts.length > 0 && (
+                {relatedPosts.length > 0 && (
                     <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
                         <div className="flex items-end justify-between gap-4 mb-6">
                             <div>
@@ -370,7 +383,7 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                             </Link>
                         </div>
                         <div className="grid gap-4 md:grid-cols-3">
-                            {c.relatedBlogPosts.slice(0, 4).map((p) => (
+                            {relatedPosts.slice(0, 4).map((p) => (
                                 <Link
                                     key={p.slug}
                                     href={`/blog/${p.slug}`}
@@ -430,19 +443,15 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                             Ready to crack {c.name}?
                         </h2>
                         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-                            Join 47,000+ medical aspirants using CrackCMS to prepare smarter. Start free today.
+                            Prepare smarter with PYQs, AI explanations and full mock tests. Start free today.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'exam_landing' }}>
-                                <Button size="lg" className="gap-2 font-bold">
-                                    Create free account <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            </TrackedLink>
-                            <Link href="/subscription">
-                                <Button size="lg" variant="outline" className="gap-2 font-bold">
-                                    See premium plans
-                                </Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'exam_landing' }}>Create free account <ArrowRight className="h-4 w-4" /></TrackedLink>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="gap-2 font-bold">
+                                <Link href="/subscription">See premium plans</Link>
+                            </Button>
                         </div>
                     </div>
                 </section>

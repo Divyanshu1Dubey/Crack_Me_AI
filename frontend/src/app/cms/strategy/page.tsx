@@ -5,7 +5,7 @@ import { getAllCmsStrategySlugs, ALL_STRATEGIES } from '@/lib/strategyData';
 import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
-    title: 'UPSC CMS Study Plans — 6-Month, 3-Month, Last-Week | CrackCMS',
+    title: 'UPSC CMS Study Plans — 6-Month, 3-Month, Last-Week',
     description: 'UPSC CMS study plans built by UPSC CMS AIR-1. Choose your timeline — 6 months, 3 months, or last-week revision — and follow a precise day-by-day schedule.',
     alternates: { canonical: '/cms/strategy', languages: { 'en-IN': '/cms/strategy' } },
     openGraph: { type: 'website', url: '/cms/strategy', title: 'UPSC CMS Study Plans | CrackCMS', siteName },

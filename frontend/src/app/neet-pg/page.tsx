@@ -22,7 +22,7 @@ import type { Metadata } from 'next';
 import NeetPgLanding from '@/components/neet-pg/NeetPgLanding';
 
 export const metadata: Metadata = {
-  title: 'NEET PG 2026 — 2,300+ PYQs · 19 Subjects · AI Tutor | CrackCMS',
+  title: 'NEET PG 2026 — 2,300+ PYQs · 19 Subjects · AI Tutor',
   description:
     'India\'s dedicated NEET PG preparation platform — 2,300+ previous year MCQs from 2018-2025 across 19 PG subjects, image-rich recall questions, AI tutor trained on Harrison, Robbins, Bailey & Love, and full mock tests.',
   keywords: [

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, Calendar, Target, TrendingUp, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
+import { jsonLdString } from '@/lib/metadata';
 
 export interface CutoffContent {
     examSlug: 'cms' | 'neet-pg';
@@ -29,7 +29,7 @@ export interface CutoffContent {
 }
 
 export function buildCutoffMetadata(c: CutoffContent, path: string): Metadata {
-    const title = `${c.examName} ${c.year} Cutoff Marks — Category-wise Qualifying Marks | CrackCMS`;
+    const title = `${c.examName} ${c.year} Cutoff Marks — Category-wise Qualifying Marks`;
     const description = `Category-wise ${c.examName} ${c.year} cutoff marks, topper scores, year-over-year trends, and FAQs. See if you would have qualified.`;
     return {
         title,
@@ -80,8 +80,7 @@ export default function CutoffLayout(c: CutoffContent) {
 
     return (
         <>
-            <Script id={`cutoff-${c.examSlug}-${c.year}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
@@ -198,12 +197,12 @@ export default function CutoffLayout(c: CutoffContent) {
                             See what score you can hit. Free tier includes practice, AI explanations, and analytics.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register">
-                                <Button size="lg" className="gap-2 font-bold">Create free account <ArrowRight className="h-4 w-4" /></Button>
-                            </Link>
-                            <Link href={`/questions?exam=${c.examSlug.toUpperCase()}`}>
-                                <Button size="lg" variant="outline" className="gap-2 font-bold">Open Question Bank</Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <Link href="/register">Create free account <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="gap-2 font-bold">
+                                <Link href={questionBankHref(c.examSlug)}>Open Question Bank</Link>
+                            </Button>
                         </div>
                     </div>
                     <p className="mt-6 text-center text-xs text-muted-foreground">

@@ -18,12 +18,13 @@ import {
   Users,
 } from 'lucide-react';
 import type { ExamConfig } from '@/app/exams/_data';
+import { questionBankHref } from '@/lib/seo';
 
 interface Props { cfg: ExamConfig }
 
 export function ExamMicrosite({ cfg }: Props) {
   return (
-    <main className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
         <Breadcrumbs items={[{ name: cfg.shortName, path: `/exams/${cfg.slug}` }]} />
       </div>
@@ -147,14 +148,14 @@ export function ExamMicrosite({ cfg }: Props) {
             </p>
           </div>
           <Button asChild variant="outline" size="sm">
-            <Link href={`/questions?exam_type=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}`}>
+            <Link href={questionBankHref(cfg.slug)}>
               Open QBank <ChevronRight className="w-4 h-4 ml-1" />
             </Link>
           </Button>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cfg.subjects.map((s) => (
-            <Link key={s.code} href={`/questions?exam_type=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}&subject=${encodeURIComponent(s.name)}`}>
+            <Link key={s.code} href={questionBankHref(cfg.slug, { subject: s.name })}>
               <Card className="h-full border-border/60 hover:border-primary/40 hover:shadow-md transition-all group cursor-pointer">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-2">
@@ -223,7 +224,7 @@ export function ExamMicrosite({ cfg }: Props) {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
             {cfg.pyqYears.map((y) => (
               <Link key={y}
-                href={`/questions/practice?year=${y}&exam=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}`}
+                href={questionBankHref(cfg.slug, { year: y })}
                 className="group">
                 <div className={`aspect-square rounded-2xl border border-border/60 bg-card/80 hover:border-primary/50 hover:bg-card transition-all flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md`}>
                   <div className="text-2xl font-extrabold text-foreground group-hover:text-primary transition-colors">
@@ -299,7 +300,7 @@ export function ExamMicrosite({ cfg }: Props) {
           </span>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
 

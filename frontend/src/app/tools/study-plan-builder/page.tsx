@@ -8,7 +8,7 @@ const title = 'Study Plan Builder — NEET PG / UPSC CMS / INI-CET | CrackCMS';
 const description = 'Build a personalised study plan for NEET PG, UPSC CMS, or INI-CET. Enter your exam date, available hours, and weak subjects to get a day-by-day 6-month preparation schedule.';
 const slug = 'study-plan-builder';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

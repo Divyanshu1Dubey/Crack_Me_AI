@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, Calendar, CheckCircle2, Clock, GraduationCap, Sparkles, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
 import AdSense from '@/components/AdSense';
+import { jsonLdString } from '@/lib/metadata';
 
 export interface StrategyWeek {
     week: number;
@@ -41,7 +41,7 @@ export interface StrategyContent {
 }
 
 export function buildStrategyMetadata(c: StrategyContent, path: string): Metadata {
-    const title = `${c.strategyTitle} — ${c.strategySubtitle} | CrackCMS`;
+    const title = `${c.strategyTitle} — ${c.strategySubtitle}`;
     return {
         title,
         description: c.description,
@@ -97,8 +97,7 @@ export default function StrategyLayout(c: StrategyContent) {
 
     return (
         <>
-            <Script id={`strategy-${c.examSlug}-${c.strategySlug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
@@ -215,12 +214,12 @@ export default function StrategyLayout(c: StrategyContent) {
                         <h2 className="text-2xl font-black tracking-tight">Start practising today</h2>
                         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">PYQs from every UPSC CMS year with AI-powered explanations.</p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register">
-                                <Button size="lg" className="gap-2 font-bold">Create free account <ArrowRight className="h-4 w-4" /></Button>
-                            </Link>
-                            <Link href={`/questions?exam=CMS`}>
-                                <Button size="lg" variant="outline" className="gap-2 font-bold">Open Question Bank</Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <Link href="/register">Create free account <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="gap-2 font-bold">
+                                <Link href={questionBankHref('cms')}>Open Question Bank</Link>
+                            </Button>
                         </div>
                     </div>
                     <p className="mt-6 text-center text-xs text-muted-foreground">

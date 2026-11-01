@@ -87,9 +87,7 @@ const CATEGORY_OPTIONS = [
     { value: 'st', label: 'ST' },
 ];
 
-const YEAR_OPTIONS = ['2026', '2025', '2024', '2023'];
-
-const RecommendationCard = ({ items, title, accent }: { items: HospitalEntry[]; title: string; accent: string }) => {
+const RecommendationCard = ({ items, title, accent, categoryLabel }: { items: HospitalEntry[]; title: string; accent: string; categoryLabel: string }) => {
     if (items.length === 0) {
         return (
             <div className="rounded-xl border border-border bg-muted/50 p-5">
@@ -113,7 +111,7 @@ const RecommendationCard = ({ items, title, accent }: { items: HospitalEntry[]; 
                         </div>
                         <div className="sm:text-right">
                             <p className="text-xs font-semibold text-foreground">{h.department}</p>
-                            <p className="text-[11px] text-muted-foreground">UR cutoff ~{h.urClosingRank}</p>
+                            <p className="text-[11px] text-muted-foreground">{categoryLabel} closing rank ~{h.urClosingRank}</p>
                         </div>
                     </div>
                 ))}
@@ -125,7 +123,6 @@ const RecommendationCard = ({ items, title, accent }: { items: HospitalEntry[]; 
 export default function CollegePredictor() {
     const [rank, setRank] = useState('');
     const [category, setCategory] = useState('general');
-    const [year, setYear] = useState('2026');
     const [result, setResult] = useState<CollegeResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -175,8 +172,8 @@ export default function CollegePredictor() {
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Your All India Rank</label>
-                    <input
+                    <label htmlFor="college-your-all-india-rank" className="block text-sm font-semibold mb-1">Your All India Rank</label>
+                    <input id="college-your-all-india-rank"
                         type="number"
                         value={rank}
                         onChange={(e) => setRank(e.target.value)}
@@ -187,18 +184,10 @@ export default function CollegePredictor() {
                     <p className="mt-1 text-xs text-muted-foreground">Enter the AIR you expect or have secured.</p>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Category</label>
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
+                    <label htmlFor="college-category" className="block text-sm font-semibold mb-1">Category</label>
+                    <select id="college-category" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
                         {CATEGORY_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-semibold mb-1">Exam Year</label>
-                    <select value={year} onChange={(e) => setYear(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
-                        {YEAR_OPTIONS.map((yr) => (
-                            <option key={yr} value={yr}>{yr}</option>
                         ))}
                     </select>
                 </div>
@@ -223,12 +212,8 @@ export default function CollegePredictor() {
                             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Category</p>
                             <p className="text-lg font-bold text-foreground">{result.categoryLabel}</p>
                         </div>
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Prediction Year</p>
-                            <p className="text-lg font-bold text-foreground">{year}</p>
-                        </div>
                         <div className="sm:ml-auto">
-                            <p className="text-xs text-muted-foreground">Based on previous year category-wise closing ranks. Actual cutoffs may vary each year.</p>
+                            <p className="text-xs text-muted-foreground">Indicative closing ranks for illustration, not official allotment data. Actual cutoffs vary each year.</p>
                         </div>
                     </div>
 
@@ -236,16 +221,19 @@ export default function CollegePredictor() {
                         <RecommendationCard
                             items={result.safe}
                             title="High Confidence"
+                            categoryLabel={result.categoryLabel}
                             accent="#16a34a"
                         />
                         <RecommendationCard
                             items={result.moderate}
                             title="Moderate / On Border"
+                            categoryLabel={result.categoryLabel}
                             accent="#d97706"
                         />
                         <RecommendationCard
                             items={result.reach}
                             title="Reach (Low Probability)"
+                            categoryLabel={result.categoryLabel}
                             accent="#dc2626"
                         />
                     </div>

@@ -8,7 +8,7 @@ const title = 'Category Rank Filter 2026 — Compare UPSC CMS Rank Across Genera
 const description = 'Compare your UPSC CMS rank across reservation categories. See how General, OBC, SC, ST, and PwBD reservation affects cutoffs and selection chances.';
 const slug = 'category-rank-filter';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

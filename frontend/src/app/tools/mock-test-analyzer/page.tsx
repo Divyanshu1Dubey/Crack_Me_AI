@@ -8,7 +8,7 @@ const title = 'Mock Test Analyzer 2026 — Subject-wise UPSC CMS Mock Test Perfo
 const description = 'Analyze your UPSC CMS mock test performance subject-wise. Identify weak areas, track improvement trends, and get personalised study recommendations for Combined Medical Services 2026.';
 const slug = 'mock-test-analyzer';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

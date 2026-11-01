@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, GraduationCap, User } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
-import { buildPageMetadata, personSchema } from '@/lib/metadata';
+import { buildPageMetadata, personSchema, jsonLdString } from '@/lib/metadata';
 import { getAllPosts } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
 import { siteUrl } from '@/lib/seo';
@@ -79,12 +78,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
 
     return (
         <>
-            <Script
-                id={`author-schema-${author.slug}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">

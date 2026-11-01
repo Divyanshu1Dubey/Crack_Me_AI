@@ -10,10 +10,11 @@ import { ExamMicrosite } from '@/components/exams/ExamMicrosite';
 import { EXAM_CONFIGS } from '@/app/exams/_data';
 
 export const metadata: Metadata = {
-  title: 'NEET PG — Crack PYQs 2020-2025 | CrackCMS',
+  title: 'NEET PG — Crack PYQs 2020-2025',
   description:
     'Crack NEET PG with 1,200+ PYQs from 2020-2025, 19 PG subjects mapped to high-yield topics, full mocks and an AI tutor. Standalone NEET PG microsite.',
-  alternates: { canonical: 'https://www.cracklabs.app/exams/neet-pg' },
+  // Same exam as /neet-pg: point search engines at the main landing page.
+  alternates: { canonical: '/neet-pg' },
   openGraph: {
     title: 'NEET PG Preparation | CrackCMS',
     description:

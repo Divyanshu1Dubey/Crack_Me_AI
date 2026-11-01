@@ -7,7 +7,7 @@ const content: ExamLandingContent = {
     slug: 'government-doctor-jobs',
     name: 'Government Doctor Jobs',
     fullName: 'Central & State Government MBBS Doctor Posts',
-    title: 'Government Doctor Jobs 2026 — Medical Officer, Specialist, GDMO Posts | CrackCMS',
+    title: 'Government Doctor Jobs 2026 — Medical Officer, Specialist, GDMO Posts',
     description: 'Latest 2026 government doctor jobs guide for MBBS — UPSC CMS, state PSCs, AIIMS, ESIC, Railways & Defence. Salary, eligibility, and PYQs.',
     tagline: 'Find every central and state government MBBS doctor vacancy in one place — UPSC CMS, AIIMS, PSCs, NHM, ESIC, Defence, Railways.',
     heroBullets: [
@@ -23,7 +23,7 @@ const content: ExamLandingContent = {
         { number: 'Weekly', label: 'Updates' },
     ],
     pattern: [
-        { label: 'UPSC CMS', value: '240 MCQs, 2 papers, -0.33 negative marking' },
+        { label: 'UPSC CMS', value: '240 MCQs, 2 papers, one-third negative marking (CBT)' },
         { label: 'State PSC MO', value: '100-200 MCQs, 60-120 min, varies by state' },
         { label: 'AIIMS / PGIMER MO', value: 'CBT 100 MCQs, 90 min' },
         { label: 'ESIC IMO Gr-II', value: 'CBT 100 MCQs, 60 min' },

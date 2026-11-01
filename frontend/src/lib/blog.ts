@@ -427,27 +427,51 @@ export function getPostsByCategory(categorySlug: string): BlogPost[] {
     return posts.filter((p) => categoryToSlug(p.category) === categorySlug);
 }
 
-/** Posts with a given tag, newest first. */
+/**
+ * Posts with a given tag, newest first. Matches on the same slug transform
+ * the tag pages and tag chips use (tagToSlug), so tags with hyphens or
+ * symbols ("INI-CET", "High-Yield", "X-ray", "ACC/AHA") resolve too.
+ */
 export function getPostsByTag(tagSlug: string): BlogPost[] {
-    const norm = tagSlug.toLowerCase().replace(/-/g, ' ');
-    return posts.filter((p) =>
-        p.tags.some((t) => t.toLowerCase() === norm),
-    );
+    const wanted = tagToSlug(tagSlug);
+    return posts.filter((p) => p.tags.some((t) => tagToSlug(t) === wanted));
 }
 
-/** All unique tags with their counts. */
+/**
+ * Tag archives with fewer posts than this are thin pages: they stay
+ * reachable from tag chips but are marked noindex and left out of the
+ * sitemap.
+ */
+export const MIN_INDEXABLE_TAG_POSTS = 3;
+
+/**
+ * All unique tags with their post counts. Tags that differ only in case,
+ * spacing or punctuation ("High-Yield Topics" / "high yield topics") share
+ * one slug and are merged into a single entry; the first spelling seen is
+ * used as the display name. A post is counted once per tag slug.
+ */
 export function getAllTags(): { name: string; slug: string; count: number }[] {
-    const map = new Map<string, number>();
-    posts.forEach((p) =>
-        p.tags.forEach((t) => map.set(t, (map.get(t) ?? 0) + 1)),
-    );
+    const map = new Map<string, { name: string; count: number }>();
+    posts.forEach((p) => {
+        const seen = new Set<string>();
+        p.tags.forEach((t) => {
+            const slug = tagToSlug(t);
+            if (!slug || seen.has(slug)) return;
+            seen.add(slug);
+            const entry = map.get(slug);
+            if (entry) entry.count += 1;
+            else map.set(slug, { name: t, count: 1 });
+        });
+    });
     return Array.from(map.entries())
-        .map(([name, count]) => ({
-            name,
-            slug: tagToSlug(name),
-            count,
-        }))
+        .map(([slug, { name, count }]) => ({ name, slug, count }))
         .sort((a, b) => b.count - a.count);
+}
+
+/** Look up a tag (merged across spellings) by its slug. */
+export function getTagBySlug(tagSlug: string): { name: string; slug: string; count: number } | undefined {
+    const wanted = tagToSlug(tagSlug);
+    return getAllTags().find((t) => t.slug === wanted);
 }
 
 /** Turn a category or tag display name into a URL-safe slug. */

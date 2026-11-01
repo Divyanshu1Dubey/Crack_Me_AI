@@ -5,7 +5,7 @@ import { getAllCmsBookSlugs, CMS_BOOKS } from '@/lib/bookDeepDiveData';
 import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
-    title: 'Best Books for UPSC CMS — Subject-wise Book Recommendations | CrackCMS',
+    title: 'Best Books for UPSC CMS — Subject-wise Book Recommendations',
     description: 'Top book recommendations for UPSC CMS by subject — Harrison, Bailey & Love, Park PSM, Ghai Paediatrics, Dutta OBG. Edition guide + reading schedules.',
     alternates: { canonical: '/cms/books', languages: { 'en-IN': '/cms/books' } },
     openGraph: { type: 'website', url: '/cms/books', title: 'Best Books for UPSC CMS | CrackCMS', siteName },

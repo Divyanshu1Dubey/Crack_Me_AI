@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { siteName, siteUrl } from '@/lib/seo';
+import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { ArrowLeft, CalendarDays, FileText, ShieldCheck } from 'lucide-react';
 
@@ -27,14 +27,13 @@ export function buildLegalMetadata({
     canonical,
 }: Pick<LegalLayoutProps, 'title' | 'description' | 'canonical'>): Metadata {
     return {
-        title,
+        // The root template appends " | CrackCMS"; drop the page's own suffix.
+        title: stripBrandSuffix(title),
         description,
         alternates: {
             canonical,
             languages: {
                 'en-IN': canonical,
-                'en-US': canonical,
-                'en-GB': canonical,
                 'x-default': canonical,
             },
         },
@@ -72,7 +71,7 @@ export function LegalLayout({
         '@type': schemaType,
         headline: title,
         description,
-        url: canonical,
+        url: `${siteUrl}${canonical}`,
         inLanguage: 'en-IN',
         datePublished: effectiveDate || lastUpdated,
         dateModified: lastUpdated,
@@ -83,12 +82,12 @@ export function LegalLayout({
             url: siteUrl,
             logo: { '@type': 'ImageObject', url: `${siteUrl}/cms-circle-logo.png` },
         },
-        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': `${siteUrl}${canonical}` },
         breadcrumb: {
             '@type': 'BreadcrumbList',
             itemListElement: [
                 { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl },
-                { '@type': 'ListItem', position: 2, name: title, item: canonical },
+                { '@type': 'ListItem', position: 2, name: title, item: `${siteUrl}${canonical}` },
             ],
         },
     };
@@ -96,17 +95,12 @@ export function LegalLayout({
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+                {/* Breadcrumbs adds the "Home" crumb itself. */}
                 <Breadcrumbs items={[
-                    { name: 'Home', path: '/' },
                     { name: title.replace(/ — .*/, ''), path: canonical },
                 ]} />
             </div>
-            <Script
-                id={`legal-schema-${canonical.split('/').pop()}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleSchema) }} />
 
             {/* Hero */}
             <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">

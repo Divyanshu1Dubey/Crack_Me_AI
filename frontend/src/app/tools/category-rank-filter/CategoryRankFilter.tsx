@@ -1,91 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { CATEGORIES, TOTAL_VACANCIES, computeRankAnalysis, type Category } from './rankModel';
 
-type Category = 'general' | 'obc' | 'sc' | 'st' | 'pwbd';
-
-interface CategoryInfo {
-  id: Category;
-  label: string;
-  reservationPct: number;
-  description: string;
-}
-
-const CATEGORIES: CategoryInfo[] = [
-  { id: 'general', label: 'General', reservationPct: 0, description: 'Unreserved category — open competition' },
-  { id: 'obc', label: 'OBC (NCL)', reservationPct: 27, description: 'Non-Creamy Layer — 27% reservation' },
-  { id: 'sc', label: 'SC', reservationPct: 15, description: 'Scheduled Caste — 15% reservation' },
-  { id: 'st', label: 'ST', reservationPct: 7.5, description: 'Scheduled Tribe — 7.5% reservation' },
-  { id: 'pwbd', label: 'PwBD', reservationPct: 4, description: 'Persons with Benchmark Disability — 4% reservation (horizontal)' },
-];
-
-// Approximate applicant pool sizes for UPSC CMS (indicative only)
-const POOL_SIZES: Record<Category, number> = {
-  general: 45000,
-  obc: 35000,
-  sc: 15000,
-  st: 10000,
-  pwbd: 5000,
+const EMPTY_RESULTS: Record<Category, ReturnType<typeof computeRankAnalysis> | null> = {
+  general: null,
+  ews: null,
+  obc: null,
+  sc: null,
+  st: null,
+  pwbd: null,
 };
 
-// Approximate vacancy numbers for UPSC CMS 2026 (indicative only)
-const TOTAL_VACANCIES = 600;
-
-function poolForCategory(category: Category): number {
-  if (category === 'pwbd') {
-    return POOL_SIZES.general + POOL_SIZES.obc + POOL_SIZES.sc + POOL_SIZES.st;
-  }
-  return POOL_SIZES[category];
-}
-
-function categoryVacancies(category: Category): number {
-  if (category === 'pwbd') {
-    return Math.round(TOTAL_VACANCIES * 0.04);
-  }
-  return Math.round(TOTAL_VACANCIES * (CATEGORIES.find(c => c.id === category)!.reservationPct / 100));
-}
-
-function computeRankAnalysis(
-  rankInput: number,
-  sourceCategory: Category,
-  targetCategory: Category,
-): { equivalentRank: number; categoryRank: number; vacancies: number; selectionChance: string; note: string } {
-  const sourcePool = poolForCategory(sourceCategory);
-  const targetPool = poolForCategory(targetCategory);
-
-  // Convert absolute rank to percentile in source category
-  const sourcePercentile = Math.max(0, Math.min(100, (1 - rankInput / sourcePool) * 100));
-
-  // Convert percentile to equivalent rank in target category
-  const equivalentRank = Math.round(targetPool * (1 - sourcePercentile / 100));
-
-  // Compute category rank for target category
-  const categoryVacancy = categoryVacancies(targetCategory);
-  const categoryRank = Math.max(1, equivalentRank);
-
-  // Selection chance based on how the rank compares to vacancies
-  const ratio = categoryRank / categoryVacancy;
-  let selectionChance = '';
-  let note = '';
-  if (ratio <= 0.5) {
-    selectionChance = 'Very High';
-    note = 'Your rank is well within the likely selection zone for this category.';
-  } else if (ratio <= 1.0) {
-    selectionChance = 'High';
-    note = 'Your rank is within the estimated vacancy range for this category.';
-  } else if (ratio <= 1.5) {
-    selectionChance = 'Moderate';
-    note = 'Your rank is near the edge of the estimated vacancy range. Position may shift based on final merit.';
-  } else if (ratio <= 2.5) {
-    selectionChance = 'Low';
-    note = 'Your rank exceeds the estimated vacancy count for this category. Consider backup plans.';
-  } else {
-    selectionChance = 'Very Low';
-    note = 'Your rank is significantly above the estimated vacancy range for this category.';
-  }
-
-  return { equivalentRank, categoryRank, vacancies: categoryVacancy, selectionChance, note };
-}
+// Model (reservation shares, open pool, vacancies) lives in rankModel.ts.
 
 function chanceColor(chance: string): string {
   switch (chance) {
@@ -107,25 +34,13 @@ function chanceColor(chance: string): string {
 export default function CategoryRankFilter() {
   const [rankInput, setRankInput] = useState('');
   const [sourceCategory, setSourceCategory] = useState<Category>('general');
-  const [results, setResults] = useState<Record<Category, ReturnType<typeof computeRankAnalysis> | null>>({
-    general: null,
-    obc: null,
-    sc: null,
-    st: null,
-    pwbd: null,
-  });
+  const [results, setResults] = useState<Record<Category, ReturnType<typeof computeRankAnalysis> | null>>(EMPTY_RESULTS);
 
   const analyze = () => {
     const rank = parseInt(rankInput, 10);
     if (isNaN(rank) || rank <= 0) return;
 
-    const newResults: Record<Category, ReturnType<typeof computeRankAnalysis> | null> = {
-      general: null,
-      obc: null,
-      sc: null,
-      st: null,
-      pwbd: null,
-    };
+    const newResults: Record<Category, ReturnType<typeof computeRankAnalysis> | null> = { ...EMPTY_RESULTS };
 
     // First compute source category result
     const sourceResult = computeRankAnalysis(rank, sourceCategory, sourceCategory);
@@ -142,7 +57,7 @@ export default function CategoryRankFilter() {
 
   const reset = () => {
     setRankInput('');
-    setResults({ general: null, obc: null, sc: null, st: null, pwbd: null });
+    setResults(EMPTY_RESULTS);
   };
 
   const hasResults = Object.values(results).some(r => r !== null);
@@ -152,15 +67,17 @@ export default function CategoryRankFilter() {
       <h3 className="text-xl font-bold">Category Rank Filter 2026</h3>
       <p className="mt-2 text-sm text-muted-foreground">
         Enter your category-wise rank and select your category to see how that rank maps across
-        General, OBC, SC, ST, and PwBD categories. Estimate selection chances based on
-        approximate reservation quotas and vacancy data.
+        General, EWS, OBC, SC, ST, and PwBD categories. Estimate selection chances based on
+        reservation shares and the {TOTAL_VACANCIES.toLocaleString('en-IN')} posts in the current UPSC CMS notice.
       </p>
 
       <div className="mt-6 space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold mb-1">Category-wise Rank</label>
+            <label htmlFor="crf-rank" className="block text-sm font-semibold mb-1">Category-wise Rank</label>
             <input
+              id="crf-rank"
+              aria-describedby="crf-rank-help"
               type="number"
               value={rankInput}
               onChange={(e) => setRankInput(e.target.value)}
@@ -168,13 +85,14 @@ export default function CategoryRankFilter() {
               min="1"
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p id="crf-rank-help" className="mt-1 text-xs text-muted-foreground">
               Your rank in your respective category list.
             </p>
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-1">Your Category</label>
+            <label htmlFor="crf-category" className="block text-sm font-semibold mb-1">Your Category</label>
             <select
+              id="crf-category"
               value={sourceCategory}
               onChange={(e) => setSourceCategory(e.target.value as Category)}
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
@@ -251,7 +169,7 @@ export default function CategoryRankFilter() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Reservation</span>
-                        <span className="font-bold">{info.reservationPct}%</span>
+                        <span className="font-bold">{info.reservationLabel}</span>
                       </div>
                       <div className="mt-2 rounded-lg bg-muted/50 p-2.5">
                         <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
@@ -286,12 +204,12 @@ export default function CategoryRankFilter() {
                   <p className="text-sm font-bold">{cat.label}</p>
                   <p className="text-xs text-muted-foreground">{cat.description}</p>
                 </div>
-                <span className="text-lg font-black text-primary">{cat.reservationPct}%</span>
+                <span className="text-lg font-black text-primary">{cat.reservationLabel}</span>
               </div>
             ))}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Reservation percentages are based on the UPSC CMS reservation policy. PwBD reservation is horizontal, meaning it is filled from the respective category pool. Total vacancies shown are approximate and vary each year.
+            Reservation shares follow the central-government policy (OBC 27%, SC 15%, ST 7.5%, EWS 10%); the General list competes for the remaining open posts. PwBD reservation is horizontal, meaning it is filled from the respective category pool. Vacancies are estimated from the {TOTAL_VACANCIES.toLocaleString('en-IN')} posts in the current notice; the exact split is in the notification PDF.
           </p>
         </div>
       </div>

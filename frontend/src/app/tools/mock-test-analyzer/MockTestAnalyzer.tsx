@@ -35,12 +35,20 @@ export default function MockTestAnalyzer() {
   } | null>(null);
 
   const handleScoreChange = (subject: string, value: string) => {
-    const score = value === "" ? 0 : Math.max(0, Math.min(100, Number(value)));
-    setSubjectScores((prev) => ({ ...prev, [subject]: score }));
+    setSubjectScores((prev) => {
+      const next = { ...prev };
+      const parsed = Number(value);
+      if (value.trim() === "" || !Number.isFinite(parsed)) {
+        delete next[subject];
+      } else {
+        next[subject] = Math.max(0, Math.min(100, parsed));
+      }
+      return next;
+    });
   };
 
   const runAnalysis = () => {
-    const filled = DEFAULT_SUBJECTS.filter((subject) => subjectScores[subject] !== undefined && subjectScores[subject] > 0);
+    const filled = DEFAULT_SUBJECTS.filter((subject) => subjectScores[subject] !== undefined);
 
     if (filled.length === 0) {
       setAnalysis({

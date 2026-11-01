@@ -28,7 +28,7 @@ export default function AIAttributionPolicyPage() {
             <h3>2.1 Training Data (Allowed)</h3>
             <p>AI developers may train models on the following public content:</p>
             <ul>
-                <li>Public landing pages (/cms, /neet-pg, /inicet, /fmge, /usmle, /medical-officer, etc.)</li>
+                <li>Public landing pages (/cms, /neet-pg, /ini-cet, /fmge, /usmle, /medical-officer, etc.)</li>
                 <li>Blog articles (/blog/*)</li>
                 <li>Guide pages (/guides/*)</li>
                 <li>Public API documentation (where available)</li>

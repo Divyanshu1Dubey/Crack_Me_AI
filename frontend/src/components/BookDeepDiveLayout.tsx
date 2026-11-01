@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, BookOpen, Bookmark, GraduationCap, Lightbulb, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
+import { jsonLdString } from '@/lib/metadata';
 
 export interface BookChapter {
     number: number;
@@ -43,7 +43,7 @@ export interface BookDeepDiveContent {
 }
 
 export function buildBookDeepDiveMetadata(c: BookDeepDiveContent, path: string): Metadata {
-    const title = `${c.bookTitle} for ${c.examName} — Deep-Dive Review, High-Yield Chapters | CrackCMS`;
+    const title = `${c.bookTitle} for ${c.examName} — Deep-Dive Review, High-Yield Chapters`;
     const description = `Honest deep-dive review of ${c.bookTitle} for ${c.examName} ${c.subjectName}: high-yield chapters, 30-day reading schedule, FAQs, and verdict from a topper.`;
     return {
         title,
@@ -94,8 +94,7 @@ export default function BookDeepDiveLayout(c: BookDeepDiveContent) {
 
     return (
         <>
-            <Script id={`book-${c.examSlug}-${c.bookSlug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
@@ -119,11 +118,9 @@ export default function BookDeepDiveLayout(c: BookDeepDiveContent) {
                             {c.verdict}
                         </p>
                         <div className="mt-6 flex flex-wrap gap-3">
-                            <Link href={c.subjectPath}>
-                                <Button size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
-                                    Open {c.subjectName} PYQs <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            </Link>
+                            <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
+                                <Link href={c.subjectPath}>Open {c.subjectName} PYQs <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
                         </div>
                     </div>
                 </section>

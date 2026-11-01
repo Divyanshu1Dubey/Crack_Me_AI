@@ -5,7 +5,7 @@ import { getAllCmsSubjects } from '@/lib/subjectHubData';
 import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
-    title: 'UPSC CMS Subject Hubs — Medicine, Surgery, OBG, PSM, Paediatrics | CrackCMS',
+    title: 'UPSC CMS Subject Hubs — Medicine, Surgery, OBG, PSM, Paediatrics',
     description:
         'Subject-wise UPSC CMS preparation. PYQs, high-yield topics, and book recommendations for General Medicine, Surgery, Paediatrics, OBG, PSM, ENT, Ophthalmology, Anaesthesia and Orthopaedics.',
     alternates: { canonical: '/cms/subject', languages: { 'en-IN': '/cms/subject' } },

@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
     const { slug } = await params;
     const data = getCmsStrategy(slug);
-    if (!data) return { title: 'UPSC CMS Strategy | CrackCMS', robots: { index: false } };
+    if (!data) return { title: 'UPSC CMS Strategy', robots: { index: false } };
     return buildStrategyMetadata(data, `/cms/strategy/${slug}`);
 }
 

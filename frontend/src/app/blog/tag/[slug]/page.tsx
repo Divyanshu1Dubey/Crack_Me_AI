@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, Hash } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
-import { buildPageMetadata } from '@/lib/metadata';
-import { getAllTags, getPostsByTag, tagToSlug } from '@/lib/blog';
+import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
+import { MIN_INDEXABLE_TAG_POSTS, getAllTags, getPostsByTag, getTagBySlug } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
@@ -23,7 +22,7 @@ export async function generateStaticParams() {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
-    const tag = getAllTags().find((t) => t.slug === slug);
+    const tag = getTagBySlug(slug);
     if (!tag) {
         return buildPageMetadata({
             title: 'Tag not found — CrackCMS Blog',
@@ -36,12 +35,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         title: `#${tag.name} — CrackCMS Blog`,
         description: `${tag.count} ${tag.count === 1 ? 'post' : 'posts'} tagged #${tag.name} on UPSC CMS, NEET PG and INI-CET preparation.`,
         path: `/blog/tag/${tag.slug}`,
+        // Thin archives (1-2 posts) stay reachable from tag chips but are not
+        // indexed; sitemap.ts leaves them out for the same reason.
+        noindex: tag.count < MIN_INDEXABLE_TAG_POSTS,
     });
 }
 
 export default async function BlogTagPage({ params }: PageProps) {
     const { slug } = await params;
-    const tag = getAllTags().find((t) => t.slug === slug);
+    const tag = getTagBySlug(slug);
     if (!tag) notFound();
 
     const posts = getPostsByTag(tag.slug);
@@ -58,12 +60,7 @@ export default async function BlogTagPage({ params }: PageProps) {
 
     return (
         <>
-            <Script
-                id={`tag-schema-${tag.slug}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">
@@ -116,7 +113,8 @@ export default async function BlogTagPage({ params }: PageProps) {
                         </h2>
                         <div className="flex flex-wrap gap-2">
                             {getAllTags()
-                                .filter((t) => t.slug !== tag.slug)
+                                .filter((t) => t.slug !== tag.slug && t.count >= MIN_INDEXABLE_TAG_POSTS)
+                                .slice(0, 40)
                                 .map((t) => (
                                     <Link
                                         key={t.slug}

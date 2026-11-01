@@ -5,7 +5,7 @@ import { getAllCmsYears } from '@/lib/pyqYearData';
 import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
-    title: 'UPSC CMS Previous Year Questions (PYQs) by Year — 2020-2024 | CrackCMS',
+    title: 'UPSC CMS Previous Year Questions (PYQs) by Year — 2020-2024',
     description:
         'Practise every UPSC CMS previous year question from 2020 to 2024. Year-wise PYQ papers with subject-wise filters, cutoffs, toppers, and AI explanations.',
     alternates: { canonical: '/cms/pyq', languages: { 'en-IN': '/cms/pyq' } },

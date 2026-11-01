@@ -38,7 +38,7 @@ export default function StudyPlanBuilderGuide() {
                 Based on your baseline and the exam cutoff:
             </p>
             <ul>
-                <li><strong>UPSC CMS:</strong> Aim 480+ out of 800 (well above the ~380 general cutoff).</li>
+                <li><strong>UPSC CMS:</strong> Aim 330+ out of 500 written marks (comfortably above the recent ~280-310 General cutoff).</li>
                 <li><strong>NEET PG:</strong> Aim 600+ out of 800 for top clinical branches.</li>
                 <li><strong>INI-CET:</strong> Aim 150+ out of 200.</li>
             </ul>

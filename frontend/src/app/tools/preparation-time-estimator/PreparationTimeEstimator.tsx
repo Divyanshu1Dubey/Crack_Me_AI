@@ -118,8 +118,8 @@ export default function PreparationTimeEstimator() {
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Current Preparation Level</label>
-                    <select value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
+                    <label htmlFor="prep-current-preparation-level" className="block text-sm font-semibold mb-1">Current Preparation Level</label>
+                    <select id="prep-current-preparation-level" value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
                         <option value="beginner">Beginner</option>
                         <option value="intermediate">Intermediate</option>
                         <option value="advanced">Advanced</option>
@@ -127,8 +127,8 @@ export default function PreparationTimeEstimator() {
                     <p className="mt-1 text-xs text-muted-foreground">{levelLabels[currentLevel]}</p>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Target Rank</label>
-                    <select value={targetRank} onChange={(e) => setTargetRank(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
+                    <label htmlFor="prep-target-rank" className="block text-sm font-semibold mb-1">Target Rank</label>
+                    <select id="prep-target-rank" value={targetRank} onChange={(e) => setTargetRank(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
                         <option value="top-100">Top 100 (highly competitive)</option>
                         <option value="top-500">Top 500 (competitive)</option>
                         <option value="top-1000">Top 1000 (moderately competitive)</option>
@@ -137,21 +137,21 @@ export default function PreparationTimeEstimator() {
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Daily Study Hours</label>
-                    <input type="number" value={dailyHours} onChange={(e) => setDailyHours(e.target.value)} min="1" max="16" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="prep-daily-study-hours" className="block text-sm font-semibold mb-1">Daily Study Hours</label>
+                    <input id="prep-daily-study-hours" type="number" value={dailyHours} onChange={(e) => setDailyHours(e.target.value)} min="1" max="16" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Previous UPSC CMS Attempts</label>
-                    <input type="number" value={previousAttempts} onChange={(e) => setPreviousAttempts(e.target.value)} min="0" max="5" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="prep-previous-upsc-cms-attempts" className="block text-sm font-semibold mb-1">Previous UPSC CMS Attempts</label>
+                    <input id="prep-previous-upsc-cms-attempts" type="number" value={previousAttempts} onChange={(e) => setPreviousAttempts(e.target.value)} min="0" max="5" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                     <p className="mt-1 text-xs text-muted-foreground">Each attempt reduces prep time by ~15%.</p>
                 </div>
             </div>
 
             <div className="mt-5">
-                <label className="block text-sm font-semibold mb-2">Weak Subjects (select all that apply)</label>
-                <div className="flex flex-wrap gap-2">
+                <p id="prep-weak-subjects" className="block text-sm font-semibold mb-2">Weak Subjects (select all that apply)</p>
+                <div role="group" aria-labelledby="prep-weak-subjects" className="flex flex-wrap gap-2">
                     {cmsSubjects.map(s => (
-                        <button key={s} onClick={() => toggleSubject(s)} className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${weakSubjects.includes(s) ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'}`}>
+                        <button key={s} type="button" aria-pressed={weakSubjects.includes(s)} onClick={() => toggleSubject(s)} className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${weakSubjects.includes(s) ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'}`}>
                             {s}
                         </button>
                     ))}

@@ -8,7 +8,7 @@ const title = 'UPSC CMS Salary 2026 — Pay, Allowances, Career Growth & Promoti
 const description = 'Complete UPSC CMS salary structure for 2026: basic pay, NPA, HRA, DA, promotion hierarchy (MO → ADMO → CMO → DGHS), and in-hand salary breakdown for General Duty Medical Officers.';
 const slug = 'cms-salary';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: '/cms/salary' });
 
 const jsonLd = {
     '@context': 'https://schema.org',

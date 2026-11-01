@@ -1,43 +1,31 @@
 /**
- * /exams/[slug]/page.tsx — Dispatcher for the legacy exam slugs.
+ * /exams/[slug]/page.tsx — catch-all for /exams/<slug>.
  *
- * Routes the existing /exams/upsc-cms, /exams/neet-pg, /exams/usmle,
- * /exams/ini-cet, /exams/fmge URLs to their respective microsite pages.
- * For the three fully-built microsites (cms, neet-pg, usmle) it 308s to
- * the canonical path; ini-cet and fmge still render the legacy info page.
+ * /exams/cms, /exams/neet-pg and /exams/usmle have dedicated pages (static
+ * routes win), so this only sees aliases and unknown slugs: the aliases
+ * permanently redirect, anything else is a real 404 (it used to answer 200
+ * with an "Exam Not Found" page).
  */
-import { redirect } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 type Props = { params: Promise<{ slug: string }> };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
-  // Canonical pages own their metadata; pass-through redirect.
-  return { title: 'Redirecting…', robots: { index: false, follow: false } };
-}
+const ALIASES: Record<string, string> = {
+  'upsc-cms': '/exams/cms',
+  neetpg: '/exams/neet-pg',
+  'ini-cet': '/ini-cet',
+  inicet: '/ini-cet',
+  fmge: '/fmge',
+};
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function ExamSlugDispatcher({ params }: Props) {
   const { slug } = await params;
-  // Normalize aliases.
-  if (slug === 'upsc-cms') redirect('/exams/cms');
-  if (slug === 'neetpg') redirect('/exams/neet-pg');
-  // cms / neet-pg / usmle already have dedicated pages — next/dynamic
-  // routes hit those first, so this dispatcher only sees unknown slugs.
-  return (
-    <div className="flex-1 p-8 text-center mt-20">
-      <h1 className="text-3xl font-bold mb-4">Exam Not Found</h1>
-      <p className="text-muted-foreground mb-6">
-        We don&apos;t have a microsite for &quot;{slug}&quot; yet.
-      </p>
-      <div className="flex justify-center gap-3 flex-wrap">
-        <Link href="/exams/cms" className="text-primary hover:underline">UPSC CMS</Link>
-        <span>·</span>
-        <Link href="/exams/neet-pg" className="text-primary hover:underline">NEET PG</Link>
-        <span>·</span>
-        <Link href="/exams/usmle" className="text-primary hover:underline">USMLE</Link>
-      </div>
-    </div>
-  );
+  const target = ALIASES[slug.toLowerCase()];
+  if (target) permanentRedirect(target);
+  notFound();
 }

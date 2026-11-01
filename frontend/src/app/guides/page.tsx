@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { jsonLdString } from '@/lib/metadata';
 
 export const metadata: Metadata = {
-    title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET | CrackCMS',
+    title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET',
     description: 'In-depth prep guides for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE, and Medical Officer exams. Written by practicing clinicians on CrackCMS.',
     alternates: { canonical: '/guides', languages: { 'en-IN': '/guides' } },
     openGraph: {
@@ -53,8 +53,7 @@ export default function GuidesIndexPage() {
 
     return (
         <>
-            <Script id="guides-hub-schema" type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background">
                 <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">

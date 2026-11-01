@@ -1,114 +1,60 @@
 import type { MetadataRoute } from 'next';
-import { siteUrl } from '@/lib/seo';
+import { privateNoIndexPrefixes, siteUrl } from '@/lib/seo';
+
+/**
+ * robots.txt — served from this route (the old static public/robots.txt and
+ * public/sitemap.xml shadowed it and were removed).
+ *
+ * Rules:
+ *  - Disallow prefixes have NO trailing slash, so "/dashboard" blocks both
+ *    /dashboard and /dashboard/... (a "/dashboard/" rule does not match the
+ *    real URL /dashboard).
+ *  - /_next/ is NOT blocked: Google needs the JS/CSS chunks and /_next/image
+ *    to render pages.
+ *  - Every user-agent appears in exactly one group. A crawler obeys only the
+ *    most specific group that names it, so each group carries the full rule
+ *    set.
+ */
+
+/** Search engines and AI answer engines we explicitly welcome. */
+const NAMED_CRAWLERS = [
+    'Googlebot',
+    'Googlebot-Image',
+    'Googlebot-News',
+    'Googlebot-Video',
+    'Google-Extended',
+    'Bingbot',
+    'Slurp',
+    'DuckDuckBot',
+    'DuckAssistBot',
+    'Baiduspider',
+    'YandexBot',
+    'Applebot',
+    'Applebot-Extended',
+    'GPTBot',
+    'ChatGPT-User',
+    'OAI-SearchBot',
+    'ClaudeBot',
+    'Claude-Web',
+    'Claude-User',
+    'Claude-SearchBot',
+    'PerplexityBot',
+    'Perplexity-User',
+    'cohere-ai',
+    'cohere-training-crawler',
+    'CCBot',
+    'Diffbot',
+    'PetalBot',
+];
 
 export default function robots(): MetadataRoute.Robots {
-    // Generic crawler rule: allow indexable public marketing/legal/guides/exam
-    // pages; disallow every authenticated/private route to avoid leaking
-    // private dashboards or sensitive app state.
-    const publicAllow = '/';
-    const privateDisallow = [
-        '/admin/',
-        '/dashboard/',
-        '/questions/',
-        '/tests/',
-        '/analytics/',
-        '/simulator/',
-        '/ai-tutor/',
-        '/tokens/',
-        '/bookmarks/',
-        '/flashcards/',
-        '/generate/',
-        '/roadmap/',
-        '/textbooks/',
-        '/upload/',
-        '/trends/',
-        '/leaderboard/',
-        '/feedback/',
-        '/settings/',
-        '/auth/',
-        '/reset-password',
-        '/forgot-password',
-        '/api/',
-        '/_next/',
-    ];
+    // Private / login-only app routes (question bank, dashboards, admin, API).
+    const disallow = [...privateNoIndexPrefixes];
 
     return {
         rules: [
-            {
-                userAgent: '*',
-                allow: publicAllow,
-                disallow: privateDisallow,
-            },
-            {
-                userAgent: ['Googlebot', 'Googlebot-Image', 'Googlebot-News', 'Googlebot-Video'],
-                allow: publicAllow,
-                disallow: privateDisallow,
-            },
-            {
-                userAgent: ['Bingbot', 'Slurp', 'DuckDuckBot', 'Baiduspider', 'YandexBot', 'Applebot'],
-                allow: publicAllow,
-                disallow: privateDisallow,
-            },
-            // Major AI crawlers — explicit allow so CrackCMS content is
-            // cited in ChatGPT, Claude, Perplexity, Gemini, Google AI Mode.
-            // Question bank and dashboard pages stay blocked to prevent
-            // scraping of licensed question content.
-            {
-                userAgent: [
-                    'GPTBot',
-                    'ChatGPT-User',
-                    'OAI-SearchBot',
-                    'Claude-Web',
-                    'ClaudeBot',
-                    'Claude-Image',
-                    'PerplexityBot',
-                    'Perplexity-User',
-                    'Google-Extended',
-                    'Googlebot',
-                    'Googlebot-Image',
-                    'Googlebot-News',
-                    'Googlebot-Video',
-                    'Applebot',
-                    'Applebot-Extended',
-                    'cohere-ai',
-                    'cohere-training-crawler',
-                    'ccbot',
-                    'Diffbot',
-                    'DuckAssistBot',
-                    'ISRBot',
-                    ' Kangaroo Bot',
-                    'PetalBot',
-                    ' Sidetrade',
-                ],
-                allow: [
-                    '/',
-                    '/cms',
-                    '/neet-pg',
-                    '/ini-cet',
-                    '/fmge',
-                    '/usmle',
-                    '/medical-officer',
-                    '/government-doctor-jobs',
-                    '/exams',
-                    '/guides',
-                    '/blog',
-                    '/about',
-                    '/contact',
-                    '/subscription',
-                    '/register',
-                    '/resources',
-                    '/jobs',
-                    '/privacy-policy',
-                    '/terms',
-                    '/refund-policy',
-                    '/cookie-policy',
-                    '/disclaimer',
-                    '/editorial-policy',
-                    '/medical-review-policy',
-                    '/ai-attribution-policy',
-                ],
-                disallow: privateDisallow,
-            },
+            { userAgent: '*', allow: '/', disallow },
+            { userAgent: NAMED_CRAWLERS, allow: '/', disallow },
         ],
         sitemap: `${siteUrl}/sitemap.xml`,
         host: siteUrl,

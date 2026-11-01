@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import {
     ArrowRight, BookOpen, Brain, CheckCircle2, ChevronRight,
     GraduationCap, Sparkles, Target, Trophy
@@ -8,9 +7,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
+import { jsonLdString } from '@/lib/metadata';
 
 export interface SubjectHubContent {
     examSlug: 'cms' | 'neet-pg' | 'ini-cet' | 'fmge' | 'usmle';
@@ -47,7 +47,7 @@ const ACCENT: Record<SubjectHubContent['examSlug'], { from: string; to: string }
 
 export function buildSubjectHubMetadata(c: SubjectHubContent): Metadata {
     const path = `/${c.examSlug}/subject/${c.subjectSlug}`;
-    const title = `${c.examName} ${c.subjectName} — PYQs, High-Yield Topics, Books | CrackCMS`;
+    const title = `${c.examName} ${c.subjectName} — PYQs, High-Yield Topics, Books`;
     const description = `Master ${c.subjectName} for ${c.examName}. Practice ${c.questionCount}+ ${c.subjectName} PYQs, learn high-yield topics, see year-wise question distribution and book recommendations.`;
     return {
         title,
@@ -59,7 +59,7 @@ export function buildSubjectHubMetadata(c: SubjectHubContent): Metadata {
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: title }],
+            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: {
@@ -116,8 +116,7 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
 
     return (
         <>
-            <Script id={`subject-hub-${c.examSlug}-${c.subjectSlug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
@@ -152,16 +151,12 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
                             ))}
                         </div>
                         <div className="mt-6 flex flex-wrap gap-3">
-                            <Link href="/register">
-                                <Button size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
-                                    Start Practising <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            </Link>
-                            <Link href={`/questions?exam=${c.examSlug.toUpperCase()}&subject=${c.subjectSlug}`}>
-                                <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
-                                    <BookOpen className="h-4 w-4" /> Open Question Bank
-                                </Button>
-                            </Link>
+                            <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
+                                <Link href="/register">Start Practising <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
+                                <Link href={questionBankHref(c.examSlug, { subject: c.subjectSlug })}><BookOpen className="h-4 w-4" /> Open Question Bank</Link>
+                            </Button>
                         </div>
                     </div>
                 </section>
@@ -262,16 +257,12 @@ export default function SubjectHubLayout(c: SubjectHubContent) {
                             Join thousands of medical aspirants using CrackCMS to prepare smarter. Start free today.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register">
-                                <Button size="lg" className="gap-2 font-bold">
-                                    Create free account <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            </Link>
-                            <Link href={`/questions?exam=${c.examSlug.toUpperCase()}&subject=${c.subjectSlug}`}>
-                                <Button size="lg" variant="outline" className="gap-2 font-bold">
-                                    Open Question Bank
-                                </Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <Link href="/register">Create free account <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="gap-2 font-bold">
+                                <Link href={questionBankHref(c.examSlug, { subject: c.subjectSlug })}>Open Question Bank</Link>
+                            </Button>
                         </div>
                     </div>
                     <p className="mt-6 text-center text-xs text-muted-foreground">

@@ -13,14 +13,19 @@
  *   2. Single event taxonomy across all vendors (`AnalyticsEvent`). Any
  *      new event MUST be added here, otherwise GA4 + PostHog + Clarity
  *      dashboards drift apart.
- *   3. Lazy / consent-gated — `loadConsent()` from `lib/consent` gates
- *      vendor script init. See `ConsentGate.tsx` for the runtime gate.
+ *   3. Consent-gated — nothing is sent anywhere unless the visitor allowed
+ *      the matching category in the cookie banner (`lib/consent`):
+ *      GA4, Clarity, Datadog and our own backend relay need `analytics`;
+ *      PostHog needs `marketing`. The vendor loaders (layout.tsx gtag
+ *      bootstrap, ClarityInit, PostHogInit, DatadogInit, AdSense) apply the
+ *      same rule before any script is fetched.
  *   4. No duplicate `page_view` fires — GA4 auto-pv is disabled in
  *      layout.tsx (`send_page_view: false`) and we push manually via
  *      `analytics.pageView(...)` from `TrafficAnalytics`.
  */
 
 import type { User } from './auth';
+import { consent, type ConsentCategory } from './consent';
 
 declare global {
     interface Window {
@@ -187,12 +192,31 @@ function safeDdAction(name: string, params?: EventParams): void {
     }
 }
 
-/** Fan out to every enabled vendor. Internal — do not call directly. */
+/** True when the visitor has allowed this consent category. */
+function allowed(category: ConsentCategory): boolean {
+    if (!isBrowser()) return false;
+    try {
+        return consent.isAllowed(category);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Fan out to every enabled vendor the visitor consented to, and mirror the
+ * high-value events to our backend. Internal — do not call directly.
+ */
 function dispatch(event: AnalyticsEvent, params?: EventParams): void {
-    safeGtag(event, params);
-    safeClarity(event, params);
-    safePosthog(event, params);
-    safeDdAction(event, params);
+    if (!isBrowser()) return;
+    if (allowed('analytics')) {
+        safeGtag(event, params);
+        safeClarity(event, params);
+        safeDdAction(event, params);
+        maybeRelay(event, params);
+    }
+    if (allowed('marketing')) {
+        safePosthog(event, params);
+    }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -221,27 +245,31 @@ export const identity = {
         };
         const merged: EventParams = { ...base, ...(traits ?? {}) };
 
-        safeGtag('set', { user_id: id });
-        // Set scalar user properties (GA4 user_properties bag requires a
-        // nested object — we cast to gtag's loose type to avoid clashing
-        // with our strict EventParams interface).
-        try {
-            const win = window as unknown as {
-                gtag?: (cmd: string, ...args: unknown[]) => void;
-            };
-            win.gtag?.('set', 'user_properties', merged as unknown as Record<string, unknown>);
-        } catch {
-            /* ignore */
+        if (allowed('analytics')) {
+            // GA4 forbids personal data (email, names) in user properties, so
+            // only the opaque id and coarse traits go to gtag.
+            const { email: _email, username: _username, ...gaTraits } = merged;
+            try {
+                const win = window as unknown as {
+                    gtag?: (cmd: string, ...args: unknown[]) => void;
+                };
+                win.gtag?.('set', { user_id: id });
+                win.gtag?.('set', 'user_properties', gaTraits as unknown as Record<string, unknown>);
+            } catch {
+                /* ignore */
+            }
+            try {
+                window.DD_RUM?.setUser({ id, role: merged.role });
+            } catch {
+                /* ignore */
+            }
         }
-        try {
-            window.posthog?.identify(id, merged as Record<string, unknown>);
-        } catch {
-            /* ignore */
-        }
-        try {
-            window.DD_RUM?.setUser({ id, ...merged });
-        } catch {
-            /* ignore */
+        if (allowed('marketing')) {
+            try {
+                window.posthog?.identify(id, merged as Record<string, unknown>);
+            } catch {
+                /* ignore */
+            }
         }
         lastIdentifiedId = id;
     },
@@ -315,6 +343,8 @@ function emptyAttribution(): Attribution {
 export const attribution = {
     capture(): Attribution | null {
         if (!isBrowser()) return null;
+        // UTM persistence is part of the `marketing` consent category.
+        if (!allowed('marketing')) return null;
         const url = new URL(window.location.href);
         const params = url.searchParams;
         const hasUtm = UTM_KEYS.some((k) => params.has(k));
@@ -535,12 +565,17 @@ function getSessionId(): string {
 }
 
 /**
- * Debounced relay — fire-and-forget to our backend, max 1 call per 50ms.
- * Listens only to high-value events so we don't flood the API. Pageview
- * + scroll + scroll-related fires are excluded — only the conversion
- * funnel + content events are mirrored to our backend.
+ * Relay — fire-and-forget copy of selected events to our backend
+ * (`/api/analytics/events/`), which powers /admin/analytics-dashboard.
+ * Every wrapper goes through dispatch(), so the relay lives there (it used
+ * to sit only in analytics.event(), which almost nothing called, so the
+ * dashboard never received page views, searches or blog views).
+ * Page views (one per route change, deduped) feed the visitor / page KPIs;
+ * scroll, engagement and other chatty events stay out.
  */
-const RELAYED_EVENTS = new Set<AnalyticsEvent>([
+export const RELAYED_EVENTS = new Set<AnalyticsEvent>([
+    'page_view',
+    'register_intent',
     'sign_up',
     'login',
     'subscription_intent',
@@ -558,20 +593,66 @@ const RELAYED_EVENTS = new Set<AnalyticsEvent>([
     'site_search',
 ]);
 
-let pendingRelay: { event: AnalyticsEvent; params?: EventParams } | null = null;
-let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+/** Keys the ingest endpoint stores as columns (everything else -> properties). */
+const RELAY_TOP_LEVEL_KEYS = [
+    'page_type',
+    'page_group',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+] as const;
 
+/**
+ * Build the body for POST /api/analytics/events/. The endpoint reads
+ * known columns from the top level and free-form data from `properties`
+ * (e.g. the admin dashboard's top searches read properties.search_term),
+ * so event params are nested there instead of spread at the top level.
+ */
+export function buildRelayPayload(
+    event: AnalyticsEvent,
+    params: EventParams | undefined,
+    context: EventParams,
+): Record<string, unknown> {
+    const props: Record<string, string | number | boolean | null> = {};
+    Object.entries(params ?? {}).forEach(([k, v]) => {
+        if (v !== undefined) props[k] = v;
+    });
+    const body: Record<string, unknown> = { event_name: event };
+    Object.entries(context).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') body[k] = v;
+    });
+    RELAY_TOP_LEVEL_KEYS.forEach((k) => {
+        const v = props[k];
+        if (v !== undefined && v !== null && v !== '') body[k] = String(v);
+    });
+    body.properties = props;
+    return body;
+}
+
+const RELAY_QUEUE_MAX = 20;
+let relayQueue: { event: AnalyticsEvent; params?: EventParams }[] = [];
+let relayTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Queue an event for the backend relay and flush the queue every 50ms.
+ * (The old debounce kept only the LAST event of each window, so a page_view
+ * followed by session_start lost the page_view.)
+ */
 function maybeRelay(event: AnalyticsEvent, params?: EventParams): void {
     if (!isBrowser()) return;
     if (!RELAYED_EVENTS.has(event)) return;
-    pendingRelay = { event, params };
-    if (pendingTimer) return;
-    pendingTimer = setTimeout(() => {
-        const next = pendingRelay;
-        pendingRelay = null;
-        pendingTimer = null;
-        if (!next) return;
-        void analytics.relay(next.event, next.params);
+    if (relayQueue.length >= RELAY_QUEUE_MAX) relayQueue.shift();
+    relayQueue.push({ event, params });
+    if (relayTimer) return;
+    relayTimer = setTimeout(() => {
+        relayTimer = null;
+        const batch = relayQueue;
+        relayQueue = [];
+        batch.forEach((item) => {
+            void analytics.relay(item.event, item.params);
+        });
     }, 50);
 }
 
@@ -670,10 +751,9 @@ export const analytics = {
     reset: identity.clear,
     attribution,
 
-    /* Generic helper — surface any event with safe fan-out */
+    /* Generic helper — surface any event with safe, consent-gated fan-out */
     event(event: AnalyticsEvent, params?: EventParams): void {
         dispatch(event, params);
-        maybeRelay(event, params);
     },
 
     /**
@@ -686,13 +766,12 @@ export const analytics = {
      * (e.g. simulator) can't flood the backend.
      */
     async relay(event: AnalyticsEvent, params?: EventParams): Promise<void> {
+        // First-party analytics with a persistent visitor id: same consent
+        // rule as the third-party vendors.
+        if (!allowed('analytics')) return;
         try {
             const { analyticsAPI } = await import('./api');
-            await analyticsAPI.ingestEvent({
-                event_name: event,
-                ...(params ?? {}),
-                ...buildServerContext(),
-            });
+            await analyticsAPI.ingestEvent(buildRelayPayload(event, params, buildServerContext()));
         } catch {
             /* failures are silent — analytics must never break the page */
         }
@@ -914,3 +993,20 @@ export const analytics = {
 };
 
 export default analytics;
+
+/* ----------------------------------------------------------------------- */
+/* PostHog loader                                                           */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * The official PostHog web snippet (stub queue + async /static/array.js),
+ * followed by posthog.init(key, options). Rendered by PostHogInit only after
+ * `marketing` consent. The previous hand-edited snippet was not valid
+ * JavaScript ("e.__SV=1.2.2;" is a SyntaxError) and never loaded array.js.
+ */
+export function posthogLoaderScript(key: string, options: Record<string, unknown>): string {
+    const snippet =
+        '!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);';
+    const safeJson = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
+    return `${snippet}window.posthog.init(${safeJson(key)},${safeJson(options)});`;
+}

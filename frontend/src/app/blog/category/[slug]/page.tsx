@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { BookOpen, ChevronLeft } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
-import { buildPageMetadata } from '@/lib/metadata';
+import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
 import {
     getAllCategories,
     getPostsByCategory,
@@ -78,12 +77,7 @@ export default async function BlogCategoryPage({ params }: PageProps) {
 
     return (
         <>
-            <Script
-                id={`category-schema-${cat.slug}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">

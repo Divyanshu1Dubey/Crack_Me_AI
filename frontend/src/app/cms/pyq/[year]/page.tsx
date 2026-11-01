@@ -14,7 +14,7 @@ export async function generateMetadata(
     const year = Number(y);
     if (!Number.isFinite(year)) return {};
     const data = getCmsYear(year);
-    if (!data) return { title: 'UPSC CMS PYQs | CrackCMS', robots: { index: false } };
+    if (!data) return { title: 'UPSC CMS PYQs', robots: { index: false } };
     return buildPyqYearMetadata(data);
 }
 

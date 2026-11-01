@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, CheckCircle2, GraduationCap, Sparkles, Trophy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
+import { jsonLdString } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
 
@@ -18,7 +18,13 @@ export interface ComparisonRow {
 
 export interface ComparisonContent {
     examASlug: 'cms' | 'neet-pg' | 'ini-cet' | 'fmge' | 'usmle';
-    examBSlug: 'cms' | 'neet-pg' | 'ini-cet' | 'fmge' | 'usmle';
+    examBSlug: 'cms' | 'neet-pg' | 'ini-cet' | 'fmge' | 'usmle' | 'next';
+    /**
+     * The page's real URL path, e.g. '/fmge/vs-next'. Used for the JSON-LD
+     * @id and breadcrumb (building it from the slugs produced a 404 URL for
+     * FMGE vs NEXT).
+     */
+    path: string;
     examAName: string;
     examBName: string;
     examALandingPath: string;
@@ -51,7 +57,7 @@ export function buildComparisonMetadata(c: ComparisonContent, path: string): Met
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: title }],
+            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
@@ -60,7 +66,7 @@ export function buildComparisonMetadata(c: ComparisonContent, path: string): Met
 
 export default function ComparisonLayout(props: ComparisonContent | { content: ComparisonContent }) {
     const c = 'content' in props && props.content ? props.content : (props as ComparisonContent);
-    const path = `/${c.examASlug}/vs-${c.examBSlug}`;
+    const path = c.path;
     const jsonLd = {
         '@context': 'https://schema.org',
         '@graph': [
@@ -96,8 +102,7 @@ export default function ComparisonLayout(props: ComparisonContent | { content: C
 
     return (
         <>
-            <Script id={`vs-${c.examASlug}-${c.examBSlug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
@@ -209,9 +214,9 @@ export default function ComparisonLayout(props: ComparisonContent | { content: C
                             PYQs from both exams, AI tutor, and exam-mode simulator in one free account.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <Link href="/register">
-                                <Button size="lg" className="gap-2 font-bold">Create free account <ArrowRight className="h-4 w-4" /></Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <Link href="/register">Create free account <ArrowRight className="h-4 w-4" /></Link>
+                            </Button>
                         </div>
                     </div>
                 </section>

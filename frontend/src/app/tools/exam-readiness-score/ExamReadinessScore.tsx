@@ -22,7 +22,6 @@ const SUBJECTS = [
     'ENT',
     'Ophthalmology',
     'FM',
-    'SPM',
 ];
 
 export default function ExamReadinessScore() {
@@ -112,8 +111,8 @@ export default function ExamReadinessScore() {
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Days Remaining Until Exam</label>
-                    <input
+                    <label htmlFor="readiness-days-remaining-until-exam" className="block text-sm font-semibold mb-1">Days Remaining Until Exam</label>
+                    <input id="readiness-days-remaining-until-exam"
                         type="number"
                         min={1}
                         value={daysRemaining}
@@ -122,8 +121,8 @@ export default function ExamReadinessScore() {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Study Hours Per Day</label>
-                    <input
+                    <label htmlFor="readiness-study-hours-per-day" className="block text-sm font-semibold mb-1">Study Hours Per Day</label>
+                    <input id="readiness-study-hours-per-day"
                         type="number"
                         min={0}
                         max={16}
@@ -133,8 +132,8 @@ export default function ExamReadinessScore() {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Mock Tests Completed</label>
-                    <input
+                    <label htmlFor="readiness-mock-tests-completed" className="block text-sm font-semibold mb-1">Mock Tests Completed</label>
+                    <input id="readiness-mock-tests-completed"
                         type="number"
                         min={0}
                         max={100}
@@ -144,8 +143,8 @@ export default function ExamReadinessScore() {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Revision Cycles Completed</label>
-                    <input
+                    <label htmlFor="readiness-revision-cycles-completed" className="block text-sm font-semibold mb-1">Revision Cycles Completed</label>
+                    <input id="readiness-revision-cycles-completed"
                         type="number"
                         min={0}
                         max={10}
@@ -157,12 +156,14 @@ export default function ExamReadinessScore() {
             </div>
 
             <div className="mt-6">
-                <label className="block text-sm font-semibold mb-2">Subject Completion (%)</label>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <p id="readiness-subjects" className="block text-sm font-semibold mb-2">Subject Completion (%)</p>
+                <div role="group" aria-labelledby="readiness-subjects" className="grid gap-3 sm:grid-cols-2">
                     {subjects.map((s, i) => (
                         <div key={s.subject} className="flex items-center gap-3">
-                            <span className="w-28 text-xs font-medium text-muted-foreground truncate">{s.subject}</span>
+                            <label htmlFor={`readiness-subject-${i}`} className="w-28 text-xs font-medium text-muted-foreground truncate">{s.subject}</label>
                             <input
+                                id={`readiness-subject-${i}`}
+                                aria-valuetext={`${s.completed}%`}
                                 type="range"
                                 min={0}
                                 max={100}

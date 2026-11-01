@@ -56,9 +56,10 @@ export default function MedicalReviewPage() {
 
             <h2>Disclosure of AI Involvement</h2>
             <p>
-                Every explanation card carries a small "AI-assisted" or "Clinician-authored" badge so
-                learners know the source. The full review trail is available to administrators on the
-                Admin → Question Review page.
+                Output from the AI tutor is shown in AI-labelled panels (for example the AI explanation
+                and AI tutor views), so learners know when they are reading AI-generated text. Per-question
+                source badges are not shown yet; until they are, treat any explanation as AI-assisted unless
+                it names a clinician author.
             </p>
 
             <h2>Reporting Concerns</h2>

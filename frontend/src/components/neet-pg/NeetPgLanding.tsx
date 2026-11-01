@@ -147,7 +147,9 @@ export default function NeetPgLanding() {
     return () => { cancelled = true; };
   }, []);
 
-  const totalQs = stats?.total && stats.total > 0 ? stats.total : 2300;
+  // Only call the count "live" when it really came from the API.
+  const liveTotal = stats?.total && stats.total > 0 ? stats.total : null;
+  const totalQs = liveTotal ?? 2300;
   const totalYears = stats?.by_year.length ?? 0;
   const totalSubjects = subjects.length > 0 ? subjects.length : 19;
 
@@ -160,7 +162,7 @@ export default function NeetPgLanding() {
   }, [stats]);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
         <Breadcrumbs items={[{ name: 'NEET PG', path: '/neet-pg' }]} />
       </div>
@@ -230,7 +232,7 @@ export default function NeetPgLanding() {
 
           {/* Live stats row */}
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl">
-            <StatTile value={loading ? '—' : `${totalQs.toLocaleString()}+`} label="NEET PG PYQs" sub="live from API" />
+            <StatTile value={loading ? '—' : `${totalQs.toLocaleString()}+`} label="NEET PG PYQs" sub={liveTotal ? 'live from API' : 'approximate'} />
             <StatTile value={loading ? '—' : `${totalYears}`} label="Years covered" sub="2018 – 2025" />
             <StatTile value={loading ? '—' : `${totalSubjects}`} label="PG Subjects" sub="clinical + para + pre" />
             <StatTile value="800" label="Max Marks" sub="200 Qs · +4 / -1" />
@@ -597,7 +599,7 @@ export default function NeetPgLanding() {
           </span>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
 

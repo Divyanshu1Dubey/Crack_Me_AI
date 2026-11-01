@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
     const { slug } = await params;
     const data = getCmsSubject(slug);
-    if (!data) return { title: 'UPSC CMS Subject | CrackCMS', robots: { index: false } };
+    if (!data) return { title: 'UPSC CMS Subject', robots: { index: false } };
     return buildSubjectHubMetadata(data);
 }
 
