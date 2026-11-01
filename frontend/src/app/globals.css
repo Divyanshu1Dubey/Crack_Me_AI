@@ -8,10 +8,14 @@
    classes can still override. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Layout stability — isolate major regions to prevent CLS from
-   notifications, sidebar toggles, and async content loading. */
+/* No layout containment on .main-content. `contain: layout` made it the
+   containing block for every `position: fixed` descendant, so page modals
+   (`fixed inset-0`: subscription, questions editor, search dialog) covered
+   the tall content box instead of the viewport and opened off-screen, and
+   fixed tooltips were offset by the sidebar width. The CLS figure that
+   justified it was measured on the home page, which has no .main-content. */
 .main-content {
-  contain: layout style;
+  contain: style;
 }
 
 /* Reserve space for notification badge to prevent header shift */
@@ -382,9 +386,15 @@
   --gradient-primary: linear-gradient(125deg, #ec4899, #f472b6, #db2777);
 }
 
-* {
-  box-sizing: border-box;
-  border-color: var(--color-border);
+/* Default border colour. In @layer base (after Tailwind's preflight) so
+   border-colour utilities win: unlayered, this rule beat every
+   `border-primary` / `border-slate-700` / `border-transparent` in the app
+   (active tab underlines, error boxes, the home demo card outlines). */
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-border);
+  }
 }
 
 html {
@@ -409,9 +419,12 @@ body {
 /* Defensive: prevent any single element from blowing out mobile viewport.
    Real phones fit-to-width on body.scrollWidth, which makes everything
    look zoomed-out. Capping main containers at 100vw keeps the viewport
-   scale correct on actual phones. */
-main, .main-content, .page-container, header {
-  max-width: 100%;
+   scale correct on actual phones. A default only (@layer base): a page's
+   own `max-w-4xl` on a <main> must still apply. */
+@layer base {
+  main, .main-content, .page-container, header {
+    max-width: 100%;
+  }
 }
 
 /* Body background — split off so the overflow cap above stays independent */
@@ -452,12 +465,16 @@ body {
   }
 }
 
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-heading), var(--font-body), sans-serif;
-  letter-spacing: -0.02em;
+/* Heading defaults; in @layer base so `tracking-*` / `font-*` utilities on a
+   heading still apply. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading), var(--font-body), sans-serif;
+    letter-spacing: -0.02em;
+  }
 }
 
 /* ==========================================
@@ -492,64 +509,81 @@ h4 {
   background-clip: text;
 }
 
-/* Buttons */
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
-  padding: 10px 20px;
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: 14px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Buttons and inputs are @layer components: utilities on the same element
+   (`text-xs`, `px-3 py-1.5`, `w-full`, `pl-10`, `disabled:opacity-60`)
+   override them. Unlayered, these rules silently beat every such utility. */
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
 
-.btn-primary:hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(14, 116, 144, 0.28);
-}
+  .btn-primary:hover {
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(14, 116, 144, 0.28);
+  }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--color-primary);
-  padding: 10px 20px;
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: 14px;
-  border: 1px solid var(--color-border);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+  /* Same flex row as .btn-primary: with the default display, an icon
+     (display:block from preflight) sat on its own line above the label. */
+  .btn-secondary {
+    background: transparent;
+    color: var(--color-primary);
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
 
-.btn-secondary:hover {
-  background: var(--color-accent);
-}
+  .btn-secondary:hover {
+    background: var(--color-accent);
+  }
 
-/* Input */
-.input-field {
-  background: var(--color-card);
-  border: 1px solid var(--color-input);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  color: var(--color-foreground);
-  width: 100%;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
-}
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-.input-field:focus {
-  outline: none;
-  border-color: var(--color-ring);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
-}
+  /* Input */
+  .input-field {
+    background: var(--color-card);
+    border: 1px solid var(--color-input);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    color: var(--color-foreground);
+    width: 100%;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+  }
 
-[data-theme="dark"] .input-field:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  .input-field:focus {
+    outline: none;
+    border-color: var(--color-ring);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  }
+
+  [data-theme="dark"] .input-field:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  }
 }
 
 /* Scrollbar */
@@ -705,13 +739,10 @@ h4 {
   50% { opacity: 0.8; }
 }
 
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #6366f1 50%, #8b5cf6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+/* .gradient-text is defined once, with its dark-theme variant, under
+   "Legacy Compatibility Classes" above. Two later copies (primary->violet
+   here, an animated amber->pink->violet one further down) overrode it in
+   the light theme only, so the same heading changed hue with the theme. */
 
 /* Glowing border animation */
 @keyframes borderGlow {
@@ -1020,12 +1051,14 @@ html { scroll-behavior: smooth; }
   min-height: 100vh;
 }
 
+/* z-index 45: above the sidebar (40), below modal overlays (z-50) so it
+   does not float over a dimmed dialog backdrop. */
 .desktop-sidebar-toggle-btn {
   display: none;
   position: fixed;
   top: 18px;
   left: 18px;
-  z-index: 60;
+  z-index: 45;
   background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -1044,29 +1077,32 @@ html { scroll-behavior: smooth; }
   }
 }
 
-/* Desktop-only: hide sidebar when user has collapsed it. On mobile (<768px)
-   the sidebar is a slide-in drawer controlled by .open, so the
-   `desktop-hidden` class (which is applied based on the SidebarContext
-   desktop-open state) must NOT trigger display:none — otherwise the
-   mobile drawer can never open. */
-@media (min-width: 769px) {
+/* Desktop-only: hide sidebar when user has collapsed it. Only from 1025px,
+   where the .desktop-sidebar-toggle-btn exists to bring it back: on phones
+   the sidebar is the slide-in drawer, and the 72px tablet rail (769-1024px)
+   has no toggle, so hiding it there (e.g. on the auto-collapsing
+   /questions routes) left tablets with no navigation at all. */
+@media (min-width: 1025px) {
   .sidebar.desktop-hidden {
     display: none !important;
   }
-}
 
-body.sidebar-hidden .main-content {
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-}
-
-/* Floating dock mobile — reserve space so buttons don't overlap content */
-@media (max-width: 640px) {
-  body.floating-dock-visible {
-    padding-bottom: 5rem;
+  /* Only the sidebar offset goes; the normal 20px padding stays, so the
+     page keeps its left gutter (it used to touch the screen edge). */
+  body.sidebar-hidden .main-content {
+    margin-left: 0 !important;
   }
-  body.floating-dock-visible main,
-  body.floating-dock-visible .main-content {
+}
+
+/* Floating dock (phones): keep the page's last lines scrollable clear of the
+   fixed buttons. App-shell pages already end with .main-content's 116px
+   bottom padding, so only pages without the shell, and pages that show the
+   footer, get room under <body>. The old rule padded <body>, the root <main>,
+   .main-content and any nested <main>: up to 4 x 5rem of blank scroll, shown
+   as a differently coloured band below opaque page wrappers. */
+@media (max-width: 640px) {
+  body.floating-dock-visible:not(:has(.main-content)),
+  body.floating-dock-visible:has(> footer) {
     padding-bottom: 5rem;
   }
 }
@@ -1213,11 +1249,13 @@ body.sidebar-hidden .main-content {
   opacity: 1;
 }
 
-/* Mobile menu button */
+/* Mobile menu button. top: 16px keeps it inside the 64px header both at the
+   top of the page (header at 12-76px) and once the sticky header has
+   scrolled up to 0-64px; 12px sat 10px above the header's icon row. */
 .mobile-menu-btn {
   display: none;
   position: fixed;
-  top: 12px;
+  top: 16px;
   left: 12px;
   z-index: 50;
   width: 44px;
@@ -1312,16 +1350,8 @@ body.sidebar-hidden .main-content {
    This empty block is intentionally left as a marker so the earlier rule
    remains the single source of truth for mobile-menu-btn styling. */
 
-/* Disabled button */
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Disabled button styles live with .btn-primary / .btn-secondary in
+   @layer components above. */
 
 /* Skeleton loading */
 @keyframes shimmer {
@@ -1568,68 +1598,74 @@ body.sidebar-hidden .main-content {
    Legal / Long-form content typography
    Hand-styled (no @tailwindcss/typography) so headings, lists,
    blockquotes and tables render correctly in light + dark.
+   @layer components: these are defaults for bare prose. Unlayered, they
+   beat the utilities of every button, card and label placed inside the
+   prose (a `text-primary-foreground` CTA turned blue-on-blue, card labels
+   lost their colours).
    ========================================== */
-.legal-content h2 {
-  margin: 2.25rem 0 0.75rem;
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--color-foreground);
-  scroll-margin-top: 5rem;
-}
-.legal-content h3 {
-  margin: 1.5rem 0 0.5rem;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--color-foreground);
-}
-.legal-content p {
-  margin: 0.85rem 0;
-  line-height: 1.75;
-  color: var(--color-foreground);
-}
-.legal-content ul,
-.legal-content ol {
-  margin: 0.75rem 0 0.75rem 1.25rem;
-  padding: 0;
-  color: var(--color-foreground);
-}
-.legal-content ul { list-style: disc; }
-.legal-content ol { list-style: decimal; }
-.legal-content li { margin: 0.4rem 0; line-height: 1.7; }
-.legal-content strong { color: var(--color-foreground); font-weight: 700; }
-.legal-content a {
-  color: var(--color-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.legal-content blockquote {
-  border-left: 3px solid var(--color-primary);
-  background: var(--color-accent);
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  border-radius: 0 0.5rem 0.5rem 0;
-}
-.legal-content hr {
-  border: 0;
-  border-top: 1px solid var(--color-border);
-  margin: 2rem 0;
-}
-.legal-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-  font-size: 0.9rem;
-}
-.legal-content th,
-.legal-content td {
-  border: 1px solid var(--color-border);
-  padding: 0.6rem 0.8rem;
-  text-align: left;
-}
-.legal-content th {
-  background: var(--color-muted);
-  font-weight: 700;
+@layer components {
+  .legal-content h2 {
+    margin: 2.25rem 0 0.75rem;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--color-foreground);
+    scroll-margin-top: 5rem;
+  }
+  .legal-content h3 {
+    margin: 1.5rem 0 0.5rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-foreground);
+  }
+  .legal-content p {
+    margin: 0.85rem 0;
+    line-height: 1.75;
+    color: var(--color-foreground);
+  }
+  .legal-content ul,
+  .legal-content ol {
+    margin: 0.75rem 0 0.75rem 1.25rem;
+    padding: 0;
+    color: var(--color-foreground);
+  }
+  .legal-content ul { list-style: disc; }
+  .legal-content ol { list-style: decimal; }
+  .legal-content li { margin: 0.4rem 0; line-height: 1.7; }
+  .legal-content strong { color: var(--color-foreground); font-weight: 700; }
+  .legal-content a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .legal-content blockquote {
+    border-left: 3px solid var(--color-primary);
+    background: var(--color-accent);
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border-radius: 0 0.5rem 0.5rem 0;
+  }
+  .legal-content hr {
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    margin: 2rem 0;
+  }
+  .legal-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  .legal-content th,
+  .legal-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+  }
+  .legal-content th {
+    background: var(--color-muted);
+    font-weight: 700;
+  }
 }
 
 /* ==========================================
@@ -1983,6 +2019,15 @@ body.sidebar-hidden .main-content {
   color: var(--accent-primary);
   font-weight: 700;
 }
+/* Wide tables (blog posts) scroll inside this wrapper instead of being
+   clipped by html/body overflow-x: hidden. Same pattern as .ai-table-wrap. */
+.formatted-text .formatted-table-wrap {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.formatted-text .formatted-table-wrap > table {
+  margin: 0;
+}
 
 /* On colored "explanation" cards the body text needs a slightly darker
    shade in light mode so it doesn't disappear against emerald-50/indigo-50
@@ -2216,20 +2261,6 @@ body.sidebar-hidden .main-content {
 }
 .stat-card-glow:hover::before {
   opacity: 1;
-}
-
-/* Gradient text utility */
-.gradient-text {
-  background: linear-gradient(135deg, #f59e0b, #ec4899, #7c3aed);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradientShift 4s ease-in-out infinite;
-}
-@keyframes gradientShift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
 }
 
 /* Glass card shimmer on hover */

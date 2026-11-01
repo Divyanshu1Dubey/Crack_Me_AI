@@ -1,26 +1,37 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useDock } from '@/context/DockContext';
+import { useAuth } from '@/lib/auth';
+import { isFloatingDockHiddenRoute } from '@/lib/appShellRoutes';
 import { MessageSquare, Layers, X, Send, Save } from 'lucide-react';
 import { Button } from './ui/button';
 import api from '@/lib/api';
 
 export function FloatingDock() {
   const { activePanel, setActivePanel, contextQuestionId, selectedText, setSelectedText } = useDock();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const pathname = usePathname();
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Prevent floating buttons from overlapping page content on mobile
+  // Both actions call login-only endpoints, so anonymous visitors (and the
+  // moment before auth resolves) get no dock; nor do the admin tools, the
+  // AI Tutor and the timed test player (see isFloatingDockHiddenRoute).
+  const hidden = authLoading || !isAuthenticated || isFloatingDockHiddenRoute(pathname);
+
+  // Tell globals.css to reserve space under the page for the buttons, but
+  // only while they are actually on screen.
   useEffect(() => {
-    if (activePanel === 'none') {
+    if (activePanel === 'none' && !hidden) {
       document.body.classList.add('floating-dock-visible');
     } else {
       document.body.classList.remove('floating-dock-visible');
     }
     return () => document.body.classList.remove('floating-dock-visible');
-  }, [activePanel]);
+  }, [activePanel, hidden]);
 
   const handleAskAI = async () => {
     if (!aiQuery.trim()) return;
@@ -58,6 +69,8 @@ export function FloatingDock() {
     }
   };
 
+  if (hidden) return null;
+
   if (activePanel === 'none') {
     return (
       <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6 flex flex-col gap-2 z-50">
@@ -70,11 +83,13 @@ export function FloatingDock() {
         >
           <MessageSquare className="h-5 w-5" aria-hidden="true" />
         </Button>
+        {/* Phones get the AI button only: the stacked pair covered the right
+            edge of cards, and select-then-tap does not work well on touch. */}
         <Button
           variant="secondary"
           size="icon"
           aria-label="Create flashcard from selected text"
-          className="rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="hidden sm:inline-flex rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           onClick={() => {
             const selection = window.getSelection()?.toString();
             if (selection) {
