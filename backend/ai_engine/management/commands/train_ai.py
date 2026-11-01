@@ -102,6 +102,14 @@ class Command(BaseCommand):
                 filename = Path(file_path).name
                 book_name = self._clean_name(filename, category)
 
+                # Not study material (internal business docs, personal /
+                # administrative forms): never index it — the same corpus
+                # policy the search index applies (ai_engine.lexical_index).
+                from ai_engine.lexical_index import is_excluded_document
+                if is_excluded_document(book_name, filename):
+                    self.stdout.write(f"  [File] Skipping (not study material): {filename}")
+                    continue
+
                 self.stdout.write(f"  [File] Indexing: {filename} -> '{book_name}'")
 
                 def progress_cb(current, total, name):

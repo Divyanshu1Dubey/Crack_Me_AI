@@ -12,9 +12,10 @@ import { Sparkles, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 interface UsageBannerProps {
-  /** Daily AI tutor cap (matches backend `AI_TUTOR_DAILY_FREE_CAP = 2`). */
+  /** Override for the daily AI tutor cap. Defaults to the profile's
+   *  `ai_tutor_daily_cap` (backend TokenConfig.ai_tutor_daily_cap). */
   cap?: number;
-  /** Used count today — usually pulled from /api/auth/profile/. */
+  /** Override for today's usage. Defaults to the profile's `ai_tutor_used_today`. */
   usedToday?: number;
 }
 
@@ -28,7 +29,7 @@ function readDismissed(): boolean {
   );
 }
 
-export function UsageBanner({ cap = 2, usedToday = 0 }: UsageBannerProps) {
+export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: UsageBannerProps) {
   const { user } = useAuth();
   // Storage is read on each render — the dismiss() callback bumps
   // `nonce` so React re-renders and we re-read storage. Avoids the
@@ -44,14 +45,22 @@ export function UsageBanner({ cap = 2, usedToday = 0 }: UsageBannerProps) {
     setNonce(1);
   }, []);
 
-  // Only render for free (non-premium, non-admin) users.
+  // Only render for free (non-premium, non-admin) users. The profile sends
+  // `ai_tutor_daily_cap: null` for anyone without a cap.
   const isFree =
     user &&
     !user.is_admin &&
-    !user.subscription_info?.is_active;
+    !user.is_premium &&
+    !user.subscription_info?.is_active &&
+    user.ai_tutor_daily_cap !== null;
 
   if (!isFree || dismissed) return null;
 
+  const cap = capOverride ?? (typeof user.ai_tutor_daily_cap === 'number' ? user.ai_tutor_daily_cap : 2);
+  const usedToday = Math.min(
+    cap,
+    usedOverride ?? (typeof user.ai_tutor_used_today === 'number' ? user.ai_tutor_used_today : 0),
+  );
   const remaining = Math.max(0, cap - usedToday);
   const isDepleted = remaining === 0;
 

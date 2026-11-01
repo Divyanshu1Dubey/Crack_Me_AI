@@ -3,25 +3,32 @@ Hybrid retrieval pipeline for the knowledge base.
 
 Pipeline stages:
   1. Query expansion (medical synonyms + abbreviations)
-  2. BM25 search (Postgres tsvector when available; in-Python fallback)
-  3. Vector search (cosine over stored embeddings; pure Python numpy)
+  2. BM25 search (in-Python inverted index, built once per process and
+     rebuilt when the approved chunk set changes)
+  3. Vector search (cosine over stored embeddings; skipped when no real
+     embedding provider is available; bounded scan)
   4. Reciprocal Rank Fusion (RRF) to combine rankings
   5. Knowledge-graph neighbour boost (for entities mentioned in query)
-  6. Cross-encoder rerank (when available; otherwise skip)
+  6. Cross-encoder rerank (when available and ``KB_USE_RERANK``; otherwise a
+     lexical rerank)
   7. Context compression — return top-K chunks with citations
 
-All stages degrade gracefully if their dependency is unavailable.
+All stages degrade gracefully if their dependency is unavailable. Models
+are loaded once per process (views build a new pipeline per request).
 """
 
+import hashlib
 import logging
 import math
 import re
+import threading
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
 from django.conf import settings
-from django.db import connection
+from django.db.models import Count, Max
 
 from knowledge_base.models import (
     KnowledgeChunk, KnowledgeEntity, KnowledgeRelation, KnowledgeSource,
@@ -30,6 +37,54 @@ from knowledge_base.ontology.loader import expand_query, get_kg_neighbors
 from knowledge_base.services.embedding import EmbeddingService
 
 logger = logging.getLogger(__name__)
+
+CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_LOAD_RETRY_SECONDS = 600
+
+_APPROVED = (KnowledgeChunk.APPROVAL_AUTO, KnowledgeChunk.APPROVAL_ADMIN)
+
+# ─── Per-process caches ───────────────────────────────────────────────
+
+_CE_LOCK = threading.Lock()
+_CE_STATE = {"model": None, "failed_at": None}
+
+_CORPUS_LOCK = threading.Lock()
+_CORPUS = {"sig": None, "index": None}
+
+_KG_LOCK = threading.Lock()
+_KG_CACHE = {"sig": None, "entities": []}
+
+
+def _offline() -> bool:
+    try:
+        from ai_engine.offline import ai_offline_mode
+        return ai_offline_mode()
+    except Exception:
+        return False
+
+
+def get_cross_encoder():
+    """The process-wide CrossEncoder, or None (not installed, not cached
+    locally in offline mode, or a recent load failed)."""
+    model = _CE_STATE["model"]
+    if model is not None:
+        return model
+    failed_at = _CE_STATE["failed_at"]
+    if failed_at is not None and time.monotonic() - failed_at < _LOAD_RETRY_SECONDS:
+        return None
+    with _CE_LOCK:
+        if _CE_STATE["model"] is not None:
+            return _CE_STATE["model"]
+        try:
+            from sentence_transformers import CrossEncoder  # type: ignore
+            kwargs = {"local_files_only": True} if _offline() else {}
+            _CE_STATE["model"] = CrossEncoder(CROSS_ENCODER_MODEL, **kwargs)
+            _CE_STATE["failed_at"] = None
+        except Exception as e:
+            logger.info(f"Cross-encoder unavailable ({e}); using lexical rerank")
+            _CE_STATE["failed_at"] = time.monotonic()
+            return None
+        return _CE_STATE["model"]
 
 
 @dataclass
@@ -52,6 +107,14 @@ class RetrievedChunk:
     citation: dict = field(default_factory=dict)
 
 
+@dataclass
+class _BM25Corpus:
+    docs: list
+    postings: dict          # term -> list[(doc_idx, tf)]
+    lengths: list
+    avgdl: float
+
+
 class RetrievalPipeline:
     """
     Default hybrid retriever. Wraps BM25, vector, KG, and rerank
@@ -65,15 +128,35 @@ class RetrievalPipeline:
 
     # ─── Public ────────────────────────────────────────────
 
-    def search(self, query: str, top_k: int = 8,
+    @staticmethod
+    def cache_key(query: str, top_k: int, subject: Optional[str],
+                  source_slugs: Optional[list[str]], use_rerank: bool, use_kg: bool) -> str:
+        """Stable across processes (``hash()`` of a str is randomised per
+        process, so workers could never share entries)."""
+        raw = "\x1f".join([
+            query or "", str(top_k), subject or "", ",".join(sorted(source_slugs or [])),
+            str(bool(use_rerank)), str(bool(use_kg)),
+        ])
+        return "kb:ret:v2:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def search(self, query: str, top_k: Optional[int] = None,
                subject: Optional[str] = None,
                source_slugs: Optional[list[str]] = None,
-               use_rerank: bool = True,
-               use_kg: bool = True) -> list[RetrievedChunk]:
-        # Cache key
-        cache_key = f"kb:ret:{hash(query)}:{top_k}:{subject}:{','.join(source_slugs or [])}"
+               use_rerank: Optional[bool] = None,
+               use_kg: Optional[bool] = None) -> list[RetrievedChunk]:
+        if top_k is None:
+            top_k = int(getattr(settings, "KB_DEFAULT_TOP_K", 8))
+        if use_rerank is None:
+            use_rerank = bool(getattr(settings, "KB_USE_RERANK", True))
+        if use_kg is None:
+            use_kg = bool(getattr(settings, "KB_USE_KG_BOOST", True))
+
+        cache_key = self.cache_key(query, top_k, subject, source_slugs, use_rerank, use_kg)
         if self.cache is not None:
-            cached = self.cache.get(cache_key)
+            try:
+                cached = self.cache.get(cache_key)
+            except Exception:
+                cached = None
             if cached:
                 return [RetrievedChunk(**c) for c in cached]
 
@@ -125,64 +208,71 @@ class RetrievalPipeline:
         return [t.lower() for t in re.findall(r"[a-zA-Z][a-zA-Z0-9\-]+", text)
                 if t.lower() not in self._STOP and len(t) > 1]
 
+    def _corpus(self) -> Optional[_BM25Corpus]:
+        """Tokenized approved corpus + inverted index, built once per process
+        and rebuilt when the approved chunk set changes (one aggregate query
+        per search instead of loading and tokenizing every chunk)."""
+        qs = KnowledgeChunk.objects.filter(is_active=True, approval_state__in=_APPROVED)
+        agg = qs.aggregate(n=Count("id"), last=Max("updated_at"), top=Max("id"))
+        sig = (agg["n"], agg["last"], agg["top"])
+        if _CORPUS["sig"] == sig and _CORPUS["index"] is not None:
+            return _CORPUS["index"]
+        with _CORPUS_LOCK:
+            if _CORPUS["sig"] == sig and _CORPUS["index"] is not None:
+                return _CORPUS["index"]
+            limit = int(getattr(settings, "KB_BM25_MAX_DOCS", 5000))
+            docs = list(qs.select_related("source").order_by("id").values(
+                "id", "text", "subject", "topic", "locator", "source__slug",
+                "source__name", "source__attribution", "license",
+                "source__source_url",
+            )[:limit])
+            postings: dict = defaultdict(list)
+            lengths = []
+            for i, d in enumerate(docs):
+                toks = self._tokenize(d["text"])
+                lengths.append(len(toks))
+                for term, tf in Counter(toks).items():
+                    postings[term].append((i, tf))
+            index = _BM25Corpus(
+                docs=docs, postings=dict(postings), lengths=lengths,
+                avgdl=(sum(lengths) / len(lengths)) if lengths else 1.0,
+            )
+            _CORPUS["sig"], _CORPUS["index"] = sig, index
+            return index
+
     def _bm25(self, query: str, top_k: int, subject: Optional[str],
               source_slugs: Optional[list[str]]) -> list[RetrievedChunk]:
-        """BM25 over the active chunk corpus.
-
-        Implementation note: we tried using Postgres tsvector via
-        django.contrib.postgres.search, but kept this engine-agnostic
-        in-Python implementation so it works on SQLite dev and Postgres
-        prod. Cost is bounded: we materialize docs from chunks tagged
-        as auto-approved + admin-approved.
-        """
-        qs = KnowledgeChunk.objects.filter(is_active=True, approval_state__in=[
-            KnowledgeChunk.APPROVAL_AUTO, KnowledgeChunk.APPROVAL_ADMIN,
-        ])
-        if subject:
-            qs = qs.filter(subject=subject)
-        if source_slugs:
-            qs = qs.filter(source__slug__in=source_slugs)
-        # Cap candidate set for performance
-        docs = list(qs.select_related("source").values(
-            "id", "text", "subject", "topic", "locator", "source__slug",
-            "source__name", "source__attribution", "license",
-            "source__source_url",
-        )[:5000])
-        if not docs:
-            return []
-
+        """BM25 over the active, approved chunk corpus (IDF over the whole
+        cached corpus; subject/source filters applied per document)."""
         query_tokens = self._tokenize(query)
         if not query_tokens:
             return []
-
-        # Build BM25 structures
-        tokenized = [self._tokenize(d["text"]) for d in docs]
-        N = len(docs)
-        df = Counter()
-        for toks in tokenized:
-            for t in set(toks):
-                df[t] += 1
-        avgdl = sum(len(t) for t in tokenized) / max(N, 1)
-
+        corpus = self._corpus()
+        if corpus is None or not corpus.docs:
+            return []
+        slugs = set(source_slugs or [])
+        n_docs = len(corpus.docs)
         k1, b = 1.5, 0.75
-        scores = []
-        for i, toks in enumerate(tokenized):
-            s = 0.0
-            tf = Counter(toks)
-            dl = len(toks)
-            for q in query_tokens:
-                if q not in tf:
+        acc: dict[int, float] = defaultdict(float)
+        for q in set(query_tokens):
+            entries = corpus.postings.get(q)
+            if not entries:
+                continue
+            df = len(entries)
+            idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1)
+            for i, tf in entries:
+                d = corpus.docs[i]
+                if subject and d.get("subject") != subject:
                     continue
-                idf = math.log((N - df[q] + 0.5) / (df[q] + 0.5) + 1)
-                denom = tf[q] + k1 * (1 - b + b * dl / max(avgdl, 1))
-                s += idf * ((tf[q] * (k1 + 1)) / max(denom, 1e-9))
-            if s > 0:
-                scores.append((s, i))
+                if slugs and d.get("source__slug") not in slugs:
+                    continue
+                dl = corpus.lengths[i]
+                denom = tf + k1 * (1 - b + b * dl / max(corpus.avgdl, 1))
+                acc[i] += idf * ((tf * (k1 + 1)) / max(denom, 1e-9))
 
-        scores.sort(reverse=True, key=lambda x: x[0])
         out = []
-        for s, i in scores[:top_k]:
-            d = docs[i]
+        for i, s in sorted(acc.items(), key=lambda x: x[1], reverse=True)[:top_k]:
+            d = corpus.docs[i]
             out.append(RetrievedChunk(
                 chunk_id=d["id"],
                 text=d["text"],
@@ -203,26 +293,28 @@ class RetrievalPipeline:
     def _vector(self, query: str, top_k: int, subject: Optional[str],
                 source_slugs: Optional[list[str]]) -> list[RetrievedChunk]:
         try:
-            qvec = self.embedding.embed(query)[0]
+            qvec = self.embedding.embed_query(query)
         except Exception as e:
             logger.warning(f"Embedding failed: {e}")
+            return []
+        if not qvec:
+            # No real embedding provider: BM25-only (never compare
+            # meaningless hash vectors).
             return []
 
         qs = KnowledgeChunk.objects.filter(
             is_active=True,
-            approval_state__in=[
-                KnowledgeChunk.APPROVAL_AUTO,
-                KnowledgeChunk.APPROVAL_ADMIN,
-            ],
+            approval_state__in=_APPROVED,
             embedding__isnull=False,
         )
         if subject:
             qs = qs.filter(subject=subject)
         if source_slugs:
             qs = qs.filter(source__slug__in=source_slugs)
+        limit = int(getattr(settings, "KB_VECTOR_SCAN_LIMIT", 5000))
 
         scored = []
-        for chunk in qs.select_related("embedding", "source").iterator(chunk_size=500):
+        for chunk in qs.select_related("embedding", "source").order_by("-id")[:limit].iterator(chunk_size=500):
             try:
                 vec = chunk.embedding.vector
                 score = self._cosine(qvec, vec)
@@ -282,22 +374,34 @@ class RetrievalPipeline:
 
     # ─── KG boost ─────────────────────────────────────────
 
+    @staticmethod
+    def _kg_entities() -> list[tuple[str, set]]:
+        """(name, lower-cased names+synonyms) for every entity, cached per
+        process until the entity table changes."""
+        agg = KnowledgeEntity.objects.aggregate(n=Count("id"), top=Max("id"))
+        sig = (agg["n"], agg["top"])
+        if _KG_CACHE["sig"] == sig:
+            return _KG_CACHE["entities"]
+        with _KG_LOCK:
+            entities = []
+            for name, synonyms in KnowledgeEntity.objects.values_list("name", "synonyms"):
+                names = {str(name).lower(), *(str(s).lower() for s in (synonyms or []))}
+                entities.append((name, names))
+            _KG_CACHE["sig"], _KG_CACHE["entities"] = sig, entities
+            return entities
+
     def _kg_boost(self, chunks: list[RetrievedChunk], expansion: dict) -> None:
         tokens = set(expansion.get("tokens", []))
         # Find entities mentioned in the query
-        entities = []
-        for e in KnowledgeEntity.objects.all():
-            names = {e.name.lower(), *(s.lower() for s in e.synonyms)}
-            if tokens & names:
-                entities.append(e)
+        entities = [name for name, names in self._kg_entities() if tokens & names]
 
         if not entities:
             return
 
         # Build a chunk_id -> boost map by walking KG neighbors
         boosts: dict[int, float] = defaultdict(float)
-        for e in entities:
-            for edge in get_kg_neighbors(e.name, hops=1):
+        for name in entities:
+            for edge in get_kg_neighbors(name, hops=1):
                 # Match by name appearing in chunk text
                 for c in chunks:
                     if edge["from"].lower() in c.text.lower() or edge["to"].lower() in c.text.lower():
@@ -311,24 +415,22 @@ class RetrievalPipeline:
     # ─── Rerank ───────────────────────────────────────────
 
     def _rerank(self, chunks: list[RetrievedChunk], expanded_query: str) -> None:
-        """Lightweight lexical rerank — favours chunks with more query
-        token overlap. A real cross-encoder would be better; we keep
-        this engine-agnostic so it runs in any environment.
-
-        If `sentence-transformers` `CrossEncoder` is available we'll
-        upgrade to that automatically.
-        """
-        try:
-            from sentence_transformers import CrossEncoder  # type: ignore
-            model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-            pairs = [(expanded_query, c.text[:512]) for c in chunks]
-            scores = model.predict(pairs)
-            for c, s in zip(chunks, scores):
-                c.rerank_score = float(s)
-                c.final_score = 0.7 * float(s) + 0.3 * c.final_score
+        """Cross-encoder rerank when the (process-wide) model is available,
+        otherwise a lightweight lexical rerank that favours chunks with more
+        query token overlap."""
+        if not chunks:
             return
-        except Exception:
-            pass
+        model = get_cross_encoder()
+        if model is not None:
+            try:
+                pairs = [(expanded_query, c.text[:512]) for c in chunks]
+                scores = model.predict(pairs)
+                for c, s in zip(chunks, scores):
+                    c.rerank_score = float(s)
+                    c.final_score = 0.7 * float(s) + 0.3 * c.final_score
+                return
+            except Exception as e:
+                logger.info(f"Cross-encoder rerank failed ({e}); using lexical rerank")
 
         query_tokens = set(self._tokenize(expanded_query))
         for c in chunks:
@@ -340,8 +442,10 @@ class RetrievalPipeline:
     # ─── Citations ────────────────────────────────────────
 
     def _attach_citations(self, chunks: list[RetrievedChunk]) -> None:
+        # One query for every chunk's source template (was one per chunk).
+        objs = KnowledgeChunk.objects.select_related("source").in_bulk([c.chunk_id for c in chunks])
         for c in chunks:
-            chunk_obj = KnowledgeChunk.objects.filter(pk=c.chunk_id).select_related("source").first()
+            chunk_obj = objs.get(c.chunk_id)
             tpl = chunk_obj.source.citation_template if chunk_obj and chunk_obj.source.citation_template else "{title} — {attribution} ({locator}). {url}"
             try:
                 citation = tpl.format(

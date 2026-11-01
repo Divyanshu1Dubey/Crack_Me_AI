@@ -8,10 +8,11 @@
 import React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
+import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
-import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
+import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { decodeMojiB, coerceToText } from '@/lib/textCleanup';
 
@@ -20,7 +21,13 @@ interface Message {
     content: string;
     type?: string;
     citations?: Array<{ book: string; page: number; excerpt: string; relevance: number }>;
+    /** Answer assembled from the textbook library without an AI model. */
+    offline?: boolean;
 }
+
+/** Fields every AI Tutor call sends so the backend saves the turn to history
+ *  (strings, so they fit every aiAPI payload type; the backend parses both). */
+type HistoryFields = { save_history: 'true'; chat_session_id?: string };
 
 interface ChatSession {
     id: number;
@@ -39,7 +46,9 @@ const looksLikeProviderErrorResponse = (text: string) => {
         normalized.includes('no endpoints provided') ||
         normalized.includes('model endpoint not found') ||
         normalized.includes('service unavailable') ||
-        normalized.includes('upstream request failed')
+        normalized.includes('upstream request failed') ||
+        normalized.includes('all ai services are temporarily unavailable') ||
+        normalized.includes('ai answer generation is unavailable')
     );
 };
 
@@ -189,6 +198,7 @@ function SafeUserText({ content }: { content: unknown }) {
 
 export default function AITutorPage() {
     const { ready } = useRequireAuth();
+    const { user, refreshProfile } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -214,8 +224,15 @@ export default function AITutorPage() {
             // Sanitize legacy/malformed session rows so the renderer never
             // dereferences a missing field (caused the "Something went wrong"
             // crash on /ai-tutor when session.updated_at was null).
+            // The endpoint returns a plain array; older deployments paginated
+            // it as {count, results}.
             const raw: unknown = res.data || [];
-            const list = (Array.isArray(raw) ? raw : []).map((s: any) => ({
+            const rows: unknown[] = Array.isArray(raw)
+                ? raw
+                : Array.isArray((raw as { results?: unknown[] })?.results)
+                    ? (raw as { results: unknown[] }).results
+                    : [];
+            const list = rows.map((s: any) => ({
                 id: typeof s?.id === 'number' ? s.id : 0,
                 title: typeof s?.title === 'string' ? s.title : '',
                 mode: typeof s?.mode === 'string' ? s.mode : 'tutor',
@@ -312,51 +329,74 @@ export default function AITutorPage() {
         // The mode that actually answered (the textbook path can fall back
         // to the tutor); `mode` from state would be stale inside this call.
         let effectiveMode = mode;
+        // The backend saves both turns of every answered message to the
+        // user's chat history (and returns the session id to continue in).
+        const history: HistoryFields = currentSessionId
+            ? { save_history: 'true', chat_session_id: String(currentSessionId) }
+            : { save_history: 'true' };
         try {
             let response: string;
             let citations: Message['citations'] = undefined;
+            let data: { chat_session_id?: unknown; offline?: unknown } | undefined;
 
             if (mode === 'tutor') {
-                const res = await aiAPI.askTutor({ question: userMsg });
+                const res = await aiAPI.askTutor({ question: userMsg, ...history });
+                data = res.data;
                 response = res.data.response;
             } else if (mode === 'mnemonic') {
-                const res = await aiAPI.generateMnemonic({ topic: userMsg });
+                const res = await aiAPI.generateMnemonic({ topic: userMsg, ...history });
+                data = res.data;
                 response = res.data.mnemonic;
             } else if (mode === 'explain') {
-                const res = await aiAPI.explain({ concept: userMsg });
+                const res = await aiAPI.explain({ concept: userMsg, ...history });
+                data = res.data;
                 response = res.data.explanation;
             } else if (mode === 'textbook') {
-                const res = await aiAPI.ragAnswer({ question: userMsg });
+                const res = await aiAPI.ragAnswer({ question: userMsg, ...history });
                 // If RAG backend has no indexed textbooks (e.g. fresh host),
                 // fall back to AI Tutor so the student always gets an answer.
+                // (The backend gives the textbook attempt's message back, so
+                // this costs one message, not two.)
                 if (res.data?.error === 'textbook_search_unavailable') {
                     effectiveMode = 'tutor';
                     setMode('tutor');
-                    const tutorRes = await aiAPI.askTutor({ question: userMsg });
+                    const tutorRes = await aiAPI.askTutor({ question: userMsg, ...history });
+                    data = tutorRes.data;
                     response = tutorRes.data.response;
                 } else {
+                    data = res.data;
                     response = res.data.answer;
                     citations = res.data.citations;
                 }
             } else {
-                const res = await aiAPI.analyzeQuestion({ question_text: userMsg });
+                const res = await aiAPI.analyzeQuestion({ question_text: userMsg, ...history });
+                data = res.data;
                 response = res.data.analysis;
             }
 
             if (!response || looksLikeProviderErrorResponse(response)) {
                 response = '⚠️ AI is temporarily unavailable right now. Please retry in a few seconds.';
             }
+            const offline = data?.offline === true;
+            if (typeof data?.chat_session_id === 'number') {
+                setCurrentSessionId(data.chat_session_id);
+            }
 
-            setMessages(prev => [...prev, { role: 'ai', content: response, type: effectiveMode, citations }]);
+            setMessages(prev => [...prev, { role: 'ai', content: response, type: effectiveMode, citations, offline }]);
             // Scroll to show AI answer from top after it's added
             scrollToLatestAiMessage();
             // Refresh sessions to include the new one
             loadSessions();
+            // Keep the free-tier usage banner ("N/2 AI chats used today") current.
+            if (typeof user?.ai_tutor_daily_cap === 'number') {
+                refreshProfile().catch(() => { /* banner refreshes on next load */ });
+            }
         } catch (err: unknown) {
             const statusCode = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
             const errorPayload = (err as { response?: { data?: unknown } })?.response?.data;
             const errorCode = (errorPayload as { code?: string } | undefined)?.code;
             const is429 = statusCode === 429;
+            const unavailableMessage = (errorPayload as { message?: string } | undefined)?.message;
             // Freemium conversion layer (Task 11): when the api.ts interceptor
             // fires the global UpgradeModal on `code: 'upgrade_required'`,
             // suppress the noisy inline error message — the modal already
@@ -366,9 +406,13 @@ export default function AITutorPage() {
             if (isUpgradeRequired) {
                 setMessages(prev => prev.slice(0, -1));
             } else {
+                // `ai_unavailable`: no AI answer and nothing in the textbook
+                // library matched; the backend did not charge for it.
                 const message = is429
                     ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
-                    : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
+                    : errorCode === 'ai_unavailable' && unavailableMessage
+                        ? `⚠️ ${unavailableMessage}`
+                        : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
 
                 setMessages(prev => [...prev, {
                     role: 'ai',
@@ -633,6 +677,13 @@ export default function AITutorPage() {
                                         }}>
                                         {msg.role === 'ai' ? (
                                             <div className="ai-response text-foreground">
+                                                {msg.offline && (
+                                                    <div className="mb-2 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold"
+                                                        style={{ background: 'rgba(217, 119, 6, 0.12)', color: '#b45309' }}>
+                                                        <WifiOff className="w-3 h-3" aria-hidden="true" />
+                                                        Offline answer · from the textbook library, no AI model · not charged
+                                                    </div>
+                                                )}
                                                 {/*
                                                   NOTE: do NOT use Tailwind `prose` here.
                                                   Tailwind 4 doesn't ship the typography

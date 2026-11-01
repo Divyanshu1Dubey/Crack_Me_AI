@@ -7,6 +7,12 @@
  */
 // `ExamTrack` is re-exported via the index barrel; not referenced here.
 
+/** Tokens per generation request, whatever the question count
+ *  (backend: GenerateQuestionsView.GENERATION_COST). */
+export const GENERATION_TOKEN_COST = 10;
+/** Tokens per optional AI deep explanation (backend: ExplainAfterAnswerView). */
+export const EXPLANATION_TOKEN_COST = 10;
+
 export interface TrackMeta {
   label: string;
   tagline: string;

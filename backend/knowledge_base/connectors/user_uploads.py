@@ -10,20 +10,66 @@ the upload cannot enter search results.
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Iterable, Optional
 
 from django.conf import settings
 
-from knowledge_base.models import UserUploadAttestation
+from knowledge_base.models import KnowledgeSource, LICENSE_USER_ATTESTED, UserUploadAttestation
 
 from .base import ConnectorBase, RawChunk
 
 logger = logging.getLogger(__name__)
 
+# Filenames that name a copyrighted textbook or a competitor platform as the
+# document's subject (matched as whole words of the cleaned filename).
+REFUSED_FILENAME_MARKERS = (
+    "harrison", "bailey", "love", "robbins", "park", "ghai",
+    "nelson", "ganong", "guyton", "kdt", "tripathi", "katzung",
+    "marrow", "prepladder", "dams", "prepcms", "gomed",
+)
+
+
+def refused_marker(filename: str) -> Optional[str]:
+    """The refused marker a filename contains, or None."""
+    cleaned = re.sub(r"[^a-z0-9]+", " ", (filename or "").lower()).strip()
+    tokens = set(cleaned.split())
+    for marker in REFUSED_FILENAME_MARKERS:
+        if marker in tokens:
+            return marker
+    return None
+
 
 class UserUploadsConnector(ConnectorBase):
-    source_slug = "internal-notes"  # reuse internal attribution; license is USER_ATTESTED
+    """Own source (``user-uploads``, licence ``user_attested``): uploads used
+    to borrow the internal-notes source and were stored as "CrackLabs
+    Internal" content and auto-approved. User-attested chunks always wait for
+    an admin (see IngestionService.AUTO_APPROVE_LICENSES)."""
+
+    source_slug = "user-uploads"
+    SOURCE_DEFAULTS = {
+        "name": "User uploads (rights attested)",
+        "description": "Documents uploaded by CrackLabs users who attested they hold the rights; admin-reviewed.",
+        "license": LICENSE_USER_ATTESTED,
+        "attribution": "Uploaded by a CrackLabs user (rights attested)",
+        "citation_template": "{title} — {attribution}",
+        "is_active": True,
+    }
+
+    @property
+    def source(self) -> KnowledgeSource:
+        if self._source is None:
+            source, _created = KnowledgeSource.objects.get_or_create(
+                slug=self.source_slug, defaults=self.SOURCE_DEFAULTS,
+            )
+            if not source.is_active:
+                raise RuntimeError(
+                    f"Source '{self.source_slug}' is marked inactive. "
+                    f"Re-activate in admin before ingesting."
+                )
+            self._source = source
+        return self._source
 
     def __init__(self, base_dir: Optional[str] = None):
         super().__init__()
@@ -50,23 +96,17 @@ class UserUploadsConnector(ConnectorBase):
                 logger.warning(f"Upload missing on disk: {path}")
                 continue
 
-            n = path.name.lower()
             # Same defence-in-depth as internal connector. We strip the
             # extension + non-alpha so "park" doesn't match "parking" or
             # "parks_psm_cms_notes.md" — we only want to refuse filenames
             # that explicitly reference a copyrighted textbook or
-            # competitor platform as the document subject.
-            import re as _re
-            cleaned = _re.sub(r"[^a-z0-9]+", " ", n).strip()
-            tokens = set(cleaned.split())
-            for marker in (
-                "harrison", "bailey", "love", "robbins", "park", "ghai",
-                "nelson", "ganong", "guyton", "kdt", "tripathi", "katzung",
-                "marrow", "prepladder", "dams", "prepcms", "gomed",
-            ):
-                if marker in tokens:
-                    logger.warning(f"REFUSED user upload {path.name} — contains '{marker}'")
-                    continue
+            # competitor platform as the document subject. (The old
+            # `continue` sat in the marker loop, so refused files were
+            # still ingested.)
+            marker = refused_marker(path.name)
+            if marker:
+                logger.warning(f"REFUSED user upload {path.name} — contains '{marker}'")
+                continue
 
             try:
                 if path.suffix.lower() == ".pdf":

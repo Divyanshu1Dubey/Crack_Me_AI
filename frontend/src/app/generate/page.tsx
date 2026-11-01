@@ -25,6 +25,7 @@ import { useExamTrack } from '@/components/ExamTrackProvider';
 import { questionsAPI } from '@/lib/api';
 import {
   FALLBACK_SUBJECTS_BY_TRACK,
+  GENERATION_TOKEN_COST,
   GenerateControls,
   GenerateEmptyState,
   GenerateHero,
@@ -36,9 +37,14 @@ import {
 } from '@/components/QuestionComposer';
 import type { ComposerSubject, Difficulty } from '@/components/QuestionComposer';
 import { useTokenWallet } from '@/hooks/useTokenWallet';
+import { useAuth } from '@/lib/auth';
+
+/** Plans whose AI use is not token-metered (backend PLAN_FEATURES.unlimited_ai). */
+const UNLIMITED_AI_PLANS = new Set(['1_year', 'legacy', 'admin_grant']);
 
 export default function GeneratePage() {
     const { ready } = useRequireAuth();
+    const { user } = useAuth();
     const { activeTrack, hydrated } = useExamTrack();
     const [subjects, setSubjects] = useState<ComposerSubject[]>([]);
     // Track the user's explicit pick separately so we can derive
@@ -106,10 +112,15 @@ export default function GeneratePage() {
     ).length;
     const quizComplete = gen.questions.length > 0 && answeredCount === gen.questions.length;
 
-    // Surplus-token hint for the cost line (purely informational).
-    const insufficientTokens = wallet
-        ? wallet.balance !== undefined && wallet.balance < count
-        : false;
+    // Surplus-token hint for the cost line (purely informational). The
+    // balance endpoint returns `available` (there is no `balance` field, so
+    // this warning never rendered); unlimited plans and admins are not metered.
+    const walletAvailable = (wallet as { available?: number } | null)?.available ?? wallet?.balance;
+    const unmetered =
+        Boolean(wallet?.is_admin || user?.is_admin) ||
+        Boolean(user?.subscription_info?.is_active && UNLIMITED_AI_PLANS.has(user.subscription_info.plan));
+    const insufficientTokens =
+        !unmetered && typeof walletAvailable === 'number' && walletAvailable < GENERATION_TOKEN_COST;
 
     return (
         <>
@@ -124,8 +135,8 @@ export default function GeneratePage() {
                             <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
                                 <Coins className="h-4 w-4 mt-0.5 shrink-0" />
                                 <span>
-                                    You have {wallet?.balance ?? 0} tokens but this quiz costs {count}.
-                                    Generation will still run, but the AI explanation step may exhaust your quota.
+                                    You have {walletAvailable ?? 0} tokens but generating a quiz costs {GENERATION_TOKEN_COST}.
+                                    Top up on the Tokens page or wait for your free daily tokens to reset.
                                 </span>
                             </div>
                         )}
@@ -175,7 +186,9 @@ export default function GeneratePage() {
                                     showExplanation={Boolean(gen.showExplanations[idx])}
                                     aiExplanation={gen.aiExplanations[idx]}
                                     aiLoading={gen.aiLoadingIdx === idx}
+                                    aiBusy={gen.aiLoadingIdx !== null}
                                     onPickAnswer={gen.pickAnswer}
+                                    onRequestExplanation={gen.requestExplanation}
                                 />
                             ))}
                         </div>

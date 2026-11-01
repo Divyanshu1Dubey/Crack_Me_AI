@@ -67,9 +67,15 @@ class AutoIngestService:
         if not force and file_hash in self._get_indexed_files():
             return {"status": "skipped", "message": "File already indexed", "chunks": 0}
 
+        book_name = book_name or self._auto_name(file_path)
+        # Same corpus policy as the search index: internal business documents
+        # and personal / administrative forms are never indexed.
+        from ai_engine.lexical_index import is_excluded_document
+        if is_excluded_document(book_name, Path(file_path).name):
+            return {"status": "skipped", "message": "Not study material; not indexed", "chunks": 0}
+
         # Index the file
         rag = RAGPipeline()
-        book_name = book_name or self._auto_name(file_path)
 
         try:
             chunks = rag.index_textbook(file_path, book_name)

@@ -243,7 +243,7 @@ export default function TokensPage() {
                         AI Tokens
                     </h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        Manage your AI tokens — each AI-powered feature costs 1 token
+                        Manage your AI tokens — AI Tutor chats cost 1 token; in-depth AI features cost 10
                     </p>
                 </div>
 
@@ -582,7 +582,9 @@ export default function TokensPage() {
                     <div className="grid md:grid-cols-2 gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
                         <div className="space-y-2">
                             <p><strong style={{ color: 'var(--text-primary)' }}>Free Tokens:</strong> You get {balance?.daily_limit || 10} tokens/day and {balance?.weekly_limit || 50} tokens/week for free.</p>
-                            <p><strong style={{ color: 'var(--text-primary)' }}>What costs a token:</strong> AI Tutor, Mnemonics, Explain Concept, Question Analysis, AI Study Plan, AI Question Generation.</p>
+                            <p><strong style={{ color: 'var(--text-primary)' }}>1 token:</strong> AI Tutor chat, Textbook Search answer, a fresh High-Yield prediction (usually served free from the daily cache).</p>
+                            <p><strong style={{ color: 'var(--text-primary)' }}>10 tokens:</strong> Mnemonic, Explain Concept, Question Analysis, AI deep explanation of a question, AI Study Plan, AI Question Generation (per quiz).</p>
+                            <p><strong style={{ color: 'var(--text-primary)' }}>Never charged:</strong> explanations already saved for a question, offline answers, and calls that fail — failed AI calls are refunded automatically. 1-year and lifetime plans use no tokens.</p>
                         </div>
                         <div className="space-y-2">
                             <p><strong style={{ color: 'var(--text-primary)' }}>Priority Order:</strong> Free tokens are used first, then feedback credits, then purchased tokens.</p>

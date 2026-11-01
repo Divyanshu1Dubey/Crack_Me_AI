@@ -2,11 +2,22 @@
 Enhanced AI Engine API Views with RAG integration.
 
 Token System Integration:
-- Every AI call consumes 1 token (checked via consume_ai_token()).
-- Admins (user.is_admin) bypass token limits entirely.
+- AI calls consume tokens via consume_ai_token(): 1 for tutor chat, textbook
+  answers and a fresh high-yield prediction; 10 for mnemonic, explain,
+  analyze, explain-answer, explain-question, study plan and question
+  generation.
+- Admins (user.is_admin) and unlimited plans bypass token limits entirely.
 - Students get free daily/weekly tokens; after exhaustion, they must buy tokens.
 - Token config is managed via Django Admin > Token Configuration.
+
+Failure contract: when no AI provider answers, AIService raises AIUnavailable.
+Every view then gives back what it charged (tokens AND the freemium slot),
+persists and caches nothing, and answers either with a grounded extractive
+offline answer (ai_engine.offline) or a 503 {code: 'ai_unavailable'}.
+With AI_OFFLINE_MODE on, the same offline answers are served free of charge
+and no provider is called.
 """
+import hashlib
 import json
 import logging
 import os
@@ -17,12 +28,100 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework import status
 from django.conf import settings as django_settings
+from django.core.cache import cache
 from django.db.utils import OperationalError, ProgrammingError
+from django.utils import timezone
 
-from .services import AIService
+from .offline import (
+    REASON_OFFLINE_MODE,
+    REASON_PROVIDERS_DOWN,
+    ai_offline_mode,
+    compose_offline_answer,
+    is_unusable_text,
+    offline_notice,
+    pyq_summary,
+    stored_rich_explanation,
+)
+from .services import AIService, AIUnavailable
 from accounts.models import TokenBalance
 
 logger = logging.getLogger(__name__)
+
+# Input limits for every AI endpoint (prompt size drives provider cost).
+MAX_AI_INPUT_CHARS = 4000      # question / topic / concept / question stem
+MAX_AI_CONTEXT_CHARS = 6000    # optional extra context sent to the tutor
+MAX_AI_PROMPT_CHARS = 1000     # custom instruction on explain-question
+MAX_OPTION_CHARS = 1000
+MAX_LABEL_CHARS = 200          # subject / topic labels
+
+AI_UNAVAILABLE_MESSAGE = (
+    'The AI tutor is unavailable right now and no grounded offline answer was '
+    'found for this question. You were not charged. Please try again in a few minutes.'
+)
+AI_OFFLINE_UNAVAILABLE_MESSAGE = (
+    'AI generation is switched off (offline mode) and no grounded offline answer '
+    'was found for this question. You were not charged.'
+)
+
+
+def _as_text(value) -> str:
+    """A request field as stripped text ('' for missing / non-scalar values)."""
+    if value is None or isinstance(value, (dict, list, tuple)):
+        return ''
+    return str(value).strip()
+
+
+def _required_text(request, name: str, label: str, max_chars: int = MAX_AI_INPUT_CHARS):
+    """(text, None) or ('', 400 Response) for a required, length-capped field."""
+    text = _as_text(request.data.get(name))
+    if not text:
+        return '', Response({'error': f'{label} is required'}, status=400)
+    if len(text) > max_chars:
+        return '', Response(
+            {'error': f'{label} is too long (max {max_chars} characters)'}, status=400,
+        )
+    return text, None
+
+
+def _optional_text(request, name: str, max_chars: int) -> str:
+    return _as_text(request.data.get(name))[:max_chars]
+
+
+def _as_bool(value) -> bool:
+    """Strict boolean parse: multipart 'false' / '0' are False."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return _as_text(value).lower() in ('1', 'true', 'yes', 'on')
+
+
+def _answer_letter(value) -> str:
+    letter = _as_text(value).upper()[:1]
+    return letter if letter in ('A', 'B', 'C', 'D') else ''
+
+
+def _options_param(value) -> dict:
+    """Client-supplied options as {A..D: text}, capped; anything else dropped."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    for key in ('A', 'B', 'C', 'D'):
+        raw = value.get(key, value.get(key.lower()))
+        if raw is not None:
+            out[key] = _as_text(raw)[:MAX_OPTION_CHARS]
+    return out
+
+
+def _ai_unavailable_response(*, offline: bool = False, message: str = None) -> Response:
+    """503 telling the client no AI (and no grounded offline) answer exists.
+    `error` stays human-readable for clients that display it directly."""
+    text = message or (AI_OFFLINE_UNAVAILABLE_MESSAGE if offline else AI_UNAVAILABLE_MESSAGE)
+    return Response(
+        {'code': 'ai_unavailable', 'error': text, 'message': text,
+         'offline': offline, 'charged': False},
+        status=503,
+    )
 
 
 class IsAdminUser(BasePermission):
@@ -189,63 +288,248 @@ def _ai_tutor_cap() -> int:
     return AI_TUTOR_DAILY_FREE_CAP
 
 
-def _check_ai_tutor_quota(user):
+def _take_ai_tutor_slot(user):
     """Atomic check-and-consume for the AI tutor daily cap.
 
-    Returns ``None`` if the user may proceed, or a 402 ``Response`` if the
-    daily cap is hit. Uses ``models_usage.check_and_consume`` which holds a
-    row lock for the entire check+increment window — race-free even under
-    100 concurrent requests from the same user.
+    Returns ``(error_response, slot_day)``: ``(None, day)`` when a slot was
+    consumed (``day`` lets the caller release exactly that slot later),
+    ``(None, None)`` when the user is exempt, ``(402 Response, None)`` when
+    the daily cap is hit. Uses ``models_usage.check_and_consume`` which holds
+    a row lock for the entire check+increment window.
 
-    Bypass order (must match ``consume_ai_token`` so we never bill a free
-    user for an upgrade-gated call):
-        1. Anonymous / not authenticated → anonymous path returns None here;
-           the view's permission_classes handles 401 separately.
-        2. Admin / superuser → unlimited.
-        3. Active subscription with ``unlimited_ai=True`` (1_year / legacy /
-           admin_grant) → unlimited.
-        4. Otherwise → atomic check-and-consume on the daily counter.
+    Exempt: anonymous (the view's permissions answer 401), admin/superuser,
+    and every user with an active subscription of any plan
+    (``accounts.utils.is_premium``) — the profile already tells subscribers
+    their AI tutor cap is unlimited (``ai_tutor_daily_cap = None``); holding
+    1-month/3-month subscribers to the free cap contradicted that.
     """
     if not user or not getattr(user, 'is_authenticated', False):
-        return None
+        return None, None
     if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
-        return None
+        return None, None
 
     try:
-        from accounts.models import Subscription
-        sub = Subscription.get_active_subscription(user)
-        if sub and getattr(sub, 'is_active', False) and getattr(sub, 'unlimited_ai', False):
-            return None
+        from accounts.utils import is_premium
+        if is_premium(user):
+            return None, None
     except Exception:
         logger.exception('_check_ai_tutor_quota: subscription lookup failed; applying cap anyway')
 
     from .models_usage import check_and_consume
 
     cap = _ai_tutor_cap()
-    allowed, new_count = check_and_consume(user, cap=cap)
+    day = timezone.localdate()
+    allowed, _new_count = check_and_consume(user, cap=cap)
     if allowed:
-        return None
+        return None, day
     return Response(
         {
             'code': 'upgrade_required',
             'feature': 'AI Tutor',
             'message': (
                 f"You've used your {cap} free AI Tutor messages for today. "
-                'Subscribe for unlimited AI explanations from just ₹129/month.'
+                'Subscribe to remove the daily limit — plans start at ₹129/month.'
             ),
             'remaining': 0,
             'cap': cap,
         },
         status=402,
-    )
+    ), None
+
+
+def _check_ai_tutor_quota(user):
+    """Returns ``None`` if the user may proceed, or the 402 ``Response`` when
+    the free daily cap is hit (consumes one slot when it lets a free user
+    through). See ``_take_ai_tutor_slot``."""
+    err, _day = _take_ai_tutor_slot(user)
+    return err
 
 
 def _check_freemium_ai_quota(request):
     """Convenience wrapper for views: same as ``_check_ai_tutor_quota`` but
-    reads ``user`` off the request object. Returns the Response to short-circuit
-    with, or ``None`` if the call may proceed.
+    reads ``user`` off the request object and remembers a consumed slot on the
+    request so ``_release_freemium_slot`` can give it back if the call does
+    not deliver an answer. Returns the Response to short-circuit with, or
+    ``None`` if the call may proceed.
     """
-    return _check_ai_tutor_quota(getattr(request, 'user', None))
+    err, day = _take_ai_tutor_slot(getattr(request, 'user', None))
+    if day is not None:
+        try:
+            request._ai_tutor_slot_day = day
+        except Exception:  # pragma: no cover - exotic request objects
+            pass
+    return err
+
+
+def _release_freemium_slot(request) -> None:
+    """Give back the freemium slot this request consumed (no-op otherwise)."""
+    day = getattr(request, '_ai_tutor_slot_day', None)
+    if not day:
+        return
+    try:
+        request._ai_tutor_slot_day = None  # never release the same slot twice
+    except Exception:  # pragma: no cover
+        pass
+    try:
+        from .models_usage import release_ai_tutor_message
+        release_ai_tutor_message(request.user, date=day)
+    except Exception:
+        logger.exception('Failed to release AI tutor slot')
+
+
+def _charge_ai_call(request, *, amount: int, freemium: bool):
+    """Spend the freemium slot (capped endpoints) and then ``amount`` tokens.
+
+    Returns an error Response, or None when the call may proceed. When the
+    token check fails the slot is given back, so a 429 never costs a free
+    message.
+    """
+    if freemium:
+        err = _check_freemium_ai_quota(request)
+        if err is not None:
+            return err
+    ok, err = consume_ai_token(request, amount=amount)
+    if not ok:
+        if freemium:
+            _release_freemium_slot(request)
+        return err
+    return None
+
+
+def _refund_ai_call(request, *, amount: int) -> None:
+    """Give back everything this request was charged: the tokens (exact
+    pools, see refund_ai_token) and the freemium slot."""
+    try:
+        refund_ai_token(request, amount=amount)
+    except Exception:
+        logger.exception('AI token refund failed')
+    _release_freemium_slot(request)
+
+
+# ─── Chat history (server-side, opt-in per request) ────────────────────
+
+def _clean_citations(citations) -> list:
+    if not isinstance(citations, list):
+        return []
+    out = []
+    for c in citations[:20]:
+        if isinstance(c, dict):
+            out.append({
+                'book': _as_text(c.get('book'))[:200],
+                'page': c.get('page') if isinstance(c.get('page'), (int, str)) else '',
+                'excerpt': _as_text(c.get('excerpt'))[:300],
+                'relevance': c.get('relevance') if isinstance(c.get('relevance'), (int, float)) else None,
+            })
+    return out
+
+
+def _record_chat_turn(request, payload: dict, *, mode: str, question: str, answer: str,
+                      citations=None) -> None:
+    """Save the question and the answer to the user's chat history when the
+    client asked for it (``save_history`` or a ``chat_session_id``), and put
+    the session id in ``payload['chat_session_id']``. Never fails the AI
+    response: history is best-effort."""
+    data = request.data
+    session_id = data.get('chat_session_id')
+    if not (_as_bool(data.get('save_history')) or session_id not in (None, '')):
+        return
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False) or not answer:
+        return
+    try:
+        from .models import ChatMessage, ChatSession
+        valid_modes = {key for key, _label in ChatSession.MODE_CHOICES}
+        session = None
+        if session_id not in (None, ''):
+            try:
+                session = ChatSession.objects.filter(
+                    id=int(session_id), user=user, is_archived=False,
+                ).first()
+            except (TypeError, ValueError):
+                session = None
+        if session is None:
+            session = ChatSession.objects.create(
+                user=user,
+                mode=mode if mode in valid_modes else 'tutor',
+                title=question[:100],
+            )
+        ChatMessage.objects.create(session=session, role='user', content=question, mode=mode)
+        ChatMessage.objects.create(
+            session=session, role='ai', content=answer, mode=mode,
+            citations=_clean_citations(citations),
+        )
+        session.save(update_fields=['updated_at'])
+        payload['chat_session_id'] = session.id
+    except Exception:
+        logger.warning('Chat history write failed', exc_info=True)
+
+
+def _offline_text_response(request, question: str, *, key: str, reason: str,
+                           passages=None, mode: str = None, extra: dict = None) -> Response:
+    """Grounded extractive answer under ``key`` (200, labelled offline, free),
+    or a 503 ``ai_unavailable`` when nothing in the library matches."""
+    try:
+        result = compose_offline_answer(question, passages=passages,
+                                        user=getattr(request, 'user', None), reason=reason)
+    except Exception:
+        logger.exception('Offline composer failed')
+        result = None
+    if result is None or not result.grounded:
+        return _ai_unavailable_response(offline=(reason == REASON_OFFLINE_MODE))
+    payload = {
+        key: result.answer,
+        'offline': True,
+        'offline_reason': reason,
+        'citations': result.citations,
+        'charged': False,
+    }
+    if result.pyq:
+        payload['similar_pyq'] = {
+            'id': result.pyq['id'], 'year': result.pyq.get('year'),
+            'exam_source': result.pyq.get('exam_source'),
+        }
+    if extra:
+        payload.update(extra)
+    if mode:
+        _record_chat_turn(request, payload, mode=mode, question=question,
+                          answer=result.answer, citations=result.citations)
+    return Response(payload)
+
+
+def _run_text_endpoint(request, *, question: str, mode: str, key: str, amount: int,
+                       freemium: bool, generate) -> Response:
+    """Shared flow of the text-answer AI endpoints (tutor, mnemonic, explain,
+    analyze): offline mode → free extractive answer; otherwise charge, call
+    ``generate(service)``, and on AIUnavailable refund everything and fall
+    back to the extractive answer (or a 503)."""
+    if ai_offline_mode():
+        return _offline_text_response(request, question, key=key, reason=REASON_OFFLINE_MODE, mode=mode)
+
+    charge_err = _charge_ai_call(request, amount=amount, freemium=freemium)
+    if charge_err is not None:
+        return charge_err
+
+    try:
+        service = AIService()
+        text = generate(service)
+    except AIUnavailable as exc:
+        _refund_ai_call(request, amount=amount)
+        reason = REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN
+        return _offline_text_response(request, question, key=key, reason=reason,
+                                      passages=exc.passages, mode=mode)
+    except Exception as e:
+        logger.error(f"AI {mode} failed: {e}")
+        _refund_ai_call(request, amount=amount)
+        return _ai_unavailable_response()
+
+    if not isinstance(text, str) or is_unusable_text(text):
+        # Defence in depth: never hand an outage sentence over as an answer.
+        _refund_ai_call(request, amount=amount)
+        return _offline_text_response(request, question, key=key, reason=REASON_PROVIDERS_DOWN, mode=mode)
+
+    payload = {key: text}
+    _record_chat_turn(request, payload, mode=mode, question=question, answer=text)
+    return Response(payload)
 
 
 class AskTutorView(AITutorThrottleMixin, APIView):
@@ -255,29 +539,16 @@ class AskTutorView(AITutorThrottleMixin, APIView):
         return _get_permission()
 
     def post(self, request):
-        question = request.data.get('question', '')
-        context = request.data.get('context', '')
-        if not question:
-            return Response({'error': 'Question is required'}, status=400)
-
-        # Freemium 2/day cap — premium/admin bypass entirely
-        freemium_err = _check_freemium_ai_quota(request)
-        if freemium_err is not None:
-            return freemium_err
-
-        # Token check — admins bypass
-        ok, err = consume_ai_token(request)
-        if not ok:
+        question, err = _required_text(request, 'question', 'Question')
+        if err:
             return err
-
-        try:
-            service = AIService()
-            response = service.ask_tutor(question, context)
-            return Response({'response': response})
-        except Exception as e:
-            logger.error(f"AskTutor failed: {e}")
-            refund_ai_token(request)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+        context = _optional_text(request, 'context', MAX_AI_CONTEXT_CHARS)
+        # Freemium 2/day cap (subscribers/admin exempt) + 1 token; both are
+        # given back if no AI answer is delivered.
+        return _run_text_endpoint(
+            request, question=question, mode='tutor', key='response', amount=1, freemium=True,
+            generate=lambda service: service.ask_tutor(question, context),
+        )
 
 
 class GenerateMnemonicView(AITutorThrottleMixin, APIView):
@@ -287,27 +558,15 @@ class GenerateMnemonicView(AITutorThrottleMixin, APIView):
         return _get_permission()
 
     def post(self, request):
-        topic = request.data.get('topic', '')
-        concept = request.data.get('concept', '')
-        if not topic:
-            return Response({'error': 'Topic is required'}, status=400)
-
-        freemium_err = _check_freemium_ai_quota(request)
-        if freemium_err is not None:
-            return freemium_err
-
-        ok, err = consume_ai_token(request, amount=10)
-        if not ok:
+        topic, err = _required_text(request, 'topic', 'Topic')
+        if err:
             return err
-
-        try:
-            service = AIService()
-            mnemonic = service.generate_mnemonic(topic, concept)
-            return Response({'mnemonic': mnemonic})
-        except Exception as e:
-            logger.error(f"GenerateMnemonic failed: {e}")
-            refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+        concept = _optional_text(request, 'concept', MAX_AI_INPUT_CHARS)
+        return _run_text_endpoint(
+            request, question=f'{topic} {concept}'.strip(), mode='mnemonic', key='mnemonic',
+            amount=10, freemium=True,
+            generate=lambda service: service.generate_mnemonic(topic, concept),
+        )
 
 
 class ExplainConceptView(AITutorThrottleMixin, APIView):
@@ -317,27 +576,16 @@ class ExplainConceptView(AITutorThrottleMixin, APIView):
         return _get_permission()
 
     def post(self, request):
-        concept = request.data.get('concept', '')
-        level = request.data.get('level', 'basic')
-        if not concept:
-            return Response({'error': 'Concept is required'}, status=400)
-
-        freemium_err = _check_freemium_ai_quota(request)
-        if freemium_err is not None:
-            return freemium_err
-
-        ok, err = consume_ai_token(request, amount=10)
-        if not ok:
+        concept, err = _required_text(request, 'concept', 'Concept')
+        if err:
             return err
-
-        try:
-            service = AIService()
-            explanation = service.explain_concept(concept, level)
-            return Response({'explanation': explanation})
-        except Exception as e:
-            logger.error(f"ExplainConcept failed: {e}")
-            refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+        level = _as_text(request.data.get('level')).lower()
+        if level not in ('basic', 'intermediate', 'advanced'):
+            level = 'basic'
+        return _run_text_endpoint(
+            request, question=concept, mode='explain', key='explanation', amount=10, freemium=True,
+            generate=lambda service: service.explain_concept(concept, level),
+        )
 
 
 class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
@@ -347,125 +595,288 @@ class AnalyzeQuestionView(AITutorThrottleMixin, APIView):
         return _get_permission()
 
     def post(self, request):
-        question_text = request.data.get('question_text', '')
-        options = request.data.get('options', {})
-        correct_answer = request.data.get('correct_answer', '')
-        if not question_text:
-            return Response({'error': 'question_text is required'}, status=400)
-
-        freemium_err = _check_freemium_ai_quota(request)
-        if freemium_err is not None:
-            return freemium_err
-
-        ok, err = consume_ai_token(request, amount=10)
-        if not ok:
+        question_text, err = _required_text(request, 'question_text', 'question_text')
+        if err:
             return err
+        options = _options_param(request.data.get('options'))
+        correct_answer = _answer_letter(request.data.get('correct_answer'))
+        return _run_text_endpoint(
+            request, question=question_text, mode='analyze', key='analysis', amount=10, freemium=True,
+            generate=lambda service: service.analyze_question(question_text, options, correct_answer),
+        )
 
-        try:
-            service = AIService()
-            analysis = service.analyze_question(question_text, options, correct_answer)
-            return Response({'analysis': analysis})
-        except Exception as e:
-            logger.error(f"AnalyzeQuestion failed: {e}")
-            refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+
+# Per-request keys that must never be stored in the shared ai_explanation.
+_TRANSIENT_EXPLANATION_KEYS = (
+    'is_correct', 'offline', 'offline_reason', 'offline_notice', 'charged', 'cached',
+    'chat_session_id',
+)
+
+
+def _parse_stored_json(raw):
+    if not raw:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _stored_ai_explanation(q):
+    """The question's stored rich explanation if it is a valid one (not
+    failed, not an outage sentence, not the markdown shape), else None."""
+    data = _parse_stored_json(getattr(q, 'ai_explanation', ''))
+    return dict(data) if AIService.is_valid_explanation(data) else None
+
+
+def _stored_analysis_markdown(q):
+    """ExplainQuestionView's stored ``{"analysis": md}`` as markdown, if valid."""
+    data = _parse_stored_json(getattr(q, 'ai_explanation', ''))
+    if not data or data.get('_failed'):
+        return None
+    analysis = data.get('analysis')
+    if not isinstance(analysis, str) or is_unusable_text(analysis):
+        return None
+    return _stitch_explanation_markdown(data, q)
+
+
+def _ai_model_label(service) -> str:
+    provider = getattr(service, 'last_provider', None)
+    return f'roundrobin/{provider}' if provider else 'roundrobin'
+
+
+def _persist_rich_explanation(q, result: dict, service) -> list:
+    """Store a validated explanation in the question's EMPTY shared fields.
+
+    Student-triggered calls never overwrite existing content: ai_explanation
+    is written only when it is empty or unusable (failed / outage sentence /
+    the older markdown-only shape, which the rich shape supersedes), and
+    each companion field only when it is empty. Locked explanations are not
+    touched. The dispute flags compare the AI's answer with the STORED key
+    (callers pass DB fields), and only on the first stored generation.
+    Returns the names of the fields written.
+    """
+    if getattr(q, 'lock_explanation', False) or not AIService.is_valid_explanation(result):
+        return []
+    data = {k: v for k, v in result.items() if k not in _TRANSIENT_EXPLANATION_KEYS}
+    fields = []
+    if _stored_ai_explanation(q) is None:
+        q.ai_explanation = json.dumps(data, ensure_ascii=False)
+        q.ai_generated_at = timezone.now()
+        q.ai_model = _ai_model_label(service)
+        q.ai_version = 'v2-verify'
+        fields += ['ai_explanation', 'ai_generated_at', 'ai_model', 'ai_version']
+    for field, value in (
+        ('ai_mnemonic', data.get('mnemonic')),
+        ('ai_clinical_pearl', data.get('clinical_pearl')),
+        ('learning_technique', data.get('exam_tip')),
+    ):
+        if isinstance(value, str) and value.strip() and not (getattr(q, field, '') or '').strip():
+            setattr(q, field, value.strip())
+            fields.append(field)
+    ref = data.get('textbook_reference')
+    if isinstance(ref, dict) and ref.get('book') and not q.ai_references:
+        q.ai_references = [ref]
+        fields.append('ai_references')
+    concepts = data.get('around_concepts')
+    if isinstance(concepts, list) and concepts and not q.concept_keywords:
+        q.concept_keywords = [str(c)[:200] for c in concepts[:10]]
+        fields.append('concept_keywords')
+
+    if 'ai_explanation' in fields:
+        ai_verified = _answer_letter(data.get('ai_verified_answer'))
+        mismatch = data.get('answer_mismatch')
+        mismatch = mismatch is True or _as_text(mismatch).lower() == 'true'
+        stored_key = _answer_letter(q.correct_answer)
+        if mismatch and ai_verified and stored_key and ai_verified != stored_key:
+            q.needs_review = True
+            q.is_disputed = True
+            fields += ['needs_review', 'is_disputed']
+            logger.warning(
+                f"ANSWER MISMATCH Q#{q.id}: DB says {stored_key}, AI says {ai_verified}. "
+                f"Reason: {_as_text(data.get('confidence_note'))[:200] or 'N/A'}"
+            )
+    if fields:
+        q.save(update_fields=fields + ['updated_at'])
+    return fields
+
+
+def _empty_rich_explanation(subject: str = '', topic: str = '') -> dict:
+    return {
+        'ai_verified_answer': '', 'answer_mismatch': False, 'confidence_note': '',
+        'why_correct': '', 'why_wrong': {},
+        'textbook_reference': {'book': '', 'chapter': '', 'page': '', 'section': ''},
+        'mnemonic': '', 'core_concept': '', 'topic_deep_dive': '', 'key_differentiators': [],
+        'category': subject, 'sub_category': topic, 'question_type': '',
+        'around_concepts': [], 'high_yield_points': [], 'clinical_pearl': '', 'exam_tip': '',
+        'quick_revision': '', 'pyq_frequency': '', 'similar_pyq': '', 'citations': [],
+    }
 
 
 class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
-    """Rich AI explanation after answering a question — textbook refs, mnemonics, related concepts."""
+    """Rich AI explanation after answering a question — textbook refs, mnemonics, related concepts.
+
+    With ``question_id`` (or an exact stem + options match) the prompt is
+    built from the question's DB fields — stem, options, answer key, subject,
+    topic — never from client-supplied values, and a valid result fills the
+    question's empty shared AI fields. Without one (e.g. AI-generated practice
+    questions) the client's question is explained but nothing is stored and
+    no dispute flag is set.
+
+    Cost: 10 tokens, charged only when a new explanation is generated (stored
+    and cached explanations are free) and refunded when the AI fails.
+    """
 
     def get_permissions(self):
         return _get_permission()
 
     def post(self, request):
-        question_id = request.data.get('question_id')
-        question_text = request.data.get('question_text', '')
-        
         from questions.models import Question
-        from django.utils import timezone
-        import json
-        
-        db_question = None
-        if question_id:
-            db_question = Question.objects.filter(id=question_id).first()
-        elif question_text:
-            db_question = Question.objects.filter(question_text=question_text).first()
-            
-        if db_question and db_question.ai_generated_at:
-            is_correct = request.data.get('selected_answer') == request.data.get('correct_answer')
-            try:
-                cached_json = json.loads(db_question.ai_explanation)
-                # BUG FIX (2026-07-26): ExplainQuestionView stores its
-                # result as `{"analysis": "<markdown>", "context": {...}}`
-                # while ExplainAfterAnswerView returns the rich shape with
-                # `core_concept`, `why_correct`, `mnemonic`, etc. If we
-                # hand the ExplainQuestionView shape back to a client
-                # expecting the rich keys, every Deep-Analysis panel
-                # disappears (only the header renders) — the user sees
-                # an empty "AI-Powered Deep Analysis" block and reports
-                # the button is broken.
-                # Detect the wrong-shape cache and fall through to
-                # regenerate the rich payload.
-                if not isinstance(cached_json, dict):
-                    raise ValueError("cached ai_explanation is not a JSON object")
-                if 'analysis' in cached_json and 'context' in cached_json and 'core_concept' not in cached_json:
-                    raise ValueError("cached ai_explanation is ExplainQuestionView shape, regenerating as rich")
-                cached_json['is_correct'] = is_correct
-                return Response(cached_json)
-            except Exception:
-                pass # Fallback to regenerate if parsing fails
-        
-        if not question_text and db_question:
-            question_text = db_question.question_text
 
-        if not question_text:
-            return Response({'error': 'question_text is required'}, status=400)
+        selected_answer = _answer_letter(request.data.get('selected_answer'))
+        db_question = None
+        raw_id = request.data.get('question_id')
+        if raw_id not in (None, ''):
+            try:
+                qid = int(raw_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'question_id must be an integer'}, status=400)
+            db_question = Question.objects.select_related('subject', 'topic').filter(id=qid).first()
+            if db_question is None:
+                return Response({'error': f'Question {qid} not found'}, status=404)
+            options = {}
+        else:
+            question_text, err = _required_text(request, 'question_text', 'question_text')
+            if err:
+                return err
+            options = _options_param(request.data.get('options'))
+            db_question = self._exact_match(question_text, options)
+
+        if db_question is not None:
+            question_text = db_question.question_text or ''
+            options = {
+                'A': db_question.option_a or '', 'B': db_question.option_b or '',
+                'C': db_question.option_c or '', 'D': db_question.option_d or '',
+            }
+            correct_answer = _answer_letter(db_question.correct_answer)
+            subject = getattr(db_question.subject, 'name', '') if db_question.subject_id else ''
+            topic = getattr(db_question.topic, 'name', '') if db_question.topic_id else ''
+            qid = db_question.id
+        else:
+            correct_answer = _answer_letter(request.data.get('correct_answer'))
+            subject = _optional_text(request, 'subject', MAX_LABEL_CHARS)
+            topic = _optional_text(request, 'topic', MAX_LABEL_CHARS)
+            qid = None
+        is_correct = bool(selected_answer) and selected_answer == correct_answer
+
+        # 1. Stored explanation on the question (free).
+        if db_question is not None:
+            stored = _stored_ai_explanation(db_question)
+            if stored:
+                stored['is_correct'] = is_correct
+                return Response(stored)
+
+        # 2. Shared 24 h cache (free) — checked before charging.
+        cached = AIService.get_cached_explanation(question_text, options, correct_answer, question_id=qid)
+        if cached:
+            cached['is_correct'] = is_correct
+            return Response(cached)
+
+        if ai_offline_mode():
+            return self._offline(request, db_question, question_text, options, correct_answer,
+                                 selected_answer, subject, topic, REASON_OFFLINE_MODE)
 
         ok, err = consume_ai_token(request, amount=10)
         if not ok:
             return err
 
-        options = request.data.get('options', {})
-        correct_answer = request.data.get('correct_answer', '')
-        selected_answer = request.data.get('selected_answer', '')
-        subject = request.data.get('subject', '')
-        topic = request.data.get('topic', '')
-
         try:
             service = AIService()
             result = service.explain_after_answer(
-                question_text, options, correct_answer, selected_answer, subject, topic
+                question_text, options, correct_answer, selected_answer, subject, topic,
+                question_id=qid,
             )
-            
-            if db_question:
-                db_question.ai_explanation = json.dumps(result)
-                db_question.ai_mnemonic = result.get('mnemonic', '')
-                db_question.ai_clinical_pearl = result.get('clinical_pearl', '')
-                db_question.learning_technique = result.get('exam_tip', '')
-                db_question.ai_references = [result.get('textbook_reference', {})]
-                db_question.concept_keywords = result.get('around_concepts', [])
-                db_question.ai_generated_at = timezone.now()
-                db_question.ai_model = 'RoundRobin-11'
-                db_question.ai_version = 'v2-verify'
-                
-                # Auto-flag questions where AI disagrees with stored answer
-                ai_verified = result.get('ai_verified_answer', '').strip().upper()[:1]
-                answer_mismatch = result.get('answer_mismatch', False)
-                if answer_mismatch and ai_verified in ('A', 'B', 'C', 'D') and ai_verified != correct_answer:
-                    db_question.needs_review = True
-                    db_question.is_disputed = True
-                    logger.warning(
-                        f"ANSWER MISMATCH Q#{db_question.id}: DB says {correct_answer}, "
-                        f"AI says {ai_verified}. Reason: {result.get('confidence_note', 'N/A')[:200]}"
-                    )
-                
-                db_question.save()
-                
-            return Response(result)
+        except AIUnavailable as exc:
+            refund_ai_token(request, amount=10)
+            reason = REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN
+            return self._offline(request, db_question, question_text, options, correct_answer,
+                                 selected_answer, subject, topic, reason, passages=exc.passages)
         except Exception as e:
             logger.error(f"ExplainAfterAnswer failed: {e}")
             refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+            return _ai_unavailable_response()
+
+        if db_question is not None:
+            try:
+                _persist_rich_explanation(db_question, result, service)
+            except Exception:
+                logger.warning("ExplainAfterAnswer: could not store explanation for Q%s",
+                               db_question.id, exc_info=True)
+        return Response(result)
+
+    @staticmethod
+    def _exact_match(question_text: str, options: dict):
+        """The DB question with exactly this stem and these four options.
+        (Matching on the stem alone picked the wrong row for duplicates with
+        shuffled options.)"""
+        from questions.models import Question
+        if len(options) < 4 or not all(options.values()):
+            return None
+        return (
+            Question.objects.select_related('subject', 'topic')
+            .filter(question_text=question_text, option_a=options['A'], option_b=options['B'],
+                    option_c=options['C'], option_d=options['D'])
+            .first()
+        )
+
+    @staticmethod
+    def _offline(request, db_question, question_text, options, correct_answer, selected_answer,
+                 subject, topic, reason, passages=None):
+        """Free answer from stored data: the question's curated explanation
+        plus textbook sentences; a 503 when neither exists."""
+        payload = None
+        if db_question is not None:
+            payload = stored_rich_explanation(db_question, selected_answer=selected_answer)
+        query = question_text
+        if correct_answer and options.get(correct_answer):
+            query = f"{question_text} {options[correct_answer]}"
+        try:
+            composed = compose_offline_answer(
+                query, passages=passages, user=getattr(request, 'user', None), reason=reason,
+                exclude_question_id=getattr(db_question, 'id', None),
+            )
+        except Exception:
+            logger.exception('Offline composer failed')
+            composed = None
+        grounded = composed is not None and composed.grounded
+        if payload is None:
+            if not grounded:
+                return _ai_unavailable_response(offline=(reason == REASON_OFFLINE_MODE))
+            payload = _empty_rich_explanation(subject, topic)
+            payload['ai_verified_answer'] = correct_answer
+            payload['why_correct'] = '\n'.join(
+                f"• {s['text']} [{s['label']}]" for s in composed.sentences
+            )
+            if composed.pyq:
+                payload['similar_pyq'] = pyq_summary(composed.pyq)
+                if not payload['why_correct']:
+                    payload['why_correct'] = composed.pyq['explanation']
+            payload['is_correct'] = bool(selected_answer) and selected_answer == correct_answer
+        if grounded:
+            payload['citations'] = [
+                {'book': c['book'], 'page': c['page'], 'text': c['excerpt']}
+                for c in composed.citations
+            ]
+        payload.update({
+            'offline': True,
+            'offline_reason': reason,
+            'offline_notice': offline_notice(reason),
+            'charged': False,
+        })
+        return Response(payload)
 
 
 class ExplainQuestionView(AITutorThrottleMixin, APIView):
@@ -474,21 +885,27 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
     The frontend player (`NeetPgPlayer.tsx`) calls
     `aiAPI.explainQuestion(questionId, {selected_answer, ...})` and expects
     `{explanation: <markdown>}`. This view:
-      1. Loads the Question by id (404 if missing).
-      2. Reuses the cached `ai_explanation` JSON if it's <24h old.
+      1. Loads the Question by id (404 if missing); the prompt is always
+         built from its DB fields.
+      2. Serves the stored explanation (rich or markdown, validated) for
+         free unless the client sent a custom ``prompt`` or
+         ``force_regenerate``.
       3. Otherwise calls `AIService.analyze_question(...)` and returns
          the markdown wrapped as `{explanation, cached, question_id}`.
 
-    Cost: 1 token (admins bypass). Refunded on AI failure.
+    Only the default (no custom prompt) answer is stored, only into an empty
+    or unusable ai_explanation; a custom-prompt answer goes to that user
+    alone. Replacing an existing shared explanation (``force_regenerate``)
+    is admin-only — a student's regenerate returns a fresh answer without
+    storing it.
+
+    Cost: 10 tokens (admins / unlimited plans bypass). Refunded on AI failure.
     """
 
     def get_permissions(self):
         return _get_permission()
 
     def post(self, request, question_id: int):
-        from django.utils import timezone
-        from datetime import timedelta
-
         from questions.models import Question
 
         q = (
@@ -499,28 +916,29 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
         if not q:
             return Response({'error': f'Question {question_id} not found'}, status=404)
 
-        # Cache hit: reuse the cached ai_explanation within 24h
-        # unless the client asked for a custom prompt (different output)
-        # or forced regeneration (e.g. user clicked "Regenerate").
-        client_prompt = (request.data.get("prompt") or "").strip()
-        force_regen = bool(request.data.get("force_regenerate"))
+        client_prompt = _as_text(request.data.get("prompt"))
+        if len(client_prompt) > MAX_AI_PROMPT_CHARS:
+            return Response(
+                {'error': f'prompt is too long (max {MAX_AI_PROMPT_CHARS} characters)'}, status=400,
+            )
+        force_regen = _as_bool(request.data.get("force_regenerate"))
+        user = request.user
+        is_admin = bool(getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))
+
         if not client_prompt and not force_regen:
-            if q.ai_explanation and q.ai_generated_at and timezone.now() - q.ai_generated_at < timedelta(hours=24):
-                try:
-                    cached = json.loads(q.ai_explanation) if isinstance(q.ai_explanation, str) else q.ai_explanation
-                    # Frontend expects `explanation` key (markdown); explain_after_answer
-                    # stores rich JSON with multiple fields. Stitch a markdown body so
-                    # the player UI gets a single text blob.
-                    explanation = _stitch_explanation_markdown(cached, q)
-                    return Response({
-                        'explanation': explanation,
-                        'cached': True,
-                        'question_id': q.id,
-                        'ai_model': q.ai_model,
-                        'ai_generated_at': q.ai_generated_at.isoformat(),
-                    })
-                except (ValueError, TypeError):
-                    pass  # corrupt cache → fall through to regenerate
+            stored = _stored_ai_explanation(q)
+            explanation = _stitch_explanation_markdown(stored, q) if stored else _stored_analysis_markdown(q)
+            if explanation:
+                return Response({
+                    'explanation': explanation,
+                    'cached': True,
+                    'question_id': q.id,
+                    'ai_model': q.ai_model,
+                    'ai_generated_at': q.ai_generated_at.isoformat() if q.ai_generated_at else None,
+                })
+
+        if ai_offline_mode():
+            return self._offline(request, q, REASON_OFFLINE_MODE)
 
         ok, err = consume_ai_token(request, amount=10)
         if not ok:
@@ -528,19 +946,6 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
 
         try:
             service = AIService()
-            subject_name = q.subject.name if hasattr(q.subject, "name") else (q.subject or "")
-            topic_name = q.topic.name if hasattr(q.topic, "name") else (q.topic or "")
-            selected_answer = (request.data.get("selected_answer") or "").strip()
-
-            prompt_ctx = {
-                "selected_answer": selected_answer,
-                "subject": subject_name,
-                "topic": topic_name,
-                "year": q.year,
-                "exam_type": q.exam_type,
-                "exam_source": q.exam_source,
-            }
-
             analysis = service.analyze_question(
                 q.question_text,
                 {
@@ -552,30 +957,114 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
                 q.correct_answer or "",
                 user_prompt=client_prompt,
             )
-
-            # Persist for next-time cache hit (best-effort)
-            try:
-                q.ai_explanation = json.dumps({
-                    "analysis": analysis,
-                    "context": prompt_ctx,
-                })
-                q.ai_model = "RoundRobin-11"
-                q.ai_generated_at = timezone.now()
-                q.ai_version = "explain-question-v1"
-                q.save(update_fields=["ai_explanation", "ai_model", "ai_generated_at", "ai_version"])
-            except Exception as save_exc:  # noqa: BLE001
-                logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
-
-            return Response({
-                'explanation': analysis,
-                'cached': False,
-                'question_id': q.id,
-                'ai_model': 'RoundRobin-11',
-            })
+        except AIUnavailable as exc:
+            refund_ai_token(request, amount=10)
+            reason = REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN
+            return self._offline(request, q, reason, passages=exc.passages)
         except Exception as e:
             logger.error(f"ExplainQuestion failed for Q{question_id}: {e}")
             refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+            return _ai_unavailable_response()
+
+        if not isinstance(analysis, str) or is_unusable_text(analysis):
+            refund_ai_token(request, amount=10)
+            return self._offline(request, q, REASON_PROVIDERS_DOWN)
+
+        ai_model = _ai_model_label(service)
+        persisted = False
+        if not client_prompt and not q.lock_explanation:
+            has_valid = _stored_ai_explanation(q) is not None or _stored_analysis_markdown(q) is not None
+            if not has_valid or (force_regen and is_admin):
+                try:
+                    q.ai_explanation = json.dumps({
+                        "analysis": analysis,
+                        "context": {
+                            "subject": getattr(q.subject, 'name', '') if q.subject_id else '',
+                            "topic": getattr(q.topic, 'name', '') if q.topic_id else '',
+                            "year": q.year,
+                            "exam_type": q.exam_type,
+                            "exam_source": q.exam_source,
+                        },
+                    })
+                    q.ai_model = ai_model
+                    q.ai_generated_at = timezone.now()
+                    q.ai_version = "explain-question-v1"
+                    q.save(update_fields=["ai_explanation", "ai_model", "ai_generated_at",
+                                          "ai_version", "updated_at"])
+                    persisted = True
+                except Exception as save_exc:  # noqa: BLE001
+                    logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
+
+        return Response({
+            'explanation': analysis,
+            'cached': False,
+            'question_id': q.id,
+            'ai_model': ai_model,
+            'persisted': persisted,
+        })
+
+    @staticmethod
+    def _offline(request, q, reason, passages=None):
+        """Free markdown answer from the question's curated fields plus
+        textbook sentences; a 503 when neither exists."""
+        stored = stored_rich_explanation(q)
+        correct = _answer_letter(q.correct_answer)
+        query = q.question_text or ''
+        if correct:
+            query = f"{query} {getattr(q, f'option_{correct.lower()}', '') or ''}"
+        try:
+            composed = compose_offline_answer(
+                query, passages=passages, user=getattr(request, 'user', None), reason=reason,
+                exclude_question_id=q.id,
+            )
+        except Exception:
+            logger.exception('Offline composer failed')
+            composed = None
+        parts = [f'> {offline_notice(reason)}']
+        if stored:
+            parts.append(_stitch_explanation_markdown(stored, q))
+        if composed is not None and composed.grounded:
+            parts.append(composed.body)
+        if len(parts) == 1:
+            return _ai_unavailable_response(offline=(reason == REASON_OFFLINE_MODE))
+        return Response({
+            'explanation': '\n\n'.join(parts),
+            'cached': False,
+            'offline': True,
+            'offline_reason': reason,
+            'question_id': q.id,
+            'charged': False,
+        })
+
+
+def _markdown_value(value) -> str:
+    """Render a stored explanation value as markdown (dicts/lists used to be
+    interpolated as Python reprs)."""
+    if isinstance(value, dict):
+        lines = []
+        for key, val in value.items():
+            text = _markdown_value(val)
+            if text:
+                lines.append(f"- **{key}:** {text}")
+        return '\n'.join(lines)
+    if isinstance(value, (list, tuple)):
+        return '\n'.join(f"- {_markdown_value(v)}" for v in value if _markdown_value(v))
+    return _as_text(value)
+
+
+def _reference_markdown(ref) -> str:
+    if isinstance(ref, dict):
+        bits = [_as_text(ref.get('book'))]
+        if ref.get('chapter'):
+            bits.append(f"Chapter: {_as_text(ref['chapter'])}")
+        if ref.get('page'):
+            bits.append(f"p. {_as_text(ref['page'])}")
+        if ref.get('section'):
+            bits.append(_as_text(ref['section']))
+        return ', '.join(b for b in bits if b)
+    if isinstance(ref, list):
+        return '; '.join(r for r in (_reference_markdown(x) for x in ref) if r)
+    return _as_text(ref)
 
 
 def _stitch_explanation_markdown(cached: dict, q) -> str:
@@ -606,31 +1095,31 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
         return analysis_val
 
     parts: list[str] = []
-    core = cached.get("core_concept") or cached.get("ai_verified_answer")
+    core = _markdown_value(cached.get("core_concept") or cached.get("ai_verified_answer"))
     if core:
         parts.append(f"**Core concept:** {core}")
-    why_correct = cached.get("why_correct")
+    why_correct = _markdown_value(cached.get("why_correct"))
     if why_correct:
         parts.append(f"\n**Why the correct answer is right:**\n{why_correct}")
-    why_wrong = cached.get("why_wrong")
+    why_wrong = _markdown_value(cached.get("why_wrong"))
     if why_wrong:
         parts.append(f"\n**Why other options are wrong:**\n{why_wrong}")
-    pearl = cached.get("clinical_pearl")
+    pearl = _markdown_value(cached.get("clinical_pearl"))
     if pearl:
         parts.append(f"\n**Clinical pearl:** {pearl}")
     high_yield = cached.get("high_yield_points") or []
     if high_yield:
         if isinstance(high_yield, list):
-            parts.append("\n**High-yield points:**\n" + "\n".join(f"- {p}" for p in high_yield))
+            parts.append("\n**High-yield points:**\n" + _markdown_value(high_yield))
         else:
-            parts.append(f"\n**High-yield points:**\n{high_yield}")
-    mnemonic = cached.get("mnemonic")
+            parts.append(f"\n**High-yield points:**\n{_markdown_value(high_yield)}")
+    mnemonic = _markdown_value(cached.get("mnemonic"))
     if mnemonic:
         parts.append(f"\n**Mnemonic:** {mnemonic}")
-    tip = cached.get("exam_tip")
+    tip = _markdown_value(cached.get("exam_tip"))
     if tip:
         parts.append(f"\n**Exam tip:** {tip}")
-    ref = cached.get("textbook_reference")
+    ref = _reference_markdown(cached.get("textbook_reference"))
     if ref:
         parts.append(f"\n**Textbook reference:** {ref}")
     if not parts:
@@ -641,28 +1130,36 @@ def _stitch_explanation_markdown(cached: dict, q) -> str:
 
 
 class RAGSearchView(AITutorThrottleMixin, APIView):
-    """Semantic search across indexed textbooks.
+    """Search across indexed textbooks (raw passages) — admin only.
 
-    Auth + token-cost: RAG search is a free (no-token) lookup, but it still
-    requires authentication. Anonymous callers (including the DEBUG-mode
-    allow-list) are rejected so a single attacker can't amplify compute
-    against the TF-IDF store. The `ai_tutor` throttle cap (30/min) gives
-    a per-user rate ceiling.
+    It returns passage text from the indexed store, which includes
+    copyrighted textbooks, so it is not a student endpoint (no student UI
+    calls it; students get cited answers from rag-answer). Results are
+    capped at 10 and each passage at RAG_SEARCH_EXCERPT_CHARS characters.
     """
 
+    RAG_SEARCH_EXCERPT_CHARS = 600
+
     def get_permissions(self):
-        return [IsAuthenticated()]
+        return _get_admin_permission()
 
     def post(self, request):
-        query = request.data.get('query', '')
-        book_filter = request.data.get('book', None)
-        n_results = min(int(request.data.get('n_results', 5)), 20)
-        if not query:
-            return Response({'error': 'Query is required'}, status=400)
+        query, err = _required_text(request, 'query', 'Query', max_chars=1000)
+        if err:
+            return err
+        book_filter = _as_text(request.data.get('book')) or None
+        try:
+            n_results = max(1, min(int(request.data.get('n_results', 5)), 10))
+        except (TypeError, ValueError):
+            return Response({'error': 'n_results must be an integer'}, status=400)
 
         try:
             service = AIService()
             results = service.rag_search(query, book_filter, n_results)
+            if isinstance(results, dict):
+                for item in results.get('results') or []:
+                    if isinstance(item, dict) and isinstance(item.get('text'), str):
+                        item['text'] = item['text'][:self.RAG_SEARCH_EXCERPT_CHARS]
             # Translate the legacy "RAG pipeline not initialized" payload
             # into a 503 the frontend can render as a friendly error
             # instead of surfacing a developer-only remediation string.
@@ -697,49 +1194,30 @@ class RAGAnswerView(AITutorThrottleMixin, APIView):
         return _get_permission()
 
     def post(self, request):
-        question = request.data.get('question', '')
-        if not question:
-            return Response({'error': 'Question is required'}, status=400)
-
-        freemium_err = _check_freemium_ai_quota(request)
-        if freemium_err is not None:
-            return freemium_err
-
-        ok, err = consume_ai_token(request)
-        if not ok:
+        question, err = _required_text(request, 'question', 'Question')
+        if err:
             return err
+
+        if ai_offline_mode():
+            return _offline_text_response(request, question, key='answer', reason=REASON_OFFLINE_MODE,
+                                          mode='textbook', extra={'confidence': 'offline'})
+
+        charge_err = _charge_ai_call(request, amount=1, freemium=True)
+        if charge_err is not None:
+            return charge_err
 
         try:
             service = AIService()
             result = service.rag_answer(question)
-            # If the RAG store is empty, the backend returns the legacy
-            # "RAG pipeline not initialized" reminder that leaks an
-            # operator-only command. Translate it into a user-facing
-            # fallback: still answer with the general AI model so the
-            # student gets *something* useful, and refund the token
-            # because we didn't actually do a textbook-grounded answer.
-            if (
-                isinstance(result, dict)
-                and 'RAG pipeline not initialized' in str(result.get('answer', ''))
-            ):
-                logger.warning("Textbook-mode answer requested but RAG is disabled (DISABLE_RAG=1)")
-                refund_ai_token(request)
-                return Response(
-                    {
-                        'answer': (
-                            'Textbook search is temporarily unavailable right now. '
-                            'Please switch to AI Tutor mode for a general answer, '
-                            'or try again in a few minutes.'
-                        ),
-                        'citations': [],
-                        'error': 'textbook_search_unavailable',
-                    },
-                    status=200,
-                )
-            return Response(result)
+        except AIUnavailable as exc:
+            _refund_ai_call(request, amount=1)
+            reason = REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN
+            return _offline_text_response(request, question, key='answer', reason=reason,
+                                          passages=exc.passages, mode='textbook',
+                                          extra={'confidence': 'offline'})
         except Exception as e:
             logger.error(f"RAGAnswer failed: {e}")
-            refund_ai_token(request)
+            _refund_ai_call(request, amount=1)
             return Response(
                 {
                     'answer': (
@@ -751,6 +1229,44 @@ class RAGAnswerView(AITutorThrottleMixin, APIView):
                 },
                 status=503,
             )
+
+        if not isinstance(result, dict):
+            result = {'answer': _as_text(result), 'citations': []}
+        # The textbook store cannot be searched (RAG disabled / store missing;
+        # the legacy payload leaked an operator command). Give back the token
+        # AND the freemium slot: the client falls back to AI Tutor mode, which
+        # then costs exactly one message instead of two.
+        if (
+            result.get('error') == 'textbook_search_unavailable'
+            or 'RAG pipeline not initialized' in str(result.get('answer', ''))
+        ):
+            logger.warning("Textbook-mode answer requested but RAG is unavailable")
+            _refund_ai_call(request, amount=1)
+            return Response(
+                {
+                    'answer': (
+                        'Textbook search is temporarily unavailable right now. '
+                        'Please switch to AI Tutor mode for a general answer, '
+                        'or try again in a few minutes.'
+                    ),
+                    'citations': [],
+                    'error': 'textbook_search_unavailable',
+                },
+                status=200,
+            )
+        # Nothing in the textbooks matched: no AI call was made, so it is free.
+        if result.get('no_match'):
+            _refund_ai_call(request, amount=1)
+            result['charged'] = False
+            return Response(result)
+        answer = result.get('answer')
+        if not isinstance(answer, str) or is_unusable_text(answer):
+            _refund_ai_call(request, amount=1)
+            return _offline_text_response(request, question, key='answer', reason=REASON_PROVIDERS_DOWN,
+                                          mode='textbook', extra={'confidence': 'offline'})
+        _record_chat_turn(request, result, mode='textbook', question=question,
+                          answer=answer, citations=result.get('citations'))
+        return Response(result)
 
 
 class TextbookReferenceView(AITutorThrottleMixin, APIView):
@@ -764,9 +1280,9 @@ class TextbookReferenceView(AITutorThrottleMixin, APIView):
         return [IsAuthenticated()]
 
     def post(self, request):
-        question_text = request.data.get('question_text', '')
-        if not question_text:
-            return Response({'error': 'question_text is required'}, status=400)
+        question_text, err = _required_text(request, 'question_text', 'question_text')
+        if err:
+            return err
 
         service = AIService()
         references = service.find_textbook_reference(question_text)
@@ -774,15 +1290,30 @@ class TextbookReferenceView(AITutorThrottleMixin, APIView):
 
 
 class StudyPlanView(AITutorThrottleMixin, APIView):
-    """Generate personalized study plan."""
+    """Generate personalized study plan (10 tokens, refunded on AI failure)."""
 
     def get_permissions(self):
         return _get_permission()
 
     def post(self, request):
-        weak_topics = request.data.get('weak_topics', [])
-        days_remaining = request.data.get('days_remaining', 60)
+        raw_topics = request.data.get('weak_topics', [])
+        if isinstance(raw_topics, str):
+            raw_topics = [raw_topics]
+        if not isinstance(raw_topics, (list, tuple)):
+            return Response({'error': 'weak_topics must be a list'}, status=400)
+        weak_topics = [t for t in (_as_text(x)[:MAX_LABEL_CHARS] for x in raw_topics[:30]) if t]
+        try:
+            days_remaining = max(1, min(int(request.data.get('days_remaining', 60)), 730))
+        except (TypeError, ValueError):
+            return Response({'error': 'days_remaining must be an integer'}, status=400)
         user_analytics = request.data.get('analytics', None)
+        if user_analytics is not None:
+            if not isinstance(user_analytics, dict) or len(json.dumps(user_analytics, default=str)) > MAX_AI_INPUT_CHARS:
+                user_analytics = None
+
+        if ai_offline_mode():
+            # A personal plan cannot be extracted from stored text.
+            return _ai_unavailable_response(offline=True)
 
         ok, err = consume_ai_token(request, amount=10)
         if not ok:
@@ -791,23 +1322,126 @@ class StudyPlanView(AITutorThrottleMixin, APIView):
         try:
             service = AIService()
             plan = service.generate_study_plan(weak_topics, days_remaining, user_analytics)
-            return Response({'study_plan': plan})
+        except AIUnavailable as exc:
+            refund_ai_token(request, amount=10)
+            return _ai_unavailable_response(offline=exc.offline)
         except Exception as e:
             logger.error(f"StudyPlan failed: {e}")
             refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+            return _ai_unavailable_response()
+        return Response({'study_plan': plan})
+
+
+HIGH_YIELD_CACHE_SECONDS = 24 * 3600
+HIGH_YIELD_FALLBACK_CACHE_SECONDS = 3600
+
+
+def _question_bank_high_yield(subject: str, reason: str):
+    """High-yield list from the question bank itself (PYQ frequency per topic),
+    in the markdown shape the roadmap page parses. None when the bank has no
+    topic-tagged CMS questions."""
+    from django.db.models import Count
+    from questions.models import Question
+
+    qs = Question.objects.filter(is_active=True, exam_type='cms', topic__isnull=False)
+    if subject:
+        qs = qs.filter(subject__name__icontains=subject)
+    rows = list(
+        qs.values('subject__name', 'topic__name')
+        .annotate(n=Count('id'), years=Count('year', distinct=True))
+        .order_by('subject__name', '-years', '-n')
+    )
+    if not rows:
+        return None
+    by_subject: dict = {}
+    for row in rows:
+        by_subject.setdefault(row['subject__name'] or 'General', []).append(row)
+    lines = [f'> {offline_notice(reason)} Ranked by how often each topic appeared in past CMS papers.', '']
+    for name, topics in by_subject.items():
+        lines.append(f'## {name}')
+        for i, row in enumerate(topics[:10], 1):
+            stars = '★★★' if row['years'] >= 4 else ('★★' if row['years'] >= 2 else '★')
+            lines.append(f"{i}. **{row['topic__name']}** ({row['n']} PYQs in {row['years']} years) ({stars})")
+        lines.append('')
+    return '\n'.join(lines).strip()
 
 
 class HighYieldTopicsView(AITutorThrottleMixin, APIView):
-    """Get AI-predicted high-yield topics for CMS exam."""
+    """Get AI-predicted high-yield topics for CMS exam.
+
+    The prediction prompt is the same for every user, so the result is cached
+    for 24 h per subject (``?subject=`` optional) and served free. Only a cache
+    miss calls the AI, for 1 token (refunded on failure). When the AI is
+    unavailable or offline mode is on, the topics are ranked from the question
+    bank's own PYQ frequencies instead (free, cached for an hour).
+    """
 
     def get_permissions(self):
         return _get_permission()
 
     def get(self, request):
-        service = AIService()
-        predictions = service.predict_high_yield_topics()
-        return Response({'predictions': predictions})
+        subject = _as_text(request.query_params.get('subject'))[:60]
+        cache_key = 'ai_high_yield_v1:' + (
+            hashlib.sha256(subject.lower().encode('utf-8')).hexdigest()[:16] if subject else 'all'
+        )
+        try:
+            cached = cache.get(cache_key)
+        except Exception:
+            cached = None
+        if isinstance(cached, dict) and cached.get('predictions'):
+            return Response({**cached, 'cached': True})
+
+        if ai_offline_mode():
+            return self._from_question_bank(subject, cache_key, REASON_OFFLINE_MODE)
+
+        ok, err = consume_ai_token(request, amount=1)
+        if not ok:
+            return err
+        try:
+            service = AIService()
+            predictions = service.predict_high_yield_topics(subject)
+        except AIUnavailable as exc:
+            refund_ai_token(request, amount=1)
+            return self._from_question_bank(
+                subject, cache_key, REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN,
+            )
+        except Exception as e:
+            logger.error(f"HighYield failed: {e}")
+            refund_ai_token(request, amount=1)
+            return _ai_unavailable_response()
+
+        payload = {
+            'predictions': predictions,
+            'subject': subject or None,
+            'generated_at': timezone.now().isoformat(),
+        }
+        try:
+            cache.set(cache_key, payload, timeout=HIGH_YIELD_CACHE_SECONDS)
+        except Exception:
+            logger.debug('HighYield cache write failed', exc_info=True)
+        return Response({**payload, 'cached': False})
+
+    @staticmethod
+    def _from_question_bank(subject: str, cache_key: str, reason: str):
+        try:
+            markdown = _question_bank_high_yield(subject, reason)
+        except Exception:
+            logger.exception('HighYield question-bank fallback failed')
+            markdown = None
+        if not markdown:
+            return _ai_unavailable_response(offline=(reason == REASON_OFFLINE_MODE))
+        payload = {
+            'predictions': markdown,
+            'subject': subject or None,
+            'offline': True,
+            'offline_reason': reason,
+            'generated_at': timezone.now().isoformat(),
+        }
+        try:
+            cache.set(cache_key, payload, timeout=HIGH_YIELD_FALLBACK_CACHE_SECONDS)
+        except Exception:
+            logger.debug('HighYield cache write failed', exc_info=True)
+        return Response({**payload, 'cached': False, 'charged': False})
 
 
 class KnowledgeUploadView(APIView):
@@ -844,10 +1478,11 @@ class KnowledgeScanView(APIView):
 
 
 class KnowledgeStatsView(APIView):
-    """Get AI knowledge base statistics."""
+    """Get AI knowledge base statistics (indexed book names). Admin only —
+    the only UI using it is the admin upload page."""
 
     def get_permissions(self):
-        return _get_permission()
+        return _get_admin_permission()
 
     def get(self, request):
         from .auto_ingest import AutoIngestService
@@ -858,34 +1493,56 @@ class KnowledgeStatsView(APIView):
 
 
 class GenerateQuestionsView(AITutorThrottleMixin, APIView):
-    """AI-generated practice MCQs for weak topics."""
+    """AI-generated practice MCQs for weak topics.
+
+    Cost: 10 tokens per generation (any count), refunded when the AI fails or
+    returns no valid question. Raw model output is never returned.
+    """
+
+    GENERATION_COST = 10
 
     def get_permissions(self):
         return _get_permission()
 
     def post(self, request):
-        subject = request.data.get('subject', '')
-        topic = request.data.get('topic', '')
-        difficulty = request.data.get('difficulty', 'medium')
+        subject, err = _required_text(request, 'subject', 'Subject', max_chars=MAX_LABEL_CHARS)
+        if err:
+            return err
+        topic = _optional_text(request, 'topic', MAX_LABEL_CHARS)
+        difficulty = _as_text(request.data.get('difficulty')).lower() or 'medium'
+        if difficulty not in ('easy', 'medium', 'hard'):
+            difficulty = 'medium'
         try:
             count = max(1, min(int(request.data.get('count', 5)), 20))
         except (TypeError, ValueError):
             return Response({'error': 'count must be an integer'}, status=400)
-        if not subject:
-            return Response({'error': 'Subject is required'}, status=400)
 
-        ok, err = consume_ai_token(request, amount=10)
+        if ai_offline_mode():
+            return _ai_unavailable_response(
+                offline=True,
+                message='Question generation needs the AI, which is switched off (offline mode). '
+                        'You were not charged.',
+            )
+
+        ok, err = consume_ai_token(request, amount=self.GENERATION_COST)
         if not ok:
             return err
 
         try:
             service = AIService()
             questions = service.generate_questions(subject, topic, difficulty, count)
-            return Response({'questions': questions, 'count': len(questions)})
+        except AIUnavailable as exc:
+            refund_ai_token(request, amount=self.GENERATION_COST)
+            return _ai_unavailable_response(
+                offline=exc.offline,
+                message='The AI could not generate valid questions right now. '
+                        'You were not charged — please try again.',
+            )
         except Exception as e:
             logger.error(f"GenerateQuestions failed: {e}")
-            refund_ai_token(request, amount=10)
-            return Response({'error': 'AI service temporarily unavailable. Token refunded.'}, status=503)
+            refund_ai_token(request, amount=self.GENERATION_COST)
+            return _ai_unavailable_response()
+        return Response({'questions': questions, 'count': len(questions), 'cost': self.GENERATION_COST})
 
 
 class PageScreenshotView(APIView):
@@ -946,26 +1603,26 @@ class AIStatusView(APIView):
     def get(self, request):
         try:
             service = AIService()
-            # Mirror the providers list in _call_ai() so admin dashboards
-            # reflect all 10 clients, not just the 2 the previous version
-            # reported. Keeps the operator's "is the AI healthy?" view
-            # in sync with the round-robin code path.
+            # Exactly the entries of the _call_ai() rotation, so the
+            # operator's "is the AI healthy?" view matches the code path.
+            # (NVIDIA Mistral is implemented but not in the rotation.)
             providers = {
-                'gemini': service.gemini_client is not None,
+                'omniroute': service.omniroute is not None,
                 'groq': service.groq is not None,
                 'cerebras': service.cerebras is not None,
+                'gemini': service.gemini_client is not None,
                 'cohere': service.cohere is not None,
                 'openrouter': service.openrouter is not None,
-                'openrouter2': service.openrouter2 is not None,
                 'github_models': service.github_models is not None,
                 'huggingface': service.huggingface is not None,
                 'mistral': service.mistral is not None,
-                'nvidia_mistral': service.nvidia_mistral is not None,
+                'openrouter2': service.openrouter2 is not None,
             }
         except Exception as e:
             logger.error(f"AIService init failed: {e}")
             providers = {'error': 'AI service failed to initialise; see server logs'}
         keys_present = {
+            'OMNIROUTE_API_KEY': bool(getattr(django_settings, 'OMNIROUTE_API_KEY', '') or os.getenv('OMNIROUTE_API_KEY', '')),
             'GEMINI_API_KEY': bool(getattr(django_settings, 'GEMINI_API_KEY', '')),
             'GROQ_API_KEY': bool(getattr(django_settings, 'GROQ_API_KEY', '')),
             'CEREBRAS_API_KEY': bool(getattr(django_settings, 'CEREBRAS_API_KEY', '')),
@@ -987,6 +1644,7 @@ class AIStatusView(APIView):
             'providers_initialized': providers,
             'keys_present': keys_present,
             'any_available': any_available,
+            'offline_mode': ai_offline_mode(),
         })
 
 
@@ -1000,7 +1658,13 @@ class AITestView(APIView):
         try:
             service = AIService()
             result = service._call_ai("Reply with exactly: OK", system="You are a test bot. Reply with one word only.", temperature=0, max_tokens=10)
-            return Response({'status': 'ok', 'response': result[:100]})
+            return Response({'status': 'ok', 'response': result[:100], 'provider': service.last_provider})
+        except AIUnavailable as exc:
+            return Response(
+                {'status': 'error', 'code': 'ai_unavailable', 'offline': exc.offline,
+                 'error': 'No AI provider answered' if not exc.offline else 'AI_OFFLINE_MODE is on'},
+                status=503,
+            )
         except Exception as e:
             logger.error(f"AI test failed: {e}")
             return Response({'status': 'error', 'error': 'AI test failed; see server logs'}, status=500)
@@ -1023,12 +1687,26 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     """
     serializer_class = ChatSessionSerializer
     permission_classes = [IsAuthenticated]
+    # The list is capped at the 50 most recent sessions, so it is returned as
+    # a plain array (the AI Tutor history panel expects a list).
+    pagination_class = None
 
     def get_queryset(self):
+        from django.db.models import Count, OuterRef, Subquery
         try:
+            last_message = (
+                ChatMessage.objects.filter(session=OuterRef('pk'))
+                .order_by('-created_at', '-id')
+                .values('content')[:1]
+            )
+            # message_count / last preview annotated in the one query instead
+            # of two extra queries per session in the serializer.
             return ChatSession.objects.filter(
                 user=self.request.user,
                 is_archived=False
+            ).annotate(
+                message_count_value=Count('messages'),
+                last_message_content=Subquery(last_message),
             ).order_by('-updated_at')[:50]  # Keep last 50 sessions
         except (OperationalError, ProgrammingError) as e:
             logger.warning(f"ChatSession table unavailable: {e}")
@@ -1092,20 +1770,26 @@ class ChatMessageCreateView(AITutorThrottleMixin, APIView):
         except ChatSession.DoesNotExist:
             return Response({'error': 'Session not found'}, status=404)
 
-        role = request.data.get('role', 'user')
-        content = request.data.get('content', '')
-        mode = request.data.get('mode', '')
+        role = _as_text(request.data.get('role')) or 'user'
+        content = _as_text(request.data.get('content'))
+        mode = _as_text(request.data.get('mode'))
         citations = request.data.get('citations', [])
 
+        if role not in {key for key, _label in ChatMessage.ROLE_CHOICES}:
+            return Response({'error': "role must be 'user' or 'ai'"}, status=400)
+        if mode and mode not in {key for key, _label in ChatSession.MODE_CHOICES}:
+            return Response({'error': 'unknown mode'}, status=400)
         if not content:
             return Response({'error': 'Content is required'}, status=400)
+        if len(content) > 20000:
+            return Response({'error': 'content is too long (max 20000 characters)'}, status=400)
 
         message = ChatMessage.objects.create(
             session=session,
             role=role,
             content=content,
             mode=mode,
-            citations=citations
+            citations=_clean_citations(citations),
         )
 
         # Update session title from first user message

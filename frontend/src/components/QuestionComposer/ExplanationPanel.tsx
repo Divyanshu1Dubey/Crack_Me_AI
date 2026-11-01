@@ -33,7 +33,16 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
             AI unavailable
           </Badge>
         )}
+        {!explanation.error && explanation.offline && (
+          <Badge variant="outline" className="ml-auto border-amber-500/40 text-amber-700 dark:text-amber-300">
+            Offline · no AI model · not charged
+          </Badge>
+        )}
       </div>
+
+      {!explanation.error && explanation.offline && explanation.offline_notice && (
+        <p className="text-xs text-muted-foreground">{explanation.offline_notice}</p>
+      )}
 
       <Separator />
 

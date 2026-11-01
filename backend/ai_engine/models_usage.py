@@ -110,6 +110,25 @@ def check_and_consume(user, cap: int) -> Tuple[bool, int]:
         return True, row.message_count
 
 
+def release_ai_tutor_message(user, date=None) -> bool:
+    """Give back one message consumed by ``check_and_consume``.
+
+    Called when the request that took the slot did not deliver an AI answer
+    (insufficient tokens, every provider failed, RAG unavailable, no textbook
+    match), so a failed call never burns the free daily allowance. ``date``
+    is the day the slot was taken (defaults to today), so a release after
+    midnight does not hand back a slot of the new day. Never goes below 0.
+    Returns True when a slot was released.
+    """
+    day = date or timezone.localdate()
+    updated = (
+        AITutorDailyUsage.objects
+        .filter(user=user, date=day, message_count__gt=0)
+        .update(message_count=F('message_count') - 1, updated_at=timezone.now())
+    )
+    return bool(updated)
+
+
 def get_or_create_today(user) -> AITutorDailyUsage:
     """Helper used by admin / reporting UIs. Not used on the hot path."""
     today = timezone.localdate()
