@@ -449,7 +449,7 @@ Answer in a structured, student-friendly format."""
         return None
 
     def _make_id(self, book_name: str, page_num: int) -> str:
-        return hashlib.md5(f"{book_name}:{page_num}".encode()).hexdigest()
+        return hashlib.md5(f"{book_name}:{page_num}".encode(), usedforsecurity=False).hexdigest()
 
     def _clean_book_name(self, filename: str) -> str:
         name = Path(filename).stem

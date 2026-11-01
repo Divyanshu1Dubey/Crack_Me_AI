@@ -116,6 +116,9 @@ postgres/
 db_dumps/
 data_dump*.json
 *_full_dump*.json
+# Question-bank attempt dump (user answer history), moved out 2026-11-01.
+backend/questions_backup.json
+answer_mismatches_*.csv
 supabase_auth_users*.json
 backup/sql/*.sql
 !backup/sql/copy_questionimage.sql

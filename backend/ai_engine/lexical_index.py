@@ -88,7 +88,7 @@ def tokenize(text: str, stem: bool = True) -> list[str]:
 
 def content_key(text: str) -> str:
     """Identity of a chunk's content (whitespace/case-insensitive)."""
-    return hashlib.md5(' '.join(_TOKEN_RE.findall(fold(text))).encode('utf-8')).hexdigest()
+    return hashlib.md5(' '.join(_TOKEN_RE.findall(fold(text))).encode('utf-8'), usedforsecurity=False).hexdigest()
 
 
 # ─── Corpus policy ──────────────────────────────────────────────────────
