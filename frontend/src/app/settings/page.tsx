@@ -7,8 +7,11 @@ import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { authAPI } from '@/lib/api';
+import { authAPI, extractApiErrorMessage } from '@/lib/api';
 import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2, X } from 'lucide-react';
+import { USERNAME_HINT, USERNAME_MAX_LENGTH, profileUpdatePayload, usernameProblem } from './username';
+
+const PROFILE_SAVE_FAILED = 'Failed to update profile. Please try again.';
 
 const THEME_OPTIONS = [
     { value: 'light', label: 'Light' },
@@ -27,7 +30,7 @@ export default function SettingsPage() {
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [form, setForm] = useState({ first_name: '', last_name: '', phone: '', college: '', target_exam: '' });
+    const [form, setForm] = useState({ username: '', first_name: '', last_name: '', phone: '', college: '', target_exam: '' });
 
     interface Device {
         id: number;
@@ -63,6 +66,7 @@ export default function SettingsPage() {
     useEffect(() => {
         if (ready && user) {
             setForm({
+                username: user.username || '',
                 first_name: user.first_name || '',
                 last_name: user.last_name || '',
                 phone: user.phone || '',
@@ -73,15 +77,24 @@ export default function SettingsPage() {
     }, [ready, user]);
 
     const handleSave = async () => {
-        setSaving(true);
         setMessage(null);
+        // The username is sent only when it changed (profileUpdatePayload).
+        const payload = profileUpdatePayload(form, user?.username);
+        const problem = 'username' in payload ? usernameProblem(payload.username, user?.email) : null;
+        if (problem) {
+            setMessage({ type: 'error', text: problem });
+            return;
+        }
+        setSaving(true);
         try {
-            await authAPI.updateProfile(form);
+            await authAPI.updateProfile(payload);
             await refreshProfile();
             setMessage({ type: 'success', text: 'Profile updated successfully!' });
             setEditing(false);
-        } catch {
-            setMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
+        } catch (err: unknown) {
+            // Show the server's reason (e.g. "This username is taken.").
+            const data = (err as { response?: { data?: unknown } }).response?.data;
+            setMessage({ type: 'error', text: data ? extractApiErrorMessage(data, PROFILE_SAVE_FAILED) : PROFILE_SAVE_FAILED });
         } finally {
             setSaving(false);
         }
@@ -244,6 +257,14 @@ export default function SettingsPage() {
 
                         {editing ? (
                             <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="settings-username" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Username</label>
+                                    <input id="settings-username" className="input-field" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })}
+                                        maxLength={USERNAME_MAX_LENGTH} autoComplete="nickname" autoCapitalize="none" spellCheck={false} aria-describedby="settings-username-hint" />
+                                    <p id="settings-username-hint" className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                                        {USERNAME_HINT}
+                                    </p>
+                                </div>
                                 <div>
                                     <label htmlFor="settings-first-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>First Name</label>
                                     <input id="settings-first-name" className="input-field" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />

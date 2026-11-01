@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flag, Lock, RotateCcw } from 'lucide-react';
+import { nextPageToLoad, notebookListParams, type NotebookFilter } from './paging';
 
 /** Paywall feature label of a locked answer (backend questions.views.UPGRADE_REQUIRED_FEATURE). */
 const ANSWERS_FEATURE = 'PYQ answers';
@@ -50,7 +51,7 @@ interface MistakeStats {
     due_today: number;
 }
 
-type Filter = 'all' | 'due' | 'new' | 'learning' | 'reviewing' | 'mastered';
+type Filter = NotebookFilter;
 
 const FILTERS: { key: Filter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -94,7 +95,6 @@ export default function MistakeNotebookPage() {
     const { show: showPaywall } = usePaywall();
     const [entries, setEntries] = useState<MistakeEntry[]>([]);
     const [count, setCount] = useState(0);
-    const [page, setPage] = useState(1);
     const [filter, setFilter] = useState<Filter>('all');
     const [stats, setStats] = useState<MistakeStats | null>(null);
     const [loading, setLoading] = useState(true);
@@ -109,15 +109,8 @@ export default function MistakeNotebookPage() {
     }, []);
 
     const loadEntries = useCallback(async (nextFilter: Filter, nextPage: number) => {
-        if (nextFilter === 'due') {
-            // The due endpoint is not paginated (it returns everything due now).
-            const res = await mistakeNotebookAPI.due();
-            const rows = (res.data?.results ?? []) as MistakeEntry[];
-            return { rows, total: res.data?.count ?? rows.length };
-        }
-        const params: Record<string, string | number> = { page: nextPage, page_size: PAGE_SIZE };
-        if (nextFilter !== 'all') params.review_status = nextFilter;
-        const res = await mistakeNotebookAPI.list(params);
+        // Every tab is paged, "Due now" included (the list's ?due=true filter).
+        const res = await mistakeNotebookAPI.list(notebookListParams(nextFilter, nextPage, PAGE_SIZE));
         const data = res.data;
         const rows = (Array.isArray(data) ? data : data?.results ?? []) as MistakeEntry[];
         return { rows, total: Array.isArray(data) ? rows.length : data?.count ?? rows.length };
@@ -133,7 +126,6 @@ export default function MistakeNotebookPage() {
             if (!alive) return;
             setEntries(rows);
             setCount(total);
-            setPage(1);
         }).catch(() => {
             if (alive) setError('Could not load your mistake notebook. Check your connection and try again.');
         }).finally(() => {
@@ -149,10 +141,10 @@ export default function MistakeNotebookPage() {
     const loadMore = async () => {
         setLoadingMore(true);
         try {
-            const { rows, total } = await loadEntries(filter, page + 1);
+            // From what is shown: reviewed entries leave the due / status views.
+            const { rows, total } = await loadEntries(filter, nextPageToLoad(entries.length, PAGE_SIZE));
             setEntries(prev => [...prev, ...rows.filter(r => !prev.some(p => p.id === r.id))]);
             setCount(total);
-            setPage(page + 1);
         } catch {
             setError('Could not load more entries. Please try again.');
         } finally {
@@ -260,6 +252,20 @@ export default function MistakeNotebookPage() {
                 <div className="space-y-3">
                     {[1, 2, 3].map(i => <Skeleton key={i} className="h-32" />)}
                 </div>
+            ) : entries.length === 0 && count > 0 && !error ? (
+                // Reviews emptied the page while more remain (one page is shown at a time).
+                <Card>
+                    <CardContent className="p-8 text-center space-y-3">
+                        <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
+                        <h3 className="text-lg font-semibold">You reviewed every mistake on this page</h3>
+                        <p className="text-sm text-muted-foreground">
+                            {count} more {count === 1 ? 'is' : 'are'} waiting.
+                        </p>
+                        <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                            {loadingMore ? 'Loading…' : 'Show the next ones'}
+                        </Button>
+                    </CardContent>
+                </Card>
             ) : entries.length === 0 && !error ? (
                 <Card>
                     <CardContent className="p-12 text-center">
@@ -416,7 +422,7 @@ export default function MistakeNotebookPage() {
                         );
                     })}
 
-                    {filter !== 'due' && entries.length < count && (
+                    {entries.length < count && (
                         <div className="flex justify-center pt-2">
                             <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
                                 {loadingMore ? 'Loading…' : `Load more (${count - entries.length} left)`}

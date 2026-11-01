@@ -15,9 +15,36 @@ export function formatAccuracy(accuracy: number | null | undefined, digits = 1):
     return typeof accuracy === 'number' ? `${accuracy.toFixed(digits)}%` : '—';
 }
 
+/**
+ * How another learner is named: "@handle", or `fallback` when the API lists
+ * them without a name (`username: null`: they never chose a handle, e.g. a
+ * Google sign-up whose username was taken from their email address).
+ */
+export function learnerName(username: string | null | undefined, fallback: string): string {
+    const handle = (username ?? '').trim();
+    return handle ? `@${handle}` : fallback;
+}
+
+/**
+ * The viewer's own board name for their card ("Others see you as
+ * @learner_1a2b3c4d") and the label of the link to Settings, where the
+ * username is changed. `null` when the payload has no `public_username`
+ * (an envelope cached before the field existed).
+ */
+export function boardIdentity(publicUsername: string | null | undefined): { label: string; action: string } | null {
+    if (publicUsername === undefined) return null;
+    const name = learnerName(publicUsername, '');
+    return name
+        ? { label: `Others see you as ${name}`, action: 'Change' }
+        : { label: 'Others see you without a name', action: 'Choose a username' };
+}
+
 export interface MePayload {
     user_id: number;
+    /** The viewer's own display name (their name, else their username). */
     username: string;
+    /** What other learners see: a username they chose, or null (listed without a name). */
+    public_username?: string | null;
     rank: number | null;
     out_of: number;
     /** All-time XP. */
@@ -36,7 +63,8 @@ export interface MePayload {
 
 export interface RivalPayload {
     user_id: number;
-    username: string;
+    /** A handle the learner chose, or null (shown without a name, see learnerName). */
+    username: string | null;
     /** XP in the selected period. */
     xp_points: number;
     current_streak: number;
@@ -48,7 +76,8 @@ export interface RivalPayload {
 export interface LiveBoardRow {
     rank: number;
     user_id: number;
-    username: string;
+    /** A handle the learner chose, or null (shown without a name, see learnerName). */
+    username: string | null;
     /** XP in the selected period. */
     xp_points: number;
     current_streak: number;

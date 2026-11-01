@@ -5,6 +5,7 @@ is_correct, question, time_spent_seconds) and SQLite-only SQL, so every
 endpoint returned HTTP 500.
 """
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -18,6 +19,7 @@ class DashboardV3Tests(TestCase):
     def setUp(self):
         from tests_engine.models import QuestionResponse, Test, TestAttempt
 
+        cache.clear()  # every endpoint here is cached per user (dashboard_v3.CACHE_TTL)
         self.subject = Subject.objects.create(name='Dash Subject', code='DSUB')
         self.topic = Topic.objects.create(name='Dash Topic', subject=self.subject)
         qs = [Question.objects.create(

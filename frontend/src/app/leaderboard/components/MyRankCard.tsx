@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { Flame, Target, Trophy, TrendingUp, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatAccuracy, periodPhrase, type LeaderboardPeriod, type MePayload } from '../types';
+import { boardIdentity, formatAccuracy, periodPhrase, type LeaderboardPeriod, type MePayload } from '../types';
 
 interface Props {
     me: MePayload;
@@ -28,6 +29,7 @@ export default function MyRankCard({ me, period }: Props) {
         100,
         Math.round((me.weekly_xp / Math.max(1, me.weekly_goal_xp)) * 100),
     );
+    const identity = boardIdentity(me.public_username);
 
     return (
         <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
@@ -46,6 +48,16 @@ export default function MyRankCard({ me, period }: Props) {
                             )}
                         </div>
                         <p className="text-xs md:text-sm text-muted-foreground truncate">{rankSubtitle}</p>
+                        {identity && (
+                            // Wraps (not truncated) so the link stays visible on a phone.
+                            <p className="text-xs text-muted-foreground break-words">
+                                {identity.label}
+                                {' · '}
+                                <Link href="/settings" className="font-semibold text-primary hover:underline whitespace-nowrap">
+                                    {identity.action}
+                                </Link>
+                            </p>
+                        )}
                     </div>
                 </div>
 

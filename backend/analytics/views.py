@@ -27,9 +27,11 @@ from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, F
                           AnnouncementSerializer, StudentAnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
                           StudyTimeBreakdownSerializer, UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
                           MistakeNotebookSerializer)
+from questions.serializers import public_subject_name
 from tests_engine.models import TestAttempt
 from questions.models import Question
 from accounts.emails import run_in_background as _accounts_run_in_background
+from accounts.handles import exposes_email
 from accounts.permissions import IsControlTowerAdmin
 
 logger = logging.getLogger(__name__)
@@ -160,6 +162,9 @@ def subject_totals(user) -> list:
     Every answer updates the subject-level row (topic=NULL) *and* the topic
     row, so summing all rows double-counted. Use the subject-level row, and
     the topic rows only for subjects that have none (older data).
+
+    ``subject__name`` is the name students see (public_subject_name: the
+    loader's "Imported" bucket is "Expert Curated").
     """
     fields = ('subject_id', 'subject__name', 'subject__code', 'subject__color')
     base = UserTopicPerformance.objects.filter(user=user, subject__isnull=False)
@@ -170,6 +175,8 @@ def subject_totals(user) -> list:
     rows = {r['subject_id']: r for r in _grouped(base.filter(topic__isnull=True))}
     for r in _grouped(base.filter(topic__isnull=False)):
         rows.setdefault(r['subject_id'], r)
+    for r in rows.values():
+        r['subject__name'] = public_subject_name(r['subject__name'])
     return sorted(rows.values(), key=lambda r: (r['subject__name'] or ''))
 
 
@@ -432,11 +439,13 @@ class PerformanceTrendView(APIView):
         ).filter(ANSWERED_TEST_ATTEMPT).select_related('test').order_by('-started_at')[:20])
         attempts.reverse()
 
+        from tests_engine.serializers import public_test_title  # stored titles may name the loader subject
+
         trend_data = []
         for a in attempts:
             trend_data.append({
                 'date': a.started_at.strftime('%Y-%m-%d'),
-                'test_title': a.test.title if a.test else 'Test',
+                'test_title': public_test_title(a.test.title) if a.test else 'Test',
                 'accuracy': a.accuracy,
                 'score': a.score,
                 'correct': a.correct_count,
@@ -479,8 +488,7 @@ class PYQTrendsView(APIView):
         )
         subjects = {}
         for row in rows:
-            if row['subject__name'] == 'Imported':
-                row['subject__name'] = 'Expert Curated'  # same rename as the question serializers
+            row['subject__name'] = public_subject_name(row['subject__name'])
             entry = subjects.setdefault(row['subject_id'], {
                 'id': row['subject_id'], 'name': row['subject__name'], 'code': row['subject__code'],
                 'color': row['subject__color'] or '', 'count': 0,
@@ -1132,13 +1140,24 @@ def _ranked_learner_count() -> int:
     return count
 
 
-def _public_name(user) -> str:
-    """The name other learners see: the username the product already shows
-    in discussions -- never first/last name or email."""
+def _public_name(user):
+    """The handle other learners see, or None to list them without a name.
+
+    Only a username -- never a first/last name and never anything taken
+    from the email address. New accounts get the name chosen at sign-up or a
+    generated ``learner_<hex>`` handle (accounts.handles
+    .username_for_new_account), and learners can pick another in Settings.
+    Older Google sign-ups were named after the address's local part (for a
+    Gmail user, the address itself) until ``manage.py
+    rename_email_derived_usernames`` renames them: a username that shows the
+    email address (accounts.handles.exposes_email: an '@', or the local part
+    with an optional collision suffix / length cut) is still listed without
+    a name.
+    """
     name = (getattr(user, 'username', '') or '').strip()
-    if '@' in name:
-        name = name.split('@')[0]
-    return name or 'Learner'
+    if not name or exposes_email(name, getattr(user, 'email', '')):
+        return None
+    return name
 
 
 class LeaderboardView(APIView):
@@ -1153,10 +1172,15 @@ class LeaderboardView(APIView):
       dated XP ledger (see ``period_xp_by_user``); ``all`` uses the all-time
       StudyStreak total.
     * Accuracy is null when a learner has not completed a test.
-    * Other learners appear only by username (no real names, no college).
-    * The rival is the top real learner of the period other than the viewer.
-      When the active user-base crosses ``settings.LEADERBOARD_LIVE_THRESHOLD``
-      a top-10 slab is appended; below it no global rows are exposed.
+    * Other learners appear only by a username they chose (no real names, no
+      college, nothing from their email address); learners without one have
+      ``username: null`` (see ``_public_name``). ``me.public_username`` is
+      that same name for the viewer (null: listed without a name), so the
+      card can say how others see them and link to Settings to change it.
+    * The rival is the top real learner of the period other than the viewer,
+      shown at any user-base size. When the active user-base crosses
+      ``settings.LEADERBOARD_LIVE_THRESHOLD`` a top-10 slab is appended;
+      below it no other learners' rows are exposed.
     * The shared work (standings, counts) is cached once for all viewers;
       per viewer only a handful of indexed queries run.
     """
@@ -1207,7 +1231,8 @@ class LeaderboardView(APIView):
 
         # Details only for the handful of learners shown (+ me).
         shown_ids = {user_id for user_id, _ in top} | {user.id}
-        users = {u.pk: u for u in get_user_model().objects.filter(pk__in=shown_ids).only('id', 'username')}
+        # email: only to tell an email-derived username from a chosen one.
+        users = {u.pk: u for u in get_user_model().objects.filter(pk__in=shown_ids).only('id', 'username', 'email')}
         streaks = {s.user_id: s for s in StudyStreak.objects.filter(user_id__in=shown_ids)}
         # Late submits are scored but kept off the leaderboard (no accuracy,
         # no tests_completed here); the dashboard still counts them as practice.
@@ -1237,6 +1262,8 @@ class LeaderboardView(APIView):
                 or user.username
                 or (user.email or '').split('@')[0]
             ),
+            # What other learners see on the board (null: no name).
+            'public_username': _public_name(user),
             'rank': me_rank,
             'out_of': out_of,
             'xp_points': me_total_xp,
@@ -1436,6 +1463,10 @@ class AdminWeakAreaControlView(APIView):
             .values('id', 'question_text', 'reports', 'attempts', 'accuracy', 'impact_score')[:20]
         )
 
+        # The loader's "Imported" bucket reads "Expert Curated" here too.
+        for row in (*most_wrong_questions, *difficult_topics, *cohort_weak_areas, *student_weak_areas):
+            row['subject__name'] = public_subject_name(row['subject__name'])
+
         recommendations = []
         for item in cohort_weak_areas[:5]:
             recommendations.append(
@@ -1461,6 +1492,13 @@ class AdminWeakAreaControlView(APIView):
 # unreachable (and the bundle copy crashed on TestAttempt.total_questions).
 
 
+_NOTEBOOK_QUESTION_FIELDS = (
+    'question__question_text', 'question__option_a', 'question__option_b', 'question__option_c',
+    'question__option_d', 'question__correct_answer', 'question__explanation', 'question__exam_type',
+    'question__is_scholarship_eligible', 'question__subject__name', 'question__topic__name',
+)
+
+
 def _notebook_queryset(user):
     """The user's Mistake Notebook rows, annotated with whether the answer key
     may be shown (see MistakeNotebookSerializer.to_representation).
@@ -1477,7 +1515,14 @@ def _notebook_queryset(user):
     from accounts.utils import is_premium
     from questions.views import free_showcase_rows
 
-    qs = MistakeNotebook.objects.filter(user=user).select_related('question__subject', 'question__topic')
+    qs = (
+        MistakeNotebook.objects.filter(user=user)
+        .select_related('question__subject', 'question__topic')
+        # Every notebook column, but of the question only what
+        # MistakeNotebookSerializer and mistake_answer_visible read (a
+        # Question row has ~80 columns: AI texts, references, JSON).
+        .only(*(f.name for f in MistakeNotebook._meta.concrete_fields), *_NOTEBOOK_QUESTION_FIELDS)
+    )
     # is_premium already counts admins and superusers (accounts.utils).
     if is_premium(user) or getattr(user, 'is_staff', False):
         return qs.annotate(answer_visible=Value(True, output_field=BooleanField()))
@@ -1486,8 +1531,40 @@ def _notebook_queryset(user):
     )
 
 
+def _due_now(qs):
+    """Entries due for review now, oldest first (mastered ones are done).
+
+    Every wrong answer is filed with next_review_at=now, so for an active
+    student this is most of the notebook: always serve it a page at a time.
+    """
+    return (
+        qs.filter(next_review_at__lte=timezone.now())
+        .exclude(review_status='mastered')
+        .order_by('next_review_at', 'id')
+    )
+
+
+def _notebook_page(request, qs):
+    """``{results, count, page, page_size}`` for ``?page=&page_size=`` (at most 100)."""
+    try:
+        page = max(1, int(request.query_params.get('page', 1)))
+        page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
+    except (TypeError, ValueError):
+        return Response({'error': 'page and page_size must be integers'}, status=400)
+    total = qs.count()
+    start = (page - 1) * page_size
+    items = qs[start:start + page_size] if start < total else []
+    return Response({
+        'results': MistakeNotebookSerializer(items, many=True).data,
+        'count': total,
+        'page': page,
+        'page_size': page_size,
+    })
+
+
 class MistakeNotebookView(APIView):
-    """Get user's mistake notebook entries with optional filters."""
+    """Get user's mistake notebook entries with optional filters
+    (``?due=true``: only entries due for review now, like ``due/``)."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -1497,6 +1574,7 @@ class MistakeNotebookView(APIView):
         is_flagged = request.query_params.get('is_flagged')
         subject_id = request.query_params.get('subject')
         topic_id = request.query_params.get('topic')
+        due = request.query_params.get('due') in ('true', '1')
 
         if review_status:
             qs = qs.filter(review_status=review_status)
@@ -1507,24 +1585,8 @@ class MistakeNotebookView(APIView):
         if topic_id:
             qs = qs.filter(question__topic_id=topic_id)
 
-        qs = qs.order_by('-created_at')
-        # Pagination
-        try:
-            page = max(1, int(request.query_params.get('page', 1)))
-            page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
-        except (TypeError, ValueError):
-            return Response({'error': 'page and page_size must be integers'}, status=400)
-        total = qs.count()
-        start = (page - 1) * page_size
-        items = qs[start:start + page_size]
-
-        serializer = MistakeNotebookSerializer(items, many=True)
-        return Response({
-            'results': serializer.data,
-            'count': total,
-            'page': page,
-            'page_size': page_size,
-        })
+        qs = _due_now(qs) if due else qs.order_by('-created_at')
+        return _notebook_page(request, qs)
 
     def post(self, request):
         """Add a question you answered incorrectly.
@@ -1637,19 +1699,13 @@ class MistakeNotebookReviewView(APIView):
 
 
 class MistakeNotebookDueView(APIView):
-    """Get all mistakes due for review today."""
+    """Mistakes due for review now, a page at a time (``?page=&page_size=``,
+    at most 100); ``count`` is the whole due set. It used to return every
+    due entry at once -- for an active student most of their notebook."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        now = timezone.now()
-        due = _notebook_queryset(request.user).filter(
-            next_review_at__lte=now,
-        ).exclude(review_status='mastered').order_by('next_review_at')
-        serializer = MistakeNotebookSerializer(due, many=True)
-        return Response({
-            'results': serializer.data,
-            'count': due.count(),
-        })
+        return _notebook_page(request, _due_now(_notebook_queryset(request.user)))
 
 
 class UserQuestListView(APIView):

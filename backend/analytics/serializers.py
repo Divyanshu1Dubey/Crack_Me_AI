@@ -1,11 +1,17 @@
 from rest_framework import serializers
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
+# Every subject name below is the one students see: the loader's "Imported"
+# bucket reads "Expert Curated" (the question serializers' display rule).
+from questions.serializers import PublicSubjectNameField
+# The text redaction of a locked test-review row, so a locked notebook row
+# and a locked /review/ row of the same question show the same text.
+from tests_engine.entitlement import _redact_locked_text as redact_locked_text
 
 
 class TopicPerformanceSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True)
     accuracy = serializers.ReadOnlyField()
     avg_time_per_question = serializers.ReadOnlyField()
 
@@ -100,7 +106,7 @@ class LeaderboardEntrySerializer(serializers.Serializer):
 
 
 class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
     subject_color = serializers.CharField(source='subject.color', read_only=True, default='')
 
@@ -113,7 +119,7 @@ class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
 
 class UserQuestSerializer(serializers.ModelSerializer):
     progress_percent = serializers.IntegerField(read_only=True)
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
 
     class Meta:
         model = UserQuest
@@ -153,7 +159,7 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
     option_d = serializers.CharField(source='question.option_d', read_only=True, default='')
     correct_answer = serializers.CharField(source='question.correct_answer', read_only=True, default='')
     explanation = serializers.CharField(source='question.explanation', read_only=True, default='')
-    subject_name = serializers.CharField(source='question.subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='question.subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='question.topic.name', read_only=True, default='')
     exam_type = serializers.CharField(source='question.exam_type', read_only=True, default='')
 
@@ -183,6 +189,13 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
         if not visible:
             data['correct_answer'] = ''
             data['explanation'] = ''
+            # Some imports left the key or the explanation inside the stem or
+            # an option ("... Correct Answer: B. ...", "Explanation: ..."), or
+            # flagged an option ("Adrenaline (correct)", "[Correct answer]",
+            # "(wrong)", a tick): the stem and the options are cut at their
+            # first label (questions.answer_leak) and the options lose those
+            # flags -- the redaction of a locked /review/ row.
+            redact_locked_text(data)
         data['answer_locked'] = not visible
         return data
 

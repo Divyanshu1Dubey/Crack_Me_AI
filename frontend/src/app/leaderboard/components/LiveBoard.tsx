@@ -2,7 +2,7 @@
 
 import { Flame, Sparkles, Target, Trophy, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatAccuracy, periodPhrase, type LeaderboardPeriod, type LiveBoardRow } from '../types';
+import { formatAccuracy, learnerName, periodPhrase, type LeaderboardPeriod, type LiveBoardRow } from '../types';
 
 interface Props {
     rows: LiveBoardRow[];
@@ -44,7 +44,7 @@ export default function LiveBoard({ rows, myUserId, period }: Props) {
                                 </span>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold truncate">
-                                        @{row.username}
+                                        {learnerName(row.username, 'Learner')}
                                         {isMe && (
                                             <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-primary">
                                                 You

@@ -37,7 +37,9 @@ class LeaderboardTests(TestCase):
         self.client.force_authenticate(self.me)
 
     def _learner(self, username, xp, **extra):
-        user = User.objects.create_user(username=username, email=f'{username}@example.com', password='x', **extra)
+        # A handle chosen at sign-up: one taken from the email address is
+        # never shown (tests_wave4_analytics.LeaderboardNamesTests).
+        user = User.objects.create_user(username=username, email=f'inbox.{username}@example.com', password='x', **extra)
         StudyStreak.objects.create(user=user, xp_points=xp, current_streak=2)
         return user
 

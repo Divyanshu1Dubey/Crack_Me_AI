@@ -2,7 +2,7 @@
 
 import { Flame, Target, Sparkles, Swords, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatAccuracy, periodPhrase, type LeaderboardPeriod, type RivalPayload } from '../types';
+import { formatAccuracy, learnerName, periodPhrase, type LeaderboardPeriod, type RivalPayload } from '../types';
 
 interface Props {
     rival: RivalPayload | null;
@@ -61,6 +61,8 @@ export default function RivalCard({ rival, meRank, meStreak, period }: Props) {
 
     const ahead = rival.xp_to_surpass;
     const questions = rival.questions_to_surpass;
+    // The rival is the period's top learner (I'm not #1 here).
+    const rivalTitle = learnerName(rival.username, 'the top learner');
 
     return (
         <Card
@@ -74,7 +76,7 @@ export default function RivalCard({ rival, meRank, meStreak, period }: Props) {
             <CardContent className="p-5 relative space-y-3">
                 <div className="flex items-center gap-2">
                     <Swords className="w-5 h-5 text-rose-500" />
-                    <h3 className="font-bold text-foreground">Surpass @{rival.username}</h3>
+                    <h3 className="font-bold text-foreground">Surpass {rivalTitle}</h3>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
@@ -86,7 +88,7 @@ export default function RivalCard({ rival, meRank, meStreak, period }: Props) {
                 {ahead > 0 ? (
                     <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm">
                         <p className="font-semibold text-rose-600 dark:text-rose-300">
-                            Solve {questions.toLocaleString()} more question{questions === 1 ? '' : 's'} to surpass @{rival.username}.
+                            Solve {questions.toLocaleString()} more question{questions === 1 ? '' : 's'} to surpass {learnerName(rival.username, 'them')}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                             That&apos;s <span className="font-bold text-foreground">{ahead.toLocaleString()} XP</span> to climb past their rank.
