@@ -81,6 +81,11 @@ if SENTRY_DSN:
     )
 
 is_testing = 'test' in sys.argv or 'pytest' in sys.modules
+# Readable as settings.TESTING (Django only exposes upper-case names): the
+# production posture check in crack_cms/urls.py is skipped under the test
+# runner, which substitutes a test SECRET_KEY below.
+TESTING = is_testing
+# crack_cms/security.py resolves the key the same way; keep the two in sync.
 secret_key_from_env = (os.getenv('DJANGO_SECRET_KEY') or os.getenv('SECRET_KEY') or '').strip()
 if not secret_key_from_env and not DEBUG:
     if is_testing:
@@ -329,6 +334,21 @@ AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 # and falls back to REMOTE_ADDR while it is unset. TRUSTED_CLIENT_IP_HEADER
 # (e.g. "CF-Connecting-IP", "DO-Connecting-IP") is honoured by that limiter
 # only; set it only when every request reaches Django through that edge.
+#
+# Production (both default to unset; see backend/.env.example): behind the
+# DigitalOcean / Cloudflare edge REMOTE_ADDR is the proxy, shared by every
+# visitor, so until one of them is set the limiter counts all anonymous
+# traffic -- and the first request of every new or refreshed login token --
+# in that proxy's bucket (security_posture_check logs a warning).
+#   1. Look at what the edge sends: as an admin, GET /api/health/client-ip/
+#      echoes REMOTE_ADDR, X-Forwarded-For and the platform client-IP
+#      headers of your own request (crack_cms/diagnostics.py).
+#   2. TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP (App Platform) or
+#      CF-Connecting-IP (Cloudflare proxy) when that header holds your
+#      address and Django cannot be reached around that edge.
+#   3. NUM_PROXIES=<n> where X-Forwarded-For ends with your address followed
+#      by n-1 proxy addresses (usually 1). DRF's throttles read only this
+#      one, so set it as well.
 NUM_PROXIES = parse_num_proxies(os.getenv('NUM_PROXIES'))
 TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
 
@@ -389,6 +409,10 @@ REST_FRAMEWORK = {
         'ai_heavy': os.getenv('DRF_THROTTLE_AI_HEAVY', '5/min'),
         'analytics_ingest': os.getenv('DRF_THROTTLE_ANALYTICS_INGEST', '120/min'),
         'local_auth': os.getenv('DRF_THROTTLE_LOCAL_AUTH', '60/min'),
+        # analytics/views.py FeedbackSubmitThrottle / ContactHourlyThrottle
+        # (same defaults as their built-in fallbacks; listed to be tunable).
+        'feedback_submit': os.getenv('DRF_THROTTLE_FEEDBACK_SUBMIT', '10/hour'),
+        'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
     },
 }
 
@@ -576,6 +600,9 @@ if os.getenv('EMAIL_BACKEND', '').strip():
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USER}>')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+# Recipient of feedback / contact-form notifications (analytics/views.py,
+# which falls back to its built-in address when this is empty).
+ADMIN_NOTIFICATION_EMAIL = os.getenv('ADMIN_NOTIFICATION_EMAIL', '').strip()
 
 # ── Leaderboard gating ──────────────────────────────────────────────
 # Number of real (non-admin) users with weekly activity before the global
@@ -650,6 +677,14 @@ except (TypeError, ValueError):
 REDIS_URL = os.getenv('REDIS_URL', '').strip()
 _redis_url_valid = REDIS_URL and REDIS_URL.startswith(('redis://', 'rediss://', 'unix://'))
 
+# 'rate_limit' holds the question-bank limiter's counters and token -> user
+# mappings (questions/middleware.py). On LocMemCache the 'default' alias keeps
+# Django's 300-entry cap and is shared with the question-list caches, so under
+# load culling evicted token mappings (students fell back to the shared IP
+# bucket) as well as cached data. Without Redis each process still counts on
+# its own (a per-worker budget).
+_RATE_LIMIT_CACHE_MAX_ENTRIES = _env_int('RATE_LIMIT_CACHE_MAX_ENTRIES', 50000)
+
 if _redis_url_valid:
     CACHES = {
         'default': {
@@ -672,6 +707,16 @@ if _redis_url_valid:
             },
             'TIMEOUT': 3600,
         },
+        'rate_limit': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'rl',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,   # limiter fails open
+            },
+            'TIMEOUT': 300,
+        },
     }
 else:
     if REDIS_URL:
@@ -690,7 +735,19 @@ else:
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'crackcms-kb',
         },
+        'rate_limit': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'crackcms-rate-limit',
+            'OPTIONS': {'MAX_ENTRIES': _RATE_LIMIT_CACHE_MAX_ENTRIES},
+        },
     }
+    if _TEST_RUN:
+        # Same in-process store as 'default' (separate alias, larger cap), so
+        # the cache.clear() calls in test setUp keep resetting limiter buckets
+        # as they did when the limiter used 'default'; otherwise every
+        # question-bank GET of the whole suite would count in one long-lived
+        # 127.0.0.1 bucket.
+        CACHES['rate_limit']['LOCATION'] = CACHES['default']['LOCATION']
 
 # ── Knowledge Base ──────────────────────────────────────────────────────
 KB_FALLBACK_THRESHOLD = int(os.getenv('KB_FALLBACK_THRESHOLD', '10'))

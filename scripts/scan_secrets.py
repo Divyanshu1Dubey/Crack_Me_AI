@@ -8,7 +8,13 @@ is blocked when a likely credential or a personal-data dump is detected.
 Detected: provider API keys, JWTs (Supabase service_role / anon keys),
 database URLs with an inline password, hard-coded defaults for secret env
 vars or ``--password`` options, password literals in code, Django fixtures
-or SQL dumps of user/account tables, and files with many email addresses.
+or SQL dumps of account and student-activity tables (attempts, bookmarks,
+notes, flashcards, test attempts, analytics, chats) or of any rows carrying
+a ``"user": <id>`` field, and files with many email addresses.
+
+Output never contains a secret: provider keys and JWTs show at most their
+4-character type prefix, everything else (passwords, DB-URL passwords,
+hard-coded defaults) only its length -- CI logs may be public.
 
 A reviewed false positive can be suppressed by putting
 ``pragma: allowlist secret`` on the same line (the detect-secrets marker).
@@ -29,7 +35,8 @@ ALLOW_MARKER = "pragma: allowlist secret"
 # Provider-specific token formats: reported wherever they appear.
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("OpenRouter key", re.compile(r"sk-or-v1-[A-Za-z0-9]{20,}")),
-    ("ElevenLabs key", re.compile(r"sk_[A-Za-z0-9]{20,}")),
+    # Not inside another token: every Groq key ("gsk_...") was reported twice.
+    ("ElevenLabs key", re.compile(r"(?<![A-Za-z0-9_])sk_[A-Za-z0-9]{20,}")),
     ("Groq key", re.compile(r"gsk_[A-Za-z0-9]{20,}")),
     ("GitHub token", re.compile(r"ghp_[A-Za-z0-9]{20,}")),
     ("Gemini key", re.compile(r"AIza[0-9A-Za-z_-]{35}")),
@@ -73,14 +80,31 @@ PASSWORD_PROSE = re.compile(
     r"(?i)\bpassword\s*(?:is\s+|=\s*|:\s*)?\s[`'\"]?(?P<value>[^\s`'\"<>{}()\[\]]{6,64})"
 )
 
-# Personal-data dumps (file-level checks).
+# Personal-data dumps (file-level checks): account tables and every model
+# whose rows belong to a student (attempts, bookmarks, notes, flashcards,
+# test attempts, analytics, chat, feedback).
+_USER_ACTIVITY_MODELS = (
+    r"accounts\.[a-z_]+"
+    r"|questions\.(?:questionattempt|questionbookmark|questionfeedback|questionpracticestate|discussion|discussionvote"
+    r"|note|flashcard|studytimebreakdown|userquest|queststreak|mistakenotebook)"
+    r"|tests_engine\.(?:testattempt|questionresponse)"
+    r"|analytics\.(?:user[a-z_]*|dailyactivity|feedback|contactmessage|studystreak|xpevent)"
+    r"|ai_engine\.(?:chatsession|chatmessage|aifeedback)"
+    r"|jobs\.jobbookmark|knowledge_base\.useruploadattestation"
+)
 USER_FIXTURE_MODEL = re.compile(  # case-insensitive: custom exporters write "accounts.Subscription"
-    r"(?i)\"model\"\s*:\s*\"(?P<model>accounts\.(?:customuser|userdevice|paymentattempt|subscription|tokentransaction)"
-    r"|auth\.user|sessions\.session|axes\.access(?:log|attempt|failurelog))\""
+    r"(?i)\"model\"\s*:\s*\"(?P<model>" + _USER_ACTIVITY_MODELS
+    + r"|auth\.user|sessions\.session|axes\.access(?:log|attempt|failurelog))\""
 )
 USER_TABLE_SQL = re.compile(
-    r"(?i)\b(?:INSERT\s+INTO|COPY)\s+(?:\"?public\"?\.)?\"?(?P<table>accounts_[a-z_]+|auth_user|django_session|axes_[a-z_]+)\b"
+    r"(?i)\b(?:INSERT\s+INTO|COPY)\s+(?:\"?public\"?\.)?\"?(?P<table>accounts_[a-z_]+|auth_user|django_session"
+    r"|axes_[a-z_]+|questions_(?:questionattempt|questionbookmark|questionfeedback|questionpracticestate"
+    r"|discussion|discussionvote|note|flashcard|studytimebreakdown|userquest|queststreak|mistakenotebook)"
+    r"|tests_engine_(?:testattempt|questionresponse)|analytics_[a-z_]+|ai_engine_(?:chatsession|chatmessage|aifeedback))\b"
 )
+# Any other Django fixture whose rows point at a user ("user": <pk>).
+DJANGO_FIXTURE_ROW = re.compile(r"\"model\"\s*:\s*\"[A-Za-z_]\w*\.[A-Za-z_]\w*\"")
+USER_FK_FIELD = re.compile(r"\"user(?:_id)?\"\s*:\s*\d+")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b")
 EMAIL_DUMP_THRESHOLD = 10
 MAX_FINDINGS_PER_LABEL = 5  # per file; the rest are summarised
@@ -117,10 +141,19 @@ BINARY_EXTENSIONS = {
 
 
 def _mask(token: str) -> str:
-    """Never reveal short secrets (passwords): only long tokens show a type prefix."""
+    """Provider keys and JWTs: at most the 4-character type prefix (``gsk_``,
+    ``AIza``, ``eyJh``), which carries no entropy, and the length. Short
+    values show the length only."""
     if len(token) < 20:
         return f"<{len(token)} chars>"
-    return f"{token[:4]}...{token[-2:]} ({len(token)} chars)"
+    return f"{token[:4]}... ({len(token)} chars)"
+
+
+def _redact(token: str) -> str:
+    """Length only: passwords, DB-URL passwords and other free-form secrets
+    have no fixed prefix, so any character shown would be part of the secret
+    (and CI logs may be public)."""
+    return f"<{len(token)} chars>"
 
 
 def _is_placeholder(value: str) -> bool:
@@ -177,17 +210,18 @@ def _scan_line(line: str, *, code: bool, prose: bool) -> list[tuple[str, str]]:
     findings: list[tuple[str, str]] = []
     seen: set[str] = set()
 
-    def add(label: str, raw: str) -> None:
+    def add(label: str, raw: str, *, prefixed: bool = False) -> None:
+        """``prefixed``: a provider key / JWT whose type prefix may be shown."""
         if raw not in seen:
             seen.add(raw)
-            findings.append((label, _mask(raw)))
+            findings.append((label, _mask(raw) if prefixed else _redact(raw)))
 
     for label, pattern in PATTERNS:
         for match in pattern.finditer(line):
             if "XXXX" not in match.group(0).upper():
-                add(label, match.group(0))
+                add(label, match.group(0), prefixed=True)
     for match in JWT.finditer(line):
-        add(_jwt_label(match.group(0)), match.group(0))
+        add(_jwt_label(match.group(0)), match.group(0), prefixed=True)
     for match in DB_URL.finditer(line):
         value, host = match.group("value"), match.group("host").lower()
         if (
@@ -256,6 +290,9 @@ def _scan_file(path: Path, rel: Path | None = None) -> list[tuple[int, str, str]
     first_email_line = 0
     models: dict[str, int] = {}
     tables: dict[str, int] = {}
+    is_fixture = False
+    user_fk_rows = 0
+    first_user_fk_line = 0
     for line_number, line in enumerate(text.splitlines(), start=1):
         if ALLOW_MARKER in line:
             continue
@@ -267,6 +304,11 @@ def _scan_file(path: Path, rel: Path | None = None) -> list[tuple[int, str, str]
             models.setdefault(m.group("model").lower(), line_number)
         for m in USER_TABLE_SQL.finditer(line):
             tables.setdefault(m.group("table").lower(), line_number)
+        is_fixture = is_fixture or bool(DJANGO_FIXTURE_ROW.search(line))
+        hits = len(USER_FK_FIELD.findall(line))
+        if hits:
+            user_fk_rows += hits
+            first_user_fk_line = first_user_fk_line or line_number
         for address in EMAIL.findall(line):
             address = address.lower()
             if address.endswith(NON_PERSONAL_EMAIL_DOMAINS):
@@ -279,6 +321,12 @@ def _scan_file(path: Path, rel: Path | None = None) -> list[tuple[int, str, str]
             findings.append((0, f"{label}: {count - MAX_FINDINGS_PER_LABEL} more not shown", "-"))
     if models:
         findings.append((min(models.values()), "Personal-data dump: Django fixture rows for " + ", ".join(sorted(models)), "-"))
+    elif is_fixture and user_fk_rows:
+        findings.append((
+            first_user_fk_line,
+            f"Personal-data dump: Django fixture with {user_fk_rows} row(s) linked to a user",
+            "-",
+        ))
     if tables:
         findings.append((min(tables.values()), "Personal-data dump: SQL rows for " + ", ".join(sorted(tables)), "-"))
     if len(emails) >= EMAIL_DUMP_THRESHOLD:

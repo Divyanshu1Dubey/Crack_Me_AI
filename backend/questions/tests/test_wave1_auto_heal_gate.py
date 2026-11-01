@@ -23,7 +23,28 @@ class ShouldAutoHealTests(SimpleTestCase):
     def test_wsgi_server_workers_still_heal_by_default(self):
         self.assertTrue(should_auto_heal(["/venv/bin/gunicorn", "crack_cms.wsgi:application"], {}, {}))
         self.assertTrue(should_auto_heal(["/venv/bin/uvicorn", "crack_cms.asgi:application"], {}, {}))
-        self.assertTrue(should_auto_heal([], {}, {}))
+        for server in ("/venv/bin/daphne", "/venv/bin/hypercorn", "/usr/bin/uwsgi",
+                       r"C:\venv\Scripts\waitress-serve.exe", r"C:\venv\Scripts\uvicorn.exe"):
+            self.assertTrue(should_auto_heal([server, "crack_cms.asgi:application"], {}, {}), server)
+        # A server that sets SERVER_SOFTWARE but is not listed by name.
+        self.assertTrue(should_auto_heal(["/opt/server/bin/run"], {"SERVER_SOFTWARE": "Apache/2.4"}, {}))
+
+    def test_standalone_scripts_and_interactive_sessions_do_not_heal(self):
+        # CFG-16: these call django.setup() and used to start the
+        # DB-writing thread against whatever DATABASE_URL backend/.env held.
+        for argv in (
+            ["test_all.py", "--quick"],
+            ["/srv/app/backend/backfill_display_number.py"],
+            ["fix_qs.py"],
+            ["scripts/_export_questions.py"],
+            ["-c"],
+            ["/venv/lib/python3.12/site-packages/ipykernel_launcher.py", "-f", "kernel.json"],
+            [""],
+            [],
+        ):
+            self.assertFalse(should_auto_heal(argv, {}, {}), argv)
+        # A blank SERVER_SOFTWARE is not a server.
+        self.assertFalse(should_auto_heal(["test_all.py"], {"SERVER_SOFTWARE": "  "}, {}))
 
     def test_management_commands_do_not_heal(self):
         for command in ("test", "shell", "check", "migrate", "makemigrations", "collectstatic", "qcluster"):
@@ -34,6 +55,9 @@ class ShouldAutoHealTests(SimpleTestCase):
     def test_python_dash_m_gunicorn_is_a_server_not_a_management_command(self):
         self.assertTrue(
             should_auto_heal(["/venv/lib/python3.12/site-packages/gunicorn/__main__.py", "crack_cms.wsgi"], {}, {})
+        )
+        self.assertTrue(
+            should_auto_heal(["/venv/lib/python3.12/site-packages/uvicorn/__main__.py", "crack_cms.asgi"], {}, {})
         )
 
     def test_runserver_heals_only_in_the_reloader_child(self):
@@ -52,6 +76,7 @@ class ShouldAutoHealTests(SimpleTestCase):
         for value in ("1", "true", "yes"):
             env = {"CRACKCMS_HEAL_ON_READY": value}
             self.assertTrue(should_auto_heal([MANAGE, "shell"], env, {}), value)
+            self.assertTrue(should_auto_heal(["/opt/custom-server"], env, {}), value)
         # Unknown values keep the default.
         self.assertTrue(should_auto_heal(["/venv/bin/gunicorn"], {"CRACKCMS_HEAL_ON_READY": "maybe"}, {}))
 

@@ -20,6 +20,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import clear_url_caches
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
+from rest_framework.test import APIRequestFactory
 
 from crack_cms.cache_middleware import DisableApiCacheMiddleware
 from crack_cms.client_ip import get_client_ip, header_to_meta_key, parse_num_proxies
@@ -86,6 +89,23 @@ class ClientIpTests(SimpleTestCase):
         self.assertEqual(settings.REST_FRAMEWORK["NUM_PROXIES"], settings.NUM_PROXIES)
 
 
+class _PaginatedTopicList(ListAPIView):
+    """A list view on the project's default pagination class. (The taxonomy
+    endpoints these tests used are unpaginated since contract C7.)"""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        from questions.models import Topic
+
+        return Topic.objects.filter(subject__code="PGN").order_by("name")
+
+    def list(self, request, *args, **kwargs):
+        page = self.paginate_queryset(self.get_queryset())
+        return self.get_paginated_response([topic.name for topic in page])
+
+
 class PaginationTests(TestCase):
     """FE-STU-11: ?page_size= was ignored, so every list stopped at 20 rows."""
 
@@ -102,10 +122,15 @@ class PaginationTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def _results(self, query=""):
-        response = self.client.get(f"/api/questions/topics/?subject={self.subject.pk}{query}")
+    def _results(self, query="", url=None):
+        from urllib.parse import urlsplit
+
+        target = url or f"/paginated/?subject={self.subject.pk}{query}"
+        parts = urlsplit(target)
+        request = APIRequestFactory().get(f"{parts.path}?{parts.query}")
+        response = _PaginatedTopicList.as_view()(request)
         self.assertEqual(response.status_code, 200)
-        return response.json()
+        return response.data
 
     def test_default_class_is_configured(self):
         self.assertEqual(
@@ -135,8 +160,9 @@ class PaginationTests(TestCase):
     def test_next_link_keeps_page_size(self):
         data = self._results("&page_size=50")
         self.assertIn("page_size=50", data["next"])
-        second = self.client.get(data["next"]).json()
+        second = self._results(url=data["next"])
         self.assertEqual(len(second["results"]), 50)
+        self.assertNotEqual(second["results"][0], data["results"][0])
 
 
 @override_settings(CORS_ALLOWED_ORIGINS=["https://frontend.example.test"])

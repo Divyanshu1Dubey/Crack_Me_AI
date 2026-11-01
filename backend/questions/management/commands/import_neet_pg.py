@@ -10,8 +10,12 @@ so it showed up in the UPSC CMS bank. It now:
 * never deletes anything;
 * upserts on a stable key: (exam_source "NEET PG", year, source
   ``NEET_PG_<year>_IMPORT``, display_number = the question's number in the
-  paper). Rows left by the old command (no display_number) are adopted by
-  stem hash, including the cut-off stems its parser produced;
+  paper). The number alone is not trusted -- ``backfill_display_number.py``
+  and ``audit_questions --apply`` write ordinals into display_number -- so
+  the row must also carry the question's stem or its B/C options (or be
+  admin-protected). Other rows, such as those left by the old command (no
+  display_number), are adopted by stem hash, including the cut-off stems its
+  parser produced;
 * by default only creates questions that are not in the bank yet and leaves
   existing rows alone. ``--replace`` also updates matched rows (text,
   options, answer, exam_type, display number), except rows an admin edited
@@ -20,7 +24,10 @@ so it showed up in the UPSC CMS bank. It now:
   made-up answer;
 * never invents an answer: a question without an answer key is skipped.
   ``--enrich`` asks the AI service for those (flagging them needs_review)
-  and writes AI explanations; a keyed answer always wins over the AI;
+  and writes AI explanations (the ``why_correct`` text, only when the result
+  is genuine content); a keyed answer always wins over the AI. An AI outage
+  or an unusable reply (``AIUnavailable``) skips the AI step for that
+  question instead of aborting the run;
 * tags rows ``exam_type="neet_pg"`` (and the NEET PG exam track if present);
 * honours ``RemovedQuestion`` tombstones and skips stems already present in
   the NEET PG bank from another source.
@@ -214,10 +221,23 @@ def _option_signature(option_b, option_c):
     return norm(option_b), norm(option_c)
 
 
+def _row_matches_item(row, new_hashes, signature):
+    """Whether ``row`` (found by display_number) really is this question:
+    same current stem, same B/C options, or admin-protected (an admin may
+    have rewritten both; such rows are never updated anyway)."""
+    if row.admin_edited or row.lock_answer:
+        return True
+    if compute_stem_hash(row.question_text or "") in new_hashes:
+        return True
+    return _option_signature(row.option_b, row.option_c) == signature
+
+
 def _adopt_legacy_row(item, new_hashes, all_hashes, rows_by_hash, claimed):
-    """Find the row the old command stored for ``item`` (it set no
-    display_number), or None. Stems alone are ambiguous: the old parser cut
-    several of them to the same "Which of the following is"."""
+    """Find the row stored for ``item`` among the rows no question claimed by
+    number -- the old command's rows (no display_number) and rows whose
+    display_number is an ordinal rather than the paper's number -- or None.
+    Stems alone are ambiguous: the old parser cut several of them to the
+    same "Which of the following is"."""
     candidates = {}
     for stem_hash in all_hashes:
         for row in rows_by_hash.get(stem_hash, []):
@@ -396,15 +416,31 @@ class Command(BaseCommand):
             .values_list("question_text_hash", flat=True)
         )
         existing = list(Question.objects.filter(exam_source=EXAM_SOURCE, year=year, source=source))
-        by_number = {q.display_number: q for q in existing if q.display_number is not None}
+        rows_by_number = {}
+        for q in existing:
+            if q.display_number is not None:
+                rows_by_number.setdefault(q.display_number, []).append(q)
+        # A row is this question's by number only if its content agrees:
+        # backfill_display_number.py / `audit_questions --apply` store
+        # ordinals in display_number, and trusting those made the default
+        # mode create duplicates and --replace rewrite the wrong rows.
+        by_number = {}
+        for item in parsed:
+            new_hashes = _stem_hashes(item["question_text"])
+            signature = _option_signature(normalize_text(item["option_b"]), normalize_text(item["option_c"]))
+            for q in rows_by_number.get(item["number"], []):
+                if _row_matches_item(q, new_hashes, signature):
+                    by_number[item["number"]] = q
+                    break
+        numbered_pks = {q.pk for q in by_number.values()}
         legacy_rows_by_hash = {}
         for q in existing:
-            if q.display_number is None:
+            if q.pk not in numbered_pks:
                 legacy_rows_by_hash.setdefault(compute_stem_hash(q.question_text or ""), []).append(q)
         legacy_by_number = {}
         for item in legacy:
             legacy_by_number.setdefault(item["number"], item)
-        claimed = set()
+        claimed = set(numbered_pks)
 
         for item in parsed:
             number = item["number"]
@@ -466,6 +502,9 @@ class Command(BaseCommand):
         if not self.ai_service or not (self.enrich_limit == 0 or self.enriched < self.enrich_limit):
             return answer, False, None
 
+        from ai_engine.services import AIUnavailable
+        from questions.ai_per_question import usable_ai_text, usable_explain_result
+
         self.stdout.write(f"  -> Querying AI for Q{item['number']}...")
         options_dict = {
             "A": item["option_a"],
@@ -475,19 +514,38 @@ class Command(BaseCommand):
         }
         answer_from_ai = False
         if not answer:
-            ai_ans = (self.ai_service.get_consensus_answer(item["question_text"], options_dict) or "")
+            try:
+                ai_ans = (self.ai_service.get_consensus_answer(item["question_text"], options_dict) or "")
+            except AIUnavailable as exc:
+                self._ai_unavailable(item, "answer", exc)
+                ai_ans = ""
             ai_ans = str(ai_ans).strip().upper()[:1]
             if ai_ans in ("A", "B", "C", "D"):
                 answer, answer_from_ai = ai_ans, True
                 self.stdout.write(f"     AI determined correct option: {ai_ans}")
         explanation = None
         if answer:
-            explanation = self.ai_service.explain_after_answer(
-                item["question_text"], options=options_dict, correct_answer=answer,
-            ) or None
+            try:
+                ai_exp = self.ai_service.explain_after_answer(
+                    item["question_text"], options=options_dict, correct_answer=answer,
+                )
+            except AIUnavailable as exc:
+                # Outage or unparseable reply (AIOutputUnusable): import the
+                # question without an AI explanation instead of aborting.
+                self._ai_unavailable(item, "explanation", exc)
+                ai_exp = None
+            # explain_after_answer returns a structured dict; only its
+            # why_correct text is an explanation, and only when the result is
+            # genuine content (never outage text or an unparsed fallback).
+            if usable_explain_result(ai_exp):
+                explanation = usable_ai_text(ai_exp.get("why_correct")) or None
         self.enriched += 1
         time.sleep(0.5)
         return answer, answer_from_ai, explanation
+
+    def _ai_unavailable(self, item, what, exc):
+        logger.warning("import_neet_pg: AI %s unavailable for Q%s: %s", what, item["number"], exc)
+        self.stdout.write(self.style.WARNING(f"     AI {what} unavailable ({exc}); continuing without it"))
 
     def _create(self, item, year, source, answer, answer_from_ai, explanation):
         subject, topic = self._subject_and_topic(self._classify_subject(item["question_text"]))
@@ -499,7 +557,7 @@ class Command(BaseCommand):
             option_c=normalize_text(item["option_c"]),
             option_d=normalize_text(item["option_d"]),
             correct_answer=answer,
-            explanation=normalize_text(explanation) if isinstance(explanation, str) else explanation,
+            explanation=normalize_text(explanation),
             subject=subject,
             topic=topic,
             year=year,
@@ -535,7 +593,7 @@ class Command(BaseCommand):
                 row.needs_review = True
                 fields.append("needs_review")
             if explanation and (row.explanation or "").strip() in ("", LEGACY_PLACEHOLDER_EXPLANATION):
-                row.explanation = normalize_text(explanation) if isinstance(explanation, str) else explanation
+                row.explanation = normalize_text(explanation)
                 fields.append("explanation")
         else:
             # No answer key: the old command published this row with "A".

@@ -319,7 +319,11 @@ class Paper2020Tests(TestCase):
     def test_enrich_answers_unkeyed_questions_and_flags_them_for_review(self):
         fake = mock.MagicMock()
         fake.get_consensus_answer.side_effect = ["A", "C"]
-        fake.explain_after_answer.return_value = "AI explanation."
+        # AIService.explain_after_answer returns a structured dict; only its
+        # why_correct text is stored as the explanation.
+        fake.explain_after_answer.return_value = {
+            "why_correct": "AI explanation.", "core_concept": "Thyroid descent.",
+        }
         with mock.patch("ai_engine.services.AIService", return_value=fake), \
                 mock.patch.object(cmd.time, "sleep"):
             run(*self.args, "--enrich")

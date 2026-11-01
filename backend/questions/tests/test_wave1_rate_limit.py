@@ -14,11 +14,16 @@ from unittest import mock
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
 
+from questions import middleware as rl_middleware
 from questions.middleware import RateLimitMiddleware, rate_limit_identity
+
+# Middle of a 60 s window: a test that ran across a window boundary used to
+# see its counters reset half-way (flaky 200 instead of 429).
+FROZEN_NOW = 1_800_000_030.0
 
 
 def _rest_framework(**overrides):
@@ -27,12 +32,24 @@ def _rest_framework(**overrides):
     return conf
 
 
+class _FrozenLimiterMixin:
+    """Freeze the limiter's clock and start every test with empty buckets."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(rl_middleware, "_now", return_value=FROZEN_NOW)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        cache.clear()
+        caches[rl_middleware.CACHE_ALIAS].clear()
+
+
 @override_settings(
     QUESTION_BANK_RATE_LIMIT=3,
     QUESTION_BANK_RATE_WINDOW=60,
     TRUSTED_CLIENT_IP_HEADER="",
 )
-class RateLimitIdentityTests(TestCase):
+class RateLimitIdentityTests(_FrozenLimiterMixin, TestCase):
     """Middleware-level tests with a stand-in for the DRF view."""
 
     @classmethod
@@ -42,7 +59,7 @@ class RateLimitIdentityTests(TestCase):
         cls.bob = User.objects.create_user(username="rl_bob", email="rl_bob@example.com", password="x" * 12)
 
     def setUp(self):
-        cache.clear()
+        super().setUp()
         self.factory = RequestFactory()
         # token -> user, i.e. what DRF's authentication would resolve.
         self.valid_tokens = {"token-alice": self.alice}
@@ -122,30 +139,48 @@ class RateLimitIdentityTests(TestCase):
         self.assertEqual(self._get().status_code, 200)
 
     def test_bearer_token_is_keyed_on_the_user_drf_resolved(self):
-        # First request with a new token: counted against the address
-        # (the user is not known yet) and teaches the token -> user mapping.
-        self.assertEqual(self._get(token="token-alice").status_code, 200)
+        from questions.middleware import _bearer_digest
+
         request = self.factory.get("/api/questions/", REMOTE_ADDR="10.0.0.1")
         request.user = AnonymousUser()
         request.META["HTTP_AUTHORIZATION"] = "Bearer token-alice"
-        from questions.middleware import _bearer_digest
+        # Before DRF resolved it: the address's bearer bucket.
+        self.assertEqual(rate_limit_identity(request, _bearer_digest(request)), "ipb:10.0.0.1")
+
+        # First request with the new token teaches the token -> user mapping.
+        self.assertEqual(self._get(token="token-alice").status_code, 200)
         self.assertEqual(rate_limit_identity(request, _bearer_digest(request)), f"u:{self.alice.pk}")
 
-        # Anonymous traffic now uses up the shared address bucket...
-        self.assertEqual(self._statuses(2), [200, 200])
+        # Anonymous traffic uses up the shared address bucket...
+        self.assertEqual(self._statuses(3), [200, 200, 200])
         self.assertEqual(self._get().status_code, 429)
-        # ...but Alice's token requests use her own bucket.
+        # ...but Alice's token requests use her own bucket (her first,
+        # unlearned request was charged to the address's bearer bucket).
         self.assertEqual(self._statuses(3, token="token-alice"), [200, 200, 200])
         self.assertEqual(self._get(token="token-alice").status_code, 429)
 
+    def test_anonymous_load_cannot_starve_a_new_login(self):
+        """The shared address bucket is full of anonymous traffic; a student's
+        first request with a fresh token (new login / hourly refresh) still
+        gets through and is learned."""
+        self.assertEqual(self._statuses(3), [200, 200, 200])
+        self.assertEqual(self._get().status_code, 429)
+        self.assertEqual(self._get(token="token-alice").status_code, 200)
+        self.assertEqual(self._get(token="token-alice").status_code, 200)   # now u:<alice>
+        self.assertEqual(self._get().status_code, 429)   # anonymous still limited
+
     def test_forged_tokens_do_not_open_fresh_buckets(self):
         # Invalid tokens are served as anonymous by DRF, so they must be
-        # charged to the client address rather than to a per-token bucket.
+        # charged to the client address (its bearer bucket), never to a
+        # per-token bucket.
         self.assertEqual(
             [self._get(token=f"forged-{i}").status_code for i in range(3)],
             [200, 200, 200],
         )
         self.assertEqual(self._get(token="forged-final").status_code, 429)
+        # Anonymous requests have their own budget, and another address too.
+        self.assertEqual(self._get().status_code, 200)
+        self.assertEqual(self._get(token="forged-other-host", remote="10.0.0.2").status_code, 200)
 
     # -- scope ------------------------------------------------------------------
 
@@ -170,12 +205,9 @@ class RateLimitIdentityTests(TestCase):
             self.assertEqual(set(self._statuses(10)), {200})
 
 
-class RateLimitDefaultBudgetTests(TestCase):
+class RateLimitDefaultBudgetTests(_FrozenLimiterMixin, TestCase):
     """The default budget covers a student in rapid revision (~12 GETs per
     question, a question every few seconds)."""
-
-    def setUp(self):
-        cache.clear()
 
     def test_default_budget(self):
         self.assertGreaterEqual(settings.QUESTION_BANK_RATE_LIMIT, 300)
@@ -193,7 +225,7 @@ class RateLimitDefaultBudgetTests(TestCase):
 
 
 @override_settings(QUESTION_BANK_RATE_LIMIT=3, QUESTION_BANK_RATE_WINDOW=60, TRUSTED_CLIENT_IP_HEADER="")
-class RateLimitThroughTheStackTests(TestCase):
+class RateLimitThroughTheStackTests(_FrozenLimiterMixin, TestCase):
     """Full middleware stack + real DRF views (AllowAny taxonomy endpoint)."""
 
     @classmethod
@@ -201,9 +233,6 @@ class RateLimitThroughTheStackTests(TestCase):
         User = get_user_model()
         cls.alice = User.objects.create_user(username="rl_stack_a", email="rl_stack_a@example.com", password="x" * 12)
         cls.bob = User.objects.create_user(username="rl_stack_b", email="rl_stack_b@example.com", password="x" * 12)
-
-    def setUp(self):
-        cache.clear()
 
     def test_two_logged_in_students_behind_one_address_do_not_share_a_budget(self):
         self.client.force_login(self.alice)
@@ -233,11 +262,17 @@ class RateLimitThroughTheStackTests(TestCase):
             auth = {"HTTP_AUTHORIZATION": "Bearer stack-token-alice"}
             self.assertEqual(self.client.get("/api/questions/topics/", **auth).status_code, 200)
             # Exhaust the shared address bucket anonymously.
-            for _ in range(2):
+            for _ in range(3):
                 self.assertEqual(self.client.get("/api/questions/topics/").status_code, 200)
             self.assertEqual(self.client.get("/api/questions/topics/").status_code, 429)
             # Alice's token now has its own budget.
             self.assertEqual(self.client.get("/api/questions/topics/", **auth).status_code, 200)
+            # Learned from the real stack: keyed on her user, not the address.
+            from questions.middleware import _bearer_digest, _token_user_key
+            request = RequestFactory().get("/", HTTP_AUTHORIZATION="Bearer stack-token-alice")
+            self.assertEqual(
+                caches[rl_middleware.CACHE_ALIAS].get(_token_user_key(_bearer_digest(request))), alice.pk,
+            )
 
     def test_image_serve_is_never_rate_limited(self):
         for _ in range(6):

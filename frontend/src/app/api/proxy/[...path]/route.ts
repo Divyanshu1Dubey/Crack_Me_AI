@@ -1,54 +1,10 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { resolveBackendApiBaseUrls } from '../upstream';
 
-const DEFAULT_BACKEND_API_URL = 'https://api.cracklabs.app/api';
-const DEFAULT_LOCAL_BACKEND_API_URL = 'http://127.0.0.1:8000/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
-const LEGACY_UNHEALTHY_API_HOSTS = [
-  'crackcms-backend.onrender.com',
-  '.onrender.com',
-  'crackcms-vsthc.ondigitalocean.app',
-  '.ondigitalocean.app',
-];
-const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 // Only these are replayed against the fallback after a failure: a POST or
 // PATCH that hit a 5xx may already have been applied.
 const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-const normalizeApiBaseUrl = (url: string) => {
-  const normalized = url.replace(/\/+$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-};
-
-const isKnownUnhealthyApiHost = (url: string) =>
-  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
-
-const configuredApiBaseUrl = (value: string | undefined) => {
-  const configured = (value || '').trim();
-  if (!configured) return '';
-  const normalized = normalizeApiBaseUrl(configured);
-  return isKnownUnhealthyApiHost(normalized) ? '' : normalized;
-};
-
-/**
- * The browser only uses this proxy when the app runs on localhost
- * (lib/apiBase.ts USE_API_PROXY). Requests served on a local hostname -- or
- * by a dev server -- go to BACKEND_API_URL or the local backend and never
- * fall back to production unless BACKEND_API_FALLBACK_URL says so; a local
- * session must not read from or write to the production API by accident.
- * The deployed site keeps its previous behaviour (production API, no
- * fallback).
- */
-const resolveBackendApiBaseUrls = (request: NextRequest) => {
-  const servedLocally =
-    process.env.NODE_ENV !== 'production'
-    || LOCAL_HOSTNAMES.has(request.nextUrl.hostname.toLowerCase());
-  if (!servedLocally) {
-    return { primary: DEFAULT_BACKEND_API_URL, fallback: '' };
-  }
-  const primary = configuredApiBaseUrl(process.env.BACKEND_API_URL) || DEFAULT_LOCAL_BACKEND_API_URL;
-  const fallback = configuredApiBaseUrl(process.env.BACKEND_API_FALLBACK_URL);
-  return { primary, fallback: fallback && fallback !== primary ? fallback : '' };
-};
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -149,7 +105,12 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     cache: 'no-store',
   };
 
-  const { primary, fallback } = resolveBackendApiBaseUrls(request);
+  // Local / LAN hosts and dev servers use the local backend (see upstream.ts).
+  const { primary, fallback } = resolveBackendApiBaseUrls(request.nextUrl.hostname, {
+    NODE_ENV: process.env.NODE_ENV,
+    BACKEND_API_URL: process.env.BACKEND_API_URL,
+    BACKEND_API_FALLBACK_URL: process.env.BACKEND_API_FALLBACK_URL,
+  });
   const canUseFallback = Boolean(fallback) && RETRYABLE_METHODS.has(request.method.toUpperCase());
 
   let primaryUrl: string;

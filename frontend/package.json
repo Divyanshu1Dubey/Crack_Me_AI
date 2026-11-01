@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
+    "test:unit": "node --import ./tests/unit/register-ts-alias.mjs --test \"tests/unit/**/*.test.ts\" \"tests/unit/**/*.test.mjs\"",
     "icons:download": "node scripts/download-icons.mjs icons/icons-manifest.json public/icons/custom"
   },
   "dependencies": {

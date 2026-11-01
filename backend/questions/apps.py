@@ -31,25 +31,35 @@ Three layers of defence now keep the data clean:
 ``relink_fixture_images`` is idempotent (it scans for the specific URL
 pattern and only writes back when one is found), but it still writes to
 whatever database the process is configured for. So the thread only
-starts in server processes (see ``should_auto_heal``):
+starts in server processes, which are detected positively (see
+``should_auto_heal``):
 
-  * WSGI/ASGI servers (gunicorn etc.): yes -- unchanged production
-    behaviour;
+  * WSGI/ASGI servers -- ``gunicorn``, ``uvicorn``, ``daphne``,
+    ``hypercorn``, ``granian``, ``waitress-serve``, ``uwsgi``, ``mod_wsgi``
+    (also as ``python -m <server>``), or any process with
+    ``SERVER_SOFTWARE`` set: yes -- unchanged production behaviour;
   * ``manage.py runserver``: only in the autoreloader's child process (or
     with ``--noreload``), not in the parent as well;
   * every other management command (``test``, ``shell``, ``check``,
     ``migrate``, ``collectstatic``, ``qcluster``, ...) and pytest: no.
     ``build.sh`` already runs ``relink_fixture_images --apply`` after
     migrations, and the test runner must not touch the configured
-    database before its test database exists.
+    database before its test database exists;
+  * anything else -- the ~40 standalone scripts that call
+    ``django.setup()`` (``test_all.py``, ``backfill_*.py``, ``fix_*.py``,
+    ``scripts/*``), ``python -c``, notebooks: no. They used to start the
+    thread too, writing to whatever ``DATABASE_URL`` backend/.env pointed
+    at.
 
 ``CRACKCMS_HEAL_ON_READY`` overrides the default: ``1``/``true`` forces the
-thread on (also for management commands), ``0``/``false`` turns it off.
+thread on (any process, e.g. a server not listed above), ``0``/``false``
+turns it off.
 """
 from __future__ import annotations
 
 import logging
 import os
+import posixpath
 import sys
 import threading
 
@@ -69,6 +79,11 @@ _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 _MANAGEMENT_ENTRY_POINTS = frozenset(
     {"manage.py", "django-admin", "django-admin.py", "django-admin.exe"}
 )
+# Executable names of the WSGI/ASGI servers that may run this project.
+_SERVER_ENTRY_POINTS = frozenset({
+    "gunicorn", "uvicorn", "daphne", "hypercorn", "granian",
+    "waitress-serve", "uwsgi", "mod_wsgi", "mod_wsgi-express",
+})
 
 
 def _is_management_command(argv) -> bool:
@@ -79,6 +94,26 @@ def _is_management_command(argv) -> bool:
         return True
     # ``python -m django <command>``
     return entry == "__main__.py" and os.path.basename(os.path.dirname(str(argv[0]))) == "django"
+
+
+def _entry_point_name(argv0) -> str:
+    """``/venv/bin/gunicorn`` -> ``gunicorn``; ``uvicorn.exe`` -> ``uvicorn``;
+    ``.../gunicorn/__main__.py`` (``python -m gunicorn``) -> ``gunicorn``."""
+    path = str(argv0 or "").replace("\\", "/")
+    name = posixpath.basename(path).lower()
+    for suffix in (".exe", "-script.py", ".py"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    if name == "__main__":
+        name = posixpath.basename(posixpath.dirname(path)).lower()
+    return name
+
+
+def _is_server_process(argv, environ) -> bool:
+    if argv and _entry_point_name(argv[0]) in _SERVER_ENTRY_POINTS:
+        return True
+    return bool((environ.get("SERVER_SOFTWARE") or "").strip())
 
 
 def should_auto_heal(argv=None, environ=None, modules=None) -> bool:
@@ -100,8 +135,9 @@ def should_auto_heal(argv=None, environ=None, modules=None) -> bool:
         if command != "runserver":
             return False
         return environ.get("RUN_MAIN") == "true" or "--noreload" in argv
-    # Not a management command: a WSGI/ASGI server worker.
-    return True
+    # Positive detection only: "not a management command" also matched every
+    # standalone script that calls django.setup().
+    return _is_server_process(argv, environ)
 
 
 class QuestionsConfig(AppConfig):

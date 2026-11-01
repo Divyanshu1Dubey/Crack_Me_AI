@@ -13,7 +13,17 @@ pip install --no-cache-dir -r requirements.txt
 python manage.py collectstatic --no-input
 
 # Self-healing migration handles stale KB tables — no manual ALTER needed.
+# migrate also (re)creates the daily renewal-reminder schedule (accounts
+# post_migrate signal).
 python manage.py migrate --no-input
+
+# Question bank seed for a fresh database (new deploy DB, staging, fresh
+# local DB): loads fixtures/cms_fixture.json -- subjects, topics, questions,
+# honouring admin-removal tombstones -- only while the CMS bank is empty.
+# A bank that already has questions is never touched (re-loading the fixture
+# would overwrite AI explanations, answer fixes and deactivations made since
+# the export); re-sync on purpose with `python manage.py load_exam_fixture cms`.
+python manage.py seed_question_bank
 
 # Seed blog posts from frontend static content (idempotent update_or_create)
 python manage.py seed_blogs || true
@@ -31,6 +41,14 @@ python manage.py shell -c "from pathlib import Path; from django.conf import set
 # It is now a manual, non-destructive command; run it by hand when needed:
 #   python manage.py import_neet_pg --dry-run   # report only
 #   python manage.py import_neet_pg             # create missing keyed questions
+#
+# ONE-TIME CLEANUP (once per database that ever ran the old command): rows it
+# wrote -- the 2020 paper answered "A" throughout, cut-off 2025 stems, all
+# tagged exam_type="cms" so they are served in the UPSC CMS bank -- are left
+# untouched by the default mode. Repair (2025) / hide (2020, no answer key:
+# is_active=False, needs_review=True) them, skipping admin-edited rows:
+#   python manage.py import_neet_pg --replace --dry-run   # review the counts
+#   python manage.py import_neet_pg --replace
 
 # Knowledge Base: load ontology + whitelisted sources (idempotent)
 python manage.py load_ontology
@@ -80,6 +98,15 @@ fi
 # a transient DB blip on deploy can't fail the build. The 2026-07-28
 # live audit surfaced the original bare-URL bug (Production incident);
 # this command keeps fresh deploys from inheriting the same data.
-python manage.py relink_fixture_images --apply --fixture backend/questions_fixture.json || true
+# (No --fixture: the old path, backend/questions_fixture.json, no longer
+# exists, and mirroring into a fixture inside a deploy container is pointless.)
+python manage.py relink_fixture_images --apply || true
+
+# Background jobs: ingestion / recall imports, video generation and the daily
+# renewal-reminder schedule run only while a django-q worker is up
+# (Procfile `worker: python manage.py qcluster`). DigitalOcean App Platform
+# does not start a Procfile worker (or run `release`) on its own: add a Worker
+# component with run command `python manage.py qcluster` and the web
+# component's environment, or queued jobs stay queued and no reminder is sent.
 
 # build.sh is complete

@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Run this from the project root: bash SHIP_KB.sh
 #
-# Commits the entire knowledge-base build (Monica AI Knowledge Platform)
-# in one shot and pushes to origin/main. After pushing, DigitalOcean
-# App Service auto-deploys from main, so your live backend picks up
-# the new endpoints on the next deploy.
+# Commits the knowledge-base build (Monica AI Knowledge Platform) in one
+# shot and pushes to origin/main. After pushing, DigitalOcean App Service
+# auto-deploys from main, so your live backend picks up the new endpoints
+# on the next deploy.
+#
+# Only the knowledge-base paths listed in KB_PATHS are staged and committed
+# (it used to run `git add -A` and push whatever else was lying in the tree:
+# database dumps, exports, local env files).
 #
 # Pre-flight:
-#   git status   # should be clean before running
+#   git status   # review; anything outside KB_PATHS is left alone
 #   git remote -v # confirm origin is set
 #
 # Post-flight:
@@ -25,8 +29,31 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-git add -A
+KB_PATHS=(
+  backend/knowledge_base
+  backend/crack_cms/settings.py
+  backend/crack_cms/urls.py
+  backend/build.sh
+  backend/requirements.txt
+  docs/knowledge-base
+  docs/INDEX.md
+  CHANGES_SUMMARY.md
+)
+existing_paths=()
+for path in "${KB_PATHS[@]}"; do
+  if [ -e "$path" ]; then
+    existing_paths+=("$path")
+  fi
+done
+if [ "${#existing_paths[@]}" -eq 0 ]; then
+  echo "None of the knowledge-base paths exist; nothing to ship." >&2
+  exit 1
+fi
 
+git add -- "${existing_paths[@]}"
+
+# Path-limited commit (pathspec after the message): changes staged earlier
+# for any other file stay out of it.
 git commit -m "feat(kb): Monica AI knowledge platform with source whitelist + citations
 
 New knowledge_base Django app:
@@ -85,7 +112,7 @@ AI tutor for UPSC CMS via RAG + KG + ontology + citations over
 whitelisted sources.' Deliberately refused to ingest copyrighted
 textbooks or competitor platforms. Same architecture over StatPearls
 + OpenStax + NCBI + Govt + Internal gives equivalent quality without
-legal exposure." || {
+legal exposure." -- "${existing_paths[@]}" || {
   echo "Nothing to commit (everything already committed)."
 }
 
