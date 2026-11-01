@@ -23,7 +23,7 @@ from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
 from accounts.models_freemium import FreeShowcaseQuestion
-from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, TopicNote, MistakeNotebook, StudyTimeBreakdown, UserQuest, QuestStreak, compute_stem_hash
+from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, TopicNote, StudyTimeBreakdown, UserQuest, QuestStreak, compute_stem_hash
 from .serializers import (
     SubjectSerializer, TopicSerializer, AnnouncementSerializer, ExamTrackSerializer,
     QuestionListSerializer, QuestionAdminListSerializer, QuestionDetailSerializer,
@@ -31,8 +31,9 @@ from .serializers import (
     QuestionFeedbackSerializer, DiscussionSerializer,
     NoteSerializer, FlashcardSerializer, QuestionImportJobSerializer, QuestionExtractionItemSerializer,
     AdminAIPromptVersionSerializer, QuestionAIOperationLogSerializer, QuestionRevisionSnapshotSerializer,
-    TopicNoteSerializer, MistakeNotebookSerializer, StudyTimeBreakdownSerializer,
-    UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer, MistakeNotebookCreateSerializer,
+    TopicNoteSerializer, StudyTimeBreakdownSerializer,
+    UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
+    effective_explanation_for, _clean_text,
 )
 from .recall_serializers import (
     # Used directly here:
@@ -51,6 +52,16 @@ from .import_protection import pre_check_create as _pre_check_remove
 
 
 logger = logging.getLogger(__name__)
+
+
+def _truthy(value) -> bool:
+    """Request flag parsing: ``bool('false')`` is True, so strings are read
+    as words (1 / true / yes / on)."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 def _question_list_cache_version(user_id) -> int:
@@ -106,11 +117,24 @@ def _is_staff_user(user) -> bool:
     )
 
 
+def free_showcase_rows():
+    """FreeShowcaseQuestion rows that really are free content.
+
+    Scholarship-challenge questions (``is_scholarship_eligible``) are never
+    free, even when an admin also put them in the showcase: the challenge
+    (accounts ScholarshipStartView) serves five of them and checks the
+    answers, so revealing their keys to a free user would let anyone pass it.
+    """
+    return FreeShowcaseQuestion.objects.filter(question__is_scholarship_eligible=False)
+
+
 def user_can_view_answer(user, question, *, premium=None) -> bool:
     """True when ``user`` may see the answer / explanation of ``question``.
 
     ``question`` may be a Question instance or a primary key. ``premium``
     lets callers pass an already-computed ``is_premium(user)`` result.
+    Free / anonymous callers: showcase questions only, never a
+    scholarship-challenge question (see ``free_showcase_rows``).
     """
     if _is_staff_user(user):
         return True
@@ -122,7 +146,9 @@ def user_can_view_answer(user, question, *, premium=None) -> bool:
     question_id = getattr(question, 'pk', question)
     if question_id in (None, ''):
         return False
-    return FreeShowcaseQuestion.objects.filter(question_id=question_id).exists()
+    if getattr(question, 'is_scholarship_eligible', False) is True:
+        return False
+    return free_showcase_rows().filter(question_id=question_id).exists()
 
 
 def _upgrade_required_response(feature: str = UPGRADE_REQUIRED_FEATURE):
@@ -145,11 +171,14 @@ def _upgrade_required_response(feature: str = UPGRADE_REQUIRED_FEATURE):
 _ANSWER_REVEALING_DETAIL_FIELDS = (
     'correct_answer', 'explanation', 'concept_explanation', 'mnemonic',
     'learning_technique', 'shortcut_tip', 'concept_keywords',
+    'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
     'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
     'effective_answer', 'effective_explanation', 'effective_mnemonic',
     'effective_references', 'verified_note',
     'video_url', 'video_status', 'video_thumbnail', 'video_duration',
     'video_version', 'video_error', 'video_generated_at', 'video_subtitles_url',
+    # "Screenshot of textbook page where answer is discussed" (model help).
+    'page_screenshot',
 )
 
 
@@ -175,13 +204,52 @@ def _invalidate_user_question_caches(user_id) -> None:
     _bump_question_list_cache_version(user_id)
 
 
+def _answer_fallback_explanation(question) -> str:
+    """Honest stand-in when a question has no explanation yet, so the reveal
+    never renders an empty explanation panel."""
+    letter = (question.correct_answer or '').strip().upper()[:1]
+    option_text = getattr(question, f'option_{letter.lower()}', '') if letter in 'ABCDE' and letter else ''
+    option_text = _clean_text(option_text or '').strip()
+    if letter and option_text:
+        answer = f'The correct answer is {letter}: {option_text}.'
+    elif letter:
+        answer = f'The correct answer is {letter}.'
+    else:
+        answer = ''
+    return ' '.join(part for part in (
+        answer, 'A detailed explanation for this question has not been added yet.',
+    ) if part)
+
+
 def _question_explanation_payload(question) -> dict:
-    """``explanation`` / ``effective_explanation`` for answer-submission
-    responses, so the UI can reveal the explanation right after a pick."""
-    effective = QuestionDetailSerializer().get_effective_explanation(question)
+    """Answer-reveal fields of the answer-submission responses (contract C1),
+    so the UI can show the explanation right after a pick without a second
+    request:
+
+    * ``explanation`` -- the curated text ('' when there is none);
+    * ``effective_explanation`` -- what a student should read (admin
+      override / parsed AI explanation / curated text), never blank: a
+      short "correct answer is X" note when nothing has been written yet;
+    * ``mnemonic`` -- the effective mnemonic (admin override, usable AI
+      mnemonic, curated), '' when there is none.
+
+    Only called after ``user_can_view_answer`` allowed the caller.
+    """
+    from .ai_per_question import usable_ai_text
+
+    explanation = _clean_text(question.explanation or '')
+    effective = _clean_text(usable_ai_text(effective_explanation_for(question)) or '')
+    mnemonic = (
+        usable_ai_text(question.admin_mnemonic_override)
+        or usable_ai_text(question.ai_mnemonic)
+        or usable_ai_text(question.mnemonic)
+    )
     return {
-        'explanation': question.explanation or '',
-        'effective_explanation': effective or question.explanation or '',
+        'explanation': explanation,
+        'effective_explanation': (
+            effective.strip() or explanation.strip() or _answer_fallback_explanation(question)
+        ),
+        'mnemonic': _clean_text(mnemonic or ''),
     }
 
 
@@ -309,18 +377,31 @@ class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     instead of N identical ones), run the
     ``merge_loader_fallback_subjects`` management command.
     """
-    queryset = Subject.objects.annotate(question_count=Count('questions')).all()
+    # Read-only taxonomy (~40 rows): one unpaginated array (contract C7).
+    # Clients read only page 1 of the 20-row default, so dropdowns lost
+    # subjects. The explicit order replaces Meta.ordering, which Django
+    # ignores on this GROUP BY (annotate) query.
+    queryset = Subject.objects.annotate(question_count=Count('questions')).order_by('paper', 'name', 'id')
     serializer_class = SubjectSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['exam_type']
+    pagination_class = None
 
 
 class TopicViewSet(viewsets.ReadOnlyModelViewSet):
-    """List and retrieve topics, filterable by subject."""
-    queryset = Topic.objects.annotate(question_count=Count('questions')).select_related('subject').all()
+    """List and retrieve topics, filterable by subject.
+
+    Unpaginated like subjects (contract C7; ~2,000 rows unfiltered, a few
+    dozen per ``?subject=``), in an explicit stable order.
+    """
+    queryset = (
+        Topic.objects.annotate(question_count=Count('questions')).select_related('subject')
+        .order_by('subject__name', 'name', 'id')
+    )
     serializer_class = TopicSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['subject', 'parent', 'importance']
+    pagination_class = None
 
 
 def _cluster_memberships_prefetch(prefix: str = ''):
@@ -357,8 +438,32 @@ class QuestionViewSet(viewsets.ModelViewSet):
         'needs_review', 'is_controversial', 'display_number', 'is_active',
         'page_number',
     ]
-    search_fields = ['question_text', 'explanation', 'concept_tags']
-    ordering_fields = ['year', 'difficulty', 'created_at']
+    # ``display_number`` / ``paper``: the admin questions editor orders a
+    # paper by ``?ordering=paper,display_number`` (OrderingFilter dropped
+    # unknown fields, so rows came back -id).
+    ordering_fields = ['year', 'difficulty', 'created_at', 'paper', 'display_number', 'id']
+
+    # Text search. ``explanation`` is searchable only for callers who may
+    # read explanations: otherwise ``?search=<option text>`` worked as an
+    # oracle on a locked question's explanation (200 vs empty / 404).
+    _SEARCH_FIELDS_PUBLIC = ['question_text', 'concept_tags']
+    _SEARCH_FIELDS_FULL = ['question_text', 'explanation', 'concept_tags']
+
+    @property
+    def search_fields(self):
+        request = getattr(self, 'request', None)
+        user = getattr(request, 'user', None)
+        if request is not None and (_is_staff_user(user) or self._user_is_premium()):
+            return self._SEARCH_FIELDS_FULL
+        return self._SEARCH_FIELDS_PUBLIC
+
+    def filter_queryset(self, queryset):
+        # Query-param filters / search / ordering describe lists. On a
+        # detail route they only turned get_object() into a 200-vs-404
+        # probe (e.g. /questions/<locked id>/?search=...).
+        if getattr(self, 'detail', False):
+            return queryset
+        return super().filter_queryset(queryset)
 
     def _guess_year_paper_from_filename(self, filename):
         year = None
@@ -531,7 +636,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             and not _is_staff_user(user)
             and not self._user_is_premium()
         ):
-            showcase_filter = FreeShowcaseQuestion.objects.filter(
+            showcase_filter = free_showcase_rows().filter(
                 question_id=OuterRef('pk'),
             )
             queryset = queryset.filter(Exists(showcase_filter))
@@ -569,7 +674,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             # a "Premium" badge on non-showcase rows for free users.
             queryset = queryset.annotate(
                 is_showcase=Exists(
-                    FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))
+                    free_showcase_rows().filter(question_id=OuterRef('pk'))
                 ),
             )
             # UX update (2026-08-04): for free users, sprinkle showcase
@@ -1179,18 +1284,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
         )
         if is_free_user and ids:
             showcase_ids = set(
-                FreeShowcaseQuestion.objects.filter(
+                free_showcase_rows().filter(
                     question_id__in=ids
                 ).values_list('question_id', flat=True)
             )
-            original_count = len(ids)
             ids = [qid for qid in ids if qid in showcase_ids]
             if len(ids) == 0:
                 # Graceful fallback: return first 3 showcase questions
                 # so the free user sees SOMETHING even if no showcase
                 # matches the selected mode/filters.
                 ids = list(
-                    FreeShowcaseQuestion.objects.order_by('year', 'position')
+                    free_showcase_rows().filter(question__is_active=True).order_by('year', 'position')
                     .values_list('question_id', flat=True)[:3]
                 )
 
@@ -1199,7 +1303,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             "count": len(ids),
             "question_ids": ids,
             "freemium": is_free_user,
-            "showcase_count": FreeShowcaseQuestion.objects.count() if is_free_user else 0,
+            "showcase_count": free_showcase_rows().count() if is_free_user else 0,
         })
 
     # Per-question AI text (why correct / why the distractors fail / clinical
@@ -1214,11 +1318,27 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not self._can_view_answer(q):
             return Response({field: None, "locked": True})
         user = request.user
-        allow_ai = (
-            _ai_per_question.generation_gate(user, unlimited=_is_staff_user(user))
+        gate = (
+            _ai_per_question.generation_gate(user, unlimited=_is_staff_user(user), question_id=q.pk)
             if getattr(user, 'is_authenticated', False) else False
         )
-        return Response({field: producer(q, allow_ai)})
+        refused = []
+
+        def allow_ai():
+            # Evaluated only right before a real generation (see
+            # ai_per_question._may_generate); remembers a budget refusal.
+            allowed = bool(gate()) if callable(gate) else bool(gate)
+            if not allowed and callable(gate):
+                refused.append(True)
+            return allowed
+
+        value = producer(q, allow_ai)
+        payload = {field: value}
+        if value is None and refused:
+            # The hourly generation budget is spent: say so instead of a
+            # silently empty section.
+            payload['rate_limited'] = True
+        return Response(payload)
 
     # ``fallback=False``: no template boilerplate -- ``null`` when there is
     # no genuine content (the reveal panel hides empty sections).
@@ -1377,32 +1497,55 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
         Request body:
         {
-            "correct_answer": "A" | "B" | "C" | "D",   // which option is correct
-            "regenerate_if_exists": false                  // if true, overwrite existing explanation
+            "correct_answer": "A" | "B" | "C" | "D",   // required: which option is correct
+            "regenerate_if_exists": false,                 // if true, overwrite existing explanation
+            "update_correct_answer": false,                // store correct_answer (and lock it)
+            "dry_run": false                               // generate only; nothing is saved
         }
 
         The AI's prompt explicitly locks on the selected correct_answer as
-        the source of truth. It never silently changes the admin's choice.
+        the source of truth. It never silently changes the admin's choice;
+        a missing or invalid ``correct_answer`` is a 400 (it used to fall
+        back to the stored answer, or 'A').
 
         If an explanation already exists and regenerate_if_exists is false,
         the endpoint returns 409 with the existing data so the admin can
-        confirm before overwriting.
+        confirm before overwriting (not for ``dry_run``: nothing is
+        overwritten then).
+
+        ``dry_run`` returns ``generated_fields`` without touching the row so
+        the admin reviews them and the editor's Save stores them. Otherwise
+        the fields are saved (after a revision snapshot) -- but never marked
+        "Verified by Admin": unreviewed AI output must not carry that
+        student-facing badge (verification is the separate ``verify``
+        action). The active admin prompt version leads the prompt.
         """
         from ai_engine.services import AIService
         question = self.get_object()
-        correct_answer = str(request.data.get('correct_answer', question.correct_answer or 'A')).upper()[:1]
-        regenerate = bool(request.data.get('regenerate_if_exists', False))
+        data = request.data if hasattr(request.data, 'get') else {}
+        correct_answer = str(data.get('correct_answer') or '').strip().upper()
+        if correct_answer.startswith('OPTION '):
+            correct_answer = correct_answer[len('OPTION '):].strip()
+        if correct_answer not in ('A', 'B', 'C', 'D'):
+            return Response(
+                {'detail': 'correct_answer is required and must be one of A, B, C, D.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        regenerate = _truthy(data.get('regenerate_if_exists'))
+        update_answer = _truthy(data.get('update_correct_answer'))
+        dry_run = _truthy(data.get('dry_run'))
 
         # Protection: don't silently overwrite existing manually-reviewed content
         existing_fields = ['explanation', 'concept_explanation', 'mnemonic',
                            'book_name', 'chapter', 'reference_text', 'shortcut_tip']
         has_existing = any(getattr(question, f, '') for f in existing_fields)
-        if has_existing and not regenerate:
+        if has_existing and not regenerate and not dry_run:
             return Response({
                 'detail': 'This question already has an explanation. Set regenerate_if_exists=true to overwrite.',
                 'existing_fields': {f: getattr(question, f, '') for f in existing_fields if getattr(question, f, '')},
                 'requires_confirmation': True,
             }, status=status.HTTP_409_CONFLICT)
+        active_prompt = AdminAIPromptVersion.objects.filter(is_active=True).first()
 
         options = {
             'A': question.option_a or '',
@@ -1432,6 +1575,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 exam_type=str(question.exam_type or 'cms'),
                 existing_explanation=question.explanation or '',
                 image_descriptions=image_descriptions if image_descriptions else None,
+                user_prompt=(active_prompt.prompt_text if active_prompt else ''),
             )
 
             if not isinstance(result, dict) or result.get('_failed'):
@@ -1439,38 +1583,57 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     'detail': 'AI generation failed. No changes were saved to the question.',
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-            # Apply only the fields that were generated — never overwrite unrelated admin data
+            # Apply only the fields that were generated — never overwrite
+            # unrelated admin data, and never store an outage sentence.
             updatable_fields = [
                 'explanation', 'concept_explanation', 'mnemonic',
                 'book_name', 'chapter', 'page_number', 'reference_text',
                 'shortcut_tip', 'concept_keywords',
                 'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
             ]
+            generated = {}
             for field in updatable_fields:
-                if field in result and result[field]:
-                    setattr(question, field, result[field])
+                value = result.get(field)
+                if isinstance(value, str):
+                    value = _usable_ai_text(value)
+                if value:
+                    generated[field] = value
+            if not generated:
+                return Response({
+                    'detail': 'AI generation returned no usable content. No changes were saved to the question.',
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-            # Optionally update correct_answer if admin changed it
-            if request.data.get('update_correct_answer', False) and correct_answer != question.correct_answer:
-                question.correct_answer = correct_answer
+            if dry_run:
+                return Response({
+                    'detail': 'Explanation generated but not saved. Review it, then Save to store it.',
+                    'generated_fields': generated,
+                    'saved': False,
+                    'dry_run': True,
+                    'question': QuestionAdminListSerializer(question, context={'request': request}).data,
+                })
 
-            # Record who generated (without consuming user tokens — admin action)
-            try:
-                admin_user = request.user if request.user.is_authenticated else None
-                if admin_user and (getattr(admin_user, 'is_admin', False) or admin_user.is_staff):
-                    if hasattr(question, 'verified_by_id') and not question.verified_by_id:
-                        question.verified_by = admin_user
-                        question.verified_at = timezone.now()
-                        question.is_verified_by_admin = True
-            except Exception:
-                pass
-
-            question.save()
+            with transaction.atomic():
+                self._capture_revision_snapshot(question, request.user, reason='Before AI generate-explanation')
+                changed = []
+                for field, value in generated.items():
+                    setattr(question, field, value)
+                    changed.append(field)
+                # Optionally store the admin's answer: a human decision, so it
+                # is locked against AI regeneration, verifiers and re-imports
+                # (as a PATCH of correct_answer is).
+                if update_answer and correct_answer != (question.correct_answer or '').strip().upper():
+                    question.correct_answer = correct_answer
+                    question.lock_answer = True
+                    changed += ['correct_answer', 'lock_answer']
+                # Partial save: never write back stale copies of other fields.
+                question.save(update_fields=changed + ['updated_at'])
             question.refresh_from_db()
 
             return Response({
-                'detail': 'Explanation generated successfully.',
-                'generated_fields': {k: result.get(k, '') for k in updatable_fields if result.get(k, '')},
+                'detail': 'Explanation generated and saved (not marked verified).',
+                'generated_fields': generated,
+                'saved': True,
+                'dry_run': False,
                 'question': QuestionAdminListSerializer(question, context={'request': request}).data,
             })
         except Exception:
@@ -1753,6 +1916,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
         ext = filename.lower().split('.')[-1] if '.' in filename else ''
         if ext not in ['doc', 'docx', 'pdf']:
             return Response({'error': 'Only .doc, .docx, .pdf files are supported'}, status=status.HTTP_400_BAD_REQUEST)
+        # The extension is client-controlled: check the bytes too.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from accounts.upload_validation import validate_uploaded_file
+        try:
+            validate_uploaded_file(file_obj, allowed_types={'document'}, max_bytes=50 * 1024 * 1024)
+        except DjangoValidationError as exc:
+            return Response({'error': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
         job_type = 'word' if ext in ['doc', 'docx'] else 'pdf'
         stored_path = default_storage.save(f'pyq_uploads/{timezone.now().strftime("%Y%m%d_%H%M%S")}_{filename}', file_obj)
@@ -2100,8 +2270,32 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='years')
     def available_years(self, request):
-        """Return list of available PYQ years."""
-        years = Question.objects.values_list('year', flat=True).distinct().order_by('-year')
+        """Years that have questions, newest first (a plain array).
+
+        Optional filters: ``exam_type`` (``cms`` / ``neet_pg`` / ...) and
+        ``exam_source`` (label, prefix-matched like the list filter, so
+        ``NEET PG`` also covers ``NEET PG (recall)``). Year 0 / negative
+        ("unknown year") is never listed, and only active questions count
+        for students (admins also see years that only archived rows have).
+        It used to list every year of every exam, archived rows and 0.
+        """
+        user = request.user
+        qs = Question.objects.filter(year__gt=0)
+        if not (getattr(user, 'is_authenticated', False)
+                and (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))):
+            qs = qs.filter(is_active=True)
+        exam_type = (request.query_params.get('exam_type') or '').strip()
+        if exam_type:
+            qs = qs.filter(exam_type=exam_type)
+        exam_source = (request.query_params.get('exam_source') or '').strip()
+        if exam_source:
+            exam_q = Q(exam_source=exam_source)
+            for prefix in ('NEET PG', 'UPSC CMS', 'INI-CET', 'USMLE', 'FMGE'):
+                if exam_source.startswith(prefix):
+                    exam_q |= Q(exam_source__startswith=prefix)
+                    break
+            qs = qs.filter(exam_q)
+        years = qs.order_by('-year').values_list('year', flat=True).distinct()
         return Response(list(years))
 
     @action(detail=False, methods=['get'], url_path='stats')
@@ -2868,15 +3062,47 @@ class QuestionViewSet(viewsets.ModelViewSet):
             serializer.validated_data['lock_explanation'] = True
         serializer.save()
 
+    @staticmethod
+    def _if_match_timestamp(raw):
+        """The datetime an ``If-Match`` header carries, or None.
+
+        The editor echoes ``updated_at`` exactly as DRF serialised it -- in
+        ``TIME_ZONE`` (``...+05:30``) -- while the old check compared the raw
+        header with ``updated_at.isoformat()`` in UTC (``...+00:00``), so
+        every guarded save was a false 409. ETag-style quoting and a ``W/``
+        prefix are tolerated; a naive value is read in the current zone.
+        """
+        from django.utils.dateparse import parse_datetime
+
+        value = str(raw or '').strip()
+        if value.upper().startswith('W/'):
+            value = value[2:].strip()
+        value = value.strip('"').strip()
+        if not value:
+            return None
+        try:
+            parsed = parse_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if parsed is not None and timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+        return parsed
+
     def _check_if_match_or_conflict(self, instance):
         """Return a 409 Response if If-Match header doesn't match instance.updated_at,
         else None. Caller is responsible for returning this Response from update()/
-        partial_update() if not None."""
+        partial_update() if not None.
+
+        The header and ``updated_at`` are compared as instants, not strings
+        (see ``_if_match_timestamp``)."""
         match = self.request.headers.get("If-Match")
         if not match:
             return None
-        current = instance.updated_at.isoformat()
-        if match == current:
+        current = instance.updated_at
+        expected = self._if_match_timestamp(match)
+        if current is not None and expected is not None and expected == current:
+            return None
+        if current is not None and match.strip() == current.isoformat():
             return None
         return Response(
             {"detail": "Question was modified by another user",
@@ -3127,6 +3353,15 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Feedback resolved (no user to reward).'})
 
 
+#: Thread order (``Discussion.Meta.ordering`` plus a unique tie-break). The
+#: reply-count annotation makes the query a GROUP BY, and Django ignores
+#: ``Meta.ordering`` there, so it must be explicit: pinned threads first,
+#: and a stable order so pages never repeat or skip a thread.
+DISCUSSION_THREAD_ORDER = ('-is_pinned', '-upvotes', '-created_at', '-id')
+#: Replies read top to bottom (the thread UI appends new replies at the end).
+DISCUSSION_REPLY_ORDER = ('created_at', 'id')
+
+
 def _discussion_queryset(user):
     """Discussions with reply counts and the viewer's own vote preloaded
     (the serializer used to run two queries per thread)."""
@@ -3137,6 +3372,7 @@ def _discussion_queryset(user):
         .prefetch_related(Prefetch(
             'votes', queryset=DiscussionVote.objects.filter(user=user), to_attr='viewer_votes',
         ))
+        .order_by(*DISCUSSION_THREAD_ORDER)
     )
 
 
@@ -3165,7 +3401,11 @@ class DiscussionRepliesView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return _discussion_queryset(self.request.user).filter(parent_id=self.kwargs['pk'])
+        return (
+            _discussion_queryset(self.request.user)
+            .filter(parent_id=self.kwargs['pk'])
+            .order_by(*DISCUSSION_REPLY_ORDER)
+        )
 
 
 class DiscussionDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -3357,40 +3597,56 @@ class FlashcardReviewView(generics.GenericAPIView):
 
 
 class FlashcardAnalyticsView(generics.GenericAPIView):
-    """Spaced repetition analytics: retention rate, interval distribution, memory curves."""
+    """Spaced-repetition stats over ALL of the user's cards (one query).
+
+    * ``retention_rate`` = 1 - lapses / total_reviews over every review the
+      user submitted (``Flashcard.total_reviews`` / ``lapses``); ``null``
+      until the first review. It used to be the share of cards with
+      ``ease_factor >= 2.5`` -- which every brand-new card has.
+    * ``reviewed_cards``: cards with at least one review on record (cards
+      reviewed before the counters existed count through ``review_count``).
+    * ``due_today``: due now or never scheduled; ``cards_due_today`` is the
+      older name of the same number.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from django.db.models import Avg
 
-        cards = Flashcard.objects.filter(user=request.user)
-        total = cards.count()
-        if total == 0:
-            return Response({
-                'total_cards': 0, 'cards_due_today': 0, 'retention_rate': 0,
-                'avg_ease_factor': 0, 'avg_interval': 0, 'interval_distribution': {},
-            })
-
         now = timezone.now()
-        due_today = cards.filter(Q(next_review__lte=now) | Q(next_review__isnull=True)).count()
-        aggs = cards.aggregate(
+        aggs = Flashcard.objects.filter(user=request.user).aggregate(
+            total=Count('id'),
+            due=Count('id', filter=Q(next_review__lte=now) | Q(next_review__isnull=True)),
+            reviewed=Count('id', filter=Q(total_reviews__gt=0) | Q(review_count__gt=0)),
+            reviews=Sum('total_reviews'),
+            lapses=Sum('lapses'),
             avg_ease=Avg('ease_factor'),
             avg_interval=Avg('interval_days'),
+            one_day=Count('id', filter=Q(interval_days__lte=1)),
+            two_to_seven=Count('id', filter=Q(interval_days__range=(2, 7))),
+            eight_to_thirty=Count('id', filter=Q(interval_days__range=(8, 30))),
+            thirty_plus=Count('id', filter=Q(interval_days__gt=30)),
         )
-        retention_count = cards.filter(ease_factor__gte=2.5).count()
-
+        total = aggs['total'] or 0
+        reviews = aggs['reviews'] or 0
+        lapses = min(aggs['lapses'] or 0, reviews)
+        due = aggs['due'] or 0
         return Response({
             'total_cards': total,
-            'cards_due_today': due_today,
-            'retention_rate': round(retention_count / total, 3),
+            'due_today': due,
+            'cards_due_today': due,
+            'reviewed_cards': aggs['reviewed'] or 0,
+            'total_reviews': reviews,
+            'lapses': lapses,
+            'retention_rate': round(1 - lapses / reviews, 3) if reviews else None,
             'avg_ease_factor': round(aggs['avg_ease'] or 0, 2),
             'avg_interval': round(aggs['avg_interval'] or 0, 1),
             'interval_distribution': {
-                '1_day': cards.filter(interval_days=1).count(),
-                '2_7_days': cards.filter(interval_days__range=(2, 7)).count(),
-                '8_30_days': cards.filter(interval_days__range=(8, 30)).count(),
-                '30_plus_days': cards.filter(interval_days__gt=30).count(),
-            },
+                '1_day': aggs['one_day'] or 0,
+                '2_7_days': aggs['two_to_seven'] or 0,
+                '8_30_days': aggs['eight_to_thirty'] or 0,
+                '30_plus_days': aggs['thirty_plus'] or 0,
+            } if total else {},
         })
 
 class ChatAssistantView(APIView):
@@ -3442,6 +3698,15 @@ class ChatAssistantView(APIView):
 
         from ai_engine import views as ai_views
 
+        # Same failure contract as the AI Tutor (ai_engine.views
+        # ._run_text_endpoint): no outage sentence is ever handed over as the
+        # assistant's reply -- a grounded offline answer (labelled, free) or
+        # a 503 ``{code: 'ai_unavailable'}``.
+        offline_response = getattr(ai_views, '_offline_text_response', None)
+        offline_mode = getattr(ai_views, 'ai_offline_mode', None)
+        if offline_response is not None and offline_mode is not None and offline_mode():
+            return offline_response(request, message, key='reply', reason=ai_views.REASON_OFFLINE_MODE)
+
         # Free-tier daily AI Tutor cap (premium / admin bypass) + 1 token,
         # exactly like AskTutorView. Newer ai_engine builds bundle both in
         # ``_charge_ai_call`` / ``_refund_ai_call`` (which also give the
@@ -3467,20 +3732,34 @@ class ChatAssistantView(APIView):
 
         context_str = self._context_for(request, context_question_id)
 
+        from ai_engine import services as ai_services
+        unavailable_error = getattr(ai_services, 'AIUnavailable', None)
         try:
-            from ai_engine.services import AIService
-            service = AIService()
+            service = ai_services.AIService()
             reply = service.ask_tutor(message, context_str)
         except Exception as e:
-            logger.error(f"ChatAssistant AI failed: {e}")
             refund()
-            return Response({"reply": self.UNAVAILABLE_REPLY})
+            if offline_response is not None and unavailable_error is not None and isinstance(e, unavailable_error):
+                reason = (ai_views.REASON_OFFLINE_MODE if getattr(e, 'offline', False)
+                          else ai_views.REASON_PROVIDERS_DOWN)
+                return offline_response(request, message, key='reply', reason=reason,
+                                        passages=getattr(e, 'passages', None))
+            logger.error(f"ChatAssistant AI failed: {e}")
+            return self._unavailable(ai_views)
         # Older provider rotations return a failure sentence instead of
         # raising; treat it like an exception so the token is refunded.
         if not _usable_ai_text(reply):
             refund()
-            return Response({"reply": self.UNAVAILABLE_REPLY})
+            if offline_response is not None:
+                return offline_response(request, message, key='reply', reason=ai_views.REASON_PROVIDERS_DOWN)
+            return self._unavailable(ai_views)
         return Response({"reply": reply})
+
+    def _unavailable(self, ai_views):
+        make = getattr(ai_views, '_ai_unavailable_response', None)
+        if make is not None:
+            return make()
+        return Response({"reply": self.UNAVAILABLE_REPLY})  # pragma: no cover - older ai_engine.views
 
 
 _SUPABASE_PUBLIC_URL_RE = re.compile(r'^https://[^/]+\.supabase\.co/storage/v1/object/public/(.+)$')
@@ -3579,14 +3858,16 @@ class QuestionImageServeView(APIView):
         if not serve_path and img.url and img.url.startswith("/media/"):
             from django.conf import settings as _dj_settings
             rel = img.url[len("/media/"):]
-            candidate = os.path.join(_dj_settings.MEDIA_ROOT, rel)
-            if os.path.isfile(candidate):
+            media_root = os.path.realpath(_dj_settings.MEDIA_ROOT)
+            candidate = os.path.realpath(os.path.join(media_root, rel))
+            # Never leave MEDIA_ROOT (a stored "/media/../.." URL).
+            if candidate.startswith(media_root + os.sep) and os.path.isfile(candidate):
                 serve_path = candidate
         if not serve_path and img.url and img.url.startswith(("http://", "https://")):
             serve_path = _supabase_storage_mirror_path(img.url)
             if not serve_path:
                 from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(img.url)
+                return _harden_image_response(HttpResponseRedirect(img.url))
         if not serve_path:
             raise Http404("Question image not found")
 
@@ -3603,11 +3884,25 @@ class QuestionImageServeView(APIView):
                 status=503,
             )
 
+        # Only real raster bytes are served inline, typed from the content
+        # (not the stored ``mime``). Anything else -- e.g. an SVG from an
+        # older import, which a browser would run as an active document on
+        # the API origin -- is sent as an opaque download. Every response
+        # also carries ``Content-Security-Policy: default-src 'none'; sandbox``
+        # and ``nosniff`` (see ``_harden_image_response``).
+        try:
+            head = f.read(16)
+            f.seek(0)
+        except (OSError, ValueError):
+            head = b''
+        raster_mime = _sniff_raster_mime(head)
+
         # Best-effort resize via Pillow if requested. Failing open (serve
         # the raw bytes) is acceptable — the player still renders.
         w_param = request.query_params.get("w")
         q_param = request.query_params.get("q")
-        if w_param or q_param:
+        if raster_mime and (w_param or q_param):
+            raw = None
             try:
                 from io import BytesIO
                 from PIL import Image
@@ -3625,8 +3920,7 @@ class QuestionImageServeView(APIView):
                     ratio = target_w / float(pil_img.width)
                     new_size = (target_w, max(1, int(pil_img.height * ratio)))
                     pil_img = pil_img.resize(new_size, Image.LANCZOS)
-                out_mime = (img.mime or "image/jpeg").lower()
-                if out_mime in ("image/jpeg", "image/jpg") or out_mime == "image/png" and target_w:
+                if raster_mime == "image/jpeg" or raster_mime == "image/png" and target_w:
                     buf = BytesIO()
                     save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True}
                     pil_img = pil_img.convert("RGB")
@@ -3640,22 +3934,63 @@ class QuestionImageServeView(APIView):
                 resp = HttpResponse(buf.read(), content_type=out_mime)
                 resp["Content-Length"] = buf.tell()
                 resp["Cache-Control"] = "private, max-age=3600"
-                return resp
+                return _harden_image_response(resp)
             except ImportError:
                 # Pillow not installed — fall through to raw bytes
                 pass
             except Exception as resize_exc:  # noqa: BLE001
                 logger.warning("Image resize failed for #%s: %s", image_id, resize_exc)
+            if raw is not None:
+                # The file was already read (and closed): serve those bytes.
+                resp = HttpResponse(raw, content_type=raster_mime)
+                resp["Cache-Control"] = "private, max-age=3600"
+                return _harden_image_response(resp)
 
         # Raw passthrough
         try:
             f.seek(0)
         except Exception:  # noqa: BLE001
             pass
-        content_type = (img.mime or "application/octet-stream").strip()
-        resp = FileResponse(f, content_type=content_type)
+        if raster_mime:
+            resp = FileResponse(f, content_type=raster_mime)
+        else:
+            logger.info("QuestionImage #%s (stored mime %s) is not a PNG/JPEG/GIF/WebP; sent as a download",
+                        image_id, img.mime or 'unknown')
+            resp = FileResponse(
+                f, content_type="application/octet-stream",
+                as_attachment=True, filename=f"question-image-{image_id}",
+            )
         resp["Cache-Control"] = "private, max-age=3600"
-        return resp
+        return _harden_image_response(resp)
+
+
+#: Raster formats the image endpoint serves inline (magic bytes -> type).
+_RASTER_SIGNATURES = (
+    (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    (b'\xff\xd8\xff', 'image/jpeg'),
+    (b'GIF87a', 'image/gif'),
+    (b'GIF89a', 'image/gif'),
+)
+#: Image responses are inert documents even when opened directly.
+IMAGE_RESPONSE_CSP = "default-src 'none'; sandbox"
+
+
+def _sniff_raster_mime(head: bytes):
+    """'image/png' / 'image/jpeg' / 'image/gif' / 'image/webp' from the first
+    bytes of a file, or None (SVG, HTML, anything unknown)."""
+    head = head or b''
+    for signature, mime in _RASTER_SIGNATURES:
+        if head.startswith(signature):
+            return mime
+    if head[:4] == b'RIFF' and head[8:12] == b'WEBP':
+        return 'image/webp'
+    return None
+
+
+def _harden_image_response(resp):
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Security-Policy"] = IMAGE_RESPONSE_CSP
+    return resp
 
 
 from .image_upload import upload_image_to_supabase
@@ -3709,11 +4044,20 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
                 )},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Type from the bytes, not the client's Content-Type: an SVG / HTML
+        # file declared as image/png used to be stored as-is.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from accounts.upload_validation import validate_uploaded_file
+        from .image_upload import MAX_BYTES as IMAGE_MAX_BYTES
+        try:
+            detected_type = validate_uploaded_file(file_obj, allowed_types={"image"}, max_bytes=IMAGE_MAX_BYTES)
+        except DjangoValidationError as exc:
+            return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
         try:
             uploaded = upload_image_to_supabase(
                 file_obj=file_obj,
                 question_id=question_id_int,
-                content_type=file_obj.content_type or "application/octet-stream",
+                content_type=detected_type,
                 original_filename=file_obj.name or "image.png",
                 role=requested_role,
             )
@@ -3828,171 +4172,9 @@ Respond with structured content in markdown format."""
 # Student Experience — Study & Gamification Views
 # ════════════════════════════════════════════════════════════════════════════
 
-class MistakeNotebookStudentView(APIView):
-    """Student mistake notebook — list with optional filters."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        # Question has no ``sub_topic`` field -- selecting it raised
-        # FieldError (HTTP 500) on every request to this route.
-        qs = MistakeNotebook.objects.filter(user=request.user).select_related(
-            'question__subject', 'question__topic'
-        )
-        # Filters
-        review_status = request.query_params.get('review_status')
-        is_flagged = request.query_params.get('is_flagged')
-        subject_id = request.query_params.get('subject')
-        topic_id = request.query_params.get('topic')
-
-        if review_status:
-            qs = qs.filter(review_status=review_status)
-        if is_flagged is not None:
-            qs = qs.filter(is_flagged=is_flagged == 'true')
-        if subject_id:
-            qs = qs.filter(question__subject_id=subject_id)
-        if topic_id:
-            qs = qs.filter(question__topic_id=topic_id)
-
-        qs = qs.order_by('-created_at')
-        try:
-            page = max(1, int(request.query_params.get('page', 1)))
-            page_size = max(1, min(int(request.query_params.get('page_size', 20)), 100))
-        except (TypeError, ValueError):
-            return Response({'error': 'page and page_size must be integers'}, status=400)
-        total = qs.count()
-        start = (page - 1) * page_size
-        items = qs[start:start + page_size]
-        serializer = MistakeNotebookSerializer(items, many=True)
-        return Response({
-            'results': serializer.data,
-            'count': total,
-            'page': page,
-            'page_size': page_size,
-        })
-
-    def post(self, request):
-        """Add a question to mistake notebook."""
-        question_id = request.data.get('question')
-        if not question_id:
-            return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            question = Question.objects.get(pk=int(question_id), is_active=True)
-        except (Question.DoesNotExist, TypeError, ValueError):
-            return Response({'error': 'Question not found'}, status=404)
-        # The entry (and this response) carries the answer + explanation.
-        if not user_can_view_answer(request.user, question):
-            return _upgrade_required_response()
-
-        obj, created = MistakeNotebook.objects.get_or_create(
-            user=request.user,
-            question=question,
-            defaults={
-                'selected_answer': request.data.get('selected_answer', ''),
-                'correct_answer': question.correct_answer,
-                'is_correct': False,
-                'review_status': 'new',
-                'user_note': request.data.get('user_note', ''),
-            }
-        )
-        if not created:
-            obj.user_note = request.data.get('user_note', obj.user_note)
-            obj.is_flagged = request.data.get('is_flagged', obj.is_flagged)
-            obj.review_status = request.data.get('review_status', obj.review_status)
-            obj.save(update_fields=['user_note', 'is_flagged', 'review_status'])
-        serializer = MistakeNotebookSerializer(obj)
-        return Response(serializer.data, status=status.HTTP_201_CREATED if created else 200)
-
-
-class MistakeNotebookDetailView(APIView):
-    """Update/delete a mistake notebook entry."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def _get_object(self, request, pk):
-        try:
-            return MistakeNotebook.objects.get(pk=pk, user=request.user)
-        except MistakeNotebook.DoesNotExist:
-            raise Http404
-
-    def patch(self, request, pk):
-        obj = self._get_object(request, pk)
-        serializer = MistakeNotebookSerializer(obj, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    def delete(self, request, pk):
-        obj = self._get_object(request, pk)
-        obj.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class MistakeNotebookReviewView(APIView):
-    """Mark a mistake as reviewed (spaced-repetition scheduler)."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, pk):
-        try:
-            obj = MistakeNotebook.objects.get(pk=pk, user=request.user)
-        except MistakeNotebook.DoesNotExist:
-            return Response({'error': 'Not found'}, status=404)
-
-        now = timezone.now()
-        obj.review_count += 1
-        obj.last_reviewed_at = now
-        if obj.review_count == 1:
-            obj.next_review_at = now + timezone.timedelta(days=1)
-            obj.review_status = 'learning'
-        elif obj.review_count == 2:
-            obj.next_review_at = now + timezone.timedelta(days=3)
-            obj.review_status = 'reviewing'
-        elif obj.review_count >= 3:
-            obj.next_review_at = now + timezone.timedelta(days=7)
-            if obj.review_count >= 5:
-                obj.review_status = 'mastered'
-        obj.save(update_fields=['review_count', 'last_reviewed_at', 'next_review_at', 'review_status'])
-        serializer = MistakeNotebookSerializer(obj)
-        return Response(serializer.data)
-
-
-class MistakeNotebookDueView(APIView):
-    """Get all mistakes due for review today."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        now = timezone.now()
-        due = MistakeNotebook.objects.filter(
-            user=request.user,
-            next_review_at__lte=now,
-        ).exclude(review_status='mastered').select_related(
-            'question__subject', 'question__topic'
-        ).order_by('next_review_at')
-        serializer = MistakeNotebookSerializer(due, many=True)
-        return Response({
-            'results': serializer.data,
-            'count': due.count(),
-        })
-
-
-class MistakeStatsView(APIView):
-    """Aggregate stats for the mistake notebook dashboard widget."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        total = MistakeNotebook.objects.filter(user=user).count()
-        by_status = {}
-        for key, _ in MistakeNotebook.REVIEW_STATUS_CHOICES:
-            by_status[key] = MistakeNotebook.objects.filter(user=user, review_status=key).count()
-        flagged = MistakeNotebook.objects.filter(user=user, is_flagged=True).count()
-        due_today = MistakeNotebook.objects.filter(
-            user=user, next_review_at__lte=timezone.now()
-        ).exclude(review_status='mastered').count()
-        return Response({
-            'total': total,
-            'by_status': by_status,
-            'flagged': flagged,
-            'due_today': due_today,
-        })
+# The questions-app Mistake Notebook views (list / add / detail / review /
+# due / stats) were duplicates of analytics.views; the routes now live only
+# under /api/analytics/mistake-notebook/ (see questions/urls.py).
 
 
 class UserQuestListView(APIView):

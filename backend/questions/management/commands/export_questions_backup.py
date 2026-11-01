@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from django.apps import apps
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 
 # (app_label, model_name). The command used to import ``Bookmark``,
@@ -24,13 +24,32 @@ EXPORT_PLAN = [
 ]
 
 
+def _inside_a_checkout(path: Path) -> bool:
+    """True when ``path`` is inside this project or any git working tree.
+
+    The dumps hold student data (bookmarks, notes, flashcards, test attempts,
+    subscriptions); written inside a checkout they are one ``git add`` away
+    from being published.
+    """
+    from django.conf import settings
+
+    project_root = Path(settings.BASE_DIR).resolve().parent
+    try:
+        path.relative_to(project_root)
+        return True
+    except ValueError:
+        pass
+    return any((parent / '.git').exists() for parent in (path, *path.parents))
+
+
 class Command(BaseCommand):
     help = "Export questions app to JSON (handles Windows encoding issues)"
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--output-dir', default='',
-            help='Directory for the JSON dumps (default: <repo>/backup/db_dumps).',
+            '--output-dir', required=True,
+            help=('Directory for the JSON dumps. Required, and it must be outside the repository: '
+                  'the dumps contain user data (bookmarks, notes, flashcards, test attempts, subscriptions).'),
         )
 
     def handle(self, *args, **options):
@@ -39,11 +58,15 @@ class Command(BaseCommand):
         except (AttributeError, ValueError):  # pragma: no cover - non-reconfigurable stream
             pass
 
-        backup_dir = (
-            Path(options['output_dir']).expanduser()
-            if options.get('output_dir')
-            else Path(__file__).resolve().parent.parent.parent.parent / 'backup' / 'db_dumps'
-        )
+        raw_dir = str(options.get('output_dir') or '').strip()
+        if not raw_dir:
+            raise CommandError('--output-dir is required (a directory outside the repository).')
+        backup_dir = Path(raw_dir).expanduser().resolve()
+        if _inside_a_checkout(backup_dir):
+            raise CommandError(
+                f'Refusing to write user data inside a source checkout: {backup_dir}. '
+                'Choose a directory outside the repository.'
+            )
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         total_rows = 0

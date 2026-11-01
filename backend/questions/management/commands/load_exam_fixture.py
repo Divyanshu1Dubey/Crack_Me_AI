@@ -23,7 +23,16 @@ This is the workflow for editing NEET PG / INI-CET fixtures in plain JSON:
 The CMS fixture is also accepted here for symmetry — pass ``cms`` instead of
 ``neet_pg`` or ``inicet`` and the loader will read ``fixtures/cms_fixture.json``
 (which is the renamed ``questions_fixture.json``). The original fixture's name
-is still accepted for back-compat.
+is still accepted for back-compat. Its dumpdata shape (subjects / topics
+referenced by fixture pk, ``similar_questions`` lists) is handled.
+
+Safe to re-run on every deploy:
+
+* rows an admin touched (``admin_edited``, ``lock_answer``,
+  ``lock_explanation``, ``is_verified_by_admin``) are left unchanged;
+* an archived / removed question is never re-activated;
+* admin-removed stems (``RemovedQuestion``) are not re-created;
+* a fixture pk that belongs to another exam's question is skipped.
 """
 from __future__ import annotations
 
@@ -90,6 +99,20 @@ def _sha256_file(path: Path, *, chunk_bytes: int = 1 << 16) -> str:
         return h.hexdigest()
     except OSError:
         return ""
+
+
+def is_admin_protected(question) -> bool:
+    """True when an admin has touched the row, so a fixture re-load must not
+    modify it (same rule as ``importers.neetpg.db_writer.is_protected``):
+    an admin edit / removal, a locked answer or explanation, or an admin
+    verification. Deploys re-run this loader, so without the guard every
+    deploy reverted admin corrections."""
+    return bool(
+        getattr(question, "admin_edited", False)
+        or getattr(question, "lock_answer", False)
+        or getattr(question, "lock_explanation", False)
+        or getattr(question, "is_verified_by_admin", False)
+    )
 
 
 def _exam_subdir_for(row: dict, default: str = "cms") -> str:
@@ -185,6 +208,8 @@ class Command(BaseCommand):
         if options["replace"]:
             self._purge_exam(exam_type, raw)
 
+        self._exam_type = exam_type
+        self._skipped = {"protected": 0, "other_exam": 0}
         with transaction.atomic():
             self._ensure_exam_track(exam_track_code, exam_type)
             exam_track = ExamTrack.objects.get(code=exam_track_code)
@@ -196,6 +221,11 @@ class Command(BaseCommand):
             f"{len(subj_map)} Subjects, {len(topic_map)} Topics "
             f"for exam_type={exam_type}."
         ))
+        if any(self._skipped.values()):
+            self.stdout.write(self.style.WARNING(
+                f"  • Left {self._skipped['protected']} admin-edited / locked / verified question(s) unchanged; "
+                f"skipped {self._skipped['other_exam']} row(s) whose pk belongs to another exam's question."
+            ))
         if missing:
             self.stdout.write(self.style.WARNING(
                 "Some referenced images are missing — those [[img:…]] tokens "
@@ -281,6 +311,11 @@ class Command(BaseCommand):
         exam_track = ExamTrack.objects.get(code=exam_track_code)
         subj_map: dict[str, int] = {}
         topic_map: dict[tuple[str, str], int] = {}
+        # Fixture-local pk -> DB pk. ``cms_fixture.json`` (a dumpdata export)
+        # refers to subjects / topics by the fixture row's pk, which is not
+        # the DB pk once the rows are upserted by code / name.
+        self._subject_pk_by_fixture_pk: dict[int, int] = {}
+        self._topic_pk_by_fixture_pk: dict[int, int] = {}
         # Pass 1 — Subjects
         for row in raw:
             if row.get("model") != "questions.subject":
@@ -300,6 +335,8 @@ class Command(BaseCommand):
                 },
             )
             subj_map[code] = obj.pk
+            if isinstance(row.get("pk"), int):
+                self._subject_pk_by_fixture_pk[row["pk"]] = obj.pk
         # Pass 2 — Topics (need subject pk)
         for row in raw:
             if row.get("model") != "questions.topic":
@@ -309,7 +346,7 @@ class Command(BaseCommand):
             if isinstance(subj_code, str):
                 subj_pk = subj_map.get(subj_code) or self._lookup_subj_pk(subj_code, exam_type)
             else:
-                subj_pk = int(subj_code)
+                subj_pk = self._subject_pk_for_fixture_ref(subj_code)
             if subj_pk is None:
                 self.stdout.write(self.style.WARNING(
                     f"Topic '{f.get('name')}' references missing subject {subj_code!r} — skipped."
@@ -325,11 +362,35 @@ class Command(BaseCommand):
                 },
             )
             topic_map[(subj_code, f["name"])] = obj.pk
+            if isinstance(row.get("pk"), int):
+                self._topic_pk_by_fixture_pk[row["pk"]] = obj.pk
         return subj_map, topic_map
 
     def _lookup_subj_pk(self, code: str, exam_type: str) -> int | None:
         s = Subject.objects.filter(code=code, exam_type=exam_type).first()
         return s.pk if s else None
+
+    def _subject_pk_for_fixture_ref(self, value) -> int | None:
+        """DB pk for a numeric subject reference: the fixture's own subject
+        row first, else an existing DB subject with that pk (legacy rows)."""
+        try:
+            ref = int(value)
+        except (TypeError, ValueError):
+            return None
+        mapped = getattr(self, "_subject_pk_by_fixture_pk", {}).get(ref)
+        if mapped is not None:
+            return mapped
+        return ref if Subject.objects.filter(pk=ref).exists() else None
+
+    def _topic_pk_for_fixture_ref(self, value) -> int | None:
+        try:
+            ref = int(value)
+        except (TypeError, ValueError):
+            return None
+        mapped = getattr(self, "_topic_pk_by_fixture_pk", {}).get(ref)
+        if mapped is not None:
+            return mapped
+        return ref if Topic.objects.filter(pk=ref).exists() else None
 
     # ---- image token rewrite ------------------------------------------
     def _rewrite_image_tokens(self, raw, images_dir: Path, exam_alias: str) -> None:
@@ -504,6 +565,54 @@ class Command(BaseCommand):
                 return f"[[img:{img.id}]]"
             return placeholder_re.sub(repl, value)
 
+        exam_type = getattr(self, "_exam_type", "") or ""
+        skipped = getattr(self, "_skipped", None)
+        if skipped is None:
+            skipped = self._skipped = {"protected": 0, "other_exam": 0}
+        question_fields = {field.name: field for field in Question._meta.concrete_fields}
+
+        def _clean_fields(fields: dict) -> dict:
+            """Fixture fields -> model kwargs. Many-to-many keys (e.g. the
+            ``similar_questions`` of a dumpdata export) and unknown keys are
+            dropped -- assigning a list to an M2M aborted the whole load --
+            and other FK pks become ``<field>_id`` (None when the related row
+            does not exist in this DB)."""
+            out = {}
+            for key, value in fields.items():
+                if key in ("subject", "topic", "subject_code", "topic_name", "exam_track"):
+                    continue
+                field = question_fields.get(key)
+                if field is None or field.primary_key:
+                    continue
+                if field.is_relation:
+                    if value in (None, ""):
+                        out[field.attname] = None
+                    else:
+                        out[field.attname] = (
+                            field.related_model.objects.filter(pk=value).values_list("pk", flat=True).first()
+                        )
+                    continue
+                out[key] = value
+            return out
+
+        def _guard_existing(existing, kwargs: dict, pk_label) -> bool:
+            """False when ``existing`` must be left alone; otherwise drops the
+            fields a re-load may not change from ``kwargs`` (in place)."""
+            if exam_type and existing.exam_type and existing.exam_type != exam_type:
+                skipped["other_exam"] += 1
+                self.stdout.write(self.style.WARNING(
+                    f"  → Skipping fixture row ({pk_label}): that pk is a {existing.exam_type} question"
+                ))
+                return False
+            if is_admin_protected(existing):
+                skipped["protected"] += 1
+                return False
+            if not existing.is_active:
+                # Archived / removed / dropped: a re-load never revives it.
+                kwargs.pop("is_active", None)
+                kwargs.pop("is_dropped", None)
+            return True
+
         n = 0
         for row in raw:
             if row.get("model") != "questions.question":
@@ -511,7 +620,10 @@ class Command(BaseCommand):
             f = row["fields"]
             # Resolve subject / topic
             subj_code = f.get("subject") or f.get("subject_code") or ""
-            subj_pk = subj_map.get(subj_code) if isinstance(subj_code, str) else int(subj_code)
+            subj_pk = (
+                subj_map.get(subj_code) if isinstance(subj_code, str)
+                else self._subject_pk_for_fixture_ref(subj_code)
+            )
             if subj_pk is None:
                 self.stdout.write(self.style.WARNING(
                     f"Question references subject {subj_code!r} which isn't in the fixture — skipped."
@@ -520,7 +632,10 @@ class Command(BaseCommand):
             topic_name = f.get("topic") or f.get("topic_name") or ""
             topic_pk = None
             if topic_name:
-                topic_pk = topic_map.get((subj_code, topic_name))
+                topic_pk = (
+                    topic_map.get((subj_code, topic_name)) if isinstance(topic_name, str)
+                    else self._topic_pk_for_fixture_ref(topic_name)
+                )
             pk = row.get("pk")
             # Skip if an admin previously removed this question's stem via
             # the "Remove from bank" action. The stem hash is the durable
@@ -535,10 +650,7 @@ class Command(BaseCommand):
                 n += 1  # count it as a seen row so the dry-run summary is honest
                 continue
             # Strip any *_code aliases from fields and FK pks (resolved below)
-            clean = {
-                k: v for k, v in f.items()
-                if k not in ("subject", "topic", "subject_code", "topic_name", "exam_track")
-            }
+            clean = _clean_fields(f)
             clean["exam_track"] = exam_track
             images_dir = Path(row.get("_img_dir") or "") if row.get("_img_dir") else None
             rewrite_keys = row.get("_img_rewrite_keys") or set()
@@ -548,6 +660,7 @@ class Command(BaseCommand):
                 field in `_img_rewrite_keys` to swap placeholders for
                 real ``[[img:<pk>]]`` tokens. Returns the question PK."""
                 if "pk" in row and row["pk"] is not None:
+                    q_kwargs = {k: v for k, v in q_kwargs.items() if k != "pk"}
                     obj, _ = Question.objects.update_or_create(pk=row["pk"], defaults=q_kwargs)
                 else:
                     obj = Question.objects.create(**q_kwargs)
@@ -563,12 +676,16 @@ class Command(BaseCommand):
                 return obj.pk
 
             if pk is not None:
-                _save_question({
+                q_kwargs = {
                     **clean,
-                    "pk": pk,
                     "subject_id": subj_pk,
                     "topic_id": topic_pk,
-                })
+                }
+                existing = Question.objects.filter(pk=pk).first()
+                if existing is not None and not _guard_existing(existing, q_kwargs, f"pk={pk}"):
+                    n += 1
+                    continue
+                _save_question(q_kwargs)
             else:
                 # Idempotent dedup — match by (exam_type, content fingerprint)
                 # so re-running the loader never duplicates a Question whose
@@ -581,10 +698,16 @@ class Command(BaseCommand):
                 # matching recall_text_hash, or one whose question_text
                 # hashes to the same value. To avoid scanning every row,
                 # we restrict to the same subject (cheap FK lookup).
+                # Rows without an explicit exam_type belong to the exam being
+                # loaded (filtering on "" matched nothing, so every re-load
+                # of such a row created a duplicate).
                 siblings = Question.objects.filter(
-                    exam_type=clean.get("exam_type", ""),
+                    exam_type=clean.get("exam_type") or exam_type,
                     subject_id=subj_pk,
-                ).only("pk", "recall_text_hash", "question_text")
+                ).only(
+                    "pk", "recall_text_hash", "question_text", "exam_type", "is_active",
+                    "admin_edited", "lock_answer", "lock_explanation", "is_verified_by_admin",
+                )
                 existing = None
                 for sib in siblings.iterator(chunk_size=500):
                     if sib.recall_text_hash == stem_hash:
@@ -594,6 +717,9 @@ class Command(BaseCommand):
                         existing = sib
                         break
                 if existing is not None:
+                    if not _guard_existing(existing, clean, f"existing pk={existing.pk}"):
+                        n += 1
+                        continue
                     for k, v in clean.items():
                         setattr(existing, k, v)
                     existing.save()

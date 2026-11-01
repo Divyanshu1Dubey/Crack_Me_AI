@@ -53,9 +53,14 @@ def _progress_for(user, quest_type: str, day) -> int | None:
         row = DailyActivity.objects.filter(user=user, date=day).first()
         return int(row.questions_attempted) if row else 0
     if quest_type == 'complete_tests':
+        from django.db.models import Q
+
         tz = timezone.get_current_timezone()
         start = timezone.make_aware(datetime.combine(day, time.min), tz)
+        # Only a test the student actually answered counts: an empty submit
+        # earns no XP / DailyActivity, so it must not finish the quest either.
         return TestAttempt.objects.filter(
+            Q(correct_count__gt=0) | Q(incorrect_count__gt=0),
             user=user, is_completed=True,
             completed_at__gte=start, completed_at__lt=start + timedelta(days=1),
         ).count()
@@ -124,6 +129,10 @@ def claim_quest(user, quest_id: int):
                 streak.current_streak += 1
                 streak.streak_frozen = False  # a freeze protects one gap
             else:
+                if streak.last_quest_date is not None:
+                    # The streak broke: a freeze still armed from before the
+                    # gap lapses with it (it must not bridge a later gap).
+                    streak.streak_frozen = False
                 streak.current_streak = 1
             streak.last_quest_date = today
         streak.longest_streak = max(streak.longest_streak, streak.current_streak)

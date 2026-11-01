@@ -109,12 +109,18 @@ def usable_explain_result(result) -> bool:
 
 # ---------- generation gate ------------------------------------------------
 
-def generation_gate(user, *, unlimited: bool = False):
+def generation_gate(user, *, unlimited: bool = False, question_id=None):
     """``allow_ai`` for an authenticated caller.
 
     Returns ``True`` for unlimited callers (admins / staff), otherwise a
     callable that spends one unit of the user's hourly generation budget
     and says whether this generation may proceed.
+
+    With ``question_id`` the unit is spent once per (user, question, hour):
+    the reveal panel asks for up to four sections of the same question
+    (why correct / clinical / mnemonic / concept), and charging each one
+    made the budget run out after ~15 questions. The budget is therefore
+    "questions with fresh AI sections per hour".
     """
     if unlimited:
         return True
@@ -126,14 +132,26 @@ def generation_gate(user, *, unlimited: bool = False):
         limit = int(getattr(settings, "AI_PER_QUESTION_HOURLY_LIMIT", DEFAULT_GENERATION_HOURLY_LIMIT))
         if limit <= 0:
             return False
-        key = f"ai_per_q_budget:{user_id}:{timezone.now():%Y%m%d%H}"
+        hour = f"{timezone.now():%Y%m%d%H}"
+        key = f"ai_per_q_budget:{user_id}:{hour}"
         try:
+            if question_id is not None:
+                marker = f"ai_per_q_budget_q:{user_id}:{question_id}:{hour}"
+                if not cache.add(marker, 1, 60 * 60):
+                    # This question was already charged this hour.
+                    return True
             cache.add(key, 0, 60 * 60)
             used = cache.incr(key)
         except Exception:  # pragma: no cover - cache backend hiccup
             return False
         if used > limit:
             LOG.info("per-question AI generation budget exhausted for user=%s", user_id)
+            if question_id is not None:
+                # Not charged after all: a later hour may try this question.
+                try:
+                    cache.delete(f"ai_per_q_budget_q:{user_id}:{question_id}:{hour}")
+                except Exception:  # pragma: no cover - cache backend hiccup
+                    pass
             return False
         return True
 

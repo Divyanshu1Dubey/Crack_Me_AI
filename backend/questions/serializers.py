@@ -29,9 +29,11 @@ _TEXT_FIELDS = (
 )
 
 
-# List-payload fields that point at the generated explanation video. Hidden
-# from viewers who are not entitled to the row's answer.
-_LIST_ANSWER_MEDIA_FIELDS = ('video_url', 'video_thumbnail', 'video_subtitles_url')
+# List-payload fields that point at answer-linked media: the generated
+# explanation video and the "screenshot of the textbook page where the answer
+# is discussed" (``page_screenshot``). Hidden from viewers who are not
+# entitled to the row's answer.
+_LIST_ANSWER_MEDIA_FIELDS = ('video_url', 'video_thumbnail', 'video_subtitles_url', 'page_screenshot')
 _LIST_ANSWER_MEDIA_RESET_FIELDS = _LIST_ANSWER_MEDIA_FIELDS + ('video_status', 'video_duration')
 
 
@@ -349,11 +351,28 @@ class QuestionListSerializer(serializers.ModelSerializer):
             return True
         showcase = getattr(obj, 'is_showcase', None)
         if showcase is None:
-            # Not annotated (e.g. recall search / bookmarks): one lookup,
-            # only for rows that carry a video and a free / anonymous viewer.
-            from accounts.models_freemium import FreeShowcaseQuestion
-            showcase = bool(obj.pk) and FreeShowcaseQuestion.objects.filter(question_id=obj.pk).exists()
+            # Not annotated (e.g. recall search / bookmarks / similar):
+            # the free showcase ids are read once per response, not once
+            # per row (only rows that carry answer media get here).
+            showcase = bool(obj.pk) and obj.pk in self._free_showcase_ids()
         return bool(showcase)
+
+    def _free_showcase_ids(self) -> set:
+        """Ids of the free showcase questions, memoised in the (per-response)
+        serializer context -- shared by nested / many=True children."""
+        context = self.context if hasattr(self, 'context') else {}
+        ids = context.get('_free_showcase_question_ids') if isinstance(context, dict) else None
+        if ids is None:
+            from accounts.models_freemium import FreeShowcaseQuestion
+            # Same rule as questions.views.free_showcase_rows: scholarship
+            # questions are never free content.
+            ids = set(
+                FreeShowcaseQuestion.objects.filter(question__is_scholarship_eligible=False)
+                .values_list('question_id', flat=True)
+            )
+            if isinstance(context, dict):
+                context['_free_showcase_question_ids'] = ids
+        return ids
 
     class Meta:
         model = Question
@@ -432,9 +451,16 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
     def get_related_question_ids(self, obj):
         related_ids = getattr(obj, 'related_question_ids', None)
-        if related_ids is None:
-            return []
-        return list(related_ids)
+        if related_ids is not None:
+            return list(related_ids)
+        # The admin editor's "related PYQs" field: read the curated M2M from
+        # the ``similar_questions`` prefetch (QuestionViewSet.queryset). The
+        # old code only read a never-set attribute, so it was always [].
+        # Without the prefetch nothing is queried (no per-row lookups).
+        prefetched = (getattr(obj, '_prefetched_objects_cache', None) or {}).get('similar_questions')
+        if prefetched is not None:
+            return sorted(q.id for q in prefetched)
+        return []
 
     def get_accuracy(self, obj):
         # Only annotated for admins / accuracy filters (see
@@ -598,6 +624,9 @@ class QuestionAdminListSerializer(QuestionListSerializer):
             'book_name', 'chapter', 'page_number', 'reference_text',
             'shortcut_tip', 'why_correct',
             'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+            # The editor's checkbox starts from the real value, and the
+            # first save of a list row can send ``If-Match: <updated_at>``.
+            'is_controversial', 'updated_at',
         ]
 
 
@@ -664,6 +693,10 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'source', 'exam_source', 'times_asked', 'is_active', 'created_at', 'updated_at',
             'textbook_references', 'learning_technique', 'shortcut_tip', 'page_screenshot',
             'is_image_based', 'images', 'stem_images',
+            # Per-option rationale + review flag: written by the admin editor
+            # (PATCH /questions/<id>/), redacted for non-entitled readers.
+            'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+            'is_controversial',
             'concept_keywords', 'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
@@ -916,9 +949,9 @@ class FlashcardSerializer(serializers.ModelSerializer):
         model = Flashcard
         fields = ['id', 'question', 'subject', 'subject_name', 'front', 'back',
                   'difficulty', 'personal_note', 'next_review', 'review_count', 'ease_factor',
-                  'interval_days', 'created_at']
+                  'interval_days', 'total_reviews', 'lapses', 'created_at']
         read_only_fields = ['id', 'review_count', 'ease_factor', 'interval_days',
-                            'next_review', 'created_at']
+                            'total_reviews', 'lapses', 'next_review', 'created_at']
 
 
 class QuestionImportJobSerializer(serializers.ModelSerializer):
@@ -926,8 +959,11 @@ class QuestionImportJobSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuestionImportJob
+        # ``stored_file_path`` is left out: recall-import jobs store server
+        # filesystem paths there (importers.neetpg), and this list shows
+        # every QuestionImportJob.
         fields = [
-            'id', 'job_type', 'status', 'source_filename', 'stored_file_path',
+            'id', 'job_type', 'status', 'source_filename',
             'summary', 'error_report', 'created_by', 'created_by_username',
             'created_at', 'updated_at'
         ]
@@ -992,6 +1028,17 @@ class TopicNoteSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by',
                             'content_preview', 'source_question_count', 'ai_generated']
+        # An admin may save an empty draft (and fill it with AI later); the
+        # notes page used to send placeholder text because '' was rejected.
+        extra_kwargs = {'content': {'allow_blank': True, 'required': False}}
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        content = attrs.get('content', getattr(self.instance, 'content', '') or '')
+        published = attrs.get('is_published', getattr(self.instance, 'is_published', False))
+        if published and not str(content or '').strip():
+            raise serializers.ValidationError({'content': 'A published note needs content.'})
+        return attrs
 
     def validate_source_question_ids(self, value):
         if value in (None, ''):
@@ -1076,10 +1123,11 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
                   'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
                   'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
         # Review bookkeeping is server-side (the review endpoint) -- a PATCH
-        # could set ``last_reviewed_at`` and complete the "Review 5 mistakes"
-        # quest, or re-point the entry at another question.
+        # could set ``last_reviewed_at`` / ``review_status`` and complete the
+        # "Review 5 mistakes" quest, or re-point the entry at another question.
         read_only_fields = ['id', 'user', 'question', 'selected_answer', 'correct_answer', 'is_correct',
-                            'review_count', 'last_reviewed_at', 'next_review_at', 'created_at']
+                            'review_status', 'review_count', 'last_reviewed_at', 'next_review_at',
+                            'created_at']
 
 
 class MistakeNotebookCreateSerializer(serializers.ModelSerializer):

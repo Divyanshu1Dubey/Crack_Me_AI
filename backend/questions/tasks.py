@@ -7,11 +7,18 @@ from ai_engine.services import AIService
 logger = logging.getLogger(__name__)
 
 
-def apply_explain_result(question, result) -> list:
+def _model_label(service) -> str:
+    """``ai_model`` stamp, as ``ai_engine.views`` writes it."""
+    provider = getattr(service, 'last_provider', None) if service is not None else None
+    return f'roundrobin/{provider}' if isinstance(provider, str) and provider else 'roundrobin'
+
+
+def apply_explain_result(question, result, service=None) -> list:
     """Copy a usable ``AIService.explain_after_answer`` result onto
     ``question`` (in memory) and return the updated field names.
 
-    Shared by ``generate_ai_task`` and ``manage.py backfill_empty_ai``:
+    Shared by ``generate_ai_task`` and ``manage.py backfill_empty_ai`` /
+    ``generate_missing_ai``:
 
     * a failed / unparsed result (provider outage: ``raw_response`` or the
       "All AI services are temporarily unavailable" sentence) changes
@@ -19,7 +26,8 @@ def apply_explain_result(question, result) -> list:
     * ``lock_answer`` protects ``ai_answer``; ``lock_explanation`` protects
       every explanation-side field;
     * curated text is never replaced by an empty value, and the curated
-      ``learning_technique`` is only filled while it is still empty.
+      (non ``ai_``) fields ``learning_technique`` and ``concept_keywords``
+      are only filled while they are still empty.
     """
     from questions.ai_per_question import usable_ai_text, usable_explain_result
 
@@ -53,12 +61,12 @@ def apply_explain_result(question, result) -> list:
         if textbook_ref:
             _set('ai_references', [textbook_ref])
         around_concepts = result.get('around_concepts', [])
-        if around_concepts:
+        if around_concepts and not question.concept_keywords:
             _set('concept_keywords', around_concepts)
 
     if updated:
         question.ai_generated_at = timezone.now()
-        question.ai_model = 'RoundRobin-11'
+        question.ai_model = _model_label(service)
         question.ai_version = 'v1'
         updated += ['ai_generated_at', 'ai_model', 'ai_version']
     return updated
@@ -84,7 +92,7 @@ def generate_ai_task(question_id: int):
             topic=question.topic.name if question.topic else ''
         )
 
-        fields = apply_explain_result(question, result)
+        fields = apply_explain_result(question, result, service)
         if not fields:
             logger.warning(f"AI generation for Q{question.id} produced no usable content; nothing saved")
             return False

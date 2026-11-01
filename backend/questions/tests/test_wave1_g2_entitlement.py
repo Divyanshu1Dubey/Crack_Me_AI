@@ -355,12 +355,17 @@ class ChatAssistantTests(_Base):
         self.assertEqual(capped.data['code'], 'upgrade_required')
 
     def test_outage_sentence_refunds_the_token(self):
+        # Same failure contract as the AI Tutor (wave 2, AI-01): never a 200
+        # whose "reply" is an outage notice -- a 503 ai_unavailable when no
+        # grounded offline answer exists (the composer is pinned to "none").
         from accounts.models import TokenBalance
         balance, _ = TokenBalance.objects.get_or_create(user=self.free)
         before = balance.available_tokens
         self._patched_service(reply=OUTAGE + '\n\n📚 **References**: Harrison p.1')
-        res = self._chat(self.free)
-        self.assertEqual(res.status_code, 200)
-        self.assertNotIn('All AI services', res.data['reply'])
+        with mock.patch('ai_engine.views.compose_offline_answer', return_value=None):
+            res = self._chat(self.free)
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(res.data['code'], 'ai_unavailable')
+        self.assertNotIn('reply', res.data)
         balance.refresh_from_db()
         self.assertEqual(balance.available_tokens, before)

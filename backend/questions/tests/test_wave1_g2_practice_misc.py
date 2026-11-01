@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import Subscription
 from questions.models import (
-    Announcement, Discussion, DuplicateCluster, DuplicateMember, Question, QuestionAttempt,
+    Announcement, Discussion, DuplicateCluster, DuplicateMember, MistakeNotebook, Question, QuestionAttempt,
     QuestionBookmark, QuestionImage, QuestStreak, Subject, Topic, UserQuest,
 )
 
@@ -154,17 +154,28 @@ class StreakFreezeTests(_Base):
 
 
 class QuestionsAppMistakeRoutesTests(_Base):
-    def test_list_and_due_routes_do_not_500(self):
-        client = _client(self.premium)
-        self.assertEqual(client.get('/api/questions/mistake-notebook/').status_code, 200)
-        self.assertEqual(client.get('/api/questions/mistake-notebook/due/').status_code, 200)
+    """The questions-app copies of the Mistake Notebook routes were removed
+    (wave 2): they duplicated /api/analytics/mistake-notebook/ (the routes the
+    frontend uses) with a writable review state and a weaker add check."""
 
-    def test_adding_a_locked_question_is_paywalled(self):
+    def test_duplicate_routes_are_gone(self):
+        client = _client(self.premium)
+        for path in ('/api/questions/mistake-notebook/', '/api/questions/mistake-notebook/due/',
+                     '/api/questions/mistake-notebook/stats/', '/api/questions/mistake-notebook/1/review/'):
+            self.assertEqual(client.get(path).status_code, 404, path)
+
+    def test_post_cannot_create_or_reveal_anything(self):
         free = User.objects.create_user(username='g2-misc-free', password='unused-pw-4')
         q = _question(self.subject, 20)
         res = _client(free).post('/api/questions/mistake-notebook/', {'question': q.id}, format='json')
-        self.assertEqual(res.status_code, 402)
-        self.assertNotIn('correct_answer', res.data)
+        self.assertIn(res.status_code, (403, 404, 405))
+        self.assertNotIn('correct_answer', getattr(res, 'data', None) or {})
+        self.assertFalse(MistakeNotebook.objects.filter(user=free).exists())
+
+    def test_analytics_routes_still_serve_the_notebook(self):
+        client = _client(self.premium)
+        self.assertEqual(client.get('/api/analytics/mistake-notebook/').status_code, 200)
+        self.assertEqual(client.get('/api/analytics/mistake-notebook/due/').status_code, 200)
 
 
 class ListQueryCountTests(_Base):

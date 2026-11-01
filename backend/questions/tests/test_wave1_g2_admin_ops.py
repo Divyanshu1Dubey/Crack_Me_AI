@@ -204,9 +204,15 @@ class ResolveDisputeTests(_AdminBase):
         locked = _question(self.subject, 51, year=2031, lock_answer=True)
         verified = _question(self.subject, 52, year=2031, is_verified_by_admin=True)
         open_q = _question(self.subject, 53, year=2031)
-        with mock.patch('ai_engine.services.AIService') as service:
-            service.return_value.get_consensus_answer.return_value = 'B'
-            call_command('verify_answers', year=2031, fix=True, sleep_ms=0, stdout=StringIO())
+        # The mismatch report goes to a temp dir (it used to land in the
+        # working directory as answer_mismatches_2031.csv on every run).
+        with tempfile.TemporaryDirectory() as tmp:
+            report = os.path.join(tmp, 'mismatches.csv')
+            with mock.patch('ai_engine.services.AIService') as service:
+                service.return_value.get_consensus_answer.return_value = 'B'
+                call_command('verify_answers', year=2031, fix=True, sleep_ms=0, output=report, stdout=StringIO())
+            with open(report, encoding='utf-8') as fh:
+                self.assertIn(str(open_q.id), fh.read())
         for q, expected in ((locked, 'A'), (verified, 'A'), (open_q, 'B')):
             q.refresh_from_db()
             self.assertEqual(q.correct_answer, expected, q.id)

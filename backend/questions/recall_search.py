@@ -181,9 +181,9 @@ def recall_search(self, request):
     # requested year (or any year, if year is omitted) are visible to a
     # free authenticated user.
     if is_authed and not is_admin and not is_premium:
-        from accounts.models_freemium import FreeShowcaseQuestion  # local import
         from django.db.models import Exists, OuterRef
-        showcase_qs = FreeShowcaseQuestion.objects.filter(question_id=OuterRef("pk"))
+        from .views import free_showcase_rows  # lazy: views imports this module
+        showcase_qs = free_showcase_rows().filter(question_id=OuterRef("pk"))
         year_param = request.query_params.get("year")
         if year_param not in (None, ""):
             try:

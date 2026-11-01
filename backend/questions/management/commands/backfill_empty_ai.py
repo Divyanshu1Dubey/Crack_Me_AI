@@ -213,7 +213,7 @@ class Command(BaseCommand):
         # row half-updated. Lock flags are honoured and curated fields are
         # never blanked (see questions.tasks.apply_explain_result).
         with transaction.atomic():
-            fields = apply_explain_result(question, result)
+            fields = apply_explain_result(question, result, service)
             if not fields:
                 return False
             question.save(update_fields=fields)

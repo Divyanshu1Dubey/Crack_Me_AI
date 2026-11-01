@@ -676,6 +676,11 @@ class Flashcard(models.Model):
     review_count = models.IntegerField(default=0)
     ease_factor = models.FloatField(default=2.5, help_text="SM-2 algorithm ease factor")
     interval_days = models.IntegerField(default=1)
+    # Lifetime counters for the analytics endpoint. ``review_count`` is the
+    # SM-2 repetition number and resets on every lapse, so it cannot give a
+    # retention rate.
+    total_reviews = models.PositiveIntegerField(default=0, help_text="Reviews submitted for this card (all time)")
+    lapses = models.PositiveIntegerField(default=0, help_text="Reviews graded below 3 (forgotten)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -697,9 +702,11 @@ class Flashcard(models.Model):
         # successful reviews). A lapse restarts the sequence at n=0 so the
         # next success is scheduled 1 day out (previously the lapse left
         # n=1 and the next success jumped straight to 6 days).
+        self.total_reviews = (self.total_reviews or 0) + 1
         if quality < 3:
             self.interval_days = 1
             self.review_count = 0
+            self.lapses = (self.lapses or 0) + 1
         else:
             if self.review_count == 0:
                 self.interval_days = 1
