@@ -32,7 +32,10 @@ Safe to re-run on every deploy:
   ``lock_explanation``, ``is_verified_by_admin``) are left unchanged;
 * an archived / removed question is never re-activated;
 * admin-removed stems (``RemovedQuestion``) are not re-created;
-* a fixture pk that belongs to another exam's question is skipped.
+* a fixture pk that belongs to another exam's question (another exam_type,
+  or another exam_source under the same exam_type) is skipped;
+* the id sequences are moved past the explicit fixture pks afterwards
+  (PostgreSQL; ``loaddata`` does the same), so later inserts never collide.
 """
 from __future__ import annotations
 
@@ -99,6 +102,43 @@ def _sha256_file(path: Path, *, chunk_bytes: int = 1 << 16) -> str:
         return h.hexdigest()
     except OSError:
         return ""
+
+
+def reset_question_sequences() -> None:
+    """Move the id sequences past the explicit fixture pks, as ``loaddata``
+    does.
+
+    Fixture question rows carry their pks (the CMS fixture: 2005-6822) and
+    are written with ``update_or_create(pk=...)``. PostgreSQL does not
+    advance an identity / serial sequence for explicit ids, so on a freshly
+    seeded database the next auto-id insert (admin create, importers, recall
+    or extraction publish) got id 1, 2, ... and failed with a duplicate key
+    once it reached the first fixture pk. SQLite needs nothing (an empty list
+    of statements).
+    """
+    from django.core.management.color import no_style
+    from django.db import connection
+
+    from questions.models import Question, QuestionImage
+
+    statements = connection.ops.sequence_reset_sql(no_style(), [Question, QuestionImage, Subject, Topic])
+    if not statements:
+        return
+    with connection.cursor() as cursor:
+        for sql in statements:
+            cursor.execute(sql)
+
+
+_EXAM_SOURCE_FAMILIES = ("NEET PG", "UPSC CMS", "INI-CET", "USMLE", "FMGE")
+
+
+def _exam_source_family(value) -> str:
+    """'NEET PG (recall)' -> 'NEET PG'; other labels compare case-insensitively."""
+    text = str(value or "").strip()
+    for prefix in _EXAM_SOURCE_FAMILIES:
+        if text.upper().startswith(prefix.upper()):
+            return prefix
+    return text.lower()
 
 
 def is_admin_protected(question) -> bool:
@@ -216,6 +256,7 @@ class Command(BaseCommand):
             subj_map, topic_map = self._upsert_taxonomy(raw, exam_type, exam_track_code)
             self._rewrite_image_tokens(raw, images_dir, exam_alias)
             q_count = self._upsert_questions(raw, subj_map, topic_map, exam_track)
+            reset_question_sequences()
         self.stdout.write(self.style.SUCCESS(
             f"Loaded {fixture_path.name}: {q_count} Question rows, "
             f"{len(subj_map)} Subjects, {len(topic_map)} Topics "
@@ -604,6 +645,22 @@ class Command(BaseCommand):
                     f"  → Skipping fixture row ({pk_label}): that pk is a {existing.exam_type} question"
                 ))
                 return False
+            # Same exam_type is not enough: the old NEET PG import stored its
+            # rows as exam_type='cms' with exam_source 'NEET PG'. Overwriting
+            # one of them (its pk happens to be a fixture pk) would turn a
+            # NEET PG question -- with its attempts and bookmarks -- into a
+            # CMS one.
+            fixture_source = kwargs.get("exam_source")
+            existing_source = getattr(existing, "exam_source", "")
+            if (
+                fixture_source and existing_source
+                and _exam_source_family(existing_source) != _exam_source_family(fixture_source)
+            ):
+                skipped["other_exam"] += 1
+                self.stdout.write(self.style.WARNING(
+                    f"  → Skipping fixture row ({pk_label}): that pk is a {existing_source} question"
+                ))
+                return False
             if is_admin_protected(existing):
                 skipped["protected"] += 1
                 return False
@@ -705,7 +762,7 @@ class Command(BaseCommand):
                     exam_type=clean.get("exam_type") or exam_type,
                     subject_id=subj_pk,
                 ).only(
-                    "pk", "recall_text_hash", "question_text", "exam_type", "is_active",
+                    "pk", "recall_text_hash", "question_text", "exam_type", "exam_source", "is_active",
                     "admin_edited", "lock_answer", "lock_explanation", "is_verified_by_admin",
                 )
                 existing = None

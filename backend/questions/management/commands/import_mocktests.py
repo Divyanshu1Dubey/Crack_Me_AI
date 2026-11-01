@@ -241,7 +241,7 @@ def upload_pending_images(
             except Exception as exc:
                 logger.warning("Supabase upload failed for Q%s img %s: %s", question_id, idx, exc)
         # Fallback: write to local MEDIA_ROOT
-        digest = hashlib.sha1(blob).hexdigest()[:12]
+        digest = hashlib.sha1(blob, usedforsecurity=False).hexdigest()[:12]  # file name, not security
         rel = f"mocktest_assets/inline_{digest}.{ext}"
         out_path = Path(settings.MEDIA_ROOT) / rel
         out_path.parent.mkdir(parents=True, exist_ok=True)

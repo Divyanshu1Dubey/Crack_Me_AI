@@ -167,6 +167,28 @@ def _may_generate(allow_ai) -> bool:
     return bool(allow_ai)
 
 
+# A failed generation (every provider down, or no usable text) is not retried
+# for this long, by any caller. Producers cached nothing on failure, and once
+# a question was charged to a user's hourly budget the gate let every later
+# request through, so each GET of the section re-ran the whole provider
+# rotation (bounded only by the question-bank rate limiter).
+FAILED_GENERATION_TTL = 5 * 60
+
+
+def _recently_failed(cid, feature: str) -> bool:
+    try:
+        return bool(cache.get(_k(cid, f"{feature}:failed")))
+    except Exception:  # pragma: no cover - cache backend hiccup
+        return False
+
+
+def _remember_failure(cid, feature: str) -> None:
+    try:
+        cache.set(_k(cid, f"{feature}:failed"), 1, FAILED_GENERATION_TTL)
+    except Exception:  # pragma: no cover - cache backend hiccup
+        pass
+
+
 def _q_id(q):
     return getattr(q, "id", None) or (q.get("id") if isinstance(q, dict) else None)
 
@@ -252,12 +274,13 @@ def concept(q, allow_ai=False, *, fallback: bool = True):
     cached = cache.get(_k(cid, "concept"))
     if cached:
         return cached
-    if not _may_generate(allow_ai):
+    if _recently_failed(cid, "concept") or not _may_generate(allow_ai):
         return _fallback("concept", fallback)
     prompt = (f"In one short clause, name the underlying concept for this "
               f"NEET-PG question:\n\nQ: {_stem_text(q)}\n\nConcept:")
     out = _ai_call(prompt, max_tokens=64)
     if not out:
+        _remember_failure(cid, "concept")
         return _fallback("concept", fallback)
     cache.set(_k(cid, "concept"), out, CACHE_TTL)
     return out
@@ -277,7 +300,7 @@ def why_correct(q, options: list[str] | None = None, allow_ai=False, *, fallback
     cached = cache.get(_k(cid, "why_correct"))
     if cached:
         return cached
-    if not _may_generate(allow_ai):
+    if _recently_failed(cid, "why_correct") or not _may_generate(allow_ai):
         return _fallback("why_correct", fallback)
     correct = _correct_letter(q)
     opts = options or _options(q)
@@ -290,6 +313,7 @@ def why_correct(q, options: list[str] | None = None, allow_ai=False, *, fallback
               f"Reason (2-3 lines):")
     out = _ai_call(prompt, max_tokens=220)
     if not out:
+        _remember_failure(cid, "why_correct")
         return _fallback("why_correct", fallback)
     cache.set(_k(cid, "why_correct"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_answer", out)
@@ -363,12 +387,13 @@ def clinical_significance(q, allow_ai=False, *, fallback: bool = True):
     cached = cache.get(_k(cid, "clinical_significance"))
     if cached:
         return cached
-    if not _may_generate(allow_ai):
+    if _recently_failed(cid, "clinical_significance") or not _may_generate(allow_ai):
         return _fallback("clinical_significance", fallback)
     prompt = (f"Explain the clinical significance of this NEET-PG concept in 2 sentences:\n\n"
               f"Q: {_stem_text(q)}\nSignificance:")
     out = _ai_call(prompt, max_tokens=140)
     if not out:
+        _remember_failure(cid, "clinical_significance")
         return _fallback("clinical_significance", fallback)
     cache.set(_k(cid, "clinical_significance"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_clinical_pearl", out)
@@ -389,12 +414,13 @@ def memory_trick(q, allow_ai=False, *, fallback: bool = True):
     cached = cache.get(_k(cid, "memory_trick"))
     if cached:
         return cached
-    if not _may_generate(allow_ai):
+    if _recently_failed(cid, "memory_trick") or not _may_generate(allow_ai):
         return _fallback("memory_trick", fallback)
     prompt = (f"Give a 1-line mnemonic or memory trick to recall the answer "
               f"to:\n\nQ: {_stem_text(q)}\nMnemonic:")
     out = _ai_call(prompt, max_tokens=80)
     if not out:
+        _remember_failure(cid, "memory_trick")
         return _fallback("memory_trick", fallback)
     cache.set(_k(cid, "memory_trick"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_mnemonic", out)

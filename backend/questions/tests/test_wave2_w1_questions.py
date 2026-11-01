@@ -426,7 +426,27 @@ class ImageServeHardeningTests(_Base):
                 self._assert_hardened(res)
 
     def test_media_url_cannot_leave_media_root(self):
+        media_root = os.path.realpath(settings.MEDIA_ROOT)
+        question = self.png.question
+        # A real raster file right next to MEDIA_ROOT: a "/media/../<name>"
+        # URL resolves to it, so only the containment check keeps it out.
+        outside = tempfile.NamedTemporaryFile(dir=os.path.dirname(media_root), suffix='.png', delete=False)
+        outside.write(_png_bytes())
+        outside.close()
+        self.addCleanup(os.remove, outside.name)
+        escaped = QuestionImage.objects.create(
+            question=question, page_number=0, url=f'/media/../{os.path.basename(outside.name)}',
+        )
+        self.assertEqual(self._get(escaped).status_code, 404)
         self.assertEqual(self._get(self.traversal).status_code, 404)
+        # A file inside MEDIA_ROOT referenced by a normal /media/ URL is served.
+        with open(os.path.join(media_root, 'inside-serve.png'), 'wb') as fh:
+            fh.write(_png_bytes())
+        inside = QuestionImage.objects.create(question=question, page_number=0, url='/media/inside-serve.png')
+        res = self._get(inside)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(b''.join(res.streaming_content).startswith(b'\x89PNG'))
+        res.close()
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

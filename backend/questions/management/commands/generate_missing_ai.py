@@ -83,7 +83,8 @@ class Command(BaseCommand):
                     correct_answer=question.correct_answer,
                     selected_answer=question.correct_answer, # Treat correct answer as selected to get proper 'why_correct' context
                     subject=question.subject.name if question.subject else '',
-                    topic=question.topic.name if question.topic else ''
+                    topic=question.topic.name if question.topic else '',
+                    question_id=question.id,
                 )
                 
                 # Same rule as the AI cache task / backfill: an outage result

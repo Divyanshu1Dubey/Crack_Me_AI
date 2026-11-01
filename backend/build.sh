@@ -14,8 +14,15 @@ python manage.py collectstatic --no-input
 
 # Self-healing migration handles stale KB tables — no manual ALTER needed.
 # migrate also (re)creates the daily renewal-reminder schedule (accounts
-# post_migrate signal).
+# post_migrate signal) and the ingestion stale-job recovery schedule
+# (ingestion post_migrate signal, every 10 min on the qcluster worker).
 python manage.py migrate --no-input
+
+# Admin/staff accounts not yet linked to a Supabase identity: a DRY RUN report
+# (writes nothing, never fails the build). Review it, then run once by hand
+# (owner action, never from this script):
+#   python manage.py link_supabase_identity --all-privileged --apply
+python manage.py link_supabase_identity --all-privileged || true
 
 # Question bank seed for a fresh database (new deploy DB, staging, fresh
 # local DB): loads fixtures/cms_fixture.json -- subjects, topics, questions,
@@ -49,6 +56,14 @@ python manage.py shell -c "from pathlib import Path; from django.conf import set
 # is_active=False, needs_review=True) them, skipping admin-edited rows:
 #   python manage.py import_neet_pg --replace --dry-run   # review the counts
 #   python manage.py import_neet_pg --replace
+#
+# ONE-TIME CLEANUP, owner action (this script never runs destructive data
+# commands): releases before the seed_data fix stored its 15
+# demo questions as UPSC CMS PYQs of 2019-2023, so the live bank shows them
+# as real papers. Review the report, then apply once per database (rows an
+# admin edited, verified or answer-locked are reported and left alone):
+#   python manage.py cleanup_seed_samples                 # dry run: report only
+#   python manage.py cleanup_seed_samples --apply         # set year=0 (Expert Curated)
 
 # Knowledge Base: load ontology + whitelisted sources (idempotent)
 python manage.py load_ontology
@@ -102,8 +117,9 @@ fi
 # exists, and mirroring into a fixture inside a deploy container is pointless.)
 python manage.py relink_fixture_images --apply || true
 
-# Background jobs: ingestion / recall imports, video generation and the daily
-# renewal-reminder schedule run only while a django-q worker is up
+# Background jobs: ingestion / recall imports, video generation, the daily
+# renewal-reminder schedule and the ingestion stale-job recovery schedule run
+# only while a django-q worker is up
 # (Procfile `worker: python manage.py qcluster`). DigitalOcean App Platform
 # does not start a Procfile worker (or run `release`) on its own: add a Worker
 # component with run command `python manage.py qcluster` and the web

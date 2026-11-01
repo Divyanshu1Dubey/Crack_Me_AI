@@ -249,15 +249,18 @@ class RuntimeRoleCacheTests(_Base):
         from questions.serializers import QuestionDetailSerializer, QuestionListSerializer
         q = _question(self.subject, 800)
         img = QuestionImage.objects.create(question=q, page_number=1, role='primary')
+        # An entitled viewer: list rows of locked questions drop explanation
+        # figures (wave 3), which is not what this test is about.
+        context = {'viewer_full_access': True}
         for serializer_cls in (QuestionDetailSerializer, QuestionListSerializer):
             q.explanation = ''
             q.save()
             q.refresh_from_db()
-            self.assertEqual(serializer_cls(q).data['images'][0]['role'], 'primary')
+            self.assertEqual(serializer_cls(q, context=context).data['images'][0]['role'], 'primary')
             q.explanation = f'See [[img:{img.id}]]'
             q.save()
             q = Question.objects.prefetch_related('images').get(pk=q.pk)
-            self.assertEqual(serializer_cls(q).data['images'][0]['role'], 'explanation')
+            self.assertEqual(serializer_cls(q, context=context).data['images'][0]['role'], 'explanation')
 
 
 class AnnouncementCacheTests(_Base):
@@ -286,6 +289,11 @@ class DiscussionTests(_Base):
         self.author = User.objects.create_user(username='g2-disc-author', password='unused-pw-7')
         self.other = User.objects.create_user(username='g2-disc-other', password='unused-pw-8')
         self.thread = Discussion.objects.create(question=self.q1, user=self.author, text='Thread')
+        # Free accounts read the threads of free showcase questions only
+        # (wave 3: threads discuss the answer); these tests are about
+        # replies and moderation, so q1 is a showcase question.
+        from accounts.models_freemium import FreeShowcaseQuestion
+        FreeShowcaseQuestion.objects.create(question=self.q1, year=self.q1.year, position=9)
 
     def test_reply_must_belong_to_the_same_question(self):
         res = _client(self.other).post('/api/questions/discussions/',

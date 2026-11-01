@@ -13,7 +13,8 @@ Engineer would expect for a launch-ready deploy:
 * AI keys are not required but warn if all-round-robin keys are absent
 * ALLOWED_HOSTS doesn't include the localhost-only default
 * warn when neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set (the
-  rate limiters then see only the proxy's address)
+  rate limiters then see only the proxy's address), and when NUM_PROXIES
+  alone is missing (DRF's throttles read only that one)
 
 Called from `crack_cms/urls.py` (not under the test runner); never raises
 in dev.
@@ -61,7 +62,8 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
     frontend = os.getenv("FRONTEND_URL", "").strip()
     if not frontend:
         LOG.warning(
-            "FRONTEND_URL is unset — password-reset links will fall back to localhost."
+            "FRONTEND_URL is unset — the default CORS/CSRF trusted origins, invite links and "
+            "the robots.txt sitemap URL fall back to localhost."
         )
 
     cors = os.getenv("CORS_ALLOWED_ORIGINS", "")
@@ -76,15 +78,20 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
             "ALLOWED_HOSTS contains localhost in production — strip it for prod."
         )
 
-    if (
-        parse_num_proxies(os.getenv("NUM_PROXIES")) is None
-        and not os.getenv("TRUSTED_CLIENT_IP_HEADER", "").strip()
-    ):
+    num_proxies_unset = parse_num_proxies(os.getenv("NUM_PROXIES")) is None
+    if num_proxies_unset and not os.getenv("TRUSTED_CLIENT_IP_HEADER", "").strip():
         LOG.warning(
             "Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: behind the platform proxy "
             "the question-bank limiter counts every anonymous visitor in the proxy's bucket and "
             "DRF's anon throttles key on the client-supplied X-Forwarded-For. See the client-IP "
             "notes in crack_cms/settings.py and backend/.env.example."
+        )
+    elif num_proxies_unset:
+        # TRUSTED_CLIENT_IP_HEADER feeds the question-bank limiter only; DRF's
+        # anon / user / scoped throttles (auth, AI, local auth) read NUM_PROXIES.
+        LOG.warning(
+            "NUM_PROXIES is not set: DRF throttles key on the raw, client-controlled "
+            "X-Forwarded-For (TRUSTED_CLIENT_IP_HEADER covers the question-bank limiter only)."
         )
 
     has_any_ai_key = any(

@@ -98,11 +98,20 @@ class QuestTests(TestCase):
 
 class TestSubmitHardeningTests(TestCase):
     def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from accounts.models import Subscription
         from tests_engine.models import Test
         self.subject = Subject.objects.create(name='Audit Submit')
         self.in_test = [_question(self.subject, i) for i in range(4)]
         self.foreign = _question(self.subject, 99)
         self.user = User.objects.create_user(username='submit-u', password='x')
+        # Tests of premium-bank questions are a paid feature (/start/ answers
+        # 402 upgrade_required for free users); these tests are about scoring.
+        Subscription.objects.create(user=self.user, plan='1_year', status='active',
+                                    expires_at=timezone.now() + timedelta(days=365))
         self.test = Test.objects.create(title='Audit test', test_type='mixed', negative_marking=False)
         self.test.questions.set(self.in_test)
         self.client = APIClient()

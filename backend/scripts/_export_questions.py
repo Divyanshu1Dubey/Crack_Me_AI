@@ -1,14 +1,26 @@
-"""Export large tables using Django ORM with batch processing."""
+"""Export large tables using Django ORM with batch processing.
+
+    python scripts/_export_questions.py --output-dir <directory outside the repository>
+
+Same location rule as the other backup scripts (scripts/_safe_paths.py): the
+dumps of this folder hold user data, so they never go inside the checkout
+(this one used to write ../backup/db_dumps).
+"""
 import os
 import sys
 
 sys.stdout.reconfigure(encoding='utf-8')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _safe_paths import output_dir_from_argv  # noqa: E402
+
+OUTPUT_DIR = output_dir_from_argv(description=__doc__.splitlines()[0])
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
-import django
+import django  # noqa: E402
 django.setup()
 
-from django.apps import apps
+from django.apps import apps  # noqa: E402
 
 def export_model(app_label, model_name, batch_size=500):
     """Export a model in batches to avoid memory issues."""
@@ -31,8 +43,7 @@ def export_model(app_label, model_name, batch_size=500):
     from django.core import serializers
     data = serializers.serialize('json', all_objects)
 
-    os.makedirs('../backup/db_dumps', exist_ok=True)
-    fname = f'../backup/db_dumps/{app_label}.{model_name}.json'
+    fname = OUTPUT_DIR / f'{app_label}.{model_name}.json'
     with open(fname, 'w', encoding='utf-8') as f:
         f.write(data)
     size_kb = len(data) / 1024

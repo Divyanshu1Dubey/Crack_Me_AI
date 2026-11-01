@@ -149,12 +149,18 @@ class QuestionBankCaptureTests(TestCase):
 
 class TestSubmissionCaptureTests(TestCase):
     def setUp(self):
+        from accounts.models import Subscription
         from tests_engine.models import Test
         self.subj_a = Subject.objects.create(name='Submit A', code='SUBA')
         self.subj_b = Subject.objects.create(name='Submit B', code='SUBB')
         self.qa = [_question(self.subj_a, i) for i in (1, 2)]
         self.qb = [_question(self.subj_b, i) for i in (3, 4)]
         self.user = User.objects.create_user(username='submit-capture-u', password='x')
+        # A test made of premium-bank questions is a paid feature (/start/
+        # answers 402 upgrade_required for free users, covered in
+        # tests_engine); these tests are about mistake / study-time capture.
+        Subscription.objects.create(user=self.user, plan='1_year', status='active',
+                                    expires_at=timezone.now() + timedelta(days=365))
         self.test = Test.objects.create(title='Capture test', test_type='mixed', negative_marking=False,
                                         time_limit_minutes=30)
         self.test.questions.set(self.qa + self.qb)

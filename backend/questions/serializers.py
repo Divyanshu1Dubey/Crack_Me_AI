@@ -10,6 +10,7 @@ from .models import (
     StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook,
 )
 from .text_encoding import normalize_text
+from .image_access import is_image_serve_url, with_image_token
 import json as _json
 
 
@@ -35,6 +36,27 @@ _TEXT_FIELDS = (
 # entitled to the row's answer.
 _LIST_ANSWER_MEDIA_FIELDS = ('video_url', 'video_thumbnail', 'video_subtitles_url', 'page_screenshot')
 _LIST_ANSWER_MEDIA_RESET_FIELDS = _LIST_ANSWER_MEDIA_FIELDS + ('video_status', 'video_duration')
+
+# Textbook reference fields of a list row, blanked (same types) on rows the
+# viewer is not entitled to: ``reference_text`` is "relevant textbook content
+# that directly supports the answer", ``textbook_references`` holds excerpts
+# and a chapter title can name the diagnosis (questions.views
+# _ANSWER_REVEALING_DETAIL_FIELDS redacts the same fields in the detail).
+_LIST_REFERENCE_TEXT_FIELDS = ('reference_text', 'book_name', 'chapter', 'page_number')
+_LIST_REFERENCE_LIST_FIELDS = ('textbook_references',)
+
+# concept_tags markers that say nothing about the answer and that the
+# question-bank cards read (the "High yield" badge). Every other tag is a
+# concept term ("ventricular aneurysm", "jones criteria") that can name the
+# answer, so locked payloads keep only these.
+NON_REVEALING_CONCEPT_TAGS = frozenset({'high_yield'})
+
+
+def locked_concept_tags(tags):
+    """``concept_tags`` as shown on a question the viewer is not entitled to."""
+    if not isinstance(tags, (list, tuple)):
+        return []
+    return [tag for tag in tags if isinstance(tag, str) and tag in NON_REVEALING_CONCEPT_TAGS]
 
 
 def _instance_role_cache(serializer) -> dict:
@@ -313,14 +335,52 @@ class QuestionListSerializer(serializers.ModelSerializer):
                 data[field] = _clean_text(data[field])
         if data.get('subject_name') == 'Imported':
             data['subject_name'] = 'Expert Curated'
-        has_media = any(data.get(field) for field in _LIST_ANSWER_MEDIA_FIELDS)
-        if has_media and not self._row_answer_visible(instance):
-            # A generated explanation video explains the answer: same
-            # entitlement as the answer itself (premium / admin / showcase).
-            for field in _LIST_ANSWER_MEDIA_RESET_FIELDS:
-                if field in data:
-                    data[field] = None
+        if self._row_may_reveal(data) and not self._row_answer_visible(instance):
+            self._redact_locked_row(data)
         return data
+
+    @staticmethod
+    def _row_may_reveal(data) -> bool:
+        """True when the row carries anything that is hidden on locked rows
+        (most rows carry nothing, so the entitlement lookup is skipped)."""
+        if any(data.get(field) for field in _LIST_ANSWER_MEDIA_FIELDS):
+            return True
+        if any(data.get(field) for field in _LIST_REFERENCE_TEXT_FIELDS + _LIST_REFERENCE_LIST_FIELDS):
+            return True
+        if data.get('user_is_correct') is not None or data.get('user_selected_answer'):
+            return True
+        tags = data.get('concept_tags')
+        if isinstance(tags, list) and any(tag not in NON_REVEALING_CONCEPT_TAGS for tag in tags):
+            return True
+        return any((img or {}).get('role') == 'explanation' for img in (data.get('images') or []))
+
+    @staticmethod
+    def _redact_locked_row(data) -> None:
+        """Hide answer-linked content of a row the viewer is not entitled to
+        (premium / admin / free showcase), keeping each field's type."""
+        # A generated explanation video explains the answer: same
+        # entitlement as the answer itself.
+        for field in _LIST_ANSWER_MEDIA_RESET_FIELDS:
+            if field in data:
+                data[field] = None
+        for field in _LIST_REFERENCE_TEXT_FIELDS:
+            if field in data:
+                data[field] = ''
+        for field in _LIST_REFERENCE_LIST_FIELDS:
+            if field in data:
+                data[field] = []
+        if 'concept_tags' in data:
+            data['concept_tags'] = locked_concept_tags(data.get('concept_tags'))
+        # The viewer's own right / wrong on a locked row (answered while a
+        # plan was active) names its answer. The pick goes too: the cards
+        # render a pick without a verdict as "Incorrect".
+        for field in ('user_is_correct', 'user_selected_answer'):
+            if field in data:
+                data[field] = None
+        if isinstance(data.get('images'), list):
+            # Explanation figures belong to the explanation (``stem_images``
+            # never carries them).
+            data['images'] = [img for img in data['images'] if (img or {}).get('role') != 'explanation']
 
     def _viewer_full_access(self) -> bool:
         """Premium / admin / staff viewer -- computed once per response."""
@@ -500,16 +560,22 @@ class QuestionListSerializer(serializers.ModelSerializer):
                     url = self._resolve_image_url(img)
             except Exception:
                 url = self._resolve_image_url(img) or ''
+            # Bug fix 2026-08-01 (belt-and-suspenders): reclassify the role
+            # at response time so stale admin uploads with the wrong role
+            # are corrected before reaching the client. `get_stem_images`
+            # then drops these rows from the stem-pane list. See
+            # _resolve_runtime_role.
+            role = self._resolve_runtime_role(obj, img)
+            if role == 'explanation' and is_image_serve_url(url) and self._row_answer_visible(obj):
+                # The serve endpoint returns an explanation figure only with
+                # a signed token, issued to viewers entitled to the answer
+                # (questions.image_access).
+                url = with_image_token(url, img.id)
             out.append({
                 'id': img.id,
                 'page_number': img.page_number,
                 'image_index_in_page': img.image_index_in_page,
-                # Bug fix 2026-08-01 (belt-and-suspenders): reclassify
-                # the role at response time so stale admin uploads with
-                # the wrong role are corrected before reaching the
-                # client. `get_stem_images` then drops these rows from
-                # the stem-pane list. See _resolve_runtime_role.
-                'role': self._resolve_runtime_role(obj, img),
+                'role': role,
                 'modality': img.modality,
                 'mime': img.mime,
                 'width': img.width,
@@ -627,6 +693,9 @@ class QuestionAdminListSerializer(QuestionListSerializer):
             # The editor's checkbox starts from the real value, and the
             # first save of a list row can send ``If-Match: <updated_at>``.
             'is_controversial', 'updated_at',
+            # Contract C10: the editor's drag-renumber refuses removed
+            # (inactive) rows, so admin rows say whether they are active.
+            'is_active',
         ]
 
 
@@ -638,6 +707,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     is_bookmarked = serializers.SerializerMethodField()
     effective_answer = serializers.SerializerMethodField()
     effective_explanation = serializers.SerializerMethodField()
+    explanation_overridden = serializers.SerializerMethodField()
     effective_mnemonic = serializers.SerializerMethodField()
     effective_references = serializers.SerializerMethodField()
     revision_count = serializers.SerializerMethodField()
@@ -700,6 +770,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             'concept_keywords', 'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
             'is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note',
             'similar', 'is_bookmarked', 'effective_answer', 'effective_explanation',
+            'explanation_overridden',
             'effective_mnemonic', 'effective_references', 'revision_count', 'last_revision_at',
             'user_selected_answer', 'user_is_correct', 'video_url', 'video_status',
             'video_thumbnail', 'video_duration', 'video_version', 'video_error',
@@ -730,15 +801,20 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
                     url = self._build_image_serve_url(img) or self._resolve_image_url(img)
             except Exception:
                 url = self._resolve_image_url(img) or ''
+            # Bug fix 2026-08-01 (belt-and-suspenders): reclassify the role
+            # at response time so stale admin uploads with the wrong role
+            # are corrected before reaching the client. See
+            # _resolve_runtime_role.
+            role = self._resolve_runtime_role(obj, img)
+            if role == 'explanation' and is_image_serve_url(url) and self._viewer_can_view_answer(obj):
+                # Explanation figures are served only with a signed token
+                # (questions.image_access), issued to entitled viewers.
+                url = with_image_token(url, img.id)
             out.append({
                 'id': img.id,
                 'page_number': img.page_number,
                 'image_index_in_page': img.image_index_in_page,
-                # Bug fix 2026-08-01 (belt-and-suspenders): reclassify
-                # the role at response time so stale admin uploads with
-                # the wrong role are corrected before reaching the
-                # client. See _resolve_runtime_role.
-                'role': self._resolve_runtime_role(obj, img),
+                'role': role,
                 'modality': img.modality,
                 'mime': img.mime,
                 'width': img.width,
@@ -761,6 +837,23 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         mnemonic / concept_explanation text via the same ID lookup.
         """
         return [img for img in self.get_images(obj) if img.get('role') != 'explanation']
+
+    def _viewer_can_view_answer(self, obj) -> bool:
+        """``questions.views.user_can_view_answer`` for the requesting user,
+        memoised per question for this response (``get_images`` runs for
+        both ``images`` and ``stem_images``)."""
+        memo = self.__dict__.setdefault('_viewer_answer_access_memo', {})
+        if obj.pk not in memo:
+            from .views import user_can_view_answer  # views imports this module
+            context = self.context if hasattr(self, 'context') else {}
+            request = context.get('request')
+            # QuestionViewSet puts "staff or premium" in the context.
+            full_access = context.get('viewer_full_access')
+            memo[obj.pk] = bool(full_access) or user_can_view_answer(
+                getattr(request, 'user', None), obj,
+                premium=None if full_access is None else bool(full_access),
+            )
+        return memo[obj.pk]
 
     def _resolve_image_url(self, img):
         """Pick the best URL for a QuestionImage — proxy or stored public URL."""
@@ -839,6 +932,13 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
 
     def get_effective_explanation(self, obj):
         return effective_explanation_for(obj)
+
+    def get_explanation_overridden(self, obj):
+        # An admin lock / override decides the explanation
+        # (effective_explanation_for serves it first), so the practice UI
+        # (frontend practiceData.pickExplanation) shows effective_explanation
+        # ahead of the raw curated ``explanation`` when this is true.
+        return bool(obj.lock_explanation or (obj.admin_explanation_override or '').strip())
 
     def get_effective_mnemonic(self, obj):
         if obj.admin_mnemonic_override:

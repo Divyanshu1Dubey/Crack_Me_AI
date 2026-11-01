@@ -221,15 +221,21 @@ def _option_signature(option_b, option_c):
     return norm(option_b), norm(option_c)
 
 
-def _row_matches_item(row, new_hashes, signature):
+def _row_matches_item(row, new_hashes, signature, belongs_elsewhere=None):
     """Whether ``row`` (found by display_number) really is this question:
     same current stem, same B/C options, or admin-protected (an admin may
-    have rewritten both; such rows are never updated anyway)."""
-    if row.admin_edited or row.lock_answer:
-        return True
+    have rewritten both; such rows are never updated anyway) -- unless the
+    protected row's content is clearly another parsed question's
+    (``belongs_elsewhere(row)``): its number is then a backfill ordinal, and
+    claiming it here left that question without its row (created again as a
+    duplicate) and this question's real row unrepaired."""
     if compute_stem_hash(row.question_text or "") in new_hashes:
         return True
-    return _option_signature(row.option_b, row.option_c) == signature
+    if _option_signature(row.option_b, row.option_c) == signature:
+        return True
+    if row.admin_edited or row.lock_answer:
+        return not (belongs_elsewhere is not None and belongs_elsewhere(row))
+    return False
 
 
 def _adopt_legacy_row(item, new_hashes, all_hashes, rows_by_hash, claimed):
@@ -424,12 +430,31 @@ class Command(BaseCommand):
         # backfill_display_number.py / `audit_questions --apply` store
         # ordinals in display_number, and trusting those made the default
         # mode create duplicates and --replace rewrite the wrong rows.
+        # The same two content keys _row_matches_item uses (current stem, B/C
+        # options -- the old parser cut stems, so its stems are not keys).
+        item_keys = {}
+        for item in parsed:
+            item_keys.setdefault(item["number"], (
+                _stem_hashes(item["question_text"]),
+                _option_signature(normalize_text(item["option_b"]), normalize_text(item["option_c"])),
+            ))
+
+        def content_of_another_item(number):
+            def check(row):
+                row_hash = compute_stem_hash(row.question_text or "")
+                row_signature = _option_signature(row.option_b, row.option_c)
+                return any(
+                    other != number and (row_hash in hashes or (any(row_signature) and row_signature == sig))
+                    for other, (hashes, sig) in item_keys.items()
+                )
+            return check
+
         by_number = {}
         for item in parsed:
             new_hashes = _stem_hashes(item["question_text"])
             signature = _option_signature(normalize_text(item["option_b"]), normalize_text(item["option_c"]))
             for q in rows_by_number.get(item["number"], []):
-                if _row_matches_item(q, new_hashes, signature):
+                if _row_matches_item(q, new_hashes, signature, content_of_another_item(item["number"])):
                     by_number[item["number"]] = q
                     break
         numbered_pks = {q.pk for q in by_number.values()}

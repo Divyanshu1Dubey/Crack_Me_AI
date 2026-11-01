@@ -1,18 +1,39 @@
+"""Restore a questions backup (Django fixture JSON, UTF-16 or UTF-8).
+
+    python scripts/restore_backup.py <path to the backup file, outside the repository>
+
+Questions an admin edited are left alone. The backup holds student activity
+(attempts, discussions, bookmarks, feedback), so it is kept outside the
+repository (scripts/_safe_paths.py); this script used to read
+backend/questions_backup.json, a tracked copy of such a dump.
+"""
+import argparse
 import json
 import os
 import sys
-import django
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
-django.setup()
 
-from django.core.serializers import deserialize
-from questions.models import Question
+from _safe_paths import external_path  # noqa: E402
 
-def run():
-    backup_path = os.path.join(os.path.dirname(__file__), '..', 'questions_backup.json')
-    if not os.path.exists(backup_path):
+
+def _backup_path_from_argv(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('backup_path', help='Backup fixture to restore (a file outside the repository).')
+    return external_path(parser.parse_args(argv).backup_path, what='the backup path')
+
+
+def run(backup_path):
+    import django
+
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
+    django.setup()
+
+    from django.core.serializers import deserialize
+    from questions.models import Question
+
+    if not backup_path.is_file():
         print(f"Backup file not found at {backup_path}")
         return
 
@@ -59,5 +80,6 @@ def run():
     print(f"Questions restored/updated: {restored}")
     print(f"Admin-edited questions protected (skipped): {skipped}")
 
+
 if __name__ == '__main__':
-    run()
+    run(_backup_path_from_argv())

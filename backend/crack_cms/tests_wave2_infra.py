@@ -357,30 +357,34 @@ class CiWorkflowTests(SimpleTestCase):
         return next(step for step in self.jobs[job]["steps"] if needle in str(step.get("run", "")))
 
     def test_secret_scan_is_a_blocking_step(self):
-        step = self._step("security", "scan_secrets.py")
+        # Its own job (wave 3): as the first step of `security`, a finding
+        # skipped the Bandit report and gate after it.
+        step = self._step("secret-scan", "scan_secrets.py")
         self.assertEqual(step["run"].strip(), "python scripts/scan_secrets.py --all-tracked")
         self.assertNotIn("continue-on-error", step)
-        steps = self.jobs["security"]["steps"]
+        self.assertNotIn("continue-on-error", self.jobs["secret-scan"])
+        steps = self.jobs["secret-scan"]["steps"]
         setup_python = next(i for i, s in enumerate(steps) if "setup-python" in str(s.get("uses", "")))
         self.assertGreater(steps.index(step), setup_python)
+        self.assertFalse([s for s in self.jobs["security"]["steps"] if "scan_secrets" in str(s.get("run", ""))])
+        self.assertNotIn("needs", self.jobs["security"])
 
-    def test_bandit_gate_uses_the_per_site_baseline_not_a_tree_wide_b324_skip(self):
+    def test_bandit_gate_has_no_baseline_and_no_b324_skip(self):
+        # Every cache-key / fingerprint hash passes usedforsecurity=False, so
+        # the gate needs no exemptions: a new weak hash anywhere fails it.
         gate = self._step("security", "-lll -iii")["run"]
         self.assertNotIn("B324", gate)
-        self.assertIn("-b .bandit-baseline.json", gate)
-        baseline = json.loads((REPO_ROOT / ".bandit-baseline.json").read_text(encoding="utf-8"))
-        self.assertTrue(baseline["results"])
-        for entry in baseline["results"]:
-            self.assertEqual(entry["test_id"], "B324")
-            self.assertTrue(entry["filename"].startswith("backend/"), entry["filename"])
-            self.assertNotIn("\\", entry["filename"])
-            self.assertTrue((REPO_ROOT / entry["filename"]).exists(), entry["filename"])
+        self.assertNotIn("-b ", gate)
+        self.assertFalse((REPO_ROOT / ".bandit-baseline.json").exists())
         self.assertFalse((REPO_ROOT / ".bandit.yml").exists())
 
     def test_frontend_unit_tests_run_on_node_22(self):
         job = self.jobs["frontend-unit"]
         node = next(s for s in job["steps"] if "setup-node" in str(s.get("uses", "")))
         self.assertEqual(str(node["with"]["node-version"]), "22")
+        # The newest 22.x (>= 22.18 strips TypeScript types), not an older
+        # 22.x cached on the runner image.
+        self.assertIs(node["with"].get("check-latest"), True)
         self.assertEqual(self._step("frontend-unit", "test:unit")["run"].strip(), "npm run test:unit")
         scripts = json.loads((REPO_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]
         self.assertIn("--test", scripts["test:unit"])

@@ -72,10 +72,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # node --test runs the TypeScript tests directly: Node >= 22.18 strips
-      # types natively (the build job stays on Node 20).
+      # types natively (the build job stays on Node 20). check-latest makes
+      # setup-node resolve the newest 22.x instead of an older 22.x that may
+      # be cached on the runner image.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          check-latest: true
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -83,8 +86,11 @@ jobs:
       - name: Unit tests (tests/unit)
         run: npm run test:unit
 
-  security:
-    name: Security Scanning
+  # Its own job: a finding fails this job only, so the Bandit SAST report and
+  # gate in `security` still run (as one step of that job, a failing scan
+  # skipped every later step).
+  secret-scan:
+    name: Secret and Personal-Data Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +101,15 @@ jobs:
       # (the pre-commit hook is opt-in). Output shows labels and lengths only.
       - name: Secret and personal-data scan
         run: python scripts/scan_secrets.py --all-tracked
+
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install security tools
         run: pip install bandit safety
       # Full report (every severity and confidence) for review; never fails.
@@ -104,13 +119,11 @@ jobs:
         run: bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -f json -o bandit-report.json --exit-zero
       # Gate: fail on high-severity, high-confidence findings. Previously any
       # finding at all (even LOW) failed the job, so it was always red and the
-      # report was never uploaded. The known md5/sha1 cache-key and
-      # fingerprint calls (B324) are exempted one by one in
-      # .bandit-baseline.json instead of skipping B324 everywhere, so a new
-      # weak hash in any other file still fails the gate; they stay in the
-      # uploaded report.
+      # report was never uploaded. There is no baseline and no B324 skip:
+      # cache-key and fingerprint hashes pass usedforsecurity=False, so any
+      # new weak hash used without it fails the gate.
       - name: Bandit gate (high severity, high confidence)
-        run: bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -lll -iii -b .bandit-baseline.json
+        run: bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -lll -iii
       - name: Upload Bandit report
         if: always()
         uses: actions/upload-artifact@v4

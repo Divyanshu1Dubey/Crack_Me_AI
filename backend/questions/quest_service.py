@@ -59,9 +59,11 @@ def _progress_for(user, quest_type: str, day) -> int | None:
         start = timezone.make_aware(datetime.combine(day, time.min), tz)
         # Only a test the student actually answered counts: an empty submit
         # earns no XP / DailyActivity, so it must not finish the quest either.
+        # Nor does a late submission (TestAttempt.is_late): its XP is
+        # withheld, and claiming the quest would pay XP for it after all.
         return TestAttempt.objects.filter(
             Q(correct_count__gt=0) | Q(incorrect_count__gt=0),
-            user=user, is_completed=True,
+            user=user, is_completed=True, is_late=False,
             completed_at__gte=start, completed_at__lt=start + timedelta(days=1),
         ).count()
     if quest_type == 'review_mistakes':

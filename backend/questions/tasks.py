@@ -89,7 +89,9 @@ def generate_ai_task(question_id: int):
             correct_answer=question.correct_answer,
             selected_answer=question.correct_answer,
             subject=question.subject.name if question.subject else '',
-            topic=question.topic.name if question.topic else ''
+            topic=question.topic.name if question.topic else '',
+            # Cached under the question's own key, the one explain-answer reads.
+            question_id=question.id,
         )
 
         fields = apply_explain_result(question, result, service)

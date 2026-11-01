@@ -14,6 +14,7 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from crack_cms.client_ip import parse_num_proxies
+from crack_cms.db_config import server_side_cursors_unsupported
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -283,6 +284,14 @@ if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
     if IS_PRODUCTION_RUNTIME:
         db_options.setdefault('sslmode', 'require')
 
+    # Supabase's transaction pooler (port 6543) may run each transaction on
+    # another server connection, so a server-side cursor (QuerySet.iterator())
+    # cannot be read past its transaction: Django's documented setting for
+    # transaction pooling. DB_DISABLE_SERVER_SIDE_CURSORS=true/false overrides
+    # the detection (crack_cms/db_config.py).
+    if server_side_cursors_unsupported(DATABASES['default'], os.getenv('DB_DISABLE_SERVER_SIDE_CURSORS')):
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
     force_ipv4_default = 'true' if IS_PRODUCTION_RUNTIME else 'false'
     force_ipv4 = os.getenv('DB_FORCE_IPV4', force_ipv4_default).lower() == 'true'
     if force_ipv4:
@@ -343,14 +352,24 @@ AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 #   1. Look at what the edge sends: as an admin, GET /api/health/client-ip/
 #      echoes REMOTE_ADDR, X-Forwarded-For and the platform client-IP
 #      headers of your own request (crack_cms/diagnostics.py).
-#   2. TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP (App Platform) or
-#      CF-Connecting-IP (Cloudflare proxy) when that header holds your
-#      address and Django cannot be reached around that edge.
+#   2. TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP on DigitalOcean App
+#      Platform: DO's own edge sets it on every request. Do not use
+#      CF-Connecting-IP there -- the default *.ondigitalocean.app hostname
+#      stays reachable around Cloudflare, and a client can send that header
+#      itself. Verify before relying on it: send a forged
+#      CF-Connecting-IP / DO-Connecting-IP to /api/health/client-ip/ and
+#      check which value reaches Django.
 #   3. NUM_PROXIES=<n> where X-Forwarded-For ends with your address followed
 #      by n-1 proxy addresses (usually 1). DRF's throttles read only this
-#      one, so set it as well.
+#      one, so set it as well -- TRUSTED_CLIENT_IP_HEADER alone leaves DRF
+#      keying on the raw X-Forwarded-For (security_posture_check warns).
 NUM_PROXIES = parse_num_proxies(os.getenv('NUM_PROXIES'))
 TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
+# The one edge country header analytics ingest trusts
+# (analytics/views_internal.py), e.g. CF-IPCountry or X-Vercel-IP-Country;
+# 'none' stores no country. Unset: the country header of the edge
+# TRUSTED_CLIENT_IP_HEADER names, otherwise CF-IPCountry.
+ANALYTICS_COUNTRY_HEADER = os.getenv('ANALYTICS_COUNTRY_HEADER', '').strip()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -535,6 +554,11 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     # the cross-origin preflight fails and the save never reaches the API.
     "if-match",
 ]
+# Response headers cross-origin JavaScript may read. The question-bank
+# limiter's 429 carries Retry-After, and the bank's automatic retry waits
+# that long; without exposing it the browser hides the header and the client
+# fell back to a fixed 5 s.
+CORS_EXPOSE_HEADERS = ["Retry-After"]
 CORS_MAX_AGE = 86400  # 24 hours — browsers cache preflight responses
 
 # CSRF trusted origins (needed for production)
@@ -799,6 +823,18 @@ Q_CLUSTER = {
     'queue_limit': 500,
     'cpu_affinity': 1,
     'label': 'Django Q',
-    'orm': 'default'
+    'orm': 'default',
+    # A task that raises or is killed at the timeout is never acknowledged
+    # (ack_failures is off), so the ORM broker re-presents it every 'retry'
+    # seconds; django-q2's default 0 means for ever. Ingestion and the recall
+    # importers treat a re-delivery as a no-op or mark the job failed; this
+    # bounds every other task (video_engine.tasks, questions.tasks).
+    'max_attempts': 3,
 }
+
+# Ingestion stale-job recovery (ingestion/schedules.py, orchestrator.py):
+# minutes between the scheduled recovery passes (0 removes the schedule) and
+# how often one job is re-queued automatically after losing its worker.
+INGESTION_RECOVERY_SCHEDULE_MINUTES = _env_int('INGESTION_RECOVERY_SCHEDULE_MINUTES', 10)
+INGESTION_MAX_AUTO_RESUMES = _env_int('INGESTION_MAX_AUTO_RESUMES', 2)
 

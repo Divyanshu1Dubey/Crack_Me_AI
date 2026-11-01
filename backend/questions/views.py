@@ -33,8 +33,9 @@ from .serializers import (
     AdminAIPromptVersionSerializer, QuestionAIOperationLogSerializer, QuestionRevisionSnapshotSerializer,
     TopicNoteSerializer, StudyTimeBreakdownSerializer,
     UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
-    effective_explanation_for, _clean_text,
+    effective_explanation_for, _clean_text, locked_concept_tags, resolve_runtime_image_role,
 )
+from .image_access import TOKEN_PARAM as IMAGE_TOKEN_PARAM, image_token_is_valid
 from .recall_serializers import (
     # Used directly here:
     RecallSourceSerializer,
@@ -64,6 +65,16 @@ def _truthy(value) -> bool:
     return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
 
 
+def _stored_value_differs(stored, value) -> bool:
+    """True when writing ``value`` changes the stored field content
+    (text compared without surrounding whitespace)."""
+    if stored == value:
+        return False
+    if isinstance(stored, (list, dict)) or isinstance(value, (list, dict)):
+        return True
+    return str(stored or '').strip() != str(value or '').strip()
+
+
 def _question_list_cache_version(user_id) -> int:
     try:
         return int(cache.get(f'qlist_ver:{user_id}') or 0)
@@ -88,6 +99,34 @@ def _bump_question_list_cache_version(user_id) -> None:
 # silently overwrote admin edits and revived archived / removed questions
 # (loaddata ignores RemovedQuestion tombstones). Seeding is a deploy step
 # (build.sh), never a side effect of a web request.
+
+
+# ``exam_source`` labels of one exam's bank. Recall imports add a suffix
+# ("NEET PG (recall)", "INI-CET (recall)"), and older INI-CET imports stored
+# the unhyphenated "INICET".
+INI_CET_SOURCE_PREFIXES = ('INI-CET', 'INICET')
+_EXAM_SOURCE_FILTER_PREFIXES = (
+    ('NEET PG', ('NEET PG',)),
+    ('UPSC CMS', ('UPSC CMS',)),
+    ('INI-CET', INI_CET_SOURCE_PREFIXES),
+    ('INICET', INI_CET_SOURCE_PREFIXES),
+    ('USMLE', ('USMLE',)),
+    ('FMGE', ('FMGE',)),
+)
+
+
+def exam_source_filter_q(exam_source: str) -> Q:
+    """``?exam_source=`` of the question list and years endpoints: the exact
+    label, or -- for a known exam -- every label of that exam's bank, so
+    ``NEET PG`` also matches ``NEET PG (recall)`` and ``INI-CET`` also
+    matches ``INI-CET (recall)`` and ``INICET``."""
+    exam_q = Q(exam_source=exam_source)
+    for label, prefixes in _EXAM_SOURCE_FILTER_PREFIXES:
+        if exam_source.startswith(label):
+            for prefix in prefixes:
+                exam_q |= Q(exam_source__startswith=prefix)
+            break
+    return exam_q
 
 
 # ── Question-bank entitlement (freemium) ─────────────────────────────────
@@ -175,10 +214,20 @@ _ANSWER_REVEALING_DETAIL_FIELDS = (
     'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
     'effective_answer', 'effective_explanation', 'effective_mnemonic',
     'effective_references', 'verified_note',
+    # Part of the explanation payload (an admin lock / override decides the
+    # explanation); the practice UI treats anything but ``true`` as false.
+    'explanation_overridden',
     'video_url', 'video_status', 'video_thumbnail', 'video_duration',
     'video_version', 'video_error', 'video_generated_at', 'video_subtitles_url',
     # "Screenshot of textbook page where answer is discussed" (model help).
     'page_screenshot',
+    # Textbook reference: ``reference_text`` is "relevant textbook content
+    # that directly supports the answer" (admin AI generation fills it),
+    # ``textbook_references`` holds excerpts, and a chapter title can name
+    # the diagnosis.
+    'reference_text', 'textbook_references', 'book_name', 'chapter', 'page_number',
+    # The caller's own verdict on a locked question identifies its answer.
+    'user_is_correct',
 )
 
 
@@ -188,6 +237,8 @@ def _redact_question_detail(data: dict) -> dict:
     for field in _ANSWER_REVEALING_DETAIL_FIELDS:
         if field in data:
             data[field] = None
+    if 'concept_tags' in data:
+        data['concept_tags'] = locked_concept_tags(data.get('concept_tags'))
     # Explanation figures belong to the explanation, not to the stem.
     for key in ('images', 'stem_images'):
         if isinstance(data.get(key), list):
@@ -226,10 +277,17 @@ def _question_explanation_payload(question) -> dict:
     so the UI can show the explanation right after a pick without a second
     request:
 
-    * ``explanation`` -- the curated text ('' when there is none);
+    * ``explanation`` -- the curated text ('' when there is none), or the
+      admin's explanation override when one is set (locked or not): the
+      practice UI prefers a non-blank ``explanation``, so an admin
+      correction of a curated explanation must arrive here as well;
     * ``effective_explanation`` -- what a student should read (admin
       override / parsed AI explanation / curated text), never blank: a
       short "correct answer is X" note when nothing has been written yet;
+    * ``explanation_overridden`` -- True when an admin lock or a non-blank
+      override decides the explanation (the detail serializer's flag of the
+      same name), so the practice UI (practiceData.pickExplanation) shows
+      ``effective_explanation`` ahead of the curated text;
     * ``mnemonic`` -- the effective mnemonic (admin override, usable AI
       mnemonic, curated), '' when there is none.
 
@@ -237,7 +295,8 @@ def _question_explanation_payload(question) -> dict:
     """
     from .ai_per_question import usable_ai_text
 
-    explanation = _clean_text(question.explanation or '')
+    override = (question.admin_explanation_override or '').strip()
+    explanation = _clean_text(override or question.explanation or '')
     effective = _clean_text(usable_ai_text(effective_explanation_for(question)) or '')
     mnemonic = (
         usable_ai_text(question.admin_mnemonic_override)
@@ -249,6 +308,7 @@ def _question_explanation_payload(question) -> dict:
         'effective_explanation': (
             effective.strip() or explanation.strip() or _answer_fallback_explanation(question)
         ),
+        'explanation_overridden': bool(question.lock_explanation or override),
         'mnemonic': _clean_text(mnemonic or ''),
     }
 
@@ -323,7 +383,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         except (TypeError, ValueError):
             version = 0
         query = request.META.get('QUERY_STRING') or ''
-        digest = hashlib.md5(query.encode()).hexdigest()
+        digest = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()  # cache key, not security
         return f'announcements:list:v{version}:u{request.user.pk}:{digest}'
 
     def _invalidate_list_cache(self):
@@ -421,12 +481,30 @@ def _question_list_related(queryset, prefix: str = ''):
     ).prefetch_related(f'{prefix}images', _cluster_memberships_prefetch(prefix))
 
 
+class IdTiebreakOrderingFilter(filters.OrderingFilter):
+    """``?ordering=`` with a final ``id`` tiebreak.
+
+    ``ordering=paper,display_number`` leaves rows that share a number (or
+    have none) in an arbitrary database order, so page N and page N+1 could
+    overlap or skip rows -- the admin editor's drag-renumber relies on pages
+    being stable, contiguous slices. Requests that already order by id keep
+    their own direction.
+    """
+
+    def get_ordering(self, request, queryset, view):
+        ordering = super().get_ordering(request, queryset, view)
+        if ordering and not any(str(term).lstrip('-') in ('id', 'pk') for term in ordering):
+            ordering = [*ordering, 'id']
+        return ordering
+
+
 class QuestionViewSet(viewsets.ModelViewSet):
     """Full CRUD for questions with filtering, search, and bookmark support."""
     queryset = Question.objects.select_related('subject', 'topic', 'verified_by').prefetch_related(
         'images', 'recall_sources', 'feedbacks', 'similar_questions', _cluster_memberships_prefetch(),
         'revision_snapshots',
     ).all()
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, IdTiebreakOrderingFilter]
     # NOTE: exam_source is NOT in filterset_fields on purpose — Bug #6
     # (2026-07-25) discovered that DjangoFilterBackend's exact-match
     # behaviour rejects valid labels like 'NEET PG (recall)' when the
@@ -440,13 +518,15 @@ class QuestionViewSet(viewsets.ModelViewSet):
     ]
     # ``display_number`` / ``paper``: the admin questions editor orders a
     # paper by ``?ordering=paper,display_number`` (OrderingFilter dropped
-    # unknown fields, so rows came back -id).
+    # unknown fields, so rows came back -id). IdTiebreakOrderingFilter adds
+    # the final ``id`` when the request does not order by it.
     ordering_fields = ['year', 'difficulty', 'created_at', 'paper', 'display_number', 'id']
 
-    # Text search. ``explanation`` is searchable only for callers who may
-    # read explanations: otherwise ``?search=<option text>`` worked as an
-    # oracle on a locked question's explanation (200 vs empty / 404).
-    _SEARCH_FIELDS_PUBLIC = ['question_text', 'concept_tags']
+    # Text search. ``explanation`` and ``concept_tags`` are searchable only
+    # for callers who may read them: otherwise ``?search=<option text>``
+    # worked as an oracle on a locked question's explanation or concept
+    # tags (a tag such as "ventricular aneurysm" can be the answer).
+    _SEARCH_FIELDS_PUBLIC = ['question_text']
     _SEARCH_FIELDS_FULL = ['question_text', 'explanation', 'concept_tags']
 
     @property
@@ -587,12 +667,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # way the stats endpoint already does (see _exam_source_q()).
         exam_source_param = self.request.query_params.get('exam_source')
         if exam_source_param:
-            exam_q = Q(exam_source=exam_source_param)
-            for prefix in ('NEET PG', 'UPSC CMS', 'INI-CET', 'USMLE', 'FMGE'):
-                if exam_source_param.startswith(prefix):
-                    exam_q = exam_q | Q(exam_source__startswith=prefix)
-                    break
-            queryset = queryset.filter(exam_q)
+            queryset = queryset.filter(exam_source_filter_q(exam_source_param))
         admin_actions = {
             'create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate',
             'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload',
@@ -704,7 +779,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     ),
                 ).order_by('shuffle_slot', '-id')
             if user and getattr(user, 'is_authenticated', False):
+                from django.db.models import BooleanField
                 from questions.models import QuestionAttempt
+                user_is_correct = Subquery(
+                    QuestionAttempt.objects.filter(question_id=OuterRef('pk'), user=user).values('is_correct')[:1]
+                )
+                if not (is_admin or _is_staff_user(user) or self._user_is_premium()):
+                    # Right / wrong on a question outside the free showcase
+                    # (e.g. answered while a plan was active) identifies its
+                    # answer: hidden from the row and from ?incorrect=.
+                    user_is_correct = Case(
+                        When(is_showcase=True, then=user_is_correct),
+                        default=Value(None),
+                        output_field=BooleanField(),
+                    )
                 queryset = queryset.annotate(
                     is_bookmarked=Exists(
                         QuestionBookmark.objects.filter(question_id=OuterRef('pk'), user=user)
@@ -712,9 +800,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     user_selected_answer=Subquery(
                         QuestionAttempt.objects.filter(question_id=OuterRef('pk'), user=user).values('selected_answer')[:1]
                     ),
-                    user_is_correct=Subquery(
-                        QuestionAttempt.objects.filter(question_id=OuterRef('pk'), user=user).values('is_correct')[:1]
-                    )
+                    user_is_correct=user_is_correct,
                 )
 
         question_id = self.request.query_params.get('question_id')
@@ -831,7 +917,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         tier = 'premium' if (is_authenticated and self._user_is_premium()) else 'free'
         version = _question_list_cache_version(user_id) if is_authenticated else 0
         filter_parts = [f'{k}={request.query_params.get(k, "")}' for k in sorted(request.query_params.keys())]
-        digest = hashlib.md5('&'.join(filter_parts).encode()).hexdigest()
+        digest = hashlib.md5('&'.join(filter_parts).encode(), usedforsecurity=False).hexdigest()  # cache key
         cache_key = f'qlist:{user_id}:{tier}:v{version}:{digest}'
         cached = cache.get(cache_key)
         if cached is not None:
@@ -1278,8 +1364,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         is_free_user = (
             user is not None
             and getattr(user, 'is_authenticated', False)
-            and not getattr(user, 'is_admin', False)
-            and not getattr(user, 'is_superuser', False)
+            and not _is_staff_user(user)
             and not _is_premium(user)
         )
         if is_free_user and ids:
@@ -1468,19 +1553,23 @@ class QuestionViewSet(viewsets.ModelViewSet):
             confidence = int(request.data.get("confidence", 0)) or None
         except (TypeError, ValueError):
             confidence = None
-        correct_answer = (q.correct_answer or "").upper()[:1]
-        is_correct = bool(answer) and answer == correct_answer
+        correct_answer = (q.correct_answer or "").strip().upper()[:1]
+        # No answer key: the pick cannot be graded. Nothing is recorded as an
+        # attempt or a mistake (the time still counts as study time); the
+        # response carries ``correct_answer: ''`` and ``is_correct: null``.
+        gradable = bool(correct_answer)
+        is_correct = bool(answer) and gradable and answer == correct_answer
         payload = _practice_experience.submit_attempt(
             q, request.user,
-            answer=answer, correct=is_correct,
+            answer=answer if gradable else "", correct=is_correct,
             time_spent=time_spent, confidence=confidence,
         )
         created = payload.pop("created", False)
-        if answer:
+        if answer and gradable:
             _invalidate_user_question_caches(request.user.id)
         payload.update({
-            "is_correct": is_correct,
-            "correct_answer": q.correct_answer,
+            "is_correct": is_correct if gradable else None,
+            "correct_answer": correct_answer,
             "created": created,
             **_question_explanation_payload(q),
         })
@@ -1518,7 +1607,10 @@ class QuestionViewSet(viewsets.ModelViewSet):
         the fields are saved (after a revision snapshot) -- but never marked
         "Verified by Admin": unreviewed AI output must not carry that
         student-facing badge (verification is the separate ``verify``
-        action). The active admin prompt version leads the prompt.
+        action), so a verified question whose content changes loses the
+        mark (``verification_cleared`` in the response). The active admin
+        prompt version leads the prompt and is recorded in the AI timeline
+        (QuestionAIOperationLog), for dry runs too.
         """
         from ai_engine.services import AIService
         question = self.get_object()
@@ -1603,7 +1695,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     'detail': 'AI generation returned no usable content. No changes were saved to the question.',
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+            def log_operation(provider):
+                # QB-34: the AI timeline records which admin prompt version
+                # led the generation, as force-regenerate does.
+                QuestionAIOperationLog.objects.create(
+                    question=question,
+                    operation_type='regenerate',
+                    provider=provider,
+                    prompt_version=active_prompt,
+                    tokens_used=max(1, sum(len(str(v)) for v in generated.values()) // 4),
+                    response_excerpt=str(generated.get('explanation') or next(iter(generated.values())))[:500],
+                    created_by=request.user,
+                )
+
             if dry_run:
+                log_operation('aiservice:generate-explanation:dry-run')
                 return Response({
                     'detail': 'Explanation generated but not saved. Review it, then Save to store it.',
                     'generated_fields': generated,
@@ -1612,10 +1718,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     'question': QuestionAdminListSerializer(question, context={'request': request}).data,
                 })
 
+            verification_cleared = False
             with transaction.atomic():
                 self._capture_revision_snapshot(question, request.user, reason='Before AI generate-explanation')
                 changed = []
+                content_changed = False
                 for field, value in generated.items():
+                    content_changed = content_changed or _stored_value_differs(getattr(question, field, None), value)
                     setattr(question, field, value)
                     changed.append(field)
                 # Optionally store the admin's answer: a human decision, so it
@@ -1625,15 +1734,38 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     question.correct_answer = correct_answer
                     question.lock_answer = True
                     changed += ['correct_answer', 'lock_answer']
+                    content_changed = True
+                # QE-03: unreviewed AI text must not sit under an earlier
+                # "Verified by Admin" badge. Saving new content clears the
+                # mark (as the ``unverify`` action does; the revision
+                # snapshot above keeps the verified state for undo). Verify
+                # again after reviewing the text.
+                if question.is_verified_by_admin and content_changed:
+                    question.is_verified_by_admin = False
+                    question.verified_by = None
+                    question.verified_at = None
+                    changed += ['is_verified_by_admin', 'verified_by', 'verified_at']
+                    verification_cleared = True
                 # Partial save: never write back stale copies of other fields.
                 question.save(update_fields=changed + ['updated_at'])
+                log_operation('aiservice:generate-explanation')
             question.refresh_from_db()
 
+            if verification_cleared:
+                detail = ('Explanation generated and saved. The earlier "Verified by Admin" mark was removed: '
+                          'review the new text and verify again.')
+            elif question.is_verified_by_admin:
+                # Output identical to the stored text keeps the mark.
+                detail = ('Explanation generated and saved; the stored text did not change, so it keeps its '
+                          '"Verified by Admin" mark.')
+            else:
+                detail = 'Explanation generated and saved (not marked verified).'
             return Response({
-                'detail': 'Explanation generated and saved (not marked verified).',
+                'detail': detail,
                 'generated_fields': generated,
                 'saved': True,
                 'dry_run': False,
+                'verification_cleared': verification_cleared,
                 'question': QuestionAdminListSerializer(question, context={'request': request}).data,
             })
         except Exception:
@@ -1677,6 +1809,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'reference_text': question.reference_text,
             'textbook_references': question.textbook_references,
             'concept_tags': question.concept_tags,
+            # Students read the AI answer / explanation unless an admin locks
+            # or overrides them, and force-regenerate rewrites them: undo must
+            # restore them together with the verified flag (else undoing a
+            # regenerate re-verified the new, unreviewed text).
+            'ai_answer': question.ai_answer,
+            'ai_explanation': question.ai_explanation,
+            'ai_references': question.ai_references,
             'is_verified_by_admin': question.is_verified_by_admin,
             'verified_note': question.verified_note,
             'is_active': question.is_active,
@@ -2195,7 +2334,24 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not self._can_view_answer(question):
             return _upgrade_required_response()
 
-        is_correct = selected_answer == (question.correct_answer or '').strip().upper()[:1]
+        from questions.study_time import clamp_seconds, record_study_time
+        seconds = clamp_seconds(request.data.get('time_spent_seconds'))
+        correct_answer = (question.correct_answer or '').strip().upper()[:1]
+
+        if not correct_answer:
+            # No answer key: the pick cannot be graded, so it is neither an
+            # attempt nor a mistake (it used to be stored as a wrong answer
+            # and filed in the mistake notebook). The time still counts as
+            # study time. ``correct_answer: ''`` tells the UI "no key".
+            record_study_time(request.user, [(question.subject_id, seconds, 0)])
+            return Response({
+                'is_correct': None,
+                'correct_answer': '',
+                **_question_explanation_payload(question),
+                'is_subscribed': getattr(request.user, 'is_subscribed', False)
+            })
+
+        is_correct = selected_answer == correct_answer
 
         from questions.models import QuestionAttempt
 
@@ -2211,18 +2367,16 @@ class QuestionViewSet(viewsets.ModelViewSet):
             from questions.mistakes import record_mistake
             record_mistake(request.user, question, selected_answer, attempt=attempt)
 
-        from questions.study_time import clamp_seconds, record_study_time
-        record_study_time(request.user, [
-            (question.subject_id, clamp_seconds(request.data.get('time_spent_seconds')), 1),
-        ])
+        record_study_time(request.user, [(question.subject_id, seconds, 1)])
 
         # Invalidate per-user caches so dashboard + question list stay fresh.
         _invalidate_user_question_caches(request.user.id)
 
         if created:
-            # Topic / subject performance, daily activity (quests) and
+            # Topic / subject performance (attempts and, AN-30, the answer
+            # time behind /analytics "Avg Time"), daily activity (quests) and
             # streak XP -- atomic F() increments (two tabs used to race).
-            _practice_experience.record_attempt_stats(request.user, question, is_correct)
+            _practice_experience.record_attempt_stats(request.user, question, is_correct, seconds=seconds)
 
         return Response({
             'is_correct': is_correct,
@@ -2289,12 +2443,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             qs = qs.filter(exam_type=exam_type)
         exam_source = (request.query_params.get('exam_source') or '').strip()
         if exam_source:
-            exam_q = Q(exam_source=exam_source)
-            for prefix in ('NEET PG', 'UPSC CMS', 'INI-CET', 'USMLE', 'FMGE'):
-                if exam_source.startswith(prefix):
-                    exam_q |= Q(exam_source__startswith=prefix)
-                    break
-            qs = qs.filter(exam_q)
+            qs = qs.filter(exam_source_filter_q(exam_source))
         years = qs.order_by('-year').values_list('year', flat=True).distinct()
         return Response(list(years))
 
@@ -2345,12 +2494,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
         EXAM_SOURCE_PREFIXES = {
             'NEET PG': ('NEET PG',),
             'UPSC CMS': ('UPSC CMS',),
+            # The INI-CET bank is stored as 'INI-CET (recall)' and, by older
+            # imports, 'INICET': an exact 'INI-CET' match found no rows.
+            # Either label selects the whole bank (as the list filter does).
+            'INI-CET': INI_CET_SOURCE_PREFIXES,
+            'INICET': INI_CET_SOURCE_PREFIXES,
         }
         # ``Question.exam_type`` enum → source. exam_type uses ``cms`` and
         # ``neet_pg`` (underscores) so this is just the slug→source map
         # restricted to enum keys.
         EXAM_TYPE_TO_SOURCE = {k: v for k, v in EXAM_SLUG_TO_SOURCE.items()
-                               if k in {'cms', 'neet_pg', 'usmle', 'fmge'}}
+                               if k in {'cms', 'neet_pg', 'ini_cet', 'usmle', 'fmge'}}
 
         user = request.user
         has_user = user and user.is_authenticated
@@ -2403,9 +2557,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
         else:
             total_solved = 0
 
-        # Progress by year (one aggregate query)
+        # Progress by year (one aggregate query). Year 0 / NULL is the
+        # "unknown year" / Expert Curated bucket, not a paper year (the
+        # years endpoint never lists it either).
         by_year_raw = list(
-            total_qs.values('year').annotate(count=Count('id')).order_by('-year')
+            total_qs.filter(year__gt=0).values('year').annotate(count=Count('id')).order_by('-year')
         )
         # Pre-compute solved counts per year in ONE aggregate query.
         solved_by_year_map = {}
@@ -2447,8 +2603,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
         by_subject = []
         for subject in Subject.objects.all():
             count = subject_counts.get(subject.id, 0)
-            if count == 0 and exam_source == 'NEET PG':
-                # Skip 0 question subjects for NEET PG
+            if count == 0:
+                # A subject without active questions in this bank is not a
+                # row of its progress table (it used to be skipped for NEET
+                # PG only, so every other exam listed all other exams'
+                # subjects at 0).
                 continue
             by_subject.append({
                 'id': subject.id,
@@ -2682,6 +2841,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
         Calls the real AIService.analyze_question() — never writes
         placeholder text. If the AI service is unavailable, returns 503
         and leaves the existing ai_* fields intact.
+
+        Students read ``ai_answer`` / ``ai_explanation`` (effective answer /
+        explanation) unless the admin locked or overrode them, so the save
+        follows generate-explanation (QE-03): a revision snapshot first (undo
+        restores the earlier AI text and the verified state), and a verified
+        question whose AI content changes loses its "Verified by Admin" mark
+        (``verification_cleared``) until an admin reviews it again.
         """
         question = self.get_object()
 
@@ -2733,42 +2899,64 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # analyze_question returns a free-form markdown explanation; we
         # use the same text for both answer and explanation rather than
         # fabricating distinct placeholders.
-        updated_fields = []
+        new_values = {}
         if not question.lock_answer:
-            question.ai_answer = analysis
-            updated_fields.append('ai_answer')
+            new_values['ai_answer'] = analysis
         if not question.lock_explanation:
-            question.ai_explanation = analysis
-            updated_fields.append('ai_explanation')
+            new_values['ai_explanation'] = analysis
 
         # ai_mnemonic stays untouched — AIService has no mnemonic entry
         # point, and silently overwriting it with placeholder text
         # previously destroyed verified content. Admins use ai_override
         # for that.
         if not question.lock_explanation and isinstance(question.textbook_references, list):
-            question.ai_references = question.textbook_references
-            updated_fields.append('ai_references')
+            new_values['ai_references'] = question.textbook_references
 
-        if updated_fields:
-            question.save(update_fields=updated_fields)
+        updated_fields = list(new_values)
+        verification_cleared = False
+        with transaction.atomic():
+            self._capture_revision_snapshot(question, request.user, reason='Before AI force-regenerate')
+            content_changed = any(
+                _stored_value_differs(getattr(question, field, None), value)
+                for field, value in new_values.items()
+            )
+            for field, value in new_values.items():
+                setattr(question, field, value)
+            save_fields = list(updated_fields)
+            # QE-03 (as generate-explanation): unreviewed AI text must not sit
+            # under an earlier "Verified by Admin" badge.
+            if question.is_verified_by_admin and content_changed:
+                question.is_verified_by_admin = False
+                question.verified_by = None
+                question.verified_at = None
+                save_fields += ['is_verified_by_admin', 'verified_by', 'verified_at']
+                verification_cleared = True
+            if save_fields:
+                question.save(update_fields=save_fields + ['updated_at'])
 
-        response_excerpt = (question.ai_explanation or question.ai_answer or '')[:500]
-        QuestionAIOperationLog.objects.create(
-            question=question,
-            operation_type='regenerate',
-            provider='aiservice',
-            prompt_version=active_prompt,
-            tokens_used=max(1, len(analysis) // 4),
-            response_excerpt=response_excerpt,
-            created_by=request.user,
-        )
+            response_excerpt = (question.ai_explanation or question.ai_answer or '')[:500]
+            QuestionAIOperationLog.objects.create(
+                question=question,
+                operation_type='regenerate',
+                provider='aiservice',
+                prompt_version=active_prompt,
+                tokens_used=max(1, len(analysis) // 4),
+                response_excerpt=response_excerpt,
+                created_by=request.user,
+            )
 
         return Response({
-            'message': 'AI regeneration completed',
+            'message': (
+                'AI regeneration completed. The earlier "Verified by Admin" mark was removed: '
+                'review the new text and verify again.'
+                if verification_cleared else
+                'AI regeneration completed'
+            ),
             'id': question.id,
             'lock_answer': question.lock_answer,
             'lock_explanation': question.lock_explanation,
             'updated_fields': updated_fields,
+            'verification_cleared': verification_cleared,
             'active_prompt_version': active_prompt.id if active_prompt else None,
         })
 
@@ -2949,7 +3137,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
         current = self._serialize_revision_state(question)
         before = base.snapshot or {}
         changed_fields = []
-        for key in sorted(set(before.keys()) | set(current.keys())):
+        # Only the fields the snapshot recorded: older snapshots predate the
+        # AI fields, and a field they never captured is not a change.
+        for key in sorted(before.keys()):
             if before.get(key) != current.get(key):
                 changed_fields.append({'field': key, 'before': before.get(key), 'after': current.get(key)})
 
@@ -3364,10 +3554,23 @@ DISCUSSION_REPLY_ORDER = ('created_at', 'id')
 
 def _discussion_queryset(user):
     """Discussions with reply counts and the viewer's own vote preloaded
-    (the serializer used to run two queries per thread)."""
+    (the serializer used to run two queries per thread).
+
+    Threads discuss the answer ("C, because ..."), so they follow the
+    question-bank entitlement rule (``user_can_view_answer``): a viewer who
+    is not entitled to a question's answer -- a free account outside the
+    free showcase, or any scholarship-challenge question -- sees only their
+    own posts on it. Admins / staff and premium subscribers see everything.
+    """
     from django.db.models import Prefetch
+    queryset = Discussion.objects.all()
+    if not (_is_staff_user(user) or _is_premium(user)):
+        queryset = queryset.filter(
+            Q(Exists(free_showcase_rows().filter(question_id=OuterRef('question_id'))))
+            | Q(user_id=getattr(user, 'pk', None))
+        )
     return (
-        Discussion.objects.select_related('user', 'question')
+        queryset.select_related('user', 'question')
         .annotate(reply_count_annotated=Count('replies', distinct=True))
         .prefetch_related(Prefetch(
             'votes', queryset=DiscussionVote.objects.filter(user=user), to_attr='viewer_votes',
@@ -3790,6 +3993,19 @@ def _supabase_storage_mirror_path(url: str):
     return candidate if os.path.isfile(candidate) else None
 
 
+def _image_serve_allowed(request, img) -> bool:
+    """Stem figures: always. Explanation figures (runtime role): with a
+    valid signed token for this image id, or when the caller's own
+    credentials (an API client's Authorization header, a staff session)
+    make it entitled to the question's answer. See QuestionImageServeView."""
+    question = img.question
+    if resolve_runtime_image_role(question, img) != "explanation":
+        return True
+    if image_token_is_valid(img.id, request.query_params.get(IMAGE_TOKEN_PARAM)):
+        return True
+    return user_can_view_answer(getattr(request, "user", None), question)
+
+
 class QuestionImageServeView(APIView):
     """Serve a `QuestionImage.file` binary through Django.
 
@@ -3811,6 +4027,7 @@ class QuestionImageServeView(APIView):
     Optional query params (best-effort, ignored if Pillow unavailable):
       - `w` : max width in px (preserves aspect ratio, never upscales)
       - `q` : JPEG quality 1-100 (default 80)
+    and `t`, the signed token an explanation figure needs (see below).
 
     Returns 404 if the row is missing or inactive. Returns 200 with the
     binary when the file exists locally. Returns 503 with a clear JSON
@@ -3825,10 +4042,17 @@ class QuestionImageServeView(APIView):
     were getting 403 from every inline image. The question text and
     metadata returned by `QuestionViewSet` are themselves public via
     the same API, so gating only the binary image bytes made the
-    implementation inconsistent with the rest of the contract. Users who
-    want to paywall the bank can wrap this view in middleware or move
-    the storage to Supabase and proxy through a signed URL; until then,
-    `AllowAny` matches the question-text behaviour.
+    implementation inconsistent with the rest of the contract. Stem
+    figures stay public, like the stem text.
+
+    **Explanation figures** (runtime role 'explanation': stored role, or
+    referenced only from the explanation / concept explanation / mnemonic,
+    see ``resolve_runtime_image_role``) belong to the answer. Image ids are
+    sequential, so they are served only with a valid signed ``?t=`` token
+    for that image id (``questions.image_access``; payloads built for a
+    viewer entitled to the answer carry it in the image URL) or to a caller
+    whose own credentials make it entitled (``user_can_view_answer``).
+    Anyone else gets 403 ``{"code": "image_token_required"}``.
     """
 
     permission_classes = [permissions.AllowAny]
@@ -3836,11 +4060,27 @@ class QuestionImageServeView(APIView):
     def get(self, request, image_id: int):
         img = (
             QuestionImage.objects.filter(id=image_id, is_active=True)
-            .only("id", "question_id", "file", "url", "mime", "width", "height")
+            .select_related("question")
+            .only(
+                "id", "question", "file", "url", "mime", "width", "height", "role",
+                # resolve_runtime_image_role + user_can_view_answer
+                "question__question_text", "question__explanation",
+                "question__concept_explanation", "question__mnemonic",
+                "question__is_scholarship_eligible",
+            )
             .first()
         )
         if not img:
             raise Http404("Question image not found")
+        if not _image_serve_allowed(request, img):
+            return Response(
+                {
+                    "code": "image_token_required",
+                    "detail": "Explanation figures load through the link in the question data; "
+                              "reload the question for a fresh link.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         # 2026-07-27 fallback chain:
         #   1. `img.file` (ImageField) — recall imports ship bytes here.
         #   2. `img.url` starting with /media/ — recall path failed to

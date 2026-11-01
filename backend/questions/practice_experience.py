@@ -110,7 +110,7 @@ def get_state(q, user) -> dict:
     return state
 
 
-def record_attempt_stats(user, q, is_correct: bool) -> None:
+def record_attempt_stats(user, q, is_correct: bool, seconds: int = 0) -> None:
     """Analytics for a user's FIRST answer to a question-bank question.
 
     Shared by the question-bank ``attempt`` endpoint and practice mode so
@@ -118,6 +118,12 @@ def record_attempt_stats(user, q, is_correct: bool) -> None:
     drives the "Solve 20 questions" quest) and streak XP. Every counter is
     an atomic ``F()`` increment: the old ``+= 1; save()`` lost updates when
     two tabs answered at the same time.
+
+    ``seconds`` -- the answer time, already clamped by the caller
+    (``questions.study_time.clamp_seconds``) -- goes into
+    ``UserTopicPerformance.total_time_seconds`` (AN-30: the /analytics
+    "Avg Time" column only ever saw test answers). It is added once, with
+    the attempt it belongs to, so the average stays time per counted answer.
     """
     from django.db.models import F
     from django.utils import timezone
@@ -125,6 +131,12 @@ def record_attempt_stats(user, q, is_correct: bool) -> None:
 
     now = timezone.now()
     perf_inc = {"total_attempts": F("total_attempts") + 1, "last_attempted": now}
+    try:
+        seconds = max(0, int(seconds or 0))
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds:
+        perf_inc["total_time_seconds"] = F("total_time_seconds") + seconds
     if is_correct:
         perf_inc["correct_answers"] = F("correct_answers") + 1
     else:
@@ -161,8 +173,15 @@ def submit_attempt(q, user, *, answer: str, correct: bool, time_spent: int = 0,
     it, exactly like the question-bank ``attempt`` endpoint).
     """
     from questions.models import QuestionAttempt
+    from questions.study_time import clamp_seconds, record_study_time
 
     answer = (answer or "").strip().upper()[:1]
+    if not (getattr(q, "correct_answer", "") or "").strip():
+        # No answer key: a pick cannot be graded -- never stored as a wrong
+        # attempt or a mistake (callers report it as ungraded).
+        answer = ""
+        correct = False
+    seconds = clamp_seconds(time_spent)
     created = False
     if answer:
         attempt, created = QuestionAttempt.objects.update_or_create(
@@ -173,11 +192,10 @@ def submit_attempt(q, user, *, answer: str, correct: bool, time_spent: int = 0,
             from questions.mistakes import record_mistake
             record_mistake(user, q, answer, attempt=attempt)
         if created:
-            record_attempt_stats(user, q, bool(correct))
+            record_attempt_stats(user, q, bool(correct), seconds=seconds)
     if time_spent:
         add_time_spent(q, user, time_spent)
     if confidence:
         set_confidence(q, user, confidence)
-    from questions.study_time import clamp_seconds, record_study_time
-    record_study_time(user, [(q.subject_id, clamp_seconds(time_spent), 1 if answer else 0)])
+    record_study_time(user, [(q.subject_id, seconds, 1 if answer else 0)])
     return {"question_id": q.id, "correct": bool(correct), "time_spent": time_spent, "created": created}

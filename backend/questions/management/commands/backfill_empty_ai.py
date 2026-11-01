@@ -188,6 +188,7 @@ class Command(BaseCommand):
                     selected_answer=question.correct_answer,
                     subject=question.subject.name if question.subject else "",
                     topic=question.topic.name if question.topic else "",
+                    question_id=question.id,
                 )
                 # A provider outage comes back as an unparsed fallback dict
                 # whose why_correct is the "All AI services are temporarily
