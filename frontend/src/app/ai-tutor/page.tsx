@@ -337,7 +337,7 @@ export default function AITutorPage() {
         try {
             let response: string;
             let citations: Message['citations'] = undefined;
-            let data: { chat_session_id?: unknown; offline?: unknown } | undefined;
+            let data: { chat_session_id?: unknown; offline?: unknown; citations?: unknown } | undefined;
 
             if (mode === 'tutor') {
                 const res = await aiAPI.askTutor({ question: userMsg, ...history });
@@ -376,6 +376,11 @@ export default function AITutorPage() {
 
             if (!response || looksLikeProviderErrorResponse(response)) {
                 response = '⚠️ AI is temporarily unavailable right now. Please retry in a few seconds.';
+            }
+            // Every mode can return textbook citations (offline extracts always
+            // do); list them under the answer, not only in Textbook Search.
+            if (!citations && Array.isArray(data?.citations) && data.citations.length > 0) {
+                citations = data.citations as Message['citations'];
             }
             const offline = data?.offline === true;
             if (typeof data?.chat_session_id === 'number') {
