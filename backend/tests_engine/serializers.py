@@ -1,6 +1,7 @@
 from rest_framework import serializers
+from .entitlement import lock_answer
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
-from questions.serializers import QuestionListSerializer, QuestionDetailSerializer
+from questions.serializers import QuestionListSerializer
 
 
 class TestSerializer(serializers.ModelSerializer):
@@ -74,7 +75,16 @@ class TestDetailSerializer(serializers.ModelSerializer):
 
 
 class QuestionResponseSerializer(serializers.ModelSerializer):
-    question_detail = QuestionDetailSerializer(source='question', read_only=True)
+    """One answered question of an attempt (GET /api/tests/attempts/<id>/).
+
+    ``question_detail`` is a slim snapshot of the question. It used to nest
+    the full QuestionDetailSerializer: about five queries per response, and
+    the answer key and explanations of every question whatever the viewer's
+    plan. The answer parts now follow tests_engine.entitlement: the view
+    puts ``answer_visibility`` ({question_id: bool}) in the context, and
+    without it every answer is locked.
+    """
+    question_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = QuestionResponse
@@ -82,6 +92,37 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
                   'is_correct', 'time_taken_seconds', 'is_marked_for_review',
                   'confidence_level']
         read_only_fields = ['is_correct']
+
+    def get_question_detail(self, obj):
+        q = obj.question
+        subject_name = q.subject.name if q.subject_id else ''
+        if subject_name == 'Imported':  # loader bucket, shown as in the question bank
+            subject_name = 'Expert Curated'
+        row = {
+            'id': q.id,
+            'question_text': q.question_text,
+            'option_a': q.option_a,
+            'option_b': q.option_b,
+            'option_c': q.option_c,
+            'option_d': q.option_d,
+            'subject': q.subject_id,
+            'subject_name': subject_name,
+            'topic': q.topic_id,
+            'topic_name': q.topic.name if q.topic_id else '',
+            'year': q.year,
+            'paper': q.paper,
+            'difficulty': q.difficulty,
+            'exam_source': q.exam_source,
+            'correct_answer': q.correct_answer,
+            'explanation': q.explanation or q.ai_explanation or '',
+            'mnemonic': q.mnemonic or '',
+            'concept_explanation': q.concept_explanation or '',
+            'textbook_references': q.textbook_references or [],
+            'answer_locked': False,
+        }
+        if not (self.context.get('answer_visibility') or {}).get(q.pk, False):
+            lock_answer(row)
+        return row
 
 
 class TestAttemptSerializer(serializers.ModelSerializer):
@@ -93,9 +134,10 @@ class TestAttemptSerializer(serializers.ModelSerializer):
         fields = ['id', 'test', 'test_title', 'started_at', 'completed_at',
                   'score', 'total_marks', 'correct_count', 'incorrect_count',
                   'unanswered_count', 'time_taken_seconds', 'is_completed',
-                  'accuracy']
+                  'is_late', 'accuracy']
         read_only_fields = ['id', 'started_at', 'score', 'total_marks',
-                            'correct_count', 'incorrect_count', 'unanswered_count']
+                            'correct_count', 'incorrect_count', 'unanswered_count',
+                            'is_late']
 
 
 class TestAttemptDetailSerializer(TestAttemptSerializer):

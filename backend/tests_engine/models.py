@@ -46,10 +46,17 @@ class Test(models.Model):
     negative_marking = models.BooleanField(default=True)
     negative_mark_value = models.FloatField(default=0.33)
     is_published = models.BooleanField(default=True)
+    # Retired: the start gate ignores it. Free users may start any test of at
+    # most FREE_TEST_MAX_QUESTIONS questions and no others (the public copy
+    # promises exactly that), so a curated "free" full-length mock would
+    # contradict it. Kept only so existing rows and seeding code still load.
     is_free_preview = models.BooleanField(
         default=False,
         db_index=True,
-        help_text='Free users may start this test even without a subscription. Admin curates 2.',
+        help_text=(
+            'Retired, has no effect: free users may start any test of at most '
+            f'{FREE_TEST_MAX_QUESTIONS} questions and no others.'
+        ),
     )
     version = models.PositiveIntegerField(default=1)
     created_by = models.ForeignKey(
@@ -79,6 +86,14 @@ class TestAttempt(models.Model):
     unanswered_count = models.IntegerField(default=0)
     time_taken_seconds = models.IntegerField(null=True, blank=True)
     is_completed = models.BooleanField(default=False, db_index=True)
+    # Submitted after started_at + the time limit + a short grace period. The
+    # submission is still accepted and scored (an expired attempt resumed on
+    # reload is auto-submitted with the answers saved on the device), but it
+    # earns no XP and is kept off the leaderboard.
+    is_late = models.BooleanField(
+        default=False,
+        help_text='Submitted after the time limit (plus grace): scored, but no XP and off the leaderboard.',
+    )
 
     class Meta:
         ordering = ['-started_at']

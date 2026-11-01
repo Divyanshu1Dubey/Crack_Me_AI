@@ -8,8 +8,6 @@ import { testsAPI, questionsAPI } from '@/lib/api';
 import { extractApiErrorMessage } from '@/lib/api';
 import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar } from 'lucide-react';
 
-interface Subject { id: number; name: string; code: string; }
-
 // This page simulates UPSC CMS only; the backend scopes the questions with it.
 const SIMULATOR_EXAM = 'cms';
 
@@ -27,9 +25,7 @@ function cmsYears(stats: unknown, allYears: unknown): number[] {
 export default function SimulatorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
-    const [, setSubjects] = useState<Subject[]>([]);
     const [years, setYears] = useState<number[]>([]);
-    const [, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pyqYear, setPyqYear] = useState<number | null>(null);
@@ -38,14 +34,14 @@ export default function SimulatorPage() {
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
+            // Only the PYQ years are needed (an unused subjects request in the
+            // same Promise.all used to blank the year list when it failed).
             Promise.all([
-                questionsAPI.getSubjects(),
-                questionsAPI.getYears(),
+                questionsAPI.getYears().catch(() => null),
                 questionsAPI.getStats({ exam_source: 'UPSC CMS' }).catch(() => null),
-            ]).then(([sRes, yRes, statsRes]) => {
-                setSubjects(sRes.data.results || sRes.data || []);
-                setYears(cmsYears(statsRes?.data ?? null, yRes.data.results || yRes.data || []));
-            }).catch(() => { }).finally(() => setLoading(false));
+            ]).then(([yRes, statsRes]) => {
+                setYears(cmsYears(statsRes?.data ?? null, yRes?.data?.results || yRes?.data || []));
+            });
         }
     }, [authLoading, isAuthenticated, router]);
 

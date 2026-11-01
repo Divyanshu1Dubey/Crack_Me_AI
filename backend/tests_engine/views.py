@@ -8,9 +8,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Count, Exists, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Cast, Coalesce
 
+from .entitlement import answer_visibility, lock_answer
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
 from .serializers import (
     TestSerializer, TestDetailSerializer,
@@ -49,6 +50,26 @@ EXAM_MARKING = {
 XP_PER_NEW_CORRECT = 10
 XP_COMPLETION_BONUS = 5
 COMPLETION_BONUS_DAILY_CAP = 10
+
+# A submission later than started_at + time limit + this grace is still
+# accepted and scored (the player auto-submits an expired attempt when it is
+# resumed), but it is flagged late: no XP, off the leaderboard. The grace
+# covers the 0:00 auto-submit round trip on a slow connection.
+LATE_SUBMIT_GRACE_SECONDS = 120
+
+# /generate-adaptive/: the weakest areas by accuracy, among those with enough
+# answers for the accuracy to mean something.
+ADAPTIVE_MIN_ATTEMPTS = 3
+ADAPTIVE_WEAK_AREAS = 10
+
+# Generated test titles (the card title is the only thing that tells two
+# 20-question practice tests apart).
+GENERATED_TITLES = {'daily': 'Daily Quick Test', 'mixed': 'Mixed Practice'}
+
+# Study-aid fields of QuestionListSerializer that can give an answer away
+# (textbook excerpts, concept tags). The exam player never shows them; the
+# post-test review returns them when the student may see the answer.
+EXAM_HIDDEN_FIELDS = ('textbook_references', 'reference_text', 'concept_tags', 'concept_id')
 
 # Older importers (e.g. import_neet_pg) left Question.exam_type at its 'cms'
 # default and recorded the real exam only in exam_source ('NEET PG',
@@ -196,6 +217,15 @@ def _attach_duplicate_clusters(questions):
         question._cluster_member_count = sizes.get(cluster_id, 0) if cluster_id is not None else 0
 
 
+def _without_exam_hidden_fields(question_rows):
+    """Serialized exam questions minus the study aids that can give the
+    answer away (EXAM_HIDDEN_FIELDS); /review/ returns them after submit."""
+    for row in question_rows:
+        for field in EXAM_HIDDEN_FIELDS:
+            row.pop(field, None)
+    return question_rows
+
+
 def _attempt_result(attempt, request, **extra):
     data = TestAttemptSerializer(attempt, context={'request': request}).data
     data.update(extra)
@@ -249,8 +279,29 @@ def _xp_for_submission(user, attempt, clean_answers):
     return xp
 
 
-def _bump_topic_performance(user, subject_id, topic_id, total, correct, incorrect, now):
-    """Atomic (F()) increment of one UserTopicPerformance row.
+def _answer_seconds(clean_answers, budget_seconds):
+    """{question_id: seconds} for the answered questions of a submission.
+
+    The client's per-question timings are untrusted: each is clamped like
+    the study-time figures, and they are scaled down proportionally when
+    they add up to more than the attempt actually lasted.
+    """
+    from questions.study_time import clamp_seconds
+
+    seconds = {
+        qid: clamp_seconds(ans.get('time_taken'))
+        for qid, ans in clean_answers.items() if ans.get('selected')
+    }
+    reported = sum(seconds.values())
+    budget = max(0, int(budget_seconds or 0))
+    if reported > budget:
+        seconds = {qid: value * budget // reported for qid, value in seconds.items()}
+    return seconds
+
+
+def _bump_topic_performance(user, subject_id, topic_id, total, correct, incorrect, now, seconds=0):
+    """Atomic (F()) increment of one UserTopicPerformance row (attempt
+    counts and the answer time behind the /analytics "Avg Time" column).
 
     Looks the row up with filter().first(): with topic=None the unique
     constraint does not stop duplicate rows (NULLs are distinct), and
@@ -273,6 +324,7 @@ def _bump_topic_performance(user, subject_id, topic_id, total, correct, incorrec
         total_attempts=F('total_attempts') + total,
         correct_answers=F('correct_answers') + correct,
         incorrect_answers=F('incorrect_answers') + incorrect,
+        total_time_seconds=F('total_time_seconds') + max(0, int(seconds or 0)),
         last_attempted=now,
     )
 
@@ -280,7 +332,11 @@ def _bump_topic_performance(user, subject_id, topic_id, total, correct, incorrec
 def _record_submission_analytics(user, attempt, clean_answers, questions_map, correct, answered):
     """Dashboard analytics for a scored, non-empty attempt; returns the XP
     earned. Runs inside the submit transaction with F() increments so
-    concurrent writers (QBank answers, a second tab) cannot lose updates."""
+    concurrent writers (QBank answers, a second tab) cannot lose updates.
+
+    A late attempt (attempt.is_late) still counts as practice (activity,
+    streak, topic accuracy) but earns no XP, which also keeps it off the
+    XP-ranked leaderboard."""
     from analytics.models import DailyActivity, StudyStreak
 
     daily, _ = DailyActivity.objects.get_or_create(user=user, date=timezone.localdate())
@@ -291,14 +347,16 @@ def _record_submission_analytics(user, attempt, clean_answers, questions_map, co
         time_spent_minutes=F('time_spent_minutes') + max(1, int((attempt.time_taken_seconds or 0) / 60)),
     )
 
-    xp_earned = _xp_for_submission(user, attempt, clean_answers)
+    xp_earned = 0 if attempt.is_late else _xp_for_submission(user, attempt, clean_answers)
     streak, _ = StudyStreak.objects.get_or_create(user=user)
     streak.record_activity()
     if xp_earned:
         streak.add_xp(xp_earned)
 
-    subject_counts = defaultdict(lambda: [0, 0, 0])   # subject_id -> total, correct, incorrect
-    topic_counts = defaultdict(lambda: [0, 0, 0])     # (subject_id, topic_id) -> ...
+    seconds_by_question = _answer_seconds(clean_answers, attempt.time_taken_seconds)
+    # subject_id -> [total, correct, incorrect, seconds]; same per (subject_id, topic_id).
+    subject_counts = defaultdict(lambda: [0, 0, 0, 0])
+    topic_counts = defaultdict(lambda: [0, 0, 0, 0])
     for qid, ans in clean_answers.items():
         question = questions_map.get(qid)
         if not ans['selected'] or question is None or not question.subject_id:
@@ -310,12 +368,13 @@ def _record_submission_analytics(user, attempt, clean_answers, questions_map, co
         for bucket in buckets:
             bucket[0] += 1
             bucket[slot] += 1
+            bucket[3] += seconds_by_question.get(qid, 0)
 
     now = timezone.now()
-    for subject_id, (total, ok, bad) in subject_counts.items():
-        _bump_topic_performance(user, subject_id, None, total, ok, bad, now)
-    for (subject_id, topic_id), (total, ok, bad) in topic_counts.items():
-        _bump_topic_performance(user, subject_id, topic_id, total, ok, bad, now)
+    for subject_id, (total, ok, bad, seconds) in subject_counts.items():
+        _bump_topic_performance(user, subject_id, None, total, ok, bad, now, seconds)
+    for (subject_id, topic_id), (total, ok, bad, seconds) in topic_counts.items():
+        _bump_topic_performance(user, subject_id, topic_id, total, ok, bad, now, seconds)
     return xp_earned
 
 
@@ -328,6 +387,9 @@ class TestViewSet(viewsets.ModelViewSet):
         queryset = (
             Test.objects.select_related('subject', 'topic')
             .annotate(_question_count=Count('questions', distinct=True))
+            # Explicit: Meta.ordering is ignored once the Count adds a GROUP
+            # BY, which left the paginated library in arbitrary order.
+            .order_by('-created_at', '-pk')
         )
         user = getattr(self.request, 'user', None)
         authenticated = bool(user and user.is_authenticated)
@@ -387,6 +449,22 @@ class TestViewSet(viewsets.ModelViewSet):
         ]:
             return [IsControlTowerAdmin()]
         return [permissions.IsAuthenticated()]
+
+    def retrieve(self, request, *args, **kwargs):
+        """Test detail with its questions (prefetched in get_queryset).
+
+        The duplicate-cluster fields are computed for all questions at once
+        -- QuestionListSerializer otherwise runs one COUNT per clustered
+        question -- and, as in /start/, students do not get the study aids
+        that can give an answer away.
+        """
+        test = self.get_object()
+        _attach_duplicate_clusters(list(test.questions.all()))
+        data = self.get_serializer(test).data
+        user = request.user
+        if not (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)):
+            _without_exam_hidden_fields(data.get('questions') or [])
+        return Response(data)
 
     @action(detail=False, methods=['post'], url_path='create-manual')
     def create_manual(self, request):
@@ -577,6 +655,10 @@ class TestViewSet(viewsets.ModelViewSet):
           * 'daily' is always 20 questions; paper1 / paper2 are always a full
             120-question paper with the real 120-minute CMS limit;
           * questions come from one exam (exam_type, default 'cms');
+          * a UPSC CMS paper mock goes by each question's own paper (subject
+            paper only for rows without one); other exams have no real
+            papers (import_neet_pg sets paper=1 on every row), so their
+            paper mocks follow the subject's paper;
           * ids and years are validated (400, not a 500);
           * the test is private to its creator (is_published=False).
         """
@@ -630,15 +712,21 @@ class TestViewSet(viewsets.ModelViewSet):
             title_parts.append(f"PYQ {year}")
         elif test_type in ('paper1', 'paper2'):
             paper_no = 1 if test_type == 'paper1' else 2
-            # A question's own paper wins; the subject's paper is only the
-            # fallback for rows without one (Subject.paper defaults to 1, so
-            # "subject paper OR question paper" put paper-2 PYQs into the
-            # Paper 1 mock).
-            q_filter &= (Q(paper=paper_no) | (~Q(paper__in=(1, 2)) & Q(subject__paper=paper_no)))
+            if exam_type == 'cms':
+                # A question's own paper wins; the subject's paper is only
+                # the fallback for rows without one (Subject.paper defaults
+                # to 1, so "subject paper OR question paper" put paper-2
+                # PYQs into the Paper 1 mock).
+                q_filter &= (Q(paper=paper_no) | (~Q(paper__in=(1, 2)) & Q(subject__paper=paper_no)))
+            else:
+                q_filter &= Q(subject__paper=paper_no)
             title_parts.append(f"Paper {paper_no} Mock")
             num_questions = FULL_PAPER_QUESTIONS
         elif test_type == 'daily':
             num_questions = DAILY_TEST_QUESTIONS
+            title_parts.append(GENERATED_TITLES['daily'])
+        elif test_type == 'mixed':
+            title_parts.append(GENERATED_TITLES['mixed'])
 
         questions = list(Question.objects.filter(q_filter).values_list('id', flat=True))
         if not questions:
@@ -707,7 +795,11 @@ class TestViewSet(viewsets.ModelViewSet):
 
         The response carries ``remaining_seconds`` (time limit minus the
         time elapsed since ``started_at``) so a reload continues the clock
-        instead of granting a fresh full timer.
+        instead of granting a fresh full timer, and
+        ``last_completed_attempt_id`` (the student's latest completed attempt
+        of this test, or null): when a submit went through but its response
+        was lost, a reload starts a fresh attempt, and this lets the player
+        still show the stored result.
         """
         test = self.get_object()
 
@@ -759,6 +851,12 @@ class TestViewSet(viewsets.ModelViewSet):
             test._user_attempt_count += 1
 
         questions = _questions_for_attempt(test, attempt)
+        last_completed_id = (
+            TestAttempt.objects.filter(user=user, test=test, is_completed=True)
+            .order_by('-completed_at', '-pk')
+            .values_list('id', flat=True)
+            .first()
+        )
         now = timezone.now()
         limit_seconds = _time_limit_seconds(test)
         elapsed = max(0, int((now - attempt.started_at).total_seconds()))
@@ -766,12 +864,15 @@ class TestViewSet(viewsets.ModelViewSet):
         return Response({
             'attempt_id': attempt.id,
             'test': TestSerializer(test, context={'request': request}).data,
-            'questions': QuestionListSerializer(questions, many=True, context={'request': request}).data,
+            'questions': _without_exam_hidden_fields(
+                QuestionListSerializer(questions, many=True, context={'request': request}).data
+            ),
             'started_at': attempt.started_at,
             'resumed': not created,
             'server_time': now,
             'time_limit_seconds': limit_seconds,
             'remaining_seconds': max(0, limit_seconds - elapsed),
+            'last_completed_attempt_id': last_completed_id,
         })
 
     @action(detail=True, methods=['post'], url_path='submit')
@@ -792,6 +893,10 @@ class TestViewSet(viewsets.ModelViewSet):
           auto-submits at 0:00 and a resumed attempt keeps its original
           clock, so a late submit is accepted, but an attempt abandoned and
           finished days later no longer books days of study time.
+        * A submit later than the time limit + LATE_SUBMIT_GRACE_SECONDS is
+          still scored (that keeps the expired-resume auto-submit working)
+          but stored with is_late=True: it earns no XP and stays off the
+          leaderboard, so it is never recorded as an on-time attempt.
         * An empty submission (nothing answered) completes the attempt but
           earns no XP, streak, tests_completed or study time. XP rules: see
           _xp_for_submission.
@@ -891,6 +996,7 @@ class TestViewSet(viewsets.ModelViewSet):
             now = timezone.now()
             elapsed = max(0.0, (now - attempt.started_at).total_seconds())
             limit_seconds = _time_limit_seconds(test)
+            is_late = bool(limit_seconds) and elapsed > limit_seconds + LATE_SUBMIT_GRACE_SECONDS
             if limit_seconds:
                 elapsed = min(elapsed, limit_seconds)
 
@@ -902,6 +1008,7 @@ class TestViewSet(viewsets.ModelViewSet):
             attempt.is_completed = True
             attempt.completed_at = now
             attempt.time_taken_seconds = int(elapsed)
+            attempt.is_late = is_late
             attempt.save()
 
             answered = correct + incorrect
@@ -949,6 +1056,14 @@ class TestViewSet(viewsets.ModelViewSet):
 
         Looked up by (attempt id, user, test) like submit, so a completed
         attempt stays reviewable after its test is unpublished.
+
+        The answer key and the explanations follow the question bank's
+        entitlement (tests_engine.entitlement.answer_visibility): for a
+        question the student may not see, the row keeps the student's pick
+        and right / wrong but carries ``answer_locked: true`` instead of
+        correct_answer, explanation, mnemonic, concept_explanation and
+        textbook_references. Without this, generating and submitting
+        20-question tests was an unlimited way around the PYQ-answer paywall.
         """
         attempt_id = request.query_params.get('attempt_id')
 
@@ -959,7 +1074,11 @@ class TestViewSet(viewsets.ModelViewSet):
         except (TestAttempt.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'No completed attempt found'}, status=400)
 
-        responses = QuestionResponse.objects.filter(attempt=attempt).select_related('question', 'question__subject', 'question__topic')
+        responses = list(
+            QuestionResponse.objects.filter(attempt=attempt)
+            .select_related('question', 'question__subject', 'question__topic')
+        )
+        visible = answer_visibility(request.user, [resp.question_id for resp in responses])
 
         questions_review = []
         subject_breakdown = {}
@@ -978,7 +1097,7 @@ class TestViewSet(viewsets.ModelViewSet):
             else:
                 subject_breakdown[subj]['unanswered'] += 1
 
-            questions_review.append({
+            row = {
                 'question_id': q.id,
                 'question_text': q.question_text,
                 'options': {'A': q.option_a, 'B': q.option_b, 'C': q.option_c, 'D': q.option_d},
@@ -1001,7 +1120,11 @@ class TestViewSet(viewsets.ModelViewSet):
                 'time_taken': resp.time_taken_seconds,
                 'confidence': resp.confidence_level,
                 'concept_tags': q.concept_tags or [],
-            })
+                'answer_locked': False,
+            }
+            if not visible.get(q.id, False):
+                lock_answer(row)
+            questions_review.append(row)
 
         return Response({
             'attempt_id': attempt.id,
@@ -1012,6 +1135,7 @@ class TestViewSet(viewsets.ModelViewSet):
             'correct': attempt.correct_count,
             'incorrect': attempt.incorrect_count,
             'unanswered': attempt.unanswered_count,
+            'is_late': attempt.is_late,
             'subject_breakdown': subject_breakdown,
             'questions': questions_review,
         })
@@ -1022,6 +1146,12 @@ class TestViewSet(viewsets.ModelViewSet):
 
         Scoped to one exam (exam_type, default 'cms') and private to its
         creator, like the other generators.
+
+        Weak areas are the ADAPTIVE_WEAK_AREAS lowest-accuracy
+        UserTopicPerformance rows with at least ADAPTIVE_MIN_ATTEMPTS
+        answers (ordering by the raw correct count used to pick the least
+        practised topics, not the weakest). A weak topic row targets that
+        topic; a weak subject-level row (topic=None) targets the subject.
         """
         try:
             num_questions = int(request.data.get('num_questions', 30))
@@ -1034,17 +1164,19 @@ class TestViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         exam_q = Q(is_active=True) & exam_scope_q(exam_type)
 
-        # Find weak topics from user's attempt history
+        # Weakest areas of the user's answer history, by accuracy.
         from analytics.models import UserTopicPerformance
-        weak_perfs = UserTopicPerformance.objects.filter(
-            user=request.user,
-            total_attempts__gte=2
-        ).order_by('correct_answers')[:10]
+        weak_perfs = list(
+            UserTopicPerformance.objects
+            .filter(user=request.user, total_attempts__gte=ADAPTIVE_MIN_ATTEMPTS)
+            .annotate(accuracy_ratio=Cast('correct_answers', FloatField()) / Cast('total_attempts', FloatField()))
+            .order_by('accuracy_ratio', '-total_attempts', 'pk')[:ADAPTIVE_WEAK_AREAS]
+        )
 
         q_filter = exam_q
-        if weak_perfs.exists():
-            weak_topic_ids = [p.topic_id for p in weak_perfs if p.topic_id]
-            weak_subject_ids = [p.subject_id for p in weak_perfs if p.subject_id]
+        weak_topic_ids = [p.topic_id for p in weak_perfs if p.topic_id]
+        weak_subject_ids = [p.subject_id for p in weak_perfs if not p.topic_id]
+        if weak_topic_ids or weak_subject_ids:
             q_filter &= (Q(topic_id__in=weak_topic_ids) | Q(subject_id__in=weak_subject_ids))
 
         questions = list(Question.objects.filter(q_filter).values_list('id', flat=True))
@@ -1148,13 +1280,13 @@ class TestAttemptViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = TestAttempt.objects.filter(user=self.request.user).select_related('test')
         if self.action == 'retrieve':
-            # TestAttemptDetailSerializer nests a QuestionDetailSerializer per
-            # response; load the relations it reads in bulk.
+            # TestAttemptDetailSerializer reads each response's question,
+            # subject and topic: load them in bulk.
             queryset = queryset.prefetch_related(Prefetch(
                 'responses',
                 queryset=QuestionResponse.objects.select_related(
                     'question__subject', 'question__topic',
-                ).prefetch_related('question__images', 'question__revision_snapshots'),
+                ).order_by('pk'),
             ))
         return queryset
 
@@ -1162,3 +1294,13 @@ class TestAttemptViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'retrieve':
             return TestAttemptDetailSerializer
         return TestAttemptSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        """One attempt with its responses; the answer key and explanations
+        follow the question bank's entitlement, as in /tests/<id>/review/."""
+        attempt = self.get_object()
+        context = self.get_serializer_context()
+        context['answer_visibility'] = answer_visibility(
+            request.user, [resp.question_id for resp in attempt.responses.all()],
+        )
+        return Response(TestAttemptDetailSerializer(attempt, context=context).data)

@@ -45,6 +45,36 @@ type ListScope = 'library' | 'mine';
 // How many of the student's own practice tests are shown before "Show all".
 const PRACTICE_PREVIEW = 4;
 
+// Card badge text for Test.test_type (the raw enum values used to show).
+const TEST_TYPE_LABELS: Record<string, string> = {
+    subject: 'Subject',
+    topic: 'Topic',
+    mixed: 'Mixed',
+    paper1: 'Paper 1',
+    paper2: 'Paper 2',
+    daily: 'Daily',
+    pyq_year: 'PYQ',
+    weak: 'Weak areas',
+    adaptive: 'Adaptive',
+};
+
+// Loader fallback buckets ("Expert Curated" / "Imported"): not real subjects,
+// so they get no subject-test chip (two identical "Expert Curated" chips used
+// to be the only ones shown for UPSC CMS).
+const LOADER_BUCKET_CODES = new Set(['EXPERT', 'IMPORTED']);
+const LOADER_BUCKET_NAMES = new Set(['expert curated', 'imported']);
+
+function subjectChips(subjects: Subject[]): Subject[] {
+    const seen = new Set<string>();
+    return subjects.filter(s => {
+        const name = (s.name || '').trim().toLowerCase();
+        const isBucket = LOADER_BUCKET_CODES.has((s.code || '').toUpperCase()) || LOADER_BUCKET_NAMES.has(name);
+        if (!name || isBucket || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+    });
+}
+
 // One page of /tests/ (paginated `{results, next}`, or a bare array).
 function pageOf(data: any): { results: TestItem[]; hasNext: boolean } {
     if (Array.isArray(data)) return { results: data, hasNext: false };
@@ -87,6 +117,9 @@ export default function TestsPage() {
     const [showAllMine, setShowAllMine] = useState(false);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
+    // The library request failed (as opposed to an empty library).
+    const [loadError, setLoadError] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     const [generating, setGenerating] = useState(false);
     const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -114,22 +147,27 @@ export default function TestsPage() {
         testsAPI.list({ exam_type: examType, scope, page: String(page) });
 
     useEffect(() => {
-        if (ready) {
-            setShowAllMine(false);
-            Promise.all([
-                fetchTests('library', 1),
-                fetchTests('mine', 1),
-                questionsAPI.getSubjects({ exam_type: examType }),
-            ]).then(([libRes, mineRes, sRes]) => {
-                const lib = pageOf(libRes.data);
-                const mine = pageOf(mineRes.data);
+        if (!ready) return;
+        setShowAllMine(false);
+        // Subject chips are optional: a failed or throttled subjects call must
+        // not throw away the test lists (it used to share one Promise.all, so
+        // the page showed "No tests yet" over a full library).
+        questionsAPI.getSubjects({ exam_type: examType, page_size: 100 })
+            .then(sRes => setSubjects(subjectChips(sRes.data?.results || sRes.data || [])))
+            .catch(() => setSubjects([]));
+        Promise.allSettled([fetchTests('library', 1), fetchTests('mine', 1)])
+            .then(([libRes, mineRes]) => {
+                // A failed list is emptied rather than left showing another
+                // exam's tests; the library failure gets its own error card.
+                const lib = libRes.status === 'fulfilled' ? pageOf(libRes.value.data) : { results: [], hasNext: false };
+                const mine = mineRes.status === 'fulfilled' ? pageOf(mineRes.value.data) : { results: [], hasNext: false };
                 setLibraryTests(dedupeLibrary(lib.results));
                 setMyTests(uniqueById(mine.results));
                 setNextPage({ library: lib.hasNext ? 2 : null, mine: mine.hasNext ? 2 : null });
-                setSubjects(sRes.data.results || sRes.data || []);
-            }).catch(() => { }).finally(() => setLoading(false));
-        }
-    }, [ready, examType]);
+                setLoadError(libRes.status === 'rejected');
+            })
+            .finally(() => setLoading(false));
+    }, [ready, examType, reloadKey]);
 
     const loadMore = async (scope: ListScope) => {
         const page = nextPage[scope];
@@ -197,13 +235,13 @@ export default function TestsPage() {
                         <h3 className="font-semibold text-sm text-foreground min-w-0 wrap-break-word">{test.title}</h3>
                         <div className="flex items-center gap-1.5 shrink-0">
                             {!isFreeForUser && <LockedBadge size="sm" />}
-                            <Badge variant="secondary" className="whitespace-nowrap">{test.test_type}</Badge>
+                            <Badge variant="secondary" className="whitespace-nowrap">{TEST_TYPE_LABELS[test.test_type] ?? test.test_type}</Badge>
                         </div>
                     </div>
                     <div className="flex items-center gap-4 text-xs mb-4 text-muted-foreground">
                         <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {test.num_questions} Qs</span>
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {test.time_limit_minutes} min</span>
-                        <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempts</span>
+                        <span className="flex items-center gap-1"><Play className="w-3 h-3" /> {test.attempt_count} attempt{test.attempt_count === 1 ? '' : 's'}</span>
                     </div>
                     <Button variant="neon" onClick={() => startTest(test)} className="w-full" size="sm">
                         {isFreeForUser ? (
@@ -264,14 +302,16 @@ export default function TestsPage() {
                     </div>
 
                     {/* Subject-wise tests */}
-                    <div className="flex flex-wrap gap-2">
-                        {subjects.map(s => (
-                            <Button key={s.id} variant="outline" size="sm" onClick={() => generateTest('subject', s.id)}
-                                disabled={generating}>
-                                {s.name}
-                            </Button>
-                        ))}
-                    </div>
+                    {subjects.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {subjects.map(s => (
+                                <Button key={s.id} variant="outline" size="sm" onClick={() => generateTest('subject', s.id)}
+                                    disabled={generating}>
+                                    {s.name}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* The student's own generated tests */}
@@ -311,9 +351,18 @@ export default function TestsPage() {
                         <div className="grid md:grid-cols-2 gap-4">
                             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
                         </div>
+                    ) : loadError && libraryTests.length === 0 ? (
+                        <Card role="alert" className="p-8 text-center text-muted-foreground">
+                            <p className="mb-3">Couldn&apos;t load tests. Check your connection and try again.</p>
+                            <Button variant="outline" size="sm" onClick={() => { setLoading(true); setReloadKey(k => k + 1); }}>
+                                Retry
+                            </Button>
+                        </Card>
                     ) : libraryTests.length === 0 ? (
                         <Card className="p-8 text-center text-muted-foreground">
-                            No tests yet. Generate one above to get started!
+                            {/* Generated tests are listed under "Your Practice Tests", never here. */}
+                            No library tests for this exam yet.
+                            {myTests.length === 0 && ' Generate a practice test above to get started.'}
                         </Card>
                     ) : (
                         <>

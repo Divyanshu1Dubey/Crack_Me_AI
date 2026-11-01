@@ -16,11 +16,12 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
-import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn } from 'lucide-react';
+import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn, Lock } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
 import { decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import ImageViewer from '@/components/image/ImageViewer';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface QuestionImage {
     id: number;
@@ -154,11 +155,13 @@ function resultFromReview(review: any): Record<string, any> | null {
         accuracy: review.accuracy ?? 0,
         score: review.score ?? 0,
         total_marks: review.total_marks ?? (correct + incorrect + unanswered),
+        is_late: review.is_late === true,
     };
 }
 
 export default function TakeTestPage() {
     const { ready } = useRequireAuth();
+    const { show: showPaywall } = usePaywall();
     const router = useRouter();
     const params = useParams();
     const testId = Number(params.id);
@@ -175,6 +178,14 @@ export default function TakeTestPage() {
     const [reviewData, setReviewData] = useState<any[] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // Bumped by "Try again" on the load-error card to re-run the start call
+    // (safe: start resumes the active attempt instead of creating another).
+    const [reloadKey, setReloadKey] = useState(0);
+    // An earlier attempt of this test that the server completed while this
+    // device never got the result (its in-progress answers are still saved
+    // here): offered as "View result" instead of being lost.
+    const [lostAttemptId, setLostAttemptId] = useState<number | null>(null);
+    const [lostAttemptLoading, setLostAttemptLoading] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     // Submit failures are shown inline (with Retry) instead of through
     // `error`, which replaces the whole exam with "Failed to Load Test"
@@ -202,6 +213,11 @@ export default function TakeTestPage() {
     const [flagError, setFlagError] = useState<string | null>(null);
     const [zoomImg, setZoomImg] = useState<any>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Wall-clock end of the attempt (ms). The countdown is recomputed from it
+    // on every tick, so background-tab timer throttling or a sleeping laptop
+    // cannot stretch the paper past the server's clock (which flags late
+    // submissions).
+    const deadlineRef = useRef<number | null>(null);
     const startTimes = useRef<Record<number, number>>({});
     const timeSpent = useRef<Record<number, number>>({});
     const doSubmitRef = useRef<() => void>(() => {});
@@ -221,6 +237,7 @@ export default function TakeTestPage() {
     useEffect(() => {
         if (!ready || !testId) return;
         setError(null);
+        setLoading(true);
         testsAPI.start(testId).then(res => {
             const data = res.data;
             const qs: Question[] = Array.isArray(data.questions) ? data.questions : [];
@@ -242,6 +259,11 @@ export default function TakeTestPage() {
             // Restore answers saved on this device for this attempt.
             pruneSavedAttempts();
             const saved = readSavedAttempt(attempt);
+            // A successful submit clears its saved answers, so saved answers
+            // of the attempt the server last completed mean its result was
+            // lost on the way back (e.g. the connection dropped on submit).
+            const lastCompleted = Number(data.last_completed_attempt_id) || null;
+            setLostAttemptId(!data.resumed && lastCompleted && lastCompleted !== attempt && readSavedAttempt(lastCompleted) ? lastCompleted : null);
             const indexById = new Map(qs.map((q, i) => [q.id, i]));
             const restoredAnswers: Record<number, string> = {};
             const restoredMarked = new Set<number>();
@@ -279,6 +301,7 @@ export default function TakeTestPage() {
             setAnswers(restoredAnswers);
             setMarked(restoredMarked);
             setCurrentIdx(startIdx);
+            deadlineRef.current = limitSeconds > 0 ? Date.now() + remaining * 1000 : null;
             setTimeLeft(remaining);
             if (limitSeconds > 0 && remaining <= 0 && qs.length > 0) {
                 setExpiredOnLoad(true);
@@ -287,7 +310,7 @@ export default function TakeTestPage() {
         }).catch(err => {
             setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
         }).finally(() => setLoading(false));
-    }, [ready, testId]);
+    }, [ready, testId, reloadKey]);
 
     // Persist in-progress state for this attempt (cleared after submit).
     useEffect(() => {
@@ -308,17 +331,16 @@ export default function TakeTestPage() {
         });
     }, [attemptId, submitted, questions, answers, marked, currentIdx]);
 
-    // Timer — uses ref to avoid stale closure
+    // Timer — uses refs to avoid stale closures; each tick reads the
+    // wall-clock deadline instead of counting ticks.
     useEffect(() => {
         if (timeLeft > 0 && !submitted) {
             timerRef.current = setInterval(() => {
-                setTimeLeft(prev => {
-                    if (prev <= 1) {
-                        doSubmitRef.current();
-                        return 0;
-                    }
-                    return prev - 1;
-                });
+                const deadline = deadlineRef.current;
+                if (deadline === null) return;
+                const next = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+                setTimeLeft(next);
+                if (next <= 0) doSubmitRef.current();
             }, 1000);
         }
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -430,6 +452,33 @@ export default function TakeTestPage() {
     // NOTE: AI explanation is NO LONGER auto-fetched.
     // Students must click "Generate AI Analysis" to save API tokens.
 
+    // Show the stored result of the attempt whose submit response was lost.
+    const viewLostResult = async () => {
+        if (!lostAttemptId || lostAttemptLoading) return;
+        setLostAttemptLoading(true);
+        try {
+            const reviewRes = await testsAPI.review(testId, lostAttemptId);
+            const stored = resultFromReview(reviewRes.data);
+            if (!stored) return;
+            if (timerRef.current) clearInterval(timerRef.current);
+            clearSavedAttempt(lostAttemptId);
+            setReviewData(reviewRes.data.questions || []);
+            setResult(stored);
+            setStoredResult(true);
+            setSubmitted(true);
+            setLostAttemptId(null);
+        } catch {
+            /* keep the notice: the button stays available for a retry */
+        } finally {
+            setLostAttemptLoading(false);
+        }
+    };
+
+    const dismissLostResult = () => {
+        if (lostAttemptId) clearSavedAttempt(lostAttemptId);
+        setLostAttemptId(null);
+    };
+
     const handleSubmit = () => setShowConfirm(true);
 
     if (loading) {
@@ -454,7 +503,10 @@ export default function TakeTestPage() {
                         <p className="text-sm text-muted-foreground mb-6">
                             {error}
                         </p>
-                        <div className="flex gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <button onClick={() => setReloadKey(k => k + 1)} className="btn-secondary w-full inline-flex items-center justify-center">
+                                Try again
+                            </button>
                             <button onClick={() => router.push('/tests')} className="btn-primary w-full justify-center">
                                 Back to Test Center
                             </button>
@@ -496,8 +548,11 @@ export default function TakeTestPage() {
         // Match review data by question_id, not by index (order may differ)
         const rd = reviewData ? reviewData.find((r: any) => r.question_id === rq?.id) : null;
         const userAns = rd?.selected_answer || answers[rq?.id];
+        // Free plan, non-showcase question: the server returns right / wrong
+        // only (no answer key, explanation or mnemonic).
+        const answerLocked = rd?.answer_locked === true;
         const correctAns = rd?.correct_answer || rq?.correct_answer;
-        const explanation = rd?.explanation || rq?.explanation;
+        const explanation = answerLocked ? '' : (rd?.explanation || rq?.explanation);
         const aiExp = reviewAiExplanations[reviewIdx];
 
         const fetchAiExplanation = (idx: number) => {
@@ -506,14 +561,18 @@ export default function TakeTestPage() {
             if (!q) return;
             const rrd = reviewData ? reviewData.find((r: any) => r.question_id === q.id) : null;
             setReviewAiLoading(true);
-            aiAPI.explainAfterAnswer({
+            // question_id lets the server explain the stored question (and
+            // apply the answer entitlement) instead of trusting this payload.
+            const payload = {
+                question_id: q.id,
                 question_text: q.question_text,
                 options: { A: q.option_a, B: q.option_b, C: q.option_c, D: q.option_d },
                 correct_answer: rrd?.correct_answer || q.correct_answer || '',
                 selected_answer: rrd?.selected_answer || answers[q.id] || '',
                 subject: rrd?.subject || q.subject_name || '',
                 topic: rrd?.topic || q.topic_name || '',
-            }).then(res => {
+            };
+            aiAPI.explainAfterAnswer(payload).then(res => {
                 setReviewAiExplanations(prev => ({ ...prev, [idx]: res.data }));
             }).catch((err) => {
                 if (err?.response?.status === 429) {
@@ -590,7 +649,7 @@ export default function TakeTestPage() {
                                 <div>
                                     <div className="font-bold text-sm">Q{reviewIdx + 1} of {questions.length}</div>
                                     <div className="text-xs" style={{ color: rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b' }}>
-                                        {rd?.is_correct ? 'Correct! Great job 🎉' : rd?.is_correct === false ? 'Incorrect — Study the explanation below carefully' : 'Skipped — Review what you missed'}
+                                        {rd?.is_correct ? 'Correct! Great job 🎉' : rd?.is_correct === false ? (answerLocked ? 'Incorrect' : 'Incorrect — Study the explanation below carefully') : (answerLocked ? 'Skipped' : 'Skipped — Review what you missed')}
                                     </div>
                                 </div>
                             </div>
@@ -598,7 +657,7 @@ export default function TakeTestPage() {
                                 {rq?.subject_name && <span className="review-tag review-tag-cyan">{rq.subject_name}</span>}
                                 {(rd?.topic || rq?.topic_name) && <span className="review-tag review-tag-purple">{rd?.topic || rq?.topic_name}</span>}
                                 {rd?.difficulty && <span className={`review-tag ${rd.difficulty === 'hard' ? 'review-tag-red' : rd.difficulty === 'medium' ? 'review-tag-amber' : 'review-tag-green'}`}>{rd.difficulty}</span>}
-                                {rd?.year && <span className="review-tag review-tag-pink">PYQ {rd.year}</span>}
+                                {rd?.year ? <span className="review-tag review-tag-pink">PYQ {rd.year}</span> : null}
                             </div>
                         </div>
 
@@ -648,8 +707,10 @@ export default function TakeTestPage() {
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                     const optText = rq?.[`option_${opt.toLowerCase()}` as keyof Question] || rq?.[`option_${opt}` as keyof Question];
                                     if (!optText) return null;
-                                    const isCorrect = correctAns === opt;
                                     const isUserPick = userAns === opt;
+                                    // Locked rows carry no answer key: only the
+                                    // student's own pick is marked right or wrong.
+                                    const isCorrect = correctAns === opt || (answerLocked && isUserPick && rd?.is_correct === true);
                                     const isWrong = isUserPick && !isCorrect;
                                     return (
                                         <div key={opt} className={`review-option ${isCorrect ? 'review-option-correct' : isWrong ? 'review-option-wrong' : ''}`}>
@@ -763,8 +824,24 @@ export default function TakeTestPage() {
                         </div>
                     )}
 
+                    {/* ═══ LOCKED ANSWER (free plan, non-showcase question) ═══ */}
+                    {answerLocked && !aiExp && (
+                        <div className="glass-card p-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <Lock className="w-6 h-6 shrink-0 text-primary" aria-hidden="true" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold text-foreground">Answer and explanation are part of Premium</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    You can see whether your answer was right. Upgrade to see the correct answer, the explanation and AI analysis for every question.
+                                </p>
+                            </div>
+                            <button onClick={() => showPaywall('PYQ answers')} className="btn-primary justify-center text-sm shrink-0">
+                                Unlock answers
+                            </button>
+                        </div>
+                    )}
+
                     {/* ═══ AI GENERATE BUTTON — only triggers on click to save API tokens ═══ */}
-                    {!aiExp && !reviewAiLoading && !reviewTokenError && (
+                    {!answerLocked && !aiExp && !reviewAiLoading && !reviewTokenError && (
                         <button onClick={() => fetchAiExplanation(reviewIdx)}
                             className="w-full glass-card p-5 flex items-center justify-center gap-3 cursor-pointer transition-all hover:scale-[1.01] group"
                             style={{ background: 'rgba(6,182,212,0.04)' }}>
@@ -777,7 +854,7 @@ export default function TakeTestPage() {
                     )}
 
                     {/* Token depleted error */}
-                    {reviewTokenError && !aiExp && (
+                    {reviewTokenError && !aiExp && !answerLocked && (
                         <div className="token-depleted-banner">
                             <div className="flex items-start gap-3">
                                 <Zap className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#ef4444' }} />
@@ -1022,17 +1099,26 @@ export default function TakeTestPage() {
 
     // ─── RESULTS SCREEN ─────────────────────────────────
     if (submitted && result) {
+        const resultNote = [
+            storedResult
+                ? 'This attempt had already been submitted, so your saved result is shown.'
+                : expiredOnLoad
+                    ? 'Time had run out on this attempt, so it was submitted with the answers saved on this device.'
+                    : '',
+            // The server flags submits past the time limit (plus a short grace).
+            result.is_late === true
+                ? 'It was submitted after the time limit, so it earns no XP and does not count towards the leaderboard.'
+                : '',
+        ].filter(Boolean).join(' ');
         return (
             <div className="min-h-screen flex items-center justify-center p-4 sm:p-8 bg-background">
                 <div className="glass-card p-5 sm:p-8 max-w-lg w-full text-center animate-fadeInUp">
                     <CheckCircle className="w-16 h-16 mx-auto mb-4" style={{ color: '#10b981' }} aria-hidden="true" />
                     <h1 className="text-2xl font-bold mb-2">Test Completed!</h1>
-                    <p className={expiredOnLoad || storedResult ? 'mb-3' : 'mb-6'} style={{ color: 'var(--text-secondary)' }}>{test?.title}</p>
-                    {(expiredOnLoad || storedResult) && (
-                        <p role="status" className="mb-6 text-sm rounded-lg px-3 py-2" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
-                            {storedResult
-                                ? 'This attempt had already been submitted, so your saved result is shown.'
-                                : 'Time had run out on this attempt, so it was submitted with the answers saved on this device.'}
+                    <p className={resultNote ? 'mb-3' : 'mb-6'} style={{ color: 'var(--text-secondary)' }}>{test?.title}</p>
+                    {resultNote && (
+                        <p role="status" className="mb-6 text-sm rounded-lg px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                            {resultNote}
                         </p>
                     )}
 
@@ -1086,8 +1172,15 @@ export default function TakeTestPage() {
 
     const examLabel = EXAM_LABELS[test?.exam_type || 'cms'] || EXAM_LABELS.cms;
     const answeredCount = Object.keys(answers).length;
-    const markedCount = marked.size;
-    const notVisitedCount = questions.length - Math.max(currentIdx + 1, Object.keys(startTimes.current).length);
+    // Legend counts mirror the palette colours, so they add up to the total:
+    // answered (green), marked and unanswered (purple), visited and
+    // unanswered (red), never opened (grey). Every visited question has a
+    // startTimes entry, including the current one.
+    const visitedCount = Object.keys(startTimes.current).length;
+    const markedCount = Array.from(marked).filter(i => questions[i] && !answers[questions[i].id]).length;
+    const notVisitedCount = Math.max(0, questions.length - visitedCount);
+    const notAnsweredVisitedCount = Math.max(0, visitedCount - answeredCount - markedCount);
+    // Everything unanswered, visited or not (Submit dialog).
     const notAnsweredCount = questions.length - answeredCount;
 
     return (
@@ -1106,6 +1199,24 @@ export default function TakeTestPage() {
                         <button onClick={() => setSubmitError(null)} className="btn-secondary">Dismiss</button>
                         <button onClick={doSubmit} disabled={submitting} className="btn-primary justify-center disabled:opacity-60">
                             {submitting ? 'Submitting…' : 'Retry submit'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {lostAttemptId && !submitError && !showConfirm && (
+                <div role="status" className="fixed bottom-4 left-1/2 z-100 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-xl border border-amber-500/40 bg-card p-4 shadow-lg">
+                    <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                        <div className="flex-1 text-sm">
+                            <p className="font-semibold text-foreground">Your last attempt was submitted</p>
+                            <p className="text-muted-foreground">Its result did not reach this device. You can still see it.</p>
+                        </div>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={dismissLostResult} className="btn-secondary">Dismiss</button>
+                        <button onClick={viewLostResult} disabled={lostAttemptLoading} className="btn-primary justify-center disabled:opacity-60">
+                            {lostAttemptLoading ? 'Loading…' : 'View result'}
                         </button>
                     </div>
                 </div>
@@ -1134,15 +1245,16 @@ export default function TakeTestPage() {
                 </div>
             )}
 
-            {/* Top Bar */}
-            <div className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between"
+            {/* Top Bar — one row on phones: the title chip is hidden there
+                (the test card in the right rail shows it) and nothing wraps. */}
+            <div className="sticky top-0 z-50 px-3 sm:px-6 py-3 flex items-center justify-between gap-3"
                 style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
-                <div className="flex items-center gap-4">
-                    <div className="font-bold text-lg gradient-text">{examLabel.toUpperCase()} SIMULATOR</div>
-                    <div className="text-sm px-3 py-1 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{test?.title}</div>
+                <div className="flex items-center gap-4 min-w-0">
+                    <div className="font-bold text-base sm:text-lg gradient-text whitespace-nowrap">{examLabel.toUpperCase()} SIMULATOR</div>
+                    <div className="hidden sm:block truncate max-w-[40vw] text-sm px-3 py-1 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{test?.title}</div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-2 rounded-lg ${timeLeft < 300 ? 'animate-pulse' : ''}`}
+                <div className="flex items-center gap-4 shrink-0">
+                    <div className={`flex items-center gap-2 font-mono text-lg sm:text-xl font-bold whitespace-nowrap px-2 sm:px-4 py-2 rounded-lg ${timeLeft < 300 ? 'animate-pulse' : ''}`}
                         style={{ background: timeLeft < 300 ? 'rgba(239,68,68,0.15)' : 'var(--bg-card)', color: timeLeft < 300 ? '#ef4444' : 'var(--text-primary)' }}>
                         ⏱ {formatTime(timeLeft)}
                     </div>
@@ -1159,7 +1271,7 @@ export default function TakeTestPage() {
                         <div className="flex gap-2 text-sm">
                             <span className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>{currentQ.subject_name}</span>
                             {currentQ.topic_name && <span className="badge" style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--accent-secondary)' }}>{currentQ.topic_name}</span>}
-                            {currentQ.year && <span className="badge" style={{ background: 'rgba(236,72,153,0.1)', color: '#ec4899' }}>PYQ {currentQ.year}</span>}
+                            {currentQ.year ? <span className="badge" style={{ background: 'rgba(236,72,153,0.1)', color: '#ec4899' }}>PYQ {currentQ.year}</span> : null}
                         </div>
                     </div>
 
@@ -1227,19 +1339,21 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    <div className="px-6 py-4 flex items-center justify-between shrink-0" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
+                    {/* Wraps to two rows on phones ([Clear, Mark & Next] then
+                        [Prev, Save & Next]) instead of squeezing four buttons. */}
+                    <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 shrink-0" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--bg-secondary)' }}>
                         <div className="flex gap-3">
                             <button onClick={handleClear} className="btn-secondary text-sm">Clear</button>
-                            <button onClick={handleMarkAndNext} className="text-sm px-4 py-2 rounded-lg font-semibold transition-colors"
+                            <button onClick={handleMarkAndNext} className="text-sm px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap"
                                 style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
                                 Mark & Next
                             </button>
                         </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => goTo(Math.max(0, currentIdx - 1))} disabled={currentIdx === 0} className="btn-secondary text-sm">
+                        <div className="flex gap-3 ml-auto">
+                            <button onClick={() => goTo(Math.max(0, currentIdx - 1))} disabled={currentIdx === 0} className="btn-secondary text-sm inline-flex items-center gap-2">
                                 <ChevronLeft className="w-4 h-4" /> Prev
                             </button>
-                            <button onClick={handleSaveAndNext} className="btn-primary text-sm">
+                            <button onClick={handleSaveAndNext} className="btn-primary text-sm whitespace-nowrap">
                                 Save & Next <ChevronRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -1262,8 +1376,8 @@ export default function TakeTestPage() {
                         <div className="font-bold text-sm mb-3">Legend</div>
                         <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
                             <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-white text-xs" style={{ background: '#10b981' }}>{answeredCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Answered</span></div>
-                            <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-white text-xs" style={{ background: '#ef4444' }}>{notAnsweredCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Not Answered</span></div>
-                            <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-xs" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{notVisitedCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Not Visited</span></div>
+                            <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-white text-xs" style={{ background: '#ef4444' }}>{notAnsweredVisitedCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Not Answered</span></div>
+                            <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-xs" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}>{notVisitedCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Not Visited</span></div>
                             <div className="flex items-center gap-2"><span className="w-6 h-6 rounded flex items-center justify-center text-white text-xs" style={{ background: '#8b5cf6' }}>{markedCount}</span> <span style={{ color: 'var(--text-secondary)' }}>Marked</span></div>
                         </div>
                     </div>
@@ -1294,7 +1408,7 @@ export default function TakeTestPage() {
                             )}
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1">
-                            <div className="grid grid-cols-6 gap-1.5 pt-1.5 pb-1">
+                            <div className="grid grid-cols-6 sm:grid-cols-10 lg:grid-cols-6 gap-1.5 pt-1.5 pb-1">
                                 {questions.slice(palettePage * 30, (palettePage + 1) * 30).map((q, localIdx) => {
                                     const i = palettePage * 30 + localIdx;
                                     const answered = !!answers[q.id];
