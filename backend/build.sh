@@ -25,8 +25,12 @@ python manage.py seed_blogs || true
 # SuspiciousFileOperation, leaving the QuestionImage row with no file.
 python manage.py shell -c "from pathlib import Path; from django.conf import settings; p = Path(settings.MEDIA_ROOT) / 'recall_images'; p.mkdir(parents=True, exist_ok=True); print('Bootstrapped', p)"
 
-# Import dataset for NEET PG
-python manage.py import_neet_pg
+# NEET PG 2025/2020 papers: NOT imported on deploy. `import_neet_pg` used to
+# run here and deleted every exam_source="NEET PG" question (with their
+# attempts, bookmarks, notes, flashcards and test responses) on every build.
+# It is now a manual, non-destructive command; run it by hand when needed:
+#   python manage.py import_neet_pg --dry-run   # report only
+#   python manage.py import_neet_pg             # create missing keyed questions
 
 # Knowledge Base: load ontology + whitelisted sources (idempotent)
 python manage.py load_ontology

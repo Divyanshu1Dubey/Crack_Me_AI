@@ -7,18 +7,25 @@ from django.conf.urls.static import static
 from django.http import JsonResponse
 
 
-# Phase 4 — production-only safety nets.  Never raises in dev/CI.
+# Phase 4 — production-only safety nets.  Never raises in dev/CI. In
+# production a fatal misconfiguration raises ImproperlyConfigured here, as
+# security.py documents. Only the import is guarded: the old `except
+# Exception` around the call also swallowed the check's own
+# ImproperlyConfigured and logged it as an import failure.
 try:
     from .security import security_posture_check
-    security_posture_check(
-        is_production=getattr(settings, "IS_PRODUCTION_RUNTIME", False),
-        is_ci=getattr(settings, "IS_CI", False),
-    )
-except Exception:  # pragma: no cover - defensive
+except ImportError:  # pragma: no cover - defensive
+    security_posture_check = None
     import logging
     logging.getLogger(__name__).warning(
         "security_posture_check failed to import — production checks disabled.",
         exc_info=True,
+    )
+
+if security_posture_check is not None:
+    security_posture_check(
+        is_production=getattr(settings, "IS_PRODUCTION_RUNTIME", False),
+        is_ci=getattr(settings, "IS_CI", False),
     )
 
 

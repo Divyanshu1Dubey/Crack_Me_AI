@@ -13,6 +13,8 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from crack_cms.client_ip import parse_num_proxies
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Env file selection. Local development points DJANGO_ENV_FILE at a separate
@@ -30,6 +32,24 @@ if _env_file:
     load_dotenv(_env_path, override=False)
 else:
     load_dotenv()  # Load .env file (does not override existing system env vars)
+
+# ── Hermetic test runs ──────────────────────────────────────────────
+# `manage.py test` used to inherit live credentials from backend/.env: test
+# failures were reported to the production Sentry and AI tests made real
+# provider calls. Under the test runner every external-service secret is
+# blanked (tests mock what they need). Opt out explicitly with
+# ALLOW_EXTERNAL_SERVICES_IN_TESTS=1.
+_TEST_RUN = 'test' in sys.argv or 'pytest' in sys.modules
+if _TEST_RUN and os.getenv('ALLOW_EXTERNAL_SERVICES_IN_TESTS', '').strip().lower() not in ('1', 'true', 'yes'):
+    for _secret in (
+        'SENTRY_DSN', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY', 'COHERE_API_KEY',
+        'OPENROUTER_API_KEY', 'OPENROUTER_API_KEY2', 'TOGETHER_API_KEY', 'GITHUB_TOKEN',
+        'HUGGINGFACE_API_KEY', 'AIML_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_MISTRAL_API_KEY',
+        'DEEPSEEK_API_KEY', 'OMNIROUTE_API_KEY', 'OMNIROUTEAPI', 'OMNIROUTE_BASE_URL', 'NCBI_API_KEY',
+        'SUPABASE_SERVICE_ROLE_KEY', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET',
+        'EMAIL_HOST_PASSWORD', 'REDIS_URL',
+    ):
+        os.environ[_secret] = ''
 
 # ── Sentry Error Tracking ────────────────────────────────────────────
 # Production-safe default. Local development can opt in through backend/.env.
@@ -139,6 +159,7 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',
     'questions.middleware.RateLimitMiddleware',
     'crack_cms.cache_middleware.DisableApiCacheMiddleware',
+    'crack_cms.cross_origin.CrossOriginResourcePolicyMiddleware',
     'accounts.middleware.UpdateLastSeenMiddleware',
 ]
 
@@ -168,6 +189,20 @@ DATABASE_URL = (
     or os.getenv('SUPABASE_DATABASE_URL')
     or ''
 ).strip()
+# A test run creates (and drops) its own database next to DATABASE_URL, so it
+# must never point at a remote server -- backend/.env holds the production
+# pooler URL. Local hosts are fine; list others in TEST_DATABASE_HOSTS.
+if _TEST_RUN and DATABASE_URL:
+    _test_db_host = (urlparse(DATABASE_URL).hostname or '').strip().lower()
+    _allowed_test_hosts = {'localhost', '127.0.0.1', '::1', 'postgres', 'db'} | {
+        h.strip().lower() for h in os.getenv('TEST_DATABASE_HOSTS', '').split(',') if h.strip()
+    }
+    if _test_db_host and _test_db_host not in _allowed_test_hosts:
+        raise ImproperlyConfigured(
+            f'Refusing to run tests against the remote database host "{_test_db_host}". '
+            'Unset DATABASE_URL / SUPABASE_DATABASE_URL (tests then use SQLite) or add the host to TEST_DATABASE_HOSTS.'
+        )
+
 # Use in-memory SQLite for GitHub CI to avoid LFS pointer file issues
 IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
 IS_PRODUCTION_RUNTIME = not DEBUG and not IS_CI
@@ -284,6 +319,33 @@ AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
 AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']  # Lock by username and IP
 AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
+# Client IP behind proxies. DRF's throttles key anonymous traffic on the
+# client IP; without NUM_PROXIES DRF uses the whole, client-controlled
+# X-Forwarded-For string, so a new prefix per request is a new throttle
+# bucket. Set NUM_PROXIES to the number of proxies in front of Django that
+# append to X-Forwarded-For (DRF then takes that entry from the right).
+# Unset keeps DRF's historical behaviour. The question-bank limiter
+# (questions/middleware.py, via crack_cms/client_ip.py) reads the same value
+# and falls back to REMOTE_ADDR while it is unset. TRUSTED_CLIENT_IP_HEADER
+# (e.g. "CF-Connecting-IP", "DO-Connecting-IP") is honoured by that limiter
+# only; set it only when every request reaches Django through that edge.
+NUM_PROXIES = parse_num_proxies(os.getenv('NUM_PROXIES'))
+TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+# Question-bank limiter (questions/middleware.py): GETs under /api/questions/
+# per user (or per client IP when anonymous) per window. One student in rapid
+# revision issues about 12 GETs per question; 0 disables the limiter.
+QUESTION_BANK_RATE_LIMIT = _env_int('QUESTION_BANK_RATE_LIMIT', 300)
+QUESTION_BANK_RATE_WINDOW = _env_int('QUESTION_BANK_RATE_WINDOW', 60)
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -298,8 +360,10 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # Honours ?page_size= (max 100); default page size stays 20.
+    'DEFAULT_PAGINATION_CLASS': 'crack_cms.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
+    'NUM_PROXIES': NUM_PROXIES,
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
@@ -349,10 +413,19 @@ if LOCAL_DEV_AUTH:
 
 # SimpleJWT — refresh rotation + blacklist after rotation.
 # These apply to the DRF-issued JWT fallback only (Supabase users go through
-# SupabaseJWTAuthentication which has its own refresh handling).
+# SupabaseJWTAuthentication which has its own refresh handling). Today that
+# is only the dev-only local refresh endpoint (accounts/local_auth.py).
+# Blacklisting needs the 'rest_framework_simplejwt.token_blacklist' app (and
+# its tables); it is not installed, so SimpleJWT silently skipped the
+# blacklist and rotated refresh tokens stayed valid until expiry. The flag
+# now reflects that: it can only be on when the app is installed.
+_JWT_BLACKLIST_APP_INSTALLED = 'rest_framework_simplejwt.token_blacklist' in INSTALLED_APPS
 SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': os.getenv('JWT_ROTATE_REFRESH_TOKENS', 'true').lower() == 'true',
-    'BLACKLIST_AFTER_ROTATION': os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true',
+    'BLACKLIST_AFTER_ROTATION': (
+        _JWT_BLACKLIST_APP_INSTALLED
+        and os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true'
+    ),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MIN', '15'))),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7'))),
 }
@@ -433,6 +506,10 @@ CORS_ALLOW_CREDENTIALS = True
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-session-id",
+    # Optimistic locking: the admin question editor (and QuestionImage
+    # PATCH/DELETE) send If-Match: <updated_at>. Without it in the allow-list
+    # the cross-origin preflight fails and the save never reaches the API.
+    "if-match",
 ]
 CORS_MAX_AGE = 86400  # 24 hours — browsers cache preflight responses
 

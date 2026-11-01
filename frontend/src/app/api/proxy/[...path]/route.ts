@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 
 const DEFAULT_BACKEND_API_URL = 'https://api.cracklabs.app/api';
+const DEFAULT_LOCAL_BACKEND_API_URL = 'http://127.0.0.1:8000/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
 const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-backend.onrender.com',
@@ -8,6 +9,10 @@ const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-vsthc.ondigitalocean.app',
   '.ondigitalocean.app',
 ];
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+// Only these are replayed against the fallback after a failure: a POST or
+// PATCH that hit a 5xx may already have been applied.
+const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const normalizeApiBaseUrl = (url: string) => {
   const normalized = url.replace(/\/+$/, '');
@@ -17,24 +22,33 @@ const normalizeApiBaseUrl = (url: string) => {
 const isKnownUnhealthyApiHost = (url: string) =>
   LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
 
-const resolveBackendApiBaseUrl = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return DEFAULT_BACKEND_API_URL;
-  }
-
-  const configured = (process.env.BACKEND_API_URL || '').trim();
-  if (!configured) return DEFAULT_BACKEND_API_URL;
-
+const configuredApiBaseUrl = (value: string | undefined) => {
+  const configured = (value || '').trim();
+  if (!configured) return '';
   const normalized = normalizeApiBaseUrl(configured);
-  if (isKnownUnhealthyApiHost(normalized)) {
-    return DEFAULT_BACKEND_API_URL;
-  }
-
-  return normalized;
+  return isKnownUnhealthyApiHost(normalized) ? '' : normalized;
 };
 
-const PRIMARY_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl();
-const FALLBACK_BACKEND_API_BASE_URL = normalizeApiBaseUrl(DEFAULT_BACKEND_API_URL);
+/**
+ * The browser only uses this proxy when the app runs on localhost
+ * (lib/apiBase.ts USE_API_PROXY). Requests served on a local hostname -- or
+ * by a dev server -- go to BACKEND_API_URL or the local backend and never
+ * fall back to production unless BACKEND_API_FALLBACK_URL says so; a local
+ * session must not read from or write to the production API by accident.
+ * The deployed site keeps its previous behaviour (production API, no
+ * fallback).
+ */
+const resolveBackendApiBaseUrls = (request: NextRequest) => {
+  const servedLocally =
+    process.env.NODE_ENV !== 'production'
+    || LOCAL_HOSTNAMES.has(request.nextUrl.hostname.toLowerCase());
+  if (!servedLocally) {
+    return { primary: DEFAULT_BACKEND_API_URL, fallback: '' };
+  }
+  const primary = configuredApiBaseUrl(process.env.BACKEND_API_URL) || DEFAULT_LOCAL_BACKEND_API_URL;
+  const fallback = configuredApiBaseUrl(process.env.BACKEND_API_FALLBACK_URL);
+  return { primary, fallback: fallback && fallback !== primary ? fallback : '' };
+};
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -135,11 +149,14 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     cache: 'no-store',
   };
 
+  const { primary, fallback } = resolveBackendApiBaseUrls(request);
+  const canUseFallback = Boolean(fallback) && RETRYABLE_METHODS.has(request.method.toUpperCase());
+
   let primaryUrl: string;
   let fallbackUrl: string;
   try {
-    primaryUrl = buildTargetUrl(PRIMARY_BACKEND_API_BASE_URL, request, pathParts);
-    fallbackUrl = buildTargetUrl(FALLBACK_BACKEND_API_BASE_URL, request, pathParts);
+    primaryUrl = buildTargetUrl(primary, request, pathParts);
+    fallbackUrl = canUseFallback ? buildTargetUrl(fallback, request, pathParts) : primaryUrl;
   } catch {
     return buildErrorResponse(400, 'Invalid proxy path.');
   }
@@ -149,7 +166,7 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     upstreamResponse = await fetchWithTimeout(primaryUrl, requestInit);
   } catch (error: unknown) {
     console.error('Proxy upstream fetch failed for primary backend', error);
-    if (PRIMARY_BACKEND_API_BASE_URL === FALLBACK_BACKEND_API_BASE_URL) {
+    if (!canUseFallback) {
       const name = (error as { name?: string })?.name;
       if (name === 'AbortError') {
         return buildErrorResponse(504, 'Upstream request timed out.');
@@ -169,10 +186,7 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     }
   }
 
-  if (
-    upstreamResponse.status >= 500 &&
-    PRIMARY_BACKEND_API_BASE_URL !== FALLBACK_BACKEND_API_BASE_URL
-  ) {
+  if (upstreamResponse.status >= 500 && canUseFallback) {
     try {
       upstreamResponse = await fetchWithTimeout(fallbackUrl, requestInit);
     } catch (error: unknown) {

@@ -28,14 +28,29 @@ Three layers of defence now keep the data clean:
      as ``<img onerror=...>`` instead of raw text — graceful
      fallback if a row escapes both heal passes.
 
-The auto-heal is safe to leave enabled in every environment because
-``relink_fixture_images`` is itself idempotent (it scans for the
-specific URL pattern and only writes back when one is found).
+``relink_fixture_images`` is idempotent (it scans for the specific URL
+pattern and only writes back when one is found), but it still writes to
+whatever database the process is configured for. So the thread only
+starts in server processes (see ``should_auto_heal``):
+
+  * WSGI/ASGI servers (gunicorn etc.): yes -- unchanged production
+    behaviour;
+  * ``manage.py runserver``: only in the autoreloader's child process (or
+    with ``--noreload``), not in the parent as well;
+  * every other management command (``test``, ``shell``, ``check``,
+    ``migrate``, ``collectstatic``, ``qcluster``, ...) and pytest: no.
+    ``build.sh`` already runs ``relink_fixture_images --apply`` after
+    migrations, and the test runner must not touch the configured
+    database before its test database exists.
+
+``CRACKCMS_HEAL_ON_READY`` overrides the default: ``1``/``true`` forces the
+thread on (also for management commands), ``0``/``false`` turns it off.
 """
 from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 
 from django.apps import AppConfig
@@ -48,6 +63,45 @@ logger = logging.getLogger(__name__)
 # Django reloads the app (e.g. ``runserver`` autoreload).
 _HEAL_LOCK = threading.Lock()
 _HEAL_DONE = threading.Event()
+
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+_MANAGEMENT_ENTRY_POINTS = frozenset(
+    {"manage.py", "django-admin", "django-admin.py", "django-admin.exe"}
+)
+
+
+def _is_management_command(argv) -> bool:
+    if not argv:
+        return False
+    entry = os.path.basename(str(argv[0]))
+    if entry in _MANAGEMENT_ENTRY_POINTS:
+        return True
+    # ``python -m django <command>``
+    return entry == "__main__.py" and os.path.basename(os.path.dirname(str(argv[0]))) == "django"
+
+
+def should_auto_heal(argv=None, environ=None, modules=None) -> bool:
+    """Whether this process should start the relink thread (see module doc)."""
+    argv = sys.argv if argv is None else argv
+    environ = os.environ if environ is None else environ
+    modules = sys.modules if modules is None else modules
+
+    flag = (environ.get("CRACKCMS_HEAL_ON_READY") or "").strip().lower()
+    if flag in _FALSE_VALUES:
+        return False
+    if flag in _TRUE_VALUES:
+        return True
+
+    if "pytest" in modules:
+        return False
+    if _is_management_command(argv):
+        command = argv[1] if len(argv) > 1 else ""
+        if command != "runserver":
+            return False
+        return environ.get("RUN_MAIN") == "true" or "--noreload" in argv
+    # Not a management command: a WSGI/ASGI server worker.
+    return True
 
 
 class QuestionsConfig(AppConfig):
@@ -65,31 +119,17 @@ class QuestionsConfig(AppConfig):
         accepting requests. The ``Event`` guards against duplicate
         runs within the same process, and the call itself is wrapped
         so a misconfigured DB / missing migration can never crash the
-        boot.
+        boot. Which processes start it is decided by ``should_auto_heal``.
         """
-        # Skip during management commands other than ``runserver`` /
-        # ``gunicorn``-style boots. ``RUN_MAIN`` is set by the Django
-        # autoreloader's child process; without it, the parent would
-        # also try to run the heal and double-spawn the thread.
-        run_main = os.environ.get("RUN_MAIN") == "true"
-        if not run_main and os.environ.get("CRACKCMS_HEAL_ON_READY") != "1":
-            # Production / autoreload-parent path. The heal still
-            # fires on the worker child (``RUN_MAIN=true``). When the
-            # reloader isn't in play (gunicorn, wsgi) we also fire on
-            # first ready() — i.e. always, because RUN_MAIN isn't
-            # exported by gunicorn. The double-fire guard below
-            # protects us.
-            if "RUN_MAIN" not in os.environ:
-                # Likely a production worker. Fall through.
-                pass
-            else:
-                return
+        if not should_auto_heal():
+            return
 
         if _HEAL_DONE.is_set():
             return
         with _HEAL_LOCK:
             if _HEAL_DONE.is_set():
                 return
+            _HEAL_DONE.set()
 
         thread = threading.Thread(
             target=_run_relink_passive,
@@ -97,7 +137,6 @@ class QuestionsConfig(AppConfig):
             daemon=True,
         )
         thread.start()
-        _HEAL_DONE.set()
 
 
 def _run_relink_passive() -> None:

@@ -21,17 +21,13 @@ from pathlib import Path
 
 import django
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-
-# Setup Django before importing models
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
-from dotenv import load_dotenv
-load_dotenv(override=True)
-
-django.setup()
+# This is a standalone script, not a test module. `manage.py test` imports
+# every test*.py file it discovers, and pytest would collect the test_*
+# functions below (they hit the configured database and the live AI
+# providers). So nothing may run at import time -- the console, Django and
+# environment setup live under `if __name__ == '__main__'` -- and pytest is
+# told not to collect this module.
+__test__ = False
 
 # ─── Colors & formatting ───
 GREEN = '\033[92m'
@@ -754,6 +750,18 @@ def test_auth_flow():
 # MAIN
 # ══════════════════════════════════════════════════════════════
 if __name__ == '__main__':
+    # Fix Windows console encoding
+    if sys.platform == 'win32':
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+    # Setup Django before importing models. Environment loading is left to
+    # settings.py: DJANGO_ENV_FILE when set, otherwise .env -- and neither
+    # overrides variables already in the environment (this script used to
+    # reload .env with override=True).
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
+    django.setup()
+
     parser = argparse.ArgumentParser(description='CrackCMS Comprehensive Test Suite')
     parser.add_argument('--quick', action='store_true', help='Skip slow AI provider tests')
     parser.add_argument('--keys-only', action='store_true', help='Only test API keys')
