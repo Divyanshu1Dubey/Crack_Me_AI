@@ -96,7 +96,9 @@ export default function FlashcardsPage() {
         setCreateError(null);
         setCreateSuccess(false);
         try {
-            const response = await flashcardsAPI.create({ front: form.front, back: form.back, difficulty: form.difficulty });
+            // personal_note is accepted by the serializer; it used to be dropped here.
+            const payload = { front: form.front, back: form.back, difficulty: form.difficulty, personal_note: form.note.trim() };
+            const response = await flashcardsAPI.create(payload);
             setForm({ front: '', back: '', difficulty: 'medium', note: '' });
             setCreateSuccess(true);
             setTimeout(() => {
@@ -175,6 +177,12 @@ export default function FlashcardsPage() {
     if (authLoading) return null;
 
     const currentCard = dueCards[currentIndex];
+    // From real review history: a card counts once it has been graded at least
+    // once (new cards start at ease 2.5, so they used to show as "retained").
+    const reviewedCards = cards.filter(c => (c.review_count || 0) > 0);
+    const retentionPct = reviewedCards.length > 0
+        ? Math.round((reviewedCards.filter(c => c.ease_factor >= 2.5).length / reviewedCards.length) * 100)
+        : null;
 
     return (
         <>
@@ -274,7 +282,7 @@ export default function FlashcardsPage() {
                                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
                                     <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-emerald-500" />
                                     <div>
-                                        <p className="text-xl sm:text-2xl font-bold">{cards.length - dueCards.length}</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{reviewedCards.length}</p>
                                         <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Reviewed</p>
                                     </div>
                                 </CardContent>
@@ -291,7 +299,9 @@ export default function FlashcardsPage() {
                             <CardContent className="pb-4">
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-emerald-600">{Math.round(analytics.retention_rate * 100)}%</p>
+                                        <p className="text-lg font-bold text-emerald-600" title="Share of your reviewed cards you recalled easily">
+                                            {retentionPct === null ? '—' : `${retentionPct}%`}
+                                        </p>
                                         <p className="text-[10px] text-muted-foreground">Retention Rate</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">

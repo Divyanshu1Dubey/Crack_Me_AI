@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI, questionsAPI, announcementsAPI } from '@/lib/api';
+import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle, Clock, FileText, Flame,
@@ -33,28 +33,6 @@ interface HeatmapDay {
 // SWR fetchers with caching
 const dashboardFetcher = () => analyticsAPI.getBundle().then(r => r.data).catch(() => null);
 
-const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
-const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
-
-function getBonusEndTimestamp(): number {
-    const now = Date.now();
-    if (typeof window === 'undefined') return now + BONUS_TOTAL_SECONDS * 1000;
-    // localStorage can throw (Safari private mode, blocked storage) --
-    // never let a promo banner crash the dashboard.
-    try {
-        const stored = window.localStorage.getItem(BONUS_END_KEY);
-        if (stored) {
-            const parsed = Number(stored);
-            if (Number.isFinite(parsed) && parsed > now) return parsed;
-        }
-        const end = now + BONUS_TOTAL_SECONDS * 1000;
-        window.localStorage.setItem(BONUS_END_KEY, String(end));
-        return end;
-    } catch {
-        return now + BONUS_TOTAL_SECONDS * 1000;
-    }
-}
-
 /** Local-time yyyy-mm-dd (matches the backend's IST activity dates). */
 function toLocalDateKey(d: Date): string {
     const yyyy = d.getFullYear();
@@ -62,92 +40,6 @@ function toLocalDateKey(d: Date): string {
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
 }
-
-const BonusTimerBanner = () => {
-    // Persist the deadline in localStorage so the countdown survives
-    // re-renders (SWR revalidations, route changes, tabs refocusing) and
-    // never resets to 1:00:00 mid-session.
-    //
-    // Lazy `useState` initializer reads the stored end-timestamp synchronously
-    // on mount so the FIRST render already shows the correct remaining time.
-    // Without this, the banner would briefly flash 60:00 every time the
-    // dashboard tree remounts (e.g., returning from another route, SWR
-    // focus revalidation, or page visibility change) — which is what was
-    // making the timer feel like it "starts again from 1 hour".
-    // Starts as null and is computed after mount: reading localStorage /
-    // Date.now() during render made the server and client markup differ
-    // (hydration mismatch). Rendering nothing until the first tick also
-    // avoids the "60:00" flash described above.
-    const [timeLeft, setTimeLeft] = useState<number | null>(null);
-    useEffect(() => {
-        const endTs = getBonusEndTimestamp();
-        const tick = () => {
-            const remaining = Math.max(0, Math.floor((endTs - Date.now()) / 1000));
-            setTimeLeft(remaining);
-        };
-        tick();
-        const timer = setInterval(tick, 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    if (timeLeft === null) return null;
-
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    const expired = timeLeft <= 0;
-
-    if (expired) {
-        return (
-            <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                        <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-amber-500" />
-                            Bonus offer ended
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                            The next bonus window opens in a few hours. Subscribe to lock in the early-bird price.
-                        </p>
-                    </div>
-                    <Link href="/subscription">
-                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                            View Offers
-                        </Button>
-                    </Link>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
-            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="space-y-1 flex-1">
-                    <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                        <Clock className="w-4 h-4 animate-pulse text-amber-500" /> 
-                        Limited Time Bonus Offer!
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                        Give an exam right now to claim your bonus subscription. You have <span className="font-bold text-amber-600 dark:text-amber-400">{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span> remaining!
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                    <Link href="/tests">
-                        <Button size="sm" className="font-semibold bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white shadow-lg shadow-amber-500/20 border-0">
-                            Give Exam Now
-                        </Button>
-                    </Link>
-                    <Link href="/subscription">
-                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                            View Offers
-                        </Button>
-                    </Link>
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -177,17 +69,14 @@ export default function DashboardPage() {
     const heatmap = bundle?.heatmap || [];
     const streak = bundle?.streak;
     const announcements = bundle?.announcements || [];
-    const questionStats = bundle?.question_stats;
 
-    // Dynamic SWR keys based on selected exam source (lightweight — just counts)
+    // Question Bank Mastery needs the per-user progress (total_solved,
+    // by_difficulty/by_year/by_subject) that only /questions/stats/ returns;
+    // the bundle's question_stats is just {total, with_explanation}, so using
+    // it whenever the bundle was cached showed "0 solved" and empty breakdowns.
     const { data: stats } = useSWR(
         ready ? ['question-stats', selectedExam] : null,
-        () => {
-            if (questionStats) {
-                return selectedExam === 'NEET PG' ? questionStats.neet_pg : questionStats.cms;
-            }
-            return questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null);
-        },
+        () => questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null),
         swrConfig
     );
 
@@ -337,9 +226,6 @@ export default function DashboardPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container space-y-6 pb-8">
-                    {/* Premium Upgrade Banner */}
-                    <BonusTimerBanner />
-
                     {/* Announcements Feed */}
                     {announcements.length > 0 && (
                         <div className="space-y-3">
@@ -353,7 +239,7 @@ export default function DashboardPage() {
                                                     <h4 className="font-semibold text-indigo-900 dark:text-indigo-100">{ann.title}</h4>
                                                     <Badge variant="outline" className="text-[10px] bg-white dark:bg-slate-800">{new Date(ann.created_at).toLocaleDateString()}</Badge>
                                                 </div>
-                                                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-3">{ann.body}</p>
+                                                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-3">{ann.message ?? ann.body}</p>
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -435,8 +321,10 @@ export default function DashboardPage() {
                         if (isPremium) return null;
                         const lockedFeatures = [
                             {
-                                label: 'Adaptive Mock Tests',
-                                desc: 'AI-built personalized tests from your weak topics',
+                                // There is no adaptive-test UI yet, so the card
+                                // sells what premium actually unlocks today.
+                                label: 'Full Mock Tests',
+                                desc: 'Timed mock tests with negative marking and instant answer review',
                                 iconName: 'tests-check',
                                 feature: 'Mock Tests',
                             },

@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI } from '@/lib/api';
-import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download } from 'lucide-react';
+import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
+import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download, AlertCircle } from 'lucide-react';
 
 interface FeedbackItem {
     id: number;
@@ -37,9 +37,11 @@ export default function FeedbackPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+    const [feedbackCount, setFeedbackCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [replyingTo, setReplyingTo] = useState<number | null>(null);
     const [replyText, setReplyText] = useState('');
 
@@ -53,8 +55,11 @@ export default function FeedbackPage() {
 
     const loadFeedback = () => {
         analyticsAPI.getFeedback()
-            .then(res => setFeedbacks(res.data.results || res.data || []))
-            .catch(() => {})
+            .then(res => {
+                setFeedbacks(res.data.results || res.data || []);
+                setFeedbackCount(typeof res.data?.count === 'number' ? res.data.count : null);
+            })
+            .catch(() => setError('Could not load feedback. Please refresh to try again.'))
             .finally(() => setLoading(false));
     };
 
@@ -67,6 +72,7 @@ export default function FeedbackPage() {
         e.preventDefault();
         if (!title.trim() || !message.trim()) return;
         setSubmitting(true);
+        setError(null);
         analyticsAPI.submitFeedback({ category, rating, title: title.trim(), message: message.trim() })
             .then(() => {
                 setSuccess(true);
@@ -74,19 +80,31 @@ export default function FeedbackPage() {
                 loadFeedback();
                 setTimeout(() => setSuccess(false), 3000);
             })
-            .catch(() => {})
+            .catch((err: { response?: { status?: number; data?: unknown } }) => {
+                // Keep the typed text so nothing is lost; say why it failed.
+                if (err?.response?.status === 429) {
+                    setError('You have sent a lot of feedback recently. Please try again in a while.');
+                } else if (err?.response?.data) {
+                    setError(extractApiErrorMessage(err.response.data, 'Could not send your feedback. Please try again.'));
+                } else {
+                    setError('Could not send your feedback. Check your connection and try again.');
+                }
+            })
             .finally(() => setSubmitting(false));
     };
 
     const handleReply = (id: number) => {
         if (!replyText.trim()) return;
+        setError(null);
         analyticsAPI.replyFeedback(id, { admin_reply: replyText.trim() })
             .then(() => { setReplyingTo(null); setReplyText(''); loadFeedback(); })
-            .catch(() => {});
+            .catch(() => setError('Could not save the reply. Please try again.'));
     };
 
     const handleDelete = (id: number) => {
-        analyticsAPI.deleteFeedback(id).then(() => loadFeedback()).catch(() => {});
+        setError(null);
+        analyticsAPI.deleteFeedback(id).then(() => loadFeedback())
+            .catch(() => setError('Could not delete this feedback. Please try again.'));
     };
 
     const downloadCSV = (type: string) => {
@@ -100,7 +118,7 @@ export default function FeedbackPage() {
                 a.click();
                 window.URL.revokeObjectURL(url);
             })
-            .catch(() => {});
+            .catch(() => setError('Could not download the CSV. Please try again.'));
     };
 
     return (
@@ -116,6 +134,13 @@ export default function FeedbackPage() {
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                     {isAdmin ? 'View and reply to all student feedback' : 'Help us improve CrackCMS — your feedback matters!'}
                 </p>
+
+                {error && (
+                    <div role="alert" className="glass-card p-3 mb-6 flex items-center gap-2 text-sm"
+                        style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                    </div>
+                )}
 
                 {/* Admin Download Buttons */}
                 {isAdmin && (
@@ -208,7 +233,7 @@ export default function FeedbackPage() {
                 {/* Feedback List */}
                 <div>
                     <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
-                        {isAdmin ? `All Feedback (${feedbacks.length})` : 'Your Previous Feedback'}
+                        {isAdmin ? `All Feedback (${feedbackCount ?? feedbacks.length})` : 'Your Previous Feedback'}
                     </h2>
 
                     {loading ? (

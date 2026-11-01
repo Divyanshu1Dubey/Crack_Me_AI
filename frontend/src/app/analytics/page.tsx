@@ -36,14 +36,18 @@ interface SubjectPrediction {
     subject: string;
     code: string;
     accuracy: number;
-    predicted_correct: number;
+    /** Questions this subject has in the real CMS paper; null if not a paper subject. */
+    out_of: number | null;
+    predicted_correct: number | null;
     strength: string;
 }
 
+// Mirrors backend DailyActivitySerializer.
 interface HeatmapDay {
     date: string;
-    questions_practiced: number;
-    tests_taken: number;
+    questions_attempted: number;
+    correct_answers: number;
+    tests_completed: number;
     time_spent_minutes: number;
 }
 
@@ -151,7 +155,9 @@ export default function AnalyticsPage() {
                                                 <div className="text-lg font-bold" style={{ color: sp.strength === 'strong' ? '#10b981' : sp.strength === 'weak' ? '#ef4444' : '#f59e0b' }}>
                                                     {sp.accuracy}%
                                                 </div>
-                                                <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sp.predicted_correct}/24 Qs</div>
+                                                {sp.out_of ? (
+                                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sp.predicted_correct ?? 0}/{sp.out_of} Qs</div>
+                                                ) : null}
                                             </div>
                                         ))}
                                     </div>
@@ -260,7 +266,7 @@ export default function AnalyticsPage() {
                                 </h3>
                                 <div className="flex flex-wrap gap-1">
                                     {heatmap.slice(-90).map((d, i) => {
-                                        const intensity = d.questions_practiced + (d.tests_taken * 10);
+                                        const intensity = (d.questions_attempted || 0) + ((d.tests_completed || 0) * 10);
                                         let bg = 'rgba(16,185,129,0.06)';
                                         let border = 'rgba(16,185,129,0.18)';
                                         if (intensity > 50) { bg = '#10b981'; border = '#10b981'; }
@@ -269,7 +275,7 @@ export default function AnalyticsPage() {
                                         else if (intensity > 0)  { bg = 'rgba(16,185,129,0.15)'; border = 'rgba(16,185,129,0.2)'; }
                                         return (
                                             <div key={i} className="w-3 h-3 rounded-sm border" style={{ background: bg, borderColor: border }}
-                                                title={`${d.date}: ${d.questions_practiced} Qs, ${d.tests_taken} tests`} />
+                                                title={`${d.date}: ${d.questions_attempted || 0} Qs, ${d.tests_completed || 0} tests`} />
                                         );
                                     })}
                                 </div>
@@ -374,7 +380,8 @@ export default function AnalyticsPage() {
                                                             {p.accuracy}%
                                                         </span>
                                                     </td>
-                                                    <td className="py-2 text-center" style={{ color: 'var(--text-secondary)' }}>{p.avg_time_per_question}s</td>
+                                                    {/* Per-topic time is not recorded yet for every answer; show a dash, not a fake 0s. */}
+                                                    <td className="py-2 text-center" style={{ color: 'var(--text-secondary)' }}>{p.avg_time_per_question > 0 ? `${p.avg_time_per_question}s` : '—'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

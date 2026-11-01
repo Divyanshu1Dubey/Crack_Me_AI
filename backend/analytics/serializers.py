@@ -32,6 +32,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'category', 'rating', 'title', 'message',
                   'is_read', 'admin_reply', 'created_at']
         read_only_fields = ['id', 'username', 'is_read', 'admin_reply', 'created_at']
+        extra_kwargs = {'message': {'max_length': 5000}}
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -50,6 +51,17 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             'id', 'created_by', 'created_by_name', 'created_at',
             'sent_at', 'delivery_status', 'delivery_count', 'failure_report',
         ]
+
+
+class StudentAnnouncementSerializer(serializers.ModelSerializer):
+    """What students see: no targeting rules, delivery stats or author ids."""
+    is_expired = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Announcement
+        fields = ['id', 'title', 'message', 'image_url', 'deep_link', 'priority',
+                  'is_expired', 'expires_at', 'created_at']
+        read_only_fields = fields
 
 
 class StudyStreakSerializer(serializers.ModelSerializer):
@@ -151,7 +163,35 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
                   'selected_answer', 'correct_answer', 'is_correct', 'review_status',
                   'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
                   'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        # Students may edit only their note and the flag. The question, the
+        # answers and the review schedule are server-controlled (review state
+        # changes only through the /review/ action): a writable `question`
+        # turned PATCH into an answer oracle for any question id, and writable
+        # review fields let clients forge the review_mistakes quest.
+        read_only_fields = ['id', 'user', 'question', 'selected_answer', 'is_correct', 'review_status',
+                            'review_count', 'last_reviewed_at', 'next_review_at', 'created_at']
+        extra_kwargs = {'user_note': {'max_length': 5000}}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Rows come from analytics.views._notebook_queryset(), which annotates
+        # whether the user may see this question's answer (premium, showcase
+        # or actually answered it). Anything else -- e.g. rows planted through
+        # the old unchecked POST -- keeps the stem but not the key.
+        if not mistake_answer_visible(instance):
+            data['correct_answer'] = ''
+            data['explanation'] = ''
+        return data
+
+
+def mistake_answer_visible(instance) -> bool:
+    """True when the annotated notebook row may expose its answer key."""
+    return bool(
+        getattr(instance, 'answer_visible', False)
+        or getattr(instance, 'answered_in_bank', False)
+        or getattr(instance, 'answered_in_test', False)
+        or getattr(instance, 'is_showcase', False)
+    )
 
 
 class TopicNoteListSerializer(serializers.Serializer):

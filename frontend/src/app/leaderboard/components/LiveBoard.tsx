@@ -2,11 +2,12 @@
 
 import { Flame, Sparkles, Target, Trophy, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import type { LiveBoardRow } from '../types';
+import { formatAccuracy, periodPhrase, type LeaderboardPeriod, type LiveBoardRow } from '../types';
 
 interface Props {
     rows: LiveBoardRow[];
     myUserId?: number;
+    period: LeaderboardPeriod;
 }
 
 /**
@@ -15,7 +16,7 @@ interface Props {
  * users). Below threshold the envelope omits this so the small-user
  * count is never exposed on the page.
  */
-export default function LiveBoard({ rows, myUserId }: Props) {
+export default function LiveBoard({ rows, myUserId, period }: Props) {
     if (!rows || rows.length === 0) return null;
 
     return (
@@ -23,7 +24,7 @@ export default function LiveBoard({ rows, myUserId }: Props) {
             <CardContent className="p-5 space-y-3">
                 <div className="flex items-center gap-2">
                     <Trophy className="w-5 h-5 text-emerald-500" />
-                    <h3 className="font-bold text-foreground">Top 10 this week — live</h3>
+                    <h3 className="font-bold text-foreground">Top 10 {periodPhrase(period)} — live</h3>
                     <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Live
@@ -50,9 +51,6 @@ export default function LiveBoard({ rows, myUserId }: Props) {
                                             </span>
                                         )}
                                     </p>
-                                    {row.college && (
-                                        <p className="text-[10px] text-muted-foreground truncate">{row.college}</p>
-                                    )}
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
                                     <span className="hidden sm:inline-flex items-center gap-1">
@@ -61,7 +59,7 @@ export default function LiveBoard({ rows, myUserId }: Props) {
                                     </span>
                                     <span className="hidden sm:inline-flex items-center gap-1">
                                         <Target className="w-3 h-3 text-emerald-500" />
-                                        {row.accuracy.toFixed(0)}%
+                                        {formatAccuracy(row.accuracy, 0)}
                                     </span>
                                     <span className="inline-flex items-center gap-1 font-semibold text-foreground">
                                         <Zap className="w-3.5 h-3.5 text-yellow-500" />

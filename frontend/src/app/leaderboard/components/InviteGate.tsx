@@ -10,7 +10,8 @@ interface Props {
 }
 
 /**
- * Soft invite gate. Always visible until `live_board_enabled` is true.
+ * Invite card. Shown until `live_board_enabled` is true (the live board opens
+ * when enough learners are active -- invites alone do not unlock it).
  * Provides copy / WhatsApp / X (Twitter) share actions. No DB writes —
  * the URL simply carries `?ref=<user_id>` so a future Referral model can
  * attribute signups without changing this component.
@@ -45,7 +46,7 @@ export default function InviteGate({ invite }: Props) {
                     <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-foreground">Compete with peers</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                            {invite.cta}. Invite 2 friends to unlock the live leaderboard for everyone.
+                            {invite.cta}. The live leaderboard opens for everyone once enough learners are active.
                         </p>
                     </div>
                 </div>

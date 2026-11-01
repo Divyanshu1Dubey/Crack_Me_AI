@@ -1,18 +1,28 @@
 import csv
+import hashlib
 import logging
+import math
+import os
+import threading
+from collections import defaultdict
+from datetime import datetime, time, timedelta
 from io import StringIO
 from rest_framework.views import APIView
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.validators import validate_email
 from rest_framework.response import Response
 from rest_framework import permissions, status
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from django.http import Http404, HttpResponse
-from django.db.models import Sum, Avg, Count, F, Q
+from django.db.models import (Sum, Avg, Count, F, Q, Exists, OuterRef, Value, BooleanField, ExpressionWrapper,
+                              FloatField, Min)
 from django.utils import timezone
-from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
+from .models import (UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge,
+                     ContactMessage, AnalyticsEvent, XPEvent)
 from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
 from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, FeedbackSerializer,
-                          AnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
+                          AnnouncementSerializer, StudentAnnouncementSerializer, StudyStreakSerializer, BadgeSerializer,
                           StudyTimeBreakdownSerializer, UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
                           MistakeNotebookSerializer)
 from tests_engine.models import TestAttempt
@@ -25,20 +35,131 @@ logger = logging.getLogger(__name__)
 from django.core.mail import send_mail
 from django.conf import settings
 
-def send_admin_notification_email(subject, message):
-    """Utility to email crackwith.ai notifications to the administrator."""
+# Mail backends that accept a message but deliver nothing (settings.py falls
+# back to the console backend when no SMTP password is configured).
+_NON_DELIVERING_EMAIL_BACKENDS = (
+    'django.core.mail.backends.console.EmailBackend',
+    'django.core.mail.backends.dummy.EmailBackend',
+)
+_DEFAULT_ADMIN_NOTIFICATION_EMAIL = 'divyanshudubey2712@gmail.com'
+
+
+def _admin_notification_recipient() -> str:
+    return (
+        getattr(settings, 'ADMIN_NOTIFICATION_EMAIL', '')
+        or os.getenv('ADMIN_NOTIFICATION_EMAIL', '')
+        or _DEFAULT_ADMIN_NOTIFICATION_EMAIL
+    ).strip()
+
+
+def send_admin_notification_email(subject, message) -> bool:
+    """Email a notification to the administrator.
+
+    Returns True only when the message was handed to a mail backend that
+    really delivers mail; never raises.
+    """
     try:
-        admin_email = 'divyanshudubey2712@gmail.com'
-        send_mail(
+        sent = send_mail(
             subject=subject,
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[admin_email],
+            recipient_list=[_admin_notification_recipient()],
             fail_silently=False,
         )
-        logger.info(f"Admin notification email sent successfully: {subject}")
     except Exception as e:
-        logger.exception(f"Failed to send admin notification email: {str(e)}")
+        logger.exception("Failed to send admin notification email: %s", e)
+        return False
+    if getattr(settings, 'EMAIL_BACKEND', '') in _NON_DELIVERING_EMAIL_BACKENDS:
+        logger.warning("Admin notification not delivered (no real email backend configured): %s", subject)
+        return False
+    logger.info("Admin notification email sent successfully: %s", subject)
+    return bool(sent)
+
+
+def _run_in_background(func, *args) -> None:
+    """Run a best-effort notification off the request thread (after the
+    current transaction commits), so slow SMTP never delays the response.
+    ``ADMIN_NOTIFICATIONS_SYNC`` runs it inline (tests)."""
+    if getattr(settings, 'ADMIN_NOTIFICATIONS_SYNC', False):
+        func(*args)
+        return
+
+    def _target():
+        from django.db import connection
+        try:
+            func(*args)
+        except Exception:
+            logger.exception('Background admin notification failed')
+        finally:
+            connection.close()
+
+    from django.db import transaction
+    transaction.on_commit(
+        lambda: threading.Thread(target=_target, name='admin-notify', daemon=True).start()
+    )
+
+
+class _DefaultRateThrottle(UserRateThrottle):
+    """Per-user (per-IP when anonymous) throttle with a built-in default.
+
+    The rate can be set in REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'][scope];
+    a scope missing there falls back to ``default_rate`` instead of raising
+    ImproperlyConfigured (HTTP 500) on every request.
+    """
+    default_rate = None
+
+    def get_rate(self):
+        try:
+            return super().get_rate()
+        except ImproperlyConfigured:
+            return self.default_rate
+
+
+class FeedbackSubmitThrottle(_DefaultRateThrottle):
+    scope = 'feedback_submit'
+    default_rate = '10/hour'
+
+
+class ContactHourlyThrottle(_DefaultRateThrottle):
+    scope = 'contact_us_hourly'
+    default_rate = '20/hour'
+
+
+def _csv_safe(value):
+    """Neutralise spreadsheet formulas in exported text cells (CSV injection):
+    a cell starting with = + - @ tab or CR is prefixed with a quote."""
+    if isinstance(value, str) and value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + value
+    return value
+
+
+class _FormulaSafeCSVWriter:
+    """csv.writer whose text cells go through _csv_safe."""
+
+    def __init__(self, stream):
+        self._writer = csv.writer(stream)
+
+    def writerow(self, row):
+        self._writer.writerow([_csv_safe(cell) for cell in row])
+
+
+def subject_totals(user) -> list:
+    """Per-subject attempts / correct answers for ``user``.
+
+    Every answer updates the subject-level row (topic=NULL) *and* the topic
+    row, so summing all rows double-counted. Use the subject-level row, and
+    the topic rows only for subjects that have none (older data).
+    """
+    fields = ('subject_id', 'subject__name', 'subject__code', 'subject__color')
+    base = UserTopicPerformance.objects.filter(user=user, subject__isnull=False)
+
+    def _grouped(qs):
+        return qs.values(*fields).annotate(total=Sum('total_attempts'), correct=Sum('correct_answers')).order_by()
+
+    rows = {r['subject_id']: r for r in _grouped(base.filter(topic__isnull=True))}
+    for r in _grouped(base.filter(topic__isnull=False)):
+        rows.setdefault(r['subject_id'], r)
+    return sorted(rows.values(), key=lambda r: (r['subject__name'] or ''))
 
 
 class DashboardView(APIView):
@@ -75,19 +196,9 @@ class DashboardView(APIView):
         total_incorrect = (overall['total_incorrect'] or 0) + qbank_incorrect
         overall_accuracy = round(total_correct / total_q * 100, 1) if total_q > 0 else 0
 
-        # Subject-wise performance — single aggregated query, no N+1
-        from django.db.models import Sum as AggSum
-        subject_perfs = (
-            UserTopicPerformance.objects
-            .filter(user=user)
-            .values('subject__name', 'subject__code', 'subject__color')
-            .annotate(
-                total=AggSum('total_attempts'),
-                correct=AggSum('correct_answers'),
-            )
-        )
+        # Subject-wise performance — aggregated queries, no N+1, no double count
         subject_perf = []
-        for perf in subject_perfs:
+        for perf in subject_totals(user):
             total = perf['total'] or 0
             correct = perf['correct'] or 0
             acc = round(correct / total * 100, 1) if total > 0 else 0
@@ -116,26 +227,29 @@ class DashboardView(APIView):
         return result
 
 
+WEAK_TOPIC_MIN_ATTEMPTS = 3
+
+
 class WeakTopicsView(APIView):
     """Identify weak topics for improvement."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        all_topic_perfs = UserTopicPerformance.objects.filter(
+        # Ranked by accuracy (it used to be the absolute correct count, which
+        # put barely-attempted topics first), ignoring topics with too few
+        # attempts to judge.
+        topic_perfs = UserTopicPerformance.objects.filter(
             user=request.user,
-            total_attempts__gte=1,
+            total_attempts__gte=WEAK_TOPIC_MIN_ATTEMPTS,
             topic__isnull=False  # Only topics, not subject-level aggregates
-        ).select_related('topic', 'subject').order_by('correct_answers')
+        ).select_related('topic', 'subject').annotate(
+            acc=ExpressionWrapper(F('correct_answers') * 100.0 / F('total_attempts'), output_field=FloatField()),
+        )
 
-        weak = []
-        strong = []
-
-        for perf in all_topic_perfs:
-            data = TopicPerformanceSerializer(perf).data
-            if perf.accuracy < 60:
-                weak.append(data)
-            elif perf.accuracy >= 80:
-                strong.append(data)
+        weak = [TopicPerformanceSerializer(p).data
+                for p in topic_perfs.filter(acc__lt=60).order_by('acc', '-total_attempts')[:10]]
+        strong = [TopicPerformanceSerializer(p).data
+                  for p in topic_perfs.filter(acc__gte=80).order_by('-acc', '-total_attempts')[:10]]
 
         # AI-style suggestions
         suggestions = []
@@ -194,8 +308,22 @@ class RecentAttemptsView(APIView):
 
 
 class ScorePredictionView(APIView):
-    """Predict CMS exam score based on current performance trends."""
+    """Predict CMS exam score based on current performance trends.
+
+    UPSC CMS has two papers of 120 questions / 250 marks each (500 total):
+    Paper I = General Medicine 96 + Paediatrics 24; Paper II = Surgery,
+    Obstetrics & Gynaecology and PSM, 40 each. A wrong answer costs one
+    third of the question's marks; unanswered questions cost nothing.
+    """
     permission_classes = [permissions.IsAuthenticated]
+
+    MARKS_PER_QUESTION = 250 / 120
+    PENALTY_PER_WRONG = MARKS_PER_QUESTION / 3
+    PAPER_PATTERN = {
+        1: {'MED': 96, 'PED': 24},
+        2: {'SUR': 40, 'OBG': 40, 'PSM': 40},
+    }
+    SUBJECT_MIN_ATTEMPTS = 10
 
     def get(self, request):
         user = request.user
@@ -210,42 +338,47 @@ class ScorePredictionView(APIView):
             })
 
         # Calculate recent accuracy trend
-        recent = attempts[:10]
+        recent = list(attempts[:10])
         accuracies = [a.accuracy for a in recent if a.accuracy is not None]
         avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0
+        # Share of questions the student actually answers (skips are not wrong).
+        answered = sum((a.correct_count or 0) + (a.incorrect_count or 0) for a in recent)
+        offered = answered + sum(a.unanswered_count or 0 for a in recent)
+        attempt_rate = answered / offered if offered else 1.0
 
-        # CMS scoring: 120 questions × ~2.08 marks each = 250 marks
-        # Negative marking: -0.33 for wrong
-        total_qs = 120
-        predicted_correct = int(total_qs * avg_accuracy / 100)
-        predicted_wrong = total_qs - predicted_correct
-        predicted_score = round(
-            predicted_correct * 2.08 - predicted_wrong * 0.33, 1
-        )
-
-        # Subject-wise prediction — single aggregated query, no N+1
-        from django.db.models import Sum as AggSum
-        sub_rows = (
-            UserTopicPerformance.objects
-            .filter(user=user)
-            .values('subject__name', 'subject__code', 'subject__color')
-            .annotate(
-                total=AggSum('total_attempts'),
-                correct=AggSum('correct_answers'),
-            )
-        )
+        # Subject-wise prediction — aggregated queries, no N+1, no double count
         subject_predictions = []
-        for perf in sub_rows:
+        subject_accuracy = {}
+        for perf in subject_totals(user):
             total = perf['total'] or 0
             correct = perf['correct'] or 0
             acc = round(correct / total * 100, 1) if total > 0 else 0
+            code = (perf['subject__code'] or '').upper()
+            if total >= self.SUBJECT_MIN_ATTEMPTS:
+                subject_accuracy[code] = acc
+            out_of = next((p[code] for p in self.PAPER_PATTERN.values() if code in p), None)
             subject_predictions.append({
                 'subject': perf['subject__name'],
                 'code': perf['subject__code'],
                 'accuracy': acc,
-                'predicted_correct': int(24 * acc / 100),  # ~24 questions per subject
+                # Questions this subject has in the real paper (None: not a CMS paper subject).
+                'out_of': out_of,
+                'predicted_correct': int(round(out_of * attempt_rate * acc / 100)) if out_of else None,
                 'strength': 'strong' if acc >= 70 else ('average' if acc >= 50 else 'weak'),
             })
+
+        def _paper_score(pattern):
+            correct = wrong = 0.0
+            for code, questions in pattern.items():
+                acc = subject_accuracy.get(code, avg_accuracy) / 100
+                answered_qs = questions * attempt_rate
+                correct += answered_qs * acc
+                wrong += answered_qs * (1 - acc)
+            return max(0.0, correct * self.MARKS_PER_QUESTION - wrong * self.PENALTY_PER_WRONG)
+
+        paper1 = round(_paper_score(self.PAPER_PATTERN[1]), 1)
+        paper2 = round(_paper_score(self.PAPER_PATTERN[2]), 1)
+        predicted_score = round(paper1 + paper2, 1)
 
         # Trend direction
         if len(accuracies) >= 5:
@@ -258,10 +391,12 @@ class ScorePredictionView(APIView):
             trend = 'insufficient_data'
 
         return Response({
-            'predicted_score': max(0, predicted_score),
-            'predicted_score_paper1': max(0, round(predicted_score / 2, 1)),
-            'predicted_score_paper2': max(0, round(predicted_score / 2, 1)),
-            'max_score': 250,
+            'predicted_score': predicted_score,
+            'predicted_score_paper1': paper1,
+            'predicted_score_paper2': paper2,
+            'max_score': 500,
+            'max_score_per_paper': 250,
+            'attempt_rate': round(attempt_rate * 100, 1),
             'avg_accuracy': round(avg_accuracy, 1),
             'trend': trend,
             'confidence': 'high' if attempt_count >= 10 else 'medium',
@@ -275,9 +410,12 @@ class PerformanceTrendView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        attempts = TestAttempt.objects.filter(
+        # The latest 20 tests (it used to be the oldest 20, so the charts
+        # froze after the 20th test), charted oldest -> newest.
+        attempts = list(TestAttempt.objects.filter(
             user=request.user, is_completed=True
-        ).select_related('test').order_by('started_at')[:20]
+        ).select_related('test').order_by('-started_at')[:20])
+        attempts.reverse()
 
         trend_data = []
         for a in attempts:
@@ -297,70 +435,185 @@ class PerformanceTrendView(APIView):
         })
 
 
-class FeedbackListCreateView(APIView):
-    """Students submit feedback; admins see all feedback."""
+class PYQTrendsView(APIView):
+    """Year x subject question counts of the active PYQ bank (Exam Trends page).
+
+    ``GET /api/analytics/pyq-trends/?exam_source=UPSC CMS`` -- real counts only;
+    questions without a year (year 0) count towards ``total`` but not the matrix.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
+    EXAM_SOURCES = ('UPSC CMS', 'NEET PG', 'INI-CET', 'FMGE', 'USMLE')
+
     def get(self, request):
-        if request.user.is_admin:
-            feedbacks = Feedback.objects.all()
-        else:
-            feedbacks = Feedback.objects.filter(user=request.user)
-        serializer = FeedbackSerializer(feedbacks, many=True)
-        return Response(serializer.data)
+        exam_source = (request.query_params.get('exam_source') or 'UPSC CMS').strip()
+        if exam_source not in self.EXAM_SOURCES:
+            return Response({'error': f"exam_source must be one of: {', '.join(self.EXAM_SOURCES)}"}, status=400)
+        cache_key = 'analytics:pyq_trends:' + hashlib.sha256(exam_source.encode()).hexdigest()[:16]
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        # Prefix match folds "NEET PG (recall)"-style labels into their exam.
+        bank = Question.objects.filter(is_active=True, exam_source__startswith=exam_source)
+        rows = list(
+            bank.filter(year__gt=0)
+            .values('year', 'subject_id', 'subject__name', 'subject__code', 'subject__color')
+            .annotate(count=Count('id'))
+            .order_by()
+        )
+        subjects = {}
+        for row in rows:
+            if row['subject__name'] == 'Imported':
+                row['subject__name'] = 'Expert Curated'  # same rename as the question serializers
+            entry = subjects.setdefault(row['subject_id'], {
+                'id': row['subject_id'], 'name': row['subject__name'], 'code': row['subject__code'],
+                'color': row['subject__color'] or '', 'count': 0,
+            })
+            entry['count'] += row['count']
+        payload = {
+            'exam_source': exam_source,
+            'total': bank.count(),
+            'years': sorted({row['year'] for row in rows}, reverse=True),
+            'subjects': sorted(subjects.values(), key=lambda s: (-s['count'], s['name'] or '')),
+            'trends': [
+                {'year': row['year'], 'subject__name': row['subject__name'],
+                 'subject__code': row['subject__code'], 'count': row['count']}
+                for row in rows
+            ],
+        }
+        try:
+            cache.set(cache_key, payload, 600)
+        except Exception:
+            pass
+        return Response(payload)
+
+
+class FeedbackListCreateView(APIView):
+    """Students submit feedback; admins see all feedback (paginated)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.request.method == 'POST':
+            throttles.append(FeedbackSubmitThrottle())
+        return throttles
+
+    def get(self, request):
+        feedbacks = Feedback.objects.select_related('user')
+        if not request.user.is_admin:
+            feedbacks = feedbacks.filter(user=request.user)
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+            page_size = max(1, min(int(request.query_params.get('page_size', 50)), 200))
+        except (TypeError, ValueError):
+            return Response({'error': 'page and page_size must be integers'}, status=400)
+        total = feedbacks.count()
+        start = (page - 1) * page_size
+        serializer = FeedbackSerializer(feedbacks[start:start + page_size], many=True)
+        return Response({'results': serializer.data, 'count': total, 'page': page, 'page_size': page_size})
 
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         fb = serializer.save(user=request.user)
-        
-        # Email notification to admin
-        try:
-            send_admin_notification_email(
-                subject=f"[FEEDBACK SUBMITTED] {fb.get_category_display()} by {request.user.username}",
-                message=(
-                    f"A student has submitted feedback on CrackCMS.\n\n"
-                    f"User: {request.user.username} ({request.user.email})\n"
-                    f"Category: {fb.get_category_display()}\n"
-                    f"Rating: {fb.rating}/5\n"
-                    f"Title: {fb.title}\n"
-                    f"Message:\n{fb.message}\n"
-                )
-            )
-        except Exception:
-            logger.exception("Failed to send admin feedback email")
-            
+
+        # Email notification to admin -- best effort, off the request thread
+        # (the feedback itself is already stored).
+        _run_in_background(
+            send_admin_notification_email,
+            f"[FEEDBACK SUBMITTED] {fb.get_category_display()} by {request.user.username}",
+            (
+                f"A student has submitted feedback on CrackCMS.\n\n"
+                f"User: {request.user.username} ({request.user.email})\n"
+                f"Category: {fb.get_category_display()}\n"
+                f"Rating: {fb.rating}/5\n"
+                f"Title: {fb.title}\n"
+                f"Message:\n{fb.message}\n"
+            ),
+        )
+
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+def _deliver_contact_email(message_id, subject, body) -> bool:
+    delivered = send_admin_notification_email(subject, body)
+    if delivered and message_id:
+        ContactMessage.objects.filter(pk=message_id).update(email_delivered=True)
+    return delivered
+
+
 class ContactUsView(APIView):
-    """Allows anyone to submit the Contact Us support form."""
+    """Contact Us support form (anyone).
+
+    Each message is stored (ContactMessage, visible in Django admin) before
+    the admin is emailed, so nothing is lost when email is slow, failing or
+    not configured. The request fails only when the message could neither be
+    stored nor emailed.
+    """
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ScopedRateThrottle, ContactHourlyThrottle]
     throttle_scope = 'contact_us'
 
-    def post(self, request):
-        name = request.data.get('name', 'Anonymous')
-        email = request.data.get('email', 'Not provided')
-        subject = request.data.get('subject', 'Contact Form Submission')
-        message = request.data.get('message', '')
+    MAX_MESSAGE = 5000
 
+    def post(self, request):
+        data = request.data if hasattr(request.data, 'get') else {}
+
+        def _text(key, limit):
+            value = data.get(key, '')
+            return value.strip()[:limit] if isinstance(value, str) else ''
+
+        user = request.user if request.user.is_authenticated else None
+        raw_message = data.get('message', '')
+        message = raw_message.strip() if isinstance(raw_message, str) else ''
         if not message:
             return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(message) > self.MAX_MESSAGE:
+            return Response({'error': f'Message is too long (max {self.MAX_MESSAGE} characters).'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        email = _text('email', 254) or ((user.email or '').strip() if user else '')
+        if not email:
+            return Response({'error': 'Please enter your email address so we can reply.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response({'error': 'Please enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+        name = _text('name', 120) or ((user.get_full_name() or user.username) if user else '') or 'Anonymous'
+        subject = _text('subject', 200) or 'Contact Form Submission'
 
-        # Trigger notification email
-        send_admin_notification_email(
-            subject=f"[CONTACT FORM] {subject} - from {name}",
-            message=(
-                f"Contact Form Inquiry on CrackCMS:\n\n"
-                f"Name: {name}\n"
-                f"Email: {email}\n"
-                f"Subject: {subject}\n\n"
-                f"Message:\n{message}\n"
-            )
+        mail_subject = f"[CONTACT FORM] {subject} - from {name}"
+        mail_body = (
+            f"Contact Form Inquiry on CrackCMS:\n\n"
+            f"Name: {name}\n"
+            f"Email: {email}\n"
+            f"Subject: {subject}\n\n"
+            f"Message:\n{message}\n"
         )
 
-        return Response({'message': 'Your message has been sent to our team. We will get back to you shortly!'})
+        try:
+            stored = ContactMessage.objects.create(user=user, name=name, email=email, subject=subject, message=message)
+        except Exception:
+            logger.exception('Failed to store contact message')
+            stored = None
+
+        if stored is not None:
+            _run_in_background(_deliver_contact_email, stored.pk, mail_subject, mail_body)
+            return Response({
+                'message': f"Thanks! We've received your message and will reply to {email}.",
+                'stored': True,
+            })
+
+        if send_admin_notification_email(mail_subject, mail_body):
+            return Response({
+                'message': f"Thanks! Your message has been sent to our team. We will reply to {email}.",
+                'stored': False,
+            })
+        return Response(
+            {'error': 'We could not send your message right now. Please try again later or email crackwith.ai@gmail.com.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
 
 class FeedbackDetailView(APIView):
@@ -471,7 +724,7 @@ class DataExportCSVView(APIView):
         export_type = request.query_params.get('type', 'users')
 
         output = StringIO()
-        writer = csv.writer(output)
+        writer = _FormulaSafeCSVWriter(output)
 
         if export_type == 'users':
             writer.writerow(['ID', 'Username', 'Email', 'First Name', 'Last Name', 'Admin', 'Date Joined', 'Last Login'])
@@ -505,45 +758,106 @@ class DataExportCSVView(APIView):
         return response
 
 
+def _campaign_audience(audience_filter):
+    """Users an announcement's audience_filter targets."""
+    from accounts.models import CustomUser
+
+    audience = audience_filter if isinstance(audience_filter, dict) else {}
+    users = CustomUser.objects.all()
+    role = audience.get('role')
+    if role in ['admin', 'student']:
+        users = users.filter(role=role)
+    target_year = audience.get('target_year')
+    if target_year:
+        users = users.filter(target_year=target_year)
+    if audience.get('active_only') is True:
+        users = users.filter(is_active=True)
+    return users
+
+
+def promote_due_scheduled_announcements(now=None) -> int:
+    """Publish scheduled announcements whose time has come.
+
+    Nothing else ever moved a row from 'scheduled' to 'sent', so scheduled
+    campaigns never reached students. There is no background scheduler, so
+    the feeds call this on read; it is idempotent and cheap when nothing is
+    due. Delivery is in-app only (feed + notification bell).
+    """
+    now = now or timezone.now()
+    due = list(
+        Announcement.objects.filter(delivery_status='scheduled', scheduled_for__lte=now)
+        .values('pk', 'scheduled_for', 'audience_filter')[:50]
+    )
+    promoted = 0
+    for row in due:
+        promoted += Announcement.objects.filter(pk=row['pk'], delivery_status='scheduled').update(
+            delivery_status='sent',
+            sent_at=row['scheduled_for'] or now,
+            delivery_count=_campaign_audience(row['audience_filter']).count(),
+        )
+    return promoted
+
+
+def _live_announcements(now):
+    return Announcement.objects.filter(
+        is_active=True,
+        delivery_status='sent',
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+    ).filter(
+        Q(scheduled_for__isnull=True) | Q(scheduled_for__lte=now)
+    )
+
+
+def student_announcements(user, now=None):
+    """Live announcements whose audience_filter matches ``user``."""
+    now = now or timezone.now()
+    announcements = _live_announcements(now)
+    user_role = getattr(user, 'role', None)
+    user_target = getattr(user, 'target_year', None)
+
+    announcements = announcements.filter(
+        Q(audience_filter__role__isnull=True)
+        | Q(audience_filter__role='')
+        | Q(audience_filter__role=user_role)
+    )
+
+    target_year_filter = Q(audience_filter__target_year__isnull=True) | Q(audience_filter__target_year='')
+    if user_target is not None:
+        target_year_filter |= Q(audience_filter__target_year=user_target)
+        target_year_filter |= Q(audience_filter__target_year=str(user_target).strip())
+    announcements = announcements.filter(target_year_filter)
+
+    if not user.is_active:
+        announcements = announcements.filter(
+            Q(audience_filter__active_only__isnull=True)
+            | Q(audience_filter__active_only=False)
+        )
+    return announcements
+
+
 class AnnouncementListView(APIView):
     """List active announcements for students, or CRUD for admins."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         now = timezone.now()
-        announcements = Announcement.objects.filter(
-            is_active=True,
-            delivery_status='sent',
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
-        ).filter(
-            Q(scheduled_for__isnull=True) | Q(scheduled_for__lte=now)
-        )
-
+        promote_due_scheduled_announcements(now)
         user = request.user
-        user_role = getattr(user, 'role', None)
-        user_target = getattr(user, 'target_year', None)
+        if getattr(user, 'is_admin', False):
+            # Admins manage every announcement, including ones targeted at
+            # students (the role filter used to hide those from the admin
+            # list, so they could not be deleted). ?scope=all adds drafts,
+            # scheduled, inactive and expired rows.
+            if request.query_params.get('scope') == 'all':
+                rows = Announcement.objects.all()
+            else:
+                rows = _live_announcements(now)
+            rows = rows.select_related('created_by').order_by('-created_at')[:200]
+            return Response(AnnouncementSerializer(rows, many=True).data)
 
-        announcements = announcements.filter(
-            Q(audience_filter__role__isnull=True)
-            | Q(audience_filter__role='')
-            | Q(audience_filter__role=user_role)
-        )
-
-        target_year_filter = Q(audience_filter__target_year__isnull=True) | Q(audience_filter__target_year='')
-        if user_target is not None:
-            target_year_filter |= Q(audience_filter__target_year=user_target)
-            target_year_filter |= Q(audience_filter__target_year=str(user_target).strip())
-        announcements = announcements.filter(target_year_filter)
-
-        if not user.is_active:
-            announcements = announcements.filter(
-                Q(audience_filter__active_only__isnull=True)
-                | Q(audience_filter__active_only=False)
-            )
-
-        announcements = announcements.select_related('created_by').order_by('-created_at')[:200]
-        return Response(AnnouncementSerializer(announcements, many=True).data)
+        announcements = student_announcements(user, now).order_by('-created_at')[:200]
+        return Response(StudentAnnouncementSerializer(announcements, many=True).data)
 
     def post(self, request):
         if not request.user.is_admin:
@@ -617,209 +931,310 @@ class BadgeListView(APIView):
         return Response(data)
 
 
+# XP values used only to re-derive XP for days before the XPEvent ledger
+# existed (see _rebuilt_period_xp): question-bank first answer 15 correct /
+# 5 wrong, tests 10 per correct + 5 per completed test, quests xp_reward.
+XP_QBANK_CORRECT = 15
+XP_QBANK_WRONG = 5
+XP_TEST_CORRECT = 10
+XP_TEST_COMPLETED = 5
+
+LEADERBOARD_PERIODS = ('weekly', 'monthly', 'all')
+LEADERBOARD_TOP_N = 10
+_LEADERBOARD_SHARED_TTL = 60
+
+
+def _leaderboard_period_start(period, now=None):
+    """Local midnight starting the current calendar week (Monday) or month;
+    None for all time."""
+    today = timezone.localdate(now)
+    if period == 'weekly':
+        day = today - timedelta(days=today.weekday())
+    elif period == 'monthly':
+        day = today.replace(day=1)
+    else:
+        return None
+    return timezone.make_aware(datetime.combine(day, time.min), timezone.get_current_timezone())
+
+
+def _eligible_learner_q(prefix='user__'):
+    """Real learners only: no staff, superusers or deactivated accounts."""
+    return Q(**{f'{prefix}is_superuser': False, f'{prefix}is_staff': False, f'{prefix}is_active': True})
+
+
+def _scoped_by_user(qs, user_ids, eligible_only):
+    if user_ids is not None:
+        qs = qs.filter(user_id__in=list(user_ids))
+    if eligible_only:
+        qs = qs.filter(_eligible_learner_q())
+    return qs.values('user_id').order_by()
+
+
+def _xp_ledger_first_day():
+    """Local midnight of the first day the XP ledger covers; None when empty."""
+    first = cache.get('analytics:xp_ledger_first')
+    if first is None:
+        first = XPEvent.objects.aggregate(first=Min('created_at'))['first']
+        if first is None:
+            return None
+        try:
+            cache.set('analytics:xp_ledger_first', first, 600)
+        except Exception:
+            pass
+    return timezone.make_aware(
+        datetime.combine(timezone.localtime(first).date(), time.min), timezone.get_current_timezone())
+
+
+def _rebuilt_period_xp(start, end, user_ids, eligible_only) -> dict:
+    """XP for [start, end) re-derived from dated activity rows -- only for days
+    before the XP ledger existed (``end`` = the ledger's first day; None =
+    up to now). Uses the award values above, so it is an approximation:
+      * question bank -- DailyActivity counts first answers of both the bank
+        and tests, so the test answers of the same days are subtracted;
+      * tests -- completed TestAttempt rows; quests -- claimed UserQuest rows.
+    """
+    def _window(qs, field):
+        qs = qs.filter(**{f'{field}__gte': start})
+        return qs.filter(**{f'{field}__lt': end}) if end is not None else qs
+
+    daily = DailyActivity.objects.filter(date__gte=timezone.localtime(start).date())
+    if end is not None:
+        daily = daily.filter(date__lt=timezone.localtime(end).date())
+    daily = _scoped_by_user(daily, user_ids, eligible_only).annotate(
+        answered=Sum('questions_attempted'), correct=Sum('correct_answers'))
+    tests = _scoped_by_user(_window(TestAttempt.objects.filter(is_completed=True), 'completed_at'),
+                            user_ids, eligible_only).annotate(
+        t_correct=Sum('correct_count'), t_incorrect=Sum('incorrect_count'), t_count=Count('id'))
+    quests = _scoped_by_user(_window(UserQuest.objects.filter(is_claimed=True), 'completed_at'),
+                             user_ids, eligible_only).annotate(quest_xp=Sum('xp_reward'))
+
+    test_rows = {r['user_id']: r for r in tests}
+    xp = defaultdict(int)
+    for r in daily:
+        t = test_rows.get(r['user_id'], {})
+        t_correct = t.get('t_correct') or 0
+        bank_answered = max(0, (r['answered'] or 0) - t_correct - (t.get('t_incorrect') or 0))
+        bank_correct = min(bank_answered, max(0, (r['correct'] or 0) - t_correct))
+        xp[r['user_id']] += bank_correct * XP_QBANK_CORRECT + (bank_answered - bank_correct) * XP_QBANK_WRONG
+    for user_id, t in test_rows.items():
+        xp[user_id] += (t.get('t_correct') or 0) * XP_TEST_CORRECT + (t.get('t_count') or 0) * XP_TEST_COMPLETED
+    for r in quests:
+        xp[r['user_id']] += int(r['quest_xp'] or 0)
+    return xp
+
+
+def period_xp_by_user(start, user_ids=None, eligible_only=True) -> dict:
+    """XP earned since ``start``, per user id.
+
+    From the dated XP ledger (XPEvent, written by StudyStreak.add_xp). Days
+    before the ledger existed are re-derived from activity rows, so weekly
+    and monthly boards are not blank right after the ledger ships. Capped at
+    the all-time total (admin progress resets zero xp_points).
+    """
+    xp = defaultdict(int)
+    ledger = _scoped_by_user(XPEvent.objects.filter(created_at__gte=start), user_ids, eligible_only)
+    for row in ledger.annotate(points=Sum('points')):
+        xp[row['user_id']] += int(row['points'] or 0)
+
+    ledger_day = _xp_ledger_first_day()
+    if ledger_day is None or start < ledger_day:
+        for user_id, value in _rebuilt_period_xp(start, ledger_day, user_ids, eligible_only).items():
+            xp[user_id] += value
+
+    totals = dict(StudyStreak.objects.filter(user_id__in=list(xp)).values_list('user_id', 'xp_points'))
+    capped = {user_id: min(value, int(totals.get(user_id, value) or 0)) for user_id, value in xp.items()}
+    return {user_id: value for user_id, value in capped.items() if value > 0}
+
+
+def _period_standings(period, start) -> list:
+    """[(user_id, xp)] best first for the period; shared by every viewer."""
+    key = f'analytics:leaderboard:standings:{period}:{start.date().isoformat()}'
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    standings = sorted(period_xp_by_user(start).items(), key=lambda item: (-item[1], item[0]))
+    try:
+        cache.set(key, standings, _LEADERBOARD_SHARED_TTL)
+    except Exception:
+        pass
+    return standings
+
+
+def _ranked_learner_count() -> int:
+    """Learners with any XP (all time); shared by every viewer."""
+    key = 'analytics:leaderboard:ranked_count'
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    count = StudyStreak.objects.filter(_eligible_learner_q(), xp_points__gt=0).count()
+    try:
+        cache.set(key, count, _LEADERBOARD_SHARED_TTL)
+    except Exception:
+        pass
+    return count
+
+
+def _public_name(user) -> str:
+    """The name other learners see: the username the product already shows
+    in discussions -- never first/last name or email."""
+    name = (getattr(user, 'username', '') or '').strip()
+    if '@' in name:
+        name = name.split('@')[0]
+    return name or 'Learner'
+
+
 class LeaderboardView(APIView):
     """
     Personal-stats leaderboard.
 
-    Returns a personal envelope (`me`, `rival`, optional `live_board`) instead of a
-    global ranking of real + virtual users. The previous version of this view
-    merged 15 hardcoded "Dr. …" virtual users with the real-user list, which
-    exposed both fabricated personas and the small real-user count. That logic
-    has been removed entirely.
+    Returns a personal envelope (`me`, `rival`, optional `live_board`), never
+    fabricated users or numbers:
 
-    The rival is always a real, top-scoring learner (never fabricated). When the
-    active user-base crosses `settings.LEADERBOARD_LIVE_THRESHOLD`, a top-10
-    live ranking slab is appended to the envelope. Below the threshold, no
-    global rows are exposed — only the personal dashboard.
+    * ``period`` (weekly = this calendar week, monthly = this calendar month,
+      all) ranks learners by the XP they earned in that period, from the
+      dated XP ledger (see ``period_xp_by_user``); ``all`` uses the all-time
+      StudyStreak total.
+    * Accuracy is null when a learner has not completed a test.
+    * Other learners appear only by username (no real names, no college).
+    * The rival is the top real learner of the period other than the viewer.
+      When the active user-base crosses ``settings.LEADERBOARD_LIVE_THRESHOLD``
+      a top-10 slab is appended; below it no global rows are exposed.
+    * The shared work (standings, counts) is cached once for all viewers;
+      per viewer only a handful of indexed queries run.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        import math
         from django.conf import settings as dj_settings
-        from django.core.cache import cache
-        from django.db.models import Sum, Count, Q
+        from django.contrib.auth import get_user_model
 
+        user = request.user
         period = request.query_params.get('period', 'weekly')
-        if period not in ('weekly', 'monthly', 'all'):
+        if period not in LEADERBOARD_PERIODS:
             period = 'weekly'
 
-        # Per-user envelope cache — the page is read-mostly and XP changes
-        # infrequently. 60s TTL keeps the dashboard snappy without exposing
-        # stale data for too long.
-        cache_key = f"analytics:leaderboard:personal:{request.user.id}:{period}"
+        # Per-user envelope cache — the page is read-mostly; 60s keeps it
+        # snappy without serving stale data for long.
+        cache_key = f"analytics:leaderboard:personal:{user.id}:{period}"
         cached = cache.get(cache_key)
         if cached is not None:
             return Response(cached)
 
-        # Ensure the requesting user has a streak row.
-        StudyStreak.objects.get_or_create(user=request.user)
+        me_streak, _ = StudyStreak.objects.get_or_create(user=user)
+        me_total_xp = int(me_streak.xp_points or 0)
+        me_eligible = not (user.is_superuser or user.is_staff) and user.is_active
+        week_start = _leaderboard_period_start('weekly')
+        me_weekly_xp = period_xp_by_user(week_start, user_ids=[user.id], eligible_only=False).get(user.id, 0)
 
-        # ── Single grouped accuracy query (no per-user N+1) ──────────────
+        if period == 'all':
+            ranked = StudyStreak.objects.filter(_eligible_learner_q(), xp_points__gt=0)
+            out_of = _ranked_learner_count()
+            me_period_xp = me_total_xp
+            me_rank = (ranked.filter(xp_points__gt=me_total_xp).count() + 1) if (me_eligible and me_total_xp > 0) else None
+            top = list(
+                ranked.order_by('-xp_points', '-current_streak', 'user_id')
+                .values_list('user_id', 'xp_points')[:LEADERBOARD_TOP_N + 1]
+            )
+        else:
+            start = _leaderboard_period_start(period)
+            standings = _period_standings(period, start)
+            out_of = len(standings)
+            me_period_xp = me_weekly_xp if period == 'weekly' else (
+                period_xp_by_user(start, user_ids=[user.id], eligible_only=False).get(user.id, 0))
+            me_rank = (sum(1 for _, xp in standings if xp > me_period_xp) + 1) if (me_eligible and me_period_xp > 0) else None
+            top = standings[:LEADERBOARD_TOP_N + 1]
+        # The shared standings/counts may be up to a minute old; never show
+        # "#3 of 2" to someone who just earned their first XP.
+        out_of = max(out_of, me_rank or 0)
+
+        # Details only for the handful of learners shown (+ me).
+        shown_ids = {user_id for user_id, _ in top} | {user.id}
+        users = {u.pk: u for u in get_user_model().objects.filter(pk__in=shown_ids).only('id', 'username')}
+        streaks = {s.user_id: s for s in StudyStreak.objects.filter(user_id__in=shown_ids)}
         accuracy_rows = {
-            r['user_id']: r
-            for r in (
-                TestAttempt.objects
-                .filter(is_completed=True)
-                .values('user_id')
-                .annotate(
-                    total_correct=Sum('correct_count'),
-                    total_incorrect=Sum('incorrect_count'),
-                    tests_done=Count('id'),
-                )
+            r['user_id']: r for r in (
+                TestAttempt.objects.filter(user_id__in=shown_ids, is_completed=True)
+                .values('user_id').order_by()
+                .annotate(total_correct=Sum('correct_count'), total_incorrect=Sum('incorrect_count'), tests_done=Count('id'))
             )
         }
 
-        def _accuracy_for(user_id: int) -> float:
-            agg = accuracy_rows.get(user_id)
-            if not agg:
-                return 76.5
-            total = (agg.get('total_correct') or 0) + (agg.get('total_incorrect') or 0)
-            if total <= 0:
-                return 76.5
-            return round((agg.get('total_correct') or 0) / total * 100, 1)
+        def _accuracy_for(user_id):
+            agg = accuracy_rows.get(user_id) or {}
+            correct = agg.get('total_correct') or 0
+            answered = correct + (agg.get('total_incorrect') or 0)
+            return round(correct / answered * 100, 1) if answered > 0 else None
 
-        def _tests_for(user_id: int) -> int:
-            agg = accuracy_rows.get(user_id)
-            return int((agg or {}).get('tests_done') or 0)
-
-        # ── Real users (no virtuals, no fabricated colleges) ─────────────
-        real_qs = (
-            StudyStreak.objects
-            .select_related('user')
-            .filter(user__is_superuser=False, user__is_staff=False, user__is_active=True)
-            .filter(xp_points__gt=0)
-            .order_by('-xp_points', '-current_streak', 'user_id')
-        )
-        real_users = []
-        for streak in real_qs:
-            user = streak.user
-            full_name = f"{user.first_name} {user.last_name}".strip()
-            username = full_name or user.username or user.email.split('@')[0]
-
-            row = {
-                'user_id': user.id,
-                'username': username,
-                'xp_points': int(streak.xp_points or 0),
-                'current_streak': int(streak.current_streak or 0),
-                'longest_streak': int(streak.longest_streak or streak.current_streak or 0),
-                'total_study_days': int(streak.total_study_days or 0),
-                'accuracy': _accuracy_for(user.id),
-                'tests_completed': _tests_for(user.id),
-            }
-
-            # College: only render if user actually set one. Never fabricated.
-            college = (getattr(user, 'college', '') or '').strip()
-            if college and len(college) >= 3 and college.lower() != 'none':
-                row['college'] = college
-
-            real_users.append(row)
-
-        total_real_users = len(real_users)
-
-        # ── `me` slice ──────────────────────────────────────────────────
-        me_row = next((r for r in real_users if r['user_id'] == request.user.id), None)
-        if me_row is None:
-            # User has 0 XP — still represent them honestly.
-            me_row = {
-                'user_id': request.user.id,
-                'username': (
-                    f"{request.user.first_name} {request.user.last_name}".strip()
-                    or request.user.username
-                    or request.user.email.split('@')[0]
-                ),
-                'xp_points': 0,
-                'current_streak': 0,
-                'longest_streak': 0,
-                'total_study_days': 0,
-                'accuracy': 76.5,
-                'tests_completed': 0,
-            }
-
-        me_rank = None
-        if me_row['xp_points'] > 0:
-            me_rank = sum(1 for r in real_users if r['xp_points'] > me_row['xp_points']) + 1
-
-        # Weekly XP is approximated from current period scaling if no
-        # historical field exists — kept deterministic (no fabrication) so
-        # the user sees a believable-but-honest number.
-        weekly_xp_estimate = _weekly_xp(me_row['xp_points'], period)
+        def _streak_for(user_id):
+            s = streaks.get(user_id)
+            return int(s.current_streak or 0) if s else 0
 
         me_payload = {
-            'user_id': me_row['user_id'],
-            'username': me_row['username'],
+            'user_id': user.id,
+            'username': (
+                f"{user.first_name} {user.last_name}".strip()
+                or user.username
+                or (user.email or '').split('@')[0]
+            ),
             'rank': me_rank,
-            'out_of': total_real_users,
-            'xp_points': me_row['xp_points'],
-            'current_streak': me_row['current_streak'],
-            'longest_streak': me_row.get('longest_streak', me_row['current_streak']),
-            'total_study_days': me_row['total_study_days'],
-            'accuracy': me_row['accuracy'],
-            'tests_completed': me_row['tests_completed'],
-            'weekly_xp': weekly_xp_estimate,
+            'out_of': out_of,
+            'xp_points': me_total_xp,
+            'period_xp': me_period_xp,
+            'current_streak': int(me_streak.current_streak or 0),
+            'longest_streak': int(me_streak.longest_streak or me_streak.current_streak or 0),
+            'total_study_days': int(me_streak.total_study_days or 0),
+            'accuracy': _accuracy_for(user.id),
+            'tests_completed': int((accuracy_rows.get(user.id) or {}).get('tests_done') or 0),
+            'weekly_xp': me_weekly_xp,
             'weekly_goal_xp': 500,
         }
-        if me_row.get('college'):
-            me_payload['college'] = me_row['college']
+        # College: only the viewer's own, only if they actually set one.
+        college = (getattr(user, 'college', '') or '').strip()
+        if college and len(college) >= 3 and college.lower() != 'none':
+            me_payload['college'] = college
 
-        # ── `rival` slice: top real user excluding self ──────────────────
-        rival = None
-        candidates = [r for r in real_users if r['user_id'] != request.user.id]
-        if candidates:
-            top = candidates[0]
-            xp_to_surpass = max(0, top['xp_points'] - me_row['xp_points'] + 1)
-            # Assumption: ~10 XP per solved question (median across the codebase
-            # award values). Documented so future readers know why this number
-            # is what it is.
-            questions_to_surpass = int(math.ceil(xp_to_surpass / 10)) if xp_to_surpass > 0 else 0
-
-            rival = {
-                'user_id': top['user_id'],
-                'username': top['username'],
-                'xp_points': top['xp_points'],
-                'current_streak': top['current_streak'],
-                'accuracy': top['accuracy'],
-                'xp_to_surpass': xp_to_surpass,
-                'questions_to_surpass': questions_to_surpass,
+        def _row(user_id, xp):
+            return {
+                'user_id': user_id,
+                'username': _public_name(users.get(user_id)),
+                'xp_points': int(xp),
+                'current_streak': _streak_for(user_id),
+                'accuracy': _accuracy_for(user_id),
             }
-            if top.get('college'):
-                rival['college'] = top['college']
+
+        # ── `rival`: top real learner of the period, excluding me ─────────
+        rival = None
+        candidate = next(((uid, xp) for uid, xp in top if uid != user.id), None)
+        if candidate is not None:
+            rival = _row(*candidate)
+            xp_to_surpass = max(0, rival['xp_points'] - me_period_xp + 1)
+            # Assumption: ~10 XP per solved question (median of the award values above).
+            rival['xp_to_surpass'] = xp_to_surpass
+            rival['questions_to_surpass'] = int(math.ceil(xp_to_surpass / 10)) if xp_to_surpass > 0 else 0
 
         # ── Live-board gating ───────────────────────────────────────────
         threshold = int(getattr(dj_settings, 'LEADERBOARD_LIVE_THRESHOLD', 50))
-        live_board_enabled = total_real_users >= threshold
-
+        live_board_enabled = _ranked_learner_count() >= threshold
         live_board = None
         if live_board_enabled:
-            top_rows = real_users[:10]  # already sorted desc by xp_points
-            live_board = []
-            for idx, r in enumerate(top_rows, 1):
-                row = {
-                    'rank': idx,
-                    'user_id': r['user_id'],
-                    'username': r['username'],
-                    'xp_points': r['xp_points'],
-                    'current_streak': r['current_streak'],
-                    'accuracy': r['accuracy'],
-                }
-                if r.get('college'):
-                    row['college'] = r['college']
-                live_board.append(row)
+            live_board = [
+                {'rank': idx, **_row(uid, xp)}
+                for idx, (uid, xp) in enumerate(top[:LEADERBOARD_TOP_N], 1)
+            ]
 
         # ── Invite (no DB writes — purely UI surface) ───────────────────
-        # When a real Referral model ships, this becomes a populated
-        # current_referrals count without touching the call site.
-        #
         # FRONTEND_URL in some envs is a comma-separated list (CORS-style);
         # take the first valid http(s) origin so the URL is well-formed.
         frontend_origin = ''
         raw = (getattr(dj_settings, 'FRONTEND_URL', '') or '').strip()
-        for candidate in raw.split(','):
-            candidate = candidate.strip().rstrip('/')
-            if candidate.startswith('http://') or candidate.startswith('https://'):
-                frontend_origin = candidate
+        for origin in raw.split(','):
+            origin = origin.strip().rstrip('/')
+            if origin.startswith('http://') or origin.startswith('https://'):
+                frontend_origin = origin
                 break
-        invite_path = f"/signup?ref={request.user.id}"
+        # /register is the real signup route (/signup 404s). There is no
+        # referral tracking yet, so nothing is promised for inviting.
+        invite_path = f"/register?ref={user.id}"
         invite_url = f"{frontend_origin}{invite_path}" if frontend_origin else invite_path
 
         envelope = {
@@ -831,8 +1246,7 @@ class LeaderboardView(APIView):
             'live_board_enabled': live_board_enabled,
             'invite': {
                 'url': invite_url,
-                'cta': 'Invite 2 friends to unlock the live board',
-                'current_referrals': 0,
+                'cta': 'Invite friends to study with you',
             },
         }
 
@@ -843,24 +1257,6 @@ class LeaderboardView(APIView):
             pass
 
         return Response(envelope)
-
-
-def _weekly_xp(total_xp: int, period: str) -> int:
-    """
-    Approximate the user's weekly XP from their all-time total.
-
-    Honest fall-back until `StudyStreak.weekly_xp` is added as a real column.
-    The multipliers mirror the relative weekly/monthly shares typically seen
-    for active students — they're not claimed to be exact, just directionally
-    right so the goal-progress bar feels alive.
-    """
-    if total_xp <= 0:
-        return 0
-    if period == 'weekly':
-        return int(total_xp * 0.35)
-    if period == 'monthly':
-        return int(total_xp * 0.65)
-    return int(total_xp)
 
 
 class AdminDashboardView(APIView):
@@ -936,15 +1332,19 @@ class AdminWeakAreaControlView(APIView):
             .values('id', 'question_text', 'year', 'subject__name', 'wrong_reports')[:10]
         )
 
+        # Topic rankings use topic rows only; the subject-level rows
+        # (topic=NULL) showed up as a "None" topic bucket.
+        topic_rows = UserTopicPerformance.objects.filter(topic__isnull=False)
+
         difficult_topics = list(
-            UserTopicPerformance.objects
+            topic_rows
             .values('topic_id', 'topic__name', 'subject__name')
             .annotate(avg_accuracy=Avg((F('correct_answers') * 100.0) / (F('total_attempts') + 0.0001)), attempts=Sum('total_attempts'))
             .order_by('avg_accuracy', '-attempts')[:10]
         )
 
         cohort_weak_areas = list(
-            UserTopicPerformance.objects
+            topic_rows
             .values('topic_id', 'topic__name', 'subject__name')
             .annotate(total_attempts=Sum('total_attempts'), total_correct=Sum('correct_answers'))
             .annotate(accuracy=(F('total_correct') * 100.0) / (F('total_attempts') + 0.0001))
@@ -954,7 +1354,7 @@ class AdminWeakAreaControlView(APIView):
         student_weak_areas = []
         if user_id:
             student_weak_areas = list(
-                UserTopicPerformance.objects.filter(user_id=user_id)
+                topic_rows.filter(user_id=user_id)
                 .values('topic_id', 'topic__name', 'subject__name', 'total_attempts', 'correct_answers')
                 .annotate(accuracy=(F('correct_answers') * 100.0) / (F('total_attempts') + 0.0001))
                 .order_by('accuracy', '-total_attempts')[:15]
@@ -963,7 +1363,9 @@ class AdminWeakAreaControlView(APIView):
         impact_priorities = list(
             Question.objects
             .annotate(
-                reports=Count('feedbacks', filter=Q(feedbacks__is_resolved=False)),
+                # distinct: the feedback and response joins multiply rows, so
+                # without it reports came out as reports x responses.
+                reports=Count('feedbacks', filter=Q(feedbacks__is_resolved=False), distinct=True),
                 attempts=Count('questionresponse', distinct=True),
                 correct=Count('questionresponse', filter=Q(questionresponse__is_correct=True), distinct=True),
             )
@@ -993,133 +1395,30 @@ class AdminWeakAreaControlView(APIView):
 # Student Experience — Study Analytics & Gamification Views
 # ════════════════════════════════════════════════════════════════════════════
 
-class DashboardV3View(APIView):
-    """Combined dashboard: stats + heatmap + streak + announcements."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        from questions.models import Subject
-        # Heatmap data
-        thirty_days_ago = timezone.localdate() - timezone.timedelta(days=30)
-        heatmap_qs = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
-        heatmap = DailyActivitySerializer(heatmap_qs, many=True).data
-        # Streak
-        streak_obj, _ = StudyStreak.objects.get_or_create(user=user)
-        streak_data = StudyStreakSerializer(streak_obj).data
-        # Announcements
-        now = timezone.now()
-        announcements = Announcement.objects.filter(
-            is_active=True, delivery_status='sent',
-        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-        announcements_data = AnnouncementSerializer(announcements[:20], many=True).data
-
-        # Subject pie data (study time breakdown for last 7 days)
-        week_ago = timezone.localdate() - timezone.timedelta(days=7)
-        study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
-        study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
-
-        # Active quests
-        quests_qs = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now())
-        quests_data = UserQuestSerializer(quests_qs[:5], many=True).data
-
-        return Response({
-            'heatmap': heatmap,
-            'streak': streak_data,
-            'announcements': announcements_data,
-            'study_time': study_time_data,
-            'active_quests': quests_data,
-        })
+# DashboardV3View / DashboardBundleView used to be duplicated here; the
+# routes point at dashboard_v3.py and views_bundle.py, so these copies were
+# unreachable (and the bundle copy crashed on TestAttempt.total_questions).
 
 
-class DashboardBundleView(APIView):
-    """Phase 3: single-call bundle for the dashboard page."""
-    permission_classes = [permissions.IsAuthenticated]
+def _notebook_queryset(user):
+    """The user's Mistake Notebook rows, annotated with whether the answer key
+    may be shown (see MistakeNotebookSerializer.to_representation): premium /
+    admin users, free showcase questions, or questions the user actually
+    answered (question bank, or a completed test)."""
+    from accounts.models_freemium import FreeShowcaseQuestion
+    from accounts.utils import is_premium
+    from questions.models import QuestionAttempt
+    from tests_engine.models import QuestionResponse
 
-    def get(self, request):
-        user = request.user
-        cache_key = f"analytics:bundle:{user.id}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return Response(cached)
-
-        from questions.models import Subject, Question
-        # Dashboard stats
-        from analytics.views import StudyStreakSerializer, DailyActivitySerializer
-        # Get recent attempts for the user
-        recent_attempts = TestAttempt.objects.filter(
-            user=user, is_completed=True
-        ).order_by('-started_at')[:10]
-        attempts_data = []
-        for a in recent_attempts:
-            attempts_data.append({
-                'id': a.id,
-                'test_title': a.test.title if a.test else 'Test',
-                'score': a.score,
-                'accuracy': a.accuracy,
-                'correct_count': a.correct_count,
-                'incorrect_count': a.incorrect_count,
-                'total_questions': a.total_questions,
-                'started_at': a.started_at.strftime('%Y-%m-%d %H:%M'),
-                'time_minutes': round((a.time_taken_seconds or 0) / 60, 1),
-            })
-
-        # Question stats
-        question_stats = {
-            'total': Question.objects.count(),
-            'cms': Question.objects.filter(exam_type='cms').count(),
-            'neet_pg': Question.objects.filter(exam_type='neet_pg').count(),
-            'ini_cet': Question.objects.filter(exam_type='ini_cet').count(),
-        }
-
-        # Heatmap — last 30 days
-        thirty_days_ago = timezone.localdate() - timezone.timedelta(days=30)
-        heatmap = DailyActivity.objects.filter(user=user, date__gte=thirty_days_ago)
-        heatmap_data = DailyActivitySerializer(heatmap, many=True).data
-
-        # Streak
-        streak_obj, _ = StudyStreak.objects.get_or_create(user=user)
-        streak_data = StudyStreakSerializer(streak_obj).data
-
-        # Mistake notebook stats
-        mistake_count = MistakeNotebook.objects.filter(user=user).count()
-        flagged_count = MistakeNotebook.objects.filter(user=user, is_flagged=True).count()
-
-        # Active quests
-        quests = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now())
-        quests_data = UserQuestSerializer(quests[:5], many=True).data
-
-        # Study time breakdown (pie chart) — last 7 days
-        week_ago = timezone.localdate() - timezone.timedelta(days=7)
-        study_time_qs = StudyTimeBreakdown.objects.filter(user=user, date__gte=week_ago)
-        study_time_data = StudyTimeBreakdownSerializer(study_time_qs, many=True).data
-
-        # Active quests count
-        active_quests_count = UserQuest.objects.filter(user=user, is_completed=False, expires_at__gt=timezone.now()).count()
-
-        result = {
-            'dashboard': {
-                'question_stats': question_stats,
-                'recent_attempts': attempts_data,
-                'total_attempts': recent_attempts.count(),
-                'mistake_notebook_count': mistake_count,
-                'flagged_count': flagged_count,
-                'active_quests_count': active_quests_count,
-                'xp_points': streak_data.get('xp_points', 0),
-                'current_streak': streak_data.get('current_streak', 0),
-                'longest_streak': streak_data.get('longest_streak', 0),
-            },
-            'heatmap': heatmap_data,
-            'streak': streak_data,
-            'study_time': study_time_data,
-            'quests': quests_data,
-        }
-
-        try:
-            cache.set(cache_key, result, 30)
-        except Exception:
-            pass
-        return Response(result)
+    qs = MistakeNotebook.objects.filter(user=user).select_related('question__subject', 'question__topic')
+    if is_premium(user):
+        return qs.annotate(answer_visible=Value(True, output_field=BooleanField()))
+    return qs.annotate(
+        answered_in_bank=Exists(QuestionAttempt.objects.filter(user=user, question_id=OuterRef('question_id'))),
+        answered_in_test=Exists(QuestionResponse.objects.filter(
+            attempt__user=user, attempt__is_completed=True, question_id=OuterRef('question_id'))),
+        is_showcase=Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('question_id'))),
+    )
 
 
 class MistakeNotebookView(APIView):
@@ -1127,9 +1426,7 @@ class MistakeNotebookView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        qs = MistakeNotebook.objects.filter(user=request.user).select_related(
-            'question__subject', 'question__topic'
-        )
+        qs = _notebook_queryset(request.user)
         # Filters
         review_status = request.query_params.get('review_status')
         is_flagged = request.query_params.get('is_flagged')
@@ -1165,42 +1462,69 @@ class MistakeNotebookView(APIView):
         })
 
     def post(self, request):
-        """Add a question to mistake notebook."""
-        question_id = request.data.get('question')
-        if not question_id:
-            return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
+        """Add a question you answered incorrectly.
+
+        The notebook fills itself from wrong answers (questions/mistakes.py);
+        this endpoint only (re-)adds a question the user really got wrong --
+        in the question bank or in a completed test -- and sets the note /
+        flag. It used to accept any question id and return its answer and
+        explanation, bypassing the premium question gate.
+        """
+        from questions.mistakes import record_mistake
+        from questions.models import QuestionAttempt
+        from tests_engine.models import QuestionResponse
+
+        user = request.user
         try:
-            question = Question.objects.get(pk=question_id)
-        except Question.DoesNotExist:
+            question_id = int(request.data.get('question'))
+        except (TypeError, ValueError):
+            return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
+        questions = Question.objects.all() if getattr(user, 'is_admin', False) else Question.objects.filter(is_active=True)
+        question = questions.filter(pk=question_id).first()
+        if question is None:
             return Response({'error': 'Question not found'}, status=404)
 
-        obj, created = MistakeNotebook.objects.get_or_create(
-            user=request.user,
-            question=question,
-            defaults={
-                'selected_answer': request.data.get('selected_answer', ''),
-                'correct_answer': question.correct_answer,
-                'is_correct': False,
-                'review_status': 'new',
-                'user_note': request.data.get('user_note', ''),
-            }
-        )
-        if not created:
-            obj.user_note = request.data.get('user_note', obj.user_note)
-            obj.is_flagged = request.data.get('is_flagged', obj.is_flagged)
-            obj.review_status = request.data.get('review_status', obj.review_status)
-            obj.save(update_fields=['user_note', 'is_flagged', 'review_status'])
-        serializer = MistakeNotebookSerializer(obj)
-        return Response(serializer.data, status=status.HTTP_201_CREATED if created else 200)
+        entry = MistakeNotebook.objects.filter(user=user, question=question).first()
+        created = False
+        if entry is None:
+            bank_attempt = QuestionAttempt.objects.filter(user=user, question=question, is_correct=False).first()
+            if bank_attempt is not None:
+                entry = record_mistake(user, question, bank_attempt.selected_answer, attempt=bank_attempt)
+            else:
+                wrong_in_test = (
+                    QuestionResponse.objects.filter(
+                        attempt__user=user, attempt__is_completed=True, question=question, is_correct=False,
+                    ).order_by('-attempt__completed_at').values_list('selected_answer', flat=True).first()
+                )
+                if wrong_in_test is None:
+                    return Response(
+                        {'error': 'Only questions you have answered incorrectly can be added to your Mistake Notebook.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                entry = record_mistake(user, question, wrong_in_test)
+            # record_mistake returns None if a concurrent request created it.
+            entry = entry or MistakeNotebook.objects.filter(user=user, question=question).first()
+            if entry is None:
+                return Response({'error': 'Could not add this question. Please try again.'}, status=500)
+            created = True
+
+        # The note and the flag are the only fields a student controls.
+        changes = {key: request.data[key] for key in ('user_note', 'is_flagged') if key in request.data}
+        if changes:
+            serializer = MistakeNotebookSerializer(entry, data=changes, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+        entry = _notebook_queryset(user).get(pk=entry.pk)
+        return Response(MistakeNotebookSerializer(entry).data, status=status.HTTP_201_CREATED if created else 200)
 
 
 class MistakeNotebookDetailView(APIView):
-    """Update/delete a mistake notebook entry."""
+    """Update/delete a mistake notebook entry (PATCH: user_note / is_flagged only)."""
     permission_classes = [permissions.IsAuthenticated]
 
     def _get_object(self, request, pk):
         try:
-            return MistakeNotebook.objects.get(pk=pk, user=request.user)
+            return _notebook_queryset(request.user).get(pk=pk)
         except MistakeNotebook.DoesNotExist:
             raise Http404
 
@@ -1223,7 +1547,7 @@ class MistakeNotebookReviewView(APIView):
 
     def post(self, request, pk):
         try:
-            obj = MistakeNotebook.objects.get(pk=pk, user=request.user)
+            obj = _notebook_queryset(request.user).get(pk=pk)
         except MistakeNotebook.DoesNotExist:
             return Response({'error': 'Not found'}, status=404)
 
@@ -1253,12 +1577,9 @@ class MistakeNotebookDueView(APIView):
 
     def get(self, request):
         now = timezone.now()
-        due = MistakeNotebook.objects.filter(
-            user=request.user,
+        due = _notebook_queryset(request.user).filter(
             next_review_at__lte=now,
-        ).exclude(review_status='mastered').select_related(
-            'question__subject', 'question__topic'
-        ).order_by('next_review_at')
+        ).exclude(review_status='mastered').order_by('next_review_at')
         serializer = MistakeNotebookSerializer(due, many=True)
         return Response({
             'results': serializer.data,
@@ -1322,6 +1643,9 @@ class UserQuestDetailView(APIView):
         wants_claim = raw is True or str(raw).strip().lower() in ('1', 'true', 'yes')
         if not wants_claim:
             return Response({'error': 'Only claiming a finished quest is supported.'}, status=400)
+        # A freeze bridges one missed day only; drop a stale one before the
+        # claim so it cannot carry the streak over a longer gap.
+        expire_stale_quest_freeze(request.user)
         try:
             quest = claim_quest(request.user, pk)
         except QuestClaimError as exc:
@@ -1345,25 +1669,89 @@ class UserQuestDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+QUEST_FREEZE_EVENT = 'quest_streak_freeze_used'  # server-written AnalyticsEvent ledger
+QUEST_FREEZE_COOLDOWN_DAYS = 7
+
+
+def _parse_bool(value) -> bool:
+    """Strict boolean parsing (bool('false') is True)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ('true', '1', 'yes', 'on'):
+            return True
+        if text in ('false', '0', 'no', 'off'):
+            return False
+    raise ValueError(value)
+
+
+def expire_stale_quest_freeze(user) -> None:
+    """A freeze protects a single missed day. Once the last claim is older
+    than the day before yesterday the streak is broken, so the freeze lapses
+    instead of bridging a gap of any length."""
+    today = timezone.localdate()
+    QuestStreak.objects.filter(
+        user=user, streak_frozen=True, last_quest_date__lt=today - timedelta(days=2),
+    ).update(streak_frozen=False)
+
+
 class QuestStreakView(APIView):
     """Get/update quest streak info."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        expire_stale_quest_freeze(request.user)
         streak, _ = QuestStreak.objects.get_or_create(user=request.user)
         serializer = QuestStreakSerializer(streak)
         return Response(serializer.data)
 
 
 class QuestStreakFreezeView(APIView):
-    """Toggle streak freeze."""
+    """Turn the streak freeze on or off.
+
+    Body ``{"streak_frozen": true|false}``; no body toggles. A freeze can be
+    switched on only while the streak is alive (a quest claimed today or
+    yesterday) and at most once every QUEST_FREEZE_COOLDOWN_DAYS days; it
+    then covers one missed day.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        freeze = bool(request.data.get('streak_frozen', True))
-        streak, _ = QuestStreak.objects.get_or_create(user=request.user)
-        streak.streak_frozen = freeze
-        streak.save(update_fields=['streak_frozen'])
+        user = request.user
+        expire_stale_quest_freeze(user)
+        streak, _ = QuestStreak.objects.get_or_create(user=user)
+        raw = request.data.get('streak_frozen') if hasattr(request.data, 'get') else None
+        if raw is None:
+            freeze = not streak.streak_frozen
+        else:
+            try:
+                freeze = _parse_bool(raw)
+            except ValueError:
+                return Response({'error': 'streak_frozen must be true or false.'}, status=400)
+
+        if freeze and not streak.streak_frozen:
+            today = timezone.localdate()
+            if (not streak.last_quest_date or streak.current_streak <= 0
+                    or streak.last_quest_date < today - timedelta(days=1)):
+                return Response({'error': 'You need an active quest streak to freeze. Claim a quest first.'},
+                                status=400)
+            since = timezone.now() - timedelta(days=QUEST_FREEZE_COOLDOWN_DAYS)
+            if AnalyticsEvent.objects.filter(
+                event_name=QUEST_FREEZE_EVENT, user_id=user.id, created_at__gte=since,
+            ).exists():
+                return Response({'error': f'You can use one streak freeze every {QUEST_FREEZE_COOLDOWN_DAYS} days.'},
+                                status=400)
+            AnalyticsEvent.objects.create(
+                event_name=QUEST_FREEZE_EVENT, user_id=user.id,
+                properties={'current_streak': streak.current_streak},
+            )
+
+        if freeze != streak.streak_frozen:
+            streak.streak_frozen = freeze
+            streak.save(update_fields=['streak_frozen', 'updated_at'])
         serializer = QuestStreakSerializer(streak)
         return Response(serializer.data)
 
@@ -1458,6 +1846,7 @@ class AdminCampaignListCreateView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def get(self, request):
+        promote_due_scheduled_announcements()
         status_filter = (request.query_params.get('status') or '').strip().lower()
         rows = Announcement.objects.all().order_by('-created_at')
         if status_filter:
@@ -1475,30 +1864,19 @@ class AdminCampaignListCreateView(APIView):
 
 
 class AdminCampaignSendNowView(APIView):
-    """Mark campaign as sent and compute target audience counts."""
+    """Publish a campaign now (in-app: dashboard feed + notification bell;
+    nothing is emailed or pushed) and record its target audience size."""
 
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'admin_control_tower'
 
     def post(self, request, pk):
-        from accounts.models import CustomUser
-
         try:
             campaign = Announcement.objects.get(pk=pk)
         except Announcement.DoesNotExist:
             return Response({'error': 'Campaign not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        audience = campaign.audience_filter or {}
-        users = CustomUser.objects.all()
-        role = audience.get('role')
-        if role in ['admin', 'student']:
-            users = users.filter(role=role)
-        target_year = audience.get('target_year')
-        if target_year:
-            users = users.filter(target_year=target_year)
-        active_only = audience.get('active_only')
-        if active_only is True:
-            users = users.filter(is_active=True)
+        users = _campaign_audience(campaign.audience_filter)
 
         campaign.sent_at = timezone.now()
         campaign.delivery_status = 'sent'

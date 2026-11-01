@@ -153,7 +153,10 @@ class AnalyticsDashboardDataView(APIView):
         month_start = today_start - timedelta(days=30)
         last_5min = now - timedelta(minutes=5)
 
-        base = AnalyticsEvent.objects.all()
+        # Server-written ledger rows (e.g. quest streak freezes) are not
+        # visitor traffic.
+        from .views import QUEST_FREEZE_EVENT
+        base = AnalyticsEvent.objects.exclude(event_name__in=[QUEST_FREEZE_EVENT])
 
         # Realtime — unique visitors in the last 5 minutes
         active_visitors = (
@@ -168,7 +171,7 @@ class AnalyticsDashboardDataView(APIView):
 
         def _kpis(start):
             qs = period_window(start)
-            users = qs.values('visitor_id').distinct().count()
+            users = qs.filter(visitor_id__isnull=False).values('visitor_id').distinct().count()
             page_views = qs.filter(event_name=AnalyticsEvent.EVENT_PAGE_VIEW).count()
             # Sign-ups and revenue come from authoritative tables: the
             # event-ingest endpoint is public, so client-posted
@@ -271,16 +274,30 @@ class AnalyticsDashboardDataView(APIView):
             .order_by('-users')[:15]
         )
 
-        # Funnel — coarse stage counts from key events
+        # Funnel — coarse stage counts. Behavioural stages come from client
+        # events; sign-up / checkout / payment come from the authoritative
+        # tables, because the public ingest endpoint lets anyone post
+        # `sign_up` or `payment_success` events and inflate those bars.
+        from django.contrib.auth import get_user_model
+        from accounts.models import PaymentAttempt
+        month_signups = get_user_model().objects.filter(date_joined__gte=month_start).count()
+        month_checkouts = (
+            PaymentAttempt.objects.filter(created_at__gte=month_start)
+            .values('user_id').distinct().count()
+        )
+        month_payers = (
+            PaymentAttempt.objects.filter(status='successful', updated_at__gte=month_start)
+            .values('user_id').distinct().count()
+        )
         funnel = [
             {'stage': 'landing', 'users': base.filter(event_name='page_view', page_type='home', created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'blog_view', 'users': base.filter(event_name=AnalyticsEvent.EVENT_BLOG_VIEW, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'question_solve', 'users': base.filter(event_name=AnalyticsEvent.EVENT_QUESTION_SOLVE, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'ai_tutor', 'users': base.filter(event_name=AnalyticsEvent.EVENT_AI_TUTOR_MESSAGE, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'register_intent', 'users': base.filter(event_name='register_intent', created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'sign_up', 'users': base.filter(event_name=AnalyticsEvent.EVENT_SIGN_UP, created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'checkout_start', 'users': base.filter(event_name=AnalyticsEvent.EVENT_CHECKOUT_START, created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'payment_success', 'users': base.filter(event_name=AnalyticsEvent.EVENT_PAYMENT_SUCCESS, created_at__gte=month_start).values('visitor_id').distinct().count()},
+            {'stage': 'sign_up', 'users': month_signups},
+            {'stage': 'checkout_start', 'users': month_checkouts},
+            {'stage': 'payment_success', 'users': month_payers},
         ]
 
         # Daily active users + event volume (last 30 days)

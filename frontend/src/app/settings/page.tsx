@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
@@ -8,10 +9,20 @@ import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
 import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2 } from 'lucide-react';
 
+const THEME_OPTIONS = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'System' },
+];
+
 export default function SettingsPage() {
     const { user, logout, refreshProfile } = useAuth();
     const { ready } = useRequireAuth();
     const router = useRouter();
+    // The stored theme is only known on the client; render the picker after mount.
+    const { theme, setTheme } = useTheme();
+    const [themeReady, setThemeReady] = useState(false);
+    useEffect(() => { setThemeReady(true); }, []);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -229,19 +240,34 @@ export default function SettingsPage() {
                             Preferences
                         </h3>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-4">
                                 <div>
-                                    <div className="text-sm font-medium">Dark Mode</div>
-                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>App always uses dark theme</div>
+                                    <div id="settings-theme-label" className="text-sm font-medium">Theme</div>
+                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Light, dark, or follow your device setting</div>
                                 </div>
-                                <div className="badge" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>Active</div>
+                                <div className="flex gap-1 rounded-lg p-1" role="radiogroup" aria-labelledby="settings-theme-label"
+                                    style={{ background: 'rgba(139,149,168,0.1)' }}>
+                                    {THEME_OPTIONS.map(opt => {
+                                        const active = themeReady && (theme || 'system') === opt.value;
+                                        return (
+                                            <button key={opt.value} type="button" role="radio" aria-checked={active}
+                                                onClick={() => setTheme(opt.value)}
+                                                className="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
+                                                style={active
+                                                    ? { background: 'rgba(16,185,129,0.15)', color: '#10b981' }
+                                                    : { color: 'var(--text-secondary)' }}>
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-sm font-medium">AI Explanations</div>
-                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Auto-generate AI explanations for questions</div>
+                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Generated when you ask for one on a question</div>
                                 </div>
-                                <div className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>Enabled</div>
+                                <div className="badge" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-primary)' }}>On request</div>
                             </div>
                         </div>
                     </div>
