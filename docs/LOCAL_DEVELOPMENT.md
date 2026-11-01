@@ -54,9 +54,23 @@ powershell -ExecutionPolicy Bypass -File scripts\local\stop-local.ps1 -KeepDatab
 | `DJANGO_ENV_FILE=.env.localdev` | load the local env file instead of `backend/.env` |
 | `LOCAL_DEV_AUTH=1` | `/api/auth/local/{login,register,refresh}/` + SimpleJWT bearer auth |
 | `PAYMENTS_MODE=mock` | Razorpay replaced by `accounts/payments_mock.py`; `/api/auth/subscribe/mock-checkout/` simulates the checkout popup |
-| `AI_OFFLINE_MODE=1` | no external LLM calls (see RAG notes) |
+| `AI_OFFLINE_MODE=1` (local default) | no external LLM call anywhere: AI features answer extractively from the textbook store and stored explanations, labelled offline, no tokens charged. Set `0` to use the real provider rotation (needs keys) |
 | `SUPABASE_STORAGE_MIRROR_DIR` | serve Supabase-storage image URLs from the local mirror |
 | `EMAIL_BACKEND=...filebased...` | write mail to `EMAIL_FILE_PATH` |
+
+How local sign-in reaches protected pages: the Next middleware normally gates `/dashboard`, `/questions`, `/tests`, `/admin`… on Supabase cookies. In local mode it gates on presence cookies kept by `src/lib/localAuth.ts` (`crack_local_session`, `crack_local_admin`, mirrored from the real profile) and never calls Supabase; the Django API still authenticates every request. Anything that injects tokens into `localStorage` (Playwright, screenshot scripts) must also set these cookies — see `frontend/tests/e2e/local/support.ts`.
+
+## Tests
+
+```bash
+# backend (bash, from backend/) — the test runner blanks every external secret and refuses a remote DATABASE_URL
+DATABASE_URL= SUPABASE_DATABASE_URL= DEBUG=True python manage.py test --parallel 1
+# frontend static checks (from frontend/)
+npx tsc --noEmit -p . && npx eslint src --quiet
+# end-to-end against the running local stack (from frontend/; start the stack first)
+npx playwright test -c playwright.local.config.ts                  # desktop + tablet + mobile
+E2E_OUTPUT_DIR=../e2e-report npx playwright test -c playwright.local.config.ts --project=desktop
+```
 
 ## Rebuilding the database from the backups
 
