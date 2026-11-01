@@ -44,7 +44,8 @@ powershell -ExecutionPolicy Bypass -File scripts\local\stop-local.ps1 -KeepDatab
 ```
 
 - Frontend: http://localhost:3000 — Backend: http://127.0.0.1:8000/api/health/ — Django admin: http://127.0.0.1:8000/admin/
-- The frontend is started with `NEXT_PUBLIC_AUTH_MODE=local`, `NEXT_PUBLIC_PAYMENTS_MODE=mock`, `NEXT_PUBLIC_API_URL=http://localhost:8000/api`.
+- The frontend is started with `NEXT_PUBLIC_AUTH_MODE=local`, `NEXT_PUBLIC_PAYMENTS_MODE=mock`, `NEXT_PUBLIC_API_URL=http://localhost:8000/api` and `NEXT_PUBLIC_SIMPLE_ANALYTICS_ENABLED=false` (local traffic is never reported to the production analytics account; GA stays consent-gated).
+- Before the backend starts, pending migrations are applied with `scripts/local/migrate_local.py`, which refuses SQLite and any non-local database host (`-SkipMigrate` skips it; `python scripts/local/migrate_local.py --check` lists what is pending without changing anything). Log: `crack_local\logs\migrate.log`.
 - Run the scripts from a normal console. (When invoked from another script with piped output, the call returns only when the servers stop, because the children inherit the pipe.)
 
 ## Local-only switches (all refuse to work unless `DEBUG=True`)
@@ -65,12 +66,17 @@ How local sign-in reaches protected pages: the Next middleware normally gates `/
 ```bash
 # backend (bash, from backend/) — the test runner blanks every external secret and refuses a remote DATABASE_URL
 DATABASE_URL= SUPABASE_DATABASE_URL= DEBUG=True python manage.py test --parallel 1
-# frontend static checks (from frontend/)
+# frontend static checks and unit tests (from frontend/)
 npx tsc --noEmit -p . && npx eslint src --quiet
-# end-to-end against the running local stack (from frontend/; start the stack first)
-npx playwright test -c playwright.local.config.ts                  # desktop + tablet + mobile
+node --import ./tests/unit/register-ts-alias.mjs --test "tests/unit/*.test.mjs" "tests/unit/*.test.ts"
+# end-to-end against the running local stack (from frontend/; start the stack with -Frontend prod first)
+npx tsc -p tests/e2e/local/tsconfig.json                           # type-check the specs
+npx playwright test -c playwright.local.config.ts                  # desktop + tablet + mobile (156 tests)
 E2E_OUTPUT_DIR=../e2e-report npx playwright test -c playwright.local.config.ts --project=desktop
+npx playwright test -c playwright.local.config.ts --project=desktop --last-failed   # re-run failures (same E2E_OUTPUT_DIR)
 ```
+
+The E2E specs (`frontend/tests/e2e/local/*.e2e.ts`) cover auth, question-bank practice, mock tests, mock payments (signature, webhook, stacking, revoke/grant), the offline AI tutor, the admin console and its authorization, and a responsive smoke pass. Every test also fails on console errors, page errors, failed requests, 5xx responses or horizontal overflow. They create throwaway `*@local.test` users through the dev-only register endpoint and read the mock secrets from `backend/.env.localdev` (never logged). A full run takes about 55 minutes on this machine.
 
 ## Rebuilding the database from the backups
 
@@ -80,7 +86,9 @@ psql -h 127.0.0.1 -p 55432 -U crack_super -d postgres -f roles.sql
 psql -h 127.0.0.1 -p 55432 -U crack_super -d postgres -c "CREATE DATABASE crack_restore TEMPLATE template0"
 psql -h 127.0.0.1 -p 55432 -U crack_super -d crack_restore -f postgres_db.sql
 psql -h 127.0.0.1 -p 55432 -U crack_super -d postgres -c "CREATE DATABASE crack_local TEMPLATE crack_restore"
-cd backend; $env:DJANGO_ENV_FILE='.env.localdev'; python manage.py migrate
+python scripts\local\migrate_local.py
 ```
+
+To go back to the working copy as it was before the overnight mission's last migrations, restore `crack_local\backups\crack_local_before_wave3_migrations.dump` with `pg_restore --clean -d crack_local`.
 
 Expected restore errors (harmless): pgvector types/functions (not installed; embeddings are stored as JSON), Supabase Vault, PG17-only privileges.

@@ -1,6 +1,6 @@
 # Overnight mission — progress log
 
-_Last updated: 2026-11-01 — fix waves 1-2 committed, dependency floors raised, local E2E suite written; fix wave 3 running_
+_Last updated: 2026-11-01 — fix waves 1-3 committed, local E2E suite running green apart from rebuild-dependent fixes; security pass 2 running_
 
 ## Where things are
 
@@ -74,11 +74,15 @@ The existing PostgreSQL service on :5432 is **not** used or modified.
 | UI reviews | public (69 verified issues) + app (156 verified issues), from 3 screenshot rounds | routed into wave 2 |
 | 2 | wave-1 review problems, cross-group follow-ups, UI issues, 11 groups | ~256 items fixed, commits `0a647c5`..`88d6461` (global-shell group partial: API outage); backend suite 1,185 OK, tsc 0 errors, eslint 0 errors |
 | deps | pip-audit: 32 vulnerable packages in the venv, 22 in the production tree | `606c91c`: Django 5.2.18, DRF 3.18.3, PyJWT, cryptography, requests, urllib3, sqlparse … floors; full suite OK. **Pillow stays 11.3** (moviepy 2.2.1 requires `pillow<12`) |
-| 3 | 2 high + ~10 medium wave-2 review problems (free-tier answer harvesting via generated tests and the Mistake Notebook, admin lockout after deploy, screenshot entitlement, ingestion sweeper), the unfinished global shell, reviews of the 3 unreviewed wave-2 commits, docs | running (workflow `crack-fix-wave3`) |
+| 3 (+3b) | 2 high + ~10 medium wave-2 review problems (free-tier answer harvesting via generated tests and the Mistake Notebook, admin lockout after deploy, screenshot entitlement, ingestion sweeper), the unfinished global shell, reviews of the 3 unreviewed wave-2 commits (86/95 claims confirmed), integration (re-run after a network outage), docs | `624cede`..`e71b967`; backend suite 1,423 OK, makemigrations clean, tsc/eslint 0 errors, 287 unit tests pass |
+| security | FormattedText rendered stored HTML unsanitized (iframes, forms, overlays) | `4923ce7`, `22e217a`: allow-list sanitizer + 6 unit tests; Bandit gate without baseline |
+| security pass 2 | 6 lenses (entitlement, authz, payments, injection, privacy, performance), 2 skeptics per finding | running (workflow `crack-security-pass`) |
 
 ## Local E2E suite (Playwright, `frontend/tests/e2e/local/`)
 
-7 spec files, 156 tests over 3 viewports (desktop 1440×900, tablet 820×1180, Pixel 5): auth, question-bank practice (answer/key, Mistake Notebook + Study Time, free-tier lock, bookmarks), mock tests (start → answer → submit → result → review), payments (mock checkout UI; invalid signature, foreign order, unknown/lifetime plan, idempotent verify, stacking, webhook duplicates/forgery/refund event, admin revoke/lifetime grant, AI entitlement), AI tutor offline answer, admin console + authorization, responsive smoke (18 app pages light/dark, 6 public pages). The auth spec passed 6/6 on desktop; the rest runs after wave 3 and a rebuild.
+7 spec files, 156 tests over 3 viewports (desktop 1440×900, tablet 820×1180, Pixel 5): auth, question-bank practice (answer/key, Mistake Notebook + Study Time, free-tier lock, bookmarks), mock tests (start → answer → submit → result → review), payments (mock checkout UI; invalid signature, foreign order, unknown/lifetime plan, idempotent verify, stacking, webhook duplicates/forgery/refund event, admin revoke/lifetime grant, AI entitlement), AI tutor offline answer, admin console + authorization, responsive smoke (18 app pages light/dark, 6 public pages).
+
+Results on the wave-3 build: desktop run 1 42/52 (the 10 failures: 8 test-side assumptions fixed in `4bd6a9e`, the tutor not listing citations fixed in `59fdc61`, and Simple Analytics loading in local builds, now disabled); re-run of the failures 8/10 + 1/1; tablet + mobile 87 passed, 15 skipped (desktop-only), 2 failed (tutor citations, fixed in `59fdc61`, needs the rebuild). Artifacts: `crack_local\e2e\run1`, `run2`.
 
 ## Findings logged for later phases
 
@@ -86,9 +90,9 @@ The existing PostgreSQL service on :5432 is **not** used or modified.
 
 ## In progress / next
 
-1. Wave 3 → full backend suite, tsc, eslint → commit per group.
-2. Rebuild the frontend, restart the app servers, run the E2E suite (desktop, then tablet and mobile), screenshot round 4.
-3. Security/performance second pass on the final diff; final report.
+1. Security pass 2 → fixes → full suites → commit.
+2. Rebuild, final E2E run on all three viewports (round-4 screenshots come from the smoke spec).
+3. Final report (`docs/audit/OVERNIGHT_MISSION_FINAL_REPORT.md`).
 
 Note: this machine has 5.9 GB RAM (heavy paging with many agents). Agents run tests through a slot wrapper (2 backend runs, 1 tsc/eslint at a time). The harness stopped one background launcher task ("Restart Postgres detached") for low memory; the Postgres server it had started kept running on :55432, and the task was not restarted.
 
