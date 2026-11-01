@@ -49,12 +49,12 @@ export default function JobDetail() {
   }, [load]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading job…</div>;
+    return <div className="text-sm text-muted-foreground">Loading job…</div>;
   }
 
   if (!job) {
     return (
-      <div className="p-6">
+      <div>
         <p>Job #{params?.id} not found.</p>
         <Link href="/admin/ingestion/jobs" className="underline">← back</Link>
       </div>
@@ -62,7 +62,7 @@ export default function JobDetail() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="space-y-6">
       <header>
         <Link href="/admin/ingestion/jobs" className="text-sm text-muted-foreground hover:text-foreground">
           ← Jobs
@@ -99,7 +99,7 @@ export default function JobDetail() {
       <section>
         <h2 className="text-xl font-semibold mb-2">Stage Timeline</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full whitespace-nowrap text-sm">
             <thead>
               <tr className="text-left border-b">
                 <th className="p-2">Stage</th>
@@ -112,7 +112,7 @@ export default function JobDetail() {
             <tbody>
               {stages.map((s) => (
                 <tr key={s.id} className="border-b">
-                  <td className="p-2 font-mono text-xs">{s.stage_name}</td>
+                  <td className="p-2" title={s.stage_name}>{stageLabel(s.stage_name)}</td>
                   <td className="p-2">{s.status}</td>
                   <td className="p-2">{s.pages_processed}/{s.pages_skipped}</td>
                   <td className="p-2">{s.artefacts_written}</td>

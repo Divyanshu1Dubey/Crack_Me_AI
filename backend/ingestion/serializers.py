@@ -105,19 +105,21 @@ class ImportLogSerializer(serializers.ModelSerializer):
 
 
 def _waiting_for_worker(job) -> bool:
-    """A job still queued well after creation: no django-q worker picked it up.
+    """A job still queued well after it was queued: no django-q worker picked it up.
 
     Jobs run only on the django-q cluster (``python manage.py qcluster``);
     without one they stay queued forever. The UI shows this flag instead of
-    pretending the job is about to start.
+    pretending the job is about to start. Measured from the last update, so
+    a job the stale-job sweeper has just re-queued is not flagged at once.
     """
     from datetime import timedelta
     from django.utils import timezone
 
+    since = job.updated_at or job.created_at
     return bool(
         job.status == "queued"
-        and job.created_at
-        and timezone.now() - job.created_at > timedelta(minutes=5)
+        and since
+        and timezone.now() - since > timedelta(minutes=5)
     )
 
 

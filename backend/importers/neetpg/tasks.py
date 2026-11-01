@@ -11,6 +11,33 @@ from pathlib import Path
 
 LOG = logging.getLogger(__name__)
 
+INTERRUPTED_MESSAGE = (
+    "The import stopped before it finished (the worker hit its time limit or was "
+    "restarted). Retry the job; split a very large folder into smaller ones."
+)
+
+
+def refuse_redelivery(job) -> dict | None:
+    """Why this delivery must not run ``job`` (a result dict), or None to run it.
+
+    Only a queued job is run: the API, the CLI and retry all queue a job
+    before dispatching its task. A job still ``processing`` means an earlier
+    delivery started the run and its worker was killed (django-q timeout,
+    restart): django-q re-presents an unacknowledged task every
+    ``Q_CLUSTER['retry']`` seconds, so running it again would restart a run
+    that cannot finish, every hour, for ever. Such a job is marked failed
+    (Retry re-queues it); any other state is a late duplicate (no-op).
+    """
+    if job.status == "queued":
+        return None
+    if job.status == "processing":
+        job.status = "failed"
+        job.error_report = (job.error_report or []) + [{"stage": "runner", "message": INTERRUPTED_MESSAGE}]
+        job.save(update_fields=["status", "error_report", "updated_at"])
+        LOG.warning("run_recall_import: job %s was interrupted by a lost worker; marked failed", job.id)
+        return {"job_id": job.id, "status": "failed", "interrupted": True}
+    return {"job_id": job.id, "status": job.status, "noop": True}
+
 
 def run_recall_import(job_id: int, source_dir: str, force: bool = False) -> dict:
     """Run the recall importer and persist results onto a QuestionImportJob row.
@@ -26,6 +53,9 @@ def run_recall_import(job_id: int, source_dir: str, force: bool = False) -> dict
     if not job:
         LOG.error("run_recall_import: job_id=%s not found", job_id)
         return {"job_id": job_id, "error": "job not found"}
+    refused = refuse_redelivery(job)
+    if refused is not None:
+        return refused
 
     job.status = "processing"
     job.save(update_fields=["status"])

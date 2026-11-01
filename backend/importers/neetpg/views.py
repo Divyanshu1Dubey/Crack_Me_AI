@@ -11,8 +11,13 @@ repo's ``material/`` folder and ``MEDIA_ROOT/ingestion_uploads`` /
 ``MEDIA_ROOT/recall_uploads``) and ``run_id`` must be a plain token, so the
 API cannot be pointed at arbitrary server paths.
 
-The views are parameterised by ``task_path`` / ``config_module`` so the
-INI-CET importer reuses them with its own task and output folder.
+The views are parameterised by ``task_path`` / ``config_module`` /
+``importer`` so the INI-CET importer reuses them with its own task, output
+folder and jobs. Each job records the importer that created it
+(``summary["importer"]``); the list, detail and retry endpoints only see
+their own importer's jobs, so a NEET PG job can never be listed by, or
+re-run through, the INI-CET API (and the reverse). Jobs created before the
+importer was recorded are NEET PG's.
 """
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ import re
 from pathlib import Path
 
 from django.conf import settings
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, serializers, status
@@ -37,6 +43,19 @@ LOG = logging.getLogger(__name__)
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 NEETPG_TASK = "importers.neetpg.tasks.run_recall_import"
 NEETPG_CONFIG = "importers.neetpg.config"
+IMPORTER_NEETPG = "neetpg"
+IMPORTER_INICET = "inicet"
+
+
+def recall_jobs(importer: str):
+    """The recall import jobs (``job_type='pdf'``) of one importer.
+
+    Jobs without a recorded importer predate it and are NEET PG's.
+    """
+    qs = QuestionImportJob.objects.filter(job_type="pdf")
+    if importer == IMPORTER_NEETPG:
+        return qs.filter(Q(summary__importer=IMPORTER_NEETPG) | ~Q(summary__has_key="importer"))
+    return qs.filter(summary__importer=importer)
 
 
 class QuestionImportJobSerializer(serializers.ModelSerializer):
@@ -91,13 +110,10 @@ class ImportJobListView(generics.ListAPIView):
     permission_classes = [IsControlTowerAdmin]
     serializer_class = QuestionImportJobSerializer
     task_path = NEETPG_TASK
+    importer = IMPORTER_NEETPG
 
     def get_queryset(self):
-        return (
-            QuestionImportJob.objects
-            .filter(job_type="pdf")
-            .order_by("-created_at", "-id")
-        )
+        return recall_jobs(self.importer).order_by("-created_at", "-id")
 
     def post(self, request, *args, **kwargs):
         source_dir = validate_source_dir(request.data.get("source_dir"))
@@ -116,7 +132,7 @@ class ImportJobListView(generics.ListAPIView):
             status="queued",
             source_filename=source_dir.name,
             stored_file_path=str(source_dir),
-            summary={"source_dir": str(source_dir), "force": force},
+            summary={"source_dir": str(source_dir), "force": force, "importer": self.importer},
             created_by=request.user if request.user.is_authenticated else None,
         )
 
@@ -133,21 +149,19 @@ class ImportJobListView(generics.ListAPIView):
 class ImportJobDetailView(generics.RetrieveAPIView):
     permission_classes = [IsControlTowerAdmin]
     serializer_class = QuestionImportJobSerializer
+    importer = IMPORTER_NEETPG
 
     def get_object(self):
-        return get_object_or_404(
-            QuestionImportJob,
-            id=self.kwargs["pk"],
-            job_type="pdf",
-        )
+        return get_object_or_404(recall_jobs(self.importer), id=self.kwargs["pk"])
 
 
 class ImportJobRetryView(APIView):
     permission_classes = [IsControlTowerAdmin]
     task_path = NEETPG_TASK
+    importer = IMPORTER_NEETPG
 
     def post(self, request, pk: int):
-        job = get_object_or_404(QuestionImportJob, id=pk, job_type="pdf")
+        job = get_object_or_404(recall_jobs(self.importer), id=pk)
         if job.status not in ("failed", "completed"):
             return Response(
                 {"detail": f"job status is {job.status}, only failed/completed can be retried"},

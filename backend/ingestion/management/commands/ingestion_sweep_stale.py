@@ -7,8 +7,11 @@ the django-q task timeout + 10 min, see
 ``orchestrator.stale_processing_after``) to ``crashed``, so it shows up as
 crashed and can be retried (Retry button, ``ingestion_retry_failed``).
 
-``ingestion_run_pending`` runs the same sweep first, so a cron that runs the
-catch-up command needs nothing else.
+This command only marks them crashed. The automatic path is the
+``ingestion_recover_stale_jobs`` django-q Schedule (every 10 minutes on the
+qcluster worker, created after ``migrate``; ``ingestion_run_pending`` runs
+the same pass): it sweeps, then re-queues the recently stalled jobs so they
+resume from their checkpoint.
 
     python manage.py ingestion_sweep_stale --dry-run
     python manage.py ingestion_sweep_stale [--older-than-minutes 90]

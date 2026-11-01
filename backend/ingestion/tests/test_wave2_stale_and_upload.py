@@ -1,7 +1,10 @@
 """Regression tests for the ingestion review follow-ups (wave 2, W10).
 
-* a processing job whose worker died is resumed by a re-delivered task once
-  it is stale, and the sweeper marks such jobs crashed (retry path)
+* a delivery that finds a stale processing job (its worker died) resumes it,
+  a live one is left alone, and the sweeper marks such jobs crashed (with the
+  shipped Q_CLUSTER settings django-q's own re-delivery comes too early to
+  resume anything; the scheduled recovery pass is tested in
+  test_wave3_recovery)
 * jobs created without an exam use their material's exam hint (profile,
   display, filter) and get it written on claim
 * uploads must be real PDFs (magic bytes)
@@ -62,12 +65,16 @@ class _JobCase(TestCase):
 
 @override_settings(INGESTION_STALE_PROCESSING_SECONDS=3600)
 class StaleProcessingJobTests(_JobCase):
-    def test_default_window_is_longer_than_the_q_cluster_timeout(self):
+    def test_default_window_outlasts_any_live_task(self):
+        # Longer than the django-q timeout, so a live worker is never swept.
+        # It is also longer than `retry`, which is why django-q's own
+        # re-delivery of a killed task finds the job not stale yet (a no-op)
+        # and the scheduled sweeper does the recovery.
         with override_settings(INGESTION_STALE_PROCESSING_SECONDS=None,
                                Q_CLUSTER={"timeout": 3600, "retry": 3660}):
-            self.assertGreater(stale_processing_after(), timedelta(seconds=3660))
+            self.assertEqual(stale_processing_after(), timedelta(seconds=3600 + 600))
 
-    def test_redelivered_task_resumes_a_stale_processing_job(self):
+    def test_a_delivery_that_finds_a_stale_processing_job_resumes_it(self):
         job = self.job(minutes_ago=90)
         with patch("ingestion.orchestrator._run_claimed_job", return_value={"status": "completed"}) as run:
             res = run_full_pipeline_for_job(job.id)
@@ -125,7 +132,9 @@ class StaleProcessingJobTests(_JobCase):
             call_command("ingestion_run_pending", "--no-sweep", stdout=io.StringIO())
             stale.refresh_from_db()
             self.assertEqual(stale.status, "processing")
-            call_command("ingestion_run_pending", stdout=io.StringIO())
+            # The recovery pass marks it crashed; with auto-resume off it stays so.
+            with override_settings(INGESTION_MAX_AUTO_RESUMES=0):
+                call_command("ingestion_run_pending", stdout=io.StringIO())
         dispatch.assert_not_called()
         stale.refresh_from_db()
         self.assertEqual(stale.status, "crashed")

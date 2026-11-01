@@ -1,7 +1,7 @@
 """URL routes for the INI-CET recall importer API.
 
-Intended mount point: `/api/imports/inicet/` (not yet included from
-`crack_cms/urls.py`).
+Mounted at `/api/imports/inicet/` from `crack_cms/urls.py`. The jobs
+endpoints list, show and retry INI-CET jobs only (see `views.py`).
 """
 from django.urls import path
 

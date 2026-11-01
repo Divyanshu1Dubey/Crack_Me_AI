@@ -32,7 +32,7 @@ export default function BatchesPage() {
   }, []);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
+    <div className="space-y-4">
       <div>
         <Link href="/admin/ingestion" className="text-sm text-muted-foreground hover:text-foreground">
           ← Ingestion

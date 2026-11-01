@@ -1,8 +1,14 @@
 """run_bulk_ingestion.py
 
-This script scans the `material/inicet-pg` and `material/neet-pg` directories,
-uploads the PDFs into the backend as `MaterialAsset` entries, and then queues
-them up as BatchRuns in the ingestion pipeline.
+This script scans the `material/inicet-pg` and `material/neet-pg` directories
+(repo root; override with BULK_INGESTION_MATERIAL_DIR), uploads the PDFs into
+the backend as `MaterialAsset` entries, and then queues them up as BatchRuns
+in the ingestion pipeline.
+
+Each job is created with its exam (`parent_exam`) and each material stores
+the exam code (`ini_cet` / `neet_pg`, the values the ingestion API uses).
+Jobs it created before that carry a blank exam; the API shows them by their
+material's hint and the orchestrator writes the exam when it claims them.
 
 Usage:
   python manage.py shell < scripts/run_bulk_ingestion.py
@@ -22,9 +28,14 @@ if not settings.configured:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crack_cms.settings")
     django.setup()
 
+from django.utils import timezone
+
 from ingestion.models import MaterialAsset, BatchRun, ImportJob, _default_config
 from ingestion.views import _page_count
 from ingestion.tasks import dispatch_job
+
+# Folder hint -> ingestion exam code (ingestion.constants.EXAM_CHOICES).
+EXAM_BY_HINT = {"inicet": "ini_cet", "neetpg": "neet_pg"}
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -34,6 +45,7 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 def ingest_directory(directory_path: Path, exam_hint: str):
+    exam = EXAM_BY_HINT[exam_hint]
     if not directory_path.exists():
         print(f"Directory {directory_path} does not exist.")
         return
@@ -73,7 +85,7 @@ def ingest_directory(directory_path: Path, exam_hint: str):
                 "storage_path": str(final_path),
                 "file_size": final_path.stat().st_size,
                 "page_count": page_count,
-                "exam_hint": exam_hint,
+                "exam_hint": exam,
                 "is_active": True,
             },
         )
@@ -102,12 +114,13 @@ def ingest_directory(directory_path: Path, exam_hint: str):
         job = ImportJob.objects.create(
             batch_run=batch,
             material_asset=material,
+            parent_exam=exam,
             config=config,
             status="queued"
         )
         task_id = dispatch_job(job.id)
-        
-        job.summary = {"q_task_id": task_id, "dispatched_at": str(django.utils.timezone.now())}
+
+        job.summary = {"q_task_id": task_id, "dispatched_at": timezone.now().isoformat()}
         job.save(update_fields=["summary"])
         print(f"  -> Queued Job {job.id} for {material.original_filename}")
         
@@ -115,8 +128,11 @@ def ingest_directory(directory_path: Path, exam_hint: str):
 
 
 def main():
-    base_dir = Path(r"C:\Users\DIVYANSHU\Desktop\crack_cms\material")
-    
+    base_dir = Path(
+        os.environ.get("BULK_INGESTION_MATERIAL_DIR")
+        or Path(settings.BASE_DIR).parent / "material"
+    )
+
     # 1. INI-CET
     inicet_dir = base_dir / "inicet-pg"
     ingest_directory(inicet_dir, "inicet")

@@ -242,8 +242,7 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Left-aligned on phones so the CTA is clear of the floating Ask AI / flashcard buttons. */}
-      <div className="flex justify-start gap-2 sm:justify-end">
+      <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={submit}

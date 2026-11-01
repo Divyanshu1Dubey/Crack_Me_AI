@@ -6,19 +6,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ingestionAPI } from "@/lib/api";
+import api, { ingestionAPI } from "@/lib/api";
 import { examLabel } from "./labels";
 
 const RECENT = 10;
 
 export default function IngestionLanding() {
   const [jobs, setJobs] = useState<any[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    // The endpoint returns up to 200 jobs (it has no page size); the tiles
-    // count all of them and the table shows the newest RECENT.
+    // The list holds only the 200 newest jobs, so the tiles come from the
+    // per-status counts over every job (/jobs/counts/); the table shows the
+    // newest RECENT.
     ingestionAPI
       .listJobs()
       .then((r: any) => {
@@ -31,21 +33,31 @@ export default function IngestionLanding() {
       .finally(() => {
         if (alive) setLoading(false);
       });
+    api
+      .get("/ingestion/jobs/counts/")
+      .then((r: any) => {
+        if (alive && r?.data?.counts) setStatusCounts(r.data.counts);
+      })
+      .catch(() => {
+        /* tiles fall back to counting the list */
+      });
     return () => {
       alive = false;
     };
   }, []);
 
-  const counts = jobs.reduce(
-    (acc: Record<string, number>, j: any) => {
-      acc[j.status] = (acc[j.status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+  const counts =
+    statusCounts ??
+    jobs.reduce(
+      (acc: Record<string, number>, j: any) => {
+        acc[j.status] = (acc[j.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-6">
       <header>
         <Link href="/admin" className="text-xs text-muted-foreground hover:text-foreground">
           ← Admin dashboard

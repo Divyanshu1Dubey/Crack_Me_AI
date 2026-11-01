@@ -41,7 +41,7 @@ class Command(BaseCommand):
             status="queued",
             source_filename=source_dir.name,
             stored_file_path=str(source_dir),
-            summary={"source_dir": str(source_dir), "force": force,
+            summary={"source_dir": str(source_dir), "force": force, "importer": "neetpg",
                      "triggered_via": "manage.py neetpg_import_run"},
         )
         self.stdout.write(self.style.SUCCESS(

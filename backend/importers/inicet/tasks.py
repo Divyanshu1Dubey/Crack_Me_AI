@@ -18,6 +18,7 @@ def run_recall_import(job_id: int, source_dir: str, force: bool = False) -> dict
     This is the entrypoint used by both the CLI runner and the
     `/api/imports/neetpg/jobs/` POST endpoint.
     """
+    from importers.neetpg.tasks import refuse_redelivery
     from questions.models import QuestionImportJob
     from .config import get_config
     from .runner import run_import
@@ -26,6 +27,11 @@ def run_recall_import(job_id: int, source_dir: str, force: bool = False) -> dict
     if not job:
         LOG.error("run_recall_import: job_id=%s not found", job_id)
         return {"job_id": job_id, "error": "job not found"}
+    # Only a queued job runs; a re-delivered task of a run whose worker was
+    # killed marks the job failed instead of restarting it every hour.
+    refused = refuse_redelivery(job)
+    if refused is not None:
+        return refused
 
     job.status = "processing"
     job.save(update_fields=["status"])

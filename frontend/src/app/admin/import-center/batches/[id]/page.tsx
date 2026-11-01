@@ -26,7 +26,7 @@ type Batch = {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
-  summary: Record<string, unknown> & { publish?: PublishState };
+  summary: Record<string, unknown> & { publish?: PublishState; rebuild?: PublishState };
   error_report: Array<Record<string, unknown>>;
   materials_count: number;
   needs_review_count: number;
@@ -40,9 +40,12 @@ type Batch = {
   }>;
 };
 
-// Background publish progress, stored by the API in batch.summary.publish.
+// Background publish progress, stored by the API in batch.summary.publish;
+// a running test rebuild (Republish Tests) is batch.summary.rebuild
+// (kind 'republish'; older API versions wrote it into summary.publish).
 type PublishState = {
   state: 'running' | 'done' | 'failed';
+  kind?: 'republish';
   started_at?: string;
   finished_at?: string;
   heartbeat_at?: string;
@@ -51,6 +54,20 @@ type PublishState = {
   rows_done?: number;
   error?: string;
 };
+
+// Same rules as the API: a background publish that has not reported for 30
+// minutes has died with its process; a rebuild runs inside its request, so
+// one older than 5 minutes died with it.
+const PUBLISH_STALE_MS = 30 * 60 * 1000;
+const REBUILD_STALE_MS = 5 * 60 * 1000;
+
+function isLive(state?: PublishState): boolean {
+  if (state?.state !== 'running') return false;
+  const lastBeat = state.heartbeat_at || state.started_at;
+  if (!lastBeat) return true;
+  const limit = state.kind === 'republish' ? REBUILD_STALE_MS : PUBLISH_STALE_MS;
+  return Date.now() - new Date(lastBeat).getTime() <= limit;
+}
 
 type Material = {
   id: number;
@@ -123,13 +140,14 @@ export default function BatchDetailPage() {
     if (!id) return;
     load();
     pollRef.current = setInterval(() => {
-      // Only poll while parsing or while a background publish runs.
+      // Only poll while parsing or while a publish / test rebuild runs.
       setBatch((prev) => {
         if (
           !prev ||
           prev.status === 'processing' ||
           prev.status === 'queued' ||
-          prev.summary?.publish?.state === 'running'
+          prev.summary?.publish?.state === 'running' ||
+          prev.summary?.rebuild?.state === 'running'
         ) {
           load();
         }
@@ -175,13 +193,14 @@ export default function BatchDetailPage() {
   }
 
   const live = batch.status === 'processing' || batch.status === 'queued';
-  const publishState = batch.summary?.publish;
-  // Same 30-minute rule as the API: a "running" publish with no heartbeat
-  // for that long has died with its process and may be started again.
-  const lastBeat = publishState?.heartbeat_at || publishState?.started_at;
-  const publishStale =
-    publishState?.state === 'running' && !!lastBeat && Date.now() - new Date(lastBeat).getTime() > 30 * 60 * 1000;
-  const publishing = publishState?.state === 'running' && !publishStale;
+  const rawPublish = batch.summary?.publish;
+  // An in-slot rebuild state (older API) is shown as a rebuild, not a publish.
+  const legacyRebuild = rawPublish?.kind === 'republish' ? rawPublish : undefined;
+  const publishState = legacyRebuild ? undefined : rawPublish;
+  const rebuilding = isLive(batch.summary?.rebuild) || isLive(legacyRebuild);
+  const publishStale = publishState?.state === 'running' && !isLive(publishState);
+  const publishing = isLive(publishState);
+  const busy = publishing || rebuilding;
   // A cancelled batch can still publish what it staged before the cancel;
   // a rolled-back one has nothing left (the API answers 409 for both cases
   // when there is nothing to publish).
@@ -211,7 +230,7 @@ export default function BatchDetailPage() {
           </button>
           <button
             type="button"
-            disabled={!canPublish || publishing || actionPending === 'publish'}
+            disabled={!canPublish || busy || actionPending === 'publish'}
             onClick={() => doAction('publish')}
             className="rounded bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
@@ -219,21 +238,21 @@ export default function BatchDetailPage() {
           </button>
           <button
             type="button"
-            disabled={live || publishing || actionPending === 'republish'}
+            disabled={live || busy || actionPending === 'republish'}
             onClick={() => doAction('republish')}
             className="rounded border border-border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50"
           >
-            {actionPending === 'republish' ? 'Republishing…' : 'Republish Tests'}
+            {actionPending === 'republish' || rebuilding ? 'Rebuilding tests…' : 'Republish Tests'}
           </button>
           <button
             type="button"
-            disabled={live || publishing || actionPending === 'rollback'}
+            disabled={live || busy || actionPending === 'rollback'}
             onClick={() => {
               if (confirm('Rollback will delete ALL materials, staging rows, and auto-generated tests for this batch. Continue?')) {
                 doAction('rollback', { delete_published: false });
               }
             }}
-            className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
           >
             {actionPending === 'rollback' ? 'Rolling back…' : 'Rollback'}
           </button>
@@ -248,6 +267,12 @@ export default function BatchDetailPage() {
         <div className={`rounded border p-3 text-sm ${ALERT.warn}`}>
           No progress for over 30 minutes — the background parse has probably stopped (for example after a
           server restart). Cancel this batch and upload the files again.
+        </div>
+      )}
+
+      {rebuilding && actionPending !== 'republish' && (
+        <div className={`rounded border p-3 text-sm ${ALERT.info}`} role="status">
+          Rebuilding this batch&apos;s tests… Publish and rollback are available again once it finishes.
         </div>
       )}
 
@@ -458,8 +483,9 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
     }
   };
 
-  // Portal: the app shell's .main-content has `contain: layout`, which would
-  // make this fixed overlay position against the content box, not the viewport.
+  // Portal to <body>: the fixed overlay stays relative to the viewport
+  // whatever the app shell's wrappers do (a transform, filter or layout
+  // containment on an ancestor would make it the containing block).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded border border-border bg-card p-6">

@@ -518,12 +518,16 @@ class DjangoWriter:
         # gets a parent job.
         if self.import_job is None:
             try:
+                summary = {"triggered_via": "_emit_extraction_item fallback"}
+                if self.exam_type == "ini_cet":
+                    # Listed by the INI-CET recall API, not NEET PG's.
+                    summary["importer"] = "inicet"
                 self.import_job = QuestionImportJob.objects.create(
                     job_type="pdf",
                     status="running",
                     source_filename=source.pdf_filename or "unknown",
                     stored_file_path=source.pdf_path or "",
-                    summary={"triggered_via": "_emit_extraction_item fallback"},
+                    summary=summary,
                 )
             except Exception:
                 # If even the fallback fails, swallow it — the import is

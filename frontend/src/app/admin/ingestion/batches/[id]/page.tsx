@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ingestionAPI } from "@/lib/api";
+import { QA_TITLE } from "../../labels";
 
 export default function BatchDetail() {
   const params = useParams<{ id: string }>();
@@ -37,11 +38,11 @@ export default function BatchDetail() {
   }, [id]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading batch…</div>;
+    return <div className="text-sm text-muted-foreground">Loading batch…</div>;
   }
   if (!batch) {
     return (
-      <div className="p-6">
+      <div>
         <p>Batch #{params?.id} not found.</p>
         <Link href="/admin/ingestion/batches" className="underline">← back</Link>
       </div>
@@ -49,7 +50,7 @@ export default function BatchDetail() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
+    <div className="space-y-4">
       <Link href="/admin/ingestion/batches" className="text-sm text-muted-foreground hover:text-foreground">
         ← Batches
       </Link>
@@ -66,7 +67,9 @@ export default function BatchDetail() {
               <th className="p-2">Job</th>
               <th className="p-2">Material</th>
               <th className="p-2">Status</th>
-              <th className="p-2">PR / NR / EF</th>
+              <th className="p-2">
+                <abbr title={QA_TITLE} className="cursor-help">PR / NR / EF</abbr>
+              </th>
             </tr>
           </thead>
           <tbody>

@@ -9,15 +9,15 @@ django-q worker. Their state is recorded on the ImportBatch (``status``
 for parsing, ``summary["publish"]`` for publishing) and the UI polls it;
 a run that stopped updating (e.g. the process restarted) is reported as
 stale instead of "still running". Both operations are idempotent, so a
-stale run can simply be started again.
+stale run can simply be started again. The synchronous test rebuild
+(republish) holds ``summary["rebuild"]`` while it runs (stale after 5 min).
 
 Endpoint summary (see ``urls.py`` for the full route list):
 
     GET    /api/admin/import/dashboard/                → summary stats
     GET    /api/admin/import/batches/                  → list batches (filterable)
-    POST   /api/admin/import/batches/                  → create batch from upload
+    POST   /api/admin/import/upload/                   → create batch from upload
     GET    /api/admin/import/batches/<id>/             → batch detail
-    DELETE /api/admin/import/batches/<id>/             → rollback batch
     POST   /api/admin/import/batches/<id>/publish/     → publish + build tests
     POST   /api/admin/import/batches/<id>/cancel/      → cancel in-flight batch
     POST   /api/admin/import/batches/<id>/republish/   → republish tests only
@@ -108,6 +108,10 @@ MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024  # 1 GiB
 # A background run (parse or publish) that has not written progress for this
 # long is reported as stale: its thread most likely died with the process.
 STALE_AFTER = timedelta(minutes=30)
+# A test rebuild (republish) runs inside its HTTP request, which gunicorn
+# kills after 120 s; a "running" rebuild older than this died with its
+# request (worker timeout or restart, so its `finally` never ran).
+REBUILD_STALE_AFTER = timedelta(minutes=5)
 
 # Content (magic-byte) check per extension: a renamed file is rejected
 # before it reaches a parser. TXT / MD have no signature; they only have to
@@ -252,8 +256,8 @@ def _safe_extract_zip(zip_path: Path, dest_dir: Path) -> list[str]:
     return skipped
 
 
-def _is_stale(ts) -> bool:
-    """True if ``ts`` (datetime or ISO string) is older than STALE_AFTER."""
+def _is_stale(ts, after: timedelta = STALE_AFTER) -> bool:
+    """True if ``ts`` (datetime or ISO string) is older than ``after``."""
     if not ts:
         return False
     if isinstance(ts, str):
@@ -261,7 +265,7 @@ def _is_stale(ts) -> bool:
         ts = parse_datetime(ts)
         if ts is None:
             return False
-    return timezone.now() - ts > STALE_AFTER
+    return timezone.now() - ts > after
 
 
 def _set_publish_state(batch_id: int, state: dict) -> dict:
@@ -270,28 +274,52 @@ def _set_publish_state(batch_id: int, state: dict) -> dict:
     return state
 
 
-def _publish_running(state: dict | None) -> bool:
-    """True while a publish (or test rebuild) is running and still reporting."""
+def _running(state: dict | None) -> bool:
+    """True while a publish (``summary["publish"]``) or a test rebuild
+    (``summary["rebuild"]``) is running and still reporting.
+
+    A rebuild runs in its request, so it goes stale after REBUILD_STALE_AFTER
+    (also for the ``kind: "republish"`` states older code wrote into the
+    publish slot); a background publish heartbeats and goes stale after
+    STALE_AFTER.
+    """
     state = state or {}
+    after = REBUILD_STALE_AFTER if state.get("kind") == "republish" else STALE_AFTER
     return state.get("state") == "running" and not _is_stale(
-        state.get("heartbeat_at") or state.get("started_at")
+        state.get("heartbeat_at") or state.get("started_at"), after
     )
 
 
-def _claim_publish(batch_id: int, state: dict) -> tuple[bool, dict]:
-    """Atomically mark a publish as running for this batch.
+def _publish_running(state: dict | None) -> bool:
+    """True while a publish (or a legacy in-slot test rebuild) is running."""
+    return _running(state)
+
+
+def _busy_state(summary: dict | None) -> dict | None:
+    """The live publish or test-rebuild state of a batch summary, if any."""
+    summary = summary or {}
+    for key in ("publish", "rebuild"):
+        if _running(summary.get(key)):
+            return summary.get(key)
+    return None
+
+
+def _claim_publish(batch_id: int, state: dict, key: str = "publish") -> tuple[bool, dict]:
+    """Atomically mark a publish (or, with ``key="rebuild"``, a test rebuild) as running.
 
     The "is one already running?" check and the write happen under the batch
-    row lock, so two near-simultaneous requests can never both start a
-    publish. Returns ``(True, previous_state)`` when claimed and
-    ``(False, running_state)`` when another live publish holds the batch.
+    row lock, so two near-simultaneous requests can never both start. A
+    publish and a rebuild exclude each other (both build the batch's tests).
+    Returns ``(True, previous_state_of_key)`` when claimed and
+    ``(False, running_state)`` when a live publish or rebuild holds the batch.
     """
     def _claim(summary: dict):
-        current = summary.get("publish") or {}
-        if _publish_running(current):
-            return False, current
-        summary["publish"] = state
-        return True, current
+        busy = _busy_state(summary)
+        if busy is not None:
+            return False, busy
+        previous = summary.get(key) or {}
+        summary[key] = state
+        return True, previous
 
     outcome = update_batch_summary(batch_id, _claim)
     return outcome if outcome is not None else (False, {})
@@ -553,10 +581,12 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         }
         claimed, current = _claim_publish(batch.id, state)
         if not claimed:
-            return Response(
-                {"error": "A publish is already running for this batch.", "publish": current},
-                status=409,
+            error = (
+                "This batch's tests are being rebuilt; publish once that has finished."
+                if current.get("kind") == "republish"
+                else "A publish is already running for this batch."
             )
+            return Response({"error": error, "publish": current}, status=409)
         batch_id = batch.id
 
         def _run():
@@ -615,8 +645,9 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 {"error": "This batch is still parsing. Cancel it first, then roll back."},
                 status=409,
             )
-        if _publish_running((batch.summary or {}).get("publish")):
-            return Response({"error": "A publish is running for this batch; wait for it to finish."},
+        if _busy_state(batch.summary) is not None:
+            return Response({"error": "A publish or test rebuild is running for this batch; "
+                                      "wait for it to finish."},
                             status=409)
 
         result = delete_batch(batch.id, delete_published=s.validated_data["delete_published"])
@@ -636,34 +667,37 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
     def republish(self, request, id=None):
         """Rebuild this batch's auto-tests (synchronous).
 
-        Refused with 409 while a background publish runs (that publish builds
-        the same tests). The rebuild holds the same ``summary["publish"]``
-        slot while it runs, so a publish cannot start half-way through it;
-        the previous publish state is restored afterwards.
+        Refused with 409 while a background publish or another rebuild runs
+        (they build the same tests). The rebuild holds its own
+        ``summary["rebuild"]`` slot while it runs, which also blocks a
+        publish, and clears it afterwards; ``summary["publish"]`` (the last
+        publish result) is never touched. If the request dies (gunicorn's
+        120 s timeout, a worker restart) the slot goes stale after
+        REBUILD_STALE_AFTER instead of blocking publish for 30 minutes.
         """
         batch = self.get_object()
         now_iso = timezone.now().isoformat()
-        claimed, previous = _claim_publish(batch.id, {
+        claimed, current = _claim_publish(batch.id, {
             "state": "running", "kind": "republish", "started_at": now_iso,
             "heartbeat_at": now_iso, "by": request.user.username,
-        })
+        }, key="rebuild")
         if not claimed:
             return Response(
-                {"error": "A publish is running for this batch; wait for it to finish.",
-                 "publish": previous},
+                {"error": "A publish or test rebuild is running for this batch; wait for it to finish.",
+                 "publish": current},
                 status=409,
             )
 
-        def _restore(summary: dict) -> None:
-            if previous:
-                summary["publish"] = previous
-            else:
-                summary.pop("publish", None)
+        def _release(summary: dict) -> None:
+            # Only our own slot: a rebuild that outlived REBUILD_STALE_AFTER
+            # (no request timeout under runserver) may have been taken over.
+            if (summary.get("rebuild") or {}).get("started_at") == now_iso:
+                summary.pop("rebuild", None)
 
         try:
             n = build_for_batch(batch.id, max_per_test=100)
         finally:
-            update_batch_summary(batch.id, _restore)
+            update_batch_summary(batch.id, _release)
         ImportAuditLog.objects.create(
             batch=batch, level="info", code="republished_tests",
             message=f"Rebuilt {n} mock tests.",

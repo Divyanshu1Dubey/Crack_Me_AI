@@ -6,22 +6,27 @@ can audit what the recall importer is doing without the admin shell.
 Examples:
     python manage.py neetpg_status
     python manage.py neetpg_status --failed-only
+    python manage.py neetpg_status --importer inicet
     python manage.py neetpg_status --job-id 42
 """
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand, CommandError
 
+from importers.neetpg.views import IMPORTER_INICET, IMPORTER_NEETPG, recall_jobs
 from questions.models import QuestionImportJob
 
 
 class Command(BaseCommand):
-    help = "Show status of NEET PG recall import jobs."
+    help = "Show status of NEET PG (or, with --importer inicet, INI-CET) recall import jobs."
 
     def add_arguments(self, parser):
         parser.add_argument("--job-id", type=int, default=None)
         parser.add_argument("--limit", type=int, default=20)
         parser.add_argument("--failed-only", action="store_true")
+        parser.add_argument("--importer", choices=[IMPORTER_NEETPG, IMPORTER_INICET],
+                            default=IMPORTER_NEETPG,
+                            help="Which recall importer's jobs to list (default: neetpg).")
 
     def handle(self, *args, **opts):
         job_id = opts.get("job_id")
@@ -32,7 +37,7 @@ class Command(BaseCommand):
             self._print_job(job, verbose=True)
             return
 
-        qs = QuestionImportJob.objects.filter(job_type="pdf").order_by("-created_at")
+        qs = recall_jobs(opts.get("importer") or IMPORTER_NEETPG).order_by("-created_at")
         if opts.get("failed_only"):
             qs = qs.filter(status="failed")
         qs = qs[: opts.get("limit", 20)]

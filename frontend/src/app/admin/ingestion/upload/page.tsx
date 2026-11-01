@@ -52,7 +52,7 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-xl space-y-4">
+    <div className="max-w-xl space-y-4">
       <div>
         <Link href="/admin/ingestion" className="text-sm text-muted-foreground hover:text-foreground">
           ← Ingestion

@@ -10,8 +10,9 @@ Endpoints
   GET    /materials/                        list materials
   POST   /materials/upload/                upload a PDF
   GET    /materials/<sha16>/               material detail + linked jobs
-  GET    /jobs/                            list jobs
+  GET    /jobs/                            list jobs (the 200 newest)
   POST   /jobs/                            create + dispatch an import job
+  GET    /jobs/counts/                     jobs per status, over every job
   GET    /jobs/<id>/                       detail + stages + checkpoints
   POST   /jobs/<id>/retry/                 create a retry job
   POST   /jobs/<id>/cancel/                mark a job cancelled
@@ -268,6 +269,23 @@ class ImportJobListView(APIView):
             ImportJobListSerializer(job).data,
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+class ImportJobCountsView(APIView):
+    """Jobs per status over every job — the ingestion hub's tiles.
+
+    The hub used to count the job list, which holds only the 200 newest jobs,
+    so the tiles undercounted once there were more.
+    """
+    permission_classes = [IsIngestionAdmin]
+
+    def get(self, request, *args, **kwargs):
+        from .constants import JOB_STATUS_CHOICES
+
+        counts = {code: 0 for code, _label in JOB_STATUS_CHOICES}
+        for row in ImportJob.objects.order_by().values("status").annotate(n=Count("id")):
+            counts[row["status"]] = row["n"]
+        return Response({"counts": counts, "total": sum(counts.values())})
 
 
 class ImportJobDetailView(generics.RetrieveAPIView):

@@ -33,6 +33,12 @@ Questions are written with the job's exam (``ImportJob.parent_exam``),
 and their ``QuestionSource.import_job_id`` is stamped ``ingestion:<job id>``
 so ``ingestion_rollback`` removes exactly this job's questions.
 
+The gate is idempotent per job: a job resumed after its worker died (same
+job id) may run it a second time, so the job's staged rows nobody has acted
+on are replaced, never duplicated, and a question whose staged row already
+carries a review decision is not staged again. PR imports are idempotent in
+``DjangoWriter``.
+
 Nothing here mutates the QA V2 thresholds. The verdict is the
 single source of truth.
 """
@@ -176,6 +182,30 @@ def _authorise_writer():
     return DjangoWriter
 
 
+def _staged_key(page_number: int, question_number_in_pdf: int, payload: dict) -> tuple:
+    return (int(page_number or 0), int(question_number_in_pdf or 0), str((payload or {}).get("id") or ""))
+
+
+def _reset_undecided_staging(job: ImportJob) -> set[tuple]:
+    """Clear what an earlier run of the gate staged for ``job`` (resume path).
+
+    Rows nobody has acted on (still pending / blocked, no review note, not
+    published) are deleted so this run stages them again exactly once. Rows
+    with a review decision are kept; their keys are returned so the gate
+    does not stage those questions a second time.
+    """
+    rows = StagedQuestion.objects.filter(job=job)
+    rows.filter(
+        review_status__in=(REVIEW_PENDING, REVIEW_BLOCKED),
+        published_question__isnull=True,
+        review_note="",
+    ).delete()
+    return {
+        _staged_key(page, qno, payload)
+        for page, qno, payload in rows.values_list("page_number", "question_number_in_pdf", "question_payload")
+    }
+
+
 def _stage_question(
     *,
     job: ImportJob,
@@ -187,7 +217,10 @@ def _stage_question(
     failing_axes: list[str],
     failure_reason: str = "",
     failure_log_paths: Optional[list[str]] = None,
-) -> StagedQuestion:
+    decided: Optional[set] = None,
+) -> Optional[StagedQuestion]:
+    if decided and _staged_key(page_number, question_number_in_pdf, payload) in decided:
+        return None  # already staged and reviewed by an earlier run of the gate
     return StagedQuestion.objects.create(
         job=job,
         material_asset=job.material_asset,
@@ -247,6 +280,7 @@ def _import_production_ready(
     job: ImportJob,
     pr_payloads: list[dict],
     artefact_root: Optional[Path] = None,
+    decided: Optional[set] = None,
 ) -> tuple[int, int, int]:
     """Write each PR payload through DjangoWriter. Returns (created, updated, held).
 
@@ -306,6 +340,7 @@ def _import_production_ready(
                     question_number_in_pdf=qno,
                     failing_axes=reasons,
                     failure_reason="Production Ready but held for review: " + ", ".join(reasons),
+                    decided=decided,
                 )
                 continue
 
@@ -343,9 +378,13 @@ def _import_production_ready(
                 question_number_in_pdf=qno,
                 failing_axes=["writer_error"],
                 failure_reason=f"DjangoWriter raised: {e}",
+                decided=decided,
             )
     created = writer.stats.questions_created - pre_created
     updated = writer.stats.questions_updated - pre_updated
+    # Added up: a second run of the gate for the same job (resume) counts
+    # only images it newly creates or links; a question's existing image is
+    # returned by write_image without touching the stats.
     job.images_imported = (job.images_imported or 0) + writer.stats.images_created + writer.stats.images_linked
     return (created, updated, held)
 
@@ -376,6 +415,10 @@ def apply_qa_v2_verdict(
     if not per_q:
         LOG.warning("No per_question_qa.json for job %s — skipping gate.", job.id)
         return counts
+
+    # A second run for the same job (resumed after its worker died) replaces
+    # the rows the first run staged instead of adding duplicates.
+    decided = _reset_undecided_staging(job)
 
     # Stage 7 structured payloads keyed by question id (e.g. "p001_q00").
     # The QA V2 summary is keyed the same way; we join on the id.
@@ -416,6 +459,7 @@ def apply_qa_v2_verdict(
                     page_number=page,
                     question_number_in_pdf=qno,
                     failing_axes=[],
+                    decided=decided,
                 )
                 counts["staged"] += 1
         elif status == QA_NEEDS_REVIEW:
@@ -429,6 +473,7 @@ def apply_qa_v2_verdict(
                 question_number_in_pdf=qno,
                 failing_axes=failing,
                 failure_reason="Needs Review: " + ", ".join(failing),
+                decided=decided,
             )
             counts["staged"] += 1
         elif status == QA_EXTRACTION_FAILURE:
@@ -445,6 +490,7 @@ def apply_qa_v2_verdict(
                 failure_log_paths=[
                     str(artefact_root / "08_qa" / "overlays" / f"p{page:03d}.png"),
                 ],
+                decided=decided,
             )
             counts["staged"] += 1
         else:
@@ -453,7 +499,7 @@ def apply_qa_v2_verdict(
     # Only run the writer for the auto strategy.
     if strategy == STRATEGY_AUTO_PR_ONLY and pr_payloads:
         created, updated, held = _import_production_ready(
-            job=job, pr_payloads=pr_payloads, artefact_root=artefact_root,
+            job=job, pr_payloads=pr_payloads, artefact_root=artefact_root, decided=decided,
         )
         counts["imported"] = created + updated
         counts["held"] = held

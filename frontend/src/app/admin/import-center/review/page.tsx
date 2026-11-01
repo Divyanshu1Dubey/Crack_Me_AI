@@ -232,8 +232,9 @@ function PreviewDrawer({ id, onClose, onDecide }: { id: number; onClose: () => v
     return () => { mounted = false; };
   }, [id]);
 
-  // Portal: the app shell's .main-content has `contain: layout`, which would
-  // make this fixed drawer position against the content box, not the viewport.
+  // Portal to <body>: the fixed drawer stays relative to the viewport
+  // whatever the app shell's wrappers do (a transform, filter or layout
+  // containment on an ancestor would make it the containing block).
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div className="h-full w-full max-w-2xl overflow-y-auto bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>

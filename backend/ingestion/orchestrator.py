@@ -190,6 +190,14 @@ def stale_processing_after() -> timedelta:
     touched for longer has no live worker any more. The job row is updated
     at every stage boundary. Override with the
     ``INGESTION_STALE_PROCESSING_SECONDS`` setting.
+
+    Such jobs are recovered by the scheduled sweeper (``recover_stale_jobs``,
+    a django-q Schedule, see ``ingestion.schedules``), not by django-q's own
+    re-delivery: the ORM broker re-presents an unacknowledged task
+    ``Q_CLUSTER['retry']`` seconds (3660) after a worker took it, when the
+    job's last update is at most that old, i.e. still inside this window, so
+    that delivery finds a job that is not stale yet, is a no-op and is
+    acknowledged.
     """
     explicit = getattr(settings, "INGESTION_STALE_PROCESSING_SECONDS", None)
     if explicit:
@@ -210,14 +218,18 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     # A job is claimed atomically (conditional UPDATE): two tasks for the
     # same job (a re-dispatch, a duplicate catch-up run) must never process
     # it concurrently.
-    #   * queued      → claimed and run.
-    #   * processing  → a no-op while its worker is alive. If nothing has
-    #     touched it for longer than any live worker could run
+    #   * queued      → claimed and run (a job the sweeper re-queued after
+    #     its worker was lost resumes from its last checkpoint).
+    #   * processing  → a no-op while its worker may still be alive. If
+    #     nothing has touched it for longer than any live worker could run
     #     (stale_processing_after), its worker died (timeout, OOM, deploy
-    #     restart) and this delivery — normally django-q re-delivering the
-    #     task — takes it over and resumes from its last checkpoint.
+    #     restart) and this delivery takes it over and resumes from its last
+    #     checkpoint. With the shipped Q_CLUSTER settings django-q's own
+    #     re-delivery arrives before that (retry 3660 s < window 4200 s) and
+    #     is a no-op; the scheduled sweeper (recover_stale_jobs) is what
+    #     recovers such jobs: it marks them crashed and re-queues them.
     #   * anything else → no-op; failed / crashed jobs are re-run through a
-    #     retry job instead.
+    #     retry job (or re-queued by the sweeper) instead.
     if job.status not in (JOB_QUEUED, JOB_PROCESSING):
         return {"job_id": job_id, "status": job.status, "noop": True}
     now = timezone.now()
@@ -474,6 +486,7 @@ def sweep_stale_processing_jobs(*, older_than: Optional[timedelta] = None,
     so the dashboard shows them as crashed and the retry path (the Retry
     button, ``ingestion_retry_failed``) applies. Each move is a conditional
     UPDATE, so a job a worker resumed in the meantime is left alone.
+    ``recover_stale_jobs`` (the scheduled sweeper) then re-queues them.
 
     Returns the ids of the jobs swept (or that would be, with ``dry_run``).
     """
@@ -496,7 +509,8 @@ def sweep_stale_processing_jobs(*, older_than: Optional[timedelta] = None,
             id=job.id, status=JOB_PROCESSING, updated_at__lt=cutoff,
         ).update(
             status=JOB_CRASHED, completed_at=now, updated_at=now,
-            error={"stage": job.current_stage or "", "message": message, "swept": True},
+            error={"stage": job.current_stage or "", "message": message, "swept": True,
+                   "last_progress_at": job.updated_at.isoformat()},
         )
         if not moved:
             continue
@@ -505,6 +519,98 @@ def sweep_stale_processing_jobs(*, older_than: Optional[timedelta] = None,
         _log(job, "ERROR", f"Marked crashed by the stale-job sweeper. {message}", job.current_stage or "")
         _refresh_batch_counters(job.batch_run_id)
     return swept
+
+
+# A job that had not progressed for longer than this when it was swept (for
+# example one left "processing" long before the sweeper was scheduled) is
+# only marked crashed, never re-queued automatically: a person decides.
+AUTO_RESUME_MAX_IDLE = timedelta(hours=24)
+
+
+def max_auto_resumes() -> int:
+    """How often one job is re-queued automatically after losing its worker.
+
+    ``INGESTION_MAX_AUTO_RESUMES`` (default 2; 0 = never). The cap stops a
+    file that kills its worker every time (OOM, a run that cannot finish
+    within the django-q timeout) from looping for ever: once it is reached
+    the job stays crashed for a person to retry.
+    """
+    try:
+        return max(0, int(getattr(settings, "INGESTION_MAX_AUTO_RESUMES", 2)))
+    except (TypeError, ValueError):
+        return 2
+
+
+def resume_swept_job(job_id: int) -> bool:
+    """Re-queue a job the sweeper marked crashed, so it resumes (same job id).
+
+    The new task claims the queued job and skips every stage its checkpoint
+    records as done (the conservative gate is idempotent per job), so a job
+    the django-q timeout or a deploy restart interrupted continues where it
+    stopped instead of starting over as a retry job. Only for jobs the
+    sweeper crashed whose last progress is recent (``AUTO_RESUME_MAX_IDLE``),
+    at most ``max_auto_resumes()`` times per job. Returns True when the job
+    was re-queued and dispatched.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    job = ImportJob.objects.filter(id=job_id, status=JOB_CRASHED).first()
+    error = dict(job.error or {}) if job else {}
+    if job is None or not error.get("swept"):
+        return False
+    last_progress = parse_datetime(error.get("last_progress_at") or "")
+    if last_progress is None or timezone.now() - last_progress > AUTO_RESUME_MAX_IDLE:
+        return False
+    summary = dict(job.summary or {})
+    done = int(summary.get("auto_resumes") or 0)
+    limit = max_auto_resumes()
+    if done >= limit:
+        if limit:
+            _log(job, "WARNING",
+                 f"Not re-queued automatically: already resumed {done} time(s) after losing its "
+                 "worker. Retry the job once the cause is fixed.")
+        return False
+
+    queued_summary = {k: v for k, v in summary.items() if k != "q_task_id"}
+    queued_summary["auto_resumes"] = done + 1
+    now = timezone.now()
+    moved = ImportJob.objects.filter(id=job_id, status=JOB_CRASHED).update(
+        status=JOB_QUEUED, completed_at=None, error={}, summary=queued_summary, updated_at=now,
+    )
+    if not moved:
+        return False
+    ck = latest_checkpoint(job)
+    resume_point = f"after {ck.last_completed_stage}" if ck and ck.last_completed_stage else "from the start"
+    _log(job, "WARNING",
+         f"Re-queued automatically ({done + 1}/{limit}) after the worker was lost; "
+         f"it resumes {resume_point}.", error.get("stage") or "")
+    from .tasks import dispatch_job
+    try:
+        task_id = dispatch_job(job_id)
+    except Exception as exc:  # broker unavailable: leave it crashed for a person
+        LOG.exception("Could not dispatch resumed ingestion job %s", job_id)
+        ImportJob.objects.filter(id=job_id, status=JOB_QUEUED).update(
+            status=JOB_CRASHED, completed_at=timezone.now(), error=error, summary=summary,
+            updated_at=timezone.now(),
+        )
+        _log(job, "ERROR", f"Could not re-queue the job automatically ({exc}). Retry the job.")
+        return False
+    # Recorded so ingestion_run_pending does not dispatch it a second time.
+    ImportJob.objects.filter(id=job_id).update(summary={**queued_summary, "q_task_id": task_id})
+    _refresh_batch_counters(job.batch_run_id)
+    return True
+
+
+def recover_stale_jobs() -> dict:
+    """The scheduled recovery pass (django-q Schedule, every 10 min by default).
+
+    Marks processing jobs whose worker died as crashed
+    (``sweep_stale_processing_jobs``) and re-queues the ones it can resume
+    (``resume_swept_job``). ``ingestion_run_pending`` runs the same pass.
+    """
+    swept = sweep_stale_processing_jobs()
+    resumed = [job_id for job_id in swept if resume_swept_job(job_id)]
+    return {"swept": swept, "resumed": resumed}
 
 
 def _close_interrupted_stages(job_id: int, reason: str) -> int:
@@ -535,7 +641,10 @@ __all__ = [
     "create_retry_job",
     "effective_exam",
     "exam_hint_spellings",
+    "max_auto_resumes",
     "normalize_exam_hint",
+    "recover_stale_jobs",
+    "resume_swept_job",
     "stale_processing_after",
     "sweep_stale_processing_jobs",
 ]
