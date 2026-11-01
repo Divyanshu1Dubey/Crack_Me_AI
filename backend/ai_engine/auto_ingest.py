@@ -45,7 +45,8 @@ class AutoIngestService:
         """Get a hash of file path + modification time."""
         stat = os.stat(file_path)
         key = f"{file_path}:{stat.st_size}:{stat.st_mtime}"
-        return hashlib.md5(key.encode()).hexdigest()
+        # A change fingerprint, not a security hash (same digest as before).
+        return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()
 
     def ingest_file(self, file_path: str, book_name: Optional[str] = None,
                     force: bool = False) -> dict:

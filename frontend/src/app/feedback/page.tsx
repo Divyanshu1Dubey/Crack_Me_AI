@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import api, { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
+import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
 import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download, AlertCircle, Loader2 } from 'lucide-react';
 
 interface FeedbackItem {
@@ -43,7 +43,7 @@ interface FeedbackListPage {
 }
 
 function fetchFeedbackPage(page: number) {
-    return api.get('/analytics/feedback/', { params: { page, page_size: FEEDBACK_PAGE_SIZE } });
+    return analyticsAPI.getFeedback({ page, page_size: FEEDBACK_PAGE_SIZE });
 }
 
 function rowsOf(body: unknown): FeedbackItem[] {

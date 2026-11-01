@@ -20,7 +20,6 @@ export type PaywallFeature =
   | 'Mock Tests'
   | 'PYQ answers'
   | 'Full PYQ practice'
-  | 'Deep Analytics'
   | string; // allow ad-hoc labels; backend is the source of truth
 
 export interface PaywallState {

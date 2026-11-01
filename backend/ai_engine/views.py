@@ -6,7 +6,7 @@ Token System Integration:
   answers and a fresh high-yield prediction; 10 for mnemonic, explain,
   analyze, explain-answer, explain-question, study plan and question
   generation.
-- Admins (user.is_admin) and unlimited plans bypass token limits entirely.
+- Admins, staff (_is_unmetered_staff) and unlimited plans bypass token limits entirely.
 - Students get free daily/weekly tokens; after exhaustion, they must buy tokens.
 - Token config is managed via Django Admin > Token Configuration.
 
@@ -29,6 +29,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework import status
 from django.conf import settings as django_settings
 from django.core.cache import cache
+from django.db import transaction
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 
@@ -218,6 +219,16 @@ def _set_consumption(request, breakdown):
         pass
 
 
+def _is_unmetered_staff(user) -> bool:
+    """Admins, superusers and staff: AI use is never metered or capped (the
+    token wallet's ``unlimited_ai`` and the header's 'Unlimited' pill rely
+    on the same rule)."""
+    return bool(
+        getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
+        or getattr(user, 'is_staff', False)
+    )
+
+
 def consume_ai_token(request, amount: int = 1):
     """
     Check and consume N AI tokens for the requesting user.
@@ -228,7 +239,7 @@ def consume_ai_token(request, amount: int = 1):
 
     Bypass rules (in priority order):
       1. Unauthenticated in DEBUG mode → bypass (dev only).
-      2. Admin (`user.is_admin`) → unlimited.
+      2. Admin / superuser / staff (`_is_unmetered_staff`) → unlimited.
       3. Active subscription with `unlimited_ai=True` (1_year / legacy / admin_grant)
          → unlimited, no token deducted. THIS IS THE FIX FOR:
          "I paid for Premium but tokens keep decreasing."
@@ -250,8 +261,8 @@ def consume_ai_token(request, amount: int = 1):
             return True, None
         return False, Response({'error': 'Authentication required'}, status=401)
 
-    # 1. Admins have unlimited tokens
-    if user.is_admin:
+    # 1. Admins and staff have unlimited tokens
+    if _is_unmetered_staff(user):
         return True, None
 
     # 2. Active subscription bypass (the critical fix)
@@ -293,7 +304,7 @@ def refund_ai_token(request, amount: int = 1):
     from accounts.models import TokenBalance, TokenTransaction
 
     user = getattr(request, 'user', None)
-    if not user or not user.is_authenticated or user.is_admin:
+    if not user or not user.is_authenticated or _is_unmetered_staff(user):
         return
 
     # Refund exactly what consume_ai_token drew for this request. When the
@@ -352,15 +363,15 @@ def _take_ai_tutor_slot(user):
     the daily cap is hit. Uses ``models_usage.check_and_consume`` which holds
     a row lock for the entire check+increment window.
 
-    Exempt: anonymous (the view's permissions answer 401), admin/superuser,
-    and every user with an active subscription of any plan
+    Exempt: anonymous (the view's permissions answer 401), admin/superuser/
+    staff, and every user with an active subscription of any plan
     (``accounts.utils.is_premium``) — the profile already tells subscribers
     their AI tutor cap is unlimited (``ai_tutor_daily_cap = None``); holding
     1-month/3-month subscribers to the free cap contradicted that.
     """
     if not user or not getattr(user, 'is_authenticated', False):
         return None, None
-    if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
+    if _is_unmetered_staff(user):
         return None, None
 
     try:
@@ -730,6 +741,15 @@ def _ai_model_label(service) -> str:
     return f'roundrobin/{provider}' if provider else 'roundrobin'
 
 
+def _capture_question_revision(q, user, reason: str) -> None:
+    """Revision snapshot of ``q`` (the question editor's history / undo),
+    taken with the editor's own helper so the snapshot records the same
+    fields (AI explanation and verified state included) and undo restores
+    them. Call it before changing any field of ``q``."""
+    from questions.views import QuestionViewSet
+    QuestionViewSet()._capture_revision_snapshot(q, user, reason=reason)
+
+
 def _persist_rich_explanation(q, result: dict, service) -> list:
     """Store a validated explanation in the question's EMPTY shared fields.
 
@@ -737,11 +757,15 @@ def _persist_rich_explanation(q, result: dict, service) -> list:
     is written only when it is empty or unusable (failed / outage sentence /
     the older markdown-only shape, which the rich shape supersedes), and
     each companion field only when it is empty. Locked explanations are not
-    touched. The dispute flags compare the AI's answer with the STORED key
-    (callers pass DB fields), and only on the first stored generation.
-    Returns the names of the fields written.
+    touched, and neither are admin-verified questions: students read the AI
+    fields ahead of the curated ones (effective explanation, mnemonic and
+    references), so a first AI write would replace the reviewed content
+    under the "Verified by Admin" badge (QE-03). The dispute flags compare
+    the AI's answer with the STORED key (callers pass DB fields), and only
+    on the first stored generation. Returns the names of the fields written.
     """
-    if getattr(q, 'lock_explanation', False) or not AIService.is_valid_explanation(result):
+    if (getattr(q, 'lock_explanation', False) or getattr(q, 'is_verified_by_admin', False)
+            or not AIService.is_valid_explanation(result)):
         return []
     data = {k: v for k, v in result.items() if k not in _TRANSIENT_EXPLANATION_KEYS}
     fields = []
@@ -810,9 +834,10 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
     With ``question_id`` (or an exact stem + options match) the prompt is
     built from the question's DB fields — stem, options, answer key, subject,
     topic — never from client-supplied values, and a valid result fills the
-    question's empty shared AI fields. Without one (e.g. AI-generated practice
-    questions) the client's question is explained but nothing is stored and
-    no dispute flag is set.
+    question's empty shared AI fields (not on locked or admin-verified
+    questions, see ``_persist_rich_explanation``). Without one (e.g.
+    AI-generated practice questions) the client's question is explained but
+    nothing is stored and no dispute flag is set.
 
     A DB question is only explained to users entitled to its answer
     (``_can_view_answer``); anyone else gets the 402 ``upgrade_required``
@@ -845,7 +870,7 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             if err:
                 return err
             options = _options_param(request.data.get('options'))
-            db_question = self._exact_match(question_text, options)
+            db_question = self._exact_match(question_text, options, user=request.user)
 
         # Paywall: the stored / cached / curated explanation, the DB key
         # behind is_correct and any explanation generated from it reveal the
@@ -868,6 +893,12 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             subject = _optional_text(request, 'subject', MAX_LABEL_CHARS)
             topic = _optional_text(request, 'topic', MAX_LABEL_CHARS)
             qid = None
+        # Ad-hoc questions are cached in their own namespace. Batch jobs
+        # cache bank questions under question_id=None too, so a shared key
+        # space let a free user who re-typed a bank question (one the exact
+        # match missed) probe the cache for its answer key, and let an
+        # ad-hoc answer key land in the bank's cache.
+        cache_scope = '' if db_question is not None else AIService.ADHOC_CACHE_SCOPE
         is_correct = bool(selected_answer) and selected_answer == correct_answer
 
         # 1. Stored explanation on the question (free).
@@ -880,7 +911,8 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
                 return Response(stored)
 
         # 2. Shared 24 h cache (free) — checked before charging.
-        cached = AIService.get_cached_explanation(question_text, options, correct_answer, question_id=qid)
+        cached = AIService.get_cached_explanation(question_text, options, correct_answer,
+                                                  question_id=qid, cache_scope=cache_scope)
         if cached:
             cached['is_correct'] = is_correct
             return Response(cached)
@@ -897,7 +929,7 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             service = AIService()
             result = service.explain_after_answer(
                 question_text, options, correct_answer, selected_answer, subject, topic,
-                question_id=qid,
+                question_id=qid, cache_scope=cache_scope,
             )
         except AIUnavailable as exc:
             refund_ai_token(request, amount=10)
@@ -918,19 +950,32 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
         return Response(result)
 
     @staticmethod
-    def _exact_match(question_text: str, options: dict):
-        """The DB question with exactly this stem and these four options.
-        (Matching on the stem alone picked the wrong row for duplicates with
-        shuffled options.)"""
+    def _exact_match(question_text: str, options: dict, user=None):
+        """The DB question with exactly this stem and these four options, or
+        None. (Matching on the stem alone picked the wrong row for duplicates
+        with shuffled options.)
+
+        Every column is compared, empty ones too: an option the client left
+        out matches an empty column, so a bank question with a blank option
+        is still recognised (and paywalled) instead of being treated as
+        ad hoc. When several rows match, one ``user`` may not see wins, so
+        an exact duplicate cannot unlock a paywalled question."""
         from questions.models import Question
-        if len(options) < 4 or not all(options.values()):
+        if not question_text:
             return None
-        return (
+        rows = list(
             Question.objects.select_related('subject', 'topic')
-            .filter(question_text=question_text, option_a=options['A'], option_b=options['B'],
-                    option_c=options['C'], option_d=options['D'])
-            .first()
+            .filter(question_text=question_text,
+                    option_a=options.get('A', ''), option_b=options.get('B', ''),
+                    option_c=options.get('C', ''), option_d=options.get('D', ''))
+            .order_by('id')[:5]
         )
+        if not rows:
+            return None
+        for row in rows:
+            if not _can_view_answer(user, row):
+                return row
+        return rows[0]
 
     @staticmethod
     def _offline(request, db_question, question_text, options, correct_answer, selected_answer,
@@ -1004,11 +1049,23 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
     explanation is stored next to it (``analysis`` key) instead of replacing
     it, so the two explain endpoints stop regenerating each other's work.
 
+    Admin-verified questions (QE-03): students read ai_explanation ahead of
+    the curated explanation, under the "Verified by Admin" badge, so only an
+    admin's ``force_regenerate`` stores into a verified question, and a
+    stored change clears the mark (``verification_cleared``) until an admin
+    reviews the text and verifies it again, as the question editor's
+    generate-explanation and force-regenerate actions do. Like them, an
+    admin regeneration that changes the stored text first takes a revision
+    snapshot (the editor's undo restores the earlier text and the mark), and
+    the write is a partial save. Every other answer on a verified question
+    is served without being stored.
+
     The prompt carries the DB answer key, so the question is only explained
     to users entitled to its answer (``_can_view_answer``): anyone else gets
     the 402 ``upgrade_required`` envelope, on every path.
 
-    Cost: 10 tokens (admins / unlimited plans bypass). Refunded on AI failure.
+    Cost: 10 tokens (admins, staff and unlimited plans bypass). Refunded on
+    AI failure.
     """
 
     def get_permissions(self):
@@ -1083,10 +1140,14 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
 
         ai_model = _ai_model_label(service)
         persisted = False
+        verification_cleared = False
+        admin_regen = force_regen and is_admin
         if not client_prompt and not q.lock_explanation:
             rich = _stored_ai_explanation(q)
             has_valid = rich is not None or _stored_analysis_markdown(q) is not None
-            if not has_valid or (force_regen and is_admin):
+            # A verified question's shared text changes only through an
+            # explicit admin regeneration (QE-03, see the docstring).
+            if admin_regen or (not has_valid and not q.is_verified_by_admin):
                 try:
                     stored = {
                         "analysis": analysis,
@@ -1106,14 +1167,31 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
                         # explain-answer call pay to regenerate (and overwrite)
                         # the admin's analysis.
                         stored = {**rich, **stored}
-                    else:
-                        q.ai_version = "explain-question-v1"
-                        fields.append("ai_version")
-                    q.ai_explanation = json.dumps(stored, ensure_ascii=False)
-                    q.ai_model = ai_model
-                    q.ai_generated_at = timezone.now()
-                    q.save(update_fields=fields)
+                    new_explanation = json.dumps(stored, ensure_ascii=False)
+                    text_changed = new_explanation != (q.ai_explanation or '')
+                    # QE-03: unreviewed AI text must not sit under an earlier
+                    # "Verified by Admin" badge; verify again after review.
+                    clear_mark = bool(q.is_verified_by_admin) and text_changed
+                    with transaction.atomic():
+                        if admin_regen and text_changed:
+                            # Before any field changes: the question editor's
+                            # undo restores the earlier text and verified
+                            # state, as after generate-explanation.
+                            _capture_question_revision(q, user, 'Before AI explain-question regenerate')
+                        if rich is None:
+                            q.ai_version = "explain-question-v1"
+                            fields.append("ai_version")
+                        if clear_mark:
+                            q.is_verified_by_admin = False
+                            q.verified_by = None
+                            q.verified_at = None
+                            fields += ["is_verified_by_admin", "verified_by", "verified_at"]
+                        q.ai_explanation = new_explanation
+                        q.ai_model = ai_model
+                        q.ai_generated_at = timezone.now()
+                        q.save(update_fields=fields)
                     persisted = True
+                    verification_cleared = clear_mark
                 except Exception as save_exc:  # noqa: BLE001
                     logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
 
@@ -1123,6 +1201,7 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
             'question_id': q.id,
             'ai_model': ai_model,
             'persisted': persisted,
+            'verification_cleared': verification_cleared,
         })
 
     @staticmethod
@@ -1414,6 +1493,12 @@ class TextbookReferenceView(AITutorThrottleMixin, APIView):
     reference carries only a short locating snippet
     (REFERENCE_EXCERPT_CHARS), not a passage — three 300-character excerpts
     per call made it a bulk-extraction path once rag-search went admin-only.
+
+    Textbook references are part of a bank question's explanation (the
+    question bank's "Find in Textbook" card sends the stem; the bank redacts
+    a question's references for callers who may not see its answer), so the
+    exact stem of a question the caller is not entitled to
+    (``_can_view_answer``) gets the 402 ``upgrade_required`` envelope.
     """
 
     MAX_REFERENCES = 3
@@ -1422,10 +1507,21 @@ class TextbookReferenceView(AITutorThrottleMixin, APIView):
     def get_permissions(self):
         return [IsAuthenticated()]
 
+    @staticmethod
+    def _locked_bank_stem(user, question_text: str) -> bool:
+        """True when ``question_text`` is the stem of a bank question
+        ``user`` may not see the answer of."""
+        from questions.models import Question
+        rows = (Question.objects.filter(question_text=question_text)
+                .only('id', 'is_scholarship_eligible').order_by('id')[:5])
+        return any(not _can_view_answer(user, row) for row in rows)
+
     def post(self, request):
         question_text, err = _required_text(request, 'question_text', 'question_text')
         if err:
             return err
+        if self._locked_bank_stem(request.user, question_text):
+            return _answer_paywall_response()
 
         service = AIService()
         references = []
@@ -1698,12 +1794,19 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
 class PageScreenshotView(AITutorThrottleMixin, APIView):
     """The textbook page a question cites, as ``{screenshot_url}``.
 
+    The page shows where (and often what) the answer is, so it is served
+    only to users entitled to the question's answer (``_can_view_answer``,
+    the rule the question bank applies when it redacts ``page_screenshot``);
+    anyone else gets the 402 ``upgrade_required`` envelope before any stored
+    URL, cache or render step runs.
+
     The first successful render is saved to ``question.page_screenshot`` (the
-    question detail payload then carries it too) and served from there; a
-    failed lookup is remembered for MISS_CACHE_SECONDS, and only one render
-    per question runs at a time, so repeated clicks neither rescan the
-    textbook folders nor re-render a 200-DPI page. Only URLs are returned --
-    never a server filesystem path (the old ``screenshot_path``).
+    question detail payload then carries it too) and served from there while
+    its file exists; a failed lookup is remembered for MISS_CACHE_SECONDS,
+    and only one render per question runs at a time, so repeated clicks
+    neither rescan the textbook folders nor re-render a 200-DPI page. Only
+    URLs are returned -- never a server filesystem path (the old
+    ``screenshot_path``).
     """
 
     MISS_CACHE_SECONDS = 3600
@@ -1718,6 +1821,8 @@ class PageScreenshotView(AITutorThrottleMixin, APIView):
         question = Question.objects.filter(id=question_id).first()
         if question is None:
             return Response({'error': 'Question not found'}, status=404)
+        if not _can_view_answer(request.user, question):
+            return _answer_paywall_response()
 
         stored = self._stored_url(question)
         if stored:
@@ -1725,20 +1830,29 @@ class PageScreenshotView(AITutorThrottleMixin, APIView):
 
         miss_key = f'ai_page_screenshot_miss_v1:{question.id}'
         lock_key = f'ai_page_screenshot_lock_v1:{question.id}'
+        locked = None
         try:
             if cache.get(miss_key):
                 return Response({'error': 'No screenshot available'}, status=404)
-            if not cache.add(lock_key, 1, timeout=self.RENDER_LOCK_SECONDS):
-                return Response({'status': 'rendering'}, status=202)
+            # True: this request holds the render lock. False: another
+            # request is rendering. None: the cache is down (django_redis
+            # with IGNORE_EXCEPTIONS answers None instead of raising) --
+            # render without a lock rather than answering 'rendering'
+            # forever while Redis is unavailable.
+            locked = cache.add(lock_key, 1, timeout=self.RENDER_LOCK_SECONDS)
         except Exception:
             logger.debug('Page screenshot cache unavailable', exc_info=True)
+            locked = None
+        if locked is False:
+            return Response({'status': 'rendering'}, status=202)
         try:
             url = self._render_and_store(question)
         finally:
-            try:
-                cache.delete(lock_key)
-            except Exception:
-                pass
+            if locked:
+                try:
+                    cache.delete(lock_key)
+                except Exception:
+                    pass
         if not url:
             try:
                 cache.set(miss_key, True, timeout=self.MISS_CACHE_SECONDS)
@@ -1749,10 +1863,16 @@ class PageScreenshotView(AITutorThrottleMixin, APIView):
 
     @staticmethod
     def _stored_url(question) -> str:
-        if not question.page_screenshot:
+        """URL of the stored render, or '' when there is none or its file is
+        gone (media on an ephemeral disk does not survive a redeploy): the
+        page is then rendered again instead of serving a broken image."""
+        field = question.page_screenshot
+        if not field:
             return ''
         try:
-            return question.page_screenshot.url
+            if not field.storage.exists(field.name):
+                return ''
+            return field.url
         except Exception:
             return ''
 
@@ -1789,16 +1909,20 @@ class PageScreenshotView(AITutorThrottleMixin, APIView):
 
     def _render_and_store(self, question):
         """Render the cited page into ``question.page_screenshot``; its URL,
-        or None when there is no reference, PDF or page."""
+        or None when there is no reference, PDF or page, or the lookup or
+        render fails (an unreadable textbook folder is a 404, not a 500)."""
         import tempfile
         from django.core.files import File
-        from .document_processor import DocumentProcessor
 
-        page_index = self._page_index(question.page_number)
-        pdf_path = self._find_pdf(question.book_name) if page_index is not None else None
-        if not pdf_path:
-            return None
         try:
+            from .document_processor import DocumentProcessor
+
+            page_index = self._page_index(question.page_number)
+            if page_index is None:
+                return None
+            pdf_path = self._find_pdf(question.book_name)
+            if not pdf_path:
+                return None
             with tempfile.TemporaryDirectory(prefix='page-shot-') as tmp:
                 output = DocumentProcessor.extract_page_image(pdf_path, page_index, tmp)
                 if not output or not os.path.isfile(output):

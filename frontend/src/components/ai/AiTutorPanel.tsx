@@ -22,7 +22,10 @@
  *     body: { selected_answer?, question_text?, subject?, topic?,
  *             prompt?, force_regenerate? }
  *   resp (axios `response.data`): { explanation: <markdown>, cached: bool,
- *           question_id: int, ai_model?: str, ai_generated_at?: ISO }
+ *           question_id: int, ai_model?: str, ai_generated_at?: ISO,
+ *           persisted?: bool, verification_cleared?: bool }
+ *   (an admin's regenerate of a verified question clears its "Verified by
+ *   Admin" mark: verification_cleared is then true)
  *   402 { code: 'upgrade_required' } when the user is not entitled to the
  *   question's answer (the api.ts interceptor opens the upgrade modal).
  */

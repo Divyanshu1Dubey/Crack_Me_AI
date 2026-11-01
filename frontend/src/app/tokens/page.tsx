@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import api, { authAPI } from '@/lib/api';
+import { authAPI } from '@/lib/api';
 import { isUnmeteredAi } from '@/hooks/useTokenWallet';
 import {
     Coins, Zap, ShoppingCart, Clock, TrendingUp,
@@ -90,7 +90,7 @@ interface AdminPaging {
 /** The admin overview returns at most `limit` users per call (default
  *  1000); totals in platform_stats always cover everyone. */
 async function fetchAdminTokenUsers(offset: number): Promise<AdminUsersPage> {
-    const res = await api.get('/auth/tokens/admin/users/', { params: offset > 0 ? { offset } : undefined });
+    const res = await authAPI.adminGetAllUsers(offset > 0 ? { offset } : undefined);
     return (res.data || {}) as AdminUsersPage;
 }
 

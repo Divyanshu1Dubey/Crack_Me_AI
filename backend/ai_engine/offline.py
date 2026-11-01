@@ -374,13 +374,18 @@ def _dice(a: set, b: set) -> float:
 
 
 def _user_sees_full_bank(user) -> bool:
+    """Staff and premium users see every answer (questions.views.
+    user_can_view_answer); fails closed."""
     if user is None or not getattr(user, 'is_authenticated', False):
         return False
+    if (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
+            or getattr(user, 'is_staff', False)):
+        return True
     try:
         from accounts.utils import is_premium
         return bool(is_premium(user))
     except Exception:
-        return bool(getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False))
+        return False
 
 
 def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optional[dict]:
@@ -409,9 +414,10 @@ def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optio
         if exclude_id:
             qs = qs.exclude(pk=exclude_id)
         if not _user_sees_full_bank(user):
-            from accounts.models_freemium import FreeShowcaseQuestion
+            # The question bank's own definition of free content.
+            from questions.views import free_showcase_rows
             qs = qs.filter(
-                Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))),
+                Exists(free_showcase_rows().filter(question_id=OuterRef('pk'))),
                 is_scholarship_eligible=False,
             )
         rows = list(qs.values(

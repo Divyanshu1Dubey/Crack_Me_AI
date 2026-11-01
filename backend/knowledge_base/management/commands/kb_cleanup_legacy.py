@@ -30,6 +30,8 @@ UPLOAD_LOCATOR_PREFIX = "user_uploads/"
 # _hash_embed: vec[i] = seed[i % 32] (normalised), seed = sha256(text).
 HASH_PERIOD = 32
 HASH_TOLERANCE = 1e-9
+# Rows per keyset page of the embedding scan, and per delete statement.
+BATCH_SIZE = 500
 
 
 def is_hash_embedding(vector) -> bool:
@@ -114,12 +116,22 @@ class Command(BaseCommand):
     # ─── 2. Hash pseudo-embeddings ────────────────────────────────────
 
     def _delete_hash_embeddings(self, apply: bool) -> int:
-        hash_ids = [
-            row.id
-            for row in KnowledgeEmbedding.objects.only("id", "vector").iterator(chunk_size=500)
-            if is_hash_embedding(row.vector)
-        ]
+        # Keyset pages by id, not .iterator(): outside a transaction that
+        # opens a PostgreSQL server-side cursor, which breaks behind a
+        # transaction-mode connection pooler (PgBouncer / Supabase pooler).
+        hash_ids = []
+        last_id = 0
+        while True:
+            page = list(
+                KnowledgeEmbedding.objects.filter(id__gt=last_id)
+                .order_by("id")
+                .values_list("id", "vector")[:BATCH_SIZE]
+            )
+            if not page:
+                break
+            last_id = page[-1][0]
+            hash_ids.extend(pk for pk, vector in page if is_hash_embedding(vector))
         if apply and hash_ids:
-            for start in range(0, len(hash_ids), 500):
-                KnowledgeEmbedding.objects.filter(id__in=hash_ids[start:start + 500]).delete()
+            for start in range(0, len(hash_ids), BATCH_SIZE):
+                KnowledgeEmbedding.objects.filter(id__in=hash_ids[start:start + BATCH_SIZE]).delete()
         return len(hash_ids)

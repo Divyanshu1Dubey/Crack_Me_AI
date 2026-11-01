@@ -1408,30 +1408,44 @@ Analyze:
                 return False
         return True
 
+    # Cache namespace of explain-after-answer calls for questions that are not
+    # in the bank (ExplainAfterAnswerView's ad-hoc path). Batch jobs cache
+    # bank questions under question_id=None as well, so without a namespace a
+    # re-typed bank question read (and wrote) the bank's cached explanation.
+    ADHOC_CACHE_SCOPE = 'adhoc'
+
     @staticmethod
     def explanation_cache_key(question_text: str, options: Optional[dict] = None,
-                              correct_answer: str = "", question_id=None) -> str:
+                              correct_answer: str = "", question_id=None,
+                              cache_scope: str = "") -> str:
         """Cache key for an explanation: the question id (when known), the full
         stem, every option and the answer key. The old key used only the first
         200 characters of the stem plus the key, so duplicates with shuffled
-        options shared one explanation."""
+        options shared one explanation. A non-empty ``cache_scope`` (e.g.
+        ADHOC_CACHE_SCOPE) gives a separate key space; without one the key
+        is unchanged."""
         opts = options if isinstance(options, dict) else {}
-        payload = json.dumps({
+        data = {
             'id': question_id,
             'q': (question_text or '').strip(),
             'o': {str(k): str(opts.get(k) or '').strip() for k in sorted(opts, key=str)},
             'a': (correct_answer or '').strip().upper(),
-        }, sort_keys=True, ensure_ascii=False)
+        }
+        if cache_scope:
+            data['scope'] = str(cache_scope)
+        payload = json.dumps(data, sort_keys=True, ensure_ascii=False)
         return 'ai_explain_v2_' + hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
     @classmethod
     def get_cached_explanation(cls, question_text: str, options: Optional[dict] = None,
-                               correct_answer: str = "", question_id=None) -> Optional[dict]:
+                               correct_answer: str = "", question_id=None,
+                               cache_scope: str = "") -> Optional[dict]:
         """The cached explanation for this exact question, or None. Lets
         callers serve a cache hit before charging for a generation."""
         from django.core.cache import cache
         try:
-            cached = cache.get(cls.explanation_cache_key(question_text, options, correct_answer, question_id))
+            cached = cache.get(cls.explanation_cache_key(
+                question_text, options, correct_answer, question_id, cache_scope))
         except Exception:
             return None
         if cls.is_valid_explanation(cached):
@@ -1440,10 +1454,12 @@ Analyze:
 
     def explain_after_answer(self, question_text: str, options: dict = None,
                              correct_answer: str = "", selected_answer: str = "",
-                             subject: str = "", topic: str = "", question_id=None) -> dict:
+                             subject: str = "", topic: str = "", question_id=None,
+                             cache_scope: str = "") -> dict:
         """Generate a rich AI explanation after the user answers a question.
         Returns textbook location, mnemonic, around-concepts, and deep explanation.
-        Results are cached by question (id, stem, options, key) for 24 hours.
+        Results are cached by question (id, stem, options, key; plus
+        ``cache_scope`` when given) for 24 hours.
 
         Raises ``AIUnavailable`` when no provider answers (with the retrieved
         passages attached) and ``AIOutputUnusable`` when the answer is not the
@@ -1452,8 +1468,10 @@ Analyze:
         from django.core.cache import cache
 
         # Cache key based on question content + correct answer (not user-specific)
-        cache_key = self.explanation_cache_key(question_text, options, correct_answer, question_id)
-        cached = self.get_cached_explanation(question_text, options, correct_answer, question_id)
+        cache_key = self.explanation_cache_key(question_text, options, correct_answer,
+                                               question_id, cache_scope)
+        cached = self.get_cached_explanation(question_text, options, correct_answer,
+                                             question_id, cache_scope)
         if cached:
             # Update is_correct for this specific user's answer
             cached['is_correct'] = (selected_answer == correct_answer)
