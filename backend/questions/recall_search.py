@@ -71,6 +71,27 @@ def _parse_bool(raw):
     return str(raw).strip().lower() in ("1", "true", "yes", "y")
 
 
+# Integer-valued filters: a malformed value used to reach the ORM and raise
+# ValueError (HTTP 500).
+_INT_PARAMS = ("year", "subject", "topic")
+
+
+def _bad_request(message: str):
+    return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _int_param(request, name: str, default: int, *, minimum: int, maximum: int):
+    """Parse a bounded integer query param. Returns (value, error_response)."""
+    raw = request.query_params.get(name)
+    if raw in (None, ""):
+        return default, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, _bad_request(f"{name} must be an integer")
+    return max(minimum, min(value, maximum)), None
+
+
 def recall_search(self, request):
     """GET /api/questions/recall_search/?q=...&recall_status=recall&...&min_confidence=0.5
 
@@ -114,6 +135,32 @@ def recall_search(self, request):
             is_premium = _is_premium(request_user)
         except Exception:
             is_premium = False
+
+    # Validate before touching the cache or the ORM -- malformed ints and an
+    # out-of-range page_size used to raise inside the query (HTTP 500).
+    for name in _INT_PARAMS:
+        raw = request.query_params.get(name)
+        if raw not in (None, ""):
+            try:
+                int(raw)
+            except (TypeError, ValueError):
+                return _bad_request(f"{name} must be an integer")
+    page_size, err = _int_param(request, "page_size", 25, minimum=1, maximum=100)
+    if err is not None:
+        return err
+    page, err = _int_param(request, "page", 1, minimum=1, maximum=100000)
+    if err is not None:
+        return err
+    min_conf_raw = request.query_params.get("min_confidence")
+    min_conf = None
+    if min_conf_raw not in (None, ""):
+        try:
+            min_conf = float(min_conf_raw)
+        except (TypeError, ValueError):
+            return _bad_request("min_confidence must be a number")
+        import math
+        if not math.isfinite(min_conf):
+            return _bad_request("min_confidence must be a finite number")
 
     cache_bucket = (
         f"u{request_user.id}" if is_authed else "anon"
@@ -207,12 +254,8 @@ def recall_search(self, request):
         if val is True:
             qs = qs.filter(**{f"images__{opt}": True, "images__is_active": True}).distinct()
 
-    min_conf = request.query_params.get("min_confidence")
-    if min_conf not in (None, ""):
-        try:
-            qs = qs.filter(confidence_score__gte=float(min_conf))
-        except ValueError:
-            pass
+    if min_conf is not None:
+        qs = qs.filter(confidence_score__gte=min_conf)
 
     # Facets — include new dimensions so UI can build checkbox grids.
     facets = {
@@ -230,21 +273,13 @@ def recall_search(self, request):
         .values_list("modality").annotate(c=Count("id"))
     )
 
-    # Paginate
-    try:
-        page_size = min(int(request.query_params.get("page_size", 25)), 100)
-    except ValueError:
-        page_size = 25
-    try:
-        page = max(int(request.query_params.get("page", 1)), 1)
-    except ValueError:
-        page = 1
-
+    # Paginate (page / page_size validated and clamped above)
     qs = qs.order_by("-year", "id")
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
-    page_qs = qs[start:end]
+    from .views import _question_list_related  # lazy: views imports this module
+    page_qs = _question_list_related(qs)[start:end]
 
     serializer = QuestionListSerializer(page_qs, many=True, context={"request": request})
     payload = {
@@ -264,24 +299,61 @@ def recall_search(self, request):
 
 
 def recall_question_images(self, request, pk=None):
-    """GET /api/questions/{id}/images/  — list QuestionImage rows for a question."""
+    """GET /api/questions/{id}/images/  — list QuestionImage rows for a question.
+
+    Goes through ``get_object()`` so removed / archived questions 404 for
+    non-admins. ``role`` is the runtime role (an image referenced only from
+    the explanation is 'explanation', which the stem gallery hides). Callers
+    who are not entitled to the answer get stem images only, without
+    captions (a caption can name the diagnosis).
+    """
     from .models import QuestionImage
     from .recall_serializers import QuestionImageSerializer  # type: ignore
-    images = QuestionImage.objects.filter(question_id=pk, is_active=True).order_by("page_number", "image_index_in_page")
-    try:
-        page_size = min(int(request.query_params.get("page_size", 50)), 200)
-    except ValueError:
-        page_size = 50
-    images = images[:page_size]
-    return Response(QuestionImageSerializer(images, many=True, context={"request": request}).data)
+    from .serializers import resolve_runtime_image_role
+
+    question = self.get_object()
+    images = QuestionImage.objects.filter(question_id=question.pk, is_active=True).order_by("page_number", "image_index_in_page")
+    page_size, err = _int_param(request, "page_size", 50, minimum=1, maximum=200)
+    if err is not None:
+        return err
+    images = list(images[:page_size])
+    memo: dict = {}
+    roles = {img.id: resolve_runtime_image_role(question, img, memo) for img in images}
+    data = QuestionImageSerializer(images, many=True, context={"request": request}).data
+    for row in data:
+        row["role"] = roles.get(row["id"], row.get("role"))
+    if not self._can_view_answer(question):
+        data = [row for row in data if row.get("role") != "explanation"]
+        for row in data:
+            row["caption"] = ""
+    return Response(data)
 
 
 def recall_question_sources(self, request, pk=None):
-    """GET /api/questions/{id}/sources/  — list QuestionSource rows for a question."""
+    """GET /api/questions/{id}/sources/  — list QuestionSource rows for a question.
+
+    Provenance metadata only (file name, page, confidences). The stored
+    ``original_text`` / ``extracted_text`` are the whole parsed block --
+    stem, answer key and explanation -- so they are returned to admins only.
+    Removed / archived questions 404 for non-admins (``get_object()``).
+    """
     from .models import QuestionSource
     from .recall_serializers import QuestionSourceSerializer  # type: ignore
-    rows = QuestionSource.objects.filter(question_id=pk).select_related("recall_source").order_by("imported_at")
-    return Response(QuestionSourceSerializer(rows, many=True, context={"request": request}).data)
+
+    question = self.get_object()
+    rows = QuestionSource.objects.filter(question_id=question.pk).select_related("recall_source").order_by("imported_at")
+    data = QuestionSourceSerializer(rows, many=True, context={"request": request}).data
+    user = getattr(request, "user", None)
+    is_admin = bool(
+        user is not None and getattr(user, "is_authenticated", False)
+        and (getattr(user, "is_admin", False) or getattr(user, "is_superuser", False)
+             or getattr(user, "is_staff", False))
+    )
+    if not is_admin:
+        for row in data:
+            row.pop("original_text", None)
+            row.pop("extracted_text", None)
+    return Response(data)
 
 
 def build_fts_query(raw: str) -> str:

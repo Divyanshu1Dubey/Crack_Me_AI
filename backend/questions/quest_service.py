@@ -14,6 +14,9 @@ from django.utils import timezone
 
 # quest_type -> (title, description, target, xp, difficulty)
 DAILY_QUEST_TEMPLATES = {
+    # Progress: DailyActivity.questions_attempted, which the question-bank
+    # ``attempt`` endpoint AND practice mode (``practice/attempt``) both
+    # increment for a user's first answer to a question.
     'solve_questions': ('Solve 20 questions', 'Answer any 20 questions today (question bank or tests).', 20, 20, 'medium'),
     'complete_tests': ('Finish a test', 'Complete at least one mock or practice test today.', 1, 15, 'medium'),
     'review_mistakes': ('Review 5 mistakes', 'Review 5 entries from your mistake notebook today.', 5, 10, 'easy'),
@@ -115,7 +118,9 @@ def claim_quest(user, quest_id: int):
             # Streak counts days with at least one claimed quest.
             if streak.last_quest_date == today - timedelta(days=1):
                 streak.current_streak += 1
-            elif streak.streak_frozen and streak.last_quest_date:
+            elif streak.streak_frozen and streak.last_quest_date == today - timedelta(days=2):
+                # A freeze covers exactly ONE missed day (it used to bridge
+                # a gap of any length, so a streak could never be lost).
                 streak.current_streak += 1
                 streak.streak_frozen = False  # a freeze protects one gap
             else:

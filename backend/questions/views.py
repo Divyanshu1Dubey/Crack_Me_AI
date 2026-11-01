@@ -2,12 +2,9 @@ import logging
 import csv
 import os
 import re
-from pathlib import Path
-from threading import Lock
 from io import StringIO
 
 from django.conf import settings
-from django.core.management import call_command
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
@@ -16,6 +13,7 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -71,56 +69,120 @@ def _bump_question_list_cache_version(user_id) -> None:
         cache.set(key, 1, None)
     except Exception:  # pragma: no cover - cache backend hiccup
         logger.debug('qlist cache version bump failed for %s', user_id)
-_QUESTION_BOOTSTRAP_LOCK = Lock()
 
 
-def _ensure_question_bank_loaded():
-    """Load fixture once if question bank is empty in a fresh deployment.
+# NOTE (QB-15): a request-time ``_ensure_question_bank_loaded`` used to run
+# ``seed_data`` + ``loaddata cms_fixture.json`` from the public ``years`` /
+# ``stats`` GETs whenever fewer than 1800 active questions existed. That
+# silently overwrote admin edits and revived archived / removed questions
+# (loaddata ignores RemovedQuestion tombstones). Seeding is a deploy step
+# (build.sh), never a side effect of a web request.
 
-    Uses a cache flag so we don't run the expensive COUNT query on
-    every single API request — which was adding ~1-2s per page load
-    on Postgres.
+
+# ── Question-bank entitlement (freemium) ─────────────────────────────────
+#
+# ONE rule for every endpoint that reveals a question's answer, explanation
+# or AI-generated study text:
+#   * admins / staff / superusers   -> always
+#   * premium subscribers           -> always (accounts.utils.is_premium)
+#   * everyone else (free accounts and anonymous visitors)
+#                                   -> only admin-curated showcase questions
+#                                      (accounts.FreeShowcaseQuestion)
+# Answer-submission endpoints answer a non-entitled caller with 402
+# ``{"code": "upgrade_required"}``; read endpoints redact the answer parts.
+
+UPGRADE_REQUIRED_FEATURE = 'PYQ answers'
+
+
+def _is_staff_user(user) -> bool:
+    return bool(
+        user is not None
+        and getattr(user, 'is_authenticated', False)
+        and (
+            getattr(user, 'is_admin', False)
+            or getattr(user, 'is_superuser', False)
+            or getattr(user, 'is_staff', False)
+        )
+    )
+
+
+def user_can_view_answer(user, question, *, premium=None) -> bool:
+    """True when ``user`` may see the answer / explanation of ``question``.
+
+    ``question`` may be a Question instance or a primary key. ``premium``
+    lets callers pass an already-computed ``is_premium(user)`` result.
     """
-    import sys
-    if 'test' in sys.argv or 'test_all' in sys.argv:
-        return
+    if _is_staff_user(user):
+        return True
+    if user is not None and getattr(user, 'is_authenticated', False):
+        if premium is None:
+            premium = _is_premium(user)
+        if premium:
+            return True
+    question_id = getattr(question, 'pk', question)
+    if question_id in (None, ''):
+        return False
+    return FreeShowcaseQuestion.objects.filter(question_id=question_id).exists()
 
-    # Cache the "already checked" flag for 10 minutes so we skip
-    # the COUNT query on every request. The count is still correct
-    # because a fresh deploy will have a different cache namespace.
-    cache_flag = cache.get('qbank:checked')
-    if cache_flag is not None:
-        return
 
-    if Question.objects.filter(is_active=True).count() >= 1800:
-        cache.set('qbank:checked', '1', 600)
-        return
+def _upgrade_required_response(feature: str = UPGRADE_REQUIRED_FEATURE):
+    """Paywall envelope understood by the frontend api.ts interceptor."""
+    return Response(
+        {
+            'code': 'upgrade_required',
+            'feature': feature,
+            'message': (
+                'This question is part of the premium question bank. '
+                'Subscribe to see answers and explanations.'
+            ),
+        },
+        status=status.HTTP_402_PAYMENT_REQUIRED,
+    )
 
-    fixture_path = Path(settings.BASE_DIR) / 'fixtures' / 'cms_fixture.json'
-    if not fixture_path.exists():
-        fixture_path = Path(settings.BASE_DIR) / 'questions_fixture.json'
-    if not fixture_path.exists():
-        cache.set('qbank:checked', '1', 600)
-        return
 
-    with _QUESTION_BOOTSTRAP_LOCK:
-        if Question.objects.filter(is_active=True).count() >= 1800:
-            cache.set('qbank:checked', '1', 600)
-            return
+# Detail-payload fields that reveal the answer or the explanation. Redacted
+# for callers who are not entitled to the question (see user_can_view_answer).
+_ANSWER_REVEALING_DETAIL_FIELDS = (
+    'correct_answer', 'explanation', 'concept_explanation', 'mnemonic',
+    'learning_technique', 'shortcut_tip', 'concept_keywords',
+    'ai_explanation', 'ai_answer', 'ai_mnemonic', 'ai_references',
+    'effective_answer', 'effective_explanation', 'effective_mnemonic',
+    'effective_references', 'verified_note',
+    'video_url', 'video_status', 'video_thumbnail', 'video_duration',
+    'video_version', 'video_error', 'video_generated_at', 'video_subtitles_url',
+)
 
-        try:
-            logger.info("Auto-running seed_data to populate subjects and topics...")
-            call_command('seed_data', verbosity=0)
-        except Exception:
-            logger.exception("Auto-seeding failed")
 
-        logger.warning('Question bank empty. Bootstrapping from fixture: %s', fixture_path)
-        try:
-            call_command('loaddata', str(fixture_path), verbosity=0)
-            cache.set('qbank:checked', '1', 600)
-            logger.info('Question bank bootstrap complete. Active questions=%s', Question.objects.filter(is_active=True).count())
-        except Exception:
-            logger.exception('Question bank bootstrap failed')
+def _redact_question_detail(data: dict) -> dict:
+    """Strip answer / explanation / AI / video content from a detail payload."""
+    data = dict(data)
+    for field in _ANSWER_REVEALING_DETAIL_FIELDS:
+        if field in data:
+            data[field] = None
+    # Explanation figures belong to the explanation, not to the stem.
+    for key in ('images', 'stem_images'):
+        if isinstance(data.get(key), list):
+            data[key] = [img for img in data[key] if (img or {}).get('role') != 'explanation']
+    data['answer_locked'] = True
+    return data
+
+
+def _invalidate_user_question_caches(user_id) -> None:
+    """After an answer: refresh the dashboard and the per-user list cache
+    (``attempted`` / ``incorrect`` filters, ``user_selected_answer``)."""
+    cache.delete(f'dashboard:{user_id}')
+    cache.delete(f'dashboard_bundle:{user_id}')
+    _bump_question_list_cache_version(user_id)
+
+
+def _question_explanation_payload(question) -> dict:
+    """``explanation`` / ``effective_explanation`` for answer-submission
+    responses, so the UI can reveal the explanation right after a pick."""
+    effective = QuestionDetailSerializer().get_effective_explanation(question)
+    return {
+        'explanation': question.explanation or '',
+        'effective_explanation': effective or question.explanation or '',
+    }
 
 
 class ExamTrackViewSet(viewsets.ReadOnlyModelViewSet):
@@ -137,9 +199,21 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     # Cache the list response for 5 minutes — announcements rarely change
-    # but are read on every dashboard load (240ms → <5ms).
-    LIST_CACHE_KEY = 'announcements:list'
+    # but are read on every dashboard load (240ms → <5ms). The queryset is
+    # per user (``target_users``), so the cache key is per user (and per
+    # query string, for pagination); writes bump a global version instead
+    # of deleting one shared key (which served one user's list to all).
+    LIST_CACHE_VERSION_KEY = 'announcements:list:ver'
     LIST_CACHE_TTL = 300  # 5 minutes
+
+    # CustomUser.target_exam stores display labels ("UPSC CMS", "NEET PG",
+    # ...) while Announcement.target_exam_track stores slugs ("cms", ...).
+    TARGET_EXAM_TO_TRACK = {
+        'upsc cms': 'cms', 'cms': 'cms',
+        'neet pg': 'neet_pg', 'neet_pg': 'neet_pg', 'neet-pg': 'neet_pg',
+        'usmle': 'usmle',
+        'fmge': 'fmge',
+    }
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -148,48 +222,75 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
 
+    @classmethod
+    def _track_for_user(cls, user) -> str:
+        raw = str(getattr(user, 'target_exam', '') or '').strip().lower()
+        return cls.TARGET_EXAM_TO_TRACK.get(raw, raw)
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
             return Announcement.objects.all()
 
         now = timezone.now()
-        user_target = getattr(user, 'target_exam', 'all')
+        user_track = self._track_for_user(user)
 
         return Announcement.objects.filter(
             # Not expired
             Q(expires_at__isnull=True) | Q(expires_at__gt=now),
-            # Visible to this user's exam track
-            Q(target_exam_track='all') |
-            Q(target_exam_track=user_target) |
-            Q(target_users=user)
+            # ``target_users`` overrides the exam track (model help text):
+            # a user-targeted announcement keeps the default track 'all',
+            # so OR-ing it in showed personal notices to every student.
+            Q(target_users=user) |
+            (
+                Q(target_users__isnull=True)
+                & (Q(target_exam_track='all') | Q(target_exam_track=user_track))
+            )
         ).distinct().order_by('-created_at')
 
+    def _list_cache_key(self, request) -> str:
+        import hashlib
+        try:
+            version = int(cache.get(self.LIST_CACHE_VERSION_KEY) or 0)
+        except (TypeError, ValueError):
+            version = 0
+        query = request.META.get('QUERY_STRING') or ''
+        digest = hashlib.md5(query.encode()).hexdigest()
+        return f'announcements:list:v{version}:u{request.user.pk}:{digest}'
+
+    def _invalidate_list_cache(self):
+        try:
+            cache.incr(self.LIST_CACHE_VERSION_KEY)
+        except ValueError:
+            cache.set(self.LIST_CACHE_VERSION_KEY, 1, None)
+        except Exception:  # pragma: no cover - cache backend hiccup
+            logger.debug('announcement cache version bump failed')
+
     def list(self, request, *args, **kwargs):
-        """Cached list — bypass for staff (always fresh) and invalidate on writes."""
+        """Cached per-user list — bypass for staff (always fresh)."""
         if request.user.is_staff:
             return super().list(request, *args, **kwargs)
 
-        cached = cache.get(self.LIST_CACHE_KEY)
+        cache_key = self._list_cache_key(request)
+        cached = cache.get(cache_key)
         if cached is not None:
-            from rest_framework.response import Response
             return Response(cached)
 
         response = super().list(request, *args, **kwargs)
-        cache.set(self.LIST_CACHE_KEY, response.data, self.LIST_CACHE_TTL)
+        cache.set(cache_key, response.data, self.LIST_CACHE_TTL)
         return response
 
     def perform_create(self, serializer):
         super().perform_create(serializer)
-        cache.delete(self.LIST_CACHE_KEY)
+        self._invalidate_list_cache()
 
     def perform_update(self, serializer):
         super().perform_update(serializer)
-        cache.delete(self.LIST_CACHE_KEY)
+        self._invalidate_list_cache()
 
     def perform_destroy(self, instance):
         super().perform_destroy(instance)
-        cache.delete(self.LIST_CACHE_KEY)
+        self._invalidate_list_cache()
 
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     """List and retrieve subjects.
@@ -222,10 +323,28 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['subject', 'parent', 'importance']
 
 
+def _cluster_memberships_prefetch(prefix: str = ''):
+    """Prefetch DuplicateMember rows annotated with their cluster's size, so
+    ``duplicate_cluster_id`` / ``duplicate_count`` cost no per-row query."""
+    from django.db.models import Prefetch
+    return Prefetch(
+        f'{prefix}cluster_memberships',
+        queryset=DuplicateMember.objects.annotate(cluster_size=Count('cluster__members')),
+    )
+
+
+def _question_list_related(queryset, prefix: str = ''):
+    """select/prefetch everything QuestionListSerializer reads per row."""
+    return queryset.select_related(
+        f'{prefix}subject', f'{prefix}topic', f'{prefix}verified_by',
+    ).prefetch_related(f'{prefix}images', _cluster_memberships_prefetch(prefix))
+
+
 class QuestionViewSet(viewsets.ModelViewSet):
     """Full CRUD for questions with filtering, search, and bookmark support."""
     queryset = Question.objects.select_related('subject', 'topic', 'verified_by').prefetch_related(
-        'images', 'recall_sources', 'feedbacks', 'similar_questions', 'cluster_memberships', 'revision_snapshots',
+        'images', 'recall_sources', 'feedbacks', 'similar_questions', _cluster_memberships_prefetch(),
+        'revision_snapshots',
     ).all()
     # NOTE: exam_source is NOT in filterset_fields on purpose — Bug #6
     # (2026-07-25) discovered that DjangoFilterBackend's exact-match
@@ -329,6 +448,28 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
         return self._cached_user_is_premium
 
+    def _can_view_answer(self, question) -> bool:
+        """Entitlement check shared by every answer-revealing detail action."""
+        user = getattr(self.request, 'user', None)
+        return user_can_view_answer(user, question, premium=self._user_is_premium())
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        user = getattr(self.request, 'user', None)
+        # Lets QuestionListSerializer decide per row whether answer-linked
+        # media (explanation videos) may be shown, without a query per row.
+        context['viewer_full_access'] = bool(_is_staff_user(user) or self._user_is_premium())
+        return context
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        data = self.get_serializer(instance).data
+        if not self._can_view_answer(instance):
+            # Only anonymous visitors reach this (free accounts get 404 from
+            # get_queryset): keep the stem public, hide the answer.
+            data = _redact_question_detail(data)
+        return Response(data)
+
     def get_queryset(self):
         queryset = super().get_queryset().order_by('-id')
         user = getattr(self.request, 'user', None)
@@ -369,8 +510,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # to /api/questions/{id}/ for any question and bypass the gate.
         # Premium and admin users continue to see the full set. Anonymous
         # requests also get the full set — public SEO/showroom value is
-        # intentional (the data is non-sensitive: stems + options, no
-        # correct answer / explanation in the public serializer).
+        # intentional — but ``retrieve`` redacts the answer, explanation,
+        # AI text and video for anything they are not entitled to (see
+        # ``user_can_view_answer``); the list serializer never exposes them.
         #
         # UX update: we now return ALL active questions for free users on the
         # LIST endpoint (with is_showcase annotation), and rely on the
@@ -386,7 +528,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             self.action == 'retrieve'
             and user is not None
             and getattr(user, 'is_authenticated', False)
-            and not is_admin
+            and not _is_staff_user(user)
             and not self._user_is_premium()
         ):
             showcase_filter = FreeShowcaseQuestion.objects.filter(
@@ -394,17 +536,31 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
             queryset = queryset.filter(Exists(showcase_filter))
 
+        # Anonymous visitors are NOT filtered here (the public detail page
+        # keeps working for SEO); ``retrieve`` redacts the answer /
+        # explanation for them unless the question is a showcase question.
+        # Every other answer-revealing detail action checks
+        # ``self._can_view_answer(question)`` after ``get_object()``.
+
         if self.action == 'retrieve':
             queryset = queryset.select_related('subject', 'topic', 'verified_by')
 
         if self.action == 'list':
             queryset = queryset.select_related('subject', 'topic', 'verified_by')
-            queryset = queryset.annotate(
-                attempt_count=Count('questionresponse', distinct=True),
-                correct_count=Count('questionresponse', filter=Q(questionresponse__is_correct=True), distinct=True),
-            ).annotate(
-                accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
+            # Global accuracy (GROUP BY over every test response) is only
+            # shown on the admin list and only needed to filter by it --
+            # students used to pay for it on every list request.
+            wants_accuracy = is_admin or any(
+                self.request.query_params.get(p) not in (None, '')
+                for p in ('accuracy_min', 'accuracy_max')
             )
+            if wants_accuracy:
+                queryset = queryset.annotate(
+                    attempt_count=Count('questionresponse', distinct=True),
+                    correct_count=Count('questionresponse', filter=Q(questionresponse__is_correct=True), distinct=True),
+                ).annotate(
+                    accuracy=(F('correct_count') * 100.0) / (F('attempt_count') + 0.0001),
+                )
             # NOTE: DuplicateCluster annotations removed — they caused
             # 2 correlated subqueries per row (slow on 8k+ questions).
             # The admin duplicate page computes these on demand instead.
@@ -469,8 +625,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if flagged in ['false', '0', 'no']:
             queryset = queryset.exclude(feedbacks__is_resolved=False).distinct()
 
-        accuracy_min = self.request.query_params.get('accuracy_min')
-        accuracy_max = self.request.query_params.get('accuracy_max')
+        # The accuracy annotation only exists on the list queryset.
+        accuracy_min = self.request.query_params.get('accuracy_min') if self.action == 'list' else None
+        accuracy_max = self.request.query_params.get('accuracy_max') if self.action == 'list' else None
         try:
             if accuracy_min not in [None, '']:
                 queryset = queryset.filter(accuracy__gte=float(accuracy_min))
@@ -595,7 +752,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # from the bank, merge duplicates and rewrite correct answers
         # (resolve-dispute). Admin actions are listed explicitly; any other
         # action now honours its decorator; the remainder stays public.
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix', 'merge_duplicates', 'remove_from_bank', 'unremove_from_bank', 'resolve_dispute', 'generate_explanation']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix', 'merge_duplicates', 'remove_from_bank', 'unremove_from_bank', 'resolve_dispute', 'generate_explanation', 'recall_sources', 'duplicate_clusters']:
             return [IsControlTowerAdmin()]
         if self.action in ['bookmark', 'my_bookmarks', 'attempt', 'submit_feedback']:
             return [permissions.IsAuthenticated()]
@@ -622,17 +779,22 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def sources(self, request, pk=None):
         return _recall_search.recall_question_sources(self, request, pk=pk)
 
+    # Admin-only: RecallSource rows carry server filesystem paths
+    # (``pdf_path``) and import-job ids; only app/admin/recall uses these.
     @action(detail=False, methods=['get'], url_path='recall_sources',
-            permission_classes=[permissions.AllowAny])
+            permission_classes=[IsControlTowerAdmin])
     def recall_sources(self, request):
-        """List RecallSource rows — useful for the recall bank landing page."""
+        """List RecallSource rows for the admin recall dashboard."""
         qs = RecallSource.objects.filter(is_active=True).order_by("-created_at")[:200]
         return Response(RecallSourceSerializer(qs, many=True, context={"request": request}).data)
 
     @action(detail=False, methods=['get'], url_path='duplicate_clusters',
-            permission_classes=[permissions.AllowAny])
+            permission_classes=[IsControlTowerAdmin])
     def duplicate_clusters(self, request):
-        qs = DuplicateCluster.objects.all().order_by("-created_at")[:100]
+        qs = (
+            DuplicateCluster.objects.annotate(member_count_annotated=Count('members'))
+            .order_by("-created_at")[:100]
+        )
         return Response(DuplicateClusterSerializer(qs, many=True, context={"request": request}).data)
 
     @action(detail=True, methods=['get'], url_path='duplicates',
@@ -698,21 +860,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         else:
             # Live fallback: find active rows with the same normalized text
             # + year + exam_source, even if no cluster exists.
-            import re as _re
-            def _normalize(s: str) -> str:
-                s = (s or '').lower()
-                s = _re.sub(r'[^a-z0-9\s]+', ' ', s)
-                return _re.sub(r'\s+', ' ', s).strip()
-            norm = _normalize(question.question_text)
-            fallback = Question.objects.filter(
-                is_active=True,
-                year=question.year,
-                exam_source=question.exam_source or '',
-            ).only('id', 'question_text', 'is_active', 'is_dropped', 'admin_edited',
-                   'subject', 'topic', 'year', 'exam_source')[:200]
-            for q in fallback:
-                if _normalize(q.question_text) != norm:
-                    continue
+            for q in self._text_duplicate_candidates(question):
                 members.append(_serialize(q, question.id))
             canonical_id = question.id
 
@@ -724,21 +872,52 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'members': members,
         })
 
+    @staticmethod
+    def _normalize_stem_for_match(text: str) -> str:
+        s = (text or '').lower()
+        s = re.sub(r'[^a-z0-9\s]+', ' ', s)
+        return re.sub(r'\s+', ' ', s).strip()
+
+    def _text_duplicate_candidates(self, question):
+        """Active rows with the same normalized stem + year + exam_source
+        (the live fallback ``list_duplicates`` shows when no cluster exists).
+        Includes ``question`` itself."""
+        norm = self._normalize_stem_for_match(question.question_text)
+        fallback = Question.objects.filter(
+            is_active=True,
+            year=question.year,
+            exam_source=question.exam_source or '',
+        ).select_related('subject', 'topic').only(
+            'id', 'question_text', 'is_active', 'is_dropped', 'admin_edited',
+            'subject', 'topic', 'year', 'exam_source',
+            'subject__name', 'topic__name',
+        )[:200]
+        return [q for q in fallback if self._normalize_stem_for_match(q.question_text) == norm]
+
     @action(detail=True, methods=['post'], url_path='merge-duplicates',
             permission_classes=[IsControlTowerAdmin])
     def merge_duplicates(self, request, pk=None):
-        """Mark a list of duplicate ids as soft-dropped (is_dropped=True,
-        is_active=False) and point the cluster's canonical at `pk`.
+        """Soft-drop duplicates (``is_dropped=True, is_active=False``) and
+        keep exactly one row of the cluster as its canonical.
 
         Body: { "duplicate_ids": [<int>, ...] }
 
-        Behaviour:
-          - Returns 400 if any duplicate_id == canonical_id (the question
-            itself).
-          - Returns 400 if any duplicate_id is in a DIFFERENT cluster
-            than `pk` (so admin doesn't accidentally drop unrelated rows).
-          - All drops are recorded with `is_active=False` so the row is
-            invisible to the public list but still queryable for audits.
+        Keeper: the cluster's canonical row, unless it is itself listed in
+        ``duplicate_ids`` -- then ``pk``. (The admin dialog pre-selects
+        every member except the canonical, so opening it from a
+        non-canonical member used to 400 by default.) The cluster's
+        ``canonical_question`` is repointed at the keeper.
+
+        Without an existing cluster, ``duplicate_ids`` must be rows that
+        ``list_duplicates`` offered through its text-match fallback; the
+        cluster is created atomically (a rejected request leaves nothing
+        behind).
+
+          - 400 if every row of the cluster would be dropped.
+          - 400 if any duplicate_id is outside the cluster / text matches.
+          - Dropped rows stay in the DB for audits. No RemovedQuestion
+            tombstone is written: duplicates share the keeper's stem hash,
+            so a stem tombstone would also suppress the keeper on re-import.
         """
         question = self.get_object()
         body = request.data or {}
@@ -746,62 +925,71 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not isinstance(dup_ids, list) or not dup_ids:
             return Response({'detail': 'duplicate_ids must be a non-empty list'}, status=400)
         try:
-            dup_ids = [int(x) for x in dup_ids]
+            dup_ids = sorted({int(x) for x in dup_ids})
         except (TypeError, ValueError):
             return Response({'detail': 'duplicate_ids must be integers'}, status=400)
-        if question.id in dup_ids:
-            return Response({'detail': 'canonical id cannot appear in duplicate_ids'}, status=400)
 
-        membership = (
-            DuplicateMember.objects.filter(question_id=question.id)
-            .select_related('cluster')
-            .first()
-        )
-        cluster = membership.cluster if membership else None
-        if cluster is None:
-            cluster = DuplicateCluster.objects.create(
-                canonical_question=question,
-                similarity_threshold='1.000',
-                detection_method='manual-merge',
+        with transaction.atomic():
+            membership = (
+                DuplicateMember.objects.filter(question_id=question.id)
+                .select_related('cluster')
+                .order_by('-cluster_id')
+                .first()
             )
-            DuplicateMember.objects.get_or_create(
-                cluster=cluster,
-                question=question,
-                defaults={'similarity_score': 1.0},
-            )
+            cluster = membership.cluster if membership else None
+            if cluster is not None:
+                valid_ids = set(
+                    DuplicateMember.objects.filter(cluster_id=cluster.id)
+                    .values_list('question_id', flat=True)
+                )
+                valid_ids.add(cluster.canonical_question_id)
+                current_canonical = cluster.canonical_question_id
+            else:
+                valid_ids = {q.id for q in self._text_duplicate_candidates(question)}
+                valid_ids.add(question.id)
+                current_canonical = question.id
 
-        # Validate: every requested duplicate_id must currently be in the
-        # same cluster (or be the canonical itself).
-        valid_cluster_ids = set(
-            DuplicateMember.objects.filter(cluster_id=cluster.id)
-            .values_list('question_id', flat=True)
-        )
-        valid_cluster_ids.add(cluster.canonical_question_id)
-        bad = [d for d in dup_ids if d not in valid_cluster_ids]
-        if bad:
-            return Response(
-                {'detail': f'these ids are not in the same cluster: {bad}'},
-                status=400,
-            )
+            bad = [d for d in dup_ids if d not in valid_ids]
+            if bad:
+                return Response(
+                    {'detail': f'these ids are not in the same cluster: {bad}'},
+                    status=400,
+                )
 
-        # Apply: soft-drop and ensure each row is in the cluster as a member.
-        dropped = 0
-        for d in dup_ids:
-            if d == question.id:
-                continue
-            DuplicateMember.objects.get_or_create(
-                cluster=cluster,
-                question_id=d,
-                defaults={'similarity_score': 1.0},
-            )
-            updated = Question.objects.filter(id=d).update(
+            if current_canonical not in dup_ids:
+                keeper_id = current_canonical
+            elif question.id not in dup_ids:
+                keeper_id = question.id
+            else:
+                return Response(
+                    {'detail': 'at least one row (the canonical) must be kept; '
+                               'remove it or this question from duplicate_ids'},
+                    status=400,
+                )
+
+            if cluster is None:
+                cluster = DuplicateCluster.objects.create(
+                    canonical_question_id=keeper_id,
+                    similarity_threshold='1.000',
+                    detection_method='manual-merge',
+                )
+            elif cluster.canonical_question_id != keeper_id:
+                cluster.canonical_question_id = keeper_id
+                cluster.save(update_fields=['canonical_question'])
+            for member_id in {keeper_id, question.id, *dup_ids}:
+                DuplicateMember.objects.get_or_create(
+                    cluster=cluster,
+                    question_id=member_id,
+                    defaults={'similarity_score': 1.0},
+                )
+
+            dropped = Question.objects.filter(id__in=dup_ids).exclude(id=keeper_id).update(
                 is_dropped=True,
                 is_active=False,
             )
-            dropped += updated
 
         return Response({
-            'canonical_id': question.id,
+            'canonical_id': keeper_id,
             'cluster_id': cluster.id,
             'dropped': dropped,
         })
@@ -824,10 +1012,22 @@ class QuestionViewSet(viewsets.ModelViewSet):
         """
         question = self.get_object()
         reason = (request.data or {}).get('reason', '') or ''
-        stem_hash = compute_stem_hash(question.question_text or '')
+        removed, _created = self._remove_question_from_bank(question, request.user, reason=reason)
+        return Response({
+            'id': question.id,
+            'is_active': False,
+            'is_dropped': True,
+            'removed_question_id': removed.id,
+            'was_already_removed': not _created,
+        })
 
+    def _remove_question_from_bank(self, question, actor, reason=''):
+        """Soft-delete + RemovedQuestion tombstone (shared by
+        ``remove-from-bank`` and ``DELETE``). Returns (tombstone, created)."""
+        reason = str(reason or '')
+        stem_hash = compute_stem_hash(question.question_text or '')
         with transaction.atomic():
-            removed, _created = RemovedQuestion.objects.get_or_create(
+            removed, created = RemovedQuestion.objects.get_or_create(
                 exam_source=question.exam_source or '',
                 year=question.year,
                 source_number=getattr(question, 'display_number', None),
@@ -835,15 +1035,15 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 defaults={
                     'original_question_id': question.id,
                     'reason': reason[:1000],
-                    'removed_by': request.user if getattr(request.user, 'is_authenticated', False) else None,
+                    'removed_by': actor if getattr(actor, 'is_authenticated', False) else None,
                 },
             )
             # Capture a pre-removal revision snapshot so the admin can
             # diff before/after. Idempotent w.r.t. flags because the row
             # is only soft-mutated once.
             self._capture_revision_snapshot(
-                question, request.user,
-                reason=f'Before remove-from-bank (reason={reason!r})',
+                question, actor,
+                reason=f'Before remove-from-bank (reason={reason!r})'[:200],
             )
             question.is_active = False
             question.is_dropped = True
@@ -854,7 +1054,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         try:
             from accounts.views import create_admin_audit_log
             create_admin_audit_log(
-                actor=request.user,
+                actor=actor,
                 action='REMOVE_FROM_BANK',
                 resource_type='Question',
                 resource_id=str(question.id),
@@ -863,14 +1063,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             logger.error(f'Failed to log remove_from_bank: {e}')
-
-        return Response({
-            'id': question.id,
-            'is_active': False,
-            'is_dropped': True,
-            'removed_question_id': removed.id,
-            'was_already_removed': not _created,
-        })
+        return removed, created
 
     @action(detail=True, methods=['post'], url_path='unremove-from-bank',
             permission_classes=[IsControlTowerAdmin])
@@ -945,21 +1138,33 @@ class QuestionViewSet(viewsets.ModelViewSet):
         """
         mode = request.query_params.get("mode", "random")
         try:
-            count = min(int(request.query_params.get("count", 30)), 100)
-        except ValueError:
+            count = max(1, min(int(request.query_params.get("count", 30)), 100))
+        except (TypeError, ValueError):
             count = 30
         try:
             seed = int(request.query_params.get("seed")) if request.query_params.get("seed") else None
-        except ValueError:
+        except (TypeError, ValueError):
             seed = None
         params = {"count": count, "seed": seed}
-        for k in ("year", "subject_id", "topic_id", "difficulty",
-                  "is_image_based", "has_explanation", "has_ai_enrichment"):
+        for k in ("year", "subject_id", "topic_id"):
+            v = request.query_params.get(k)
+            if v:
+                try:
+                    params[k] = int(v)
+                except (TypeError, ValueError):
+                    return Response({"error": f"{k} must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+        for k in ("difficulty", "is_image_based", "has_explanation", "has_ai_enrichment"):
             v = request.query_params.get(k)
             if v:
                 params[k] = v
 
-        ids = _practice_modes.build_queue(mode, request.user, params)
+        try:
+            ids = _practice_modes.build_queue(mode, request.user, params)
+        except Exception:
+            # Never 500 the practice page on a queue-builder bug; the
+            # logged exception still reaches error monitoring.
+            logger.exception("practice_queue failed (mode=%s, user=%s)", mode, request.user.pk)
+            ids = []
 
         # Freemium filter: free (non-premium, non-admin) users only get
         # admin-curated showcase questions in their practice queue.
@@ -997,61 +1202,88 @@ class QuestionViewSet(viewsets.ModelViewSet):
             "showcase_count": FreeShowcaseQuestion.objects.count() if is_free_user else 0,
         })
 
+    # Per-question AI text (why correct / why the distractors fail / clinical
+    # pearl / mnemonic / concept) reveals the answer, so it follows the same
+    # entitlement rule as the answer itself. Callers who are not entitled
+    # get ``{<field>: null, "locked": true}`` (the reveal panel hides empty
+    # sections); only authenticated, entitled users can trigger a new
+    # (rate-capped) LLM generation, everyone else gets stored content only.
+
+    def _ai_text_response(self, request, field: str, producer):
+        q = self.get_object()
+        if not self._can_view_answer(q):
+            return Response({field: None, "locked": True})
+        user = request.user
+        allow_ai = (
+            _ai_per_question.generation_gate(user, unlimited=_is_staff_user(user))
+            if getattr(user, 'is_authenticated', False) else False
+        )
+        return Response({field: producer(q, allow_ai)})
+
+    # ``fallback=False``: no template boilerplate -- ``null`` when there is
+    # no genuine content (the reveal panel hides empty sections).
+
     @action(detail=True, methods=['get'], url_path='ai/concept',
             permission_classes=[permissions.AllowAny])
     def ai_concept(self, request, pk=None):
-        q = self.get_object()
-        return Response({"concept": _ai_per_question.concept(q, allow_ai=request.user.is_authenticated)})
+        return self._ai_text_response(
+            request, "concept",
+            lambda q, allow_ai: _ai_per_question.concept(q, allow_ai=allow_ai, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/why_correct',
             permission_classes=[permissions.AllowAny])
     def ai_why_correct(self, request, pk=None):
-        q = self.get_object()
-        return Response({"why_correct": _ai_per_question.why_correct(q, allow_ai=request.user.is_authenticated)})
+        return self._ai_text_response(
+            request, "why_correct",
+            lambda q, allow_ai: _ai_per_question.why_correct(q, allow_ai=allow_ai, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/why_incorrect',
             permission_classes=[permissions.AllowAny])
     def ai_why_incorrect(self, request, pk=None):
-        q = self.get_object()
-        return Response({"why_incorrect": _ai_per_question.why_incorrect(q)})
+        return self._ai_text_response(
+            request, "why_incorrect",
+            lambda q, allow_ai: _ai_per_question.why_incorrect(q, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/clinical',
             permission_classes=[permissions.AllowAny])
     def ai_clinical(self, request, pk=None):
-        q = self.get_object()
-        return Response({"clinical_significance": _ai_per_question.clinical_significance(q, allow_ai=request.user.is_authenticated)})
+        return self._ai_text_response(
+            request, "clinical_significance",
+            lambda q, allow_ai: _ai_per_question.clinical_significance(q, allow_ai=allow_ai, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/mnemonic',
             permission_classes=[permissions.AllowAny])
     def ai_mnemonic(self, request, pk=None):
-        q = self.get_object()
-        return Response({"memory_trick": _ai_per_question.memory_trick(q, allow_ai=request.user.is_authenticated)})
+        return self._ai_text_response(
+            request, "memory_trick",
+            lambda q, allow_ai: _ai_per_question.memory_trick(q, allow_ai=allow_ai, fallback=False))
+
+    @staticmethod
+    def _limit_param(request, default: int = 8, maximum: int = 25) -> int:
+        try:
+            return max(1, min(int(request.query_params.get("limit", default)), maximum))
+        except (TypeError, ValueError):
+            return default
 
     @action(detail=True, methods=['get'], url_path='ai/related_pyqs',
             permission_classes=[permissions.AllowAny])
     def ai_related_pyqs(self, request, pk=None):
         q = self.get_object()
-        try:
-            limit = min(int(request.query_params.get("limit", 8)), 25)
-        except ValueError:
-            limit = 8
+        limit = self._limit_param(request)
         return Response({"related_pyqs": _ai_per_question.related_pyqs(q, limit=limit)})
 
     @action(detail=True, methods=['get'], url_path='ai/related_topics',
             permission_classes=[permissions.AllowAny])
     def ai_related_topics(self, request, pk=None):
         q = self.get_object()
-        try:
-            limit = min(int(request.query_params.get("limit", 8)), 25)
-        except ValueError:
-            limit = 8
+        limit = self._limit_param(request)
         return Response({"related_topics": _ai_per_question.related_topics(q, limit=limit)})
 
     @action(detail=True, methods=['get'], url_path='ai/exam_importance',
             permission_classes=[permissions.AllowAny])
     def ai_exam_importance(self, request, pk=None):
         q = self.get_object()
-        return Response({"exam_importance": _ai_per_question.exam_importance(q)})
+        return Response({"exam_importance": _ai_per_question.exam_importance(q, fallback=False)})
 
     # ── Phase 3: question experience endpoints (flag / time / conf / elim) ──
 
@@ -1105,6 +1337,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
         answer = raw_answer.strip().upper()[:1] if isinstance(raw_answer, str) else ""
         if answer and answer not in "ABCDE":
             return Response({"error": "answer must be one of A-E"}, status=status.HTTP_400_BAD_REQUEST)
+        # Telling a caller whether a pick is right reveals the answer.
+        if not self._can_view_answer(q):
+            return _upgrade_required_response()
         try:
             time_spent = int(request.data.get("time_spent", 0))
         except (TypeError, ValueError):
@@ -1115,11 +1350,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
             confidence = None
         correct_answer = (q.correct_answer or "").upper()[:1]
         is_correct = bool(answer) and answer == correct_answer
-        return Response(_practice_experience.submit_attempt(
+        payload = _practice_experience.submit_attempt(
             q, request.user,
             answer=answer, correct=is_correct,
             time_spent=time_spent, confidence=confidence,
-        ))
+        )
+        created = payload.pop("created", False)
+        if answer:
+            _invalidate_user_question_caches(request.user.id)
+        payload.update({
+            "is_correct": is_correct,
+            "correct_answer": q.correct_answer,
+            "created": created,
+            **_question_explanation_payload(q),
+        })
+        return Response(payload)
 
     @action(detail=True, methods=["post"], url_path='generate-explanation',
             permission_classes=[IsControlTowerAdmin])
@@ -1159,14 +1404,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 'requires_confirmation': True,
             }, status=status.HTTP_409_CONFLICT)
 
-        # Collect images for AI context
-        image_descriptions = []
-        for img in question.images.filter(is_active=True).order_by('image_index_in_page', 'id')[:6]:
-            if img.caption:
-                image_descriptions.append(img.caption)
-            elif img.alt_text:
-                image_descriptions.append(img.alt_text)
-
         options = {
             'A': question.option_a or '',
             'B': question.option_b or '',
@@ -1175,6 +1412,16 @@ class QuestionViewSet(viewsets.ModelViewSet):
         }
 
         try:
+            # Collect images for AI context. QuestionImage has no alt_text
+            # (the old `img.alt_text` raised AttributeError -> 500 for every
+            # image without a caption, outside this try block); fall back to
+            # the OCR text instead.
+            image_descriptions = []
+            for img in question.images.filter(is_active=True).order_by('image_index_in_page', 'id')[:6]:
+                description = (img.caption or '').strip() or (img.ocr_text or '').strip()
+                if description:
+                    image_descriptions.append(description[:1000])
+
             ai_service = AIService()
             result = ai_service.generate_admin_explanation(
                 question_text=question.question_text or '',
@@ -1515,7 +1762,15 @@ class QuestionViewSet(viewsets.ModelViewSet):
             status='queued',
             source_filename=filename,
             stored_file_path=stored_path,
-            summary={'message': 'File uploaded and queued for extraction'},
+            # Honest status: no worker parses these jobs. The placeholder
+            # item below must be filled in by hand (and approved) before it
+            # can be published; real PDF/DOCX ingestion is the Admin Import
+            # Center (material_importer).
+            summary={
+                'message': 'File stored. Automatic extraction is not available for this queue; '
+                           'enter the questions manually or use the Admin Import Center.',
+                'parser': 'none',
+            },
             created_by=request.user if request.user.is_authenticated else None,
         )
 
@@ -1648,12 +1903,30 @@ class QuestionViewSet(viewsets.ModelViewSet):
         serializer = QuestionExtractionItemSerializer(item)
         return Response({'message': 'Item rejected', 'item': serializer.data})
 
+    _EXAM_TYPE_TO_SOURCE = {
+        'cms': 'UPSC CMS', 'neet_pg': 'NEET PG', 'ini_cet': 'INI-CET',
+        'usmle': 'USMLE', 'fmge': 'FMGE',
+    }
+
+    def _extraction_exam_for(self, request, item):
+        """(exam_source, exam_type) for a published extraction item: an
+        explicit ``exam_type`` in the request body, else the item subject's
+        exam, else UPSC CMS (the old hard-coded value)."""
+        requested = str((request.data or {}).get('exam_type') or '').strip().lower()
+        exam_type = requested if requested in self._EXAM_TYPE_TO_SOURCE else ''
+        if not exam_type:
+            exam_type = getattr(item.subject, 'exam_type', '') or 'cms'
+            if exam_type not in self._EXAM_TYPE_TO_SOURCE:
+                exam_type = 'cms'
+        return self._EXAM_TYPE_TO_SOURCE[exam_type], exam_type
+
     @action(detail=False, methods=['post'], url_path=r'extraction/items/(?P<item_id>[^/.]+)/publish')
     def extraction_item_publish(self, request, item_id=None):
         """Publish approved extraction item as a live question."""
         with transaction.atomic():
             try:
-                item = QuestionExtractionItem.objects.select_for_update().select_related('subject', 'topic').get(id=item_id)
+                # of=('self',): subject / topic are nullable FKs (outer join).
+                item = QuestionExtractionItem.objects.select_for_update(of=('self',)).select_related('subject', 'topic').get(id=item_id)
             except QuestionExtractionItem.DoesNotExist:
                 return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1664,8 +1937,27 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK,
                 )
 
-            if not item.subject or not item.question_text:
+            # Only reviewed, complete items may go live. The upload step
+            # creates a placeholder item (no parser consumes these jobs), and
+            # publishing it used to create a live question with empty
+            # options and a hard-coded answer 'A'.
+            if item.status != 'approved':
+                return Response(
+                    {'error': f'Only approved items can be published (status is {item.status!r}).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not item.subject or not (item.question_text or '').strip():
                 return Response({'error': 'Subject and question_text are required before publish'}, status=status.HTTP_400_BAD_REQUEST)
+            if item.question_text.strip() == 'Extracted content pending parser review':
+                return Response({'error': 'This is an unparsed placeholder item; enter the real question first.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if not all((getattr(item, f) or '').strip() for f in ('option_a', 'option_b', 'option_c', 'option_d')):
+                return Response({'error': 'All four options are required before publish'}, status=status.HTTP_400_BAD_REQUEST)
+            publish_answer = (item.correct_answer or '').strip().upper()
+            if publish_answer not in ('A', 'B', 'C', 'D'):
+                return Response({'error': 'An explicit correct_answer (A-D) is required before publish'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            exam_source, exam_type = self._extraction_exam_for(request, item)
 
             # Honor admin "Remove from bank" tombstones — if this stem was
             # previously removed, refuse to publish it back into the bank.
@@ -1681,7 +1973,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 option_b=item.option_b or '',
                 option_c=item.option_c or '',
                 option_d=item.option_d or '',
-                correct_answer=item.correct_answer or 'A',
+                correct_answer=publish_answer,
                 year=item.year or timezone.now().year,
                 subject=item.subject,
                 topic=item.topic,
@@ -1690,7 +1982,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 explanation=item.explanation or '',
                 paper=item.paper or 0,
                 source=f'extraction_job_{item.job_id}_item_{item.id}',
-                exam_source='UPSC CMS',
+                exam_source=exam_source,
+                exam_type=exam_type,
                 is_active=True,
             )
 
@@ -1727,10 +2020,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if not selected_answer or selected_answer not in 'ABCDE':
             return Response({'error': 'selected_answer must be one of A-E'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # The response reveals the answer: free users may only submit on
+        # showcase questions (premium / admin: everything).
+        if not self._can_view_answer(question):
+            return _upgrade_required_response()
+
         is_correct = selected_answer == (question.correct_answer or '').strip().upper()[:1]
 
         from questions.models import QuestionAttempt
-        from analytics.models import UserTopicPerformance, DailyActivity
 
         attempt, created = QuestionAttempt.objects.update_or_create(
             user=request.user,
@@ -1750,61 +2047,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
         ])
 
         # Invalidate per-user caches so dashboard + question list stay fresh.
-        cache.delete(f'dashboard:{request.user.id}')
-        cache.delete(f'dashboard_bundle:{request.user.id}')
-        _bump_question_list_cache_version(request.user.id)
-        
+        _invalidate_user_question_caches(request.user.id)
+
         if created:
-            # Update Subject/Topic performance
-            if question.topic:
-                perf, _ = UserTopicPerformance.objects.get_or_create(
-                    user=request.user,
-                    subject=question.subject,
-                    topic=question.topic
-                )
-                perf.total_attempts += 1
-                if is_correct:
-                    perf.correct_answers += 1
-                else:
-                    perf.incorrect_answers += 1
-                perf.last_attempted = timezone.now()
-                perf.save()
-            
-            # General subject row
-            perf_sub, _ = UserTopicPerformance.objects.get_or_create(
-                user=request.user,
-                subject=question.subject,
-                topic=None
-            )
-            perf_sub.total_attempts += 1
-            if is_correct:
-                perf_sub.correct_answers += 1
-            else:
-                perf_sub.incorrect_answers += 1
-            perf_sub.last_attempted = timezone.now()
-            perf_sub.save()
-            
-            # Update DailyActivity
-            today = timezone.localdate()
-            activity, _ = DailyActivity.objects.get_or_create(
-                user=request.user,
-                date=today
-            )
-            activity.questions_attempted += 1
-            if is_correct:
-                activity.correct_answers += 1
-            activity.save()
-            
-            # Update StudyStreak and grant XP points
-            from analytics.models import StudyStreak
-            streak, _ = StudyStreak.objects.get_or_create(user=request.user)
-            streak.record_activity()
-            xp_reward = 15 if is_correct else 5
-            streak.add_xp(xp_reward)
-            
+            # Topic / subject performance, daily activity (quests) and
+            # streak XP -- atomic F() increments (two tabs used to race).
+            _practice_experience.record_attempt_stats(request.user, question, is_correct)
+
         return Response({
             'is_correct': is_correct,
             'correct_answer': question.correct_answer,
+            **_question_explanation_payload(question),
             'is_subscribed': getattr(request.user, 'is_subscribed', False)
         })
 
@@ -1821,17 +2074,33 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return Response({'bookmarked': False})
         return Response({'bookmarked': True}, status=status.HTTP_201_CREATED)
 
+    BOOKMARKS_MAX = 500
+
     @action(detail=False, methods=['get'], url_path='bookmarks')
     def my_bookmarks(self, request):
-        """List current user's bookmarked questions."""
-        bookmarks = QuestionBookmark.objects.filter(user=request.user).select_related('question')
-        serializer = BookmarkSerializer(bookmarks, many=True, context={'request': request})
+        """List current user's bookmarked questions (newest first).
+
+        Without ``?page=`` the response stays a plain array (what the
+        bookmarks page expects), capped at ``BOOKMARKS_MAX`` rows; with
+        ``?page=`` it is paginated (``count`` / ``results``). The nested
+        question rows are fully select/prefetch-related -- the old version
+        ran ~7 queries per bookmark.
+        """
+        bookmarks = _question_list_related(
+            QuestionBookmark.objects.filter(user=request.user), prefix='question__',
+        ).order_by('-created_at', '-id')
+        context = self.get_serializer_context()
+        if request.query_params.get('page'):
+            page = self.paginate_queryset(bookmarks)
+            if page is not None:
+                serializer = BookmarkSerializer(page, many=True, context=context)
+                return self.get_paginated_response(serializer.data)
+        serializer = BookmarkSerializer(bookmarks[:self.BOOKMARKS_MAX], many=True, context=context)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='years')
     def available_years(self, request):
         """Return list of available PYQ years."""
-        _ensure_question_bank_loaded()
         years = Question.objects.values_list('year', flat=True).distinct().order_by('-year')
         return Response(list(years))
 
@@ -1853,7 +2122,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
         incoming key to the correct ``exam_source`` value before filtering so both
         old and new client conventions Just Work.
         """
-        _ensure_question_bank_loaded()
         from django.db.models import Count
 
         # Slug → human label stored in Question.exam_source. Keep in sync with
@@ -2045,28 +2313,30 @@ class QuestionViewSet(viewsets.ModelViewSet):
         """
         question = self.get_object()
         LIMIT = 8
+        # Removed / archived / dropped questions must never be recommended.
+        active = Question.objects.filter(is_active=True)
 
         # Bucket 1: explicit M2M curation (admin-set "questions testing
         # the same concept"). Always surface these first if present.
-        curated_ids = list(question.similar_questions.values_list('id', flat=True))
+        curated_ids = list(question.similar_questions.filter(is_active=True).values_list('id', flat=True))
         # Bucket 2: same concept_id (stable AI-assigned concept key).
         same_concept_ids = []
         if question.concept_id:
             same_concept_ids = list(
-                Question.objects.filter(concept_id=question.concept_id)
+                active.filter(concept_id=question.concept_id)
                 .exclude(id=question.id)
                 .exclude(id__in=curated_ids)
                 .values_list('id', flat=True)[:LIMIT]
             )
         # Bucket 3: shares an image (same sha256_short fingerprint).
         same_image_ids = []
-        image_hashes = list(
-            question.images.filter(is_active=True).values_list('sha256_short', flat=True)
-        )
+        image_hashes = [
+            h for h in question.images.filter(is_active=True).values_list('sha256_short', flat=True) if h
+        ]
         if image_hashes:
             same_image_ids = list(
                 QuestionImage.objects.filter(
-                    is_active=True, sha256_short__in=image_hashes
+                    is_active=True, sha256_short__in=image_hashes, question__is_active=True,
                 )
                 .exclude(question_id=question.id)
                 .exclude(question_id__in=curated_ids + same_concept_ids)
@@ -2077,7 +2347,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         same_topic_ids = []
         if question.topic_id:
             same_topic_ids = list(
-                Question.objects.filter(topic_id=question.topic_id)
+                active.filter(topic_id=question.topic_id)
                 .exclude(id=question.id)
                 .exclude(id__in=curated_ids + same_concept_ids + same_image_ids)
                 .values_list('id', flat=True)[:LIMIT]
@@ -2085,7 +2355,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # Bucket 5: same subject (fallback so we always return *something*
         # — better to suggest something than an empty sidebar).
         same_subject_ids = list(
-            Question.objects.filter(subject_id=question.subject_id)
+            active.filter(subject_id=question.subject_id)
             .exclude(id=question.id)
             .exclude(id__in=curated_ids + same_concept_ids + same_image_ids + same_topic_ids)
             .values_list('id', flat=True)[: max(0, LIMIT - len(curated_ids) - len(same_concept_ids) - len(same_image_ids) - len(same_topic_ids))]
@@ -2112,16 +2382,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
             if len(ordered_ids) >= LIMIT:
                 break
 
-        # Re-hydrate in the priority order via a single query.
-        from django.db.models import Case, When, IntegerField
+        # Re-hydrate in the priority order via a single query (plus the
+        # prefetches the list serializer needs -- it used to cost ~7
+        # queries per row).
+        if not ordered_ids:
+            return Response([])
         preserve = Case(*[When(pk=pk, then=pos) for pos, pk in enumerate(ordered_ids)],
                         default=len(ordered_ids), output_field=IntegerField())
-        qs = Question.objects.filter(pk__in=ordered_ids).order_by(preserve)
-        data = QuestionListSerializer(qs, many=True, context={'request': request}).data
+        rows = list(_question_list_related(active.filter(pk__in=ordered_ids)).order_by(preserve))
+        data = QuestionListSerializer(rows, many=True, context=self.get_serializer_context()).data
 
         # Attach the reason to each serialized item.
-        for item, qid in zip(data, [d.id for d in qs]):
-            item['similarity_reason'] = reasons.get(qid, 'same_subject')
+        for item, row in zip(data, rows):
+            item['similarity_reason'] = reasons.get(row.id, 'same_subject')
         return Response(data)
 
     @action(detail=True, methods=['patch'], url_path='verify')
@@ -2227,6 +2500,10 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
 
         from ai_engine.services import AIService
+        # The admin-managed active prompt version (ai-prompt-versions) is fed
+        # to the model as the leading instruction; before it was stored and
+        # "activated" but never used by any AI call.
+        active_prompt = AdminAIPromptVersion.objects.filter(is_active=True).first()
         try:
             service = AIService()
             options = {
@@ -2239,6 +2516,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 question_text=question.question_text or '',
                 options=options,
                 correct_answer=question.correct_answer or '',
+                user_prompt=(active_prompt.prompt_text if active_prompt else ''),
             )
         except Exception as e:
             logger.error(f"force_regenerate AI call failed for question {question.id}: {e}")
@@ -2247,10 +2525,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        # The provider rotation returns a human-readable failure sentence
+        # ("All AI services are temporarily unavailable...") instead of
+        # raising; saving it made that sentence the official explanation.
+        analysis = _usable_ai_text(analysis)
         if not analysis:
             return Response(
-                {'error': 'AI service returned an empty response; existing fields left unchanged.'},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {'error': 'AI service returned no usable response; existing fields left unchanged.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         # Map the analysis sections back to Question fields, gated by lock flags.
@@ -2276,7 +2558,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if updated_fields:
             question.save(update_fields=updated_fields)
 
-        active_prompt = AdminAIPromptVersion.objects.filter(is_active=True).first()
         response_excerpt = (question.ai_explanation or question.ai_answer or '')[:500]
         QuestionAIOperationLog.objects.create(
             question=question,
@@ -2294,6 +2575,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'lock_answer': question.lock_answer,
             'lock_explanation': question.lock_explanation,
             'updated_fields': updated_fields,
+            'active_prompt_version': active_prompt.id if active_prompt else None,
         })
 
     @action(detail=False, methods=['get', 'post'], url_path='ai-prompt-versions')
@@ -2498,16 +2780,31 @@ class QuestionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='resolve-dispute')
     def resolve_dispute(self, request, pk=None):
         question = self.get_object()
-        corrected_answer = request.data.get('corrected_answer')
+        raw_answer = request.data.get('corrected_answer')
         justification = request.data.get('justification')
-        
-        if not corrected_answer or not justification:
+
+        if not raw_answer or not justification:
             return Response({'error': 'Both corrected_answer and justification are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        # Answers are compared as a single upper-case letter; storing 'b' or
+        # 'Option B' marked every student wrong.
+        corrected_answer = str(raw_answer).strip().upper()
+        if corrected_answer.startswith('OPTION '):
+            corrected_answer = corrected_answer[len('OPTION '):].strip()
+        if corrected_answer not in ('A', 'B', 'C', 'D'):
+            return Response({'error': 'corrected_answer must be one of A, B, C, D.'}, status=status.HTTP_400_BAD_REQUEST)
+
         old_answer = question.correct_answer
-        question.correct_answer = corrected_answer
-        question.is_disputed = False
-        question.save(update_fields=['correct_answer', 'is_disputed', 'updated_at'])
+        with transaction.atomic():
+            self._capture_revision_snapshot(
+                question, request.user, reason=f'Before resolve-dispute ({old_answer} -> {corrected_answer})',
+            )
+            question.correct_answer = corrected_answer
+            question.is_disputed = False
+            # A human decision: protect it from AI regeneration, verifiers
+            # (verify_answers --fix) and fixture re-imports.
+            question.lock_answer = True
+            question.admin_edited = True
+            question.save(update_fields=['correct_answer', 'is_disputed', 'lock_answer', 'admin_edited', 'updated_at'])
 
         try:
             from accounts.views import create_admin_audit_log
@@ -2523,6 +2820,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
             logger.error(f"Failed to log dispute resolution: {e}")
 
         return Response({'message': 'Dispute resolved successfully', 'new_answer': corrected_answer})
+
+    def destroy(self, request, *args, **kwargs):
+        """``DELETE /api/questions/<id>/`` -- remove from the bank (soft).
+
+        A hard ``instance.delete()`` cascaded away every student's attempts,
+        bookmarks, flashcards, notes and test responses for the question,
+        wrote no RemovedQuestion tombstone (so fixture loaders recreated it)
+        and 500'd on PROTECT relations (images, sources, duplicate
+        clusters). DELETE now has ``remove-from-bank`` semantics: the row is
+        hidden and tombstoned, history is kept, ``unremove-from-bank``
+        restores it.
+        """
+        question = self.get_object()
+        self._remove_question_from_bank(question, request.user, reason='Deleted via admin DELETE')
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def perform_create(self, serializer):
         # Tombstone guard: refuse to recreate an admin-removed question.
@@ -2614,18 +2926,27 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
         if status_filter in ['new', 'in_progress', 'resolved']:
             queryset = queryset.filter(status=status_filter)
 
+        # Counts must be DISTINCT: the questionresponse join multiplies every
+        # feedback row by the question's test responses. The queue status is
+        # derived from the open reports (MAX('status') compared strings, so
+        # one resolved report made the whole question look "resolved").
         rows = (
             queryset
             .values('question_id', 'question__question_text', 'question__subject__name')
             .annotate(
                 feedback_id=Max('id'),
-                status=Max('status'),
-                reports=Count('id'),
-                unresolved_reports=Count('id', filter=Q(is_resolved=False)),
+                reports=Count('id', distinct=True),
+                unresolved_reports=Count('id', filter=Q(is_resolved=False), distinct=True),
+                in_progress_reports=Count('id', filter=Q(is_resolved=False, status='in_progress'), distinct=True),
                 latest_created_at=Max('created_at'),
                 attempts=Count('question__questionresponse', distinct=True),
                 correct=Count('question__questionresponse', filter=Q(question__questionresponse__is_correct=True), distinct=True),
             )
+            .annotate(queue_status=Case(
+                When(unresolved_reports=0, then=Value('resolved')),
+                When(in_progress_reports__gt=0, then=Value('in_progress')),
+                default=Value('new'),
+            ))
             .annotate(accuracy=(F('correct') * 100.0) / (F('attempts') + 0.0001))
             .annotate(impact_score=F('reports') * 3 + F('attempts') * 0.2 + (100.0 - F('accuracy')))
         )
@@ -2637,29 +2958,147 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
         else:
             rows = rows.order_by('-reports', '-latest_created_at')
 
-        return Response({'count': len(rows[:200]), 'results': list(rows[:200])})
+        results = []
+        for row in rows[:200]:
+            row = dict(row)
+            # ``status`` cannot be the annotation name (it clashes with the
+            # model field); keep the key the admin UI reads.
+            row['status'] = row.pop('queue_status')
+            row.pop('in_progress_reports', None)
+            results.append(row)
+        return Response({'count': len(results), 'results': results})
+
+    _REWARD_NOTE_PREFIX = 'Reward for accepted feedback #'
+
+    @classmethod
+    def _rewarded_feedback_q(cls, feedback_ids):
+        q = Q()
+        for fid in feedback_ids:
+            q |= Q(note__startswith=f'{cls._REWARD_NOTE_PREFIX}{fid}:')
+        return q
+
+    def _reward_already_paid(self, feedback) -> bool:
+        """True when this reporter was already rewarded for a report on the
+        same question (the reward transaction is the durable marker)."""
+        from accounts.models import TokenTransaction
+        if not feedback.user_id:
+            return False
+        sibling_ids = list(
+            QuestionFeedback.objects.filter(user_id=feedback.user_id, question_id=feedback.question_id)
+            .values_list('id', flat=True)[:100]
+        ) or [feedback.id]
+        return TokenTransaction.objects.filter(
+            self._rewarded_feedback_q(sibling_ids),
+            user_id=feedback.user_id, transaction_type='feedback_reward',
+        ).exists()
+
+    def _pay_feedback_reward(self, feedback) -> int:
+        """Pay the "+N tokens for accepted feedback" reward at most once per
+        reporter per question -- idempotent across both resolve paths,
+        re-resolves after a status toggle and double clicks (callers hold
+        row locks on the reports)."""
+        if not feedback.user_id or self._reward_already_paid(feedback):
+            return 0
+        from accounts.models import TokenBalance, TokenConfig, TokenTransaction
+        reward = TokenConfig.get_config().feedback_reward
+        balance, _ = TokenBalance.objects.get_or_create(user_id=feedback.user_id)
+        balance.add_feedback_credit(reward)
+        TokenTransaction.objects.create(
+            user_id=feedback.user_id,
+            transaction_type='feedback_reward',
+            amount=reward,
+            note=f'{self._REWARD_NOTE_PREFIX}{feedback.id}: {feedback.get_category_display()}',
+        )
+        return reward
+
+    def _resolve_question_reports(self, feedback, admin, note: str = '', notify: bool = False) -> dict:
+        """Resolve ``feedback`` and every other open report on the same
+        question, paying each reporter once (and e-mailing them when
+        ``notify``). Returns {report_id: tokens}."""
+        now = timezone.now()
+        paid = {}
+        with transaction.atomic():
+            # of=('self',): PostgreSQL rejects FOR UPDATE on the nullable
+            # side of the outer join select_related('user') adds.
+            reports = list(
+                QuestionFeedback.objects.select_for_update(of=('self',))
+                .filter(Q(pk=feedback.pk) | Q(question_id=feedback.question_id, is_resolved=False))
+                .select_related('user')
+                .order_by('id')
+            )
+            for report in reports:
+                if not report.is_resolved or report.status != 'resolved':
+                    report.status = 'resolved'
+                    report.is_resolved = True
+                    report.resolved_by = admin
+                    report.resolved_at = now
+                    if note:
+                        report.resolution_note = note
+                    report.save(update_fields=['status', 'is_resolved', 'resolved_by', 'resolved_at', 'resolution_note'])
+                tokens = self._pay_feedback_reward(report)
+                if tokens:
+                    paid[report.id] = tokens
+                if notify and not report.notified_user and self._notify_reporter(report, tokens):
+                    report.notified_user = True
+                    report.save(update_fields=['notified_user'])
+        return paid
+
+    @staticmethod
+    def _notify_reporter(report, tokens: int = 0) -> bool:
+        """E-mail the reporter that their report was resolved (sent after
+        commit, off the request thread). Returns False when there is nobody
+        to notify -- ``notified_user`` used to be set although only a log
+        line was written."""
+        email = (getattr(report.user, 'email', '') or '').strip() if report.user_id else ''
+        if not email:
+            return False
+        from django.core.mail import send_mail
+        import threading
+        lines = [
+            f'Thanks for reporting an issue with question #{report.question_id}.',
+            'Our team has reviewed and resolved it.',
+        ]
+        if report.resolution_note:
+            lines.append(f'Note from the reviewer: {report.resolution_note}')
+        if tokens:
+            lines.append(f'{tokens} bonus AI tokens have been added to your account.')
+        message = '\n\n'.join(lines)
+        subject = f'Your report on question #{report.question_id} was resolved'
+
+        def _send():
+            try:
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
+            except Exception:  # pragma: no cover - mail backend hiccup
+                logger.warning('Feedback notification e-mail failed (feedback_id=%s)', report.id)
+
+        transaction.on_commit(lambda: threading.Thread(target=_send, daemon=True).start())
+        return True
 
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
         feedback = self.get_object()
         new_status = (request.data.get('status') or '').strip().lower()
-        note = request.data.get('resolution_note', '')
-        notify_user = bool(request.data.get('notify_user', False))
+        note = request.data.get('resolution_note', '') or ''
 
         if new_status not in ['new', 'in_progress', 'resolved']:
             return Response({'error': "status must be one of: new, in_progress, resolved"}, status=status.HTTP_400_BAD_REQUEST)
 
-        feedback.status = new_status
-        feedback.is_resolved = new_status == 'resolved'
-        feedback.resolution_note = note or feedback.resolution_note
-        if feedback.is_resolved:
-            feedback.resolved_by = request.user
-            feedback.resolved_at = timezone.now()
-        feedback.notified_user = notify_user
-        feedback.save(update_fields=['status', 'is_resolved', 'resolution_note', 'resolved_by', 'resolved_at', 'notified_user'])
+        raw_notify = request.data.get('notify_user', False)
+        notify_user = raw_notify if isinstance(raw_notify, bool) else (
+            str(raw_notify).strip().lower() in ('1', 'true', 'yes', 'on')
+        )
 
-        if notify_user and feedback.user:
-            logger.info('Feedback resolution notice queued for user_id=%s feedback_id=%s', feedback.user_id, feedback.id)
+        if new_status == 'resolved':
+            # The queue acts per question: resolve all of its open reports,
+            # pay the advertised reward (this path never paid before) and
+            # notify the reporters when asked.
+            self._resolve_question_reports(feedback, request.user, note=note, notify=notify_user)
+            feedback.refresh_from_db()
+        else:
+            feedback.status = new_status
+            feedback.is_resolved = False
+            feedback.resolution_note = note or feedback.resolution_note
+            feedback.save(update_fields=['status', 'is_resolved', 'resolution_note'])
 
         return Response(QuestionFeedbackSerializer(feedback, context={'request': request}).data)
 
@@ -2670,35 +3109,35 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
         If the feedback was from a registered user, reward them with token credits.
         """
         feedback = self.get_object()
-        if feedback.is_resolved:
+        # A report resolved through the queue before rewards were paid there
+        # can still be resolved here once to pay its reporter.
+        if feedback.is_resolved and (not feedback.user_id or self._reward_already_paid(feedback)):
             return Response({'message': 'Already resolved'}, status=400)
 
-        feedback.status = 'resolved'
-        feedback.is_resolved = True
-        feedback.resolved_by = request.user
-        feedback.resolved_at = timezone.now()
-        feedback.save(update_fields=['status', 'is_resolved', 'resolved_by', 'resolved_at'])
-
-        # Reward the reporter with token credits
-        if feedback.user:
-            from accounts.models import TokenBalance, TokenConfig, TokenTransaction
-            balance, _ = TokenBalance.objects.get_or_create(user=feedback.user)
-            config = TokenConfig.get_config()
-            reward = config.feedback_reward
-            balance.add_feedback_credit(reward)
-            TokenTransaction.objects.create(
-                user=feedback.user,
-                transaction_type='feedback_reward',
-                amount=reward,
-                note=f'Reward for accepted feedback #{feedback.id}: {feedback.get_category_display()}',
-            )
+        paid = self._resolve_question_reports(feedback, request.user)
+        own = paid.get(feedback.id, 0)
+        if feedback.user_id and own:
             return Response({
-                'message': f'Feedback resolved. User {feedback.user.username} rewarded {reward} tokens.',
+                'message': f'Feedback resolved. User {feedback.user.username} rewarded {own} tokens.',
                 'rewarded_user': feedback.user.username,
-                'tokens_rewarded': reward,
+                'tokens_rewarded': own,
             })
-
+        if feedback.user_id:
+            return Response({'message': 'Feedback resolved (reporter was already rewarded for this question).'})
         return Response({'message': 'Feedback resolved (no user to reward).'})
+
+
+def _discussion_queryset(user):
+    """Discussions with reply counts and the viewer's own vote preloaded
+    (the serializer used to run two queries per thread)."""
+    from django.db.models import Prefetch
+    return (
+        Discussion.objects.select_related('user', 'question')
+        .annotate(reply_count_annotated=Count('replies', distinct=True))
+        .prefetch_related(Prefetch(
+            'votes', queryset=DiscussionVote.objects.filter(user=user), to_attr='viewer_votes',
+        ))
+    )
 
 
 class DiscussionListCreateView(generics.ListCreateAPIView):
@@ -2708,9 +3147,12 @@ class DiscussionListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         question_id = self.request.query_params.get('question')
-        qs = Discussion.objects.select_related('user', 'question').filter(parent__isnull=True)
+        qs = _discussion_queryset(self.request.user).filter(parent__isnull=True)
         if question_id:
-            qs = qs.filter(question_id=question_id)
+            try:
+                qs = qs.filter(question_id=int(question_id))
+            except (TypeError, ValueError):
+                return qs.none()
         return qs
 
     def perform_create(self, serializer):
@@ -2723,7 +3165,39 @@ class DiscussionRepliesView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Discussion.objects.filter(parent_id=self.kwargs['pk']).select_related('user')
+        return _discussion_queryset(self.request.user).filter(parent_id=self.kwargs['pk'])
+
+
+class DiscussionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """``GET/PATCH/DELETE /api/questions/discussions/<pk>/``.
+
+    Authors may edit the text of (PATCH) or delete their own posts; admins /
+    staff may delete any post (moderation). Before this there was no way to
+    remove an abusive or wrong post without shell access.
+    """
+    serializer_class = DiscussionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'patch', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        return _discussion_queryset(self.request.user)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+        if serializer.instance.user_id != self.request.user.id:
+            raise PermissionDenied('You can only edit your own posts.')
+        # Only the text is editable; a post cannot be moved to another
+        # question or thread.
+        for key in list(serializer.validated_data):
+            if key != 'text':
+                serializer.validated_data.pop(key)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        if instance.user_id != self.request.user.id and not _is_staff_user(self.request.user):
+            raise PermissionDenied('You can only delete your own posts.')
+        instance.delete()
 
 
 class DiscussionVoteView(generics.GenericAPIView):
@@ -2924,42 +3398,89 @@ class ChatAssistantView(APIView):
     Handles unstructured queries from the Floating Ask-AI Dock.
     Passes contextual question text if provided.
     Uses the real AIService.ask_tutor() with RAG grounding.
+
+    Same metering as the AI Tutor (``ai_engine.views.AskTutorView``): the
+    'ai_tutor' scoped throttle, the free-tier daily cap and the token
+    economy, with a refund when every provider failed. A context question
+    is only injected when it is active and the user is entitled to its
+    answer.
     """
     permission_classes = [permissions.IsAuthenticated]
+    # Mirrors ai_engine.views.AITutorThrottleMixin (that module imports the
+    # whole AI provider stack, which questions.views only loads lazily).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'ai_tutor'
+
+    UNAVAILABLE_REPLY = "AI service temporarily unavailable. Your token has been refunded. Please try again."
+
+    def _context_for(self, request, raw_question_id) -> str:
+        if raw_question_id in (None, ''):
+            return ''
+        try:
+            question_id = int(raw_question_id)
+        except (TypeError, ValueError):
+            return ''
+        question = Question.objects.filter(id=question_id, is_active=True).first()
+        if question is None:
+            return ''
+        if not user_can_view_answer(request.user, question):
+            # Locked question: never hand its stem + answer key to the
+            # model (the reply would reveal the answer).
+            return ''
+        context_str = f"Context Question: {question.question_text}\n"
+        context_str += f"A: {question.option_a}, B: {question.option_b}, C: {question.option_c}, D: {question.option_d}\n"
+        context_str += f"Correct Answer: {question.correct_answer}\n\n"
+        return context_str
 
     def post(self, request, *args, **kwargs):
-        message = request.data.get('message', '').strip()
+        raw_message = request.data.get('message', '')
+        message = raw_message.strip() if isinstance(raw_message, str) else ''
         context_question_id = request.data.get('context_question_id')
 
         if not message:
             return Response({"error": "Message is required."}, status=400)
 
-        # Token check — admins bypass
-        from ai_engine.views import consume_ai_token, refund_ai_token
-        ok, err = consume_ai_token(request)
-        if not ok:
-            return err
+        from ai_engine import views as ai_views
 
-        # Build context if a question ID is provided
-        context_str = ""
-        if context_question_id:
-            try:
-                question = Question.objects.get(id=context_question_id)
-                context_str = f"Context Question: {question.question_text}\n"
-                context_str += f"A: {question.option_a}, B: {question.option_b}, C: {question.option_c}, D: {question.option_d}\n"
-                context_str += f"Correct Answer: {question.correct_answer}\n\n"
-            except Question.DoesNotExist:
-                pass
+        # Free-tier daily AI Tutor cap (premium / admin bypass) + 1 token,
+        # exactly like AskTutorView. Newer ai_engine builds bundle both in
+        # ``_charge_ai_call`` / ``_refund_ai_call`` (which also give the
+        # free daily slot back on failure).
+        charge = getattr(ai_views, '_charge_ai_call', None)
+        if charge is not None:
+            charge_err = charge(request, amount=1, freemium=True)
+            if charge_err is not None:
+                return charge_err
+
+            def refund():
+                ai_views._refund_ai_call(request, amount=1)
+        else:  # pragma: no cover - older ai_engine.views
+            freemium_err = ai_views._check_freemium_ai_quota(request)
+            if freemium_err is not None:
+                return freemium_err
+            ok, err = ai_views.consume_ai_token(request)
+            if not ok:
+                return err
+
+            def refund():
+                ai_views.refund_ai_token(request)
+
+        context_str = self._context_for(request, context_question_id)
 
         try:
             from ai_engine.services import AIService
             service = AIService()
             reply = service.ask_tutor(message, context_str)
-            return Response({"reply": reply})
         except Exception as e:
             logger.error(f"ChatAssistant AI failed: {e}")
-            refund_ai_token(request)
-            return Response({"reply": "AI service temporarily unavailable. Your token has been refunded. Please try again."})
+            refund()
+            return Response({"reply": self.UNAVAILABLE_REPLY})
+        # Older provider rotations return a failure sentence instead of
+        # raising; treat it like an exception so the token is refunded.
+        if not _usable_ai_text(reply):
+            refund()
+            return Response({"reply": self.UNAVAILABLE_REPLY})
+        return Response({"reply": reply})
 
 
 _SUPABASE_PUBLIC_URL_RE = re.compile(r'^https://[^/]+\.supabase\.co/storage/v1/object/public/(.+)$')
@@ -3312,8 +3833,10 @@ class MistakeNotebookStudentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Question has no ``sub_topic`` field -- selecting it raised
+        # FieldError (HTTP 500) on every request to this route.
         qs = MistakeNotebook.objects.filter(user=request.user).select_related(
-            'question__subject', 'question__topic', 'question__sub_topic'
+            'question__subject', 'question__topic'
         )
         # Filters
         review_status = request.query_params.get('review_status')
@@ -3353,9 +3876,12 @@ class MistakeNotebookStudentView(APIView):
         if not question_id:
             return Response({'error': 'question is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            question = Question.objects.get(pk=question_id)
-        except Question.DoesNotExist:
+            question = Question.objects.get(pk=int(question_id), is_active=True)
+        except (Question.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'Question not found'}, status=404)
+        # The entry (and this response) carries the answer + explanation.
+        if not user_can_view_answer(request.user, question):
+            return _upgrade_required_response()
 
         obj, created = MistakeNotebook.objects.get_or_create(
             user=request.user,
@@ -3438,7 +3964,7 @@ class MistakeNotebookDueView(APIView):
             user=request.user,
             next_review_at__lte=now,
         ).exclude(review_status='mastered').select_related(
-            'question__subject', 'question__topic', 'question__sub_topic'
+            'question__subject', 'question__topic'
         ).order_by('next_review_at')
         serializer = MistakeNotebookSerializer(due, many=True)
         return Response({
@@ -3563,7 +4089,9 @@ class QuestStreakFreezeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        freeze = bool(request.data.get('streak_frozen', True))
+        raw = request.data.get('streak_frozen', True)
+        # bool('false') is True -- the string 'false' used to freeze.
+        freeze = raw if isinstance(raw, bool) else str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
         streak, _ = QuestStreak.objects.get_or_create(user=request.user)
         streak.streak_frozen = freeze
         streak.save(update_fields=['streak_frozen'])
@@ -3628,13 +4156,9 @@ class StudyTimeView(APIView):
 
 def _usable_ai_text(raw) -> str:
     """Return AI output, or '' when every provider failed (the rotation
-    returns a human-readable failure sentence that must never be saved)."""
-    from ai_engine.services import AIService
-    text = (raw or '').strip()
-    if (not text or AIService._looks_like_provider_error_response(text)
-            or text.lower().startswith('all ai services are temporarily unavailable')):
-        return ''
-    return text
+    returns a human-readable failure sentence that must never be saved).
+    Single implementation: ``ai_per_question.usable_ai_text``."""
+    return _ai_per_question.usable_ai_text(raw)
 
 
 def _refresh_topic_note_derived_fields(note) -> None:
@@ -3650,39 +4174,80 @@ class TopicNoteCreateView(APIView):
     """Create (or update by subject/topic/exam/title) an admin topic note."""
     permission_classes = [IsControlTowerAdmin]
 
+    @staticmethod
+    def _existing_note(data):
+        """The note this request refers to, keyed like the DB constraint
+        ``uniq_topic_note`` (topic, exam_type, is_combined)."""
+        topic_id = data.get('topic')
+        if topic_id in (None, ''):
+            return None
+        try:
+            topic_id = int(topic_id)
+        except (TypeError, ValueError):
+            return None
+        raw_combined = data.get('is_combined', False)
+        is_combined = raw_combined if isinstance(raw_combined, bool) else (
+            str(raw_combined).strip().lower() in ('1', 'true', 'yes', 'on')
+        )
+        return TopicNote.objects.filter(
+            topic_id=topic_id,
+            exam_type=data.get('exam_type') or 'cms',
+            is_combined=is_combined,
+        ).first()
+
     def post(self, request):
-        serializer = TopicNoteSerializer(data=request.data)
+        # Update in place when a note already exists for this topic: DRF
+        # turns ``uniq_topic_note`` into a UniqueTogetherValidator, so
+        # validating as a *create* returned 400 before the update branch
+        # could ever run.
+        existing = self._existing_note(request.data)
+        if existing is not None:
+            serializer = TopicNoteSerializer(existing, data=request.data, partial=True)
+        else:
+            serializer = TopicNoteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        exam_type = serializer.validated_data.get('exam_type', 'cms')
-        subject = serializer.validated_data.get('subject')
-        topic = serializer.validated_data.get('topic')
-        title = serializer.validated_data['title']
+        subject = serializer.validated_data.get('subject', getattr(existing, 'subject', None))
+        topic = serializer.validated_data.get('topic', getattr(existing, 'topic', None))
         if not subject or not topic:
             return Response({'error': 'subject and topic are required'}, status=400)
 
-        note, created = TopicNote.objects.get_or_create(
-            exam_type=exam_type,
-            subject=subject,
-            topic=topic,
-            title=title,
-            defaults={
-                'content': serializer.validated_data.get('content', ''),
-                'is_combined': serializer.validated_data.get('is_combined', False),
-                'is_published': serializer.validated_data.get('is_published', False),
-                'source_question_ids': serializer.validated_data.get('source_question_ids', []),
-                'created_by': request.user,
-            },
-        )
-        if not created:
-            note.content = serializer.validated_data.get('content', note.content)
-            note.is_published = serializer.validated_data.get('is_published', note.is_published)
-            if 'source_question_ids' in serializer.validated_data:
-                note.source_question_ids = serializer.validated_data['source_question_ids']
-            note.save()
+        if existing is not None:
+            note = serializer.save()
+            created = False
+        else:
+            note = serializer.save(created_by=request.user)
+            created = True
         _refresh_topic_note_derived_fields(note)
 
         out = TopicNoteSerializer(note)
         return Response(out.data, status=status.HTTP_201_CREATED if created else 200)
+
+
+class PublishedTopicNoteListView(generics.ListAPIView):
+    """Read-only list of published topic notes for students
+    (``GET /api/questions/topic-notes/published/?subject=&topic=&exam_type=``).
+
+    The admin CRUD is admin-only, so the student "Topic Notes" page had no
+    way to read notes even when they were marked ``is_published``.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TopicNoteSerializer
+
+    def get_queryset(self):
+        qs = TopicNote.objects.filter(is_published=True, is_active=True).select_related(
+            'subject', 'topic', 'created_by',
+        ).order_by('-updated_at')
+        params = self.request.query_params
+        for param, lookup in (('subject', 'subject_id'), ('topic', 'topic_id')):
+            value = params.get(param)
+            if value not in (None, ''):
+                try:
+                    qs = qs.filter(**{lookup: int(value)})
+                except (TypeError, ValueError):
+                    return qs.none()
+        if params.get('exam_type'):
+            qs = qs.filter(exam_type=params['exam_type'])
+        return qs
 
 
 class AITopicNoteGenerationView(APIView):
@@ -3708,13 +4273,28 @@ class AITopicNoteGenerationView(APIView):
             title = request.data.get('title', '')
             if not all([subject_id, topic_id]):
                 return Response({'error': 'subject and topic are required'}, status=400)
-            note, _ = TopicNote.objects.get_or_create(
-                exam_type=exam_type,
-                subject_id=subject_id,
-                topic_id=topic_id,
-                title=title,
-                defaults={'content': '', 'content_preview': '', 'created_by': request.user},
-            )
+            try:
+                subject_id, topic_id = int(subject_id), int(topic_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'subject and topic must be integers'}, status=400)
+            if not Topic.objects.filter(pk=topic_id, subject_id=subject_id).exists():
+                return Response({'error': 'topic not found for this subject'}, status=404)
+            # One note per (topic, exam_type, is_combined) -- reuse it
+            # whatever its title (get_or_create keyed on the title raised
+            # IntegrityError -> 500 when the note existed under another one).
+            note = TopicNote.objects.filter(
+                topic_id=topic_id, exam_type=exam_type, is_combined=False,
+            ).select_related('subject', 'topic').first()
+            if note is None:
+                note = TopicNote.objects.create(
+                    exam_type=exam_type,
+                    subject_id=subject_id,
+                    topic_id=topic_id,
+                    title=title or str(Topic.objects.get(pk=topic_id).name),
+                    content='',
+                    content_preview='',
+                    created_by=request.user,
+                )
 
         if not note.subject or not note.topic:
             return Response({'error': 'This note has no subject/topic to generate from.'}, status=400)

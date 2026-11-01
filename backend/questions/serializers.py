@@ -29,6 +29,69 @@ _TEXT_FIELDS = (
 )
 
 
+# List-payload fields that point at the generated explanation video. Hidden
+# from viewers who are not entitled to the row's answer.
+_LIST_ANSWER_MEDIA_FIELDS = ('video_url', 'video_thumbnail', 'video_subtitles_url')
+_LIST_ANSWER_MEDIA_RESET_FIELDS = _LIST_ANSWER_MEDIA_FIELDS + ('video_status', 'video_duration')
+
+
+def _instance_role_cache(serializer) -> dict:
+    """Per-serializer-instance memo for ``resolve_runtime_image_role``.
+
+    With ``many=True`` the child serializer is shared by every row of one
+    response, so this memoises per response -- never across requests.
+    """
+    cache = serializer.__dict__.get('_runtime_role_memo')
+    if cache is None:
+        cache = {}
+        serializer.__dict__['_runtime_role_memo'] = cache
+    return cache
+
+
+def resolve_runtime_image_role(obj, img, memo=None) -> str:
+    """Reclassify ``img.role`` from which text fields reference ``[[img:N]]``:
+    a token in the stem keeps the stored role, a token only in the
+    explanation / concept explanation / mnemonic means 'explanation'."""
+    per_q = memo.setdefault(obj.id, {}) if memo is not None else {}
+    if img.id in per_q:
+        return per_q[img.id]
+    stem = (obj.question_text or "")
+    expl = (
+        (obj.explanation or "")
+        + (obj.concept_explanation or "")
+        + (obj.mnemonic or "")
+    )
+    token = f"[[img:{img.id}]]"
+    if token in stem:
+        role = img.role  # legitimate stem image; keep stored role
+    elif token in expl:
+        role = "explanation"
+    else:
+        role = img.role
+    per_q[img.id] = role
+    return role
+
+
+def effective_explanation_for(obj):
+    """The explanation a student should see (admin lock / override, parsed
+    AI explanation, then the curated explanation).
+
+    A stored provider-failure sentence ("All AI services are temporarily
+    unavailable...", persisted by older regenerate / backfill runs) is
+    never served as the explanation.
+    """
+    if obj.lock_explanation:
+        return obj.admin_explanation_override or obj.explanation
+    if obj.admin_explanation_override:
+        return obj.admin_explanation_override
+    from .ai_per_question import usable_ai_text
+    ai_exp = usable_ai_text(obj.ai_explanation)
+    parsed = _parse_ai_explanation_to_markdown(ai_exp)
+    if parsed and usable_ai_text(parsed):
+        return parsed
+    return ai_exp or obj.explanation
+
+
 def _clean_text(value):
     """Repair mojibake + normalize NFC + collapse whitespace at the API boundary.
 
@@ -203,10 +266,6 @@ class QuestionListSerializer(serializers.ModelSerializer):
     duplicate_count = serializers.SerializerMethodField()
     duplicate_cluster_id = serializers.SerializerMethodField()
 
-    # Cache key for the runtime role-resolution pass below. Keyed on the
-    # question id so each request only does the per-row heuristic once.
-    _runtime_role_cache: dict = {}
-
     def _resolve_runtime_role(self, obj, img) -> str:
         """Reclassify `img.role` based on which text fields reference its id.
 
@@ -220,27 +279,12 @@ class QuestionListSerializer(serializers.ModelSerializer):
             `mnemonic` references it, the row is explanation-attached.
           * Otherwise, leave the stored role alone.
 
-        Cached per `obj.id` so a list-endpoint response of N rows only
-        does the text-token scan once per question.
+        Memoised per serializer instance (i.e. per response) so a list of N
+        rows only does the text-token scan once per question. It used to be
+        a class-level dict that lived for the whole process, so role edits
+        and new ``[[img:N]]`` tokens were ignored until a restart.
         """
-        per_q = self._runtime_role_cache.setdefault(obj.id, {})
-        if img.id in per_q:
-            return per_q[img.id]
-        stem = (obj.question_text or "")
-        expl = (
-            (obj.explanation or "")
-            + (obj.concept_explanation or "")
-            + (obj.mnemonic or "")
-        )
-        token = f"[[img:{img.id}]]"
-        if token in stem:
-            role = img.role  # legitimate stem image; keep stored role
-        elif token in expl:
-            role = "explanation"
-        else:
-            role = img.role
-        per_q[img.id] = role
-        return role
+        return resolve_runtime_image_role(obj, img, _instance_role_cache(self))
 
     def to_representation(self, instance):
         """Repair mojibake on every text field at the API boundary AND
@@ -267,7 +311,49 @@ class QuestionListSerializer(serializers.ModelSerializer):
                 data[field] = _clean_text(data[field])
         if data.get('subject_name') == 'Imported':
             data['subject_name'] = 'Expert Curated'
+        has_media = any(data.get(field) for field in _LIST_ANSWER_MEDIA_FIELDS)
+        if has_media and not self._row_answer_visible(instance):
+            # A generated explanation video explains the answer: same
+            # entitlement as the answer itself (premium / admin / showcase).
+            for field in _LIST_ANSWER_MEDIA_RESET_FIELDS:
+                if field in data:
+                    data[field] = None
         return data
+
+    def _viewer_full_access(self) -> bool:
+        """Premium / admin / staff viewer -- computed once per response."""
+        context = self.context if hasattr(self, 'context') else {}
+        cached = context.get('viewer_full_access')
+        if cached is not None:
+            return bool(cached)
+        request = context.get('request')
+        user = getattr(request, 'user', None)
+        value = False
+        if user is not None and getattr(user, 'is_authenticated', False):
+            if self._is_admin():
+                value = True
+            else:
+                try:
+                    from accounts.utils import is_premium
+                    value = bool(is_premium(user))
+                except Exception:  # pragma: no cover - defensive
+                    value = False
+        try:
+            context['viewer_full_access'] = value
+        except TypeError:  # pragma: no cover - immutable context
+            pass
+        return value
+
+    def _row_answer_visible(self, obj) -> bool:
+        if self._viewer_full_access():
+            return True
+        showcase = getattr(obj, 'is_showcase', None)
+        if showcase is None:
+            # Not annotated (e.g. recall search / bookmarks): one lookup,
+            # only for rows that carry a video and a free / anonymous viewer.
+            from accounts.models_freemium import FreeShowcaseQuestion
+            showcase = bool(obj.pk) and FreeShowcaseQuestion.objects.filter(question_id=obj.pk).exists()
+        return bool(showcase)
 
     class Meta:
         model = Question
@@ -327,7 +413,8 @@ class QuestionListSerializer(serializers.ModelSerializer):
             return obj.admin_answer_override or obj.get_correct_option_text()
         if obj.admin_answer_override:
             return obj.admin_answer_override
-        return obj.ai_answer or obj.get_correct_option_text()
+        from .ai_per_question import usable_ai_text
+        return usable_ai_text(obj.ai_answer) or obj.get_correct_option_text()
 
     def get_effective_explanation(self, obj):
         # Same leak as effective_answer — the full explanation text was
@@ -335,15 +422,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
         # assessment for any student willing to open DevTools.
         if not self._is_admin():
             return None
-        if obj.lock_explanation:
-            return obj.admin_explanation_override or obj.explanation
-        if obj.admin_explanation_override:
-            return obj.admin_explanation_override
-        ai_exp = obj.ai_explanation
-        parsed = _parse_ai_explanation_to_markdown(ai_exp)
-        if parsed:
-            return parsed
-        return ai_exp or obj.explanation
+        return effective_explanation_for(obj)
 
     def get_revision_count(self, obj):
         return getattr(obj, 'revision_count', 0) or 0
@@ -358,8 +437,15 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return list(related_ids)
 
     def get_accuracy(self, obj):
+        # Only annotated for admins / accuracy filters (see
+        # QuestionViewSet.get_queryset); the missing return made the admin
+        # "Acc: X%" badge never render.
         value = getattr(obj, 'accuracy', None)
         if value is None:
+            return None
+        try:
+            return round(float(value), 1)
+        except (TypeError, ValueError):
             return None
 
     def get_video_subtitles_url(self, obj):
@@ -425,13 +511,23 @@ class QuestionListSerializer(serializers.ModelSerializer):
         modal derives the sibling list separately. Returns 0 when the row
         is not part of any cluster (the common case for unique questions).
 
-        Reads from a prefetched `_cluster_member_count` annotation when the
-        queryset was annotated (admin list view does this for O(1) reads),
-        otherwise falls back to a single query.
+        Reads the ``cluster_size`` annotation on the prefetched
+        ``cluster_memberships`` (QuestionViewSet / bookmarks / similar
+        prefetch it) so clustered rows cost no extra query; otherwise falls
+        back to a single query.
         """
         cached = getattr(obj, '_cluster_member_count', None)
         if cached is not None:
             return max(0, int(cached))
+        prefetched = (getattr(obj, '_prefetched_objects_cache', None) or {}).get('cluster_memberships')
+        if prefetched is not None:
+            members = list(prefetched)
+            if not members:
+                return 0
+            newest = max(members, key=lambda m: (m.cluster_id, m.similarity_score or 0))
+            size = getattr(newest, 'cluster_size', None)
+            if size is not None:
+                return max(0, int(size))
         from .models import DuplicateMember
         cluster_id = getattr(obj, '_cluster_id', None)
         if cluster_id is None:
@@ -532,27 +628,9 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     # the question stem before any attempt.
     stem_images = serializers.SerializerMethodField()
 
-    _runtime_role_cache: dict = {}
-
     def _resolve_runtime_role(self, obj, img) -> str:
-        per_q = self._runtime_role_cache.setdefault(obj.id, {})
-        if img.id in per_q:
-            return per_q[img.id]
-        stem = (obj.question_text or "")
-        expl = (
-            (obj.explanation or "")
-            + (obj.concept_explanation or "")
-            + (obj.mnemonic or "")
-        )
-        token = f"[[img:{img.id}]]"
-        if token in stem:
-            role = img.role
-        elif token in expl:
-            role = "explanation"
-        else:
-            role = img.role
-        per_q[img.id] = role
-        return role
+        # Per-response memo (was a process-wide class attribute).
+        return resolve_runtime_image_role(obj, img, _instance_role_cache(self))
 
     def to_representation(self, instance):
         """Repair mojibake on every text field at the API boundary AND
@@ -699,7 +777,17 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         return _derive_subtitles_url(getattr(obj, 'video_url', '') or '')
 
     def get_similar(self, obj):
-        similar_qs = obj.similar_questions.filter(is_active=True)[:5]
+        from django.db.models import Count, Prefetch
+        from .models import DuplicateMember
+        similar_qs = (
+            obj.similar_questions.filter(is_active=True)
+            .select_related('subject', 'topic', 'verified_by')
+            .prefetch_related(
+                'images',
+                Prefetch('cluster_memberships',
+                         queryset=DuplicateMember.objects.annotate(cluster_size=Count('cluster__members'))),
+            )[:5]
+        )
         return QuestionListSerializer(similar_qs, many=True, context=self.context).data
 
     def get_is_bookmarked(self, obj):
@@ -713,18 +801,11 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             return obj.admin_answer_override or obj.get_correct_option_text()
         if obj.admin_answer_override:
             return obj.admin_answer_override
-        return obj.ai_answer or obj.get_correct_option_text()
+        from .ai_per_question import usable_ai_text
+        return usable_ai_text(obj.ai_answer) or obj.get_correct_option_text()
 
     def get_effective_explanation(self, obj):
-        if obj.lock_explanation:
-            return obj.admin_explanation_override or obj.explanation
-        if obj.admin_explanation_override:
-            return obj.admin_explanation_override
-        ai_exp = obj.ai_explanation
-        parsed = _parse_ai_explanation_to_markdown(ai_exp)
-        if parsed:
-            return parsed
-        return ai_exp or obj.explanation
+        return effective_explanation_for(obj)
 
     def get_effective_mnemonic(self, obj):
         if obj.admin_mnemonic_override:
@@ -774,7 +855,11 @@ class QuestionFeedbackSerializer(serializers.ModelSerializer):
             'id', 'question', 'question_text', 'user', 'username', 'category', 'comment',
             'status', 'is_resolved', 'resolution_note', 'resolved_by', 'resolved_at', 'notified_user', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at', 'user', 'resolved_by', 'resolved_at', 'notified_user', 'is_resolved']
+        # Moderation fields are set only by the admin status / resolve
+        # actions -- reporters (including anonymous ones) could create a
+        # report that was already "resolved" with their own note.
+        read_only_fields = ['id', 'created_at', 'user', 'status', 'resolution_note', 'resolved_by',
+                            'resolved_at', 'notified_user', 'is_resolved']
 
 
 class DiscussionSerializer(serializers.ModelSerializer):
@@ -790,10 +875,26 @@ class DiscussionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'username', 'upvotes', 'downvotes',
                             'is_pinned', 'created_at', 'updated_at']
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        parent = attrs.get('parent', getattr(self.instance, 'parent', None))
+        question = attrs.get('question', getattr(self.instance, 'question', None))
+        if parent is not None and question is not None and parent.question_id != question.id:
+            raise serializers.ValidationError({'parent': 'A reply must belong to the same question as its parent.'})
+        return attrs
+
     def get_reply_count(self, obj):
+        # Annotated by the discussion list views (one query per page
+        # instead of one per thread).
+        annotated = getattr(obj, 'reply_count_annotated', None)
+        if annotated is not None:
+            return annotated
         return obj.replies.count()
 
     def get_user_vote(self, obj):
+        viewer_votes = getattr(obj, 'viewer_votes', None)
+        if viewer_votes is not None:
+            return viewer_votes[0].vote_type if viewer_votes else None
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             vote = obj.votes.filter(user=request.user).first()
@@ -974,7 +1075,11 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
                   'selected_answer', 'correct_answer', 'is_correct', 'review_status',
                   'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
                   'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        # Review bookkeeping is server-side (the review endpoint) -- a PATCH
+        # could set ``last_reviewed_at`` and complete the "Review 5 mistakes"
+        # quest, or re-point the entry at another question.
+        read_only_fields = ['id', 'user', 'question', 'selected_answer', 'correct_answer', 'is_correct',
+                            'review_count', 'last_reviewed_at', 'next_review_at', 'created_at']
 
 
 class MistakeNotebookCreateSerializer(serializers.ModelSerializer):

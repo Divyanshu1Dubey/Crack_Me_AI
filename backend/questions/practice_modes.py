@@ -31,41 +31,97 @@ def _qs_for_user(user):
     return Question.objects.filter(is_active=True)
 
 
+# The three per-user modes below used to 500 on every call: they imported a
+# non-existent ``analytics.models.TestAttempt`` and filtered on relations
+# Question does not have (``attempts``, ``bookmarks__is_active``). Answers
+# live in ``QuestionAttempt`` (related_name ``qbank_attempts``, one row per
+# user+question = the latest answer) and in tests_engine ``QuestionResponse``.
+
+
+def _wrong_ids_for_user(user, count: int) -> list[int]:
+    """Active questions the user answered wrong (question bank / practice
+    or a test), most recent first."""
+    from questions.models import QuestionAttempt
+    from tests_engine.models import QuestionResponse
+
+    ordered: list[int] = []
+    seen: set[int] = set()
+    qbank = (
+        QuestionAttempt.objects
+        .filter(user=user, is_correct=False, question__is_active=True)
+        .order_by("-attempted_at", "-id")
+        .values_list("question_id", flat=True)[: count * 2]
+    )
+    tests = (
+        QuestionResponse.objects
+        .filter(attempt__user=user, is_correct=False, question__is_active=True)
+        .exclude(selected_answer__isnull=True).exclude(selected_answer="")
+        .order_by("-attempt__started_at", "-id")
+        .values_list("question_id", flat=True)[: count * 4]
+    )
+    for qid in list(qbank) + list(tests):
+        if qid in seen:
+            continue
+        seen.add(qid)
+        ordered.append(qid)
+        if len(ordered) >= count:
+            break
+    return ordered
+
+
 def _wrong_for_user(user):
-    """Questions the user got wrong at least once."""
-    from analytics.models import TestAttempt
+    """Questions the user got wrong at least once (queryset)."""
     return _qs_for_user(user).filter(
-        attempts__user=user,
-        attempts__is_correct=False,
+        Q(qbank_attempts__user=user, qbank_attempts__is_correct=False)
+        | Q(questionresponse__attempt__user=user, questionresponse__is_correct=False)
     ).distinct()
+
+
+def _bookmarked_ids_for_user(user, count: int) -> list[int]:
+    """The user's bookmarked active questions, newest bookmark first."""
+    from questions.models import QuestionBookmark
+    return list(
+        QuestionBookmark.objects
+        .filter(user=user, question__is_active=True)
+        .order_by("-created_at", "-id")
+        .values_list("question_id", flat=True)[:count]
+    )
 
 
 def _bookmarked_for_user(user):
-    from questions.models import QuestionBookmark
-    return _qs_for_user(user).filter(
-        bookmarks__user=user,
-        bookmarks__is_active=True,
-    ).distinct()
+    return _qs_for_user(user).filter(bookmarks__user=user).distinct()
 
 
 def _weak_topics_for_user(user, limit: int = 5):
-    """Top-N topics by mistake rate for this user (min 5 attempts)."""
-    from analytics.models import TestAttempt
-    from questions.models import Topic
-    rows = (
-        TestAttempt.objects
-        .filter(user=user)
+    """Top-N topics by mistake count for this user (min 5 answers per
+    topic), from question-bank / practice answers plus test responses."""
+    from collections import Counter
+    from questions.models import QuestionAttempt
+    from tests_engine.models import QuestionResponse
+
+    attempts: Counter = Counter()
+    mistakes: Counter = Counter()
+    qbank_rows = (
+        QuestionAttempt.objects
+        .filter(user=user, question__topic__isnull=False)
         .values("question__topic_id")
-        .annotate(
-            attempts=Count("id"),
-            mistakes=Count("id", filter=Q(is_correct=False)),
-        )
-        .filter(attempts__gte=5)
-        .order_by("-mistakes")
+        .annotate(n=Count("id"), wrong=Count("id", filter=Q(is_correct=False)))
     )
-    if not rows:
-        return _qs_for_user(user).filter(topic__isnull=False)
-    topic_ids = [r["question__topic_id"] for r in rows[:limit] if r["question__topic_id"]]
+    test_rows = (
+        QuestionResponse.objects
+        .filter(attempt__user=user, question__topic__isnull=False)
+        .exclude(selected_answer__isnull=True).exclude(selected_answer="")
+        .values("question__topic_id")
+        .annotate(n=Count("id"), wrong=Count("id", filter=Q(is_correct=False)))
+    )
+    for row in list(qbank_rows) + list(test_rows):
+        topic_id = row["question__topic_id"]
+        attempts[topic_id] += row["n"]
+        mistakes[topic_id] += row["wrong"]
+    topic_ids = [
+        topic_id for topic_id, _wrong in mistakes.most_common()
+        if attempts[topic_id] >= 5 and mistakes[topic_id] > 0
+    ][:limit]
     if not topic_ids:
         return _qs_for_user(user).filter(topic__isnull=False)
     return _qs_for_user(user).filter(topic_id__in=topic_ids)
@@ -166,12 +222,8 @@ _MODE_BUILDERS: dict[str, Callable] = {
     "weak_topics":   lambda qs, user, params: list(
         _weak_topics_for_user(user).order_by("-year").values_list("id", flat=True)[:params.get("count", 40)]
     ),
-    "bookmarked":    lambda qs, user, params: list(
-        _bookmarked_for_user(user).order_by("-created_at").values_list("id", flat=True)[:params.get("count", 60)]
-    ),
-    "wrong":         lambda qs, user, params: list(
-        _wrong_for_user(user).order_by("-attempts__created_at").values_list("id", flat=True)[:params.get("count", 60)]
-    ),
+    "bookmarked":    lambda qs, user, params: _bookmarked_ids_for_user(user, params.get("count", 60)),
+    "wrong":         lambda qs, user, params: _wrong_ids_for_user(user, params.get("count", 60)),
     "image_only":    lambda qs, user, params: _image_only(qs, count=params.get("count", 25)),
     "rapid_revision": lambda qs, user, params: _rapid_revision(qs, count=params.get("count", 30)),
     "high_yield":    lambda qs, user, params: _high_yield(qs, count=params.get("count", 30)),

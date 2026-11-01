@@ -110,24 +110,74 @@ def get_state(q, user) -> dict:
     return state
 
 
+def record_attempt_stats(user, q, is_correct: bool) -> None:
+    """Analytics for a user's FIRST answer to a question-bank question.
+
+    Shared by the question-bank ``attempt`` endpoint and practice mode so
+    both count towards topic performance, the daily activity row (which
+    drives the "Solve 20 questions" quest) and streak XP. Every counter is
+    an atomic ``F()`` increment: the old ``+= 1; save()`` lost updates when
+    two tabs answered at the same time.
+    """
+    from django.db.models import F
+    from django.utils import timezone
+    from analytics.models import DailyActivity, StudyStreak, UserTopicPerformance
+
+    now = timezone.now()
+    perf_inc = {"total_attempts": F("total_attempts") + 1, "last_attempted": now}
+    if is_correct:
+        perf_inc["correct_answers"] = F("correct_answers") + 1
+    else:
+        perf_inc["incorrect_answers"] = F("incorrect_answers") + 1
+
+    if q.subject_id:
+        if q.topic_id:
+            perf, _ = UserTopicPerformance.objects.get_or_create(
+                user=user, subject_id=q.subject_id, topic_id=q.topic_id,
+            )
+            UserTopicPerformance.objects.filter(pk=perf.pk).update(**perf_inc)
+        perf_sub, _ = UserTopicPerformance.objects.get_or_create(
+            user=user, subject_id=q.subject_id, topic=None,
+        )
+        UserTopicPerformance.objects.filter(pk=perf_sub.pk).update(**perf_inc)
+
+    activity, _ = DailyActivity.objects.get_or_create(user=user, date=timezone.localdate())
+    activity_inc = {"questions_attempted": F("questions_attempted") + 1}
+    if is_correct:
+        activity_inc["correct_answers"] = F("correct_answers") + 1
+    DailyActivity.objects.filter(pk=activity.pk).update(**activity_inc)
+
+    streak, _ = StudyStreak.objects.get_or_create(user=user)
+    streak.record_activity()
+    streak.add_xp(15 if is_correct else 5)
+
+
 def submit_attempt(q, user, *, answer: str, correct: bool, time_spent: int = 0,
                    confidence: int | None = None) -> dict:
-    """Record the latest practice attempt for this question."""
+    """Record the latest practice attempt for this question.
+
+    The returned ``created`` flag is True when this was the user's first
+    answer to the question (that is when analytics / quest progress count
+    it, exactly like the question-bank ``attempt`` endpoint).
+    """
     from questions.models import QuestionAttempt
 
     answer = (answer or "").strip().upper()[:1]
+    created = False
     if answer:
-        attempt, _ = QuestionAttempt.objects.update_or_create(
+        attempt, created = QuestionAttempt.objects.update_or_create(
             user=user, question=q,
             defaults={"selected_answer": answer, "is_correct": bool(correct)},
         )
         if not correct:
             from questions.mistakes import record_mistake
             record_mistake(user, q, answer, attempt=attempt)
+        if created:
+            record_attempt_stats(user, q, bool(correct))
     if time_spent:
         add_time_spent(q, user, time_spent)
     if confidence:
         set_confidence(q, user, confidence)
     from questions.study_time import clamp_seconds, record_study_time
     record_study_time(user, [(q.subject_id, clamp_seconds(time_spent), 1 if answer else 0)])
-    return {"question_id": q.id, "correct": bool(correct), "time_spent": time_spent}
+    return {"question_id": q.id, "correct": bool(correct), "time_spent": time_spent, "created": created}

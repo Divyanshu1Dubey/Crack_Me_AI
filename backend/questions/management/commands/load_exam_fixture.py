@@ -122,7 +122,10 @@ class Command(BaseCommand):
         parser.add_argument(
             "--replace",
             action="store_true",
-            help="Delete existing Subject/Topic rows for this exam_type before loading.",
+            help=(
+                "Remove Subject rows of this exam_type that the fixture no longer lists, "
+                "when nothing (questions, student data) references them. Never deletes questions."
+            ),
         )
         parser.add_argument(
             "--dry-run",
@@ -180,7 +183,7 @@ class Command(BaseCommand):
             return
 
         if options["replace"]:
-            self._purge_exam(exam_type)
+            self._purge_exam(exam_type, raw)
 
         with transaction.atomic():
             self._ensure_exam_track(exam_track_code, exam_type)
@@ -228,10 +231,51 @@ class Command(BaseCommand):
             },
         )
 
-    def _purge_exam(self, exam_type: str) -> None:
-        # Only subject/topic — keep Question rows alone, they need image FKs intact.
-        Subject.objects.filter(exam_type=exam_type).delete()
-        self.stdout.write(self.style.WARNING(f"Purged Subject rows for exam_type={exam_type}."))
+    def _purge_exam(self, exam_type: str, raw=None) -> None:
+        """Remove obsolete Subject rows of ``exam_type`` -- safely.
+
+        ``Subject.objects.filter(exam_type=...).delete()`` cascaded through
+        ``Question.subject`` (CASCADE) into every question of the exam and
+        all student history attached to them, or aborted with
+        ProtectedError once images / sources existed. Subjects are upserted
+        by ``code`` in ``_upsert_taxonomy`` anyway, so ``--replace`` now only
+        deletes subjects that the fixture no longer lists AND whose deletion
+        would touch nothing but the Subject and its Topics.
+        """
+        from django.db.models.deletion import Collector
+
+        keep_codes = set()
+        for row in raw or []:
+            if row.get("model") == "questions.subject":
+                f = row.get("fields", {})
+                code = f.get("code") or f.get("name", "")
+                if code:
+                    keep_codes.add(code)
+
+        deleted, kept = [], []
+        for subject in Subject.objects.filter(exam_type=exam_type).exclude(code__in=keep_codes):
+            collector = Collector(using=Subject.objects.db)
+            try:
+                collector.collect([subject])
+            except Exception:  # ProtectedError and friends: referenced rows
+                kept.append(subject.code)
+                continue
+            touched = {model._meta.label for model in collector.data}
+            touched |= {qs.model._meta.label for qs in collector.fast_deletes if qs.exists()}
+            # SET_NULL updates (e.g. Question.topic) would change other rows too.
+            for (field, _value), batches in collector.field_updates.items():
+                if any(len(batch) if hasattr(batch, '__len__') else True for batch in batches):
+                    touched.add(field.model._meta.label)
+            if touched - {"questions.Subject", "questions.Topic"}:
+                kept.append(subject.code)
+                continue
+            subject.delete()
+            deleted.append(subject.code)
+        self.stdout.write(self.style.WARNING(
+            f"--replace (exam_type={exam_type}): removed {len(deleted)} obsolete Subject row(s) "
+            f"{sorted(deleted)}; kept {len(kept)} still referenced by questions or student data "
+            f"{sorted(kept)}. Subjects in the fixture are updated in place by code."
+        ))
 
     def _upsert_taxonomy(self, raw, exam_type: str, exam_track_code: str):
         exam_track = ExamTrack.objects.get(code=exam_track_code)

@@ -47,6 +47,8 @@ class QuestionSourceSerializer(serializers.ModelSerializer):
 
 
 class RecallSourceSerializer(serializers.ModelSerializer):
+    # Carries server filesystem paths (``pdf_path``) and import-job ids:
+    # only served by the admin-only ``recall_sources`` action.
     class Meta:
         model = RecallSource
         fields = [
@@ -68,6 +70,11 @@ class DuplicateClusterSerializer(serializers.ModelSerializer):
         ]
 
     def get_member_count(self, obj):
+        # ``duplicate_clusters`` annotates the count (one query per page
+        # instead of one per cluster).
+        annotated = getattr(obj, 'member_count_annotated', None)
+        if annotated is not None:
+            return annotated
         return obj.members.count()
 
 

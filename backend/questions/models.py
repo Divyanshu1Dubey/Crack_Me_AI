@@ -398,25 +398,13 @@ class Question(models.Model):
         self.ai_mnemonic = normalize_text(self.ai_mnemonic or "")
         self.ai_clinical_pearl = normalize_text(self.ai_clinical_pearl or "")
 
-        update_fields = kwargs.get('update_fields')
-        if update_fields is not None:
-            update_fields = set(update_fields)
-            update_fields.update([
-                'question_text',
-                'option_a',
-                'option_b',
-                'option_c',
-                'option_d',
-                'explanation',
-                'concept_explanation',
-                'mnemonic',
-                'reference_text',
-                'ai_explanation',
-                'ai_mnemonic',
-                'ai_clinical_pearl',
-            ])
-            kwargs['update_fields'] = update_fields
-
+        # A partial save (``update_fields=[...]``) writes ONLY the listed
+        # fields. It used to add all twelve text fields above, so a long task
+        # (video render, AI call) that saved e.g. ``video_url`` also wrote
+        # back its stale copy of the stem / options / explanation and
+        # silently reverted admin edits made in the meantime. The listed
+        # fields are still normalised (normalisation runs on the instance
+        # above); unlisted fields are not written, so they need none.
         return super().save(*args, **kwargs)
 
 

@@ -35,15 +35,15 @@ Run:
     # cap to 200 rows for a quick smoke test
     python manage.py backfill_empty_ai --limit 200
 """
-import json
 import logging
 import time
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.utils import timezone
 
 from questions.models import Question
+from questions.ai_per_question import usable_explain_result
+from questions.tasks import apply_explain_result
 from ai_engine.services import AIService
 
 logger = logging.getLogger(__name__)
@@ -173,6 +173,10 @@ class Command(BaseCommand):
             "D": question.option_d,
         }
 
+        if question.lock_answer and question.lock_explanation:
+            self.stdout.write(f"  Q{question.id}: answer and explanation locked — skipped")
+            return False
+
         result = None
         last_error = None
         for attempt in range(max_retries + 1):
@@ -185,10 +189,12 @@ class Command(BaseCommand):
                     subject=question.subject.name if question.subject else "",
                     topic=question.topic.name if question.topic else "",
                 )
-                if result and (result.get("why_correct") or result.get("analysis") or result.get("core_concept")):
+                # A provider outage comes back as an unparsed fallback dict
+                # whose why_correct is the "All AI services are temporarily
+                # unavailable" sentence -- not a success.
+                if usable_explain_result(result):
                     break
-                # Empty result — treat as transient, retry.
-                last_error = "empty result"
+                last_error = "no usable AI output"
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries:
@@ -197,30 +203,20 @@ class Command(BaseCommand):
             if attempt < max_retries:
                 time.sleep(2 ** attempt)
 
-        if not result or not (result.get("why_correct") or result.get("analysis") or result.get("core_concept")):
+        if not usable_explain_result(result):
             self.stdout.write(self.style.WARNING(
-                f"  Q{question.id}: empty result after {max_retries + 1} attempt(s) ({last_error})"
+                f"  Q{question.id}: no usable result after {max_retries + 1} attempt(s) ({last_error})"
             ))
             return False
 
         # Persist in a single transaction so a partial save can't leave the
-        # row half-updated.
+        # row half-updated. Lock flags are honoured and curated fields are
+        # never blanked (see questions.tasks.apply_explain_result).
         with transaction.atomic():
-            question.ai_explanation = json.dumps(result)
-            question.ai_answer = result.get("why_correct", "")
-            question.ai_mnemonic = result.get("mnemonic", "")
-            question.ai_clinical_pearl = result.get("clinical_pearl", "")
-            question.learning_technique = result.get("exam_tip", "")
-            textbook_ref = result.get("textbook_reference", {})
-            if textbook_ref:
-                question.ai_references = [textbook_ref]
-            around_concepts = result.get("around_concepts", [])
-            if around_concepts:
-                question.concept_keywords = around_concepts
-            question.ai_generated_at = timezone.now()
-            question.ai_model = "RoundRobin-11"
-            question.ai_version = "v1"
-            question.save()
+            fields = apply_explain_result(question, result)
+            if not fields:
+                return False
+            question.save(update_fields=fields)
 
         self.stdout.write(self.style.SUCCESS(f"  Q{question.id}: populated"))
         return True

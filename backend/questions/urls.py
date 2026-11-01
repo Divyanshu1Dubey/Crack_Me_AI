@@ -39,6 +39,7 @@ urlpatterns = [
     # Discussions
     path('discussions/<int:pk>/vote/', views.DiscussionVoteView.as_view(), name='discussion-vote'),
     path('discussions/<int:pk>/replies/', views.DiscussionRepliesView.as_view(), name='discussion-replies'),
+    path('discussions/<int:pk>/', views.DiscussionDetailView.as_view(), name='discussion-detail'),
     path('discussions/', views.DiscussionListCreateView.as_view(), name='discussion-list'),
     # Chat AI Assistant
     path('chat/', views.ChatAssistantView.as_view(), name='chat-assistant'),
@@ -64,6 +65,7 @@ urlpatterns = [
     path('quests/streak/', views.QuestStreakView.as_view(), name='quest-streak'),
     path('quests/streak/freeze/', views.QuestStreakFreezeView.as_view(), name='quest-streak-freeze'),
     # Topic Notes (manual + AI generation)
+    path('topic-notes/published/', views.PublishedTopicNoteListView.as_view(), name='topic-note-published'),
     path('topic-notes/', views.TopicNoteCreateView.as_view(), name='topic-note-create'),
     path('topic-notes/<int:pk>/generate/', views.AITopicNoteGenerationView.as_view(), name='topic-note-generate'),
 
