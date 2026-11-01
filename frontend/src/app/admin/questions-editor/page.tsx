@@ -6,7 +6,16 @@ import { questionsAPI } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import QuestionEditModal from './QuestionEditModal';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { buildYearOptions, computeDisplayRenumber, formatCount, listRows, matchesQuestionConfirm } from '../_lib/adminHelpers';
+import {
+  buildYearOptions,
+  computeDisplayRenumber,
+  formatCount,
+  isReorderMode,
+  listRows,
+  matchesQuestionConfirm,
+  questionEditorListParams,
+  type QuestionEditorFilters,
+} from '../_lib/adminHelpers';
 import { fetchAllSubjects, useSubjectTopics } from '../_lib/useAdminTaxonomy';
 
 const PAGE_SIZE = 20;
@@ -205,9 +214,10 @@ export default function AdminQuestionsEditorPage() {
   // scoped by exam/year/paper. It is only offered when the list is narrowed
   // to one exam and one year with no other filter, so a drag renumbers
   // questions of a single paper instead of an arbitrary mix of papers/years.
-  const reorderEnabled =
-    !!examType && !!year && !search && !subjectId && !topicId && !difficulty &&
-    !needsReview && !isDropped && !isControversial && !isImageBased;
+  const listFilters: QuestionEditorFilters = {
+    needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, search,
+  };
+  const reorderEnabled = isReorderMode(listFilters);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -219,27 +229,12 @@ export default function AdminQuestionsEditorPage() {
       return;
     }
     try {
-      // `ordering` is only honoured once the backend lists display_number /
-      // paper in QuestionViewSet.ordering_fields; until then rows come back
-      // newest first and are sorted client-side below when reordering. It is
-      // only sent in reorder mode (pages must then be contiguous slices of a
-      // paper); other views keep the default newest-first order instead of
-      // mixing every paper's #1 together once the backend honours it.
-      const params: any = { page, page_size: PAGE_SIZE };
-      if (reorderEnabled) params.ordering = 'paper,display_number';
-      if (needsReview) params.needs_review = true;
-      if (isDropped) params.is_dropped = true;
-      if (examType) params.exam_type = examType;
-      if (year) params.year = year;
-      if (subjectId) params.subject = subjectId;
-      if (topicId) params.topic = topicId;
-      if (difficulty) params.difficulty = difficulty;
-      if (isControversial) params.is_controversial = true;
-      if (isImageBased) params.is_image_based = true;
-      if (search) params.search = search;
-      // Removed questions (is_active=false) are hidden from students, so the
-      // renumbering view leaves them out (admins otherwise list every row).
-      if (reorderEnabled) params.is_active = true;
+      // Reorder mode asks for ordering=paper,display_number,id (pages are
+      // then contiguous slices of a paper; the id tiebreak keeps rows from
+      // moving across pages) and is_active=true (removed questions take no
+      // part in the numbering). Other views keep the default newest-first
+      // order. See questionEditorListParams.
+      const params = questionEditorListParams(listFilters, page, PAGE_SIZE);
 
       const res = await questionsAPI.list(params);
       let rows = listRows<any>(res.data);
@@ -513,8 +508,9 @@ export default function AdminQuestionsEditorPage() {
     }
   };
 
+  // Inside the AppShell layout, .page-container already pads the page.
   return (
-    <div className="p-6 mx-auto space-y-6 text-gray-900 dark:text-slate-100">
+    <div className="p-6 [.page-container_&]:p-0 mx-auto space-y-6 text-gray-900 dark:text-slate-100">
       {pageError && (
         <div
           role="alert"

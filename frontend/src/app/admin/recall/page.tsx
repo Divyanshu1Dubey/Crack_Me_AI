@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
-import { listRows, loadErrorMessage } from "../_lib/adminHelpers";
+import { ADMIN_PAGE_SIZE, formatCount, listCount, listRows, loadErrorMessage } from "../_lib/adminHelpers";
 
 interface ImportJob {
   id: number;
@@ -57,6 +57,7 @@ export default function AdminRecallPage() {
   const isAdmin = !!user && (user.role === "admin" || user.is_admin);
 
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [jobsTotal, setJobsTotal] = useState(0);
   const [images, setImages] = useState<any[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [errs, setErrs] = useState<Partial<Record<SectionKey, string>>>({});
@@ -76,14 +77,18 @@ export default function AdminRecallPage() {
     let alive = true;
     (async () => {
       const [j, im, cl] = await Promise.allSettled([
-        api.get("/imports/neetpg/jobs/"),
+        // Paginated, newest first, 20 per page by default: ask for the
+        // newest 100 (the endpoint's page_size cap) instead of only 20.
+        api.get("/imports/neetpg/jobs/", { params: { page_size: ADMIN_PAGE_SIZE } }),
         api.get("/questions/recall_sources/"),
         api.get("/questions/duplicate_clusters/"),
       ]);
       if (!alive) return;
       const nextErrs: Partial<Record<SectionKey, string>> = {};
-      if (j.status === "fulfilled") setJobs(listRows<ImportJob>(j.value.data));
-      else nextErrs.jobs = loadErrorMessage(j.reason, "import jobs");
+      if (j.status === "fulfilled") {
+        setJobs(listRows<ImportJob>(j.value.data));
+        setJobsTotal(listCount(j.value.data));
+      } else nextErrs.jobs = loadErrorMessage(j.reason, "import jobs");
       if (im.status === "fulfilled") setImages(listRows<any>(im.value.data));
       else nextErrs.sources = loadErrorMessage(im.reason, "recall sources");
       if (cl.status === "fulfilled") setClusters(listRows<Cluster>(cl.value.data));
@@ -99,13 +104,15 @@ export default function AdminRecallPage() {
     setReloadKey((k) => k + 1);
   };
 
+  // Plain divs, no second landmark: the AppShell layout sits inside the root
+  // layout's main landmark, and its .page-container already pads the page.
   if (authLoading || !user) {
-    return <p className="p-6 text-muted-foreground">Checking admin access…</p>;
+    return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Checking admin access…</p>;
   }
   if (!isAdmin) return null;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-4 text-foreground sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 text-foreground sm:p-6 [.page-container_&]:p-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Recall admin</h1>
         <button
@@ -123,30 +130,37 @@ export default function AdminRecallPage() {
         {errs.jobs ? (
           <SectionError message={errs.jobs} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className={TABLE_CLASS}>
-              <thead className={THEAD_CLASS}>
-                <tr><th>id</th><th>status</th><th>source</th><th>created</th><th>summary</th></tr>
-              </thead>
-              <tbody>
-                {!loading && jobs.length === 0 && <EmptyRow colSpan={5} text="No import jobs yet." />}
-                {jobs.slice(0, 20).map((j) => {
-                  const summary = j.summary ? JSON.stringify(j.summary) : "";
-                  return (
-                    <tr key={j.id} className={ROW_CLASS}>
-                      <td>{j.id}</td>
-                      <td>{j.status}</td>
-                      <td className="whitespace-nowrap">{j.source_filename || ""}</td>
-                      <td className="whitespace-nowrap">{j.created_at?.slice(0, 16) || ""}</td>
-                      <td className="text-xs text-muted-foreground">
-                        <div className="max-w-xs truncate" title={summary}>{summary}</div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {!loading && jobsTotal > jobs.length && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Newest {formatCount(jobs.length)} of {formatCount(jobsTotal)} import jobs.
+              </p>
+            )}
+            <div className="max-h-112 overflow-auto">
+              <table className={TABLE_CLASS}>
+                <thead className={THEAD_CLASS}>
+                  <tr><th>id</th><th>status</th><th>source</th><th>created</th><th>summary</th></tr>
+                </thead>
+                <tbody>
+                  {!loading && jobs.length === 0 && <EmptyRow colSpan={5} text="No import jobs yet." />}
+                  {jobs.map((j) => {
+                    const summary = j.summary ? JSON.stringify(j.summary) : "";
+                    return (
+                      <tr key={j.id} className={ROW_CLASS}>
+                        <td>{j.id}</td>
+                        <td>{j.status}</td>
+                        <td className="whitespace-nowrap">{j.source_filename || ""}</td>
+                        <td className="whitespace-nowrap">{j.created_at?.slice(0, 16) || ""}</td>
+                        <td className="text-xs text-muted-foreground">
+                          <div className="max-w-xs truncate" title={summary}>{summary}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
@@ -204,6 +218,6 @@ export default function AdminRecallPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

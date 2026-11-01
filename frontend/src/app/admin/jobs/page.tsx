@@ -154,8 +154,9 @@ export default function AdminJobsPage() {
         return null;
     }
 
+    // Inside the AppShell layout, .page-container already pads the page.
     return (
-        <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
+        <div className="p-4 sm:p-6 [.page-container_&]:p-0 max-w-5xl mx-auto space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">

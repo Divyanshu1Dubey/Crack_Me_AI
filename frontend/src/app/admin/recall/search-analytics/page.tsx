@@ -46,24 +46,27 @@ export default function SearchAnalyticsPage() {
     return () => { alive = false; };
   }, [authLoading, user, isAdmin, router]);
 
-  if (authLoading || !user) return <p className="p-6 text-muted-foreground">Checking admin access…</p>;
+  // Plain divs, no second landmark: the AppShell layout (from /admin/recall)
+  // sits inside the root layout's main landmark, and its .page-container
+  // already pads the page.
+  if (authLoading || !user) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Checking admin access…</p>;
   if (!isAdmin) return null;
   if (err) {
     return (
-      <main className="mx-auto max-w-4xl p-4 sm:p-6">
+      <div className="mx-auto max-w-4xl p-4 sm:p-6 [.page-container_&]:p-0">
         <div role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
           {err}
         </div>
-      </main>
+      </div>
     );
   }
-  if (!d) return <p className="p-6 text-muted-foreground">Loading…</p>;
+  if (!d) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Loading…</p>;
 
   const topQueries = Array.isArray(d.top_queries) ? d.top_queries : [];
   const daily = Array.isArray(d.daily) ? d.daily : [];
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-4 text-foreground sm:p-6">
+    <div className="mx-auto max-w-4xl space-y-4 p-4 text-foreground sm:p-6 [.page-container_&]:p-0">
       <h1 className="text-2xl font-semibold">Search analytics</h1>
       <p className="text-sm text-muted-foreground">
         Top search terms and daily search volume. Search logging isn&apos;t switched on yet, so this page stays
@@ -85,6 +88,6 @@ export default function SearchAnalyticsPage() {
           <ul>{daily.map((row) => <li key={row.date}>{row.date}: {row.n}</li>)}</ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }

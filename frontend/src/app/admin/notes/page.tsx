@@ -231,20 +231,22 @@ export default function AdminNotesPage() {
   // Colours come from the theme tokens (text-foreground, bg-card,
   // border-border, text-muted-foreground, ...), which flip with the theme:
   // the hard-coded dark slate palette made the page white-on-white in light mode.
+  // Plain divs, no second landmark: the AppShell layout sits inside the root
+  // layout's main landmark, and its .page-container already pads the page.
   if (authLoading) {
-    return <p className="p-6 text-muted-foreground">Checking auth…</p>;
+    return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Checking auth…</p>;
   }
   if (!isAuthenticated || !isAdmin) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-12 text-center text-foreground">
+      <div className="mx-auto max-w-5xl px-4 py-12 [.page-container_&]:px-0 text-center text-foreground">
         <p className="text-muted-foreground mb-3">You need admin access to view this page.</p>
         <button onClick={() => router.push('/login')} className="rounded bg-indigo-600 px-4 py-2 text-white">Sign in</button>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 text-foreground">
+    <div className="mx-auto max-w-6xl px-4 py-6 [.page-container_&]:p-0 text-foreground">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -450,6 +452,6 @@ export default function AdminNotesPage() {
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }

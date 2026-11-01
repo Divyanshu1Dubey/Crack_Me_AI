@@ -12,6 +12,14 @@ import {
     PLATFORM_WIDE_CONFIRM_PHRASE,
     SIMILAR_ENDPOINT_LIMIT,
     adminTestListParams,
+    aiExplainResultMessage,
+    apiErrorSentence,
+    buildSystemActionRequest,
+    campaignIsExpired,
+    campaignIsLive,
+    campaignPublishErrorNotice,
+    campaignPublishNotice,
+    createRequestSequence,
     curatedRelatedIds,
     formatCount,
     hasNextPage,
@@ -22,6 +30,7 @@ import {
     parseRelatedIds,
     percentOf,
     questionSearchParams,
+    regenerateResultMessage,
     sameIdSet,
     type AdminTestScope,
 } from './_lib/adminHelpers';
@@ -316,7 +325,7 @@ export default function AdminDashboardPage() {
     const [campaignsLoading, setCampaignsLoading] = useState(false);
     const [campaignForm, setCampaignForm] = useState({ title: '', message: '', image_url: '', deep_link: '', role: 'all', active_only: true, scheduled_for: '' });
     const [campaignSaving, setCampaignSaving] = useState(false);
-    const [campaignMessage, setCampaignMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+    const [campaignMessage, setCampaignMessage] = useState<{ type: 'ok' | 'warn' | 'err'; text: string } | null>(null);
     // Phase 9 moderation queue
     const [issueQueue, setIssueQueue] = useState<any[]>([]);
     const [issueQueueLoading, setIssueQueueLoading] = useState(false);
@@ -652,6 +661,9 @@ export default function AdminDashboardPage() {
 
     // "Publish now" is in-app only (dashboard feed + notification bell);
     // nothing is emailed or pushed. delivery_count is the audience size.
+    // send-now moves a future scheduled time to now and refuses an expired row
+    // (400 code 'expired', campaignPublishErrorNotice); the success message
+    // still only says "live" when the returned row really is (campaignPublishNotice).
     const handleSendCampaignNow = async (id: number) => {
         const before = campaigns;
         setCampaignMessage(null);
@@ -660,10 +672,17 @@ export default function AdminDashboardPage() {
             const res = await analyticsAPI.sendCampaignNow(id);
             const updated = res.data;
             setCampaigns((rows) => rows.map((row) => row.id === id ? updated : row));
-            setCampaignMessage({ type: 'ok', text: `"${updated?.title ?? `Campaign #${id}`}" is live in-app for ${formatCount(updated?.delivery_count)} users.` });
+            setCampaignMessage(campaignPublishNotice(updated, id));
         } catch (err: any) {
             // Optimistic rollback on failure.
             setCampaigns(before);
+            const expiredNotice = campaignPublishErrorNotice(err?.response?.data, id);
+            if (expiredNotice) {
+                setCampaignMessage(expiredNotice);
+                // The list was stale: reload it so the row shows as expired, without a publish button.
+                fetchCampaigns();
+                return;
+            }
             setCampaignMessage({ type: 'err', text: `Could not publish campaign #${id}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}` });
         }
     };
@@ -935,17 +954,30 @@ export default function AdminDashboardPage() {
     // GET /tests/ gives an admin every test newest first (students' generated
     // practice tests included), 20 per page; the tab used to show only that
     // first page. It now lists one scope at a time and pages with Load more.
-    const fetchAdminTests = async (page = 1, scope: AdminTestScope = adminTestsScope) => {
+    // Only the latest request may write the list: a response that arrives
+    // after a scope switch (or a reload) used to replace or extend the new
+    // scope's rows, e.g. library tests listed under "My drafts".
+    const [adminTestsRequests] = useState(createRequestSequence);
+    // The scope of the latest request. Reloads that run after an await
+    // (runTestAction) read it here: their render's adminTestsScope can be a
+    // scope the admin has since left.
+    const adminTestsScopeRef = useRef<AdminTestScope>(adminTestsScope);
+    const fetchAdminTests = async (page = 1, scope: AdminTestScope = adminTestsScopeRef.current) => {
+        adminTestsScopeRef.current = scope;
+        const ticket = adminTestsRequests.next();
         if (page === 1) setAdminTestsLoading(true);
         else setAdminTestsLoadingMore(true);
         setAdminTestsError('');
         try {
             const res = await testsAPI.list(adminTestListParams(scope, page));
+            // Superseded: the newer request sets the rows and clears both loading flags.
+            if (!adminTestsRequests.isCurrent(ticket)) return;
             const rows = listRows<any>(res.data);
             setAdminTests((prev) => (page === 1 ? rows : [...prev, ...rows]));
             setAdminTestsTotal(listCount(res.data));
             setAdminTestsNextPage(hasNextPage(res.data) ? page + 1 : null);
         } catch (err: any) {
+            if (!adminTestsRequests.isCurrent(ticket)) return;
             if (page === 1) {
                 setAdminTests([]);
                 setAdminTestsTotal(0);
@@ -959,6 +991,11 @@ export default function AdminDashboardPage() {
 
     const changeAdminTestsScope = (scope: AdminTestScope) => {
         setAdminTestsScope(scope);
+        // Drop the previous scope's rows at once instead of showing them under
+        // the new scope's description until the new page arrives.
+        setAdminTests([]);
+        setAdminTestsTotal(0);
+        setAdminTestsNextPage(null);
         fetchAdminTests(1, scope);
     };
 
@@ -1316,25 +1353,15 @@ export default function AdminDashboardPage() {
     };
 
     const runSystemAction = async (action: 'resetAttempts' | 'clearAnalytics' | 'rerunEvaluation') => {
-        const payload: { scope: 'all' | 'user'; user_id?: number } = { scope: systemScope };
-        let target: string;
-        if (systemScope === 'user') {
-            const id = Number(systemUserId);
-            if (!Number.isInteger(id) || id <= 0) {
-                setUserActionMessage('Enter the user ID for a single-user action.');
-                return;
-            }
-            payload.user_id = id;
-            target = `user #${id}`;
-        } else {
-            // Platform-wide: every student's data. Needs the typed phrase AND
-            // a confirm dialog naming the action.
-            if (!isPlatformWideConfirmed(systemConfirmText)) {
-                setUserActionMessage(`Type ${PLATFORM_WIDE_CONFIRM_PHRASE} to run a platform-wide action.`);
-                return;
-            }
-            target = 'ALL USERS (platform-wide)';
+        // Platform-wide runs rewrite every student's data: they need the
+        // typed phrase (sent as `confirm`, which the backend re-checks) AND a
+        // confirm dialog naming the action. Single-user runs need the user id.
+        const request = buildSystemActionRequest(systemScope, systemUserId, systemConfirmText);
+        if (!request.ok) {
+            setUserActionMessage(request.message);
+            return;
         }
+        const { payload, target } = request;
         if (!window.confirm(`${SYSTEM_ACTION_LABELS[action]} for ${target}?\n\nThis rewrites stored data and cannot be undone.`)) return;
 
         setSystemActionLoading(true);
@@ -1352,7 +1379,9 @@ export default function AdminDashboardPage() {
             setUserActionMessage(`System action completed for ${target}${summary ? ` (${summary})` : ''}`);
             fetchUsers();
         } catch (err: any) {
-            setUserActionMessage(`System action failed: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
+            // {error, code} answers (e.g. 400 confirmation_required) show just the sentence.
+            const data = err?.response?.data;
+            setUserActionMessage(`System action failed: ${apiErrorSentence(data) ?? extractApiErrorMessage(data, 'request failed')}`);
         }
         // Each platform-wide run needs the phrase typed again.
         setSystemConfirmText('');
@@ -1363,6 +1392,9 @@ export default function AdminDashboardPage() {
         systemActionLoading ||
         (systemScope === 'user' ? !systemUserId : !isPlatformWideConfirmed(systemConfirmText));
 
+    // Without CORE_DATA_BACKUP_PATH a production server refuses backup and
+    // restore with 503 {code: 'backup_not_configured', error}: the error
+    // sentence is shown as the server wrote it (apiErrorSentence).
     const handleBackupData = async () => {
         setDataActionBusy('backup');
         setDataActionMessage(null);
@@ -1372,7 +1404,7 @@ export default function AdminDashboardPage() {
         } catch (e: any) {
             setDataActionMessage({
                 type: 'err',
-                text: extractApiErrorMessage(e?.response?.data || 'Failed to backup data'),
+                text: apiErrorSentence(e?.response?.data) ?? extractApiErrorMessage(e?.response?.data || 'Failed to backup data'),
             });
         } finally {
             setDataActionBusy(null);
@@ -1389,7 +1421,7 @@ export default function AdminDashboardPage() {
         } catch (e: any) {
             setDataActionMessage({
                 type: 'err',
-                text: extractApiErrorMessage(e?.response?.data || 'Failed to restore data'),
+                text: apiErrorSentence(e?.response?.data) ?? extractApiErrorMessage(e?.response?.data || 'Failed to restore data'),
             });
         } finally {
             setDataActionBusy(null);
@@ -1778,7 +1810,11 @@ export default function AdminDashboardPage() {
 
     const handleForceRegenerate = async (id: number) => {
         try {
-            await questionsAPI.forceRegenerate(id);
+            const res = await questionsAPI.forceRegenerate(id);
+            // New AI text removes an earlier "Verified by Admin" mark: say so
+            // instead of letting the badge vanish from the list unexplained.
+            const note = regenerateResultMessage(id, res?.data);
+            if (note) setQuestionActionMessage(note);
             fetchQuestions();
         } catch {
             // Keep UI stable on API failure.
@@ -1816,21 +1852,11 @@ export default function AdminDashboardPage() {
                     regenerate_if_exists: true,
                 });
             }
-            // The endpoint marks a previously unverified question as
-            // "Verified by Admin" while saving the AI output. Unreviewed AI
-            // content must not carry that badge, so restore the unverified
-            // state, and say so when that fails.
-            let stillVerified = false;
-            if (!q.is_verified_by_admin && res?.data?.question?.is_verified_by_admin) {
-                try {
-                    await questionsAPI.unverify(questionId);
-                } catch {
-                    stillVerified = true;
-                }
-            }
-            setQuestionActionMessage(stillVerified
-                ? `AI explanation saved for Q#${questionId}, but it is still marked "Verified by Admin" (removing the mark failed). Use Unverify on Q#${questionId} so students do not see unreviewed AI content as verified.`
-                : `AI explanation generated and saved for Q#${questionId}. Review it, then use Verify once it is correct.`);
+            // The endpoint never marks the question "Verified by Admin" (that
+            // is the separate Verify action), and saving new content removes
+            // an earlier mark (`verification_cleared`). `saved` says whether
+            // the output was stored.
+            setQuestionActionMessage(aiExplainResultMessage(questionId, res?.data, Boolean(q.is_verified_by_admin)));
             fetchQuestions();
         } catch (err: any) {
             setQuestionActionMessage(`AI explanation failed for Q#${questionId}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
@@ -2917,9 +2943,9 @@ export default function AdminDashboardPage() {
                                         <summary className="cursor-pointer text-sm font-medium">AI Prompt Editor and Version History</summary>
                                         <div className="space-y-3 mt-3">
                                         <p className="text-xs text-amber-700 dark:text-amber-300 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 p-2">
-                                            Note: Regenerate AI uses the active prompt version as its leading instruction.
-                                            AI Explain does not use it yet (it has its own fixed prompt). AI Timeline entries
-                                            show the prompt version recorded with each run.
+                                            Note: Regenerate AI and AI Explain (also the editor&apos;s AI Generate Explanation) both
+                                            lead with the active prompt version. AI Timeline entries (Regenerate runs) show the
+                                            prompt version recorded with each run; AI Explain runs are not listed there.
                                         </p>
                                         <div className="grid md:grid-cols-2 gap-2">
                                             <Input
@@ -4007,10 +4033,12 @@ export default function AdminDashboardPage() {
                                 <CardContent className="space-y-2">
                                     {campaignMessage && (
                                         <p
-                                            role={campaignMessage.type === 'err' ? 'alert' : 'status'}
+                                            role={campaignMessage.type === 'ok' ? 'status' : 'alert'}
                                             className={`text-xs rounded-md border p-2 ${campaignMessage.type === 'err'
                                                 ? 'border-destructive/40 bg-destructive/5 text-destructive'
-                                                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}
+                                                : campaignMessage.type === 'warn'
+                                                    ? 'border-amber-300/60 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+                                                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}
                                         >
                                             {campaignMessage.text}
                                         </p>
@@ -4022,13 +4050,18 @@ export default function AdminDashboardPage() {
                                             {campaigns.map((row: any) => {
                                                 const isSent = row.delivery_status === 'sent';
                                                 const isInactive = row.is_active === false;
-                                                const isLive = isSent && !isInactive;
+                                                // Expired rows are not live (the student feed drops them), and
+                                                // "Publish again" cannot revive them: send-now refuses an expired
+                                                // row (400 code 'expired') until a later expiry is set.
+                                                const isExpired = campaignIsExpired(row);
+                                                const isLive = campaignIsLive(row);
                                                 return (
                                                     <div key={row.id} className="rounded-md border p-3 bg-background text-sm">
                                                         <div className="flex items-center justify-between gap-2">
                                                             <p className="font-medium min-w-0 wrap-break-word">{row.title}</p>
                                                             <div className="flex shrink-0 gap-1">
                                                                 {isInactive && <Badge variant="outline" className="text-muted-foreground">inactive</Badge>}
+                                                                {isExpired && <Badge variant="outline" className="text-amber-700 dark:text-amber-300">expired</Badge>}
                                                                 <Badge variant="outline">{row.delivery_status || 'draft'}</Badge>
                                                             </div>
                                                         </div>
@@ -4039,13 +4072,23 @@ export default function AdminDashboardPage() {
                                                                 : row.delivery_status === 'scheduled' && row.scheduled_for
                                                                     ? `Scheduled for ${new Date(row.scheduled_for).toLocaleString()}`
                                                                     : 'Not published yet'}
+                                                            {isExpired && row.expires_at ? ` • Expired ${new Date(row.expires_at).toLocaleString()}` : ''}
                                                             {row.failure_report ? ` • Failure: ${row.failure_report}` : ''}
                                                         </p>
-                                                        <div className="mt-2 flex flex-wrap gap-2">
-                                                            {!isLive && (
+                                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                            {!isLive && !isExpired && (
                                                                 <Button size="sm" variant="outline" onClick={() => handleSendCampaignNow(Number(row.id))}>
                                                                     {isSent ? 'Publish again (in-app)' : 'Publish now (in-app)'}
                                                                 </Button>
+                                                            )}
+                                                            {isExpired && (
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Expired, so students do not see it.{' '}
+                                                                    <Link href="/admin/announcements" className="underline underline-offset-2 hover:text-foreground">
+                                                                        Set a later expiry in Announcements
+                                                                    </Link>
+                                                                    {isSent && !isInactive ? ' to show it again.' : ', then publish it here.'}
+                                                                </p>
                                                             )}
                                                             {!isInactive && row.delivery_status !== 'draft' && row.delivery_status !== 'sending' && (
                                                                 <Button size="sm" variant="outline" onClick={() => handleDeactivateCampaign(Number(row.id))}>
@@ -4340,6 +4383,12 @@ export default function AdminDashboardPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
+                                    {/* The public blog is statically generated from the site's own
+                                        post files; it does not read these database posts. */}
+                                    <p className="mb-4 text-xs text-amber-700 dark:text-amber-300 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 p-2">
+                                        Posts here are not shown on the public blog yet. The public blog (/blog) is built from
+                                        the site&apos;s own post files, so creating or publishing a post here does not put it on the site.
+                                    </p>
                                     {/* Filters */}
                                     <div className="flex flex-wrap gap-2 mb-4">
                                         <Input
@@ -4408,11 +4457,11 @@ export default function AdminDashboardPage() {
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-medium text-muted-foreground block mb-1">Author</label>
-                                                    <Input value={blogForm.author} onChange={(e) => setBlogForm({ ...blogForm, author: e.target.value })} placeholder="Dr. Name, MBBS" />
+                                                    <Input value={blogForm.author} onChange={(e) => setBlogForm({ ...blogForm, author: e.target.value })} placeholder="Author name as it should appear" />
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-medium text-muted-foreground block mb-1">Author Role</label>
-                                                    <Input value={blogForm.author_role} onChange={(e) => setBlogForm({ ...blogForm, author_role: e.target.value })} placeholder="Senior Editor — Medicine" />
+                                                    <Input value={blogForm.author_role} onChange={(e) => setBlogForm({ ...blogForm, author_role: e.target.value })} placeholder="e.g. Editorial Team" />
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-medium text-muted-foreground block mb-1">Date Published</label>

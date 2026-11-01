@@ -4,10 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
-import { listRows } from '../_lib/adminHelpers';
+import {
+  announcementStatus,
+  campaignIsExpired,
+  listRows,
+  parseExpiryInput,
+  toDateTimeLocalValue,
+  type AnnouncementStatus,
+} from '../_lib/adminHelpers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Megaphone, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
 /**
@@ -16,15 +24,42 @@ import { Megaphone, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
  * to post {title, message, priority} to /api/questions/announcements/, a
  * different model whose required field is `body`, so every create failed
  * with 400 and nothing it stored ever reached a student.
+ *
+ * It lists every announcement (?scope=all: drafts, scheduled, deactivated
+ * and expired ones too); the bare call returns only the live ones, so an
+ * expired or deactivated announcement could not be found here to fix.
  */
 interface AnnouncementItem {
   id: number;
   title: string;
   message?: string;
   priority?: string;
+  is_active?: boolean;
   is_expired?: boolean;
+  delivery_status?: string;
+  scheduled_for?: string | null;
   expires_at?: string | null;
   created_at?: string;
+}
+
+const STATUS_BADGES: Record<AnnouncementStatus, { label: string; className: string }> = {
+  live: { label: 'Live', className: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300' },
+  scheduled: { label: 'Scheduled', className: 'border-blue-500/40 text-blue-700 dark:text-blue-300' },
+  draft: { label: 'Draft', className: 'text-muted-foreground' },
+  inactive: { label: 'Deactivated', className: 'text-muted-foreground' },
+  expired: { label: 'Expired', className: 'border-amber-500/40 text-amber-700 dark:text-amber-300' },
+  failed: { label: 'Failed', className: 'border-destructive/40 text-destructive' },
+};
+
+/** Banner after an expiry change: is the announcement visible to students now? */
+function expiryChangedText(row: AnnouncementItem | null | undefined, expiresAt: string | null): string {
+  const what = expiresAt ? `Expiry set to ${new Date(expiresAt).toLocaleString()}.` : 'Expiry removed.';
+  const status = row ? announcementStatus(row) : null;
+  if (status === 'live') return `${what} Students see it now.`;
+  if (status === 'inactive') return `${what} It is still deactivated: publish it again from Admin > Broadcast.`;
+  if (status === 'draft') return `${what} It is a draft: publish it from Admin > Broadcast.`;
+  if (status === 'scheduled') return `${what} Students see it from its scheduled time.`;
+  return what;
 }
 
 export default function AdminAnnouncementsPage() {
@@ -58,10 +93,10 @@ export default function AdminAnnouncementsPage() {
     fetchAnnouncements();
   }, [authLoading, user, isAdmin, router]);
 
-  // Lists the announcements students currently see (active, sent, not expired).
+  // Every announcement, newest first (the backend returns up to 200).
   const fetchAnnouncements = async () => {
     try {
-      const res = await analyticsAPI.getAnnouncements();
+      const res = await analyticsAPI.getAnnouncements({ scope: 'all' });
       setAnnouncements(listRows<AnnouncementItem>(res.data));
     } catch (error) {
       console.error('Error fetching announcements:', error);
@@ -79,12 +114,13 @@ export default function AdminAnnouncementsPage() {
     }
     let expiresAt: string | undefined;
     if (formData.expires_at) {
-      const parsed = new Date(formData.expires_at);
-      if (Number.isNaN(parsed.getTime())) {
-        setBanner({ kind: 'error', text: 'Expiry date is not valid.' });
+      // A past expiry would create an announcement no student ever sees.
+      const parsed = parseExpiryInput(formData.expires_at);
+      if (!parsed.ok) {
+        setBanner({ kind: 'error', text: parsed.message });
         return;
       }
-      expiresAt = parsed.toISOString();
+      expiresAt = parsed.iso;
     }
     setSubmitting(true);
     try {
@@ -128,6 +164,48 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  // Expiry editor (one row at a time): a later expiry brings an expired
+  // announcement back for students; "Remove expiry" keeps it up for good.
+  const [expiryEditId, setExpiryEditId] = useState<number | null>(null);
+  const [expiryDraft, setExpiryDraft] = useState('');
+  const [expirySavingId, setExpirySavingId] = useState<number | null>(null);
+
+  const toggleExpiryEdit = (ann: AnnouncementItem) => {
+    if (expiryEditId === ann.id) {
+      setExpiryEditId(null);
+      return;
+    }
+    setExpiryEditId(ann.id);
+    setExpiryDraft(toDateTimeLocalValue(ann.expires_at));
+  };
+
+  const saveExpiry = async (id: number, removeExpiry = false) => {
+    let expiresAt: string | null = null;
+    if (!removeExpiry) {
+      const parsed = parseExpiryInput(expiryDraft);
+      if (!parsed.ok) {
+        setBanner({ kind: 'error', text: parsed.message });
+        return;
+      }
+      expiresAt = parsed.iso;
+    }
+    setExpirySavingId(id);
+    try {
+      const res = await analyticsAPI.updateAnnouncement(id, { expires_at: expiresAt });
+      setExpiryEditId(null);
+      setBanner({ kind: 'success', text: expiryChangedText(res?.data, expiresAt) });
+      await fetchAnnouncements();
+    } catch (error: any) {
+      console.error('Error changing announcement expiry:', error);
+      setBanner({
+        kind: 'error',
+        text: `Could not change the expiry: ${extractApiErrorMessage(error?.response?.data, 'request failed')}`,
+      });
+    } finally {
+      setExpirySavingId(null);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this announcement?')) return;
     try {
@@ -152,8 +230,9 @@ export default function AdminAnnouncementsPage() {
     return null;
   }
 
+  // Inside the AppShell layout, .page-container already pads the page.
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 [.page-container_&]:p-0 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Megaphone className="w-6 h-6" /> Manage Announcements
@@ -250,10 +329,10 @@ export default function AdminAnnouncementsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Live Announcements</CardTitle>
+          <CardTitle>All Announcements</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Active and not expired, as students see them. Drafts, scheduled and deactivated announcements are listed
-            in Admin &gt; Broadcast.
+            Newest first, including drafts, scheduled, deactivated and expired ones (campaigns from Admin &gt; Broadcast
+            too). Students only see the Live ones.
           </p>
         </CardHeader>
         <CardContent>
@@ -263,42 +342,98 @@ export default function AdminAnnouncementsPage() {
             <p className="text-sm text-muted-foreground py-4">No announcements found.</p>
           ) : (
             <div className="space-y-3">
-              {announcements.map((ann) => (
-                <div
-                  key={ann.id}
-                  className="border border-border rounded-md p-4 flex flex-col sm:flex-row justify-between gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-medium wrap-break-word">{ann.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Priority: <span className="font-medium">{ann.priority || 'normal'}</span>
-                      {' · '}
-                      Created: {ann.created_at ? new Date(ann.created_at).toLocaleString() : '—'}
-                      {ann.expires_at && <>{' · '}Expires: {new Date(ann.expires_at).toLocaleString()}</>}
-                    </p>
-                    <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message}</p>
+              {announcements.map((ann) => {
+                const status = announcementStatus(ann);
+                const badge = STATUS_BADGES[status];
+                // A deactivated row can also be past its expiry: say both.
+                const alsoExpired = status !== 'expired' && campaignIsExpired(ann);
+                // Same rule as Admin > Broadcast: drafts were never shown.
+                const canDeactivate = ann.is_active !== false && (ann.delivery_status || 'draft') !== 'draft';
+                const editingExpiry = expiryEditId === ann.id;
+                const savingExpiry = expirySavingId === ann.id;
+                return (
+                  <div key={ann.id} className="border border-border rounded-md p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-medium wrap-break-word">{ann.title}</h3>
+                          <Badge variant="outline" className={badge.className}>{badge.label}</Badge>
+                          {alsoExpired && (
+                            <Badge variant="outline" className={STATUS_BADGES.expired.className}>{STATUS_BADGES.expired.label}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Priority: <span className="font-medium">{ann.priority || 'normal'}</span>
+                          {' · '}
+                          Created: {ann.created_at ? new Date(ann.created_at).toLocaleString() : '—'}
+                          {status === 'scheduled' && ann.scheduled_for && (
+                            <>{' · '}Scheduled: {new Date(ann.scheduled_for).toLocaleString()}</>
+                          )}
+                          {ann.expires_at && (
+                            <>{' · '}{campaignIsExpired(ann) ? 'Expired' : 'Expires'}: {new Date(ann.expires_at).toLocaleString()}</>
+                          )}
+                        </p>
+                        <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 self-start">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleExpiryEdit(ann)}
+                          aria-expanded={editingExpiry}
+                          disabled={savingExpiry}
+                        >
+                          Edit expiry
+                        </Button>
+                        {canDeactivate && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeactivate(ann.id)}
+                            disabled={deactivatingId === ann.id}
+                          >
+                            {deactivatingId === ann.id ? 'Deactivating…' : 'Deactivate'}
+                          </Button>
+                        )}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(ann.id)}
+                          aria-label="Delete announcement"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    </div>
+                    {editingExpiry && (
+                      <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/30 p-3">
+                        <label className="flex flex-col gap-1 text-xs font-medium">
+                          New expiry
+                          <Input
+                            type="datetime-local"
+                            value={expiryDraft}
+                            onChange={(e) => setExpiryDraft(e.target.value)}
+                            disabled={savingExpiry}
+                            className="w-56 max-w-full"
+                          />
+                        </label>
+                        <Button size="sm" onClick={() => saveExpiry(ann.id)} disabled={savingExpiry}>
+                          {savingExpiry ? 'Saving…' : 'Save expiry'}
+                        </Button>
+                        {ann.expires_at && (
+                          <Button size="sm" variant="outline" onClick={() => saveExpiry(ann.id, true)} disabled={savingExpiry}>
+                            Remove expiry
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setExpiryEditId(null)} disabled={savingExpiry}>
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 self-start">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeactivate(ann.id)}
-                      disabled={deactivatingId === ann.id}
-                    >
-                      {deactivatingId === ann.id ? 'Deactivating…' : 'Deactivate'}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDelete(ann.id)}
-                      aria-label="Delete announcement"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

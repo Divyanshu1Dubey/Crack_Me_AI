@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { questionsAPI } from '@/lib/api';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { Sparkles } from 'lucide-react';
-import { buildQuestionEditPayload, isValidAnswerLetter, unpersistedEditFields } from '../_lib/adminHelpers';
+import { buildQuestionEditPayload, isValidAnswerLetter, mergeGeneratedFields, unpersistedEditFields } from '../_lib/adminHelpers';
 
 interface QuestionEditModalProps {
   question: any;
@@ -22,6 +22,12 @@ const SCRUBBED_TEXT_FIELDS = [
   'option_d', 'explanation', 'mnemonic', 'concept_explanation',
   'reference_text', 'shortcut_tip', 'why_correct',
   'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+] as const;
+
+// The fields generate-explanation treats as "an explanation already exists"
+// (backend questions/views.py generate_explanation existing_fields).
+const EXISTING_EXPLANATION_FIELDS = [
+  'explanation', 'concept_explanation', 'mnemonic', 'book_name', 'chapter', 'reference_text', 'shortcut_tip',
 ] as const;
 
 // Editable fields from a list row, detail payload or 409 `current` body.
@@ -80,14 +86,23 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   const fieldRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const formRef = useRef(form);
   formRef.current = form;
+  // True while AI-generated fields sit in the form unsaved (generation is a
+  // dry run: nothing is stored until Save), so closing asks first.
+  const aiUnsavedRef = useRef(false);
+
+  // Closing (×, Cancel, Escape) would silently drop unsaved AI output.
+  function requestClose() {
+    if (aiUnsavedRef.current && !window.confirm('The AI-generated fields are not saved yet. Close and discard them?')) return;
+    onClose();
+  }
 
   // Latest save handlers for the keyboard shortcuts below. The listener is
   // registered once; it used to capture the first render's save()/form, so
   // Ctrl+S saved stale values and dropped the edits made since.
   const saveRef = useRef<(force?: boolean) => Promise<boolean>>(async () => false);
   const saveAndNextRef = useRef<() => Promise<void>>(async () => {});
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const onCloseRef = useRef(requestClose);
+  onCloseRef.current = requestClose;
   const hasSaveAndNextRef = useRef(Boolean(onSaveAndNext));
   hasSaveAndNextRef.current = Boolean(onSaveAndNext);
 
@@ -510,12 +525,15 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       // concept_keywords goes out as a list, correct_answer only when it is a
       // real letter, is_controversial only when toggled (buildQuestionEditPayload).
       const payload = buildQuestionEditPayload(scrubMediaUrls(form), baseline);
-      // Only send If-Match when we have a real updated_at. List-serialised rows
-      // don't include updated_at, so updatedAt may be '' on first edit — in that
-      // case skip the optimistic lock and let the server accept the save.
+      // Optimistic lock: If-Match carries the row's updated_at (admin list
+      // rows and the detail payload both include it, so the first save is
+      // locked too; the server compares instants). Without a value, e.g. a
+      // row from an older serializer, the save goes through unlocked.
       const opts = force || !updatedAt ? undefined : { ifMatch: updatedAt };
       const res = await questionsAPI.update(question.id, payload, opts);
       setUpdatedAt(res.data.updated_at ?? updatedAt);
+      // The whole form was sent, generated fields included.
+      aiUnsavedRef.current = false;
       // Edits the PATCH silently ignored (the field is absent from the
       // response): keep them marked as unsaved and tell the admin.
       const dropped = unpersistedEditFields(payload, baseline, res.data);
@@ -575,57 +593,49 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   }
 
   async function generateAIExplanation() {
-    // The AI is told this letter is correct (and it is stored as the answer),
-    // so it must be an explicit choice.
+    // The AI is told this letter is correct (and Save stores it as the
+    // answer), so it must be an explicit choice; the endpoint 400s without it.
     if (!isValidAnswerLetter(form.correct_answer)) {
       setAiError('Select the correct answer first: the explanation is written for that answer.');
       return;
     }
     const correctAnswer = form.correct_answer;
+    // A dry run: the endpoint only returns the generated fields. They go into
+    // the form as unsaved edits; Save stores them with the chosen answer and
+    // Cancel discards them. (Generation never marks the question verified.)
+    // The overwrite question is therefore asked here, before the 15-30 s run.
+    const current = formRef.current as Record<string, unknown>;
+    const hasExisting = EXISTING_EXPLANATION_FIELDS.some((field) => String(current[field] ?? '').trim() !== '');
+    if (hasExisting && !window.confirm(
+      'This question already has an explanation. Replace the explanation fields in this form with AI-generated content? Nothing is saved until you click Save.',
+    )) {
+      return;
+    }
     setAiGenerating(true);
     setAiError(null);
     setAiSuccess(null);
     setAiGeneratedFields([]);
+    // update_correct_answer only matters to a server that ignores dry_run and saves.
     const requestGeneration = (regenerate: boolean) => questionsAPI.generateExplanation(question.id, {
       correct_answer: correctAnswer,
       regenerate_if_exists: regenerate,
       update_correct_answer: true,
+      dry_run: true,
     });
     try {
       let res;
       try {
-        res = await requestGeneration(false);
+        res = await requestGeneration(hasExisting);
       } catch (e: any) {
-        // An existing explanation comes back as HTTP 409, which axios rejects;
-        // the old `res.status === 409` check therefore never ran and the
-        // overwrite confirmation was unreachable.
+        // Only a server that ignores dry_run answers 409 (an explanation
+        // exists); axios rejects it, so it is handled here.
         if (e?.response?.status !== 409) throw e;
         if (!window.confirm('This question already has an explanation. Overwrite with AI-generated content?')) {
           return;
         }
         res = await requestGeneration(true);
       }
-      // The endpoint saves the AI output and marks a previously unverified
-      // question "Verified by Admin" (a student-facing badge). Unreviewed AI
-      // content must not carry it, so restore the unverified state, and say
-      // so when that fails instead of claiming "not marked verified".
-      let stillVerified = false;
-      if (!question.is_verified_by_admin && res?.data?.question?.is_verified_by_admin) {
-        try {
-          await questionsAPI.unverify(question.id);
-        } catch {
-          stillVerified = true;
-        }
-      }
-      applyGeneratedFields(res?.data, correctAnswer, stillVerified);
-      // The endpoint saved the question, so updated_at moved: refresh it or
-      // the next Save is rejected as "edited by another user".
-      try {
-        const detail = await questionsAPI.get(question.id);
-        setUpdatedAt(detail.data?.updated_at ?? '');
-      } catch {
-        setUpdatedAt('');
-      }
+      applyGeneratedFields(res?.data, correctAnswer);
     } catch (e: any) {
       setAiError(e?.response?.data?.detail || e?.response?.data?.error || e?.message || 'AI generation failed.');
     } finally {
@@ -633,27 +643,23 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
   }
 
-  function applyGeneratedFields(data: any, correctAnswer: string, stillVerified = false) {
-    const generated = data?.generated_fields || {};
-    // formRef: generation takes 15-30 s; keep edits made meanwhile.
-    const updated: any = { ...formRef.current };
-    const nextBaseline: any = { ...baselineRef.current, correct_answer: correctAnswer };
-    const applied: string[] = [];
-    for (const [key, value] of Object.entries(generated)) {
-      if (key in updated) {
-        const formValue = key === 'concept_keywords' && Array.isArray(value) ? value.join(', ') : value;
-        updated[key] = formValue;
-        // The endpoint already stored these values.
-        nextBaseline[key] = formValue;
-        applied.push(key);
-      }
+  function applyGeneratedFields(data: any, correctAnswer: string) {
+    // formRef: generation takes 15-30 s; keep edits made meanwhile. `saved`
+    // is false for a dry run (the output stays an unsaved edit, outside the
+    // baseline) and true only if the server stored it (mergeGeneratedFields).
+    const { form: updated, baseline: nextBaseline, applied, saved } =
+      mergeGeneratedFields(formRef.current, baselineRef.current, data, correctAnswer);
+    if (saved) {
+      baselineRef.current = nextBaseline;
+      // The row changed: the next Save must carry its new updated_at, or it
+      // is rejected as "edited by another user".
+      setUpdatedAt(data?.question?.updated_at ?? '');
     }
-    baselineRef.current = nextBaseline;
+    aiUnsavedRef.current = !saved && applied.length > 0;
     setForm(updated);
     setAiGeneratedFields(applied);
-    if (stillVerified) {
-      setAiSuccess(`Generated ${applied.length} fields. They are already saved to the question; review them and Save your edits.`);
-      setAiError('Still marked "Verified by Admin": removing the mark failed. Unverify it in Admin > Question Bank.');
+    if (!saved) {
+      setAiSuccess(`Generated ${applied.length} fields into the form. Nothing is saved yet: review them, then Save (Cancel discards them).`);
       return;
     }
     setAiSuccess(
@@ -673,7 +679,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
               <span className="ml-3 text-xs font-normal text-gray-500 dark:text-slate-400 animate-pulse">Loading full question…</span>
             )}
           </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100">×</button>
+          <button onClick={requestClose} className="text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100">×</button>
         </div>
 
         {error && <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 p-3 rounded">{error}</div>}
@@ -989,7 +995,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
+            <button onClick={requestClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
             <button onClick={() => save(false)} disabled={saving || loadingDetail} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
               {saving ? 'Saving…' : 'Save'}
             </button>
