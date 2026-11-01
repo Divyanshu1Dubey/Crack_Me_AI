@@ -95,6 +95,8 @@ export type AnalyticsEvent =
     | 'question_bookmark'
     | 'question_note_add'
     | 'ai_explanation_open'
+    /* "Generate AI Analysis" clicked: a GA4 conversion (docs/seo/GSC_GA4_SETUP.md) */
+    | 'ai_explain_request'
     | 'ai_explanation_feedback'
     /* AI Tutor */
     | 'ai_tutor_open'
@@ -876,6 +878,14 @@ export const analytics = {
     },
     aiExplanationOpen(questionId: number, subject: string): void {
         dispatch('ai_explanation_open', { question_id: questionId, subject });
+    },
+    /**
+     * The "Generate AI Analysis" button: the `ai_explain_request` GA4
+     * conversion the practice surfaces used to send with a direct (consent-
+     * bypassing) gtag call. `source` = surface ('question_bank' | 'practice').
+     */
+    aiExplainRequest(questionId: number, examSlug: string, source: string): void {
+        dispatch('ai_explain_request', { question_id: questionId, exam_slug: examSlug, source });
     },
     aiExplanationFeedback(questionId: number, vote: 'up' | 'down'): void {
         dispatch('ai_explanation_feedback', { question_id: questionId, vote });

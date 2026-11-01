@@ -23,9 +23,9 @@ import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } fro
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
-    appendUniqueById, classifyReveal, errorStatus, examLabelFromParam, examTypeFromParam, examTypeLabel,
-    hasBlankAnswerKey, mergeRevealWithDetail, readPage, retryTimeSpent, revealFromAttempt,
-    revealNeedsDetail, upgradeRequiredFeature, type AnswerReveal,
+    aiFailureNotice, appendUniqueById, classifyAiFailure, classifyReveal, errorStatus, examLabelFromParam,
+    examTypeFromParam, examTypeLabel, hasBlankAnswerKey, mergeRevealWithDetail, readPage, retryTimeSpent,
+    revealFromAttempt, revealNeedsDetail, upgradeRequiredFeature, type AnswerReveal,
 } from '@/components/question/practiceData';
 import {
     BookOpen, ChevronLeft, ChevronRight, Loader2, Brain, Sparkles,
@@ -110,7 +110,8 @@ function PracticeContent() {
     const [showAnswer, setShowAnswer] = useState(false);
     const [aiExplanation, setAiExplanation] = useState<any>(null);
     const [aiLoading, setAiLoading] = useState(false);
-    const [aiError, setAiError] = useState<string | null>(null);
+    // Short notice for a failed AI request (503 ai_unavailable, rate limit, …).
+    const [aiError, setAiError] = useState<{ title: string; message: string } | null>(null);
     const [tokenError, setTokenError] = useState(false);
     const [showPalette, setShowPalette] = useState(false);
     // Bookmark state the student toggled this session (server value otherwise).
@@ -384,9 +385,7 @@ function PracticeContent() {
         // `question_id` lets the server use the stored question (its own
         // answer key, stored explanation, cached analysis) and check the
         // student's entitlement; the text fields are a fallback only.
-        // (Built as a variable so it type-checks before api.ts declares
-        // `question_id` on this call.)
-        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] & { question_id?: number } = {
+        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] = {
             question_id: currentQ.id,
             question_text: sanitizeQuestionText(currentQ.question_text),
             options: {
@@ -406,13 +405,18 @@ function PracticeContent() {
             setAiLoading(false);
         }).catch(err => {
             if (cancelled || reqQuestionId !== currentQIdRef.current) return;
-            if (upgradeRequiredFeature(err)) {
-                // Premium question on the free plan: the api.ts interceptor
-                // already opened the paywall; this isn't an AI outage.
-            } else if (err?.response?.status === 429) {
+            const failure = classifyAiFailure(err);
+            if (failure === 'upgrade') {
+                // Premium question on the free plan: the paywall, not an AI
+                // outage (the api.ts interceptor opens it too; showing it
+                // twice is a no-op).
+                showPaywall(upgradeRequiredFeature(err) || 'PYQ answers');
+            } else if (failure === 'tokens') {
                 setTokenError(true);
             } else {
-                setAiError('AI service unavailable. Please try again.');
+                // 503 ai_unavailable → "AI is unavailable right now" (never
+                // charged); a throttle 429 is not an empty token wallet.
+                setAiError(aiFailureNotice(failure, err));
             }
             setAiLoading(false);
         });
@@ -795,6 +799,8 @@ function PracticeContent() {
                                         // Consent-gated analytics (the direct window.gtag
                                         // call fired before consent was given).
                                         analytics.aiExplanationOpen(currentQ.id, String(currentQ.subject_name || ''));
+                                        // The GA4 "ai_explain_request" conversion.
+                                        analytics.aiExplainRequest(currentQ.id, resolvedExamType, 'practice');
                                         fetchAiExplanation();
                                     }}
                                         className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20">
@@ -824,10 +830,13 @@ function PracticeContent() {
                                     </Card>
                                 )}
 
-                                {/* AI Error */}
+                                {/* AI Error (the Generate button above stays as the retry) */}
                                 {aiError && (
-                                    <Card className="border-red-200 bg-red-50 dark:bg-red-950/20">
-                                        <CardContent className="p-3 text-center text-sm text-red-600">{aiError}</CardContent>
+                                    <Card role="status" className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900/40">
+                                        <CardContent className="p-3 text-center">
+                                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">{aiError.title}</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">{aiError.message}</p>
+                                        </CardContent>
                                     </Card>
                                 )}
 

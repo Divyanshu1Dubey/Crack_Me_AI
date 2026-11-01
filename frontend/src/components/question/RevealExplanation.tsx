@@ -10,11 +10,14 @@
  * All three tiers cache on the backend per the ai_per_question module.
  * When no AI output exists the backend returns canned template strings
  * (generic study tips); those are hidden rather than shown as analysis.
+ * When the hourly AI generation budget is spent a tier answers
+ * `{<field>: null, rate_limited: true}`: the panel says so instead of
+ * silently leaving the AI sections out.
  */
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { FormattedText } from "@/components/FormattedText";
-import { readAiField } from "@/components/question/practiceData";
+import { aiRateLimited, readAiField } from "@/components/question/practiceData";
 
 interface Props {
   questionId: number;
@@ -30,12 +33,14 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
   const [importance, setImportance] = useState<number | null>(null);
   const [concept, setConcept] = useState<string>("");
   const [whyNot, setWhyNot] = useState<string>("");
+  const [rateLimited, setRateLimited] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let alive = true;
     // Clear the previous question's tiers while this one loads.
     setAi(""); setClinical(""); setMemory(""); setImportance(null); setConcept(""); setWhyNot("");
+    setRateLimited(false);
     (async () => {
       // Each tier settles on its own so one failing endpoint doesn't
       // blank the others.
@@ -58,6 +63,7 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
       // were swapped, so both sections always rendered empty).
       setConcept(readAiField(body(w), "concept"));
       setWhyNot(readAiField(body(wn), "why_incorrect"));
+      setRateLimited(aiRateLimited([a, c, m, e, w, wn].map(body)));
     })();
     return () => { alive = false; };
   }, [open, questionId]);
@@ -111,6 +117,11 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{importance}/100</p>
         </div>
+      ) : null}
+      {rateLimited ? (
+        <p role="status" className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+          AI limit reached for this hour. The missing AI sections can be generated again later.
+        </p>
       ) : null}
     </div>
   );

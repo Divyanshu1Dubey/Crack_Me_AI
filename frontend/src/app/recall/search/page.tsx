@@ -39,8 +39,10 @@ export default function RecallSearchPage() {
   const onResults = useCallback((r: Row[]) => { setRows(r); setStatus("ok"); }, []);
   const onError = useCallback(() => { setRows([]); setStatus("error"); }, []);
 
+  // The route layout wraps the page in AppShell, whose .page-container
+  // already pads it.
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 text-foreground">
+    <div className="mx-auto max-w-5xl px-4 py-6 [.page-container_&]:p-0 text-foreground">
       <h1 className="mb-4 text-2xl font-semibold">Recall bank search</h1>
       <RecallSearchBox onResults={onResults} onError={onError} />
 

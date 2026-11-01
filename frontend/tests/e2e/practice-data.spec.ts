@@ -306,8 +306,11 @@ test.describe('explanation fallback (effective_explanation, wave 2)', () => {
         expect(pickExplanation(attempt)).toBe('AI: B because…');
         const reveal = revealFromAttempt('A', attempt);
         expect(reveal.explanation).toBe('AI: B because…');
-        // Curated text still wins when it exists.
+        // Curated text still wins over the effective (usually AI analysis)
+        // explanation, unless the payload flags an admin override / lock.
         expect(pickExplanation({ explanation: 'Curated', effective_explanation: 'AI' })).toBe('Curated');
+        expect(pickExplanation({ explanation: 'Curated', effective_explanation: 'Override', explanation_overridden: true })).toBe('Override');
+        expect(pickExplanation({ explanation: 'Curated', effective_explanation: '', explanation_overridden: true })).toBe('Curated');
         // Fields present but blank → '' (no detail round-trip just for it);
         // fields absent (redacted / list payload) → undefined.
         expect(pickExplanation({ explanation: '  ', effective_explanation: '' })).toBe('');

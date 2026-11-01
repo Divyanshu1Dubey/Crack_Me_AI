@@ -54,9 +54,15 @@ import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/c
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
 import {
-    collectPages, errorStatus, normaliseTextbookReferences, pickExplanation, resolveSubjectParam,
-    retryAfterSeconds, upgradeRequiredFeature, type SubjectOption, type TextbookReference,
+    aiFailureNotice, answerLetter, attemptVerdict, classifyAiFailure, collectPages, detailFailureKind, errorStatus,
+    fetchPageScreenshot, isPremiumUser, normaliseTextbookReferences, normaliseYears, pickExplanation, resolveSubjectParam,
+    retryAfterSeconds, summariseBankStats, upgradeRequiredFeature, type SubjectOption, type TextbookReference,
 } from '@/components/question/practiceData';
+
+/** Bank metadata loaded next to the list (filters + stats strip). */
+type MetaPart = 'subjects' | 'years' | 'stats';
+const META_PARTS: MetaPart[] = ['subjects', 'years', 'stats'];
+const NO_META_FAILED: Record<MetaPart, boolean> = { subjects: false, years: false, stats: false };
 
 // The global `.input-field` rule is unlayered CSS (10px vertical padding,
 // 14px font), so it beat these selects' Tailwind utilities and clipped
@@ -194,11 +200,9 @@ function ExamQuestionBankInner({
     const { setContextQuestionId } = useDock();
     const { show: showPaywall } = usePaywall();
     // Freemium: a user is "premium" if they have an active subscription OR
-    // are admin/staff — mirrors backend `accounts.utils.is_premium`.
-    const isPremium =
-        (user as { is_premium?: boolean } | null)?.is_premium === true ||
-        (user as { subscription_info?: { is_active?: boolean } } | null)?.subscription_info?.is_active === true ||
-        (user as { is_admin?: boolean } | null)?.is_admin === true;
+    // are admin/staff — mirrors backend `accounts.utils.is_premium` (the
+    // same helper the practice pages use).
+    const isPremium = isPremiumUser(user);
     // Broadcast whether a question is currently being solved so the
     // SidebarAutoHide controller can keep the sidebar collapsed for the
     // entire /questions session while a question is open.
@@ -227,7 +231,24 @@ function ExamQuestionBankInner({
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear ?? '');
     const [years, setYears] = useState<number[]>([]);
     const [qbankStats, setQbankStats] = useState<any>(null);
-    const [error, setError] = useState<string | null>(null);
+    // Metadata parts whose request failed for good (after the one automatic
+    // retry of a 429): the filter card offers a Retry for them.
+    const [metaFailed, setMetaFailed] = useState<Record<MetaPart, boolean>>(NO_META_FAILED);
+    // Years and stats belong to one exam: drop the previous exam's values
+    // when /questions?exam=… switches banks without remounting.
+    const metaScope = `${examType}|${examSource}`;
+    const [metaScopeShown, setMetaScopeShown] = useState(metaScope);
+    if (metaScope !== metaScopeShown) {
+        setMetaScopeShown(metaScope);
+        setYears([]);
+        setQbankStats(null);
+        setMetaFailed(NO_META_FAILED);
+    }
+    // The open question's detail request failed (premium question on the
+    // free plan, removed question, network): shown instead of a skeleton.
+    const [detailError, setDetailError] = useState<{ id: number; error: unknown } | null>(null);
+    // The server refused to grade this question on the free plan (402).
+    const [answerLockedId, setAnswerLockedId] = useState<number | null>(null);
     const [listError, setListError] = useState<string | null>(null);
     // Shown over the list skeleton while a rate-limited (429) list request
     // waits to retry.
@@ -241,14 +262,16 @@ function ExamQuestionBankInner({
     const [showAnswer, setShowAnswer] = useState(false);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [studyMode, setStudyMode] = useState<'practice' | 'exam'>('practice');
-    const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean; answeredAt: number }>>({});
+    // isCorrect null: the question has no answer key, so the pick is ungraded.
+    const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean | null; answeredAt: number }>>({});
     const [examPaletteOpen, setExamPaletteOpen] = useState(true);
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [aiExplanation, setAiExplanation] = useState<any>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [tokenError, setTokenError] = useState(false);
-    const [aiError, setAiError] = useState<string | null>(null);
+    // Short notice for a failed AI request (503 ai_unavailable, rate limit, …).
+    const [aiError, setAiError] = useState<{ title: string; message: string } | null>(null);
     const [flagOpen, setFlagOpen] = useState(false);
     const [flagCategory, setFlagCategory] = useState('wrong_answer');
     const [flagComment, setFlagComment] = useState('');
@@ -342,11 +365,24 @@ function ExamQuestionBankInner({
     const [textbookRef, setTextbookRef] = useState<any>(null);
     const [textbookLoading, setTextbookLoading] = useState(false);
     const [textbookScreenshot, setTextbookScreenshot] = useState<string | null>(null);
+    // The page image is being fetched from /ai/screenshot/ (the question has
+    // no stored one, or the stored one failed to load).
+    const [textbookShotLoading, setTextbookShotLoading] = useState(false);
     // Question id the in-flight textbook lookup belongs to; a response for
     // a question the student has since left is dropped.
     const textbookRequestFor = useRef<number | null>(null);
+    // The question /ai/screenshot/ was asked for (once per opened question),
+    // and a counter that lets only the newest screenshot request write.
+    const screenshotAskedFor = useRef<number | null>(null);
+    const screenshotSeq = useRef(0);
+    useEffect(() => {
+        const seq = screenshotSeq;
+        return () => { seq.current += 1; };
+    }, []);
     // Same for the AI analysis request.
     const aiRequestFor = useRef<number | null>(null);
+    // Same for the question detail: the open question's id.
+    const detailRequestFor = useRef<number | null>(null);
 
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -409,35 +445,73 @@ function ExamQuestionBankInner({
     }, [aiLoading]);
 
     // Stats + subjects + years ("meta"). Each request settles on its own so
-    // a slow or failing /stats/ never blocks the filters or the list; the
-    // list error's Retry reloads whichever part is still missing (a 429
-    // used to leave the strip and the dropdowns empty until a full reload).
+    // a slow or failing /stats/ never blocks the filters or the list. A
+    // rate-limited (429) part is retried once after Retry-After, like the
+    // list; a part that still fails shows a "Retry" link in the filter card
+    // (a 429 used to leave the strip and the dropdowns empty, and a
+    // ?subject= link unfiltered, until a full reload).
     // Subjects are NOT filtered by exam_type: the Question → Subject FK
     // model uses the same medical subject names across CMS / NEET PG /
     // INI-CET tracks, and the loader's "Imported" bucket is itself tagged
     // exam_type='cms'. Filtering by exam_type=cms therefore hides every real
     // medical subject (Anatomy, Surgery, etc.) and leaves only the two
-    // "Expert Curated" rows.
-    const loadMeta = useCallback((parts: { subjects?: boolean; years?: boolean; stats?: boolean } = {
-        subjects: true, years: true, stats: true,
-    }) => {
-        if (parts.subjects) {
-            setSubjectsStatus(prev => (prev === 'ok' ? prev : 'loading'));
-            fetchAllSubjects()
-                .then(list => { setSubjects(list); setSubjectsStatus('ok'); })
-                .catch(() => setSubjectsStatus(prev => (prev === 'ok' ? prev : 'failed')));
-        }
-        if (parts.years) {
-            questionsAPI.getYears()
-                .then(yRes => setYears(yRes.data.results || yRes.data || []))
-                .catch(() => { /* year dropdown stays empty until Retry */ });
-        }
-        if (parts.stats) {
-            questionsAPI.getStats({ exam_source: examSource })
-                .then(statsRes => setQbankStats(statsRes.data))
-                .catch(() => { /* stats panel stays hidden until Retry */ });
-        }
-    }, [examSource]);
+    // "Expert Curated" rows. Years ARE the bank's exam's (contract C11).
+    const metaSeq = useRef<Record<MetaPart, number>>({ subjects: 0, years: 0, stats: 0 });
+    const metaRetryTimers = useRef<Partial<Record<MetaPart, ReturnType<typeof setTimeout>>>>({});
+    useEffect(() => {
+        const timers = metaRetryTimers.current;
+        return () => { Object.values(timers).forEach(t => { if (t) clearTimeout(t); }); };
+    }, []);
+    const loadMeta = useCallback((parts: MetaPart[] = META_PARTS) => {
+        const run = (part: MetaPart, isRetry: boolean) => {
+            const pendingRetry = metaRetryTimers.current[part];
+            if (pendingRetry) {
+                clearTimeout(pendingRetry);
+                delete metaRetryTimers.current[part];
+            }
+            // Only the newest request of a part may write it (an older
+            // exam's response, or a request a Retry replaced, is dropped).
+            const seq = ++metaSeq.current[part];
+            const isCurrent = () => seq === metaSeq.current[part];
+            setMetaFailed(prev => (prev[part] ? { ...prev, [part]: false } : prev));
+            let request: Promise<void>;
+            if (part === 'subjects') {
+                setSubjectsStatus(prev => (prev === 'ok' ? prev : 'loading'));
+                request = fetchAllSubjects().then(list => {
+                    if (!isCurrent()) return;
+                    setSubjects(list);
+                    setSubjectsStatus('ok');
+                });
+            } else if (part === 'years') {
+                // This exam's years only; the endpoint never lists year 0.
+                request = questionsAPI.getYears({ exam_type: examType }).then(res => {
+                    if (isCurrent()) setYears(normaliseYears(res.data));
+                });
+            } else {
+                request = questionsAPI.getStats({ exam_source: examSource }).then(res => {
+                    if (isCurrent()) setQbankStats(res.data);
+                });
+            }
+            request.catch((err: unknown) => {
+                if (!isCurrent()) return;
+                if (!isRetry && errorStatus(err) === 429) {
+                    // Usually the same burst that rate-limits the list; the
+                    // subjects stay 'loading' so a ?subject= link keeps waiting
+                    // (with the list's "busy" note over its skeleton).
+                    const wait = retryAfterSeconds(err);
+                    if (part === 'subjects') setListNotice(`The question bank is busy right now. Retrying in ${wait}s…`);
+                    metaRetryTimers.current[part] = setTimeout(() => {
+                        delete metaRetryTimers.current[part];
+                        run(part, true);
+                    }, wait * 1000);
+                    return;
+                }
+                if (part === 'subjects') setSubjectsStatus(prev => (prev === 'ok' ? prev : 'failed'));
+                setMetaFailed(prev => ({ ...prev, [part]: true }));
+            });
+        };
+        parts.forEach(part => run(part, false));
+    }, [examSource, examType]);
 
     // The question list itself is loaded by the filter effect below so the
     // first request already carries ?year= / ?bookmarked=1 — previously this
@@ -455,13 +529,19 @@ function ExamQuestionBankInner({
         // searchParams / pathname only shape the login redirect.
     }, [authLoading, isAuthenticated, router, loadMeta]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Honour `?q=ID` from the URL on first mount after questions load.
+    // Honour `?q=ID` once per value: after the first list load, and again
+    // when a link changes it while the bank stays mounted. (A question whose
+    // detail failed — e.g. a premium one on the free plan — used to be
+    // re-requested on every list reload, and a new ?q= was ignored once any
+    // question had been open.)
+    const openedQueryId = useRef<string | null>(null);
     useEffect(() => {
-        if (!initialQueryId) return;
+        if (!initialQueryId || openedQueryId.current === initialQueryId) return;
         const id = Number(initialQueryId);
         if (!Number.isFinite(id) || id <= 0) return;
-        if (loading || !isAuthenticated || questionDetail) return;
+        if (loading || !isAuthenticated) return;
         if (questions.some(q => q.id === id) || page === 1) {
+            openedQueryId.current = initialQueryId;
             openQuestion(id);
         }
     }, [initialQueryId, loading, isAuthenticated, questions, page]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -607,7 +687,10 @@ function ExamQuestionBankInner({
 
     const openQuestion = useCallback((id: number) => {
         questionOpenedAt.current = Date.now();
+        detailRequestFor.current = id;
         setSelectedQuestion(id);
+        setDetailError(null);
+        setAnswerLockedId(null);
         setShowAnswer(false);
         setSelectedAnswer(null);
         setAiExplanation(null);
@@ -616,13 +699,20 @@ function ExamQuestionBankInner({
         setAiError(null);
         setTextbookRef(null);
         setTextbookScreenshot(null);
+        setTextbookShotLoading(false);
         setTextbookLoading(false);
         textbookRequestFor.current = null;
+        screenshotAskedFor.current = null;
+        screenshotSeq.current += 1;
         aiRequestFor.current = null;
+        // Responses for a question the student has since left are dropped
+        // (a slow one used to replace the newer question's detail).
+        const isCurrent = () => detailRequestFor.current === id;
         Promise.all([
             questionsAPI.get(id),
             questionsAPI.getSimilar(id),
         ]).then(([qRes, sRes]) => {
+            if (!isCurrent()) return;
             const detailData = qRes.data;
             detailData.similar = sRes.data;
             setQuestionDetail(detailData);
@@ -633,14 +723,19 @@ function ExamQuestionBankInner({
                 setSelectedAnswer(detailData.user_selected_answer);
             }
         }).catch(() => {
+            if (!isCurrent()) return;
             questionsAPI.get(id).then(res => {
+                if (!isCurrent()) return;
                 setQuestionDetail(res.data);
                 if (res.data.user_selected_answer) {
                     setSelectedAnswer(res.data.user_selected_answer);
                 }
-            }).catch(() => {
-                // Both detail endpoints failed — show a user-facing error
-                setError('Unable to load question details. Please try again.');
+            }).catch((err: unknown) => {
+                // A premium question on the free plan (the detail endpoint
+                // only serves the free showcase to free accounts), a removed
+                // question or a failed request: the pane says which (it
+                // used to show a loading skeleton forever).
+                if (isCurrent()) setDetailError({ id, error: err });
             });
         });
     }, []);
@@ -657,35 +752,69 @@ function ExamQuestionBankInner({
         setQuestionFocused(selectedQuestion !== null);
     }, [selectedQuestion, setQuestionFocused]);
 
+    // The attempt was refused on the free plan (402 upgrade_required): undo
+    // the pick and show the upgrade prompt instead of the reveal (C13).
+    const relockIfUpgradeRequired = (qId: number, err: unknown) => {
+        const feature = upgradeRequiredFeature(err);
+        if (!feature) return;
+        setExamAnswers(prev => {
+            if (!(qId in prev)) return prev;
+            const next = { ...prev };
+            delete next[qId];
+            return next;
+        });
+        if (detailRequestFor.current === qId) {
+            setShowAnswer(false);
+            setSelectedAnswer(null);
+            setAnswerLockedId(qId);
+        }
+        // The api.ts interceptor opens it too; showing it twice is a no-op.
+        showPaywall(feature);
+    };
+
     const handleSelectOption = (opt: string) => {
         if (!questionDetail) return;
+        // The previous question stays on screen until the next one's detail
+        // arrives: never record a pick against it.
+        if (questionDetail.id !== selectedQuestion) return;
         if (showAnswer) return;
+        if (answerLockedId === questionDetail.id) {
+            showPaywall('PYQ answers');
+            return;
+        }
         setSelectedAnswer(opt);
 
         if (studyMode === 'practice') {
             setShowAnswer(true);
             const qId = questionDetail.id;
-            const isCorrect = opt === questionDetail.correct_answer;
             questionsAPI.attempt(qId, { selected_answer: opt, time_spent_seconds: secondsOnQuestion() }).then((res) => {
                 // Mark the row answered in the list (previously only when a
-                // token was earned, so most answers never showed up there).
-                // Prefer the server's verdict when it sends one.
-                const verdict = typeof res?.data?.is_correct === 'boolean' ? res.data.is_correct : isCorrect;
+                // token was earned, so most answers never showed up there),
+                // with the server's verdict — null when the question has no
+                // answer key (nothing recorded; the row says "Attempted",
+                // it used to say "Incorrect").
+                const verdict = attemptVerdict(opt, res?.data);
                 setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: verdict } : q));
-            }).catch(() => { });
+            }).catch((err: unknown) => relockIfUpgradeRequired(qId, err));
         }
     };
 
     const handleSubmitExamModeAnswer = () => {
         if (!questionDetail || !selectedAnswer || showAnswer) return;
+        if (questionDetail.id !== selectedQuestion) return;
         setShowAnswer(true);
         const qId = questionDetail.id;
-        const isCorrect = selectedAnswer === questionDetail.correct_answer;
-        questionsAPI.attempt(qId, { selected_answer: selectedAnswer, time_spent_seconds: secondsOnQuestion() }).then((res) => {
-            const verdict = typeof res?.data?.is_correct === 'boolean' ? res.data.is_correct : isCorrect;
-            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: verdict } : q));
-        }).catch(() => { });
-        setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
+        const picked = selectedAnswer;
+        // Graded against the detail's key until the server answers; without
+        // a key the pick is ungraded (null), not wrong.
+        const key = answerLetter(questionDetail.correct_answer);
+        const isCorrect = key ? picked === key : null;
+        questionsAPI.attempt(qId, { selected_answer: picked, time_spent_seconds: secondsOnQuestion() }).then((res) => {
+            const verdict = attemptVerdict(picked, res?.data);
+            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: picked, user_is_correct: verdict } : q));
+            setExamAnswers(prev => (prev[qId] ? { ...prev, [qId]: { ...prev[qId], isCorrect: verdict } } : prev));
+        }).catch((err: unknown) => relockIfUpgradeRequired(qId, err));
+        setExamAnswers(prev => ({ ...prev, [qId]: { selected: picked, isCorrect, answeredAt: Date.now() } }));
     };
 
     const fetchAiExplanation = () => {
@@ -700,9 +829,8 @@ function ExamQuestionBankInner({
         setAiError(null);
         // `question_id` lets the server use the stored question (its answer
         // key, stored explanation and the cached analysis) and check the
-        // student's entitlement; the text fields are a fallback only. (A
-        // variable so it type-checks before api.ts declares the field.)
-        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] & { question_id?: number } = {
+        // student's entitlement; the text fields are a fallback only.
+        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] = {
             question_id: d.id,
             question_text: sanitizeQuestionText(d.question_text),
             options: {
@@ -711,7 +839,7 @@ function ExamQuestionBankInner({
                 C: sanitizeOptionText(d.option_c || d.option_C || ''),
                 D: sanitizeOptionText(d.option_d || d.option_D || ''),
             },
-            correct_answer: d.correct_answer || '',
+            correct_answer: answerLetter(d.correct_answer),
             selected_answer: selectedAnswer || '',
             subject: d.subject_name || '',
             topic: d.topic_name || '',
@@ -725,21 +853,90 @@ function ExamQuestionBankInner({
             setAiLoading(false);
         }).catch((err) => {
             if (aiRequestFor.current !== reqId) return;
-            if (upgradeRequiredFeature(err)) {
-                // Free plan on a premium question: the api.ts interceptor
-                // opened the paywall — not an AI outage.
-                setAiLoading(false);
-            } else if (err?.response?.status === 429) {
+            setAiLoading(false);
+            const failure = classifyAiFailure(err);
+            if (failure === 'upgrade') {
+                // Free plan on a premium question: the paywall, not an AI
+                // outage (the api.ts interceptor opens it too; a no-op twice).
+                showPaywall(upgradeRequiredFeature(err) || 'PYQ answers');
+            } else if (failure === 'tokens') {
                 setTokenError(true);
-                setAiLoading(false);
             } else {
-                // No silent automatic retry: an AI call can take up to the
-                // full timeout, and the card below offers a Retry button.
-                setAiError(err?.response?.data?.error || 'AI service unavailable. Please try again.');
+                // 503 ai_unavailable → "AI is unavailable right now" (never
+                // charged); a throttle 429 is not an empty wallet. Never the
+                // server's raw error text. No silent automatic retry: an AI
+                // call can take up to the full timeout, and the card below
+                // offers a Retry button.
+                setAiError(aiFailureNotice(failure, err));
                 setAiExplanation(null);
-                setAiLoading(false);
             }
         });
+    };
+
+    // The textbook page image from /ai/screenshot/ (it renders the cited
+    // page on the server and answers {screenshot_url}; a 202 "rendering" is
+    // asked once more, a 404 means no image, a 402 opens the paywall through
+    // the api.ts interceptor). At most once per opened question, and only
+    // from the "Find in Textbook" click. False when it was already asked.
+    const requestTextbookScreenshot = (qid: number): boolean => {
+        if (screenshotAskedFor.current === qid) return false;
+        screenshotAskedFor.current = qid;
+        const seq = ++screenshotSeq.current;
+        const isCurrent = () => seq === screenshotSeq.current && textbookRequestFor.current === qid;
+        setTextbookShotLoading(true);
+        void fetchPageScreenshot(aiAPI.getScreenshot, qid, { isCurrent }).then(url => {
+            if (!isCurrent()) return;
+            setTextbookShotLoading(false);
+            setTextbookScreenshot(url);
+        });
+        return true;
+    };
+
+    // The page image failed to load (e.g. a stored file lost on a redeploy):
+    // ask /ai/screenshot/ once, which renders the page again; a second
+    // failure just hides the image.
+    const handleTextbookScreenshotError = () => {
+        setTextbookScreenshot(null);
+        const qid = (questionDetail as any)?.id;
+        if (typeof qid === 'number' && textbookRequestFor.current === qid) requestTextbookScreenshot(qid);
+    };
+
+    // "Find in Textbook": the book / chapter / page covering the question.
+    const lookupTextbook = () => {
+        const d = questionDetail as any;
+        if (!d) return;
+        const qid = d.id;
+        textbookRequestFor.current = qid;
+        setTextbookLoading(true);
+        setTextbookRef(null);
+        setTextbookScreenshot(null);
+        setTextbookShotLoading(false);
+        aiAPI.textbookReference({ question_text: d.question_text })
+            .then(res => {
+                if (textbookRequestFor.current !== qid) return;
+                // The endpoint returns {references: [{book, page, excerpt, …}]}.
+                setTextbookRef({ references: normaliseTextbookReferences(res.data) });
+                // The page screenshot stored on the question, else the one
+                // /ai/screenshot/ renders (it answers a URL now, not the
+                // server filesystem path it used to).
+                const storedShot = typeof d.page_screenshot === 'string' ? d.page_screenshot.trim() : '';
+                if (storedShot) setTextbookScreenshot(storedShot);
+                else requestTextbookScreenshot(qid);
+            })
+            .catch((err: unknown) => {
+                if (textbookRequestFor.current !== qid) return;
+                const feature = upgradeRequiredFeature(err);
+                if (feature) {
+                    // Premium question on the free plan: the paywall, and the
+                    // button again (not "no textbook mapping").
+                    showPaywall(feature);
+                    return;
+                }
+                setTextbookRef({ error: true });
+            })
+            .finally(() => {
+                if (textbookRequestFor.current === qid) setTextbookLoading(false);
+            });
     };
 
     const handleBookmark = (id: number, e: React.MouseEvent) => {
@@ -764,19 +961,27 @@ function ExamQuestionBankInner({
         fetchQuestions(params);
     };
 
-    // List error "Retry": the list plus whatever bank metadata (subjects,
-    // years, stats strip) failed with it — the same burst that fails the
-    // list usually fails those too.
-    const retryListAndMeta = () => {
+    // Reload whatever bank metadata (subjects, years, stats strip) failed or
+    // is still missing.
+    const retryMeta = () => {
         // A `?subject=` link whose subject list never loaded gets resolved again.
         if (subjectsStatus === 'failed' && subjectParam) setAppliedSubjectParam('');
-        loadMeta({
+        const missing: Record<MetaPart, boolean> = {
             subjects: subjectsStatus === 'failed' || subjects.length === 0,
             years: years.length === 0,
             stats: !qbankStats,
-        });
+        };
+        const parts = META_PARTS.filter(part => metaFailed[part] || missing[part]);
+        if (parts.length > 0) loadMeta(parts);
+    };
+
+    // List error "Retry": the list plus the metadata that failed with it —
+    // the same burst that fails the list usually fails those too.
+    const retryListAndMeta = () => {
+        retryMeta();
         handleSearch();
     };
+    const metaRetryNeeded = metaFailed.subjects || metaFailed.years || metaFailed.stats;
 
     const handleFlagSubmit = () => {
         if (!questionDetail || !flagComment.trim()) return;
@@ -815,12 +1020,27 @@ function ExamQuestionBankInner({
 
     const detail = questionDetail as any;
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    // Curated explanation, else the effective (admin override / AI) one.
+    // Curated explanation (an admin override first when the detail flags
+    // one), else the effective (AI) one.
     const detailExplanation = detail ? (pickExplanation(detail) || '') : '';
-    // PYQs = rows with a real year (year 0 is the Expert Curated sentinel).
-    const pyqCount: number = Array.isArray(qbankStats?.by_year)
-        ? qbankStats.by_year.reduce((n: number, b: any) => n + (Number(b?.year) > 0 ? Number(b?.count) || 0 : 0), 0)
-        : Number(qbankStats?.total) || 0;
+    // The open question's answer key ('' when it has none).
+    const detailKey = detail ? answerLetter(detail.correct_answer) : '';
+    // Why the selected question's detail could not be shown (or null).
+    const detailFailure = selectedQuestion && detailError?.id === selectedQuestion
+        ? detailFailureKind(detailError.error, isPremium)
+        : null;
+    // One PYQ definition (rows with a real year; year 0 is the Expert
+    // Curated sentinel) for the headline AND the progress bar.
+    const bankStats = summariseBankStats(qbankStats);
+    const pyqCount = bankStats.pyqTotal;
+    const pyqProgressPct = pyqCount > 0 ? Math.round((bankStats.pyqSolved / pyqCount) * 100) : 0;
+    // The year tiles: PYQ years only (no "0" tile for the undated pool).
+    const yearStatRows: any[] = Array.isArray(qbankStats?.by_year)
+        ? qbankStats.by_year.filter((b: any) => Number(b?.year) > 0)
+        : [];
+    // Stats that cover no question at all (e.g. an exam the stats endpoint
+    // does not map yet) would only claim "0 PYQs" next to a full list.
+    const showBankStats = !!qbankStats && bankStats.hasRows;
     const filtersActive = !!(selectedSubject || selectedDifficulty || selectedYear || searchQuery || bookmarkedOnly);
 
     // ── Render ────────────────────────────────────────────
@@ -902,7 +1122,7 @@ function ExamQuestionBankInner({
                 <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-visible">
                     <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
                     <CardContent className="p-3 space-y-2.5">
-                        {qbankStats && (
+                        {showBankStats && (
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-border/40 pb-2">
                                 <div className="space-y-1 text-left">
                                     {/* Hero title — deliberately NOT a duplicate of the page heading
@@ -916,10 +1136,13 @@ function ExamQuestionBankInner({
                                     {/* The stats count PYQs by exam_source while the list
                                         below (exam_type) also holds the Expert Curated pool, so
                                         say which number is which instead of "2277 MCQs and
-                                        PYQs" above a 277-page list of curated cards. */}
+                                        PYQs" above a 277-page list of curated cards. The
+                                        "incl. Expert Curated" note only when the stats do
+                                        have undated rows (it used to appear on banks with
+                                        none). */}
                                     <p className="text-xs text-muted-foreground">
                                         {pyqCount.toLocaleString('en-IN')} {examSource} PYQs
-                                        {!filtersActive && totalCount > pyqCount
+                                        {!filtersActive && bankStats.undatedTotal > 0 && totalCount > pyqCount
                                             ? ` · ${totalCount.toLocaleString('en-IN')} questions incl. Expert Curated`
                                             : ''}
                                     </p>
@@ -927,13 +1150,15 @@ function ExamQuestionBankInner({
 
                                 <div className="flex flex-1 max-w-md items-center gap-3">
                                     <div className="flex-1 space-y-0.5 min-w-0">
+                                        {/* Same PYQ count as the headline (it used to divide by
+                                            a total that also counted the undated rows). */}
                                         <div className="flex justify-between text-xs font-semibold gap-2">
-                                            <span className="truncate">Overall Progress</span>
+                                            <span className="truncate">PYQ Progress</span>
                                             <span className="text-primary font-bold shrink-0">
-                                                {Number(qbankStats.total_solved || 0).toLocaleString('en-IN')} / {Number(qbankStats.total || 0).toLocaleString('en-IN')} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
+                                                {bankStats.pyqSolved.toLocaleString('en-IN')} / {pyqCount.toLocaleString('en-IN')} ({pyqProgressPct}%)
                                             </span>
                                         </div>
-                                        <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-1.5" />
+                                        <Progress value={pyqProgressPct} className="h-1.5" />
                                     </div>
                                     <button
                                         type="button"
@@ -948,7 +1173,7 @@ function ExamQuestionBankInner({
                             </div>
                         )}
 
-                        {qbankStats && showStatsDetail && (
+                        {showBankStats && showStatsDetail && (
                             <div
                                 id="year-stats-panel"
                                 className="pt-1 pb-3 border-b border-border/40 animate-fadeIn space-y-2"
@@ -958,11 +1183,11 @@ function ExamQuestionBankInner({
                                         Tap a year to filter · long-press / right-click for the Practice & Exam modal
                                     </p>
                                     <p className="text-[10px] text-muted-foreground">
-                                        {(qbankStats.by_year || []).length} years
+                                        {yearStatRows.length} years
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-65 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
-                                    {(qbankStats.by_year || []).map((item: any) => {
+                                    {yearStatRows.map((item: any) => {
                                         const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
                                         const isSelected = selectedYear === String(item.year);
                                         const isComplete = item.count > 0 && item.solved >= item.count;
@@ -1089,8 +1314,9 @@ function ExamQuestionBankInner({
                                     onChange={e => setSelectedYear(e.target.value)}
                                 >
                                     <option value="">Year</option>
+                                    {/* This exam's PYQ years (the endpoint never lists year 0). */}
                                     {years.map(y => (
-                                        <option key={y} value={y}>{y === 0 ? 'Expert Curated' : y}</option>
+                                        <option key={y} value={y}>{y}</option>
                                     ))}
                                 </select>
                                 <Button
@@ -1102,6 +1328,22 @@ function ExamQuestionBankInner({
                                     <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
                                 </Button>
                             </div>
+                            {metaRetryNeeded && (
+                                <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                    <span>
+                                        {metaFailed.subjects || metaFailed.years
+                                            ? "Some filters couldn't load."
+                                            : "Your progress stats couldn't load."}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={retryMeta}
+                                        className="font-semibold text-primary hover:underline underline-offset-2"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -1167,11 +1409,16 @@ function ExamQuestionBankInner({
                                                     )}
                                                 </Badge>
                                                 <div className="flex items-center gap-2">
-                                                    {q.user_selected_answer && (
+                                                    {q.user_selected_answer && (q.user_is_correct == null ? (
+                                                        // Picked, but ungraded (the question has no answer key).
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                                                            Attempted
+                                                        </span>
+                                                    ) : (
                                                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${q.user_is_correct ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
                                                             {q.user_is_correct ? '✓ Solved' : '✗ Incorrect'}
                                                         </span>
-                                                    )}
+                                                    ))}
                                                     {diffBadge(q.difficulty)}
                                                     {/* p-2 -m-2: a 32px tap target (the bare 16px icon
                                                         sat inside a clickable card, so near misses
@@ -1293,11 +1540,13 @@ function ExamQuestionBankInner({
                                             const ans = examAnswers[q.id];
                                             const isCurrent = q.id === selectedQuestion;
                                             const status = ans
-                                                ? ans.isCorrect ? 'correct' : 'wrong'
+                                                ? ans.isCorrect === null ? 'answered' : ans.isCorrect ? 'correct' : 'wrong'
                                                 : isCurrent ? 'current' : 'unseen';
                                             const statusClass = {
                                                 correct: 'bg-emerald-500 text-white border-emerald-500',
                                                 wrong: 'bg-red-500 text-white border-red-500',
+                                                // Picked, but the question has no answer key.
+                                                answered: 'bg-primary/15 text-primary border-primary/40',
                                                 current: 'bg-amber-400 text-amber-950 border-amber-400 ring-2 ring-amber-400/40',
                                                 unseen: 'bg-muted text-muted-foreground border-border hover:bg-muted/80',
                                             }[status];
@@ -1305,7 +1554,15 @@ function ExamQuestionBankInner({
                                                 <button
                                                     key={q.id}
                                                     type="button"
-                                                    onClick={() => openQuestion(q.id)}
+                                                    onClick={() => {
+                                                        // Same rule as the list cards: a premium row on the
+                                                        // free plan opens the paywall, not a detail request.
+                                                        if (!isPremium && !q.is_showcase) {
+                                                            showPaywall('PYQ answers');
+                                                            return;
+                                                        }
+                                                        openQuestion(q.id);
+                                                    }}
                                                     className={`aspect-square rounded-lg border text-[11px] font-bold flex items-center justify-center transition-colors ${statusClass}`}
                                                     aria-label={`Question ${idx + 1}, ${status}`}
                                                 >
@@ -1320,7 +1577,31 @@ function ExamQuestionBankInner({
                     )}
 
                     <div className="qbank-detail lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
-                        {selectedQuestion && !detail ? (
+                        {selectedQuestion && detailFailure === 'locked' ? (
+                            // Premium question on the free plan (a ?q= link, the
+                            // exam palette, N / P, a similar-PYQ link).
+                            <Card className="p-6 md:p-10 text-center border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 animate-fadeIn">
+                                <Lock className="w-10 h-10 mx-auto mb-3 text-amber-600 dark:text-amber-400" />
+                                <p className="text-base font-semibold text-foreground mb-1">This is a premium question</p>
+                                <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                                    Upgrade to practise it and see its answer and explanation.
+                                </p>
+                                <Button size="sm" onClick={() => showPaywall('PYQ answers')}>Upgrade</Button>
+                            </Card>
+                        ) : selectedQuestion && detailFailure ? (
+                            <Card role="alert" className="p-6 md:p-10 text-center animate-fadeIn">
+                                <p className="text-sm text-foreground mb-3">
+                                    {detailFailure === 'missing'
+                                        ? 'This question is no longer available.'
+                                        : 'Unable to load question details. Please try again.'}
+                                </p>
+                                {detailFailure === 'error' && (
+                                    <Button size="sm" variant="outline" onClick={() => openQuestion(selectedQuestion)}>
+                                        Retry
+                                    </Button>
+                                )}
+                            </Card>
+                        ) : selectedQuestion && !detail ? (
                             <div className="space-y-3 px-1 py-0.5 animate-fadeIn" aria-busy="true" aria-label="Loading question">
                                 <Skeleton className="h-8 w-2/3 rounded-md" />
                                 <Skeleton className="h-6 w-1/3 rounded-md" />
@@ -1370,7 +1651,7 @@ function ExamQuestionBankInner({
                                             Replaces the previous behaviour of silently flipping showAnswer=true
                                             on open, which was leaking the admin's explanation image (and the
                                             correct-answer card) before the student even read the stem. */}
-                                        {detail.user_selected_answer && !showAnswer && (
+                                        {detail.user_selected_answer && !showAnswer && answerLockedId !== detail.id && (
                                             <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
                                                 <span>
                                                     You answered{' '}
@@ -1475,9 +1756,10 @@ function ExamQuestionBankInner({
                                                 const rawOption = detail[key] || detail[`option_${opt}`];
                                                 const optionText = sanitizeOptionText(rawOption);
                                                 if (!optionText) return null;
-                                                const isCorrect = detail.correct_answer === opt;
+                                                const isCorrect = detailKey === opt;
                                                 const isSelected = selectedAnswer === opt;
-                                                const isWrong = isSelected && !isCorrect && showAnswer;
+                                                // Without an answer key a pick can't be marked wrong.
+                                                const isWrong = !!detailKey && isSelected && !isCorrect && showAnswer;
 
                                                 return (
                                                     <div key={opt}
@@ -1502,11 +1784,22 @@ function ExamQuestionBankInner({
                                             })}
                                         </div>
 
-                                        {!showAnswer && !selectedAnswer && studyMode === 'practice' && (
+                                        {/* The server refused to grade it on the free plan (402). */}
+                                        {answerLockedId === detail.id && (
+                                            <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 p-3">
+                                                <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                                <p className="flex-1 text-sm text-amber-900 dark:text-amber-200">
+                                                    This is a premium question. Upgrade to see its answer and explanation.
+                                                </p>
+                                                <Button size="sm" onClick={() => showPaywall('PYQ answers')}>Upgrade</Button>
+                                            </div>
+                                        )}
+
+                                        {!showAnswer && !selectedAnswer && studyMode === 'practice' && answerLockedId !== detail.id && (
                                             <p className="text-xs text-center py-2 text-muted-foreground">👆 Select an option to reveal the answer & detailed analysis</p>
                                         )}
 
-                                        {!showAnswer && studyMode === 'exam' && (
+                                        {!showAnswer && studyMode === 'exam' && answerLockedId !== detail.id && (
                                             <div className="mt-6 flex justify-end">
                                                 <Button
                                                     variant="neon"
@@ -1523,13 +1816,22 @@ function ExamQuestionBankInner({
 
                                 {showAnswer && (
                                     <div className="space-y-3 animate-fadeInUp">
-                                        <Card className="border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60">
+                                        <Card className={detailKey
+                                            ? 'border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60'
+                                            : 'border-border bg-muted/40'}>
                                             <CardContent className="p-4 space-y-2">
-                                                <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                                                    <CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}
-                                                </h4>
-                                                {/* A blank curated explanation falls back to the
-                                                    effective (admin override / AI) explanation. */}
+                                                {detailKey ? (
+                                                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                                        <CheckCircle className="w-4 h-4" /> Correct Answer: {detailKey}
+                                                    </h4>
+                                                ) : (
+                                                    // No key in the bank (it used to read "Correct Answer:" and nothing).
+                                                    <h4 className="text-sm font-bold text-foreground">
+                                                        Answer key not available for this question. Use “Flag Issue” to let us know.
+                                                    </h4>
+                                                )}
+                                                {/* The curated explanation (or a flagged admin
+                                                    override), else the effective (AI) one. */}
                                                 {detailExplanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
                                                         <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
@@ -1592,7 +1894,11 @@ function ExamQuestionBankInner({
                                         )}
 
                                         {!aiExplanation && !aiLoading && !tokenError && (
-                                            <button onClick={() => fetchAiExplanation()}
+                                            <button onClick={() => {
+                                                    // The GA4 "ai_explain_request" conversion (consent-gated).
+                                                    analytics.aiExplainRequest(detail.id, selectedExam, 'question_bank');
+                                                    fetchAiExplanation();
+                                                }}
                                                 className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-1">
                                                 <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                                 <div className="text-left">
@@ -1689,9 +1995,9 @@ function ExamQuestionBankInner({
                                             <div className="glass-card p-4 mt-3" style={{ borderColor: 'rgba(239,68,68,0.3)' }}>
                                                 <div className="flex items-start gap-3">
                                                     <Brain className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
-                                                    <div>
-                                                        <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>AI Temporarily Unavailable</h5>
-                                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError}</p>
+                                                    <div role="status">
+                                                        <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>{aiError.title}</h5>
+                                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError.message}</p>
                                                         <button onClick={() => fetchAiExplanation()} className="text-xs mt-2 font-bold" style={{ color: 'var(--accent-primary)' }}>
                                                             Retry
                                                         </button>
@@ -1758,7 +2064,7 @@ function ExamQuestionBankInner({
                                                     {aiExplanation.why_correct && (
                                                         <div className="p-4">
                                                             <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: '#10b981' }}>
-                                                                <CheckCircle className="w-3.5 h-3.5" /> Why {detail.correct_answer} is Correct
+                                                                <CheckCircle className="w-3.5 h-3.5" /> {detailKey ? `Why ${detailKey} is Correct` : 'Why this is correct'}
                                                             </h5>
                                                             <FormattedText text={cleanAiText(aiExplanation.why_correct)} />
                                                         </div>
@@ -1913,34 +2219,7 @@ function ExamQuestionBankInner({
                                     <div className="space-y-2">
                                         {!textbookRef && !textbookLoading && (
                                             <button
-                                                onClick={() => {
-                                                    const qid = detail.id;
-                                                    textbookRequestFor.current = qid;
-                                                    setTextbookLoading(true);
-                                                    setTextbookRef(null);
-                                                    setTextbookScreenshot(null);
-                                                    aiAPI.textbookReference({ question_text: detail.question_text })
-                                                        .then(res => {
-                                                            if (textbookRequestFor.current !== qid) return;
-                                                            // The endpoint returns {references: [{book, page, excerpt, …}]}.
-                                                            setTextbookRef({ references: normaliseTextbookReferences(res.data) });
-                                                            // Only a page screenshot stored on the question can be
-                                                            // shown. Without one, /ai/screenshot/ renders the PDF
-                                                            // page on the server and answers with a filesystem path
-                                                            // (`screenshot_path`) the browser can't load — every
-                                                            // click paid for a render that was never displayed — so
-                                                            // it is no longer called here.
-                                                            const storedShot = typeof detail.page_screenshot === 'string' ? detail.page_screenshot : '';
-                                                            if (storedShot) setTextbookScreenshot(storedShot);
-                                                        })
-                                                        .catch(() => {
-                                                            if (textbookRequestFor.current !== qid) return;
-                                                            setTextbookRef({ error: true });
-                                                        })
-                                                        .finally(() => {
-                                                            if (textbookRequestFor.current === qid) setTextbookLoading(false);
-                                                        });
-                                                }}
+                                                onClick={lookupTextbook}
                                                 className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                                             >
                                                 <Bookmark className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -1956,7 +2235,7 @@ function ExamQuestionBankInner({
                                                 <span className="text-xs font-medium text-indigo-600">Looking up textbook references...</span>
                                             </div>
                                         )}
-                                        {textbookRef && !textbookRef.error && (textbookRef.references.length > 0 || textbookScreenshot) && (
+                                        {textbookRef && !textbookRef.error && (textbookRef.references.length > 0 || textbookScreenshot || textbookShotLoading) && (
                                             <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-950/10 dark:border-indigo-900/30">
                                                 <CardContent className="p-4 space-y-2">
                                                     <h5 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
@@ -1974,7 +2253,7 @@ function ExamQuestionBankInner({
                                                             )}
                                                         </div>
                                                     ))}
-                                                    {textbookScreenshot && (
+                                                    {textbookScreenshot ? (
                                                         <div className="mt-2 rounded-lg overflow-hidden border border-border/40 bg-white">
                                                             <img
                                                                 src={textbookScreenshot}
@@ -1983,14 +2262,31 @@ function ExamQuestionBankInner({
                                                                 height={1000}
                                                                 loading="lazy"
                                                                 className="w-full h-auto"
+                                                                onError={handleTextbookScreenshotError}
                                                             />
                                                             <p className="text-[10px] text-center text-muted-foreground py-1 bg-muted/30">Screenshot from textbook page</p>
                                                         </div>
-                                                    )}
+                                                    ) : textbookShotLoading ? (
+                                                        <div role="status" className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            Loading the textbook page…
+                                                        </div>
+                                                    ) : null}
                                                 </CardContent>
                                             </Card>
                                         )}
-                                        {textbookRef && (textbookRef.error || (textbookRef.references.length === 0 && !textbookScreenshot)) && (
+                                        {textbookRef && textbookRef.error && (
+                                            // A failed lookup is not "no mapping": offer a retry.
+                                            <Card className="border-border/60">
+                                                <CardContent className="p-3 text-center text-xs text-muted-foreground">
+                                                    Couldn&apos;t look up textbook references right now.{' '}
+                                                    <button type="button" onClick={lookupTextbook} className="font-semibold text-primary hover:underline underline-offset-2">
+                                                        Retry
+                                                    </button>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+                                        {textbookRef && !textbookRef.error && textbookRef.references.length === 0 && !textbookScreenshot && !textbookShotLoading && (
                                             <Card className="border-border/60">
                                                 <CardContent className="p-3 text-center text-xs text-muted-foreground">
                                                     No textbook mapping available for this question.
@@ -2078,19 +2374,22 @@ function ExamQuestionBankInner({
                                         setStartingSimulation(true);
                                         setSimulationError(null);
                                         // The backend defaults to a CMS paper; the NEET PG and
-                                        // INI-CET banks must ask for their own exam. (A variable
-                                        // so it type-checks before api.ts declares exam_type.)
-                                        const simulation: Parameters<typeof testsAPI.pyqSimulation>[0] & { exam_type?: string } = {
-                                            year: Number(modalYear),
-                                            exam_type: selectedExam,
-                                        };
-                                        testsAPI.pyqSimulation(simulation)
+                                        // INI-CET banks must ask for their own exam (C3).
+                                        testsAPI.pyqSimulation({ year: Number(modalYear), exam_type: selectedExam })
                                             .then(res => {
                                                 router.push(`/tests/${res.data.id}`);
                                             })
                                             .catch(err => {
-                                                setSimulationError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to generate simulation. Make sure there are enough questions in the database.'));
                                                 setStartingSimulation(false);
+                                                const feature = upgradeRequiredFeature(err);
+                                                if (feature) {
+                                                    // Free plan: the upgrade prompt, not a red error
+                                                    // under it in this modal.
+                                                    setYearModalOpen(false);
+                                                    showPaywall(feature);
+                                                    return;
+                                                }
+                                                setSimulationError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to generate simulation. Make sure there are enough questions in the database.'));
                                             });
                                     }}
                                     disabled={startingSimulation}
@@ -2168,7 +2467,8 @@ interface Question {
     concept_tags: string[];
     is_bookmarked: boolean;
     user_selected_answer?: string;
-    user_is_correct?: boolean;
+    // null: no verdict (an ungraded pick, or hidden on a locked row).
+    user_is_correct?: boolean | null;
     video_url?: string;
     video_status?: string;
     video_thumbnail?: string;

@@ -358,8 +358,10 @@ function PracticeInner() {
         ? attemptResult.explanation
         : (pickExplanation(q) || undefined);
 
+    // The route layout wraps the page in AppShell, whose .page-container
+    // already pads it.
     return (
-        <div className="mx-auto max-w-5xl px-4 py-6 text-foreground">
+        <div className="mx-auto max-w-5xl px-4 py-6 [.page-container_&]:p-0 text-foreground">
             <header className="mb-3 flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-semibold">Practice</h1>
                 <select value={mode} onChange={(e) => setMode(e.target.value)}
@@ -654,7 +656,7 @@ function PracticeInner() {
 
 export default function PracticePage() {
     return (
-        <Suspense fallback={<p className="p-6 text-muted-foreground">Loading…</p>}>
+        <Suspense fallback={<p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Loading…</p>}>
             <PracticeInner />
         </Suspense>
     );
