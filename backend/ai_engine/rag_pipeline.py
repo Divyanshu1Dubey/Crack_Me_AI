@@ -326,7 +326,8 @@ class RAGPipeline:
                 "book": chunk["book"],
                 "page": chunk["page"],
                 "excerpt": chunk["text"][:200],
-                "relevance": chunk["score"],
+                # 0..1 (the UI shows it as a percentage); raw BM25 is unbounded.
+                "relevance": chunk.get("norm_score", 0.0),
             })
 
         prompt = f"""You are a UPSC CMS exam preparation expert. Answer the following question using ONLY the provided textbook context. Be precise, exam-focused, and cite specific textbook references.
@@ -383,7 +384,7 @@ Answer in a structured, student-friendly format."""
             "book": r["book"],
             "page": r["page"],
             "excerpt": r["text"][:300],
-            "relevance_score": r["score"],
+            "relevance_score": r.get("norm_score", 0.0),
         } for r in results]
 
     # ─── HELPERS ────────────────────────────────────────
