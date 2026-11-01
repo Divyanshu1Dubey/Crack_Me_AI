@@ -1,6 +1,8 @@
 from urllib.parse import urlsplit, urlunsplit
 
 from rest_framework import serializers
+
+from crack_cms.public_names import public_handle
 from .models import (
     Subject, Topic, Question, QuestionBookmark, QuestionFeedback,
     Discussion, Note, Flashcard, QuestionImportJob,
@@ -11,6 +13,7 @@ from .models import (
 )
 from .text_encoding import normalize_text
 from .image_access import is_image_serve_url, with_image_token
+from .answer_leak import redact_public_text, redact_stem_text, row_has_answer_label
 import json as _json
 
 
@@ -50,6 +53,48 @@ _LIST_REFERENCE_LIST_FIELDS = ('textbook_references',)
 # concept term ("ventricular aneurysm", "jones criteria") that can name the
 # answer, so locked payloads keep only these.
 NON_REVEALING_CONCEPT_TAGS = frozenset({'high_yield'})
+
+
+# The material_importer fallback Subject is named "Imported" (Subject.name is
+# unique); it is a bucket for loader-published questions whose source had no
+# detectable subject, shown to students as "Expert Curated" everywhere.
+LOADER_SUBJECT_NAME = 'Imported'
+PUBLIC_LOADER_SUBJECT_NAME = 'Expert Curated'
+
+
+def public_subject_name(name):
+    """The subject name a student sees: "Expert Curated" for the loader's
+    "Imported" bucket, every other name (or non-string) unchanged."""
+    if isinstance(name, str) and name.strip().lower() == LOADER_SUBJECT_NAME.lower():
+        return PUBLIC_LOADER_SUBJECT_NAME
+    return name
+
+
+class PublicSubjectNameField(serializers.CharField):
+    """Read-only ``subject.name`` with the "Imported" -> "Expert Curated"
+    display rule (``public_subject_name``)."""
+
+    def to_representation(self, value):
+        return public_subject_name(super().to_representation(value))
+
+
+class PublicHandleField(serializers.Field):
+    """A user as other learners see them (``crack_cms.public_names.
+    public_handle``): a chosen username, or ``null`` for names derived from
+    an email address."""
+
+    def __init__(self, **kwargs):
+        kwargs['read_only'] = True
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        return public_handle(value)
+
+
+def handle_or_blank(user) -> str:
+    """``public_handle`` of a nullable user FK for string fields: ``''`` when
+    there is no user or the username is derived from an email address."""
+    return (public_handle(user) or '') if user is not None else ''
 
 
 def locked_concept_tags(tags):
@@ -254,13 +299,13 @@ class SubjectSerializer(serializers.ModelSerializer):
         # at serialization time so the question-bank filter dropdown shows
         # a clean "Expert Curated" label instead of leaking the loader
         # literal. See: docs/audit/COMPREHENSIVE_AUDIT_2026_07_30.md.
-        if data.get('name') == 'Imported':
-            data['name'] = 'Expert Curated'
+        if 'name' in data:
+            data['name'] = public_subject_name(data['name'])
         return data
 
 
 class TopicSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True)
     question_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -275,7 +320,9 @@ class QuestionListSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
     is_bookmarked = serializers.SerializerMethodField()
     is_showcase = serializers.SerializerMethodField()
-    verified_by_username = serializers.CharField(source='verified_by.username', read_only=True, default='')
+    # Every visitor reads the list: the verifying admin's chosen username
+    # only, never one derived from their email address.
+    verified_by_username = serializers.SerializerMethodField()
     effective_answer = serializers.SerializerMethodField()
     effective_explanation = serializers.SerializerMethodField()
     revision_count = serializers.SerializerMethodField()
@@ -333,10 +380,18 @@ class QuestionListSerializer(serializers.ModelSerializer):
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])
-        if data.get('subject_name') == 'Imported':
-            data['subject_name'] = 'Expert Curated'
-        if self._row_may_reveal(data) and not self._row_answer_visible(instance):
+        if 'subject_name' in data:
+            data['subject_name'] = public_subject_name(data['subject_name'])
+        # Some imports left the answer key or the explanation inside the
+        # stem / an option ("... Correct Answer: B. ...", "Explanation: ...")
+        # or flagged an option ("... ✔ (reason)", "(correct)"; also on the
+        # options a stem lists): a locked row shows that text only up to the
+        # first such label, without the flags (questions.answer_leak).
+        leaky = row_has_answer_label(data)
+        if (leaky or self._row_may_reveal(data)) and not self._row_answer_visible(instance):
             self._redact_locked_row(data)
+            if leaky:
+                redact_public_text(data)
         return data
 
     @staticmethod
@@ -458,6 +513,9 @@ class QuestionListSerializer(serializers.ModelSerializer):
         # Exists() subquery on FreeShowcaseQuestion. Fallback to False for
         # serializers instantiated outside the list view (e.g. tests).
         return bool(getattr(obj, 'is_showcase', False))
+
+    def get_verified_by_username(self, obj):
+        return handle_or_blank(obj.verified_by) if obj.verified_by_id else ''
 
     def _is_admin(self):
         """True when the requesting user is staff / admin.
@@ -748,8 +806,13 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])
-        if data.get('subject_name') == 'Imported':
-            data['subject_name'] = 'Expert Curated'
+        if 'subject_name' in data:
+            data['subject_name'] = public_subject_name(data['subject_name'])
+        # Answer key / explanation text or a correctness flag an import left
+        # in the stem or an option (questions.answer_leak): cut for a viewer
+        # who may not read this question's answer, like the answer fields.
+        if row_has_answer_label(data) and not self._viewer_can_view_answer(instance):
+            redact_public_text(data)
         return data
 
     class Meta:
@@ -994,9 +1057,44 @@ class QuestionFeedbackSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'user', 'status', 'resolution_note', 'resolved_by',
                             'resolved_at', 'notified_user', 'is_resolved']
 
+    # Anyone may report a question (QuestionFeedbackViewSet.create is
+    # AllowAny) and the 201 echoed the raw stem: one spam report read the
+    # unredacted stem of any row -- a locked one with a ticked option / an
+    # "Ans: (b)" line, or a removed / held one (is_active=False). Only staff
+    # (the moderation queue) see the raw stem; other reporters report on the
+    # active bank and get the stem as the question bank shows it to them.
+
+    def _viewer(self):
+        return getattr(self.context.get('request'), 'user', None)
+
+    def _viewer_is_staff(self) -> bool:
+        from .views import _is_staff_user  # lazy: views imports this module
+        return _is_staff_user(self._viewer())
+
+    def get_fields(self):
+        fields = super().get_fields()
+        question = fields.get('question')
+        if question is not None and not question.read_only and not self._viewer_is_staff():
+            question.queryset = Question.objects.filter(is_active=True)
+        return fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        text = data.get('question_text')
+        if text and not self._viewer_is_staff():
+            from .views import user_can_view_answer  # lazy: views imports this module
+            question = getattr(instance, 'question', None)
+            if question is None or not question.is_active:
+                data['question_text'] = ''
+            elif not user_can_view_answer(self._viewer(), question):
+                data['question_text'] = redact_stem_text(text)
+        return data
+
 
 class DiscussionSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
+    # Other learners read these threads: a chosen username, or null when the
+    # username is derived from the author's email (the UI shows a neutral label).
+    username = PublicHandleField(source='user')
     reply_count = serializers.SerializerMethodField()
     user_vote = serializers.SerializerMethodField()
 
@@ -1043,7 +1141,7 @@ class NoteSerializer(serializers.ModelSerializer):
 
 
 class FlashcardSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
 
     class Meta:
         model = Flashcard
@@ -1113,9 +1211,10 @@ class QuestionRevisionSnapshotSerializer(serializers.ModelSerializer):
 
 
 class TopicNoteSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default='')
+    # Published notes are listed to students: no email-derived author name.
+    created_by_username = serializers.SerializerMethodField()
 
     class Meta:
         model = TopicNote
@@ -1131,6 +1230,9 @@ class TopicNoteSerializer(serializers.ModelSerializer):
         # An admin may save an empty draft (and fill it with AI later); the
         # notes page used to send placeholder text because '' was rejected.
         extra_kwargs = {'content': {'allow_blank': True, 'required': False}}
+
+    def get_created_by_username(self, obj):
+        return handle_or_blank(obj.created_by) if obj.created_by_id else ''
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -1159,7 +1261,7 @@ class TopicNoteSerializer(serializers.ModelSerializer):
 # ════════════════════════════════════════════════════════════════════════════
 
 class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
     subject_color = serializers.CharField(source='subject.color', read_only=True, default='')
 
@@ -1172,7 +1274,7 @@ class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
 
 class UserQuestSerializer(serializers.ModelSerializer):
     progress_percent = serializers.IntegerField(read_only=True)
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
 
     class Meta:
         model = UserQuest
@@ -1212,7 +1314,7 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
     option_d = serializers.CharField(source='question.option_d', read_only=True, default='')
     correct_answer = serializers.CharField(source='question.correct_answer', read_only=True, default='')
     explanation = serializers.CharField(source='question.explanation', read_only=True, default='')
-    subject_name = serializers.CharField(source='question.subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='question.subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='question.topic.name', read_only=True, default='')
     exam_type = serializers.CharField(source='question.exam_type', read_only=True, default='')
 
@@ -1241,9 +1343,10 @@ class MistakeNotebookCreateSerializer(serializers.ModelSerializer):
 
 class TopicNoteListSerializer(serializers.ModelSerializer):
     """Lite serializer for listing notes without full content."""
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default='')
+    # Published notes are listed to students: no email-derived author name.
+    created_by_username = serializers.SerializerMethodField()
 
     class Meta:
         model = TopicNote
@@ -1251,3 +1354,6 @@ class TopicNoteListSerializer(serializers.ModelSerializer):
                   'title', 'content_preview', 'ai_generated', 'source_question_count',
                   'created_by_username', 'is_published', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_created_by_username(self, obj):
+        return handle_or_blank(obj.created_by) if obj.created_by_id else ''

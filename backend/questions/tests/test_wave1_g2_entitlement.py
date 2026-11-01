@@ -221,15 +221,21 @@ class AIPerQuestionEntitlementTests(_Base):
 
     @override_settings(AI_PER_QUESTION_HOURLY_LIMIT=1)
     def test_llm_generation_is_rate_capped_per_user(self):
+        # The GET queues the (background) generation instead of calling the
+        # LLM in the request (wave 4b); the hourly cap applies to queueing.
         q1 = _question(self.subject, 4, explanation='')
         q2 = _question(self.subject, 5, explanation='')
         from questions import ai_per_question as ai
-        with mock.patch.object(ai, '_ai_call', return_value='Shock physiology') as call:
-            first = _client(self.premium).get(f'/api/questions/{q1.id}/ai/concept/')
-            second = _client(self.premium).get(f'/api/questions/{q2.id}/ai/concept/')
-        self.assertEqual(first.data['concept'], 'Shock physiology')
-        self.assertIsNone(second.data['concept'])
-        self.assertEqual(call.call_count, 1)
+        with mock.patch.object(ai, '_ai_call', return_value='Shock physiology') as call, \
+                mock.patch('django_q.tasks.async_task') as queue:
+            first = _client(self.premium).get(f'/api/questions/{q1.id}/ai/why_correct/')
+            second = _client(self.premium).get(f'/api/questions/{q2.id}/ai/why_correct/')
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(first.data, {'why_correct': None, 'pending': True})
+        self.assertIsNone(second.data['why_correct'])
+        self.assertTrue(second.data['rate_limited'])
+        self.assertEqual(queue.call_count, 1)
+        call.assert_not_called()
 
 
 class SourcesAndImagesTests(_Base):

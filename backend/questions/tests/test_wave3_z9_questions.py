@@ -471,18 +471,30 @@ class LateTestQuestTests(_Base):
 
 class FailedGenerationRetryTests(_Base):
     def test_a_failed_generation_is_not_retried_on_the_next_request(self):
+        # Wave 4b: the GET queues the generation; the background task runs
+        # the rotation once for every missing section, and after a failure no
+        # request queues it again within the failure window.
+        from questions.tasks import generate_reveal_sections_task
+
         q = _question(self.subject, 50)
         api = _client(self.premium)
-        with mock.patch('questions.ai_per_question._ai_call', return_value='') as ai_call:
+        with mock.patch('questions.ai_per_question._ai_call', return_value='') as ai_call, \
+                mock.patch('django_q.tasks.async_task') as queue:
+            res = api.get(f'/api/questions/{q.id}/ai/clinical/')
+            self.assertEqual(res.status_code, 202)
+            self.assertEqual(queue.call_count, 1)
+            self.assertEqual(generate_reveal_sections_task(q.id), [])
             for _ in range(3):
-                res = api.get(f'/api/questions/{q.id}/ai/concept/')
+                res = api.get(f'/api/questions/{q.id}/ai/clinical/')
                 self.assertEqual(res.status_code, 200)
-                self.assertIsNone(res.data['concept'])
+                self.assertIsNone(res.data['clinical_significance'])
                 self.assertNotIn('rate_limited', res.data)
-            other = api.get(f'/api/questions/{q.id}/ai/clinical/')
-        self.assertIsNone(other.data['clinical_significance'])
-        # One rotation per section, not one per request.
-        self.assertEqual(ai_call.call_count, 2)
+            other = api.get(f'/api/questions/{q.id}/ai/why_correct/')
+            self.assertIsNone(other.data['why_correct'])
+            self.assertEqual(generate_reveal_sections_task(q.id), [])
+        # One rotation for the question, not one per request or per section.
+        self.assertEqual(ai_call.call_count, 1)
+        self.assertEqual(queue.call_count, 1)
 
     def test_success_after_the_failure_window_is_cached(self):
         from questions import ai_per_question

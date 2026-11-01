@@ -157,6 +157,10 @@ class QuestionsConfig(AppConfig):
         so a misconfigured DB / missing migration can never crash the
         boot. Which processes start it is decided by ``should_auto_heal``.
         """
+        # Every process: a question save drops the cached leaky-row text the
+        # search guard uses (connects its post_save receiver).
+        from . import locked_text_search  # noqa: F401
+
         if not should_auto_heal():
             return
 

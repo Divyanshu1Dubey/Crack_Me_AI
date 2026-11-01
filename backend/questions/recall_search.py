@@ -138,6 +138,62 @@ def _parse_bool(raw):
 # ValueError (HTTP 500).
 _INT_PARAMS = ("year", "subject", "topic")
 
+# Free-text bounds. Each ``q`` token adds an OR of five ILIKEs per row and
+# the same WHERE runs about ten times per request (facets, count, page); the
+# token list was unbounded (~1,300 tokens fit in one request line). Only the
+# first MAX_Q_TOKENS distinct tokens are used, each cut to
+# MAX_Q_TOKEN_CHARS; the keyword filters are cut to MAX_KEYWORD_CHARS.
+MAX_Q_TOKENS = 8
+MAX_Q_TOKEN_CHARS = 40
+MAX_KEYWORD_CHARS = 100
+_CLINICAL_PARAMS = ("diagnosis", "drug", "disease", "investigation", "clinical_system", "subtopic")
+# Every query param recall_search reads: the cache key is built from these
+# (normalised), so an extra throwaway param no longer bypasses the cache.
+_CACHE_KEY_PARAMS = tuple(sorted(
+    set(_PARAM_FILTERS) | set(_CLINICAL_PARAMS) | {
+        "page", "page_size", "min_confidence", "modality", "image_ocr",
+        "has_image", "has_diagram", "has_table",
+    }
+))
+
+
+def _q_tokens(q_text: str) -> list[str]:
+    """The ``q`` tokens searched: whitespace-split, at least 2 characters,
+    de-duplicated case-insensitively, the first MAX_Q_TOKENS of them, each
+    cut to MAX_Q_TOKEN_CHARS."""
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for token in (q_text or "").split():
+        if len(token) < 2:
+            continue
+        token = token[:MAX_Q_TOKEN_CHARS]
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        tokens.append(token)
+        if len(tokens) >= MAX_Q_TOKENS:
+            break
+    return tokens
+
+
+def _keyword_param(request, name: str) -> str:
+    return (request.query_params.get(name) or "").strip()[:MAX_KEYWORD_CHARS]
+
+
+def _cache_key_params(request) -> str:
+    """Digest of the normalised query string the response depends on (a
+    fixed-length key: a raw ``q`` made keys of several KB)."""
+    import hashlib
+    from urllib.parse import urlencode
+
+    pairs = []
+    for name in _CACHE_KEY_PARAMS:
+        value = request.query_params.get(name)
+        if value not in (None, ""):
+            pairs.append((name, value))
+    return hashlib.sha256(urlencode(pairs).encode()).hexdigest()
+
 
 def _bad_request(message: str):
     return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
@@ -228,12 +284,12 @@ def recall_search(self, request):
     cache_bucket = (
         f"u{request_user.id}" if is_authed else "anon"
     )
-    # v4: anonymous results changed (answer-linked text / explanation
-    # figures are no longer matched on locked questions).
-    cache_key = (
-        f"recall_search:v4:{cache_bucket}:"
-        + (request.META.get("QUERY_STRING") or "")
-    )
+    # v5: keyed on the params the response depends on (normalised), not on
+    # the raw QUERY_STRING -- a throwaway param made every request a miss --
+    # and answer / explanation labels in locked rows' text are cut
+    # (questions.answer_leak). v6: text filters no longer match inside the
+    # cut-away part (questions.locked_text_search).
+    cache_key = f"recall_search:v6:{cache_bucket}:" + _cache_key_params(request)
     cached = cache.get(cache_key)
     if cached is not None:
         return Response(cached)
@@ -282,8 +338,9 @@ def recall_search(self, request):
     q_text = request.query_params.get("q", "").strip()
     if q_text:
         # Phase 2 ships icontains + tokenized AND — FTS5 mirror is wired
-        # in build_fts_query() below for future use.
-        tokens = [t for t in q_text.split() if len(t) >= 2]
+        # in build_fts_query() below for future use. Bounded token list
+        # (see MAX_Q_TOKENS).
+        tokens = _q_tokens(q_text)
         if tokens:
             token_q = Q()
             for t in tokens:
@@ -296,7 +353,7 @@ def recall_search(self, request):
     if modality:
         qs = qs.filter(pk__in=visible_images.filter(modality=modality).values("question_id"))
 
-    image_ocr = request.query_params.get("image_ocr", "").strip()
+    image_ocr = _keyword_param(request, "image_ocr")
     if image_ocr:
         qs = qs.filter(
             pk__in=visible_images.filter(ocr_text__icontains=image_ocr).values("question_id")
@@ -306,9 +363,8 @@ def recall_search(self, request):
     # investigation/clinical_system/subtopic).  These are simple icontains
     # over the canonical text fields, cheap, and consistent with the front
     # end search box.
-    for dim in ("diagnosis", "drug", "disease",
-                "investigation", "clinical_system", "subtopic"):
-        raw = request.query_params.get(dim, "").strip()
+    for dim in _CLINICAL_PARAMS:
+        raw = _keyword_param(request, dim)
         if raw:
             qs = _apply_clinical_token(qs, dim, raw, answer_scope=answer_scope)
 
@@ -331,6 +387,16 @@ def recall_search(self, request):
 
     if min_conf is not None:
         qs = qs.filter(confidence_score__gte=min_conf)
+
+    # A locked row whose public text carries an answer label / flag shows it
+    # cut (questions.answer_leak), but q / the keywords matched the raw text:
+    # ``?drug=Correct Answer: B`` returned exactly the rows labelled B. Such a
+    # row stays only when the terms occur in the text the caller sees.
+    keywords = [kw for kw in (_keyword_param(request, dim) for dim in _CLINICAL_PARAMS) if kw]
+    q_phrase = request.query_params.get("q") or ""  # as _PARAM_FILTERS applies it
+    if not entitled and (q_phrase or keywords):
+        from .locked_text_search import recall_terms_visible, without_hidden_matches
+        qs = without_hidden_matches(qs, recall_terms_visible(q_phrase, keywords))
 
     # Facets — include new dimensions so UI can build checkbox grids.
     facets = {

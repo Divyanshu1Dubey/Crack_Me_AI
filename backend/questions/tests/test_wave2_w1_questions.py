@@ -590,19 +590,23 @@ class ChatAssistantFailureTests(_Base):
 class GenerationBudgetTests(_Base):
     @override_settings(AI_PER_QUESTION_HOURLY_LIMIT=1)
     def test_budget_is_spent_once_per_question(self):
+        # Wave 4b: the four section GETs queue ONE background generation (no
+        # LLM call in the request); the budget is spent once for the question.
         from questions import ai_per_question as ai
         q1 = _question(self.subject, 90, explanation='')
         q2 = _question(self.subject, 91, explanation='')
-        with mock.patch.object(ai, '_ai_call', return_value='Generated text') as call:
+        with mock.patch.object(ai, '_ai_call', return_value='Generated text') as call, \
+                mock.patch('django_q.tasks.async_task') as queue:
             for path in ('concept', 'why_correct', 'clinical', 'mnemonic'):
                 res = _client(self.premium).get(f'/api/questions/{q1.id}/ai/{path}/')
-                self.assertEqual(res.status_code, 200)
-            self.assertEqual(call.call_count, 4)
-            self.assertNotIn('rate_limited', res.data)
-            res = _client(self.premium).get(f'/api/questions/{q2.id}/ai/concept/')
-        self.assertIsNone(res.data['concept'])
+                self.assertIn(res.status_code, (200, 202))
+                self.assertNotIn('rate_limited', res.data)
+            self.assertEqual(queue.call_count, 1)
+            res = _client(self.premium).get(f'/api/questions/{q2.id}/ai/why_correct/')
+        self.assertIsNone(res.data['why_correct'])
         self.assertTrue(res.data['rate_limited'])
-        self.assertEqual(call.call_count, 4)
+        self.assertEqual(queue.call_count, 1)
+        call.assert_not_called()
 
 
 # ── AI fill rule (cache task / commands) ───────────────────────────────────

@@ -35,3 +35,23 @@ def server_side_cursors_unsupported(db: dict, override: str | None = None) -> bo
     except ValueError:
         return False
     return port == TRANSACTION_POOLER_PORT
+
+
+def statement_timeout_option(value: str | None) -> str:
+    """libpq ``options`` fragment setting a server-side ``statement_timeout``,
+    or '' when off.
+
+    ``value`` is DB_STATEMENT_TIMEOUT_MS: a whole number of milliseconds;
+    unset, 0, negative or not a number means no timeout (PostgreSQL's
+    default). PostgreSQL then cancels any statement that runs longer, so one
+    pathological query cannot hold a database backend (and the gunicorn
+    thread waiting on it) indefinitely. It applies to every connection the
+    process opens -- migrations and long management commands included -- so
+    set it on the web service only. A connection pooler must forward the
+    ``options`` startup parameter (check before enabling it in production).
+    """
+    try:
+        ms = int(str(value or '').strip() or 0)
+    except ValueError:
+        return ''
+    return f'-c statement_timeout={ms}' if ms > 0 else ''

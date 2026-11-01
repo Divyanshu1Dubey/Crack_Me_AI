@@ -22,6 +22,7 @@ from django.db.models import Count, F, Max, Q, Subquery, Sum, Value, OuterRef, I
 from django.db.models.functions import Greatest
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
+from crack_cms.filters import BoundedSearchFilter
 from accounts.models_freemium import FreeShowcaseQuestion
 from .models import Subject, Topic, Question, QuestionBookmark, QuestionFeedback, Discussion, DiscussionVote, Note, Flashcard, QuestionImportJob, QuestionExtractionItem, AdminAIPromptVersion, QuestionAIOperationLog, QuestionRevisionSnapshot, Announcement, ExamTrack, QuestionImage, QuestionSource, RecallSource, DuplicateCluster, DuplicateMember, RemovedQuestion, TopicNote, StudyTimeBreakdown, UserQuest, QuestStreak, compute_stem_hash
 from .serializers import (
@@ -34,8 +35,11 @@ from .serializers import (
     TopicNoteSerializer, StudyTimeBreakdownSerializer,
     UserQuestSerializer, UserQuestAdminSerializer, QuestStreakSerializer,
     effective_explanation_for, _clean_text, locked_concept_tags, resolve_runtime_image_role,
+    public_subject_name,
 )
 from .image_access import TOKEN_PARAM as IMAGE_TOKEN_PARAM, image_token_is_valid
+from .answer_leak import redact_public_text, redact_stem_text, row_has_answer_label
+from .locked_text_search import terms_visible_in_stem, without_hidden_matches
 from .recall_serializers import (
     # Used directly here:
     RecallSourceSerializer,
@@ -248,10 +252,18 @@ def _redact_question_detail(data: dict) -> dict:
 
 
 def _invalidate_user_question_caches(user_id) -> None:
-    """After an answer: refresh the dashboard and the per-user list cache
-    (``attempted`` / ``incorrect`` filters, ``user_selected_answer``)."""
+    """After an answer: refresh the dashboard (also /api/analytics/dashboard_v3/
+    and its sub-endpoints, which otherwise lagged by up to their 60 s cache)
+    and the per-user list cache (``attempted`` / ``incorrect`` filters,
+    ``user_selected_answer``)."""
     cache.delete(f'dashboard:{user_id}')
     cache.delete(f'dashboard_bundle:{user_id}')
+    try:
+        from analytics.dashboard_v3 import invalidate_user_cache
+    except ImportError:  # pragma: no cover - analytics app not installed
+        invalidate_user_cache = None
+    if invalidate_user_cache is not None:
+        invalidate_user_cache(user_id)
     _bump_question_list_cache_version(user_id)
 
 
@@ -504,7 +516,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
         'images', 'recall_sources', 'feedbacks', 'similar_questions', _cluster_memberships_prefetch(),
         'revision_snapshots',
     ).all()
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, IdTiebreakOrderingFilter]
+    # BoundedSearchFilter: ?search= keeps at most 10 distinct terms (an
+    # anonymous caller could send ~2,000, each one more ILIKE per row).
+    filter_backends = [DjangoFilterBackend, BoundedSearchFilter, IdTiebreakOrderingFilter]
     # NOTE: exam_source is NOT in filterset_fields on purpose — Bug #6
     # (2026-07-25) discovered that DjangoFilterBackend's exact-match
     # behaviour rejects valid labels like 'NEET PG (recall)' when the
@@ -543,7 +557,22 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # probe (e.g. /questions/<locked id>/?search=...).
         if getattr(self, 'detail', False):
             return queryset
-        return super().filter_queryset(queryset)
+        return self._without_hidden_search_matches(super().filter_queryset(queryset))
+
+    def _without_hidden_search_matches(self, queryset):
+        """``?search=`` for a caller without full access: drop the locked
+        rows it matched only inside an answer label / flag the caller does
+        not see (``?search="Schwannoma ✅"`` named the ticked option; see
+        ``questions.locked_text_search``)."""
+        request = getattr(self, 'request', None)
+        if request is None or not (request.query_params.get(BoundedSearchFilter.search_param) or '').strip():
+            return queryset
+        if _is_staff_user(getattr(request, 'user', None)) or self._user_is_premium():
+            return queryset
+        terms = BoundedSearchFilter().get_search_terms(request)
+        if not terms:
+            return queryset
+        return without_hidden_matches(queryset, terms_visible_in_stem(terms))
 
     def _guess_year_paper_from_filename(self, filename):
         year = None
@@ -997,6 +1026,21 @@ class QuestionViewSet(viewsets.ModelViewSet):
         yet (e.g. for questions ingested after the last detection pass).
         """
         question = self.get_object()
+        full_access = _is_staff_user(request.user) or self._user_is_premium()
+        free_ids = None
+
+        def _preview(q) -> str:
+            # An answer label / correctness flag an import left in a stem is
+            # cut (questions.answer_leak) for a member whose answer this
+            # viewer may not read, as in the list and detail payloads.
+            nonlocal free_ids
+            text = q.question_text or ''
+            if not full_access and row_has_answer_label({'question_text': text}):
+                if free_ids is None:
+                    free_ids = set(free_showcase_rows().values_list('question_id', flat=True))
+                if q.id not in free_ids:
+                    text = redact_stem_text(text)
+            return text[:120]
 
         def _serialize(q, canonical_id_for_member: int) -> dict:
             return {
@@ -1005,11 +1049,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 'is_active': q.is_active,
                 'is_dropped': q.is_dropped,
                 'admin_edited': bool(getattr(q, 'admin_edited', False)),
-                'subject_name': q.subject.name if q.subject_id else '',
+                'subject_name': public_subject_name(q.subject.name) if q.subject_id else '',
                 'topic_name': q.topic.name if q.topic_id else '',
                 'year': q.year,
                 'exam_source': q.exam_source or '',
-                'question_text_preview': (q.question_text or '')[:120],
+                'question_text_preview': _preview(q),
             }
 
         membership = (
@@ -1395,73 +1439,70 @@ class QuestionViewSet(viewsets.ModelViewSet):
     # pearl / mnemonic / concept) reveals the answer, so it follows the same
     # entitlement rule as the answer itself. Callers who are not entitled
     # get ``{<field>: null, "locked": true}`` (the reveal panel hides empty
-    # sections); only authenticated, entitled users can trigger a new
-    # (rate-capped) LLM generation, everyone else gets stored content only.
+    # sections).
+    #
+    # These GETs never wait on an LLM: they serve stored or cached text. On a
+    # miss an authenticated, entitled caller queues ONE background generation
+    # for the question (ai_per_question.queue_generation: single-flight,
+    # charged to the caller's hourly budget) and gets HTTP 202
+    # ``{<field>: null, "pending": true}``; a spent budget answers
+    # ``{<field>: null, "rate_limited": true}``. Everyone else gets stored
+    # content only.
 
-    def _ai_text_response(self, request, field: str, producer):
+    def _ai_text_response(self, request, field: str, producer, *, generate: bool = True):
         q = self.get_object()
         if not self._can_view_answer(q):
             return Response({field: None, "locked": True})
+        value = producer(q)
         user = request.user
-        gate = (
-            _ai_per_question.generation_gate(user, unlimited=_is_staff_user(user), question_id=q.pk)
-            if getattr(user, 'is_authenticated', False) else False
-        )
-        refused = []
-
-        def allow_ai():
-            # Evaluated only right before a real generation (see
-            # ai_per_question._may_generate); remembers a budget refusal.
-            allowed = bool(gate()) if callable(gate) else bool(gate)
-            if not allowed and callable(gate):
-                refused.append(True)
-            return allowed
-
-        value = producer(q, allow_ai)
-        payload = {field: value}
-        if value is None and refused:
+        if value is not None or not generate or not getattr(user, 'is_authenticated', False):
+            return Response({field: value})
+        outcome = _ai_per_question.queue_generation(q, user, field, unlimited=_is_staff_user(user))
+        if outcome in ('queued', 'pending'):
+            return Response({field: None, 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        payload = {field: None}
+        if outcome == 'rate_limited':
             # The hourly generation budget is spent: say so instead of a
             # silently empty section.
             payload['rate_limited'] = True
         return Response(payload)
 
     # ``fallback=False``: no template boilerplate -- ``null`` when there is
-    # no genuine content (the reveal panel hides empty sections).
+    # no genuine content (the reveal panel hides empty sections). The
+    # producers get no ``allow_ai``: stored / cached text only.
 
     @action(detail=True, methods=['get'], url_path='ai/concept',
             permission_classes=[permissions.AllowAny])
     def ai_concept(self, request, pk=None):
         return self._ai_text_response(
-            request, "concept",
-            lambda q, allow_ai: _ai_per_question.concept(q, allow_ai=allow_ai, fallback=False))
+            request, "concept", lambda q: _ai_per_question.concept(q, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/why_correct',
             permission_classes=[permissions.AllowAny])
     def ai_why_correct(self, request, pk=None):
         return self._ai_text_response(
-            request, "why_correct",
-            lambda q, allow_ai: _ai_per_question.why_correct(q, allow_ai=allow_ai, fallback=False))
+            request, "why_correct", lambda q: _ai_per_question.why_correct(q, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/why_incorrect',
             permission_classes=[permissions.AllowAny])
     def ai_why_incorrect(self, request, pk=None):
+        # Curated / stored reasons only; nothing generates them.
         return self._ai_text_response(
-            request, "why_incorrect",
-            lambda q, allow_ai: _ai_per_question.why_incorrect(q, fallback=False))
+            request, "why_incorrect", lambda q: _ai_per_question.why_incorrect(q, fallback=False),
+            generate=False)
 
     @action(detail=True, methods=['get'], url_path='ai/clinical',
             permission_classes=[permissions.AllowAny])
     def ai_clinical(self, request, pk=None):
         return self._ai_text_response(
             request, "clinical_significance",
-            lambda q, allow_ai: _ai_per_question.clinical_significance(q, allow_ai=allow_ai, fallback=False))
+            lambda q: _ai_per_question.clinical_significance(q, fallback=False))
 
     @action(detail=True, methods=['get'], url_path='ai/mnemonic',
             permission_classes=[permissions.AllowAny])
     def ai_mnemonic(self, request, pk=None):
         return self._ai_text_response(
-            request, "memory_trick",
-            lambda q, allow_ai: _ai_per_question.memory_trick(q, allow_ai=allow_ai, fallback=False))
+            request, "memory_trick", lambda q: _ai_per_question.memory_trick(q, fallback=False))
 
     @staticmethod
     def _limit_param(request, default: int = 8, maximum: int = 25) -> int:
@@ -1475,7 +1516,30 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def ai_related_pyqs(self, request, pk=None):
         q = self.get_object()
         limit = self._limit_param(request)
-        return Response({"related_pyqs": _ai_per_question.related_pyqs(q, limit=limit)})
+        rows = _ai_per_question.related_pyqs(q, limit=limit)
+        return Response({"related_pyqs": self._stems_for_viewer(rows)})
+
+    def _stems_for_viewer(self, rows):
+        """Related-question dicts (``id`` / ``question_text``) for this viewer:
+        a stem holding an answer / explanation label or a correctness flag on
+        an option it lists, left there by an import (questions.answer_leak),
+        is redacted on a question whose answer the viewer may not read."""
+        user = getattr(self.request, 'user', None)
+        if _is_staff_user(user) or self._user_is_premium():
+            return rows
+        leaky_ids = {row.get('id') for row in rows if row_has_answer_label(row)}
+        if not leaky_ids:
+            return rows
+        free_ids = set(
+            free_showcase_rows().filter(question_id__in=leaky_ids).values_list('question_id', flat=True)
+        )
+        out = []
+        for row in rows:
+            if row.get('id') in leaky_ids and row.get('id') not in free_ids:
+                row = dict(row)
+                redact_public_text(row)
+            out.append(row)
+        return out
 
     @action(detail=True, methods=['get'], url_path='ai/related_topics',
             permission_classes=[permissions.AllowAny])
@@ -2348,7 +2412,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 'is_correct': None,
                 'correct_answer': '',
                 **_question_explanation_payload(question),
-                'is_subscribed': getattr(request.user, 'is_subscribed', False)
+                # Premium entitlement (Subscription rows), not the legacy
+                # CustomUser.is_subscribed flag, which no longer means premium.
+                'is_subscribed': self._user_is_premium(),
             })
 
         is_correct = selected_answer == correct_answer
@@ -2382,7 +2448,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'is_correct': is_correct,
             'correct_answer': question.correct_answer,
             **_question_explanation_payload(question),
-            'is_subscribed': getattr(request.user, 'is_subscribed', False)
+            'is_subscribed': self._user_is_premium(),
         })
 
     @action(detail=True, methods=['post'], url_path='bookmark')
@@ -2611,7 +2677,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 continue
             by_subject.append({
                 'id': subject.id,
-                'name': subject.name,
+                # The loader's "Imported" bucket is "Expert Curated" to students.
+                'name': public_subject_name(subject.name),
                 'code': subject.code,
                 'count': count,
                 'solved': solved_by_subject_map.get(subject.id, 0),
@@ -3852,6 +3919,12 @@ class FlashcardAnalyticsView(generics.GenericAPIView):
             } if total else {},
         })
 
+
+# Fallback for ChatAssistantView when ai_engine.views has no
+# MAX_AI_INPUT_CHARS (the AI Tutor's limit, 4000).
+CHAT_MESSAGE_MAX_CHARS = 4000
+
+
 class ChatAssistantView(APIView):
     """
     Handles unstructured queries from the Floating Ask-AI Dock.
@@ -3900,6 +3973,17 @@ class ChatAssistantView(APIView):
             return Response({"error": "Message is required."}, status=400)
 
         from ai_engine import views as ai_views
+
+        # Same input cap as the AI Tutor (ai_engine.views._required_text),
+        # checked before any charge: an unbounded message went into every
+        # provider prompt and the RAG query, and -- refunded when the
+        # providers failed -- into the offline composer, whose term de-dupe
+        # is quadratic in the message length.
+        max_chars = getattr(ai_views, 'MAX_AI_INPUT_CHARS', CHAT_MESSAGE_MAX_CHARS)
+        if len(message) > max_chars:
+            return Response(
+                {"error": f"Message is too long (max {max_chars} characters)."}, status=400,
+            )
 
         # Same failure contract as the AI Tutor (ai_engine.views
         # ._run_text_endpoint): no outage sentence is ever handed over as the
@@ -4377,7 +4461,11 @@ class TopicNoteViewSet(viewsets.ModelViewSet):
         for q in qs:
             explanations.append(f"Q: {q.question_text[:200]}\nA: {q.correct_answer}\nExplanation: {q.explanation[:500]}")
 
-        prompt = f"""You are a medical educator. Compile the following question explanations into concise, revision-friendly notes for the topic "{note.topic}" in {note.exam_type}.
+        # The topic's name, not str(topic) ("<SUBJECT CODE> → <name>"): the
+        # model echoes it into a note students read, and the code of the
+        # loader's "Imported" bucket is "IMPORTED".
+        topic_name = getattr(note.topic, 'name', '') or ''
+        prompt = f"""You are a medical educator. Compile the following question explanations into concise, revision-friendly notes for the topic "{topic_name}" in {note.exam_type}.
 
 Organize the notes as:
 1. Key Concepts (core principles)
@@ -4741,7 +4829,9 @@ class AITopicNoteGenerationView(APIView):
         context = "\n\n---\n\n".join(explanations[:15])
         prompt = (
             f"You are a medical education expert. Synthesize the following explanations "
-            f"for '{note.topic.name}' (Subject: {note.subject.name}) into concise, "
+            # The note is published to students: the prompt carries the
+            # student-facing subject label ("Imported" -> "Expert Curated").
+            f"for '{note.topic.name}' (Subject: {public_subject_name(note.subject.name)}) into concise, "
             f"well-structured topic notes for exam preparation.\n\n"
             f"Guidelines:\n"
             f"- Combine repeated concepts, remove redundancy\n"

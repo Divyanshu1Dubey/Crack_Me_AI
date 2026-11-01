@@ -14,7 +14,7 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from crack_cms.client_ip import parse_num_proxies
-from crack_cms.db_config import server_side_cursors_unsupported
+from crack_cms.db_config import server_side_cursors_unsupported, statement_timeout_option
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -292,6 +292,14 @@ if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
     if server_side_cursors_unsupported(DATABASES['default'], os.getenv('DB_DISABLE_SERVER_SIDE_CURSORS')):
         DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
+    # Opt-in server-side statement timeout (DB_STATEMENT_TIMEOUT_MS, e.g.
+    # 15000 on the web service): without it a runaway query keeps its
+    # backend and the request thread busy until it finishes. Off by default
+    # (crack_cms/db_config.py says where to set it).
+    _statement_timeout = statement_timeout_option(os.getenv('DB_STATEMENT_TIMEOUT_MS'))
+    if _statement_timeout:
+        db_options['options'] = f"{db_options.get('options', '')} {_statement_timeout}".strip()
+
     force_ipv4_default = 'true' if IS_PRODUCTION_RUNTIME else 'false'
     force_ipv4 = os.getenv('DB_FORCE_IPV4', force_ipv4_default).lower() == 'true'
     if force_ipv4:
@@ -396,7 +404,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
+        # DRF's SearchFilter with a cap on the number / length of terms.
+        'crack_cms.filters.BoundedSearchFilter',
         'rest_framework.filters.OrderingFilter',
     ),
     # Honours ?page_size= (max 100); default page size stays 20.

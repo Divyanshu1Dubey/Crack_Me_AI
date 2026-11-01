@@ -72,6 +72,18 @@ def apply_explain_result(question, result, service=None) -> list:
     return updated
 
 
+def generate_reveal_sections_task(question_id: int):
+    """Fill one question's missing reveal-panel AI sections (why correct,
+    clinical significance, memory trick, concept) with one LLM call.
+
+    Queued by the per-question ``ai/*`` GET endpoints
+    (``ai_per_question.queue_generation``), which never call an LLM in the
+    request thread. Writes only empty fields.
+    """
+    from questions.ai_per_question import generate_missing_sections
+    return generate_missing_sections(question_id)
+
+
 def generate_ai_task(question_id: int):
     try:
         question = Question.objects.get(id=question_id)

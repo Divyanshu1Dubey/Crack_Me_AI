@@ -49,6 +49,7 @@ except ImportError:  # pragma: no cover
     Document = None
 
 from questions.models import Question, Subject, Topic
+from questions.answer_leak import PUBLIC_TEXT_FIELDS, plan_repair, row_has_answer_label
 from questions.import_protection import is_removed
 from tests_engine.models import Test
 
@@ -664,6 +665,35 @@ def parse_schema_b(paragraphs) -> list[ParsedQuestion]:
 
 
 # ---------------------------------------------------------------------------
+# Answer-label gate
+# ---------------------------------------------------------------------------
+
+
+def answer_label_gate(pq: ParsedQuestion) -> tuple[dict, list[str]]:
+    """Fields to store for ``pq`` once answer / explanation labels glued
+    into its stem or options are dealt with (``questions.answer_leak``).
+
+    The parsers keep a line such as "D. <text> Correct Answer: B. <text>"
+    in option D, and in statement / assertion-reason mode they stash an
+    "Explanation: ..." line into the stem -- public text, so the answer
+    leaked to every free and anonymous viewer. Returns ``(fields, hold)``:
+    ``fields`` are the repaired stem / options / key / explanation (only
+    what changed), ``hold`` the reasons to keep the question out of the
+    bank (``is_active=False``) for manual review -- empty when it can be
+    published.
+    """
+    row = {name: getattr(pq, name) for name in PUBLIC_TEXT_FIELDS}
+    row.update(correct_answer=pq.correct_answer, explanation=pq.explanation)
+    repair = plan_repair(row)
+    if repair.deactivate:
+        return {}, list(repair.reasons)
+    row.update(repair.changes)
+    if row_has_answer_label(row):  # defensive: nothing the repair could move
+        return {}, ["answer / explanation label left in the stem or an option"]
+    return dict(repair.changes), []
+
+
+# ---------------------------------------------------------------------------
 # Per-file dispatcher
 # ---------------------------------------------------------------------------
 
@@ -868,6 +898,14 @@ class Command(BaseCommand):
             err_rows = sum(1 for q in report.questions if q.errors)
             if err_rows:
                 self.stdout.write(self.style.WARNING(f"  {err_rows} questions have errors (will be flagged needs_review)"))
+            gated = [answer_label_gate(q) for q in report.questions]
+            label_fixed = sum(1 for fields, hold in gated if fields and not hold)
+            label_held = sum(1 for _, hold in gated if hold)
+            if label_fixed or label_held:
+                self.stdout.write(self.style.WARNING(
+                    f"  answer / explanation labels in the stem or options: {label_fixed} repaired, "
+                    f"{label_held} held for review (imported inactive)"
+                ))
 
             if dry:
                 continue
@@ -881,7 +919,14 @@ class Command(BaseCommand):
             # this file remain. Otherwise an IntegrityError mid-batch silently
             # rolls back all successes in this file — that's what bit the previous run.
             for pq in report.questions:
+                # Answer key / explanation glued into the stem or an option:
+                # moved where it belongs, or the question is held (inactive)
+                # for review -- never published as public text.
+                label_fields, label_hold = answer_label_gate(pq)
                 existing, ratio = find_existing_similar(pq.question_text, subj_code)
+                if not existing and label_fields.get("question_text"):
+                    # A row repaired by fix_answer_label_leaks has the cut stem.
+                    existing, ratio = find_existing_similar(label_fields["question_text"], subj_code)
                 if existing and ratio >= 0.99:
                     self.stdout.write(self.style.NOTICE(f"  skip dup Q{existing.id}"))
                     continue
@@ -913,6 +958,18 @@ class Command(BaseCommand):
                 }
                 if pq.errors:
                     flags["verified_note"] = " | ".join(pq.errors)
+                if label_hold:
+                    flags["is_active"] = False
+                    flags["needs_review"] = True
+                    flags["verified_note"] = " | ".join(
+                        [*pq.errors, *(f"held: {reason}" for reason in label_hold)]
+                    )
+                    self.stdout.write(self.style.WARNING(
+                        f"  held for review (answer / explanation label): {pq.question_text[:60]!r}"
+                    ))
+                elif label_fields:
+                    flags.update(label_fields)
+                    flags["needs_review"] = True
                 if pq.marks:
                     # Marks row's col2 = negative marks; col1 = positive marks
                     # We don't currently store negative marks per-question,

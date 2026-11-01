@@ -24,6 +24,14 @@ python manage.py migrate --no-input
 #   python manage.py link_supabase_identity --all-privileged --apply
 python manage.py link_supabase_identity --all-privileged || true
 
+# Accounts flagged is_subscribed without a Subscription row (premium now comes
+# from Subscription rows only; accounts.0026 restored the plans that signed
+# payments prove): a DRY RUN report of the UNPROVEN accounts left to review
+# (writes nothing without --apply, never fails the build). Owner action, by
+# hand only, after granting a plan to any that should keep premium:
+#   python manage.py reconcile_legacy_subscriptions --apply --clear-unproven
+python manage.py reconcile_legacy_subscriptions || true
+
 # Question bank seed for a fresh database (new deploy DB, staging, fresh
 # local DB): loads fixtures/cms_fixture.json -- subjects, topics, questions,
 # honouring admin-removal tombstones -- only while the CMS bank is empty.

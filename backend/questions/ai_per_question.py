@@ -16,6 +16,11 @@ the front-end can call:
 Implementation notes:
 - Stored content first (admin / curated / previously generated fields),
   then the cache, then -- only when the caller allows it -- one LLM call.
+- The API (``QuestionViewSet.ai_*`` GETs) never generates in the request
+  thread: it serves stored / cached text and, on a miss, ``queue_generation``
+  queues ONE django-q task per question (``questions.tasks.
+  generate_reveal_sections_task`` -> ``generate_missing_sections``) that
+  writes every missing section with a single LLM call.
 - ``fallback=False`` (what the API uses) returns ``None`` when there is no
   genuine content, so the reveal panel hides the section instead of
   showing template boilerplate as if it were an expert explanation. The
@@ -43,6 +48,9 @@ from django.utils import timezone
 LOG = logging.getLogger(__name__)
 
 CACHE_TTL = 60 * 60 * 24  # 24h — feature-level memo
+# The concept has no Question column (it is only cached), so it is kept
+# longer: with 24 h every revealed question regenerated it once a day.
+CONCEPT_CACHE_TTL = 7 * CACHE_TTL
 
 # Default per-user budget of NEW per-question LLM generations per hour
 # (stored / cached content is free). Override with
@@ -282,7 +290,7 @@ def concept(q, allow_ai=False, *, fallback: bool = True):
     if not out:
         _remember_failure(cid, "concept")
         return _fallback("concept", fallback)
-    cache.set(_k(cid, "concept"), out, CACHE_TTL)
+    cache.set(_k(cid, "concept"), out, CONCEPT_CACHE_TTL)
     return out
 
 
@@ -425,6 +433,197 @@ def memory_trick(q, allow_ai=False, *, fallback: bool = True):
     cache.set(_k(cid, "memory_trick"), out, CACHE_TTL)
     _persist_ai_field(q, "ai_mnemonic", out)
     return out
+
+
+# ---------- background generation (django-q) ------------------------------
+#
+# The reveal panel asks for each section with its own GET (ai/why_correct,
+# ai/clinical, ai/mnemonic, ai/concept, ...). Those GETs used to run the
+# provider rotation inline: up to four synchronous rotations per reveal, each
+# bounded only by AI_CALL_DEADLINE_SECONDS (90 s), inside the gunicorn request
+# threads (3 workers x 4 threads), so a few reveals during provider slowness
+# held every request slot. The GETs now serve stored / cached text only; on a
+# miss ``queue_generation`` queues ONE task per question (single-flight lock)
+# and the worker writes every missing section with one LLM call.
+
+GENERATION_TASK = "questions.tasks.generate_reveal_sections_task"
+# One queued (or running) generation per question for this long. With a
+# process-local cache (no REDIS_URL) the worker cannot clear a web process's
+# lock, so this is also the retry interval after a failed generation.
+GENERATION_LOCK_TTL = 15 * 60
+# django-q timeout of one generation task; the LLM call itself is bounded by
+# ai_engine.services.AI_CALL_DEADLINE_SECONDS.
+GENERATION_TASK_TIMEOUT = 5 * 60
+
+# Sections one background generation writes, the Question field each one is
+# persisted to (the concept has none: it lives in the cache only) and what the
+# prompt asks for.
+_SECTION_FIELDS = {
+    "concept": None,
+    "why_correct": "ai_answer",
+    "clinical_significance": "ai_clinical_pearl",
+    "memory_trick": "ai_mnemonic",
+}
+_SECTION_ASKS = {
+    "concept": "the underlying concept, in one short clause",
+    "why_correct": "why the correct answer is right, in 2-3 lines",
+    "clinical_significance": "the clinical significance of the concept, in 2 sentences",
+    "memory_trick": "a 1-line mnemonic or memory trick to recall the answer",
+}
+
+
+def _ai_offline() -> bool:
+    try:
+        from ai_engine.offline import ai_offline_mode
+        return bool(ai_offline_mode())
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+def _cache_is_shared() -> bool:
+    """True when every process sees the same default cache (Redis, ...).
+
+    The worker can store a generated concept only in the cache, so with a
+    process-local cache (LocMem) the web processes could never serve it and
+    generating it would only spend a provider call.
+    """
+    backend = str(settings.CACHES.get("default", {}).get("BACKEND", ""))
+    return not backend.endswith(("LocMemCache", "DummyCache"))
+
+
+def _stored_section(q, feature: str):
+    """Stored or cached text of one reveal section (never generates)."""
+    if feature == "concept":
+        return concept(q, fallback=False)
+    if feature == "why_correct":
+        return why_correct(q, fallback=False)
+    if feature == "clinical_significance":
+        return clinical_significance(q, fallback=False)
+    return memory_trick(q, fallback=False)
+
+
+def missing_sections(q) -> list:
+    """Reveal sections of ``q`` a background generation could fill: no
+    stored or cached text and no recent failed attempt."""
+    cid = _q_id(q)
+    if cid is None:
+        return []
+    out = []
+    for feature in _SECTION_FIELDS:
+        if feature == "concept" and not _cache_is_shared():
+            continue
+        if _recently_failed(cid, feature):
+            continue
+        if _stored_section(q, feature) is None:
+            out.append(feature)
+    return out
+
+
+def queue_generation(q, user, feature: str, *, unlimited: bool = False) -> str:
+    """Queue the background generation of ``q``'s missing reveal sections,
+    asked for by a GET of section ``feature``.
+
+    Never calls an LLM. Returns ``"queued"`` (this call queued the task),
+    ``"pending"`` (a generation for this question is already queued or
+    running), ``"rate_limited"`` (the caller's hourly budget is spent) or
+    ``"unavailable"`` (``feature`` cannot be generated now: not a generated
+    section, a recent failure, AI offline, or the queue refused). The
+    caller's budget (``generation_gate``, once per question and hour) is
+    charged only when this call queues the task.
+    """
+    cid = _q_id(q)
+    if cid is None or _ai_offline():
+        return "unavailable"
+    if feature not in missing_sections(q):
+        return "unavailable"
+    lock = _k(cid, "generation")
+    try:
+        if cache.get(lock):
+            return "pending"
+    except Exception:  # pragma: no cover - cache backend hiccup
+        return "unavailable"
+    if not _may_generate(generation_gate(user, unlimited=unlimited, question_id=cid)):
+        return "rate_limited"
+    try:
+        if not cache.add(lock, 1, GENERATION_LOCK_TTL):
+            return "pending"
+    except Exception:  # pragma: no cover - cache backend hiccup
+        return "unavailable"
+    try:
+        from django_q.tasks import async_task
+        async_task(GENERATION_TASK, cid, timeout=GENERATION_TASK_TIMEOUT)
+    except Exception:
+        LOG.warning("Could not queue the AI section generation for question %s", cid, exc_info=True)
+        try:
+            cache.delete(lock)
+        except Exception:  # pragma: no cover - cache backend hiccup
+            pass
+        return "unavailable"
+    return "queued"
+
+
+def _generate_sections(q, features) -> dict:
+    """ONE LLM call for every section in ``features``; ``{}`` on failure."""
+    correct = (_correct_letter(q) or "").upper()[:1]
+    option_lines = "\n".join(
+        f"{letter}: {text}" for letter, text in zip("ABCD", _options(q)) if (text or "").strip()
+    )
+    keys = "\n".join(f'- "{feature}": {_SECTION_ASKS[feature]}' for feature in features)
+    prompt = (
+        f"NEET-PG question:\n\nQ: {_stem_text(q)}\n{option_lines}\n"
+        f"Correct answer: {correct}\n\n"
+        f"Reply with only a JSON object (no markdown) with these keys:\n{keys}"
+    )
+    raw = _ai_call(prompt, max_tokens=120 + 160 * len(features))
+    if not raw:
+        return {}
+    try:
+        from ai_engine.services import AIService
+        parsed = AIService._parse_explanation_json(raw)
+    except Exception:  # pragma: no cover - defensive
+        parsed = None
+    if not isinstance(parsed, dict):
+        LOG.warning("AI section generation for question %s: the reply was not JSON", _q_id(q))
+        return {}
+    return {feature: parsed.get(feature) for feature in features if isinstance(parsed.get(feature), str)}
+
+
+def generate_missing_sections(question_id) -> list:
+    """Body of the django-q task queued by ``queue_generation``.
+
+    Writes the question's missing reveal sections with one LLM call: why
+    correct, clinical significance and memory trick into their empty
+    ``Question.ai_*`` fields (never over existing content), the concept into
+    the cache. A section the model did not produce is not retried for
+    ``FAILED_GENERATION_TTL``. Returns the sections written.
+    """
+    from questions.models import Question
+
+    try:
+        q = Question.objects.filter(pk=question_id, is_active=True).first()
+        if q is None or _ai_offline():
+            return []
+        features = missing_sections(q)
+        if not features:
+            return []
+        sections = _generate_sections(q, features)
+        written = []
+        for feature in features:
+            text = usable_ai_text(sections.get(feature))
+            if not text:
+                _remember_failure(q.pk, feature)
+                continue
+            cache.set(_k(q.pk, feature), text, CONCEPT_CACHE_TTL if feature == "concept" else CACHE_TTL)
+            field = _SECTION_FIELDS[feature]
+            if field:
+                _persist_ai_field(q, field, text)
+            written.append(feature)
+        return written
+    finally:
+        try:  # a shared cache lets the next miss queue again right away
+            cache.delete(_k(question_id, "generation"))
+        except Exception:  # pragma: no cover - cache backend hiccup
+            pass
 
 
 def related_pyqs(q, limit: int = 8):
