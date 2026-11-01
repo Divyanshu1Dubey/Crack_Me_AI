@@ -255,7 +255,9 @@ export default function SubscriptionPage() {
             logAxiosError('Failed to start the scholarship challenge:', err);
             const error = err as { response?: { status?: number; data?: { error?: string } } };
             setScholarshipError(
-                error.response?.status === 429
+                getApiErrorCode(err) === 'device_limit_reached'
+                    ? 'This device is over your plan’s device limit. Remove a device in Settings, or buy a plan (4 devices) below.'
+                    : error.response?.status === 429
                     ? 'The challenge was started too many times. Please wait a while and try again.'
                     : error.response?.data?.error || 'Could not start the scholarship challenge. Please try again.'
             );
@@ -900,13 +902,13 @@ export default function SubscriptionPage() {
                         <div className="rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                             <div className="text-left space-y-2">
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                                    <Sparkles className="w-3.5 h-3.5" /> Scholarship Offer · ₹{SCHOLARSHIP_PRICE_INR} Monthly Pass
+                                    <Sparkles className="w-3.5 h-3.5" /> Scholarship Offer · ₹{scholarshipOfferPrice} Monthly Pass
                                 </span>
                                 <h3 className="text-xl font-extrabold text-foreground">
-                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹{SCHOLARSHIP_PRICE_INR}
+                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹{scholarshipOfferPrice}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Get an instant score breakdown. Score a perfect 5/5 to claim the ₹{SCHOLARSHIP_PRICE_INR}/month scholarship price!
+                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Get an instant score breakdown. Score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price!
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (

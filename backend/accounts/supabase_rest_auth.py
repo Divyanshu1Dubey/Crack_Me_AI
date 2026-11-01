@@ -6,12 +6,13 @@ import json
 import logging
 import os
 import re
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import authentication, exceptions
 
 from .models import TokenBalance
@@ -22,6 +23,12 @@ logger = logging.getLogger(__name__)
 # Settings and free a slot (list / log out devices, load the profile) or buy
 # the 4-device plan from this device (/auth/subscribe/...).
 _DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/', '/auth/subscribe/')
+# Read-only requests every signed-in page makes in the background (Header
+# token pill, announcements). Without them the over-limit device could not
+# stay on /subscription long enough to buy the 4-device plan. Exact paths
+# (any /api prefix allowed), safe methods only; they never enrol the device.
+_DEVICE_LIMIT_EXEMPT_READS = ('/auth/tokens/', '/analytics/announcements/')
+_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 # A device's last_login is refreshed at most this often (one write per
 # request per user was the old behaviour).
 _DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
@@ -29,11 +36,38 @@ _DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
 # cap was never enforced before, so many accounts carry long-dead rows, e.g.
 # one per old incognito session). They stay listed in Settings.
 _DEVICE_STALE_AFTER = timedelta(days=30)
+# Clock skew allowed between Supabase's user ``created_at`` and our
+# ``date_joined`` when deciding that a row was created from an identity.
+ORIGINAL_IDENTITY_CLOCK_TOLERANCE = timedelta(minutes=5)
+
+# Keys that may be sent as ``apikey`` when verifying an access token, in
+# order. All are public (anon / publishable) keys or an explicit override.
+_PUBLIC_VERIFY_KEY_ENV_VARS = (
+    "SUPABASE_AUTH_VERIFY_KEY",
+    "SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+)
+_service_role_fallback_logged = False
 
 
 def _auth_failed(code: str, detail: str) -> exceptions.AuthenticationFailed:
     """AuthenticationFailed with a machine-readable ``code`` the frontend acts on."""
     return exceptions.AuthenticationFailed({"detail": detail, "code": code})
+
+
+def public_verify_key() -> str:
+    """The first configured public key for token verification ('' if none)."""
+    return next((v for v in (os.getenv(n, "").strip() for n in _PUBLIC_VERIFY_KEY_ENV_VARS) if v), "")
+
+
+def _is_device_management_request(request_obj) -> bool:
+    """Requests an over-the-limit device may make without taking a slot."""
+    path = request_obj.path
+    if any(p in path for p in _DEVICE_MANAGEMENT_PATHS):
+        return True
+    return request_obj.method in _SAFE_METHODS and any(path.endswith(p) for p in _DEVICE_LIMIT_EXEMPT_READS)
 
 
 def _supabase_email_confirmed(supabase_user: dict) -> bool:
@@ -46,6 +80,39 @@ def _supabase_email_confirmed(supabase_user: dict) -> bool:
     if supabase_user.get("email_confirmed_at"):
         return True
     return bool(supabase_user.get("confirmed_at")) and not supabase_user.get("phone_confirmed_at")
+
+
+def supabase_created_at(supabase_user: dict):
+    """GoTrue's ``created_at`` for this identity as an aware datetime, or None."""
+    raw = supabase_user.get("created_at")
+    if not raw:
+        return None
+    try:
+        value = parse_datetime(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    if value is not None and timezone.is_naive(value):
+        value = timezone.make_aware(value, dt_timezone.utc)
+    return value
+
+
+def is_original_identity(supabase_user: dict, row) -> bool:
+    """True when ``row`` was created from this Supabase identity.
+
+    A row created on an identity's first sign-in is younger than the
+    identity: GoTrue's ``created_at`` is not later than ``row.date_joined``
+    (give or take ORIGINAL_IDENTITY_CLOCK_TOLERANCE). A sign-up made after the
+    row existed -- a takeover attempt while "Confirm email" is off, or a
+    deleted and re-created identity -- cannot satisfy this. The email must be
+    confirmed too. Missing or unparseable dates never count.
+    """
+    if not _supabase_email_confirmed(supabase_user):
+        return False
+    created = supabase_created_at(supabase_user)
+    joined = getattr(row, "date_joined", None)
+    if created is None or joined is None:
+        return False
+    return created <= joined + ORIGINAL_IDENTITY_CLOCK_TOLERANCE
 
 
 def _name_parts_from_metadata(metadata: dict) -> tuple[str, str]:
@@ -111,6 +178,10 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
     Failures that the frontend must act on raise AuthenticationFailed with a
     ``code``: ``account_blocked``, ``email_not_confirmed``, ``email_required``,
     ``account_link_required``, ``device_inactive`` and ``device_limit_reached``.
+
+    The Supabase project must have "Confirm email" and "Secure email change"
+    enabled: a confirmed email is what links a row on first sign-in and what
+    the admin email allowlist trusts (system check accounts.W001).
     """
 
     def authenticate_header(self, request_obj):
@@ -188,7 +259,7 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         ip = request_obj.META.get('REMOTE_ADDR', '').strip() or None
         user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
         limit = 4 if getattr(user, 'is_subscribed', False) else 2
-        management_request = any(p in request_obj.path for p in _DEVICE_MANAGEMENT_PATHS)
+        management_request = _is_device_management_request(request_obj)
 
         def _limit_reached():
             return _auth_failed(
@@ -277,34 +348,21 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         # The SERVICE_ROLE_KEY fallback exists for operational continuity
         # when those keys are missing (e.g. during the rollout of Fix #4
         # which previously broke production by removing this fallback).
-        # We log a WARNING whenever the fallback fires so operators know
-        # to add the proper key.
-        anon_keys = [
-            os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip(),
-            os.getenv("SUPABASE_ANON_KEY", "").strip(),
-            os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip(),
-            # New-style Supabase publishable keys are as safe as the anon key.
-            os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip(),
-            os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "").strip(),
-        ]
-        verify_key = next((k for k in anon_keys if k), "")
-
-        used_service_role_fallback = False
+        # It is reported by `manage.py check --deploy` (accounts.W002) and
+        # logged once per process; remove it once every deployment sets
+        # a public key (new-style publishable keys are as safe as anon).
+        global _service_role_fallback_logged
+        verify_key = public_verify_key()
         if not verify_key:
             verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            used_service_role_fallback = bool(verify_key)
-
-        if used_service_role_fallback:
-            import logging
-            logging.getLogger(__name__).warning(
-                "SupabaseJWTAuthentication is verifying tokens with the "
-                "SUPABASE_SERVICE_ROLE_KEY fallback. This is operationally "
-                "safe (Supabase keys token verification to the bearer JWT, "
-                "not the apikey) but should be replaced with "
-                "SUPABASE_AUTH_VERIFY_KEY or SUPABASE_ANON_KEY for "
-                "principle-of-least-privilege. Add the proper key to "
-                "production env to silence this warning."
-            )
+            if verify_key and not _service_role_fallback_logged:
+                _service_role_fallback_logged = True
+                logger.warning(
+                    "SupabaseJWTAuthentication is verifying tokens with the "
+                    "SUPABASE_SERVICE_ROLE_KEY fallback. Set SUPABASE_ANON_KEY "
+                    "(or SUPABASE_PUBLISHABLE_KEY / SUPABASE_AUTH_VERIFY_KEY) in "
+                    "the backend environment (principle of least privilege)."
+                )
 
         if not supabase_url or not verify_key:
             return None
@@ -381,7 +439,9 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         # sources: Supabase app_metadata (only settable with the service-role
         # key) or the env allowlist. The email is confirmed at this point
         # (checked above), so an allowlisted address can't be claimed by an
-        # unverified sign-up. user_metadata is user-editable and never counts.
+        # unverified sign-up -- provided the Supabase project has "Confirm
+        # email" on (accounts.W001). user_metadata is user-editable and never
+        # counts.
         admin_allowlist = _admin_email_allowlist()
         is_admin_from_metadata = _is_admin_from_metadata(app_metadata)
         is_admin_from_allowlist = email in admin_allowlist
@@ -392,8 +452,28 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
         user = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
         linked_by_uid = user is not None
+        # SECURITY (ACC-05): a linked identity whose email just changed to an
+        # allowlisted admin address is not promoted, and its local email does
+        # not follow. With "Confirm email" / "Secure email change" off, GoTrue
+        # applies updateUser({email}) without any confirmation, so the new
+        # address proves nothing. Grant admin in the admin panel (or with
+        # Supabase app_metadata) instead.
+        allowlist_email_change = bool(
+            linked_by_uid
+            and is_admin_from_allowlist
+            and not is_admin_from_metadata
+            and (user.email or "").strip().lower() != email
+            and not (user.role == "admin" or user.is_superuser)
+        )
+        if allowlist_email_change:
+            logger.warning(
+                "Supabase identity %s changed its email to an admin-allowlisted address; "
+                "account id=%s is not promoted and keeps its email.",
+                supabase_uid, user.pk,
+            )
+            trusted_admin = False
         if user is None:
-            user = self._link_existing_row_by_email(User, email, supabase_uid, trusted_admin)
+            user = self._link_existing_row_by_email(User, email, supabase_uid, trusted_admin, supabase_user)
         created = False
         if user is None:
             user, created = self._create_local_user(
@@ -439,9 +519,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             if avatar_url and not user.avatar_url:
                 desired["avatar_url"] = avatar_url
             # The linked identity changed its (confirmed) email in Supabase:
-            # follow it, unless another account already uses that address.
+            # follow it, unless another account already uses that address
+            # (or it is an admin-allowlisted address, see above).
             if (
                 linked_by_uid
+                and not allowlist_email_change
                 and (user.email or "").lower() != email
                 and not User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
             ):
@@ -460,7 +542,7 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
     def _is_privileged(user) -> bool:
         return user.role == "admin" or user.is_superuser or user.is_staff
 
-    def _link_existing_row_by_email(self, User, email, supabase_uid, trusted_admin):
+    def _link_existing_row_by_email(self, User, email, supabase_uid, trusted_admin, supabase_user=None):
         """First sign-in of a Supabase identity: link the local row with its email.
 
         Returns the linked row, or None when no row has this email (the caller
@@ -469,13 +551,19 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         SECURITY (ACC-05): with "Confirm email" off, GoTrue marks every new
         sign-up as confirmed, so a confirmed email alone does not prove the
         person owns the local account. An admin / staff / superuser row is
-        therefore linked automatically only for a trusted admin identity
-        (Supabase app_metadata, which needs the service-role key, or the env
-        admin allowlist -- both would grant admin anyway). Any other identity
-        is refused until an operator links it with
-        ``manage.py link_supabase_identity`` (or sets supabase_uid in Django
-        admin). Once linked, the row is only ever matched by supabase_uid, so
-        a row already linked to another identity is never re-linked by email.
+        therefore linked automatically only when
+          * the identity is a trusted admin (Supabase app_metadata, which needs
+            the service-role key, or the env admin allowlist -- both would
+            grant admin anyway), or
+          * the row was created from this identity (is_original_identity: the
+            identity's created_at is not later than the row's date_joined).
+            That is every admin promoted in the app after signing up, whose
+            row migration 0023 left without a supabase_uid.
+        Any other identity is refused (code ``account_link_required``) until
+        an operator links it with ``manage.py link_supabase_identity`` (or
+        sets supabase_uid in Django admin). Once linked, the row is only ever
+        matched by supabase_uid, so a row already linked to another identity
+        is never re-linked by email.
         """
         row = User.objects.filter(email=email).order_by("id").first()
         if row is None:
@@ -486,19 +574,21 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 "account_blocked",
                 "This account has been blocked. Contact support if you think this is a mistake.",
             )
+        privileged = self._is_privileged(row)
+        original_identity = bool(privileged and supabase_user and is_original_identity(supabase_user, row))
         if row.supabase_uid and row.supabase_uid != supabase_uid:
             # Linked to another Supabase identity, which has since lost this
             # email (deleted and re-created account, email change, project
             # migration). Re-linking by email would reopen the takeover.
             reason = "linked to another Supabase identity"
-        elif self._is_privileged(row) and not trusted_admin:
-            reason = "an admin/staff account without a linked Supabase identity"
+        elif privileged and not trusted_admin and not original_identity:
+            reason = "an admin/staff account that was not created from this Supabase identity"
         else:
             reason = ""
         if reason:
             logger.warning(
                 "Refusing to link Supabase identity %s to account id=%s (%s); link it explicitly "
-                "with `manage.py link_supabase_identity --email <email>`.",
+                "with `manage.py link_supabase_identity --email <email> --apply`.",
                 supabase_uid or "<no id>", row.pk, reason,
             )
             raise _auth_failed(
@@ -517,6 +607,8 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             claimed = 0
         if claimed:
             row.supabase_uid = supabase_uid
+            if privileged:
+                self._log_privileged_link(row, supabase_uid, supabase_user or {}, trusted_admin)
             return row
         # A concurrent request for the same identity linked it first.
         winner = User.objects.filter(supabase_uid=supabase_uid).first()
@@ -525,6 +617,28 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         raise _auth_failed(
             "account_link_required",
             "This account must be verified by an administrator before it can sign in. Please contact support.",
+        )
+
+    @staticmethod
+    def _log_privileged_link(row, supabase_uid, supabase_user, trusted_admin):
+        """Log + audit-log the automatic link of an admin / staff row (best effort)."""
+        basis = "trusted admin identity" if trusted_admin else "identity predates the account"
+        created = supabase_created_at(supabase_user)
+        logger.warning(
+            "Linked Supabase identity %s to privileged account id=%s on first sign-in (%s; identity "
+            "created %s, account joined %s).",
+            supabase_uid, row.pk, basis, created.isoformat() if created else "unknown",
+            row.date_joined.isoformat() if row.date_joined else "unknown",
+        )
+        from .views import create_admin_audit_log
+
+        create_admin_audit_log(
+            actor=None,
+            action="user_role_update",
+            resource_type="user",
+            resource_id=row.pk,
+            detail=f"Linked {row.username} to Supabase identity {supabase_uid} on first sign-in ({basis})",
+            metadata={"supabase_uid": supabase_uid, "basis": basis, "source": "sign_in"},
         )
 
     @staticmethod

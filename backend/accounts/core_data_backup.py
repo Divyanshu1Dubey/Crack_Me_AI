@@ -16,9 +16,14 @@ worked but always reported success:
 Now the dump goes to a temporary file that replaces the backup only when it
 is complete, and every failure raises ``CoreDataBackupError``.
 
-Set ``CORE_DATA_BACKUP_PATH`` to a persistent location (container disks on
-the hosting platform are wiped on redeploy); the default is
-``<BASE_DIR>/core_data_seed.json``.
+Set ``CORE_DATA_BACKUP_PATH`` to a file on a persistent volume: container
+disks on the hosting platform are wiped on every redeploy, so a backup there
+looks complete and is gone after the next deploy. Outside DEBUG the default
+``<BASE_DIR>/core_data_seed.json`` is therefore refused
+(``CoreDataBackupNotConfigured``) unless a path is given explicitly
+(``backup_core_data --output PATH`` / ``restore_core_data --input PATH``).
+Local development (DEBUG) keeps the default. ``manage.py check --deploy``
+reports a missing CORE_DATA_BACKUP_PATH (accounts.W003).
 """
 from __future__ import annotations
 
@@ -42,9 +47,21 @@ class CoreDataBackupError(Exception):
     """Backup or restore did not complete."""
 
 
+class CoreDataBackupNotConfigured(CoreDataBackupError):
+    """No persistent backup location is configured (production without CORE_DATA_BACKUP_PATH)."""
+
+
 def core_data_backup_path() -> str:
+    """CORE_DATA_BACKUP_PATH, or the BASE_DIR default in DEBUG only."""
     configured = os.getenv('CORE_DATA_BACKUP_PATH', '').strip()
-    return configured or os.path.join(str(settings.BASE_DIR), 'core_data_seed.json')
+    if configured:
+        return configured
+    if not settings.DEBUG:
+        raise CoreDataBackupNotConfigured(
+            'CORE_DATA_BACKUP_PATH is not set. The default file would be on the container disk, '
+            'which every redeploy wipes; point CORE_DATA_BACKUP_PATH at a persistent volume.'
+        )
+    return os.path.join(str(settings.BASE_DIR), 'core_data_seed.json')
 
 
 def _read_fixture(path: str) -> list:

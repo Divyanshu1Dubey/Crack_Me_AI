@@ -142,20 +142,27 @@ class LinkSupabaseIdentityCommandTests(TestCase):
         return out.getvalue()
 
     def test_links_with_an_explicit_uid(self):
-        self.run_cmd('--email', 'OPS@example.com', '--uid', UID_A)
+        self.run_cmd('--email', 'OPS@example.com', '--uid', UID_A, '--apply')
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.supabase_uid, UID_A)
+
+    def test_dry_run_by_default(self):
+        out = self.run_cmd('--email', 'ops@example.com', '--uid', UID_A)
+        self.assertIn('Would link', out)
+        self.assertIn('Dry run', out)
+        self.admin.refresh_from_db()
+        self.assertIsNone(self.admin.supabase_uid)
 
     def test_refuses_a_uid_linked_to_another_account(self):
         User.objects.create_user(username='other', email='other@example.com', password='x', supabase_uid=UID_A)
         with self.assertRaises(CommandError):
-            self.run_cmd('--email', 'ops@example.com', '--uid', UID_A)
+            self.run_cmd('--email', 'ops@example.com', '--uid', UID_A, '--apply')
 
     def test_replacing_an_existing_link_needs_replace(self):
         User.objects.filter(pk=self.admin.pk).update(supabase_uid=UID_A)
         with self.assertRaises(CommandError):
-            self.run_cmd('--email', 'ops@example.com', '--uid', UID_B)
-        self.run_cmd('--email', 'ops@example.com', '--uid', UID_B, '--replace')
+            self.run_cmd('--email', 'ops@example.com', '--uid', UID_B, '--apply')
+        self.run_cmd('--email', 'ops@example.com', '--uid', UID_B, '--replace', '--apply')
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.supabase_uid, UID_B)
 
@@ -168,9 +175,9 @@ class LinkSupabaseIdentityCommandTests(TestCase):
         users = [{'id': UID_A, 'email': 'ops@example.com', 'email_confirmed_at': None}]
         with mock.patch('accounts.supabase_auth.list_supabase_auth_users', return_value=users):
             with self.assertRaises(CommandError):
-                self.run_cmd('--email', 'ops@example.com')
+                self.run_cmd('--email', 'ops@example.com', '--apply')
             users[0]['email_confirmed_at'] = CONFIRMED
-            self.run_cmd('--email', 'ops@example.com')
+            self.run_cmd('--email', 'ops@example.com', '--apply')
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.supabase_uid, UID_A)
 
@@ -184,7 +191,8 @@ class DeviceLimitSubscribeTests(_SupabaseAuthTestCase):
         for device in (DEVICE_A, DEVICE_B):
             self.assertEqual(self.bearer('tok-dev', payload, device=device).get('/api/auth/tokens/').status_code, 200)
         third = self.bearer('tok-dev', payload, device=DEVICE_C)
-        self.assertEqual(third.get('/api/auth/tokens/').data['code'], 'device_limit_reached')
+        # (GET /api/auth/tokens/ is exempt since wave 3: the Header reads it on /subscription.)
+        self.assertEqual(third.get('/api/auth/tokens/history/').data['code'], 'device_limit_reached')
         r = third.post('/api/auth/subscribe/order/', {'plan': '3_months'}, format='json')
         self.assertEqual(r.status_code, 200, r.data)
         # It did not take a slot.

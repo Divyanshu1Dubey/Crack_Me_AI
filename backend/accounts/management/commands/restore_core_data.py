@@ -14,7 +14,7 @@ class Command(BaseCommand):
     help = 'Restore core catalogue data (exam tracks, subjects, topics, jobs) from the JSON fixture'
 
     def add_arguments(self, parser):
-        parser.add_argument('--input', default=None, help='Fixture path (default: CORE_DATA_BACKUP_PATH or BASE_DIR/core_data_seed.json)')
+        parser.add_argument('--input', default=None, help='Fixture path (default: CORE_DATA_BACKUP_PATH; BASE_DIR/core_data_seed.json only with DEBUG on)')
 
     def handle(self, *args, **options):
         try:

@@ -1,14 +1,17 @@
 """Operational fallback for the freemium auto-seed (post_migrate signal).
 
 Production never needs this — ``accounts.signals`` runs after every
-``manage.py migrate`` and populates FreeShowcaseQuestion + auto-marks
-two free preview tests. This command remains for ops who want to:
+``manage.py migrate`` and populates FreeShowcaseQuestion. This command
+remains for ops who want to:
 
     * re-run with custom flags (``--per-year``, ``--dry-run``)
     * audit what would happen without touching the DB
     * bootstrap on a DB where the post_migrate signal was skipped
 
-Everything is idempotent.
+Scholarship-challenge questions are never added to the showcase; existing
+showcase rows that point at one are reported (they show as locked, never
+free). Free preview tests are no longer seeded (Test.is_free_preview is
+retired). Everything is idempotent.
 """
 from django.core.management.base import BaseCommand
 
@@ -48,11 +51,11 @@ class Command(BaseCommand):
                 .values_list('year', flat=True).distinct().order_by('-year')
             )
             for year in years:
-                cur = FreeShowcaseQuestion.objects.filter(year=year).count()
-                self.stdout.write(f'  year={year}: {cur}/{options["per_year"]}')
-            from tests_engine.models import Test
-            preview_count = Test.objects.filter(is_free_preview=True).count()
-            self.stdout.write(f'  free-preview tests: {preview_count}/2')
+                rows = FreeShowcaseQuestion.objects.filter(year=year)
+                cur = rows.count()
+                locked = rows.filter(question__is_scholarship_eligible=True).count()
+                note = f' ({locked} scholarship question(s): shown as locked, replace them)' if locked else ''
+                self.stdout.write(f'  year={year}: {cur}/{options["per_year"]}{note}')
             return
 
         summary = ensure_freemium_seed()

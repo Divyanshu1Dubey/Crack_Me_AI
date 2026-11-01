@@ -8,6 +8,19 @@ from .supabase_auth import sync_user_to_supabase_auth
 User = get_user_model()
 
 
+def _is_unmetered_staff(user) -> bool:
+    """Admins, superusers and staff: AI use is never metered or capped.
+
+    Mirrors ai_engine.views._is_unmetered_staff (the enforcement), so the
+    token wallet's ``unlimited_ai`` and the profile's AI tutor cap tell staff
+    the same thing the AI endpoints do (tests_wave3b_auth pins the parity).
+    """
+    return bool(
+        getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
+        or getattr(user, 'is_staff', False)
+    )
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password2 = serializers.CharField(write_only=True, min_length=8)
@@ -183,12 +196,12 @@ class UserSerializer(serializers.ModelSerializer):
     def get_ai_tutor_used_today(self, obj):
         """Today's AI tutor message count for this user (0 if no row).
 
-        Premium and admin users always read as 0 so the soft banner's
+        Premium, admin and staff users always read as 0 so the soft banner's
         progress copy (`X/2`) is hidden — they are unlimited.
         """
         try:
             from ai_engine.models_usage import get_today_usage
-            if self.get_is_premium(obj):
+            if _is_unmetered_staff(obj) or self.get_is_premium(obj):
                 return 0
             return int(get_today_usage(obj))
         except Exception:
@@ -196,14 +209,15 @@ class UserSerializer(serializers.ModelSerializer):
             return 0
 
     def get_ai_tutor_daily_cap(self, obj):
-        """Daily AI tutor cap for this user. Premium and admin → None (unlimited).
+        """Daily AI tutor cap for this user. Premium, admin and staff → None (unlimited).
 
         Same source as the enforcement (ai_engine.views._ai_tutor_cap, i.e.
         TokenConfig.ai_tutor_daily_cap), so the usage banner shows the real cap.
+        Staff are exempt there too (ai_engine.views._is_unmetered_staff).
         """
         try:
             from ai_engine.views import _ai_tutor_cap
-            if self.get_is_premium(obj):
+            if _is_unmetered_staff(obj) or self.get_is_premium(obj):
                 return None
             return int(_ai_tutor_cap())
         except Exception:
@@ -239,12 +253,16 @@ class TokenBalanceSerializer(serializers.ModelSerializer):
     weekly_limit = serializers.SerializerMethodField()
     token_price = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
+    # Same rule as the AI metering (ai_engine.views.consume_ai_token):
+    # admins, superusers and staff, and an active plan with unlimited AI
+    # (1 year / legacy / admin grant), are never charged tokens.
+    unlimited_ai = serializers.SerializerMethodField()
 
     class Meta:
         model = TokenBalance
         fields = ['available', 'purchased_tokens', 'feedback_credits',
                   'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
-                  'daily_limit', 'weekly_limit', 'token_price', 'is_admin']
+                  'daily_limit', 'weekly_limit', 'token_price', 'is_admin', 'unlimited_ai']
 
     def get_daily_limit(self, obj):
         return TokenConfig.get_config().free_daily_tokens
@@ -257,6 +275,17 @@ class TokenBalanceSerializer(serializers.ModelSerializer):
 
     def get_is_admin(self, obj):
         return obj.user.is_admin
+
+    def get_unlimited_ai(self, obj):
+        from .models import Subscription
+
+        if _is_unmetered_staff(obj.user):
+            return True
+        try:
+            sub = Subscription.get_active_subscription(obj.user)
+        except DatabaseError:
+            return False
+        return bool(sub and sub.is_active and sub.unlimited_ai)
 
 
 class TokenPurchaseSerializer(serializers.Serializer):
@@ -339,8 +368,17 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
 
 
 class UserDeviceSerializer(serializers.ModelSerializer):
+    # True for the device the request comes from (context
+    # 'current_device_fingerprint', the request's X-Session-ID); always false
+    # without that context (e.g. the admin view of another user's devices).
+    is_current = serializers.SerializerMethodField()
+
     class Meta:
         from .models import UserDevice
         model = UserDevice
-        fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at']
+        fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at', 'is_current']
+
+    def get_is_current(self, obj):
+        current = self.context.get('current_device_fingerprint') or ''
+        return bool(current) and obj.device_fingerprint == current
 

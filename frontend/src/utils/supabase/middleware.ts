@@ -22,6 +22,12 @@ const PROTECTED_ROUTE_PREFIXES = [
   '/textbooks',
   '/upload',
   '/trends',
+  // Personal pages: they also gate client-side (useRequireAuth); the
+  // redirect here avoids a flash of the page shell for signed-out visitors.
+  '/study-time',
+  '/quests',
+  '/mistake-notebook',
+  '/topic-notes',
 ];
 
 const isProtectedRoute = (pathname: string) =>

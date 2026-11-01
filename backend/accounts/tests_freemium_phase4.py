@@ -10,7 +10,7 @@ implementation:
 * `has_active_sub` lazy-expiry contract
 * `Subscription.get_active_subscription` filter-update idempotency
 * FreeShowcaseQuestion uniqueness across years
-* Free preview test auto-selection (signals) — admin override respected
+* Free preview tests are no longer auto-selected (AN-27)
 * Anonymous + non-premium user behavior across every endpoint
 """
 from datetime import date, timedelta
@@ -23,7 +23,6 @@ from django.utils import timezone
 from accounts.models import CustomUser, Subscription
 from accounts.models_freemium import FreeShowcaseQuestion
 from accounts.signals import (
-    ensure_free_preview_tests,
     ensure_freemium_seed,
     ensure_showcase_for_year,
 )
@@ -266,81 +265,34 @@ class FreemiumSeedTests(TestCase):
         )
         self.assertEqual(admin_qids, set(admin_picks))
 
-    def test_ensure_free_preview_marks_two_newest(self):
+    def test_showcase_seed_skips_scholarship_questions(self):
+        """Scholarship-challenge questions are never free, so never seeded."""
+        for i in range(1, 6):
+            q = self._make_question(2022, 4000 + i)
+            if i <= 2:
+                type(q).objects.filter(pk=q.pk).update(is_scholarship_eligible=True)
+        created = ensure_showcase_for_year(2022, per_year=10)
+        self.assertEqual(created, 3)
+        self.assertFalse(
+            FreeShowcaseQuestion.objects.filter(year=2022, question__is_scholarship_eligible=True).exists()
+        )
+
+    def test_freemium_seed_no_longer_marks_free_preview_tests(self):
+        """AN-27: Test.is_free_preview is retired; the seed leaves tests alone."""
         from tests_engine.models import Test
-        from django.contrib.auth import get_user_model
         creator = get_user_model().objects.create_user(
             username='creator', email='c@x.com', password='x',
         )
-        # Create 5 tests with explicit created_at ordering.
-        for i in range(5):
-            t = Test.objects.create(
-                title=f'Test {i}',
-                test_type='mixed',
-                num_questions=5,
-                time_limit_minutes=10,
-                created_by=creator,
-                is_published=True,
-            )
-            Test.objects.filter(pk=t.pk).update(
-                created_at=timezone.now() - timedelta(hours=5 - i),
-            )
-        marked = ensure_free_preview_tests(target=2)
-        self.assertEqual(marked, 2)
-        # The two NEWEST tests should be marked.
-        newest_ids = list(
-            Test.objects
-            .filter(is_published=True)
-            .order_by('-created_at', '-id')
-            .values_list('id', flat=True)[:2]
-        )
-        marked_ids = list(
-            Test.objects.filter(is_free_preview=True).values_list('id', flat=True)
-        )
-        self.assertEqual(set(marked_ids), set(newest_ids))
-
-    def test_ensure_free_preview_respects_admin_override(self):
-        from tests_engine.models import Test
-        from django.contrib.auth import get_user_model
-        creator = get_user_model().objects.create_user(
-            username='creator2', email='c2@x.com', password='x',
-        )
-        # Admin manually picks Test A as preview.
-        admin_test = Test.objects.create(
-            title='Admin Picked',
-            test_type='mixed',
-            num_questions=5,
-            time_limit_minutes=10,
-            created_by=creator,
-            is_published=True,
-            is_free_preview=True,
-        )
-        Test.objects.filter(pk=admin_test.pk).update(
-            created_at=timezone.now() - timedelta(days=10),
-        )
-        # Plus 3 fresh tests.
         for i in range(3):
-            t = Test.objects.create(
-                title=f'Fresh {i}',
-                test_type='mixed',
-                num_questions=5,
-                time_limit_minutes=10,
-                created_by=creator,
-                is_published=True,
+            Test.objects.create(
+                title=f'Test {i}', test_type='mixed', num_questions=5,
+                time_limit_minutes=10, created_by=creator, is_published=True,
             )
-            Test.objects.filter(pk=t.pk).update(
-                created_at=timezone.now() - timedelta(hours=i),
-            )
-        marked = ensure_free_preview_tests(target=2)
-        # Already 1 picked by admin → only 1 more should be added.
-        self.assertEqual(marked, 1)
-        self.assertEqual(
-            Test.objects.filter(is_free_preview=True).count(), 2,
-        )
-        # Admin's old pick is preserved.
-        self.assertTrue(
-            Test.objects.filter(pk=admin_test.pk, is_free_preview=True).exists()
-        )
+        self._make_question(2021, 4100)
+        with mock.patch('accounts.signals._running_tests', return_value=False):
+            summary = ensure_freemium_seed()
+        self.assertNotIn('free_preview_marked', summary)
+        self.assertFalse(Test.objects.filter(is_free_preview=True).exists())
 
     def test_ensure_freemium_seed_idempotent(self):
         for i in range(1, 12):

@@ -268,6 +268,11 @@ class SuperuserMintingTests(_SupabaseAuthTestCase):
 
 
 class DeviceLimitTests(_SupabaseAuthTestCase):
+    # A device-limited request. (GET /api/auth/tokens/ is exempt since wave 3:
+    # the Header reads it on /subscription, where the over-limit device buys
+    # the 4-device plan.)
+    PROBE = '/api/auth/tokens/history/'
+
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username='dev', email='dev@example.com', password='x-Long-passw0rd')
@@ -279,7 +284,7 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
     def test_third_device_is_refused_for_a_free_user(self):
         self.assertEqual(self.client_for(DEVICE_A).get('/api/auth/tokens/').status_code, 200)
         self.assertEqual(self.client_for(DEVICE_B).get('/api/auth/tokens/').status_code, 200)
-        r = self.client_for(DEVICE_C).get('/api/auth/tokens/')
+        r = self.client_for(DEVICE_C).get(self.PROBE)
         self.assertEqual(r.status_code, 401)
         self.assertEqual(r.data['code'], 'device_limit_reached')
         self.assertFalse(UserDevice.objects.filter(user=self.user, device_fingerprint=DEVICE_C).exists())
@@ -310,7 +315,7 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
         User.objects.filter(pk=self.user.pk).update(is_subscribed=True)
         for i in range(4):
             self.assertEqual(self.client_for(f'dev_device{i:08d}_x').get('/api/auth/tokens/').status_code, 200)
-        r = self.client_for('dev_device00000004_x').get('/api/auth/tokens/')
+        r = self.client_for('dev_device00000004_x').get(self.PROBE)
         self.assertEqual(r.data['code'], 'device_limit_reached')
 
     def test_after_a_downgrade_the_least_recently_used_device_is_refused(self):
@@ -318,7 +323,7 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
         for offset, fp in ((30, DEVICE_A), (20, DEVICE_B), (10, DEVICE_C)):
             device = UserDevice.objects.create(user=self.user, device_fingerprint=fp, is_active=True)
             UserDevice.objects.filter(pk=device.pk).update(last_login=now - timedelta(minutes=offset))
-        r = self.client_for(DEVICE_A).get('/api/auth/tokens/')
+        r = self.client_for(DEVICE_A).get(self.PROBE)
         self.assertEqual(r.status_code, 401)
         self.assertEqual(r.data['code'], 'device_limit_reached')
         # A refused request must not refresh last_login (or it would win its slot back).
@@ -334,7 +339,7 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
             UserDevice.objects.filter(pk=device.pk).update(last_login=old)
         self.assertEqual(self.client_for(DEVICE_A).get('/api/auth/tokens/').status_code, 200)
         self.assertEqual(self.client_for(DEVICE_B).get('/api/auth/tokens/').status_code, 200)
-        r = self.client_for(DEVICE_C).get('/api/auth/tokens/')
+        r = self.client_for(DEVICE_C).get(self.PROBE)
         self.assertEqual(r.data['code'], 'device_limit_reached')
 
     def test_requests_without_or_with_spoofed_device_header_are_not_enrolled(self):

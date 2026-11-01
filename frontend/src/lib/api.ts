@@ -20,6 +20,7 @@ import {
 } from './supabase';
 import { clearLocalTokens, getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
 import { createRefreshGate } from './sessionRefreshGate';
+import { DEVICE_LIMIT_SETTINGS_URL, shouldOpenSettingsForDeviceLimit } from './deviceLimit';
 
 import {
   USE_API_PROXY,
@@ -266,10 +267,12 @@ api.interceptors.response.use(
     }
 
     // Too many devices: keep the session but open Settings, where the
-    // device list and "remove device" still work for this device.
+    // device list and "remove device" still work for this device. Settings
+    // and Subscription (buy the 4-device plan) are left alone, so their
+    // background requests cannot bounce the device away (see deviceLimit.ts).
     if (errorCode === 'device_limit_reached') {
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/settings')) {
-        window.location.href = '/settings?deviceLimit=1';
+      if (typeof window !== 'undefined' && shouldOpenSettingsForDeviceLimit(window.location.pathname)) {
+        window.location.href = DEVICE_LIMIT_SETTINGS_URL;
         return new Promise(() => {});
       }
       return Promise.reject(error);
@@ -360,14 +363,12 @@ api.interceptors.response.use(
 
 /**
  * Admin system actions. scope 'all' rewrites every user's data, so the backend
- * also requires confirm === 'RESET ALL' (the phrase the admin types in the
- * UI before the call is made). Callers should pass the typed phrase; until
- * the admin page does, scope 'all' calls default to the phrase here.
+ * also requires `confirm` to be the phrase the admin typed ('RESET ALL').
+ * The payload is sent as given: there is no default phrase, so a call that
+ * says scope 'all' by mistake is refused (400 confirmation_required) instead
+ * of wiping everyone's data.
  */
 type SystemActionPayload = { scope: 'all' | 'user'; user_id?: number; confirm?: string };
-const PLATFORM_WIDE_CONFIRM_PHRASE = 'RESET ALL';
-const withPlatformConfirm = (data: SystemActionPayload): SystemActionPayload =>
-  data.scope === 'all' && data.confirm === undefined ? { ...data, confirm: PLATFORM_WIDE_CONFIRM_PHRASE } : data;
 
 /** Scholarship challenge question as served by POST /auth/scholarship/start/ (no answer). */
 export interface ScholarshipChallengeQuestion {
@@ -412,8 +413,8 @@ export const authAPI = {
   getTokenBalance: () => api.get('/auth/tokens/'),
   purchaseTokens: (data: { amount: number; payment_id?: string }) => api.post('/auth/tokens/purchase/', data),
   getTokenHistory: () => api.get('/auth/tokens/history/'),
-  // Admin token management
-  adminGetAllUsers: () => api.get('/auth/tokens/admin/users/'),
+  // Admin token management (paged: limit / offset)
+  adminGetAllUsers: (params?: { limit?: number; offset?: number }) => api.get('/auth/tokens/admin/users/', { params }),
   adminGrantTokens: (data: { user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/grant/', data),
   adminTransferTokens: (data: { from_user_id?: number; to_user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/transfer/', data),
   adminAuditLogs: (params?: Record<string, string | number>) => api.get('/auth/tokens/admin/audit-logs/', { params }),
@@ -421,9 +422,9 @@ export const authAPI = {
   adminToggleUserBlock: (userId: number, blocked: boolean) => api.patch(`/auth/admin/users/${userId}/block/`, { blocked }),
   adminUpdateUserRole: (userId: number, role: 'admin' | 'student') => api.patch(`/auth/admin/users/${userId}/role/`, { role }),
   adminResetUserProgress: (userId: number) => api.post(`/auth/admin/users/${userId}/reset-progress/`),
-  adminResetAttempts: (data: SystemActionPayload) => api.post('/auth/admin/system/reset-attempts/', withPlatformConfirm(data)),
-  adminClearAnalytics: (data: SystemActionPayload) => api.post('/auth/admin/system/clear-analytics/', withPlatformConfirm(data)),
-  adminRerunEvaluation: (data: SystemActionPayload) => api.post('/auth/admin/system/rerun-evaluation/', withPlatformConfirm(data)),
+  adminResetAttempts: (data: SystemActionPayload) => api.post('/auth/admin/system/reset-attempts/', data),
+  adminClearAnalytics: (data: SystemActionPayload) => api.post('/auth/admin/system/clear-analytics/', data),
+  adminRerunEvaluation: (data: SystemActionPayload) => api.post('/auth/admin/system/rerun-evaluation/', data),
   
   adminBackupData: () => api.post('/auth/admin/system/backup-data/'),
   adminRestoreData: () => api.post('/auth/admin/system/restore-data/'),
@@ -442,6 +443,14 @@ export const authAPI = {
 export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {
   if (typeof payload === 'string') {
     const lowerPayload = payload.toLowerCase();
+    // Django's own error pages (the DEBUG traceback page, or the plain
+    // "Server Error (500)" page) are server errors, not a gateway timeout.
+    if (lowerPayload.includes('operationalerror at')) {
+      return 'Server database is not ready. Please try again in a minute.';
+    }
+    if (lowerPayload.includes('server error (500)') || lowerPayload.includes('debug = true')) {
+      return 'Something went wrong on our server. Please try again.';
+    }
     if (
       lowerPayload.includes('<!doctype html') ||
       lowerPayload.includes('<html') ||
@@ -502,6 +511,9 @@ export const ingestionAPI = {
   // Jobs
   listJobs: (params?: Record<string, string | number>) =>
     api.get('/ingestion/jobs/', { params }),
+  // Jobs per status over every job (the list holds only the newest 200).
+  jobCounts: () =>
+    api.get<{ counts: Record<string, number>; total: number }>('/ingestion/jobs/counts/'),
   getJob: (id: number) => api.get(`/ingestion/jobs/${id}/`),
   createJob: (data: {
     material_sha16: string;
@@ -553,7 +565,8 @@ export const questionsAPI = {
   getSubjects: (params?: Record<string, string | number>) => api.get('/questions/subjects/', { params }),
   getTopics: (params?: Record<string, string | number>) => api.get('/questions/topics/', { params }),
   getExamTracks: (params?: Record<string, string | number>) => api.get('/questions/exam-tracks/', { params }),
-  getYears: () => api.get('/questions/years/'),
+  // Years with active questions (year 0 / inactive rows excluded), optionally for one exam.
+  getYears: (params?: { exam_type?: string; exam_source?: string }) => api.get('/questions/years/', { params }),
   getStats: (params?: Record<string, string | number>) => api.get('/questions/stats/', { params }),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
   // time_spent_seconds feeds server-side study-time tracking (optional).
@@ -589,7 +602,9 @@ export const questionsAPI = {
   extractionItemAutotag: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/autotag/`),
   extractionItemApprove: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/approve/`),
   extractionItemReject: (itemId: number, data?: Record<string, unknown>) => api.post(`/questions/extraction/items/${itemId}/reject/`, data || {}),
-  extractionItemPublish: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/publish/`),
+  // exam_type: the exam the published question belongs to (the backend falls back to the job's exam).
+  extractionItemPublish: (itemId: number, data?: { exam_type?: string }) =>
+    api.post(`/questions/extraction/items/${itemId}/publish/`, data || {}),
   aiOverride: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-override/`, data),
   aiLock: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-lock/`, data),
   forceRegenerate: (id: number) => api.post(`/questions/${id}/force-regenerate/`),
@@ -606,7 +621,7 @@ export const questionsAPI = {
   updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
   formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
   // Admin AI explanation generation
-  generateExplanation: (id: number, data: { correct_answer: string; regenerate_if_exists?: boolean; update_correct_answer?: boolean }) =>
+  generateExplanation: (id: number, data: { correct_answer: string; regenerate_if_exists?: boolean; update_correct_answer?: boolean; dry_run?: boolean }) =>
     api.post(`/questions/${id}/generate-explanation/`, data),
   uploadImage: (data: { questionId: number; file: File; role?: 'primary' | 'option' | 'illustration' | 'explanation' }) => {
     const form = new FormData();
@@ -679,8 +694,8 @@ export const analyticsAPI = {
   getRecentAttempts: () => api.get('/analytics/recent-attempts/'),
   getScorePrediction: () => api.get('/analytics/score-prediction/'),
   getPerformanceTrend: () => api.get('/analytics/performance-trend/'),
-  // Feedback
-  getFeedback: () => api.get('/analytics/feedback/'),
+  // Feedback (paged)
+  getFeedback: (params?: { page?: number; page_size?: number }) => api.get('/analytics/feedback/', { params }),
   submitFeedback: (data: { category: string; rating: number; title: string; message: string }) =>
     api.post('/analytics/feedback/', data),
   replyFeedback: (id: number, data: { admin_reply: string }) =>
@@ -813,6 +828,8 @@ export const topicNotesAPI = {
   update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/topic-notes/library/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/topic-notes/library/${id}/`),
   generateFromTopic: (id: number) => api.post(`/questions/topic-notes/library/${id}/generate/`),
+  // Published notes for students (paged).
+  published: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/published/', { params }),
   // Admin topic notes (exam_type-specific)
   adminList: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/library/', { params }),
   adminCreate: (data: Record<string, unknown>) => api.post('/questions/topic-notes/', data),
@@ -862,6 +879,22 @@ export const notesAPI = {
   delete: (id: number) => api.delete(`/questions/notes/${id}/`),
 };
 
+/** GET /questions/flashcards/analytics/ (questions.views.FlashcardAnalyticsView). */
+export interface FlashcardAnalytics {
+  total_cards: number;
+  due_today: number;
+  /** Older name of due_today. */
+  cards_due_today: number;
+  reviewed_cards: number;
+  total_reviews: number;
+  lapses: number;
+  /** 1 - lapses / total_reviews; null until the first review. */
+  retention_rate: number | null;
+  avg_ease_factor: number;
+  avg_interval: number;
+  interval_distribution: Record<string, number>;
+}
+
 // Flashcards API
 export const flashcardsAPI = {
   list: (params?: { subject?: number; due?: string }) => api.get('/questions/flashcards/', { params }),
@@ -870,7 +903,7 @@ export const flashcardsAPI = {
   update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/flashcards/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/flashcards/${id}/`),
   review: (id: number, quality: number) => api.post(`/questions/flashcards/${id}/review/`, { quality }),
-  analytics: () => api.get('/questions/flashcards/analytics/'),
+  analytics: () => api.get<FlashcardAnalytics>('/questions/flashcards/analytics/'),
 };
 
 // Admin Import Center API (Phase 1)

@@ -121,6 +121,14 @@ class CustomUser(AbstractUser):
     )
     scholarship_test_passed = models.BooleanField(default=False)
     scholarship_test_attempts = models.IntegerField(default=0)
+    # Question set issued for the current scholarship attempt,
+    # {"n": <attempt number>, "q": [<question ids>]}: every start of that
+    # attempt re-issues the same set (accounts.views.ScholarshipStartView);
+    # cleared when the attempt is submitted.
+    scholarship_challenge = models.JSONField(
+        null=True, blank=True, default=None,
+        help_text='Question set issued for the current scholarship attempt (kept until it is submitted).',
+    )
     last_seen = models.DateTimeField(null=True, blank=True)
     scholarship_granted_price = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -5,6 +5,7 @@
  * method handlers (and route config); this keeps the rule unit-testable
  * (tests/unit/proxy-upstream.test.ts).
  */
+import { isLocalNetworkHost as isLocalBrowserHost } from '@/lib/apiBase';
 
 export const DEFAULT_BACKEND_API_URL = 'https://api.cracklabs.app/api';
 export const DEFAULT_LOCAL_BACKEND_API_URL = 'http://127.0.0.1:8000/api';
@@ -15,23 +16,27 @@ const LEGACY_UNHEALTHY_API_HOSTS = [
   'crackcms-vsthc.ondigitalocean.app',
   '.ondigitalocean.app',
 ];
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * Unspecified bind addresses. Under `next start -H 0.0.0.0` (the usual way to
+ * open a production build from the LAN) Next builds request.nextUrl from the
+ * server's bind host, not the browser's Host header, so the proxy sees
+ * hostname '0.0.0.0' for every request; it is a self-hosted local server.
+ */
+const UNSPECIFIED_BIND_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
 
 /**
  * Loopback, private-network (10/8, 172.16/12, 192.168/16) and *.local
- * hosts. The same rule as isLocalNetworkHost in lib/apiBase.ts, which turns
- * USE_API_PROXY on for exactly these hosts -- so the proxy must treat them as
+ * hosts: isLocalNetworkHost of lib/apiBase.ts itself, the rule that turns
+ * USE_API_PROXY on for exactly these hosts -- so the proxy treats them as
  * local too, or a production build opened from the LAN (phone testing) with
  * NEXT_PUBLIC_USE_API_PROXY=true was proxied to the production API (CFG-10).
+ * Shared, not copied, so the two rules cannot drift apart. The proxy also
+ * accepts the unspecified bind addresses above (a server-side view of the
+ * same LAN case; the browser never reports them).
  */
-export const isLocalNetworkHost = (rawHost: string) => {
-  const host = rawHost.toLowerCase();
-  if (LOOPBACK_HOSTS.has(host) || host.endsWith('.local')) return true;
-  const octets = host.split('.').map(Number);
-  if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
-  const [a, b] = octets;
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-};
+export const isLocalNetworkHost = (rawHost: string) =>
+  UNSPECIFIED_BIND_HOSTS.has(rawHost.toLowerCase()) || isLocalBrowserHost(rawHost);
 
 const normalizeApiBaseUrl = (url: string) => {
   const normalized = url.replace(/\/+$/, '');

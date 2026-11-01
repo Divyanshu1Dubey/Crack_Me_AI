@@ -14,7 +14,7 @@ from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Avg, Count, Max, Q, Subquery, Sum
+from django.db.models import Count, Max, Q, Subquery, Sum
 from django.core.cache import cache
 
 from .models import TokenBalance, TokenConfig, TokenTransaction, Subscription
@@ -152,6 +152,27 @@ SCHOLARSHIP_MAX_ATTEMPTS = 2
 SCHOLARSHIP_CHALLENGE_MAX_AGE = 60 * 60  # seconds a started challenge stays valid
 _SCHOLARSHIP_SIGNING_SALT = 'accounts.scholarship-challenge.v1'
 _SCHOLARSHIP_LOCKED_MESSAGE = "Max attempts reached. Scholarship challenge is locked."
+_SCHOLARSHIP_PLAN_HOLDER_MESSAGE = "The scholarship challenge is for students without an active plan."
+
+
+def _refuse_scholarship_for_plan_holder(user):
+    """409 ``already_subscribed`` for a caller with an active plan, else None.
+
+    An active plan unlocks every answer, the scholarship-challenge questions
+    included (questions.views.user_can_view_answer), so its holder can
+    neither take the challenge nor unlock its price. Admins, superusers and
+    staff may still run it (they test the flow).
+    """
+    from .utils import is_premium
+
+    if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return None
+    if not is_premium(user):
+        return None
+    return Response(
+        {"error": _SCHOLARSHIP_PLAN_HOLDER_MESSAGE, "code": "already_subscribed"},
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _issue_scholarship_challenge(user_id, question_ids, attempt_number):
@@ -175,8 +196,38 @@ class _ScholarshipStartThrottle(UserRateThrottle):
     rate = '10/hour'
 
 
-def _scholarship_set_cache_key(user_id, attempt_number):
-    return f'scholarship_challenge_set:{user_id}:{attempt_number}'
+def _issued_scholarship_set(stored, attempt_number):
+    """The question ids stored for ``attempt_number`` (CustomUser.scholarship_challenge), or []."""
+    if not isinstance(stored, dict) or stored.get('n') != attempt_number:
+        return []
+    ids = stored.get('q')
+    if not isinstance(ids, list):
+        return []
+    return [qid for qid in ids if isinstance(qid, int) and not isinstance(qid, bool)]
+
+
+def _assign_scholarship_set(user_pk, attempt_number, eligible_ids):
+    """The attempt's question set: the stored one, else a fresh draw that is stored.
+
+    Runs under a row lock, so concurrent starts of one attempt cannot draw two
+    different sets. A stored question that is no longer eligible (an admin
+    edit) is replaced; the others are kept.
+    """
+    import random
+
+    with transaction.atomic():
+        locked = User.objects.select_for_update().only('id', 'scholarship_challenge').get(pk=user_pk)
+        eligible = set(eligible_ids)
+        stored = _issued_scholarship_set(locked.scholarship_challenge, attempt_number)
+        chosen = list(dict.fromkeys(qid for qid in stored if qid in eligible))[:SCHOLARSHIP_QUESTION_COUNT]
+        if len(chosen) < SCHOLARSHIP_QUESTION_COUNT:
+            taken = set(chosen)
+            pool = [qid for qid in eligible_ids if qid not in taken]
+            chosen += random.SystemRandom().sample(pool, SCHOLARSHIP_QUESTION_COUNT - len(chosen))
+        if chosen != stored:
+            locked.scholarship_challenge = {'n': attempt_number, 'q': chosen}
+            locked.save(update_fields=['scholarship_challenge'])
+    return chosen
 
 
 class ScholarshipStartView(APIView):
@@ -190,17 +241,21 @@ class ScholarshipStartView(APIView):
     exact set, once. (The client used to pick any five eligible questions
     itself, e.g. ones whose answers it had already looked up.)
 
-    Starting again during the same attempt returns the same five questions
-    for an hour (best effort, via the cache), and starts are rate limited,
+    The set is stored on the user (CustomUser.scholarship_challenge) until
+    the attempt is submitted: starting again -- after an hour, a day, or once
+    the token expired -- re-issues the same five questions with a new token,
     so a student cannot re-roll until a set they already know comes up.
+    Starts are rate limited as well. Callers with an active plan (who can
+    read the answers) get 409 already_subscribed, staff excepted.
     """
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [_ScholarshipStartThrottle]
 
     def post(self, request):
-        import random
-
         user = request.user
+        refused = _refuse_scholarship_for_plan_holder(user)
+        if refused is not None:
+            return refused
         passed, attempts = (
             User.objects.filter(pk=user.pk)
             .values_list('scholarship_test_passed', 'scholarship_test_attempts')
@@ -212,22 +267,14 @@ class ScholarshipStartView(APIView):
             return Response({"error": _SCHOLARSHIP_LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
 
         eligible_ids = list(
-            Question.objects.filter(is_scholarship_eligible=True, is_active=True).values_list('id', flat=True)
+            Question.objects.filter(is_scholarship_eligible=True, is_active=True)
+            .order_by('id').values_list('id', flat=True)
         )
         if len(eligible_ids) < SCHOLARSHIP_QUESTION_COUNT:
             # The subscription page shows its "no scholarship questions" state.
             return Response({'questions': [], 'challenge_token': None, 'expires_in': 0})
 
-        set_key = _scholarship_set_cache_key(user.pk, attempts)
-        chosen = cache.get(set_key)
-        eligible = set(eligible_ids)
-        if (
-            not isinstance(chosen, list)
-            or len(chosen) != SCHOLARSHIP_QUESTION_COUNT
-            or not eligible.issuperset(chosen)
-        ):
-            chosen = random.SystemRandom().sample(eligible_ids, SCHOLARSHIP_QUESTION_COUNT)
-            cache.set(set_key, chosen, SCHOLARSHIP_CHALLENGE_MAX_AGE)
+        chosen = _assign_scholarship_set(user.pk, attempts, eligible_ids)
         rows = {
             q['id']: q for q in Question.objects.filter(id__in=chosen).values(
                 'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
@@ -246,6 +293,8 @@ class VerifyScholarshipView(APIView):
     POST {answers: {<question_id>: 'A'|'B'|'C'|'D'|''}, challenge_token}
     The answered ids must be exactly the set issued by ScholarshipStartView.
     The attempt counter is checked and incremented under a row lock.
+    Callers with an active plan get 409 already_subscribed (staff excepted),
+    without using up an attempt.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -253,6 +302,9 @@ class VerifyScholarshipView(APIView):
         from django.core import signing
 
         user = request.user
+        refused = _refuse_scholarship_for_plan_holder(user)
+        if refused is not None:
+            return refused
 
         if user.scholarship_test_attempts >= SCHOLARSHIP_MAX_ATTEMPTS and not user.scholarship_test_passed:
             return Response({"error": _SCHOLARSHIP_LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
@@ -329,9 +381,18 @@ class VerifyScholarshipView(APIView):
                     {"error": "This scholarship challenge was already submitted. Please start it again.", "code": "scholarship_not_started"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            issued = _issued_scholarship_set(locked.scholarship_challenge, locked.scholarship_test_attempts)
+            if issued and sorted(issued) != challenge.get('q'):
+                # Only the set stored for this attempt can be scored, so a
+                # token issued before the set was stored cannot add another.
+                return Response(
+                    {"error": "Please start the scholarship challenge again from the subscription page.", "code": "scholarship_not_started"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             locked.scholarship_test_attempts += 1
-            update_fields = ['scholarship_test_attempts']
+            locked.scholarship_challenge = None
+            update_fields = ['scholarship_test_attempts', 'scholarship_challenge']
             if correct_count == SCHOLARSHIP_QUESTION_COUNT:
                 locked.scholarship_test_passed = True
                 locked.scholarship_granted_price = 79 if locked.scholarship_test_attempts == 1 else 99
@@ -1759,14 +1820,102 @@ class AdminSystemClearAnalyticsView(APIView):
         return Response({'message': 'Analytics clear completed', 'results': metadata})
 
 
+def _rebuild_topic_performance_rows(responses, qbank_attempts):
+    """UserTopicPerformance rows rebuilt the way the live writers keep them.
+
+    Live writers (tests_engine.views._record_submission_analytics for test
+    answers, questions.practice_experience.record_attempt_stats for a user's
+    first answer to a question-bank question) count answered questions only,
+    and bump BOTH the subject-level row (topic=NULL, every answer in the
+    subject) and, when the question has a topic, the topic row.
+    analytics.views.subject_totals() reads the subject-level row, so without
+    it the dashboard and score-prediction totals undercounted after a rerun.
+    Returns (rows, answered_responses, qbank_answers).
+    """
+    from analytics.models import UserTopicPerformance
+
+    answered = responses.filter(attempt__is_completed=True, is_correct__isnull=False)
+    totals = {}
+
+    def _add(key, attempts, correct, incorrect, seconds, confidence, last):
+        row = totals.setdefault(key, {
+            'attempts': 0, 'correct': 0, 'incorrect': 0, 'seconds': 0,
+            'confidence_sum': 0.0, 'confidence_n': 0, 'last': None,
+        })
+        row['attempts'] += attempts or 0
+        row['correct'] += correct or 0
+        row['incorrect'] += incorrect or 0
+        row['seconds'] += seconds or 0
+        if confidence:
+            row['confidence_sum'] += confidence[0]
+            row['confidence_n'] += confidence[1]
+        if last is not None and (row['last'] is None or last > row['last']):
+            row['last'] = last
+
+    response_counts = dict(
+        attempts=Count('id'),
+        correct=Count('id', filter=Q(is_correct=True)),
+        incorrect=Count('id', filter=Q(is_correct=False)),
+        seconds=Sum('time_taken_seconds'),
+        confidence_sum=Sum('confidence_level'),
+        confidence_n=Count('confidence_level'),
+        last=Max('attempt__started_at'),
+    )
+    qbank_counts = dict(
+        attempts=Count('id'),
+        correct=Count('id', filter=Q(is_correct=True)),
+        incorrect=Count('id', filter=Q(is_correct=False)),
+        last=Max('attempted_at'),
+    )
+    groupings = (
+        # (queryset, user field, extra grouping, counts) -- subject level, then topic level.
+        (answered, 'attempt__user_id', (), response_counts),
+        (answered.filter(question__topic__isnull=False), 'attempt__user_id', ('question__topic_id',), response_counts),
+        (qbank_attempts, 'user_id', (), qbank_counts),
+        (qbank_attempts.filter(question__topic__isnull=False), 'user_id', ('question__topic_id',), qbank_counts),
+    )
+    answered_total = qbank_total = 0
+    for queryset, user_field, extra, counts in groupings:
+        for row in queryset.order_by().values(user_field, 'question__subject_id', *extra).annotate(**counts):
+            key = (row[user_field], row['question__subject_id'], row['question__topic_id'] if extra else None)
+            confidence = (row['confidence_sum'] or 0, row['confidence_n'] or 0) if 'confidence_n' in row else None
+            _add(key, row['attempts'], row['correct'], row['incorrect'], row.get('seconds'), confidence, row['last'])
+            if not extra:
+                if user_field == 'user_id':
+                    qbank_total += row['attempts'] or 0
+                else:
+                    answered_total += row['attempts'] or 0
+
+    rows = [
+        UserTopicPerformance(
+            user_id=user_id,
+            subject_id=subject_id,
+            topic_id=topic_id,
+            total_attempts=t['attempts'],
+            correct_answers=t['correct'],
+            incorrect_answers=t['incorrect'],
+            total_time_seconds=t['seconds'],
+            avg_confidence=round(t['confidence_sum'] / t['confidence_n'], 2) if t['confidence_n'] else 0,
+            last_attempted=t['last'],
+        )
+        for (user_id, subject_id, topic_id), t in totals.items()
+    ]
+    return rows, answered_total, qbank_total
+
+
 class AdminSystemRerunEvaluationView(APIView):
-    """Recompute UserTopicPerformance from submitted question responses."""
+    """Recompute UserTopicPerformance from test answers and question-bank answers.
+
+    Builds the subject-level row (topic=NULL) and the per-topic rows exactly
+    as the live writers maintain them (see _rebuild_topic_performance_rows).
+    """
 
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
         from analytics.models import UserTopicPerformance
+        from questions.models import QuestionAttempt
         from tests_engine.models import QuestionResponse
 
         scope, error_response = _system_action_scope(request)
@@ -1775,7 +1924,8 @@ class AdminSystemRerunEvaluationView(APIView):
         user_id = request.data.get('user_id')
         parsed_user_id = None
 
-        responses = QuestionResponse.objects.select_related('attempt__user', 'question__subject', 'question__topic').all()
+        responses = QuestionResponse.objects.all()
+        qbank_attempts = QuestionAttempt.objects.all()
         if scope == 'user':
             if not user_id:
                 return Response({'error': 'user_id is required when scope=user'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1784,46 +1934,24 @@ class AdminSystemRerunEvaluationView(APIView):
             except (TypeError, ValueError):
                 return Response({'error': 'user_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
             responses = responses.filter(attempt__user_id=parsed_user_id)
+            qbank_attempts = qbank_attempts.filter(user_id=parsed_user_id)
 
-        aggregated_rows = list(
-            responses
-            .values('attempt__user_id', 'question__subject_id', 'question__topic_id')
-            .annotate(
-                total_attempts=Count('id'),
-                correct_answers=Count('id', filter=Q(is_correct=True)),
-                incorrect_answers=Count('id', filter=Q(is_correct=False)),
-                total_time_seconds=Sum('time_taken_seconds'),
-                avg_confidence=Avg('confidence_level'),
-                last_attempted=Max('attempt__started_at'),
-            )
-        )
+        rows, answered_total, qbank_total = _rebuild_topic_performance_rows(responses, qbank_attempts)
 
         with transaction.atomic():
             if scope == 'all':
                 UserTopicPerformance.objects.all().delete()
             else:
                 UserTopicPerformance.objects.filter(user_id=parsed_user_id).delete()
-
-            UserTopicPerformance.objects.bulk_create([
-                UserTopicPerformance(
-                    user_id=row['attempt__user_id'],
-                    subject_id=row['question__subject_id'],
-                    topic_id=row['question__topic_id'],
-                    total_attempts=row['total_attempts'] or 0,
-                    correct_answers=row['correct_answers'] or 0,
-                    incorrect_answers=row['incorrect_answers'] or 0,
-                    total_time_seconds=row['total_time_seconds'] or 0,
-                    avg_confidence=float(row['avg_confidence'] or 0),
-                    last_attempted=row['last_attempted'],
-                )
-                for row in aggregated_rows
-            ])
+            UserTopicPerformance.objects.bulk_create(rows)
 
         metadata = {
             'scope': scope,
             'user_id': parsed_user_id,
-            'rows_created': len(aggregated_rows),
-            'processed_responses': sum(row['total_attempts'] for row in aggregated_rows),
+            'rows_created': len(rows),
+            'subject_rows_created': sum(1 for row in rows if row.topic_id is None),
+            'processed_responses': answered_total,
+            'processed_qbank_answers': qbank_total,
         }
         create_admin_audit_log(
             actor=request.user,
@@ -1835,6 +1963,15 @@ class AdminSystemRerunEvaluationView(APIView):
         return Response({'message': 'Evaluation rerun completed', 'results': metadata})
 
 
+def _backup_not_configured_response(action, exc):
+    """503 for a deployment without CORE_DATA_BACKUP_PATH (see accounts.core_data_backup)."""
+    logger.warning('Admin core data %s refused: %s', action.lower(), exc)
+    return Response(
+        {'error': f'{action} is not available: {exc}', 'code': 'backup_not_configured'},
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+
+
 class AdminSystemBackupDataView(APIView):
     """Backups core configuration data to JSON fixture."""
 
@@ -1842,10 +1979,12 @@ class AdminSystemBackupDataView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
-        from .core_data_backup import CoreDataBackupError, backup_core_data
+        from .core_data_backup import CoreDataBackupError, CoreDataBackupNotConfigured, backup_core_data
 
         try:
             _path, count = backup_core_data()
+        except CoreDataBackupNotConfigured as exc:
+            return _backup_not_configured_response('Backup', exc)
         except CoreDataBackupError as exc:
             logger.exception('Admin core data backup failed')
             return Response({'error': f'Backup failed: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1866,10 +2005,12 @@ class AdminSystemRestoreDataView(APIView):
     throttle_scope = 'admin_control_tower'
 
     def post(self, request):
-        from .core_data_backup import CoreDataBackupError, restore_core_data
+        from .core_data_backup import CoreDataBackupError, CoreDataBackupNotConfigured, restore_core_data
 
         try:
             count = restore_core_data()
+        except CoreDataBackupNotConfigured as exc:
+            return _backup_not_configured_response('Restore', exc)
         except CoreDataBackupError as exc:
             logger.exception('Admin core data restore failed')
             return Response({'error': f'Restore failed: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1896,13 +2037,23 @@ class PasswordResetConfirmView(APIView):
 
 
 class UserDeviceListView(APIView):
-    """List all active devices for the authenticated user."""
+    """List all active devices for the authenticated user.
+
+    Each row carries ``is_current``: true for the device this request comes
+    from (its X-Session-ID, the fingerprint the authenticator enrols).
+    """
 
     def get(self, request):
         from .models import UserDevice
         from .serializers import UserDeviceSerializer
+        from .supabase_rest_auth import _is_valid_session_id
+
+        current = request.META.get('HTTP_X_SESSION_ID') or ''
         devices = UserDevice.objects.filter(user=request.user, is_active=True).order_by('-last_login')
-        serializer = UserDeviceSerializer(devices, many=True)
+        serializer = UserDeviceSerializer(
+            devices, many=True,
+            context={'current_device_fingerprint': current if _is_valid_session_id(current) else ''},
+        )
         return Response(serializer.data)
 
 

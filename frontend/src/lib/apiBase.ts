@@ -9,10 +9,24 @@
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
-/** Loopback, private-network (10/8, 172.16/12, 192.168/16) and *.local hosts. */
-const isLocalNetworkHost = (rawHost: string) => {
+/**
+ * Unspecified addresses: a page opened as http://0.0.0.0:3000 (the address a
+ * server bound with `-H 0.0.0.0` reports; macOS / Linux browsers connect it
+ * to this machine) and a proxy request under such a server (its nextUrl
+ * carries the bind host). Never a public site, so they count as local and a
+ * localhost API is kept. Not loopback API hosts: isLocalhostApiUrl ignores them.
+ */
+const UNSPECIFIED_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
+
+/**
+ * Loopback, unspecified (0.0.0.0, ::), private-network (10/8, 172.16/12,
+ * 192.168/16) and *.local hosts. Exported so the API proxy
+ * (app/api/proxy/upstream.ts) can use the same rule that switches
+ * USE_API_PROXY on.
+ */
+export const isLocalNetworkHost = (rawHost: string) => {
   const host = rawHost.toLowerCase();
-  if (LOOPBACK_HOSTS.has(host) || host.endsWith('.local')) return true;
+  if (LOOPBACK_HOSTS.has(host) || UNSPECIFIED_HOSTS.has(host) || host.endsWith('.local')) return true;
   const octets = host.split('.').map(Number);
   if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
   const [a, b] = octets;

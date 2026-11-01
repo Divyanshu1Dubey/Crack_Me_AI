@@ -151,3 +151,28 @@ test('local auth mode: cookie gate unchanged, deep links kept', async () => {
   response = await updateSession(request('/dashboard', 'crack_local_session=1'));
   assert.equal(redirectTarget(response), null);
 });
+
+test('personal pages (study time, quests, mistake notebook, topic notes) redirect signed-out visitors', async () => {
+  for (const path of ['/study-time', '/quests', '/mistake-notebook', '/mistake-notebook/12', '/topic-notes']) {
+    const response = await updateSession(request(path));
+    assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent(path)}`, path);
+  }
+  // Signed in (Supabase auth cookie present): no redirect.
+  for (const path of ['/quests', '/topic-notes']) {
+    const response = await updateSession(request(path, SUPABASE_COOKIE));
+    assert.equal(redirectTarget(response), null, path);
+  }
+  // Only the exact prefix: a look-alike path is not gated.
+  const response = await updateSession(request('/topic-notes-guide'));
+  assert.equal(redirectTarget(response), null);
+});
+
+test('local auth mode gates the personal pages on the presence cookie too', async () => {
+  process.env.NEXT_PUBLIC_AUTH_MODE = 'local';
+  for (const path of ['/study-time', '/topic-notes']) {
+    let response = await updateSession(request(path));
+    assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent(path)}`, path);
+    response = await updateSession(request(path, 'crack_local_session=1'));
+    assert.equal(redirectTarget(response), null, path);
+  }
+});

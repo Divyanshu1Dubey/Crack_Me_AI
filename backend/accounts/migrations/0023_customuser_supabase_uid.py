@@ -2,8 +2,13 @@
 
 ``supabase_uid`` starts empty for every existing row. The authenticator fills
 it on the next sign-in (accounts.supabase_rest_auth); privileged rows are only
-linked automatically for trusted admin identities, otherwise an operator runs
-``manage.py link_supabase_identity``.
+linked automatically for trusted admin identities or for the identity the row
+was created from, otherwise an operator runs
+``manage.py link_supabase_identity --all-privileged --apply`` (dry run without
+--apply) once after deploying this migration. It applies the same rule: rows
+whose Supabase identity is newer than the account (or undated) are reported
+as CHECK and skipped; confirm the owner, then link them with ``--email`` (or
+in bulk with ``--include-newer-identities``).
 """
 
 from django.db import migrations, models

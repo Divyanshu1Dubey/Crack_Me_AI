@@ -65,8 +65,8 @@ export default function RegisterPage() {
     return (
         <AuthShell
             badge="100% Free to Start"
-            title="Join the Elite CMS System"
-            description="Sign up to unlock an intelligent, AI-powered UPSC CMS preparation platform."
+            title="Create your free CrackCMS account"
+            description="Practise PYQs, mocks and AI explanations for UPSC CMS, NEET PG, INI-CET, FMGE and USMLE."
             highlights={[
                 'Identify your weak clinical subjects with smart diagnostics.',
                 'Master concepts with doctor-grade AI explanations and mnemonics.',
