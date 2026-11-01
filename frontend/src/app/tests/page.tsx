@@ -200,6 +200,10 @@ export default function TestsPage() {
             const res = await testsAPI.generate(data);
             setMyTests(prev => uniqueById([res.data, ...prev]));
         } catch (err: any) {
+            // 402 upgrade_required (free plan, no free questions for this
+            // choice): the api.ts interceptor opens the upgrade modal, which
+            // replaces the error banner.
+            if (err?.response?.status === 402 && err?.response?.data?.code === 'upgrade_required') return;
             console.error('Failed to generate test:', err);
             setGenerateError(
                 err?.response?.data?.error
@@ -286,6 +290,19 @@ export default function TestsPage() {
                         <Plus className="w-4 h-4 text-emerald-500" />
                         Generate New Test
                     </h2>
+                    {/* Free plan: generated tests use the free question set
+                        (tests_engine/entitlement.py), so they can be shorter. */}
+                    {user && !isPremium && (
+                        <div className="mb-4 flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center">
+                            <Lock className="w-3.5 h-3.5 shrink-0 text-primary" aria-hidden="true" />
+                            <p className="flex-1">
+                                Free plan: practice tests use the free question set, with answers and explanations, so some have fewer questions. Full-length mocks and tests from the full bank are part of Premium.
+                            </p>
+                            <button type="button" onClick={() => showPaywall('Mock Tests')} className="self-start font-semibold text-primary hover:underline sm:self-auto">
+                                Upgrade
+                            </button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                         {testTypes.map((tt) => (
                             <button key={tt.type} onClick={() => generateTest(tt.type)}

@@ -11,9 +11,8 @@ import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar }
 // This page simulates UPSC CMS only; the backend scopes the questions with it.
 const SIMULATOR_EXAM = 'cms';
 
-// Years that have UPSC CMS questions. Prefers the per-exam stats (the global
-// /questions/years/ list mixes every exam and includes the 0 "unknown year"
-// bucket); falls back to that list without the non-years.
+// Years that have UPSC CMS questions. Prefers the per-exam stats; falls back
+// to /questions/years/ for this exam (contract C11), without non-years.
 function cmsYears(stats: unknown, allYears: unknown): number[] {
     const byYear = (stats as { by_year?: { year?: unknown; count?: unknown }[] } | null)?.by_year;
     const source = Array.isArray(byYear)
@@ -37,7 +36,7 @@ export default function SimulatorPage() {
             // Only the PYQ years are needed (an unused subjects request in the
             // same Promise.all used to blank the year list when it failed).
             Promise.all([
-                questionsAPI.getYears().catch(() => null),
+                questionsAPI.getYears({ exam_type: SIMULATOR_EXAM }).catch(() => null),
                 questionsAPI.getStats({ exam_source: 'UPSC CMS' }).catch(() => null),
             ]).then(([yRes, statsRes]) => {
                 setYears(cmsYears(statsRes?.data ?? null, yRes?.data?.results || yRes?.data || []));

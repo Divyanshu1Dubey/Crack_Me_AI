@@ -14,7 +14,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
-import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage } from '@/lib/api';
+import { testsAPI, aiAPI, questionsAPI, extractApiErrorMessage, getApiErrorCode } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn, Lock } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
@@ -141,6 +141,25 @@ function pruneSavedAttempts() {
     } catch { /* ignore */ }
 }
 
+interface PremiumGate {
+    feature: string;
+    message: string;
+}
+
+// A 402 `upgrade_required` (a test with premium questions on a free plan).
+// The api.ts interceptor has already opened the upgrade modal; this keeps a
+// prompt on the page after it is dismissed.
+function premiumGateFrom(err: any): PremiumGate | null {
+    if (err?.response?.status !== 402 || getApiErrorCode(err) !== 'upgrade_required') return null;
+    const data = err.response.data || {};
+    return {
+        feature: typeof data.feature === 'string' && data.feature ? data.feature : 'Mock Tests',
+        message: typeof data.message === 'string' ? data.message : '',
+    };
+}
+
+const AI_UNAVAILABLE_NOTICE = 'AI is unavailable right now. Please try again in a little while.';
+
 // Result-card fields derived from a /review/ payload (used when the submit
 // response was lost and the server reports the attempt as already submitted).
 function resultFromReview(review: any): Record<string, any> | null {
@@ -178,6 +197,11 @@ export default function TakeTestPage() {
     const [reviewData, setReviewData] = useState<any[] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // /start/ answered 402: a premium test on a free plan.
+    const [premiumGate, setPremiumGate] = useState<PremiumGate | null>(null);
+    // /submit/ answered 402 (e.g. the plan ended during the test): the
+    // answers stay on this device and the attempt stays open.
+    const [submitLocked, setSubmitLocked] = useState<PremiumGate | null>(null);
     // Bumped by "Try again" on the load-error card to re-run the start call
     // (safe: start resumes the active attempt instead of creating another).
     const [reloadKey, setReloadKey] = useState(0);
@@ -205,6 +229,10 @@ export default function TakeTestPage() {
     const [reviewAiExplanations, setReviewAiExplanations] = useState<Record<number, any>>({});
     const [reviewAiLoading, setReviewAiLoading] = useState(false);
     const [reviewTokenError, setReviewTokenError] = useState(false);
+    // Per review index: the AI analysis is premium (402) / unavailable (503,
+    // network, throttled) for that question.
+    const [reviewAiLocked, setReviewAiLocked] = useState<Record<number, boolean>>({});
+    const [reviewAiUnavailable, setReviewAiUnavailable] = useState<Record<number, string>>({});
     const [flagOpen, setFlagOpen] = useState(false);
     const [flagCategory, setFlagCategory] = useState('wrong_answer');
     const [flagComment, setFlagComment] = useState('');
@@ -237,6 +265,7 @@ export default function TakeTestPage() {
     useEffect(() => {
         if (!ready || !testId) return;
         setError(null);
+        setPremiumGate(null);
         setLoading(true);
         testsAPI.start(testId).then(res => {
             const data = res.data;
@@ -262,8 +291,10 @@ export default function TakeTestPage() {
             // A successful submit clears its saved answers, so saved answers
             // of the attempt the server last completed mean its result was
             // lost on the way back (e.g. the connection dropped on submit).
+            // Offered on every load (also when this reload resumed the fresh
+            // attempt) until "View result" or "Dismiss" clears them.
             const lastCompleted = Number(data.last_completed_attempt_id) || null;
-            setLostAttemptId(!data.resumed && lastCompleted && lastCompleted !== attempt && readSavedAttempt(lastCompleted) ? lastCompleted : null);
+            setLostAttemptId(lastCompleted && lastCompleted !== attempt && readSavedAttempt(lastCompleted) ? lastCompleted : null);
             const indexById = new Map(qs.map((q, i) => [q.id, i]));
             const restoredAnswers: Record<number, string> = {};
             const restoredMarked = new Set<number>();
@@ -308,6 +339,11 @@ export default function TakeTestPage() {
                 setAutoSubmitPending(true);
             }
         }).catch(err => {
+            const gate = premiumGateFrom(err);
+            if (gate) {
+                setPremiumGate(gate);
+                return;
+            }
             setError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to start the test. Please try again.'));
         }).finally(() => setLoading(false));
     }, [ready, testId, reloadKey]);
@@ -376,6 +412,7 @@ export default function TakeTestPage() {
         submittingRef.current = true;
         setSubmitting(true);
         setSubmitError(null);
+        setSubmitLocked(null);
         if (timerRef.current) clearInterval(timerRef.current);
 
         // Record final time for current question
@@ -404,6 +441,14 @@ export default function TakeTestPage() {
             } catch { /* review fetch is non-critical */ }
         } catch (err: any) {
             const data = err?.response?.data;
+            const gate = premiumGateFrom(err);
+            if (gate) {
+                // Not scored: the upgrade prompt (modal + banner) replaces the
+                // error toast; the answers stay saved on this device.
+                setSubmitLocked(gate);
+                setShowConfirm(false);
+                return;
+            }
             const alreadySubmitted = err?.response?.status === 400 && (
                 data?.code === 'already_submitted' || /already submitted/i.test(String(data?.error || ''))
             );
@@ -489,6 +534,34 @@ export default function TakeTestPage() {
         );
     }
 
+    if (premiumGate) {
+        return (
+            <div className="min-h-screen flex flex-col bg-background">
+                <div className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between"
+                    style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--glass-border)' }}>
+                    <div className="font-bold text-lg gradient-text">UPSC CMS SIMULATOR</div>
+                </div>
+                <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
+                    <div className="glass-card p-6 sm:p-8 max-w-md w-full text-center border-border/80 bg-card/85 shadow-md">
+                        <Lock className="w-12 h-12 mx-auto mb-4 text-primary" aria-hidden="true" />
+                        <h1 className="text-xl font-bold mb-2 text-foreground">This test is part of Premium</h1>
+                        <p className="text-sm text-muted-foreground mb-6">
+                            {premiumGate.message || 'Subscribe to take this test, with answers and explanations for every question.'}
+                        </p>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <button onClick={() => router.push('/tests')} className="btn-secondary w-full inline-flex items-center justify-center">
+                                Back to Test Center
+                            </button>
+                            <button onClick={() => showPaywall(premiumGate.feature)} className="btn-primary w-full justify-center">
+                                <Lock className="w-4 h-4" aria-hidden="true" /> Unlock with Premium
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (error) {
         return (
             <div className="min-h-screen flex flex-col bg-background">
@@ -554,13 +627,23 @@ export default function TakeTestPage() {
         const correctAns = rd?.correct_answer || rq?.correct_answer;
         const explanation = answerLocked ? '' : (rd?.explanation || rq?.explanation);
         const aiExp = reviewAiExplanations[reviewIdx];
+        // The AI analysis explains the answer, so it is locked with it; the
+        // server can also refuse it (402) for this question.
+        const aiLocked = answerLocked || reviewAiLocked[reviewIdx] === true;
+        const aiUnavailable = reviewAiUnavailable[reviewIdx];
 
         const fetchAiExplanation = (idx: number) => {
-            if (reviewAiExplanations[idx] || reviewTokenError) return;
+            if (reviewAiExplanations[idx] || reviewTokenError || reviewAiLocked[idx]) return;
             const q = questions[idx];
             if (!q) return;
             const rrd = reviewData ? reviewData.find((r: any) => r.question_id === q.id) : null;
             setReviewAiLoading(true);
+            setReviewAiUnavailable(prev => {
+                if (!(idx in prev)) return prev;
+                const next = { ...prev };
+                delete next[idx];
+                return next;
+            });
             // question_id lets the server explain the stored question (and
             // apply the answer entitlement) instead of trusting this payload.
             const payload = {
@@ -575,8 +658,15 @@ export default function TakeTestPage() {
             aiAPI.explainAfterAnswer(payload).then(res => {
                 setReviewAiExplanations(prev => ({ ...prev, [idx]: res.data }));
             }).catch((err) => {
-                if (err?.response?.status === 429) {
+                if (err?.response?.status === 429 && err?.response?.data?.error === 'insufficient_tokens') {
                     setReviewTokenError(true);
+                } else if (premiumGateFrom(err)) {
+                    // The api.ts interceptor opened the upgrade modal; the
+                    // locked card replaces the button. Nothing was charged.
+                    setReviewAiLocked(prev => ({ ...prev, [idx]: true }));
+                } else {
+                    // 503 ai_unavailable (never charged), throttling, network.
+                    setReviewAiUnavailable(prev => ({ ...prev, [idx]: AI_UNAVAILABLE_NOTICE }));
                 }
             }).finally(() => setReviewAiLoading(false));
         };
@@ -825,13 +915,17 @@ export default function TakeTestPage() {
                     )}
 
                     {/* ═══ LOCKED ANSWER (free plan, non-showcase question) ═══ */}
-                    {answerLocked && !aiExp && (
+                    {aiLocked && !aiExp && (
                         <div className="glass-card p-5 flex flex-col gap-3 sm:flex-row sm:items-center">
                             <Lock className="w-6 h-6 shrink-0 text-primary" aria-hidden="true" />
                             <div className="flex-1">
-                                <p className="text-sm font-bold text-foreground">Answer and explanation are part of Premium</p>
+                                <p className="text-sm font-bold text-foreground">
+                                    {answerLocked ? 'Answer and explanation are part of Premium' : 'AI analysis of this question is part of Premium'}
+                                </p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                    You can see whether your answer was right. Upgrade to see the correct answer, the explanation and AI analysis for every question.
+                                    {answerLocked
+                                        ? 'You can see whether your answer was right. Upgrade to see the correct answer, the explanation and AI analysis for every question.'
+                                        : 'Upgrade to get the AI analysis of every question.'}
                                 </p>
                             </div>
                             <button onClick={() => showPaywall('PYQ answers')} className="btn-primary justify-center text-sm shrink-0">
@@ -840,8 +934,19 @@ export default function TakeTestPage() {
                         </div>
                     )}
 
+                    {/* ═══ AI UNAVAILABLE (503 / network) — short notice, nothing charged ═══ */}
+                    {aiUnavailable && !aiLocked && !aiExp && !reviewAiLoading && !reviewTokenError && (
+                        <div role="status" className="glass-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                            <p className="flex-1 text-sm text-muted-foreground">{aiUnavailable}</p>
+                            <button onClick={() => fetchAiExplanation(reviewIdx)} className="btn-secondary justify-center text-sm shrink-0">
+                                Try again
+                            </button>
+                        </div>
+                    )}
+
                     {/* ═══ AI GENERATE BUTTON — only triggers on click to save API tokens ═══ */}
-                    {!answerLocked && !aiExp && !reviewAiLoading && !reviewTokenError && (
+                    {!aiLocked && !aiUnavailable && !aiExp && !reviewAiLoading && !reviewTokenError && (
                         <button onClick={() => fetchAiExplanation(reviewIdx)}
                             className="w-full glass-card p-5 flex items-center justify-center gap-3 cursor-pointer transition-all hover:scale-[1.01] group"
                             style={{ background: 'rgba(6,182,212,0.04)' }}>
@@ -854,7 +959,7 @@ export default function TakeTestPage() {
                     )}
 
                     {/* Token depleted error */}
-                    {reviewTokenError && !aiExp && !answerLocked && (
+                    {reviewTokenError && !aiExp && !aiLocked && (
                         <div className="token-depleted-banner">
                             <div className="flex items-start gap-3">
                                 <Zap className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#ef4444' }} />
@@ -1204,7 +1309,27 @@ export default function TakeTestPage() {
                 </div>
             )}
 
-            {lostAttemptId && !submitError && !showConfirm && (
+            {submitLocked && !showConfirm && (
+                <div role="alert" className="fixed bottom-4 left-1/2 z-100 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-xl border border-primary/40 bg-card p-4 shadow-lg">
+                    <div className="flex items-start gap-3">
+                        <Lock className="w-5 h-5 shrink-0 text-primary" aria-hidden="true" />
+                        <div className="flex-1 text-sm">
+                            <p className="font-semibold text-foreground">Premium is needed to submit this test</p>
+                            <p className="text-muted-foreground">
+                                {submitLocked.message || 'This test includes questions from the premium question bank.'} Your answers are saved on this device.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={() => setSubmitLocked(null)} className="btn-secondary">Dismiss</button>
+                        <button onClick={() => showPaywall(submitLocked.feature)} className="btn-primary justify-center">
+                            Unlock with Premium
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {lostAttemptId && !submitError && !submitLocked && !showConfirm && (
                 <div role="status" className="fixed bottom-4 left-1/2 z-100 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-xl border border-amber-500/40 bg-card p-4 shadow-lg">
                     <div className="flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />

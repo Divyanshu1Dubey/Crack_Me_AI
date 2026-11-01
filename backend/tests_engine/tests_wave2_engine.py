@@ -26,7 +26,7 @@ from accounts.models_freemium import FreeShowcaseQuestion
 from analytics.models import DailyActivity, StudyStreak, UserTopicPerformance, XPEvent
 from questions.models import DuplicateCluster, DuplicateMember, Question, QuestionImage, Subject, Topic
 from tests_engine import views as te_views
-from tests_engine.models import Test, TestAttempt
+from tests_engine.models import QuestionResponse, Test, TestAttempt
 
 User = get_user_model()
 
@@ -80,8 +80,11 @@ class _ApiCase(TestCase):
 
 
 class ReviewEntitlementTests(_ApiCase):
-    """A free student's generated test must not reveal the answer key: the
-    review shows right / wrong only, except for showcase questions."""
+    """A free student's test must not reveal the answer key: the review
+    locks the answer parts, except for showcase questions. Since wave 3 a
+    free student cannot take this test at all (it has non-showcase
+    questions: see tests_wave3_engine), so their attempts here are ones
+    scored before that rule."""
 
     def setUp(self):
         super().setUp()
@@ -97,17 +100,28 @@ class ReviewEntitlementTests(_ApiCase):
         self.test = Test.objects.create(title='Review test', test_type='mixed', negative_marking=False)
         self.test.questions.set(self.questions)
 
+    PICKS = ('A', 'B', 'C')   # right, wrong, wrong (showcase)
+
     def _finish(self, user):
         self.login(user)
         attempt_id = self.start(self.test).data['attempt_id']
-        q0, q1, q2 = self.questions
         r = self.submit(self.test, attempt_id, [
-            {'question_id': q0.id, 'selected_answer': 'A'},   # right
-            {'question_id': q1.id, 'selected_answer': 'B'},   # wrong
-            {'question_id': q2.id, 'selected_answer': 'C'},   # wrong, showcase
+            {'question_id': q.id, 'selected_answer': letter} for q, letter in zip(self.questions, self.PICKS)
         ])
         self.assertEqual(r.status_code, 200, r.data)
         return attempt_id
+
+    def _finish_before_wave3(self, user):
+        """A free student's attempt scored before wave 3 (the API now
+        refuses to start or submit this test for them)."""
+        self.login(user)
+        self.assertEqual(self.client.post(f'/api/tests/{self.test.id}/start/').status_code, 402)
+        attempt = TestAttempt.objects.create(user=user, test=self.test, is_completed=True,
+                                             completed_at=timezone.now(), correct_count=1, incorrect_count=2)
+        for question, letter in zip(self.questions, self.PICKS):
+            QuestionResponse.objects.create(attempt=attempt, question=question, selected_answer=letter,
+                                            is_correct=letter == question.correct_answer)
+        return attempt.id
 
     def _review(self, attempt_id):
         r = self.client.get(f'/api/tests/{self.test.id}/review/', {'attempt_id': attempt_id})
@@ -115,7 +129,7 @@ class ReviewEntitlementTests(_ApiCase):
         return r, {row['question_id']: row for row in r.data['questions']}
 
     def test_free_user_sees_right_or_wrong_only(self):
-        attempt_id = self._finish(_user('w2-review-free'))
+        attempt_id = self._finish_before_wave3(_user('w2-review-free'))
         response, rows = self._review(attempt_id)
         q0, q1, q2 = self.questions
         for question, picked, correct in ((q0, 'A', True), (q1, 'B', False)):
@@ -149,15 +163,16 @@ class ReviewEntitlementTests(_ApiCase):
                 self.assertEqual(rows[question.id]['explanation'], SECRET_EXPLANATION)
 
     def test_showcase_rows_still_go_through_the_shared_rule(self):
-        # A narrowing applied by questions.views.user_can_view_answer (e.g. to
-        # scholarship questions) must apply to tests too.
-        attempt_id = self._finish(_user('w2-review-rule'))
-        with mock.patch('questions.views.user_can_view_answer', return_value=False):
+        # A narrowing of the shared free set (questions.views.free_showcase_rows,
+        # which user_can_view_answer checks; e.g. scholarship questions) must
+        # apply to tests too.
+        attempt_id = self._finish_before_wave3(_user('w2-review-rule'))
+        with mock.patch('questions.views.free_showcase_rows', return_value=FreeShowcaseQuestion.objects.none()):
             _, rows = self._review(attempt_id)
         self.assertTrue(all(row['answer_locked'] for row in rows.values()))
 
     def test_attempt_detail_follows_the_same_rule(self):
-        attempt_id = self._finish(_user('w2-detail-free'))
+        attempt_id = self._finish_before_wave3(_user('w2-detail-free'))
         r = self.client.get(f'/api/tests/attempts/{attempt_id}/')
         self.assertEqual(r.status_code, 200, getattr(r, 'data', None))
         details = {resp['question']: resp['question_detail'] for resp in r.data['responses']}
@@ -191,7 +206,7 @@ class LateSubmissionTests(_ApiCase):
         self.test = Test.objects.create(title='Late test', test_type='mixed', time_limit_minutes=30,
                                         negative_marking=False)
         self.test.questions.set(self.questions)
-        self.user = _user('w2-late')
+        self.user = _user('w2-late', premium=True)
         self.login(self.user)
 
     def _start_aged(self, seconds_ago, test=None):
@@ -291,7 +306,7 @@ class GeneratedTitleTests(_ApiCase):
         subject = Subject.objects.create(name='Wave2 Titles', code='W2TTL')
         for i in range(5):
             _q(subject, i)
-        self.login(_user('w2-titles'))
+        self.login(_user('w2-titles', premium=True))
 
     def test_daily_and_mixed_tests_have_their_own_titles(self):
         daily = self.generate({'test_type': 'daily'})
@@ -312,7 +327,7 @@ class TopicTimeTests(_ApiCase):
         self.test = Test.objects.create(title='Timed analytics', test_type='mixed', time_limit_minutes=30,
                                         negative_marking=False)
         self.test.questions.set(self.questions)
-        self.user = _user('w2-time')
+        self.user = _user('w2-time', premium=True)
         self.login(self.user)
 
     def _run(self, aged_seconds, timings):
@@ -350,7 +365,7 @@ class AdaptiveWeakAreaTests(_ApiCase):
 
     def setUp(self):
         super().setUp()
-        self.user = _user('w2-adaptive')
+        self.user = _user('w2-adaptive', premium=True)
         self.login(self.user)
         self.subject = Subject.objects.create(name='Wave2 Adaptive', code='W2ADP')
         self.weak, self.strong, self.rare = (
@@ -471,7 +486,7 @@ class LastCompletedAttemptTests(_ApiCase):
         subject = Subject.objects.create(name='Wave2 Last', code='W2LAST')
         test = Test.objects.create(title='Last result', test_type='mixed', negative_marking=False)
         test.questions.set([_q(subject, i) for i in range(2)])
-        self.login(_user('w2-last'))
+        self.login(_user('w2-last', premium=True))
 
         first = self.start(test).data
         self.assertIsNone(first['last_completed_attempt_id'])

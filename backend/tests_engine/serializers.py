@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .entitlement import lock_answer
+from .entitlement import has_locked_questions, lock_answer
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
 from questions.serializers import QuestionListSerializer
 
@@ -9,8 +9,9 @@ class TestSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
     attempt_count = serializers.SerializerMethodField()
     # Derived flag (2026-08-04): a test is free for the current user if it
-    # has at most FREE_TEST_MAX_QUESTIONS questions. Mirrors the gate in
-    # views.start_attempt so the UI badge matches the server-side check.
+    # has at most FREE_TEST_MAX_QUESTIONS questions, all of them questions
+    # whose answers the user may see (tests_engine.entitlement). Mirrors the
+    # gates in views.start_attempt so the UI badge matches the server.
     is_free_for_current_user = serializers.SerializerMethodField()
 
     class Meta:
@@ -61,9 +62,15 @@ class TestSerializer(serializers.ModelSerializer):
             count = getattr(obj, '_question_count', None)
             if count is None:
                 count = obj.questions.count()
-            return int(count or 0) <= FREE_TEST_MAX_QUESTIONS
+            if int(count or 0) > FREE_TEST_MAX_QUESTIONS:
+                return False
         except (TypeError, ValueError):
             return False
+        # ... and every question must be one whose answer the user may see
+        # (staff see every answer; others only the free showcase).
+        if getattr(user, 'is_staff', False):
+            return True
+        return not has_locked_questions(user, obj, full_access=False)
 
 
 class TestDetailSerializer(serializers.ModelSerializer):

@@ -18,6 +18,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from accounts.models_freemium import FreeShowcaseQuestion
 from analytics.models import DailyActivity, StudyStreak, UserTopicPerformance
 from questions.models import DuplicateCluster, DuplicateMember, Question, QuestionImage, Subject, Topic
 from tests_engine import views as te_views
@@ -69,13 +70,14 @@ class _ApiCase(TestCase):
 
 
 class FreeGateAndTestTypeTests(_ApiCase):
-    """TE-02: the free decision depends only on the server-side count."""
+    """TE-02: the free decision depends only on the server-side count (and,
+    since wave 3, on every question being a free showcase question)."""
 
     def setUp(self):
         super().setUp()
         self.subject = Subject.objects.create(name='Wave1 Gate')
         for i in range(30):
-            _q(self.subject, i)
+            FreeShowcaseQuestion.objects.create(question=_q(self.subject, i), year=2024, position=i)
         self.login(_user('w1-gate-free'))
 
     def test_unknown_test_type_is_rejected(self):
@@ -112,7 +114,7 @@ class InputValidationTests(_ApiCase):
         self.topic = Topic.objects.create(subject=self.subject, name='Wave1 Topic')
         for i in range(5):
             _q(self.subject, i, topic=self.topic)
-        self.login(_user('w1-validation'))
+        self.login(_user('w1-validation', premium=True))
 
     def test_bad_generate_payloads(self):
         cases = [
@@ -162,7 +164,7 @@ class ExamScopeTests(_ApiCase):
 
     def setUp(self):
         super().setUp()
-        self.login(_user('w1-exam'))
+        self.login(_user('w1-exam', premium=True))
 
     @staticmethod
     def _ids(test_id):
@@ -245,7 +247,7 @@ class ResumeAndTimerTests(_ApiCase):
         self.test = Test.objects.create(title='Timed', test_type='mixed', time_limit_minutes=30,
                                         negative_marking=False)
         self.test.questions.set(self.questions)
-        self.user = _user('w1-timer')
+        self.user = _user('w1-timer', premium=True)
         self.login(self.user)
 
     def test_resume_keeps_the_clock_and_the_order(self):
@@ -302,7 +304,7 @@ class SubmitRobustnessTests(_ApiCase):
         self.questions = [_q(self.subject, i) for i in range(4)]
         self.test = Test.objects.create(title='Submit test', test_type='mixed', negative_marking=False)
         self.test.questions.set(self.questions)
-        self.user = _user('w1-submit')
+        self.user = _user('w1-submit', premium=True)
         self.login(self.user)
 
     def _answers(self, *letters):
@@ -372,7 +374,7 @@ class XpRulesTests(_ApiCase):
         self.questions = [_q(self.subject, i) for i in range(4)]
         self.test = Test.objects.create(title='XP test', test_type='mixed', negative_marking=False)
         self.test.questions.set(self.questions)
-        self.user = _user('w1-xp')
+        self.user = _user('w1-xp', premium=True)
         self.login(self.user)
 
     def _xp(self):
@@ -466,7 +468,7 @@ class QueryCountTests(_ApiCase):
     def setUp(self):
         super().setUp()
         self.subject = Subject.objects.create(name='Wave1 Queries')
-        self.user = _user('w1-queries')
+        self.user = _user('w1-queries', premium=True)
         self.login(self.user)
 
     def _test_with(self, n, title):

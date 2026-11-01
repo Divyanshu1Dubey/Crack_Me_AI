@@ -8,10 +8,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models import Count, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
 from django.db.models.functions import Cast, Coalesce
 
-from .entitlement import answer_visibility, lock_answer
+from .entitlement import (
+    LOCKED_TEST_FEATURE, answer_visibility, free_question_q, free_showcase_exists,
+    has_full_access, has_locked_questions, lock_answer, locked_questions_exist,
+    locked_test_response, strip_explanation_images,
+)
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
 from .serializers import (
     TestSerializer, TestDetailSerializer,
@@ -35,6 +39,10 @@ DEFAULT_EXAM_TYPE = 'cms'
 DAILY_TEST_QUESTIONS = 20      # "Daily Quick Test" is always 20 questions
 FULL_PAPER_QUESTIONS = 120     # one UPSC CMS paper
 CMS_PAPER_MINUTES = 120        # ... answered in 120 minutes
+# Full paper mocks keep the real paper for every student; for a free student
+# they stay premium (402 at /start/), as before. Every other generated test
+# draws a free student's questions from the free showcase (entitlement.py).
+FULL_PAPER_TYPES = ('paper1', 'paper2')
 
 # (negative_marking, negative_mark_value) of each exam's real marking scheme,
 # expressed per question (score = correct - incorrect * value).
@@ -172,16 +180,15 @@ def _questions_for_attempt(test, attempt):
     schema change. Relations the serializer reads are loaded up front (the
     old per-question subject/topic/images/duplicate queries made starting a
     120-question mock cost several hundred queries); `is_showcase` is
-    annotated the way QuestionViewSet does, so the serializer never has to
-    look it up per row.
+    annotated the way QuestionViewSet does (free showcase rows only, never
+    a scholarship question), so the serializer never has to look it up per
+    row.
     """
-    from accounts.models_freemium import FreeShowcaseQuestion
-
     questions = list(
         test.questions
         .select_related('subject', 'topic', 'verified_by')
         .prefetch_related('images', 'cluster_memberships')
-        .annotate(is_showcase=Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))))
+        .annotate(is_showcase=free_showcase_exists())
         .order_by('id')
     )
     random.Random(attempt.pk).shuffle(questions)
@@ -224,6 +231,33 @@ def _without_exam_hidden_fields(question_rows):
         for field in EXAM_HIDDEN_FIELDS:
             row.pop(field, None)
     return question_rows
+
+
+def _without_locked_answer_media(question_rows, full_access):
+    """For a viewer without full access, drop the explanation figures of
+    every row that is not a free question (``is_showcase``, annotated with
+    the free set). QuestionListSerializer already blanks such a row's
+    explanation video and page screenshot."""
+    if not full_access:
+        for row in question_rows:
+            if not row.get('is_showcase'):
+                strip_explanation_images(row)
+    return question_rows
+
+
+def _no_free_questions_response():
+    """402 for a free student whose selection has questions, none of them free."""
+    return Response(
+        {
+            'code': 'upgrade_required',
+            'feature': LOCKED_TEST_FEATURE,
+            'message': (
+                'Free practice tests use the free question set, which has no questions '
+                'for this selection yet. Subscribe to practise the full question bank.'
+            ),
+        },
+        status=402,
+    )
 
 
 def _attempt_result(attempt, request, **extra):
@@ -402,6 +436,9 @@ class TestViewSet(viewsets.ModelViewSet):
             )
             queryset = queryset.annotate(
                 _user_attempt_count=Coalesce(Subquery(attempts, output_field=IntegerField()), Value(0)),
+                # Has a question outside the free set: a free student may not
+                # take the test (start gate, is_free_for_current_user).
+                _has_locked_questions=locked_questions_exist(),
             )
         is_staff_user = authenticated and (
             getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
@@ -428,12 +465,11 @@ class TestViewSet(viewsets.ModelViewSet):
             elif scope == 'library':
                 queryset = queryset.filter(official_tests_q())
         elif self.action == 'retrieve':
-            from accounts.models_freemium import FreeShowcaseQuestion
             queryset = queryset.prefetch_related(Prefetch(
                 'questions',
                 queryset=Question.objects.select_related('subject', 'topic', 'verified_by')
                 .prefetch_related('images', 'cluster_memberships')
-                .annotate(is_showcase=Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk')))),
+                .annotate(is_showcase=free_showcase_exists()),
             ))
         return queryset
 
@@ -456,14 +492,17 @@ class TestViewSet(viewsets.ModelViewSet):
         The duplicate-cluster fields are computed for all questions at once
         -- QuestionListSerializer otherwise runs one COUNT per clustered
         question -- and, as in /start/, students do not get the study aids
-        that can give an answer away.
+        that can give an answer away, nor (without full access) the
+        explanation figures of questions outside the free set.
         """
         test = self.get_object()
         _attach_duplicate_clusters(list(test.questions.all()))
         data = self.get_serializer(test).data
         user = request.user
         if not (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)):
-            _without_exam_hidden_fields(data.get('questions') or [])
+            rows = data.get('questions') or []
+            _without_exam_hidden_fields(rows)
+            _without_locked_answer_media(rows, has_full_access(user))
         return Response(data)
 
     @action(detail=False, methods=['post'], url_path='create-manual')
@@ -660,7 +699,13 @@ class TestViewSet(viewsets.ModelViewSet):
             papers (import_neet_pg sets paper=1 on every row), so their
             paper mocks follow the subject's paper;
           * ids and years are validated (400, not a 500);
-          * the test is private to its creator (is_published=False).
+          * the test is private to its creator (is_published=False);
+          * a student without full access (entitlement.has_full_access) is
+            only ever scored on free questions: their tests draw from the
+            free showcase (never a scholarship question), and a selection
+            with questions but no free ones is a 402 upgrade_required. Full
+            paper mocks keep the real paper (minus scholarship questions)
+            and stay premium: /start/ answers 402, as before.
         """
         data = request.data
         if not isinstance(data, dict):
@@ -728,8 +773,16 @@ class TestViewSet(viewsets.ModelViewSet):
         elif test_type == 'mixed':
             title_parts.append(GENERATED_TITLES['mixed'])
 
-        questions = list(Question.objects.filter(q_filter).values_list('id', flat=True))
+        pool = q_filter
+        free_pool = False
+        if not has_full_access(request.user):
+            free_pool = test_type not in FULL_PAPER_TYPES
+            pool = q_filter & (free_question_q() if free_pool else ~Q(is_scholarship_eligible=True))
+
+        questions = list(Question.objects.filter(pool).values_list('id', flat=True))
         if not questions:
+            if free_pool and Question.objects.filter(q_filter).exists():
+                return _no_free_questions_response()
             return Response(
                 {'error': 'No active questions found for this simulation type. Please check question imports and paper mapping.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -825,7 +878,7 @@ class TestViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     'code': 'upgrade_required',
-                    'feature': 'Mock Tests',
+                    'feature': LOCKED_TEST_FEATURE,
                     'message': (
                         'This mock test is part of the Premium library. '
                         'Subscribe to unlock all 100+ tests from just ₹129/month.'
@@ -833,6 +886,13 @@ class TestViewSet(viewsets.ModelViewSet):
                 },
                 status=402,
             )
+        # ... and only if every question is one whose answer they may see:
+        # scoring any other question (right / wrong, retake after retake)
+        # gives its answer away. This also locks older generated tests drawn
+        # from the whole bank, and in-flight attempts of them (entitlement.py).
+        full_access = has_full_access(user)
+        if has_locked_questions(user, test, full_access=full_access):
+            return locked_test_response()
 
         attempt = _active_attempt(user, test)
         created = False
@@ -864,9 +924,12 @@ class TestViewSet(viewsets.ModelViewSet):
         return Response({
             'attempt_id': attempt.id,
             'test': TestSerializer(test, context={'request': request}).data,
-            'questions': _without_exam_hidden_fields(
-                QuestionListSerializer(questions, many=True, context={'request': request}).data
-            ),
+            'questions': _without_locked_answer_media(_without_exam_hidden_fields(
+                QuestionListSerializer(
+                    questions, many=True,
+                    context={'request': request, 'viewer_full_access': full_access},
+                ).data
+            ), full_access),
             'started_at': attempt.started_at,
             'resumed': not created,
             'server_time': now,
@@ -900,6 +963,10 @@ class TestViewSet(viewsets.ModelViewSet):
         * An empty submission (nothing answered) completes the attempt but
           earns no XP, streak, tests_completed or study time. XP rules: see
           _xp_for_submission.
+        * A student without full access is never scored on a question whose
+          answer they may not see (entitlement.py): such a test is a 402
+          upgrade_required and the attempt stays open (e.g. one started
+          before that rule, or while the student was premium).
         """
         if not isinstance(request.data, dict):
             return Response({'error': 'Invalid attempt'}, status=status.HTTP_400_BAD_REQUEST)
@@ -913,6 +980,8 @@ class TestViewSet(viewsets.ModelViewSet):
 
         if attempt.is_completed:
             return _already_submitted(attempt, request)
+        if has_locked_questions(request.user, test):
+            return locked_test_response('submit')
 
         serializer = SubmitAnswerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1059,11 +1128,13 @@ class TestViewSet(viewsets.ModelViewSet):
 
         The answer key and the explanations follow the question bank's
         entitlement (tests_engine.entitlement.answer_visibility): for a
-        question the student may not see, the row keeps the student's pick
-        and right / wrong but carries ``answer_locked: true`` instead of
-        correct_answer, explanation, mnemonic, concept_explanation and
-        textbook_references. Without this, generating and submitting
-        20-question tests was an unlimited way around the PYQ-answer paywall.
+        question the student may not see, the row carries
+        ``answer_locked: true`` instead of correct_answer, explanation,
+        mnemonic, concept_explanation and textbook_references (scholarship
+        questions included). Since /start/ and /submit/ refuse such tests to
+        a student without full access, a locked row only appears in an
+        attempt scored earlier (before that rule, or while premium): its
+        right / wrong is what the student was already shown.
         """
         attempt_id = request.query_params.get('attempt_id')
 
@@ -1152,6 +1223,11 @@ class TestViewSet(viewsets.ModelViewSet):
         answers (ordering by the raw correct count used to pick the least
         practised topics, not the weakest). A weak topic row targets that
         topic; a weak subject-level row (topic=None) targets the subject.
+
+        A student without full access gets free questions only (as in
+        /generate/); an exam with questions but no free ones is a 402, an
+        exam with no questions at all a 400 (it used to create an empty
+        test).
         """
         try:
             num_questions = int(request.data.get('num_questions', 30))
@@ -1162,7 +1238,9 @@ class TestViewSet(viewsets.ModelViewSet):
             exam_type = _exam_type_param(request.data.get('exam_type'))
         except _BadRequest as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        exam_q = Q(is_active=True) & exam_scope_q(exam_type)
+        exam_scope = Q(is_active=True) & exam_scope_q(exam_type)
+        full_access = has_full_access(request.user)
+        exam_q = exam_scope if full_access else exam_scope & free_question_q()
 
         # Weakest areas of the user's answer history, by accuracy.
         from analytics.models import UserTopicPerformance
@@ -1190,6 +1268,11 @@ class TestViewSet(viewsets.ModelViewSet):
 
         if len(questions) > num_questions:
             questions = random.sample(questions, num_questions)
+        if not questions:
+            if not full_access and Question.objects.filter(exam_scope).exists():
+                return _no_free_questions_response()
+            return Response({'error': 'No active questions found for this exam.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         negative_marking, negative_mark_value = EXAM_MARKING.get(exam_type, EXAM_MARKING['cms'])
 
         test = Test.objects.create(
@@ -1217,6 +1300,11 @@ class TestViewSet(viewsets.ModelViewSet):
         "UPSC CMS {year}" title. The time limit follows the exam (CMS: 120
         minutes per paper, so a combined two-paper set gets 240) and so does
         the negative marking. The test is private to its creator.
+
+        A simulation is the real paper for every student, so for a student
+        without full access it stays premium: /start/ answers 402 (as for
+        any test with questions whose answers they may not see), and it never
+        contains a scholarship question.
         """
         if not isinstance(request.data, dict):
             return Response({'error': 'Year is required'}, status=400)
@@ -1234,6 +1322,8 @@ class TestViewSet(viewsets.ModelViewSet):
         q_filter = Q(is_active=True, year=year) & exam_scope_q(exam_type)
         if paper:
             q_filter &= Q(paper=paper)
+        if not has_full_access(request.user):
+            q_filter &= ~Q(is_scholarship_eligible=True)
 
         rows = list(Question.objects.filter(q_filter).values_list('id', 'paper'))
         exam_label = EXAM_LABELS.get(exam_type, exam_type)

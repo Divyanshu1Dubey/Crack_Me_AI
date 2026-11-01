@@ -3,7 +3,8 @@ from django.conf import settings
 
 
 # Freemium rule: a non-premium user may start a test only if it has at most
-# this many questions (counted on the server, never taken from the client).
+# this many questions (counted on the server, never taken from the client),
+# all of them free showcase questions (tests_engine.entitlement).
 FREE_TEST_MAX_QUESTIONS = 20
 
 
@@ -46,10 +47,12 @@ class Test(models.Model):
     negative_marking = models.BooleanField(default=True)
     negative_mark_value = models.FloatField(default=0.33)
     is_published = models.BooleanField(default=True)
-    # Retired: the start gate ignores it. Free users may start any test of at
-    # most FREE_TEST_MAX_QUESTIONS questions and no others (the public copy
-    # promises exactly that), so a curated "free" full-length mock would
-    # contradict it. Kept only so existing rows and seeding code still load.
+    # Retired: the start gate ignores it. Free users may start tests of at
+    # most FREE_TEST_MAX_QUESTIONS free showcase questions and no others (the
+    # public copy promises short practice tests), so a curated "free"
+    # full-length mock would contradict it. Kept only so existing rows and
+    # seeding code still load. (The help_text predates the free-question
+    # rule; rewording it needs a migration.)
     is_free_preview = models.BooleanField(
         default=False,
         db_index=True,
