@@ -1,6 +1,6 @@
 # Overnight mission — progress log
 
-_Last updated: 2026-11-01 — phase 2b done except AI offline mode; RAG mapping and discovery triage running_
+_Last updated: 2026-11-01 — fix waves 1-2 committed, dependency floors raised, local E2E suite written; fix wave 3 running_
 
 ## Where things are
 
@@ -59,26 +59,38 @@ The existing PostgreSQL service on :5432 is **not** used or modified.
 
 - Local auth could not reach any protected page: the Next middleware gates `/dashboard`, `/questions`, `/tests`, `/admin`… on Supabase cookies, so local mode always redirected to `/login` (41 routes in two screenshot rounds showed the login page). Local mode now gates on presence cookies and makes no Supabase call (`8c2cabd`). Tablet sidebar rail (clipped Premium pills/logo, unnamed Sign-out) fixed in the same commit. Local Playwright harness added (`frontend/playwright.local.config.ts`, `tests/e2e/local/`).
 - `dashboard_v3`, heatmap, revision-progress, PYQ-coverage and average-time endpoints all returned 500 (queried non-existent `TestAttempt` fields) — rewritten on real answer events (`0613c3f`).
-- RAG: whole-store BM25 index with a corpus policy replaces the capped TF-IDF scan (search ~1 ms instead of ~3.5 s; constructor no longer writes to the git-tracked store; offline/total-failure extractive answers). Benchmark running (`backend/ai_eval/rag_benchmark.py`) — results in `docs/audit/RAG_BENCHMARK.md`.
+- RAG: whole-store BM25 index with a corpus policy replaces the capped TF-IDF scan (search ~2 ms instead of ~3.5 s; constructor no longer writes to the git-tracked store; offline/total-failure extractive answers). Measured on a held-out test split (n=117, real PYQ explanations): success@5 0.239 → 0.547, MRR 0.168 → 0.431, nDCG@10 0.110 → 0.318 (paired bootstrap CIs exclude 0); full method and limits in `docs/audit/RAG_BENCHMARK.md`. `AI_OFFLINE_MODE=1` is the local default.
+- Data quality: NEET PG subject tags agree with the source compilation for 49.8 % of questions (1,679/3,372). 1,693 corrections from the source files were applied to the **local** database only; 2,079 classifier suggestions are left for review (`docs/audit/DATA_QUALITY.md`).
 
 ## Discovery (read-only, 139 agents, each finding verified by 2 skeptics)
 
-57 confirmed serious, 2 disputed, 241 medium/low, 55 concerns about earlier fixes. Highlights: committed production credentials (Supabase service-role key, DB passwords, an admin password literal) and committed personal-data dumps; anonymous access to every answer/explanation; Razorpay checkout blocked by the CSP; subscribers capped at 2 AI messages/day; tokens charged when AI fails and outage text persisted into question explanations; blocked users keep API access; deploy-time NEET PG import is destructive; the question rate limiter shares one budget per proxy IP. Fix wave 1 (11 file-disjoint agent groups + independent reviewers) is running.
+57 confirmed serious, 2 disputed, 241 medium/low, 55 concerns about earlier fixes. Highlights: committed production credentials (Supabase service-role key, DB passwords, an admin password literal) and committed personal-data dumps; anonymous access to every answer/explanation; Razorpay checkout blocked by the CSP; subscribers capped at 2 AI messages/day; tokens charged when AI fails and outage text persisted into question explanations; blocked users keep API access; deploy-time NEET PG import is destructive; the question rate limiter shares one budget per proxy IP.
+
+## Fix waves (file-disjoint agent groups, each diff reviewed by an independent skeptic)
+
+| Wave | Scope | Result |
+|---|---|---|
+| 1 | 57 serious + most medium findings, 11 groups | ~291 items fixed, commits `f011c1d`..`d988cec`, `61b4b2c`; backend suite 929 tests OK |
+| UI reviews | public (69 verified issues) + app (156 verified issues), from 3 screenshot rounds | routed into wave 2 |
+| 2 | wave-1 review problems, cross-group follow-ups, UI issues, 11 groups | ~256 items fixed, commits `0a647c5`..`88d6461` (global-shell group partial: API outage); backend suite 1,185 OK, tsc 0 errors, eslint 0 errors |
+| deps | pip-audit: 32 vulnerable packages in the venv, 22 in the production tree | `606c91c`: Django 5.2.18, DRF 3.18.3, PyJWT, cryptography, requests, urllib3, sqlparse … floors; full suite OK. **Pillow stays 11.3** (moviepy 2.2.1 requires `pillow<12`) |
+| 3 | 2 high + ~10 medium wave-2 review problems (free-tier answer harvesting via generated tests and the Mistake Notebook, admin lockout after deploy, screenshot entitlement, ingestion sweeper), the unfinished global shell, reviews of the 3 unreviewed wave-2 commits, docs | running (workflow `crack-fix-wave3`) |
+
+## Local E2E suite (Playwright, `frontend/tests/e2e/local/`)
+
+7 spec files, 156 tests over 3 viewports (desktop 1440×900, tablet 820×1180, Pixel 5): auth, question-bank practice (answer/key, Mistake Notebook + Study Time, free-tier lock, bookmarks), mock tests (start → answer → submit → result → review), payments (mock checkout UI; invalid signature, foreign order, unknown/lifetime plan, idempotent verify, stacking, webhook duplicates/forgery/refund event, admin revoke/lifetime grant, AI entitlement), AI tutor offline answer, admin console + authorization, responsive smoke (18 app pages light/dark, 6 public pages). The auth spec passed 6/6 on desktop; the rest runs after wave 3 and a rebuild.
 
 ## Findings logged for later phases
 
-- **Data quality**: NEET PG subject tags unreliable — 696 questions tagged *Anaesthesia* (694 without topic); a random sample of 18 had ~9 clearly from other subjects. CMS also has placeholder subjects *Expert Curated* (1,285) and *Imported* (541). Plan: classifier + review CSV (never auto-applied to production).
 - `FormattedText` renders raw HTML (`rehype-raw`) — check sanitisation in the security pass.
 
 ## In progress / next
 
-1. Fix wave 1 (workflow `crack-fix-wave1`): integrate, run full suites, commit per group.
-2. RAG benchmark → write `docs/audit/RAG_BENCHMARK.md`; offline mode end to end (with the AI group's `ai_engine/offline.py`).
-3. UI: public review done (69 verified issues), protected-page review running (round 3) → combined polish pass → round 4 capture.
-4. Playwright E2E suite on the local stack; security/performance second pass; final report.
-5. Data quality: subject audit (`backend/ai_eval/subject_audit.py`).
+1. Wave 3 → full backend suite, tsc, eslint → commit per group.
+2. Rebuild the frontend, restart the app servers, run the E2E suite (desktop, then tablet and mobile), screenshot round 4.
+3. Security/performance second pass on the final diff; final report.
 
-Note: this machine has 5.9 GB RAM (heavy paging with many agents); avoid parallel `next build` / `tsc` runs.
+Note: this machine has 5.9 GB RAM (heavy paging with many agents). Agents run tests through a slot wrapper (2 backend runs, 1 tsc/eslint at a time). The harness stopped one background launcher task ("Restart Postgres detached") for low memory; the Postgres server it had started kept running on :55432, and the task was not restarted.
 
 ## Test commands
 
@@ -87,6 +99,9 @@ Note: this machine has 5.9 GB RAM (heavy paging with many agents); avoid paralle
 DATABASE_URL= SUPABASE_DATABASE_URL= DEBUG=True SENTRY_DSN= python manage.py test --parallel 1
 # frontend (from frontend/)
 npx tsc --noEmit -p . && npx eslint src --quiet && npm run build
+# local E2E (stack running, from frontend/); artifacts in E2E_OUTPUT_DIR
+npx tsc -p tests/e2e/local/tsconfig.json
+npx playwright test -c playwright.local.config.ts --project=desktop
 ```
 
 ## Recovery instructions (if interrupted)

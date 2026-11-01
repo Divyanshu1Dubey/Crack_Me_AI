@@ -7,6 +7,7 @@
  * Nothing here talks to Supabase, Razorpay or any external service.
  */
 import { expect, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -31,16 +32,43 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const isAdminUser = (user: Record<string, unknown> | undefined) =>
     !!user && (user.is_admin === true || String(user.role || '').toLowerCase() === 'admin');
 
-let cachedPassword: string | null = null;
+let localEnvCache: Record<string, string> | null = null;
+
+/**
+ * A value from backend/.env.localdev - the local stack's own mock secrets
+ * (seed password, mock Razorpay keys). Never log what this returns.
+ */
+export function localEnv(key: string): string {
+    if (!localEnvCache) {
+        const envFile = path.resolve(__dirname, '../../../../backend/.env.localdev');
+        localEnvCache = {};
+        for (const raw of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+            const m = /^([A-Za-z0-9_]+)=(.*)$/.exec(raw.trim());
+            if (m) localEnvCache[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, '$2');
+        }
+    }
+    return localEnvCache[key] || '';
+}
 
 export function seedPassword(): string {
     if (process.env.E2E_SEED_PASSWORD) return process.env.E2E_SEED_PASSWORD;
-    if (cachedPassword) return cachedPassword;
-    const envFile = path.resolve(__dirname, '../../../../backend/.env.localdev');
-    const line = fs.readFileSync(envFile, 'utf8').split(/\r?\n/).find(l => l.startsWith('LOCAL_SEED_PASSWORD='));
-    if (!line) throw new Error('LOCAL_SEED_PASSWORD missing from backend/.env.localdev');
-    cachedPassword = line.slice('LOCAL_SEED_PASSWORD='.length).trim();
-    return cachedPassword;
+    const value = localEnv('LOCAL_SEED_PASSWORD');
+    if (!value) throw new Error('LOCAL_SEED_PASSWORD missing from backend/.env.localdev');
+    return value;
+}
+
+/** Hex HMAC-SHA256, the scheme Razorpay uses for payment and webhook signatures. */
+export const hmacHex = (secret: string, payload: string) =>
+    crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+/** Rows of a DRF list response (paginated or not). */
+export const rowsOf = <T = any>(body: any): T[] => (Array.isArray(body) ? body : body?.results ?? []);
+
+/** The current user's profile (id, flags) from the backend. */
+export async function profile(request: APIRequestContext, session: Session) {
+    const res = await request.get(`${API}/auth/profile/`, { headers: { Authorization: `Bearer ${session.access}` } });
+    expect(res.status(), 'profile').toBe(200);
+    return res.json();
 }
 
 /** Log in through the dev-only API (fast path for tests that are not about login). */
