@@ -62,7 +62,7 @@ test.describe('payments (mock provider)', () => {
     test('a free student buys the 1-month pass through checkout and gets premium', async ({ page, request }, testInfo) => {
         const session = await apiRegister(request, 'buyer');
         const locked = await lockedQuestionId(request, session);
-        expect([402, 403]).toContain((await api(request, session, 'GET', `/questions/${locked}/`)).status);
+        expect([402, 403, 404]).toContain((await api(request, session, 'GET', `/questions/${locked}/`)).status);
 
         await prepareBrowser(page, session);
         const watch = watchPage(page);
@@ -195,7 +195,7 @@ test.describe('payments (mock provider)', () => {
             const revoke = await api(request, admin, 'POST', `/auth/admin/users/${me.id}/subscription/`, { action: 'revoke' });
             expect(revoke.status, JSON.stringify(revoke.body)).toBe(200);
             expect((await status(request, user)).is_subscribed).toBe(false);
-            expect([402, 403]).toContain((await api(request, user, 'GET', `/questions/${locked}/`)).status);
+            expect([402, 403, 404]).toContain((await api(request, user, 'GET', `/questions/${locked}/`)).status);
 
             const grant = await api(request, admin, 'POST', `/auth/admin/users/${me.id}/subscription/`, { action: 'grant', plan: 'legacy' });
             expect(grant.status, JSON.stringify(grant.body)).toBe(200);

@@ -29,12 +29,19 @@ test.describe('AI tutor (offline)', () => {
     test('free student: offline answers do not use up the daily tutor allowance', async ({ request }) => {
         const session = await apiRegister(request, 'ai-free');
         const before = await profile(request, session);
-        const res = await api(request, session, 'POST', '/ai/tutor/', { question: 'Classify antihypertensive drugs with one example each.' });
-        // Either answered offline (200, offline: true) or refused cleanly; never a 5xx.
-        expect(res.status, JSON.stringify(res.body)).toBeLessThan(500);
-        if (res.status === 200) {
-            expect(res.body?.offline).toBe(true);
-            expect(JSON.stringify(res.body)).not.toMatch(/temporarily unavailable|provider|traceback/i);
+        for (const question of ['What is the drug of choice for anaphylaxis?', 'Classify antihypertensive drugs with one example each.']) {
+            const res = await api(request, session, 'POST', '/ai/tutor/', { question });
+            // Contract: a grounded offline extract (200, offline: true, charged: false)
+            // or 503 {code: 'ai_unavailable'} when nothing in the library matches.
+            if (res.status === 200) {
+                expect(res.body?.offline).toBe(true);
+                expect(res.body?.charged).toBe(false);
+                expect(JSON.stringify(res.body)).not.toMatch(/temporarily unavailable|provider error|traceback/i);
+            } else {
+                expect(res.status, JSON.stringify(res.body)).toBe(503);
+                expect(res.body?.code).toBe('ai_unavailable');
+                expect(String(res.body?.message || res.body?.error || '')).toMatch(/not charged/i);
+            }
         }
         const after = await profile(request, session);
         expect(after.ai_tutor_used_today).toBe(before.ai_tutor_used_today);

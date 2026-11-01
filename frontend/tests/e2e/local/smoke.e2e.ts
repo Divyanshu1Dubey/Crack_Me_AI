@@ -51,9 +51,11 @@ test.describe('responsive smoke', () => {
                 // Let lazy panels settle before measuring layout.
                 await fresh.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => undefined);
                 await expectNoHorizontalOverflow(fresh);
-                // The app shell is present (sidebar landmark or the phone menu button).
+                // The app shell is present: the header bar plus a way to reach the
+                // navigation (the sidebar, its Show/Hide toggle, or the phone menu).
+                await expect(fresh.locator('header').first()).toBeAttached();
                 await expect(fresh.getByRole('complementary', { name: 'Primary sidebar navigation' })
-                    .or(fresh.getByRole('button', { name: 'Open menu' })).first()).toBeAttached();
+                    .or(fresh.getByRole('button', { name: /^(Open menu|Show sidebar|Hide sidebar)$/ })).first()).toBeAttached();
                 await snap(fresh, testInfo, `${path.replace(/\//g, '_') || 'root'}-${theme}`);
                 watch.expectClean();
                 if (fresh !== page) await fresh.close();

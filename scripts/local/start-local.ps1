@@ -136,6 +136,10 @@ if (-not $SkipFrontend) {
         $env:NEXT_PUBLIC_AUTH_MODE = 'local'
         $env:NEXT_PUBLIC_PAYMENTS_MODE = 'mock'
         $env:NEXT_TELEMETRY_DISABLED = '1'
+        # Local builds must not report local traffic to the production
+        # analytics account (Simple Analytics loads without consent: it is
+        # cookieless). GA stays consent-gated as in production.
+        $env:NEXT_PUBLIC_SIMPLE_ANALYTICS_ENABLED = 'false'
         $nextBin = Join-Path $FrontendDir 'node_modules\next\dist\bin\next'
         if (-not (Test-Path $nextBin)) { throw 'frontend/node_modules missing. Run: cd frontend; npm ci' }
         if ($Frontend -eq 'prod') {

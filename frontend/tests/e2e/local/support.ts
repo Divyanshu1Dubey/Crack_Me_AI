@@ -125,9 +125,12 @@ export async function prepareBrowser(page: Page, session: Session | null, theme:
         try {
             localStorage.setItem('theme', t);
             localStorage.setItem('crackcms_consent_v1', JSON.stringify({ essential: true, analytics: false, marketing: false, updated_at: new Date().toISOString() }));
-            if (tok) {
+            // Init scripts run on every navigation: seed the session only on the
+            // tab's first load, so a logout inside the test stays logged out.
+            if (tok && !sessionStorage.getItem('__e2e_session_seeded')) {
                 localStorage.setItem('crack_local_access', tok.access);
                 localStorage.setItem('crack_local_refresh', tok.refresh);
+                sessionStorage.setItem('__e2e_session_seeded', '1');
             }
         } catch { /* storage unavailable */ }
     }, { tok: session ? { access: session.access, refresh: session.refresh } : null, theme });

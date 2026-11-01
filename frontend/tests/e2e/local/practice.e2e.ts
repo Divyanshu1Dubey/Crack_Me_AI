@@ -28,16 +28,18 @@ async function freshKeyedQuestion(request: APIRequestContext, session: Session, 
 }
 
 /**
- * A forgiving matcher for a question stem as the UI renders it: four
- * consecutive words, skipping the first (the UI strips "Q.12"-style labels),
- * image tokens and markdown; numbers and punctuation in between may differ.
+ * A forgiving matcher for a question stem as the UI renders it: five
+ * consecutive words (every word, short ones too, so nothing is skipped
+ * between them), after the first word (the UI strips "Q.12"-style labels);
+ * image tokens and markdown are ignored and numbers / punctuation between
+ * the words may differ.
  */
 function stemMatcher(text: string): RegExp {
     const words = String(text || '')
         .replace(/\[\[[^\]]*\]\]|<[^>]+>|!?\[[^\]]*\]\([^)]*\)|[*_`#>|]/g, ' ')
         .split(/[^A-Za-z]+/)
-        .filter(w => w.length >= 3 && !/^(question|img)$/i.test(w));
-    const pick = words.length > 5 ? words.slice(1, 5) : words.slice(0, 4);
+        .filter(Boolean);
+    const pick = words.length > 7 ? words.slice(1, 6) : words.slice(0, 5);
     return new RegExp(pick.join('[^A-Za-z]+'), 'i');
 }
 
@@ -107,14 +109,28 @@ test.describe('question bank practice', () => {
         const locked = rows.find(r => r.is_showcase === false);
         expect(locked, 'a non-showcase question in the first page').toBeTruthy();
         const detail = await api(request, session, 'GET', `/questions/${locked!.id}/`);
-        expect([402, 403], `detail status for a locked question (got ${detail.status})`).toContain(detail.status);
+        // The free-tier gate answers 404 for the detail (it does not confirm the
+        // question exists) and 402 upgrade_required for attempts.
+        expect([402, 403, 404], `detail status for a locked question (got ${detail.status})`).toContain(detail.status);
+        const attempt = await api(request, session, 'POST', `/questions/${locked!.id}/attempt/`, { selected_answer: 'A' });
+        expect(attempt.status, 'attempt on a locked question').toBe(402);
+        expect(JSON.stringify(attempt.body || {})).not.toMatch(/"correct_answer":"[A-D]"/);
         expect(JSON.stringify(detail.body || {})).not.toMatch(/"correct_answer":"[A-D]"/);
 
         await prepareBrowser(page, session);
         const watch = watchPage(page);
         await page.goto('/questions');
+        // Free users get the questions they can open first (the showcase), so
+        // locked cards start a few pages in: page forward until one shows.
         const lockedCard = page.locator('div.cursor-pointer', { hasText: 'Premium Question' }).first();
-        await expect(lockedCard).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByRole('button', { name: /^(Add|Remove) bookmark for question/ }).first()).toBeVisible({ timeout: 60_000 });
+        for (let i = 0; i < 8 && !(await lockedCard.isVisible().catch(() => false)); i++) {
+            const next = page.getByRole('button', { name: 'Next page' });
+            if (!(await next.isEnabled().catch(() => false))) break;
+            await next.click();
+            await page.waitForTimeout(1_500);
+        }
+        await expect(lockedCard).toBeVisible({ timeout: 30_000 });
         await expectNoHorizontalOverflow(page);
         await snap(page, testInfo, 'question-bank-free');
         await lockedCard.click();
