@@ -27,7 +27,10 @@ The strategy is configurable per-job via ``ImportJob.config.strategy``
 Even a Production Ready question is held back (staged as Needs Review,
 with the reason in ``failing_axes``) when it cannot be stored faithfully:
 no single valid A–D answer, an option beyond D, a subject that cannot be
-resolved, or an attached Stage-3 image whose file is missing.
+resolved, an attached Stage-3 image whose file is missing, or an answer /
+explanation label in the stem or an option (the stem and the options are
+public text, so the label would give the answer away; see
+``questions.answer_leak``).
 
 Questions are written with the job's exam (``ImportJob.parent_exam``),
 and their ``QuestionSource.import_job_id`` is stamped ``ingestion:<job id>``
@@ -50,6 +53,8 @@ from pathlib import Path
 from typing import Optional
 
 from django.db import transaction
+
+from questions.answer_leak import label_hold_reasons
 
 from .constants import (
     QA_EXTRACTION_FAILURE,
@@ -272,6 +277,10 @@ def _hold_reasons(payload: dict, options, subject_row, image_recs, image_ids) ->
         if not rec or not rec.get("file_path") or not Path(rec["file_path"]).is_file():
             reasons.append("image_file_missing")
             break
+    # 'answer_label_in_public_text' / 'explanation_label_in_public_text':
+    # every viewer sees the stem and the options, so a glued-in answer key or
+    # explanation must not go live.
+    reasons.extend(label_hold_reasons(payload.get("stem") or "", [o.text for o in options]))
     return reasons
 
 

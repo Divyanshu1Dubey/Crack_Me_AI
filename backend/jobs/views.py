@@ -4,7 +4,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import OrderingFilter
+from crack_cms.filters import BoundedSearchFilter
 from .models import Job, JobCategory, JobBookmark
 from .serializers import JobSerializer, JobCategorySerializer
 
@@ -19,7 +20,10 @@ class JobViewSet(viewsets.ModelViewSet):
     # queries per row: category name, exam tracks, bookmark lookup).
     queryset = Job.objects.select_related('category').prefetch_related('exam_tracks')
     serializer_class = JobSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    # BoundedSearchFilter: ?search= (open to anonymous callers) keeps at most
+    # 10 distinct terms of up to 100 characters; each term is an ILIKE per
+    # search field.
+    filter_backends = [DjangoFilterBackend, BoundedSearchFilter, OrderingFilter]
     filterset_fields = ['category', 'is_active']
     search_fields = ['title', 'hospital', 'location', 'description']
     ordering_fields = ['posted_at', 'expires_at']

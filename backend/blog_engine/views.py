@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from crack_cms.filters import BoundedSearchFilter
 from .models import BlogPost
 from .serializers import BlogPostSerializer, BlogPostListSerializer
 
@@ -32,7 +33,10 @@ class BlogPostViewSet(viewsets.ModelViewSet):
     """
 
     queryset = BlogPost.objects.all()
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    # BoundedSearchFilter: ?search= (open to anonymous callers) keeps at most
+    # 10 distinct terms of up to 100 characters; each term is an ILIKE per
+    # search field.
+    filter_backends = [DjangoFilterBackend, BoundedSearchFilter, filters.OrderingFilter]
     filterset_fields = ["category", "difficulty", "is_published", "pinned", "author_id"]
     search_fields = ["title", "body", "excerpt", "tags", "author"]
     ordering_fields = ["date_published", "created_at", "word_count"]

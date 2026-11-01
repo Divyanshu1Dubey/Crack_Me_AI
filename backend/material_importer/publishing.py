@@ -15,6 +15,8 @@ from typing import Any
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from questions.answer_leak import label_hold_reasons
+
 log = logging.getLogger(__name__)
 
 VALID_ANSWERS = frozenset({"A", "B", "C", "D"})
@@ -68,6 +70,14 @@ def _read_staged_image_bytes(imp) -> bytes | None:
     return None
 
 
+def _send_back_for_review(eq, note: str) -> None:
+    """Park ``eq`` in the review queue (``needs_review``), noting why once."""
+    eq.status = "needs_review"
+    if note not in (eq.review_note or ""):
+        eq.review_note = f"{eq.review_note}\n{note}".strip() if eq.review_note else note
+    eq.save(update_fields=["status", "review_note"])
+
+
 @transaction.atomic
 def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
     """Create a real `Question` from an `ExtractedQuestion`.
@@ -75,7 +85,10 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
     Returns True if a new Question was created, False if it was already
     published or missing required fields. A row without a valid A–D answer
     is never published (it is sent back to ``needs_review``): the live bank
-    must not show a question with no, or a guessed, correct answer.
+    must not show a question with no, or a guessed, correct answer. Nor is a
+    row whose stem or options carry an answer / explanation label
+    ("Correct Answer: B", "Explanation: ..."): the stem and the options are
+    public text, so the label would give the answer away to every viewer.
     """
     if eq.published_question_id:
         return False
@@ -99,11 +112,17 @@ def publish_extracted_question(eq: "ExtractedQuestion") -> bool:  # noqa: F821
         return False
     answer = (eq.correct_answer or "").strip().upper()
     if answer not in VALID_ANSWERS:
-        note = "Not published: no valid correct answer (A-D) was extracted."
-        eq.status = "needs_review"
-        if note not in (eq.review_note or ""):
-            eq.review_note = f"{eq.review_note}\n{note}".strip() if eq.review_note else note
-        eq.save(update_fields=["status", "review_note"])
+        _send_back_for_review(eq, "Not published: no valid correct answer (A-D) was extracted.")
+        return False
+    hold = label_hold_reasons(eq.question_text, [eq.option_a, eq.option_b, eq.option_c, eq.option_d])
+    if hold:
+        # Held, not auto-repaired (questions.answer_leak.plan_repair): an
+        # admin cleans the text in review, as with the ingestion gate.
+        _send_back_for_review(
+            eq,
+            "Not published: answer / explanation label in the stem or options "
+            f"({', '.join(hold)}).",
+        )
         return False
     from questions.models import Question, Subject, ExamTrack
 

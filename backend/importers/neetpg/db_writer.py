@@ -15,6 +15,10 @@ Design contract:
   cannot be resolved, is sent to the extraction review queue instead of
   going live (it used to go live with answer "A" and the first Subject in
   the catalogue).
+- No answer in public text: a NEW question whose stem or options carry an
+  answer / explanation label ("Ans: (b)", "Explanation: ...") goes to the
+  same review queue, and a re-import never fills an empty option with such
+  text (``questions.answer_leak``; every viewer sees the stem and options).
 - Exam-scoped: ``exam_type`` / ``exam_source`` come from the writer's
   ``exam_type`` (they used to be hard-coded to NEET PG).
 - Soft-delete: never hard-deletes. `Question.is_active=False` is the
@@ -55,6 +59,7 @@ from questions.models import (
     Subject,
     Topic,
 )
+from questions.answer_leak import OPTION_FIELDS, has_option_leak, label_hold_reasons
 from questions.text_encoding import normalize_text
 
 from . import fingerprints, deduplicator
@@ -229,6 +234,14 @@ class DjangoWriter:
                                            note="subject could not be resolved — admin review")
                 self.stats.questions_staged_for_review += 1
                 return None
+            hold = label_hold_reasons(q.stem or q.stem_raw or "", options_text[:4])
+            if hold:
+                self._emit_extraction_item(
+                    q, recall_source, status="pending",
+                    note=f"answer / explanation label in the stem or options ({', '.join(hold)}) — admin review",
+                )
+                self.stats.questions_staged_for_review += 1
+                return None
 
         # Pull year from (in order): recall_source.pdf_filename (e.g.
         # NEET-PG-2021-...) → recall_source PDF metadata creationDate →
@@ -329,6 +342,9 @@ class DjangoWriter:
         changed: list[str] = []
         for field in _FILL_IF_EMPTY:
             new_value = parsed.get(field)
+            # Options: answer labels and correctness flags ("✔", "(correct)").
+            if field in OPTION_FIELDS and has_option_leak(new_value):
+                continue  # an option is public text: never fill in an answer / explanation label
             if new_value and not (getattr(question, field, "") or "").strip():
                 setattr(question, field, new_value)
                 changed.append(field)
