@@ -6,7 +6,9 @@
  * 1. Open any Google Spreadsheet (or create a new one)
  * 2. Go to Extensions → Apps Script
  * 3. Delete any existing code, paste this ENTIRE file, click Save (💾)
- * 4. Update BACKEND_URL and ADMIN_CREDENTIALS below with your values
+ * 4. Check BACKEND_URL below, then open Project Settings (gear icon) →
+ *    Script Properties and add CRACKCMS_ADMIN_USERNAME and
+ *    CRACKCMS_ADMIN_PASSWORD (never write credentials into this file)
  * 5. Click ▶ Run → select "exportAllData" → Run (grant permissions when asked)
  * 6. Go back to your Spreadsheet — 5 sheets will appear with all your data!
  *
@@ -22,11 +24,23 @@
 
 // ═══════════ CONFIGURATION — UPDATE THESE ═══════════
 var BACKEND_URL = 'https://crackcms-vsthc.ondigitalocean.app';
-var ADMIN_CREDENTIALS = {
-  username: 'admin',         // ← your Django superuser username
-  password: 'Kali2712@'  // ← your Django superuser password
-};
+// Admin credentials are read from Script Properties, not from this file:
+//   CRACKCMS_ADMIN_USERNAME  ← your admin username
+//   CRACKCMS_ADMIN_PASSWORD  ← your admin password
 // ═════════════════════════════════════════════════════
+
+/**
+ * Read the admin credentials from Script Properties (fails if unset)
+ */
+function getAdminCredentials_() {
+  var props = PropertiesService.getScriptProperties();
+  var username = props.getProperty('CRACKCMS_ADMIN_USERNAME');
+  var password = props.getProperty('CRACKCMS_ADMIN_PASSWORD');
+  if (!username || !password) {
+    throw new Error('Set CRACKCMS_ADMIN_USERNAME and CRACKCMS_ADMIN_PASSWORD in Project Settings → Script Properties.');
+  }
+  return { username: username, password: password };
+}
 
 /**
  * Get JWT access token from the backend
@@ -36,11 +50,14 @@ function getAuthToken_() {
   var options = {
     method: 'post',
     contentType: 'application/json',
-    payload: JSON.stringify(ADMIN_CREDENTIALS),
+    payload: JSON.stringify(getAdminCredentials_()),
     muteHttpExceptions: true
   };
   var response = UrlFetchApp.fetch(url, options);
   var code = response.getResponseCode();
+  if (code === 410) {
+    throw new Error('The backend has disabled password login at /api/auth/login/ (HTTP 410); this export needs another way to obtain an admin token.');
+  }
   if (code !== 200) {
     throw new Error('Login failed (HTTP ' + code + '). Check your username/password.');
   }

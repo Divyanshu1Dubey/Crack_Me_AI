@@ -7,6 +7,10 @@
 
 ### Phase 1: Complete Backup (286 MB total)
 
+> 2026-11-01: `backup/db_dumps/`, the user-table SQL dumps in `backup/sql/` and
+> `backup/supabase_auth_users.json` were removed from the repository (personal
+> data) and are gitignored. Keep such backups encrypted, outside the repo.
+
 **Database exports** (in `backup/db_dumps/`):
 - `questions.question.json` — 13,788 questions (33.9 MB)
 - `questions.questionattempt.json` — 1,449 test attempts (284 KB)
@@ -39,7 +43,7 @@
 
 **Railway Postgres created:**
 - Project: `Postgres`
-- Connection URL: `postgresql://postgres:kLpKLuPyUucGftxyyFsfCnReVNSTzrdh@tramway.proxy.rlwy.net:24963/railway`
+- Connection URL: `postgresql://postgres:<RAILWAY_DB_PASSWORD>@tramway.proxy.rlwy.net:24963/railway`
 - Internal: `postgres.railway.internal:5432`
 
 **Railway Backend updated:**
@@ -139,8 +143,11 @@ All backups are in: `C:\Users\DIVYANSHU\Desktop\crack_cms\backup\`
 
 ## 🔑 Important Credentials (saved for reference)
 
+> Passwords removed 2026-11-01. They were committed to git history and must be
+> rotated; keep credentials in the platform's environment settings only.
+
 **Railway Postgres:**
-- URL: `postgresql://postgres:kLpKLuPyUucGftxyyFsfCnReVNSTzrdh@tramway.proxy.rlwy.net:24963/railway`
+- URL: `postgresql://postgres:<RAILWAY_DB_PASSWORD>@tramway.proxy.rlwy.net:24963/railway`
 - Project ID: `10078c0e-2f4b-404d-aaf4-7c4bd2744d06`
 - Volume ID: `bc9ad1c5-0a9d-4e80-8f4b-c88cf45834e5`
 
@@ -152,4 +159,4 @@ All backups are in: `C:\Users\DIVYANSHU\Desktop\crack_cms\backup\`
 **Supabase (current, keep as backup):**
 - Project: `ryuvcdthjnxyetdyjbph`
 - URL: `https://ryuvcdthjnxyetdyjbph.supabase.co`
-- DB: `postgresql://postgres.ryuvcdthjnxyetdyjbph:DivyanshuDubey2712@aws-1-ap-south-1.pooler.supabase.com:5432/postgres`
+- DB: `postgresql://postgres.ryuvcdthjnxyetdyjbph:<SUPABASE_DB_PASSWORD>@aws-1-ap-south-1.pooler.supabase.com:5432/postgres`

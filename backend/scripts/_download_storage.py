@@ -1,14 +1,32 @@
-"""Download all files from Supabase Storage buckets."""
+"""Download all files from Supabase Storage buckets.
+
+Credentials come only from the environment (never hard-code them here):
+    SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)
+    SUPABASE_SERVICE_ROLE_KEY
+Run from backend/:  python scripts/_download_storage.py
+"""
 import json
 import os
 import sys
 from urllib import request as urlrequest, error as urlerror
 from urllib.parse import quote
 
-sys.stdout.reconfigure(encoding='utf-8')
+SUPABASE_URL = ""
+SERVICE_ROLE_KEY = ""
 
-SUPABASE_URL = "https://ryuvcdthjnxyetdyjbph.supabase.co"
-SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5dXZjZHRoam54eWV0ZHlqYnBoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTI5MTI2MywiZXhwIjoyMDkwODY3MjYzfQ.n6alwTEqx9d3WxswCFfbYBWPmigLhO9c7QKXiM5ofMw"
+
+def load_supabase_config(environ=None):
+    """Return (url, service_role_key) from the environment or exit with an error."""
+    environ = os.environ if environ is None else environ
+    url = (environ.get("SUPABASE_URL") or environ.get("NEXT_PUBLIC_SUPABASE_URL") or "").strip().rstrip("/")
+    key = (environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    missing = [name for name, value in (("SUPABASE_URL", url), ("SUPABASE_SERVICE_ROLE_KEY", key)) if not value]
+    if missing:
+        raise SystemExit(
+            f"ERROR: {' and '.join(missing)} must be set in the environment "
+            "(credentials are not stored in this script)."
+        )
+    return url, key
 
 def list_storage_objects(bucket_name):
     """List all objects in a Supabase Storage bucket."""
@@ -67,38 +85,47 @@ def download_file(bucket_name, file_path, local_dir):
         print(f"  ERROR downloading {file_path}: {e}", flush=True)
     return False
 
-# Download from question-images bucket
-print("=== Downloading question images ===", flush=True)
-images_dir = '../backup/supabase_storage_images'
-os.makedirs(images_dir, exist_ok=True)
-image_files = list_storage_objects("crack-cms-question-images")
-print(f"Found {len(image_files)} image objects", flush=True)
-downloaded = 0
-for obj in image_files:
-    name = obj.get('name', '')
-    if not name:
-        continue
-    if download_file("crack-cms-question-images", name, images_dir):
-        downloaded += 1
-    if downloaded % 50 == 0 and downloaded > 0:
-        print(f"  ... {downloaded}/{len(image_files)} downloaded", flush=True)
-print(f"Downloaded {downloaded} images", flush=True)
+def main():
+    global SUPABASE_URL, SERVICE_ROLE_KEY
+    SUPABASE_URL, SERVICE_ROLE_KEY = load_supabase_config()
+    sys.stdout.reconfigure(encoding='utf-8')
 
-# Download from educational-videos bucket
-print("\n=== Downloading educational videos ===", flush=True)
-videos_dir = '../backup/supabase_storage_videos'
-os.makedirs(videos_dir, exist_ok=True)
-video_files = list_storage_objects("educational_videos")
-print(f"Found {len(video_files)} video objects", flush=True)
-downloaded = 0
-for obj in video_files:
-    name = obj.get('name', '')
-    if not name:
-        continue
-    if download_file("educational_videos", name, videos_dir):
-        downloaded += 1
-    if downloaded % 10 == 0 and downloaded > 0:
-        print(f"  ... {downloaded}/{len(video_files)} downloaded", flush=True)
-print(f"Downloaded {downloaded} videos", flush=True)
+    # Download from question-images bucket
+    print("=== Downloading question images ===", flush=True)
+    images_dir = '../backup/supabase_storage_images'
+    os.makedirs(images_dir, exist_ok=True)
+    image_files = list_storage_objects("crack-cms-question-images")
+    print(f"Found {len(image_files)} image objects", flush=True)
+    downloaded = 0
+    for obj in image_files:
+        name = obj.get('name', '')
+        if not name:
+            continue
+        if download_file("crack-cms-question-images", name, images_dir):
+            downloaded += 1
+        if downloaded % 50 == 0 and downloaded > 0:
+            print(f"  ... {downloaded}/{len(image_files)} downloaded", flush=True)
+    print(f"Downloaded {downloaded} images", flush=True)
 
-print("\n=== Storage backup complete ===", flush=True)
+    # Download from educational-videos bucket
+    print("\n=== Downloading educational videos ===", flush=True)
+    videos_dir = '../backup/supabase_storage_videos'
+    os.makedirs(videos_dir, exist_ok=True)
+    video_files = list_storage_objects("educational_videos")
+    print(f"Found {len(video_files)} video objects", flush=True)
+    downloaded = 0
+    for obj in video_files:
+        name = obj.get('name', '')
+        if not name:
+            continue
+        if download_file("educational_videos", name, videos_dir):
+            downloaded += 1
+        if downloaded % 10 == 0 and downloaded > 0:
+            print(f"  ... {downloaded}/{len(video_files)} downloaded", flush=True)
+    print(f"Downloaded {downloaded} videos", flush=True)
+
+    print("\n=== Storage backup complete ===", flush=True)
+
+
+if __name__ == "__main__":
+    main()
