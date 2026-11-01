@@ -47,17 +47,27 @@ function subjectKey(subjectId: unknown): string {
   return /^\d+$/.test(key) ? key : '';
 }
 
+/** Empty-option text of a topic picker whose topics failed to load. */
+export const TOPICS_ERROR_LABEL = 'Could not load topics (reopen to retry)';
+
 /**
  * Per-subject topic cache.
  *
  * - `ensureTopics(subjectId)` loads that subject's topics once (call it from
- *   event handlers / effects, e.g. when a subject is picked).
+ *   event handlers / effects, e.g. when a subject is picked, and from the
+ *   topic picker's focus / mousedown so a failed load is retried).
  * - `topicsFor(subjectId)` returns the loaded topics, or [] until they arrive.
  * - `topicsLoading(subjectId)` is true while a load is in flight.
+ * - `topicsError(subjectId)` is true after a failed load (e.g. a 429 from the
+ *   question-bank limiter), until the retry starts. A failure used to look
+ *   exactly like a subject without topics.
+ * - `topicsPlaceholder(subjectId, idleLabel)` is the picker's empty-option
+ *   text: "Loading topics…", TOPICS_ERROR_LABEL, or `idleLabel`.
  */
 export function useSubjectTopics() {
   const [topicsBySubject, setTopicsBySubject] = useState<Record<string, AdminTopic[]>>({});
   const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
+  const [errorKeys, setErrorKeys] = useState<Record<string, boolean>>({});
   const requested = useRef<Set<string>>(new Set());
 
   const ensureTopics = useCallback((subjectId: unknown) => {
@@ -65,11 +75,14 @@ export function useSubjectTopics() {
     if (!key || requested.current.has(key)) return;
     requested.current.add(key);
     setLoadingKeys((prev) => ({ ...prev, [key]: true }));
+    setErrorKeys((prev) => (prev[key] ? { ...prev, [key]: false } : prev));
     fetchSubjectTopics(key)
       .then((rows) => setTopicsBySubject((prev) => ({ ...prev, [key]: rows })))
       .catch(() => {
-        // Allow a retry the next time this subject is picked.
+        // Show the failure in the picker and allow a retry the next time
+        // this subject is picked or its topic picker is opened.
         requested.current.delete(key);
+        setErrorKeys((prev) => ({ ...prev, [key]: true }));
       })
       .finally(() => setLoadingKeys((prev) => ({ ...prev, [key]: false })));
   }, []);
@@ -84,5 +97,20 @@ export function useSubjectTopics() {
     [loadingKeys],
   );
 
-  return { ensureTopics, topicsFor, topicsLoading };
+  const topicsError = useCallback(
+    (subjectId: unknown): boolean => Boolean(errorKeys[subjectKey(subjectId)]),
+    [errorKeys],
+  );
+
+  const topicsPlaceholder = useCallback(
+    (subjectId: unknown, idleLabel: string): string => {
+      const key = subjectKey(subjectId);
+      if (key && loadingKeys[key]) return 'Loading topics…';
+      if (key && errorKeys[key]) return TOPICS_ERROR_LABEL;
+      return idleLabel;
+    },
+    [loadingKeys, errorKeys],
+  );
+
+  return { ensureTopics, topicsFor, topicsLoading, topicsError, topicsPlaceholder };
 }

@@ -73,16 +73,18 @@ function KpiCard({
 }) {
     return (
         <Card className="border-border/70">
-            <CardContent className="flex items-start justify-between gap-3 p-5">
-                <div className="space-y-1">
+            {/* Two cards per row on phones: the icon is dropped below sm so
+                the number has the card's full width. */}
+            <CardContent className="flex items-start justify-between gap-3 p-4 sm:p-5">
+                <div className="min-w-0 space-y-1">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                         {label}
                     </p>
-                    <p className="text-2xl font-black text-foreground tabular-nums">
+                    <p className="text-xl font-black text-foreground tabular-nums wrap-anywhere sm:text-2xl">
                         {value}
                     </p>
                 </div>
-                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${accent}`}>
+                <div className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:flex ${accent}`}>
                     <Icon className="h-4 w-4" />
                 </div>
             </CardContent>
@@ -123,6 +125,9 @@ function Funnel({ stages }: { stages: DashboardData['funnel'] }) {
 }
 
 function DailyChart({ rows }: { rows: DashboardData['daily_active'] }) {
+    if (!rows.length) {
+        return <p className="text-xs text-muted-foreground">No activity recorded yet.</p>;
+    }
     const max = Math.max(1, ...rows.map((r) => r.users));
     return (
         <div className="flex h-40 items-end gap-0.5">
@@ -257,7 +262,7 @@ export default function AdminAnalyticsDashboardPage() {
                     </div>
 
                     {/* KPI row */}
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                         <KpiCard
                             label="Active now (5m)"
                             value={data.realtime.active_visitors.toLocaleString('en-IN')}
@@ -284,7 +289,7 @@ export default function AdminAnalyticsDashboardPage() {
                         />
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                         <KpiCard
                             label="Weekly users"
                             value={data.weekly.users.toLocaleString('en-IN')}
@@ -314,11 +319,13 @@ export default function AdminAnalyticsDashboardPage() {
                     {/* Daily active users chart */}
                     <Card>
                         <CardContent className="p-5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h2 className="text-sm font-bold">Daily active users (last 30 days)</h2>
-                                <span className="text-[10px] text-muted-foreground">
-                                    Hover bars for details
-                                </span>
+                                {data.daily_active.length > 0 && (
+                                    <span className="hidden text-[10px] text-muted-foreground sm:inline">
+                                        Hover bars for details
+                                    </span>
+                                )}
                             </div>
                             <div className="mt-3">
                                 <DailyChart rows={data.daily_active} />
@@ -518,7 +525,7 @@ export default function AdminAnalyticsDashboardPage() {
                                     {data.campaigns.length === 0 ? (
                                         <li className="text-muted-foreground">
                                             No tagged traffic yet. Share links with{' '}
-                                            <code className="rounded bg-muted px-1 py-0.5">
+                                            <code className="whitespace-nowrap rounded bg-muted px-1 py-0.5">
                                                 ?utm_source=...
                                             </code>{' '}
                                             to populate.

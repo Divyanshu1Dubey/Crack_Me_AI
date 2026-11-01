@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { questionsAPI } from '@/lib/api';
-import { imagesHash, resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
+import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { Sparkles } from 'lucide-react';
 import { buildQuestionEditPayload, isValidAnswerLetter, unpersistedEditFields } from '../_lib/adminHelpers';
 
@@ -182,16 +182,17 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   }, [question.id]);
 
   // Rendered preview of the stem, from a debounced copy of the text.
-  // resolveImageTokens() caches results by key in a module-level map; the
-  // old key (question id + image ids) ignored the text, so the preview kept
-  // showing the first-rendered stem. The key now includes the text.
+  // resolveImageTokens() keys its (bounded) cache on a hash of the text and
+  // images itself, so the key below is only a namespace: the old key (id +
+  // image ids) ignored the text and kept showing the first-rendered stem,
+  // and putting the whole stem in the key grew the cache on every pause.
   const [previewSource, setPreviewSource] = useState<string>(form.question_text);
   useEffect(() => {
     const timer = setTimeout(() => setPreviewSource(form.question_text), 250);
     return () => clearTimeout(timer);
   }, [form.question_text]);
   const previewHtml = useMemo(
-    () => resolveImageTokens(previewSource, images, `qe:${question.id}:${imagesHash(images)}:${previewSource}`),
+    () => resolveImageTokens(previewSource, images, `qe:${question.id}`),
     [previewSource, images, question.id],
   );
 
@@ -606,11 +607,17 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       }
       // The endpoint saves the AI output and marks a previously unverified
       // question "Verified by Admin" (a student-facing badge). Unreviewed AI
-      // content must not carry it, so restore the unverified state.
+      // content must not carry it, so restore the unverified state, and say
+      // so when that fails instead of claiming "not marked verified".
+      let stillVerified = false;
       if (!question.is_verified_by_admin && res?.data?.question?.is_verified_by_admin) {
-        await questionsAPI.unverify(question.id).catch(() => undefined);
+        try {
+          await questionsAPI.unverify(question.id);
+        } catch {
+          stillVerified = true;
+        }
       }
-      applyGeneratedFields(res?.data, correctAnswer);
+      applyGeneratedFields(res?.data, correctAnswer, stillVerified);
       // The endpoint saved the question, so updated_at moved: refresh it or
       // the next Save is rejected as "edited by another user".
       try {
@@ -626,7 +633,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
   }
 
-  function applyGeneratedFields(data: any, correctAnswer: string) {
+  function applyGeneratedFields(data: any, correctAnswer: string, stillVerified = false) {
     const generated = data?.generated_fields || {};
     // formRef: generation takes 15-30 s; keep edits made meanwhile.
     const updated: any = { ...formRef.current };
@@ -644,6 +651,11 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     baselineRef.current = nextBaseline;
     setForm(updated);
     setAiGeneratedFields(applied);
+    if (stillVerified) {
+      setAiSuccess(`Generated ${applied.length} fields. They are already saved to the question; review them and Save your edits.`);
+      setAiError('Still marked "Verified by Admin": removing the mark failed. Unverify it in Admin > Question Bank.');
+      return;
+    }
     setAiSuccess(
       question.is_verified_by_admin
         ? `Generated ${applied.length} fields. They are already saved to the question, which keeps its earlier "verified" mark; review them and Save your edits.`

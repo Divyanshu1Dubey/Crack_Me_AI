@@ -155,8 +155,8 @@ export default function AdminJobsPage() {
     }
 
     return (
-        <div className="p-6 max-w-5xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <Briefcase className="h-6 w-6" />
@@ -184,9 +184,8 @@ export default function AdminJobsPage() {
                         Create New Job
                     </CardTitle>
                     <CardDescription>
-                        Posted jobs appear on the candidate jobs board immediately. Set{' '}
-                        <code>admin_edited=true</code> (set automatically) so the scraper
-                        never overwrites them.
+                        Posted jobs appear on the candidate jobs board immediately and are never
+                        overwritten by the job scraper.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -260,28 +259,43 @@ export default function AdminJobsPage() {
                                 placeholder="MBBS + MS/MD in Cardiology; MCI registration required"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">Target Exam Tracks</label>
-                            <select
-                                multiple
-                                value={formData.exam_tracks.map(String)}
-                                onChange={(e) => {
-                                    const selected = Array.from(
-                                        e.target.selectedOptions,
-                                        option => parseInt(option.value),
-                                    );
-                                    setFormData({ ...formData, exam_tracks: selected });
-                                }}
-                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-24 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                {tracks.map(t => (
-                                    <option key={t.id} value={t.id} className="p-1">{t.name}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-muted-foreground">
-                                Hold Ctrl/Cmd to select multiple.
-                            </p>
-                        </div>
+                        {/* One checkbox per track: a <select multiple> needed
+                            Ctrl/Cmd-click, which phones and the app don't have,
+                            and showed no clear selected state. */}
+                        <fieldset className="min-w-0 space-y-1">
+                            <legend className="text-sm font-medium">Target Exam Tracks</legend>
+                            {tracks.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No exam tracks available.</p>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                                    {tracks.map(t => {
+                                        const trackId = Number(t.id);
+                                        return (
+                                            <label
+                                                key={t.id}
+                                                className="flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 accent-primary"
+                                                    checked={formData.exam_tracks.includes(trackId)}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            exam_tracks: checked
+                                                                ? [...prev.exam_tracks.filter(id => id !== trackId), trackId]
+                                                                : prev.exam_tracks.filter(id => id !== trackId),
+                                                        }));
+                                                    }}
+                                                />
+                                                {t.name}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </fieldset>
                         <Button type="submit" disabled={submitting}>
                             {submitting ? 'Creating…' : 'Create Job'}
                         </Button>

@@ -108,6 +108,26 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  // Hides a live announcement from students without deleting it
+  // (PATCH is_active=false); Admin > Broadcast can publish it again.
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
+  const handleDeactivate = async (id: number) => {
+    setDeactivatingId(id);
+    try {
+      await analyticsAPI.updateAnnouncement(id, { is_active: false });
+      setBanner({ kind: 'success', text: 'Announcement deactivated. Students no longer see it; publish it again from Admin > Broadcast.' });
+      await fetchAnnouncements();
+    } catch (error: any) {
+      console.error('Error deactivating announcement:', error);
+      setBanner({
+        kind: 'error',
+        text: `Could not deactivate announcement: ${extractApiErrorMessage(error?.response?.data, 'request failed')}`,
+      });
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this announcement?')) return;
     try {
@@ -139,7 +159,7 @@ export default function AdminAnnouncementsPage() {
           <Megaphone className="w-6 h-6" /> Manage Announcements
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Create and manage announcements shown to users (student header and dashboard). Backend enforces admin permissions.
+          Create and manage announcements shown to users in the student header and dashboard.
         </p>
       </div>
 
@@ -231,7 +251,10 @@ export default function AdminAnnouncementsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Live Announcements</CardTitle>
-          <p className="text-xs text-muted-foreground">Active and not expired, as students see them.</p>
+          <p className="text-xs text-muted-foreground">
+            Active and not expired, as students see them. Drafts, scheduled and deactivated announcements are listed
+            in Admin &gt; Broadcast.
+          </p>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -255,16 +278,25 @@ export default function AdminAnnouncementsPage() {
                     </p>
                     <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message}</p>
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(ann.id)}
-                    className="self-start"
-                    aria-label="Delete announcement"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="sr-only">Delete</span>
-                  </Button>
+                  <div className="flex gap-2 self-start">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeactivate(ann.id)}
+                      disabled={deactivatingId === ann.id}
+                    >
+                      {deactivatingId === ann.id ? 'Deactivating…' : 'Deactivate'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(ann.id)}
+                      aria-label="Delete announcement"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -64,6 +64,59 @@ export async function fetchAllPages<T = any>(
   return rows;
 }
 
+/**
+ * Admin-facing copy for a failed request, keyed on the HTTP status of an
+ * axios error (`what` names the data, e.g. "import jobs"). Raw axios text
+ * ("Request failed with status code 500") is never shown.
+ */
+export function loadErrorMessage(error: unknown, what: string): string {
+  const status = Number((error as { response?: { status?: unknown } } | null | undefined)?.response?.status);
+  if (status === 429) return 'Too many requests. Try again in a minute.';
+  if (status === 401 || status === 403) return `You do not have access to ${what}.`;
+  if (status >= 500) return `Couldn't load ${what} (server error).`;
+  if (!Number.isFinite(status) || status <= 0) return `Couldn't load ${what}. Check your connection and retry.`;
+  return `Couldn't load ${what}.`;
+}
+
+// ── Numbers ─────────────────────────────────────────────────────────────────
+
+/** A count with thousands separators (en-IN, like the rest of the admin UI); '0' when missing. */
+export function formatCount(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '0';
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('en-IN') : '0';
+}
+
+/** `part` as a percentage of `total`, clamped to 0-100; 0 when the total is missing or zero. */
+export function percentOf(part: unknown, total: unknown): number {
+  const p = Number(part);
+  const t = Number(total);
+  if (!Number.isFinite(p) || !Number.isFinite(t) || t <= 0) return 0;
+  return Math.min(100, Math.max(0, (p / t) * 100));
+}
+
+// ── Tests tab ───────────────────────────────────────────────────────────────
+
+/**
+ * Which tests the admin Tests tab lists. GET /tests/ returns every test to an
+ * admin, newest first, so the library was buried under students' generated
+ * practice tests and only the first page (20) was shown.
+ *  - library: the published official library (?scope=library)
+ *  - drafts:  the admin's own unpublished tests, e.g. manual drafts
+ *  - all:     everything, including students' practice tests
+ */
+export type AdminTestScope = 'library' | 'drafts' | 'all';
+
+export function adminTestListParams(scope: AdminTestScope, page: number): Record<string, string> {
+  const params: Record<string, string> = { page: String(Math.max(1, Math.floor(page) || 1)) };
+  if (scope === 'library') params.scope = 'library';
+  if (scope === 'drafts') {
+    params.scope = 'mine';
+    params.is_published = 'false';
+  }
+  return params;
+}
+
 // ── Related PYQ ids (Question.similar_questions) ───────────────────────────
 
 /** Parse "12, 45,90" into [12, 45, 90]; ignores anything that isn't a positive integer. */
@@ -175,6 +228,8 @@ export interface ReorderRow {
   id: number;
   display_number?: number | null;
   paper?: number | null;
+  /** Removed questions (is_active=false) are not shown to students. */
+  is_active?: boolean | null;
 }
 
 export type RenumberResult<T extends ReorderRow> =
@@ -189,6 +244,13 @@ export type RenumberResult<T extends ReorderRow> =
  * the numbers are just re-assigned in the new visual order. Only rows whose
  * number actually changes are returned in `changes`. Rows of other papers
  * are left untouched, and a drop across papers is refused.
+ *
+ * The page may only show part of a paper (other pages, other filters), so the
+ * paper's visible numbers must form one unbroken run (e.g. 41..60). With a
+ * gap (10, 49, 50, 98) other questions sit between them, and dragging #98 to
+ * the top would make it #10 and push the old #10 to #49, past 38 questions
+ * the admin never saw; that is refused. Removed (inactive) rows are refused
+ * too: students never see them, so they must not take part in the numbering.
  */
 export function computeDisplayRenumber<T extends ReorderRow>(
   rows: T[],
@@ -210,6 +272,12 @@ export function computeDisplayRenumber<T extends ReorderRow>(
   reordered.splice(toIdx, 0, dragged);
 
   const group = reordered.filter((row) => paperOf(row) === paper);
+  if (group.some((row) => row.is_active === false)) {
+    return {
+      ok: false,
+      reason: 'Removed questions of this paper are listed here. Only active questions can be drag-renumbered; reload the list and try again.',
+    };
+  }
   const numbers = group.map((row) => row.display_number);
   if (numbers.some((n) => typeof n !== 'number' || !Number.isFinite(n))) {
     return {
@@ -218,6 +286,18 @@ export function computeDisplayRenumber<T extends ReorderRow>(
     };
   }
   const sortedNumbers = (numbers as number[]).slice().sort((a, b) => a - b);
+  const lowest = sortedNumbers[0];
+  const highest = sortedNumbers[sortedNumbers.length - 1];
+  const isUnbrokenRun =
+    new Set(sortedNumbers).size === sortedNumbers.length && highest - lowest + 1 === sortedNumbers.length;
+  if (!isUnbrokenRun) {
+    return {
+      ok: false,
+      reason:
+        `The numbers shown for this paper (${lowest}-${highest}) skip or repeat values, so other questions of ` +
+        'the paper may sit between them. Drag-reorder needs an unbroken run of numbers; use the number field instead.',
+    };
+  }
   const assigned = new Map<number, number>();
   group.forEach((row, idx) => assigned.set(row.id, sortedNumbers[idx]));
 

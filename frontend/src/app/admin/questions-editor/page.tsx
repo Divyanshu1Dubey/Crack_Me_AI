@@ -6,7 +6,7 @@ import { questionsAPI } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import QuestionEditModal from './QuestionEditModal';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { buildYearOptions, computeDisplayRenumber, listRows, matchesQuestionConfirm } from '../_lib/adminHelpers';
+import { buildYearOptions, computeDisplayRenumber, formatCount, listRows, matchesQuestionConfirm } from '../_lib/adminHelpers';
 import { fetchAllSubjects, useSubjectTopics } from '../_lib/useAdminTaxonomy';
 
 const PAGE_SIZE = 20;
@@ -17,7 +17,7 @@ export default function AdminQuestionsEditorPage() {
   // Client-side admin gate. The backend still enforces `IsAdminUser` on every
   // mutation, but hiding destructive UI from non-admins keeps student
   // sessions tidy and the audit log clean.
-  const isAdmin = !!user?.is_admin;
+  const isAdmin = !!user && (user.role === 'admin' || !!user.is_admin);
 
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +125,7 @@ export default function AdminQuestionsEditorPage() {
   // Subjects (all pages) and topics (per subject, on demand) for the filters
   // and inline editing. A single unpaginated GET only returned 20 of each.
   const [subjects, setSubjects] = useState<any[]>([]);
-  const { ensureTopics, topicsFor, topicsLoading } = useSubjectTopics();
+  const { ensureTopics, topicsFor, topicsPlaceholder } = useSubjectTopics();
   const [yearOptions, setYearOptions] = useState<number[]>(() => buildYearOptions([]));
 
   // Per-exam counts so the user can see which exam has what before filtering
@@ -221,8 +221,12 @@ export default function AdminQuestionsEditorPage() {
     try {
       // `ordering` is only honoured once the backend lists display_number /
       // paper in QuestionViewSet.ordering_fields; until then rows come back
-      // newest first and are sorted client-side below when reordering.
-      const params: any = { page, page_size: PAGE_SIZE, ordering: reorderEnabled ? 'paper,display_number' : 'display_number' };
+      // newest first and are sorted client-side below when reordering. It is
+      // only sent in reorder mode (pages must then be contiguous slices of a
+      // paper); other views keep the default newest-first order instead of
+      // mixing every paper's #1 together once the backend honours it.
+      const params: any = { page, page_size: PAGE_SIZE };
+      if (reorderEnabled) params.ordering = 'paper,display_number';
       if (needsReview) params.needs_review = true;
       if (isDropped) params.is_dropped = true;
       if (examType) params.exam_type = examType;
@@ -233,6 +237,9 @@ export default function AdminQuestionsEditorPage() {
       if (isControversial) params.is_controversial = true;
       if (isImageBased) params.is_image_based = true;
       if (search) params.search = search;
+      // Removed questions (is_active=false) are hidden from students, so the
+      // renumbering view leaves them out (admins otherwise list every row).
+      if (reorderEnabled) params.is_active = true;
 
       const res = await questionsAPI.list(params);
       let rows = listRows<any>(res.data);
@@ -265,9 +272,13 @@ export default function AdminQuestionsEditorPage() {
     }
   };
 
+  // Wait for auth: before it resolves fetchQuestions() would bail out with an
+  // empty list (and drop the initial "Loading..." row). Once the admin
+  // session is known the effect runs again and loads the page.
   useEffect(() => {
+    if (authLoading) return;
     fetchQuestions();
-  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, isAuthenticated, isAdmin]);
+  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, authLoading, isAuthenticated, isAdmin]);
 
   // Client-side admin gate. Backend enforces permissions; this just keeps
   // non-admins from seeing destructive affordances.
@@ -310,7 +321,8 @@ export default function AdminQuestionsEditorPage() {
   // Each chip shows the live count for that exam so the user can see at-a-glance
   // which track has the most content.
   const examChips: Array<{ key: string; label: string; ring: string; activeBg: string; activeText: string }> = [
-    { key: '', label: 'All Exams', ring: 'ring-gray-300', activeBg: 'bg-gray-900', activeText: 'text-white' },
+    // dark: the gray-900 fill matched the dark card, so the selected chip was invisible.
+    { key: '', label: 'All Exams', ring: 'ring-gray-300', activeBg: 'bg-gray-900 dark:bg-indigo-600', activeText: 'text-white' },
     { key: 'cms', label: 'UPSC CMS', ring: 'ring-blue-300', activeBg: 'bg-blue-600', activeText: 'text-white' },
     { key: 'neet_pg', label: 'NEET PG', ring: 'ring-emerald-300', activeBg: 'bg-emerald-600', activeText: 'text-white' },
     { key: 'ini_cet', label: 'INI-CET', ring: 'ring-purple-300', activeBg: 'bg-purple-600', activeText: 'text-white' },
@@ -533,7 +545,7 @@ export default function AdminQuestionsEditorPage() {
         <div className="text-sm text-gray-700 dark:text-slate-300">
           {examCounts[examType ?? ''] !== undefined && (
             <span>
-              Showing <span className="font-semibold text-gray-900 dark:text-slate-100">{examCounts[examType ?? '']}</span>{' '}
+              Showing <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCount(examCounts[examType ?? ''])}</span>{' '}
               {examType ? examType.toUpperCase().replace('_', ' ') : 'total'} questions
               {activeFiltersCount > 0 && (
                 <span className="ml-2 text-indigo-600 dark:text-indigo-400 font-medium">({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active)</span>
@@ -570,7 +582,7 @@ export default function AdminQuestionsEditorPage() {
                       (isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200')
                     }
                   >
-                    {count.toLocaleString()}
+                    {formatCount(count)}
                   </span>
                 )}
               </button>
@@ -612,9 +624,11 @@ export default function AdminQuestionsEditorPage() {
             className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40 disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:text-gray-500 dark:disabled:text-slate-500"
             value={topicId}
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
+            onFocus={() => ensureTopics(subjectId)}
+            onMouseDown={() => ensureTopics(subjectId)}
             disabled={!subjectId}
           >
-            <option value="">{subjectId && topicsLoading(subjectId) ? 'Loading topics…' : 'All Topics'}</option>
+            <option value="">{topicsPlaceholder(subjectId, 'All Topics')}</option>
             {topicsFor(subjectId).map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -712,6 +726,16 @@ export default function AdminQuestionsEditorPage() {
           <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
             {loading ? (
               <tr><td colSpan={6} className="text-center py-4 text-gray-900 dark:text-slate-100">Loading...</td></tr>
+            ) : questions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">
+                  {pageError
+                    ? 'Questions could not be loaded.'
+                    : activeFiltersCount > 0
+                      ? 'No questions match these filters.'
+                      : 'No questions found.'}
+                </td>
+              </tr>
             ) : questions.map((q, idx) => (
               <tr
                 key={q.id}
@@ -780,7 +804,7 @@ export default function AdminQuestionsEditorPage() {
                       onMouseDown={() => ensureTopics(q.subject)}
                       onChange={(e) => handleUpdate(q.id, 'topic', e.target.value ? parseInt(e.target.value) : null)}
                     >
-                      <option value="">{topicsLoading(q.subject) ? 'Loading topics…' : 'No Topic'}</option>
+                      <option value="">{topicsPlaceholder(q.subject, 'No Topic')}</option>
                       {topicsFor(q.subject).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       {q.topic && !topicsFor(q.subject).some((t) => t.id === q.topic) && (
                         <option value={q.topic}>{q.topic_name || `Topic #${q.topic}`}</option>

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
@@ -10,15 +11,19 @@ import { blogAPI } from '@/lib/blogAPI';
 import {
     PLATFORM_WIDE_CONFIRM_PHRASE,
     SIMILAR_ENDPOINT_LIMIT,
+    adminTestListParams,
     curatedRelatedIds,
+    formatCount,
     hasNextPage,
     isPlatformWideConfirmed,
     isValidAnswerLetter,
     listCount,
     listRows,
     parseRelatedIds,
+    percentOf,
     questionSearchParams,
     sameIdSet,
+    type AdminTestScope,
 } from './_lib/adminHelpers';
 import { fetchAllSubjects, useSubjectTopics } from './_lib/useAdminTaxonomy';
 import {
@@ -38,7 +43,6 @@ interface DashboardData {
     total_questions: number;
     questions_with_answer: number;
     questions_with_explanation: number;
-    answer_percentage: number;
     total_tests_taken: number;
     unresolved_feedback: number;
     recent_signups: { id: number; username: string; date_joined: string }[];
@@ -169,7 +173,7 @@ export default function AdminDashboardPage() {
     const [questionList, setQuestionList] = useState<any[]>([]);
     const [questionsLoading, setQuestionsLoading] = useState(false);
     const [questionSubjects, setQuestionSubjects] = useState<any[]>([]);
-    const { ensureTopics, topicsFor, topicsLoading } = useSubjectTopics();
+    const { ensureTopics, topicsFor, topicsPlaceholder } = useSubjectTopics();
     const [questionActionMessage, setQuestionActionMessage] = useState('');
     const [questionPage, setQuestionPage] = useState(1);
     const [questionTotal, setQuestionTotal] = useState(0);
@@ -259,6 +263,9 @@ export default function AdminDashboardPage() {
     const [extractionItemsLoading, setExtractionItemsLoading] = useState(false);
     const [editingExtractionItemId, setEditingExtractionItemId] = useState<number | null>(null);
     const [editingExtractionItem, setEditingExtractionItem] = useState<any>(null);
+    // Result of the last extraction-queue action (errors were swallowed, so a
+    // rejected publish looked like nothing happened).
+    const [extractionMessage, setExtractionMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
     const [aiPromptVersions, setAiPromptVersions] = useState<any[]>([]);
     const [aiPromptName, setAiPromptName] = useState('Default Prompt');
     const [aiPromptText, setAiPromptText] = useState('Generate clear, exam-oriented answer and explanation from verified textbook context.');
@@ -266,9 +273,15 @@ export default function AdminDashboardPage() {
     const [aiTimelineQuestionId, setAiTimelineQuestionId] = useState<number | null>(null);
     const [aiTimelineRows, setAiTimelineRows] = useState<any[]>([]);
     const [aiTimelineLoading, setAiTimelineLoading] = useState(false);
-    // Tests management (Phase 5)
+    // Tests management (Phase 5). The list is scoped (library / own drafts /
+    // all) and paginated with "Load more".
     const [adminTests, setAdminTests] = useState<any[]>([]);
     const [adminTestsLoading, setAdminTestsLoading] = useState(false);
+    const [adminTestsScope, setAdminTestsScope] = useState<AdminTestScope>('library');
+    const [adminTestsTotal, setAdminTestsTotal] = useState(0);
+    const [adminTestsNextPage, setAdminTestsNextPage] = useState<number | null>(null);
+    const [adminTestsLoadingMore, setAdminTestsLoadingMore] = useState(false);
+    const [adminTestsError, setAdminTestsError] = useState('');
     const [testQuestionSearch, setTestQuestionSearch] = useState('');
     const [testCandidateQuestions, setTestCandidateQuestions] = useState<any[]>([]);
     const [selectedTestQuestionIds, setSelectedTestQuestionIds] = useState<number[]>([]);
@@ -303,6 +316,7 @@ export default function AdminDashboardPage() {
     const [campaignsLoading, setCampaignsLoading] = useState(false);
     const [campaignForm, setCampaignForm] = useState({ title: '', message: '', image_url: '', deep_link: '', role: 'all', active_only: true, scheduled_for: '' });
     const [campaignSaving, setCampaignSaving] = useState(false);
+    const [campaignMessage, setCampaignMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
     // Phase 9 moderation queue
     const [issueQueue, setIssueQueue] = useState<any[]>([]);
     const [issueQueueLoading, setIssueQueueLoading] = useState(false);
@@ -636,16 +650,37 @@ export default function AdminDashboardPage() {
         setCampaignSaving(false);
     };
 
+    // "Publish now" is in-app only (dashboard feed + notification bell);
+    // nothing is emailed or pushed. delivery_count is the audience size.
     const handleSendCampaignNow = async (id: number) => {
         const before = campaigns;
+        setCampaignMessage(null);
         setCampaigns((rows) => rows.map((row) => row.id === id ? { ...row, delivery_status: 'sending' } : row));
         try {
             const res = await analyticsAPI.sendCampaignNow(id);
             const updated = res.data;
             setCampaigns((rows) => rows.map((row) => row.id === id ? updated : row));
-        } catch {
+            setCampaignMessage({ type: 'ok', text: `"${updated?.title ?? `Campaign #${id}`}" is live in-app for ${formatCount(updated?.delivery_count)} users.` });
+        } catch (err: any) {
             // Optimistic rollback on failure.
             setCampaigns(before);
+            setCampaignMessage({ type: 'err', text: `Could not publish campaign #${id}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}` });
+        }
+    };
+
+    // Takes a published or scheduled campaign off the student feed without
+    // deleting it (PATCH is_active=false). "Publish now" makes it live again.
+    const handleDeactivateCampaign = async (id: number) => {
+        const before = campaigns;
+        setCampaignMessage(null);
+        setCampaigns((rows) => rows.map((row) => row.id === id ? { ...row, is_active: false } : row));
+        try {
+            const res = await analyticsAPI.updateAnnouncement(id, { is_active: false });
+            setCampaigns((rows) => rows.map((row) => row.id === id ? { ...row, ...res.data } : row));
+            setCampaignMessage({ type: 'ok', text: `Campaign #${id} deactivated. Students no longer see it.` });
+        } catch (err: any) {
+            setCampaigns(before);
+            setCampaignMessage({ type: 'err', text: `Could not deactivate campaign #${id}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}` });
         }
     };
 
@@ -897,16 +932,34 @@ export default function AdminDashboardPage() {
         setAiTimelineLoading(false);
     };
 
-    const fetchAdminTests = async () => {
-        setAdminTestsLoading(true);
+    // GET /tests/ gives an admin every test newest first (students' generated
+    // practice tests included), 20 per page; the tab used to show only that
+    // first page. It now lists one scope at a time and pages with Load more.
+    const fetchAdminTests = async (page = 1, scope: AdminTestScope = adminTestsScope) => {
+        if (page === 1) setAdminTestsLoading(true);
+        else setAdminTestsLoadingMore(true);
+        setAdminTestsError('');
         try {
-            const res = await testsAPI.list();
-            const rows = Array.isArray(res.data) ? res.data : res.data?.results || [];
-            setAdminTests(rows);
-        } catch {
-            setAdminTests([]);
+            const res = await testsAPI.list(adminTestListParams(scope, page));
+            const rows = listRows<any>(res.data);
+            setAdminTests((prev) => (page === 1 ? rows : [...prev, ...rows]));
+            setAdminTestsTotal(listCount(res.data));
+            setAdminTestsNextPage(hasNextPage(res.data) ? page + 1 : null);
+        } catch (err: any) {
+            if (page === 1) {
+                setAdminTests([]);
+                setAdminTestsTotal(0);
+                setAdminTestsNextPage(null);
+            }
+            setAdminTestsError(`Could not load tests: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
         }
         setAdminTestsLoading(false);
+        setAdminTestsLoadingMore(false);
+    };
+
+    const changeAdminTestsScope = (scope: AdminTestScope) => {
+        setAdminTestsScope(scope);
+        fetchAdminTests(1, scope);
     };
 
     const fetchTestCandidateQuestions = async () => {
@@ -943,7 +996,8 @@ export default function AdminDashboardPage() {
                 negative_mark_value: '0.33',
             });
             setSelectedTestQuestionIds([]);
-            fetchAdminTests();
+            // New manual tests start unpublished: show them in "My drafts".
+            changeAdminTestsScope('drafts');
         } catch {
             // Keep UI stable on API failure.
         }
@@ -1174,11 +1228,13 @@ export default function AdminDashboardPage() {
             setUserActionMessage('You cannot remove your own admin access.');
             return;
         }
-        // Making someone an admin sets is_superuser and is_staff on the backend
-        // (accounts/views.py AdminUserRoleUpdateView), so it must be deliberate.
+        // Making someone an admin sets role=admin and is_staff on the backend
+        // (accounts/views.py AdminUserRoleUpdateView); it never grants Django
+        // superuser. Demotion clears role, staff and superuser. Either way it
+        // must be deliberate.
         const confirmText = nextRole === 'admin'
-            ? `Make ${who} an admin?\n\nThis grants full admin access (Django superuser + staff): user management, payments, question bank and platform-wide resets.`
-            : `Remove admin access from ${who}? They become a student and lose superuser/staff rights.`;
+            ? `Make ${who} an admin?\n\nThis grants admin access (admin role + Django staff, not superuser): user management, payments, question bank and platform-wide resets.`
+            : `Remove admin access from ${who}? They become a student and lose the admin role and staff/superuser rights.`;
         if (!window.confirm(confirmText)) return;
         setUserActionLoadingId(targetUserId);
         setUserActionMessage('');
@@ -1762,11 +1818,19 @@ export default function AdminDashboardPage() {
             }
             // The endpoint marks a previously unverified question as
             // "Verified by Admin" while saving the AI output. Unreviewed AI
-            // content must not carry that badge, so restore the unverified state.
+            // content must not carry that badge, so restore the unverified
+            // state, and say so when that fails.
+            let stillVerified = false;
             if (!q.is_verified_by_admin && res?.data?.question?.is_verified_by_admin) {
-                await questionsAPI.unverify(questionId).catch(() => undefined);
+                try {
+                    await questionsAPI.unverify(questionId);
+                } catch {
+                    stillVerified = true;
+                }
             }
-            setQuestionActionMessage(`AI explanation generated and saved for Q#${questionId}. Review it, then use Verify once it is correct.`);
+            setQuestionActionMessage(stillVerified
+                ? `AI explanation saved for Q#${questionId}, but it is still marked "Verified by Admin" (removing the mark failed). Use Unverify on Q#${questionId} so students do not see unreviewed AI content as verified.`
+                : `AI explanation generated and saved for Q#${questionId}. Review it, then use Verify once it is correct.`);
             fetchQuestions();
         } catch (err: any) {
             setQuestionActionMessage(`AI explanation failed for Q#${questionId}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
@@ -1883,27 +1947,33 @@ export default function AdminDashboardPage() {
         setExtractionJobsLoading(false);
     };
 
+    const extractionError = (err: any, what: string) =>
+        setExtractionMessage({ type: 'err', text: `${what} failed: ${extractApiErrorMessage(err?.response?.data, 'request failed')}` });
+
     const handleExtractionUpload = async () => {
         if (!extractionFile) return;
         setExtractionLoading(true);
+        setExtractionMessage(null);
         try {
             const formData = new FormData();
             formData.append('file', extractionFile);
             await questionsAPI.extractionUpload(formData);
             setExtractionFile(null);
+            setExtractionMessage({ type: 'ok', text: 'File stored with one placeholder item. Fill it in, approve it, then publish.' });
             fetchExtractionJobs();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            extractionError(err, 'Upload');
         }
         setExtractionLoading(false);
     };
 
     const handleExtractionRetry = async (jobId: number) => {
+        setExtractionMessage(null);
         try {
             await questionsAPI.extractionRetry(jobId);
             fetchExtractionJobs();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            extractionError(err, `Retry of job #${jobId}`);
         }
     };
 
@@ -1933,6 +2003,7 @@ export default function AdminDashboardPage() {
 
     const saveExtractionItemEdit = async (itemId: number) => {
         if (!editingExtractionItem) return;
+        setExtractionMessage(null);
         try {
             await questionsAPI.extractionItemUpdate(itemId, {
                 question_text: editingExtractionItem.question_text,
@@ -1949,22 +2020,35 @@ export default function AdminDashboardPage() {
                 review_note: editingExtractionItem.review_note,
             });
             cancelExtractionItemEdit();
+            setExtractionMessage({ type: 'ok', text: `Item #${itemId} saved.` });
             if (selectedExtractionJobId) fetchExtractionItems(selectedExtractionJobId);
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            extractionError(err, `Saving item #${itemId}`);
         }
     };
 
+    // Publishing needs an approved item with all four options and an explicit
+    // A-D answer; the backend's 400 explains which is missing.
     const runExtractionItemAction = async (action: 'autotag' | 'approve' | 'reject' | 'publish', itemId: number) => {
+        setExtractionMessage(null);
         try {
-            if (action === 'autotag') await questionsAPI.extractionItemAutotag(itemId);
-            if (action === 'approve') await questionsAPI.extractionItemApprove(itemId);
-            if (action === 'reject') await questionsAPI.extractionItemReject(itemId, { review_note: 'Rejected during admin review' });
-            if (action === 'publish') await questionsAPI.extractionItemPublish(itemId);
+            let res: any = null;
+            if (action === 'autotag') res = await questionsAPI.extractionItemAutotag(itemId);
+            if (action === 'approve') res = await questionsAPI.extractionItemApprove(itemId);
+            if (action === 'reject') res = await questionsAPI.extractionItemReject(itemId, { review_note: 'Rejected during admin review' });
+            if (action === 'publish') res = await questionsAPI.extractionItemPublish(itemId);
+            const questionId = res?.data?.question_id;
+            setExtractionMessage({
+                type: 'ok',
+                text: action === 'publish'
+                    ? (questionId ? `Item #${itemId} published as Q#${questionId}.` : `Item #${itemId} published.`)
+                    : `Item #${itemId}: ${action === 'autotag' ? 'auto-tagged' : action === 'approve' ? 'approved' : 'rejected'}.`,
+            });
             if (selectedExtractionJobId) fetchExtractionItems(selectedExtractionJobId);
             if (action === 'publish') fetchQuestions();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            const label = action === 'autotag' ? 'Auto-tag' : action === 'approve' ? 'Approve' : action === 'reject' ? 'Reject' : 'Publish';
+            extractionError(err, `${label} of item #${itemId}`);
         }
     };
 
@@ -1982,14 +2066,15 @@ export default function AdminDashboardPage() {
         );
     }
 
+    // Every count uses the same en-IN thousands separators.
     const stats = [
-        { label: 'Total Users', value: data?.total_users || 0, icon: Users, color: 'text-blue-500' },
-        { label: 'Active Today', value: data?.active_today || 0, icon: TrendingUp, color: 'text-green-500' },
-        { label: 'Total Questions', value: data?.total_questions || 0, icon: BookOpen, color: 'text-purple-500' },
-        { label: 'Tests Taken', value: data?.total_tests_taken || 0, icon: FileText, color: 'text-cyan-500' },
-        { label: 'With Answers', value: `${data?.questions_with_answer?.toLocaleString() || 0} / ${data?.total_questions?.toLocaleString() || 0}`, icon: CheckCircle, color: 'text-emerald-500' },
-        { label: 'With Explanations', value: data?.questions_with_explanation || 0, icon: CheckCircle, color: 'text-teal-500' },
-        { label: 'Unresolved Feedback', value: data?.unresolved_feedback || 0, icon: AlertTriangle, color: data?.unresolved_feedback ? 'text-amber-500' : 'text-slate-400' },
+        { label: 'Total Users', value: formatCount(data?.total_users), icon: Users, color: 'text-blue-500' },
+        { label: 'Active Today', value: formatCount(data?.active_today), icon: TrendingUp, color: 'text-green-500' },
+        { label: 'Total Questions', value: formatCount(data?.total_questions), icon: BookOpen, color: 'text-purple-500' },
+        { label: 'Tests Taken', value: formatCount(data?.total_tests_taken), icon: FileText, color: 'text-cyan-500' },
+        { label: 'With Answers', value: `${formatCount(data?.questions_with_answer)} / ${formatCount(data?.total_questions)}`, icon: CheckCircle, color: 'text-emerald-500' },
+        { label: 'With Explanations', value: formatCount(data?.questions_with_explanation), icon: CheckCircle, color: 'text-teal-500' },
+        { label: 'Unresolved Feedback', value: formatCount(data?.unresolved_feedback), icon: AlertTriangle, color: data?.unresolved_feedback ? 'text-amber-500' : 'text-slate-400' },
     ];
 
     return (
@@ -2038,7 +2123,7 @@ export default function AdminDashboardPage() {
                         <Card>
                             <CardContent className="p-4">
                                 <p className="text-xs text-muted-foreground">Pending Feedback</p>
-                                <p className="text-2xl font-bold">{data?.unresolved_feedback || 0}</p>
+                                <p className="text-2xl font-bold">{formatCount(data?.unresolved_feedback)}</p>
                             </CardContent>
                         </Card>
                     </div>
@@ -2071,24 +2156,26 @@ export default function AdminDashboardPage() {
                                 <div>
                                     <div className="flex justify-between text-sm mb-1">
                                         <span>Questions with correct answers</span>
-                                        <span className="font-medium">{data?.questions_with_answer}/{data?.total_questions}</span>
+                                        <span className="font-medium">{formatCount(data?.questions_with_answer)}/{formatCount(data?.total_questions)}</span>
                                     </div>
+                                    {/* The dashboard API has no answer_percentage field (the
+                                        bar always rendered empty): compute it like the sibling bar. */}
                                     <div className="w-full bg-muted rounded-full h-2.5">
                                         <div
                                             className="bg-emerald-500 h-2.5 rounded-full transition-all"
-                                            style={{ width: `${data?.answer_percentage || 0}%` }}
+                                            style={{ width: `${percentOf(data?.questions_with_answer, data?.total_questions)}%` }}
                                         />
                                     </div>
                                 </div>
                                 <div>
                                     <div className="flex justify-between text-sm mb-1">
                                         <span>Questions with explanations</span>
-                                        <span className="font-medium">{data?.questions_with_explanation}/{data?.total_questions}</span>
+                                        <span className="font-medium">{formatCount(data?.questions_with_explanation)}/{formatCount(data?.total_questions)}</span>
                                     </div>
                                     <div className="w-full bg-muted rounded-full h-2.5">
                                         <div
                                             className="bg-teal-500 h-2.5 rounded-full transition-all"
-                                            style={{ width: `${data?.total_questions ? (data.questions_with_explanation / data.total_questions * 100) : 0}%` }}
+                                            style={{ width: `${percentOf(data?.questions_with_explanation, data?.total_questions)}%` }}
                                         />
                                     </div>
                                 </div>
@@ -2572,10 +2659,12 @@ export default function AdminDashboardPage() {
                                             className="h-10 rounded-md border bg-background px-3 text-sm"
                                             value={createForm.topic}
                                             onChange={(e) => setCreateForm({ ...createForm, topic: e.target.value })}
+                                            onFocus={() => ensureTopics(createForm.subject)}
+                                            onMouseDown={() => ensureTopics(createForm.subject)}
                                             disabled={!createForm.subject}
                                         >
                                             <option value="">
-                                                {!createForm.subject ? 'Optional topic (pick a subject first)' : topicsLoading(createForm.subject) ? 'Loading topics…' : 'Optional topic'}
+                                                {!createForm.subject ? 'Optional topic (pick a subject first)' : topicsPlaceholder(createForm.subject, 'Optional topic')}
                                             </option>
                                             {topicsFor(createForm.subject).map((t: any) => (
                                                 <option key={t.id} value={t.id}>{t.name}</option>
@@ -2688,8 +2777,28 @@ export default function AdminDashboardPage() {
                                     </details>
 
                                     <details className="rounded-lg border p-3 mb-4 bg-muted/20">
-                                        <summary className="cursor-pointer text-sm font-medium">PYQ Extraction Queue (Word/PDF)</summary>
+                                        <summary className="cursor-pointer text-sm font-medium">PYQ Extraction Queue (Word/PDF, manual entry)</summary>
                                         <div className="space-y-3 mt-3">
+                                        {/* Nothing parses files queued here (each upload gets one
+                                            placeholder item), so point admins to the pipeline that does. */}
+                                        <div className="text-xs text-amber-700 dark:text-amber-300 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 p-2 space-y-1">
+                                            <p>
+                                                Files queued here are stored but not parsed: each upload gets one placeholder item that you fill in, approve and publish by hand.
+                                                To import Word/PDF question papers automatically, use the{' '}
+                                                <Link href="/admin/import-center" className="font-semibold underline underline-offset-2">Admin Import Center</Link>.
+                                            </p>
+                                            <p>Publishing needs an approved item with all four options and a correct answer (A-D).</p>
+                                        </div>
+                                        {extractionMessage && (
+                                            <p
+                                                role={extractionMessage.type === 'err' ? 'alert' : 'status'}
+                                                className={`text-xs rounded-md border p-2 ${extractionMessage.type === 'err'
+                                                    ? 'border-destructive/40 bg-destructive/5 text-destructive'
+                                                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}
+                                            >
+                                                {extractionMessage.text}
+                                            </p>
+                                        )}
                                         <div className="flex gap-2 flex-wrap items-center">
                                             <Input
                                                 type="file"
@@ -2768,8 +2877,8 @@ export default function AdminDashboardPage() {
                                                                                     <option key={s.id} value={s.id}>{s.name}</option>
                                                                                 ))}
                                                                             </select>
-                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.topic || '')} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, topic: Number(e.target.value) || null })} disabled={!editingExtractionItem.subject}>
-                                                                                <option value="">{topicsLoading(editingExtractionItem.subject) ? 'Loading topics…' : 'Topic'}</option>
+                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.topic || '')} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, topic: Number(e.target.value) || null })} onFocus={() => ensureTopics(editingExtractionItem.subject)} onMouseDown={() => ensureTopics(editingExtractionItem.subject)} disabled={!editingExtractionItem.subject}>
+                                                                                <option value="">{topicsPlaceholder(editingExtractionItem.subject, 'Topic')}</option>
                                                                                 {topicsFor(editingExtractionItem.subject).map((t: any) => (
                                                                                     <option key={t.id} value={t.id}>{t.name}</option>
                                                                                 ))}
@@ -2808,9 +2917,9 @@ export default function AdminDashboardPage() {
                                         <summary className="cursor-pointer text-sm font-medium">AI Prompt Editor and Version History</summary>
                                         <div className="space-y-3 mt-3">
                                         <p className="text-xs text-amber-700 dark:text-amber-300 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 p-2">
-                                            Note: saved prompt versions are stored for the record only. AI generation
-                                            (Regenerate AI, AI Explain) does not use this prompt text yet; the active
-                                            version is only shown as a label in the AI Timeline.
+                                            Note: Regenerate AI uses the active prompt version as its leading instruction.
+                                            AI Explain does not use it yet (it has its own fixed prompt). AI Timeline entries
+                                            show the prompt version recorded with each run.
                                         </p>
                                         <div className="grid md:grid-cols-2 gap-2">
                                             <Input
@@ -3043,10 +3152,12 @@ export default function AdminDashboardPage() {
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 value={bulkMetaTopic}
                                                 onChange={(e) => setBulkMetaTopic(e.target.value)}
+                                                onFocus={() => ensureTopics(bulkMetaSubject)}
+                                                onMouseDown={() => ensureTopics(bulkMetaSubject)}
                                                 disabled={!bulkMetaSubject}
                                             >
                                                 <option value="">
-                                                    {!bulkMetaSubject ? 'No topic change (pick a subject to set one)' : topicsLoading(bulkMetaSubject) ? 'Loading topics…' : 'No topic change'}
+                                                    {!bulkMetaSubject ? 'No topic change (pick a subject to set one)' : topicsPlaceholder(bulkMetaSubject, 'No topic change')}
                                                 </option>
                                                 {topicsFor(bulkMetaSubject).map((t: any) => (
                                                     <option key={t.id} value={t.id}>{t.name}</option>
@@ -3209,8 +3320,10 @@ export default function AdminDashboardPage() {
                                                                         className="h-10 rounded-md border bg-background px-3 text-sm"
                                                                         value={editingForm.topic}
                                                                         onChange={(e) => setEditingForm({ ...editingForm, topic: e.target.value })}
+                                                                        onFocus={() => ensureTopics(editingForm.subject)}
+                                                                        onMouseDown={() => ensureTopics(editingForm.subject)}
                                                                     >
-                                                                        <option value="">{topicsLoading(editingForm.subject) ? 'Loading topics…' : 'Optional topic'}</option>
+                                                                        <option value="">{topicsPlaceholder(editingForm.subject, 'Optional topic')}</option>
                                                                         {topicsFor(editingForm.subject).map((t: any) => (
                                                                             <option key={t.id} value={t.id}>{t.name}</option>
                                                                         ))}
@@ -3532,20 +3645,49 @@ export default function AdminDashboardPage() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Published and Draft Tests</CardTitle>
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <CardTitle>Published and Draft Tests</CardTitle>
+                                            <CardDescription>
+                                                {adminTestsScope === 'library'
+                                                    ? 'The official library students can take (published, created by an admin or importer).'
+                                                    : adminTestsScope === 'drafts'
+                                                        ? 'Your unpublished tests, such as manual drafts. Publish one to add it to the library.'
+                                                        : 'Every test, including the practice tests students generate for themselves.'}
+                                            </CardDescription>
+                                        </div>
+                                        <select
+                                            aria-label="Which tests to list"
+                                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                                            value={adminTestsScope}
+                                            onChange={(e) => changeAdminTestsScope(e.target.value as AdminTestScope)}
+                                        >
+                                            <option value="library">Library (published)</option>
+                                            <option value="drafts">My drafts (unpublished)</option>
+                                            <option value="all">All tests (incl. student practice)</option>
+                                        </select>
+                                    </div>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="space-y-2">
+                                    {adminTestsError && (
+                                        <p role="alert" className="text-sm rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive">{adminTestsError}</p>
+                                    )}
                                     {adminTestsLoading ? (
                                         <p className="text-sm text-muted-foreground">Loading tests...</p>
                                     ) : adminTests.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">No tests found.</p>
+                                        adminTestsError ? null : <p className="text-sm text-muted-foreground">No tests found.</p>
                                     ) : (
                                         <div className="space-y-2">
+                                            <p className="text-xs text-muted-foreground">
+                                                Showing {formatCount(adminTests.length)} of {formatCount(Math.max(adminTestsTotal, adminTests.length))}
+                                            </p>
                                             {adminTests.map((t: any) => (
-                                                <div key={t.id} className="rounded-md border p-3 flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-sm font-medium">#{t.id} {t.title}</p>
-                                                        <p className="text-xs text-muted-foreground">{t.test_type} • Qs: {t.num_questions} • v{t.version || 1}</p>
+                                                <div key={t.id} className="rounded-md border p-3 flex flex-wrap items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium wrap-break-word">#{t.id} {t.title}</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {t.test_type} • Qs: {t.num_questions} • v{t.version || 1} • {t.is_published ? 'Published' : 'Unpublished'}
+                                                        </p>
                                                     </div>
                                                     <div className="flex gap-2">
                                                         {t.is_published ? (
@@ -3557,6 +3699,18 @@ export default function AdminDashboardPage() {
                                                     </div>
                                                 </div>
                                             ))}
+                                            {adminTestsNextPage !== null && (
+                                                <div className="flex justify-center pt-1">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => fetchAdminTests(adminTestsNextPage)}
+                                                        disabled={adminTestsLoadingMore}
+                                                    >
+                                                        {adminTestsLoadingMore ? 'Loading…' : 'Load more'}
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </CardContent>
@@ -3599,7 +3753,19 @@ export default function AdminDashboardPage() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Chunk Explorer and Governance</CardTitle>
+                                    {/* The chunk endpoints report affects_ai_tutor=false: this
+                                        table is curation only, the AI tutor retrieves from the
+                                        RAG store and knowledge base. */}
+                                    <CardTitle className="flex flex-wrap items-center gap-2">
+                                        Chunk Explorer and Governance
+                                        {chunkDiagnostics?.affects_ai_tutor !== true && (
+                                            <Badge variant="outline" className="text-[10px] font-medium">Curation only — not used by the AI tutor</Badge>
+                                        )}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {chunkDiagnostics?.note
+                                            || 'Approving, rejecting, merging or deleting chunks here does not change what the AI tutor retrieves.'}
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="flex gap-2 flex-wrap">
@@ -3829,31 +3995,67 @@ export default function AdminDashboardPage() {
 
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-2">
                                         <CardTitle>Campaign Delivery Status</CardTitle>
                                         <Button size="sm" variant="outline" onClick={fetchCampaigns} disabled={campaignsLoading}>{campaignsLoading ? 'Loading...' : 'Refresh'}</Button>
                                     </div>
+                                    <CardDescription>
+                                        Delivery is in-app only: a published campaign appears in the student dashboard feed and
+                                        notification bell. Nothing is emailed or pushed. Lists drafts, scheduled and inactive campaigns too.
+                                    </CardDescription>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="space-y-2">
+                                    {campaignMessage && (
+                                        <p
+                                            role={campaignMessage.type === 'err' ? 'alert' : 'status'}
+                                            className={`text-xs rounded-md border p-2 ${campaignMessage.type === 'err'
+                                                ? 'border-destructive/40 bg-destructive/5 text-destructive'
+                                                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}
+                                        >
+                                            {campaignMessage.text}
+                                        </p>
+                                    )}
                                     {campaigns.length === 0 ? (
                                         <p className="text-sm text-muted-foreground">No campaigns found.</p>
                                     ) : (
                                         <div className="space-y-2 max-h-115 overflow-auto">
-                                            {campaigns.map((row: any) => (
-                                                <div key={row.id} className="rounded-md border p-3 bg-background text-sm">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <p className="font-medium">{row.title}</p>
-                                                        <Badge variant="outline">{row.delivery_status || 'draft'}</Badge>
+                                            {campaigns.map((row: any) => {
+                                                const isSent = row.delivery_status === 'sent';
+                                                const isInactive = row.is_active === false;
+                                                const isLive = isSent && !isInactive;
+                                                return (
+                                                    <div key={row.id} className="rounded-md border p-3 bg-background text-sm">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <p className="font-medium min-w-0 wrap-break-word">{row.title}</p>
+                                                            <div className="flex shrink-0 gap-1">
+                                                                {isInactive && <Badge variant="outline" className="text-muted-foreground">inactive</Badge>}
+                                                                <Badge variant="outline">{row.delivery_status || 'draft'}</Badge>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{row.message}</p>
+                                                        <p className="text-xs mt-1">
+                                                            {isSent
+                                                                ? `Audience: ${formatCount(row.delivery_count)} (in-app)`
+                                                                : row.delivery_status === 'scheduled' && row.scheduled_for
+                                                                    ? `Scheduled for ${new Date(row.scheduled_for).toLocaleString()}`
+                                                                    : 'Not published yet'}
+                                                            {row.failure_report ? ` • Failure: ${row.failure_report}` : ''}
+                                                        </p>
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {!isLive && (
+                                                                <Button size="sm" variant="outline" onClick={() => handleSendCampaignNow(Number(row.id))}>
+                                                                    {isSent ? 'Publish again (in-app)' : 'Publish now (in-app)'}
+                                                                </Button>
+                                                            )}
+                                                            {!isInactive && row.delivery_status !== 'draft' && row.delivery_status !== 'sending' && (
+                                                                <Button size="sm" variant="outline" onClick={() => handleDeactivateCampaign(Number(row.id))}>
+                                                                    Deactivate
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{row.message}</p>
-                                                    <p className="text-xs mt-1">Sent: {row.delivery_count || 0} {row.failure_report ? `• Failure: ${row.failure_report}` : ''}</p>
-                                                    <div className="mt-2">
-                                                        <Button size="sm" variant="outline" onClick={() => handleSendCampaignNow(Number(row.id))}>
-                                                            Send Now
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </CardContent>
