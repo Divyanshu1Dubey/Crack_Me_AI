@@ -21,11 +21,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - `docs/KNOWN_GAPS.md` — verification status (now 100% verified).
    - `docs/audit/FINAL_REPORT.md` — final consolidation summary.
 
-4. **Persistent memory**: `C:\Users\DIVYANSHU\.claude\projects\C--Users-DIVYANSHU-Desktop-crack-cms\memory\crackcms-master-knowledge.md` — full verified codebase knowledge, including every model field, AI provider config, middleware order, DRF throttling rates, and convention patterns. **Read this for fast context loading** at the start of any session.
+4. **Persistent memory**: the index at `C:\Users\DIVYANSHU\.claude\projects\C--Users-DIVYANSHU-Desktop-crack-cms\memory\MEMORY.md` (the previously referenced `crackcms-master-knowledge.md` does not exist).
+5. **Latest audit**: `docs/audit/OVERNIGHT_MISSION_FINAL_REPORT.md` (2026-11) — what was verified, fixed and still open; `docs/LOCAL_DEVELOPMENT.md` — running the whole stack locally on the restored backup.
 
 Only after reading the relevant documentation should you open individual source files. This prevents redundant exploration and keeps edits consistent with the documented architecture. The **`docs/`** directory is the **single source of truth** for architectural facts about this repository. Do not create parallel directories like `.docs/` — they will be deleted during the next consolidation pass.
 
-✅ **Verification status**: All documentation has been **verified by reading actual source code** (see `docs/audit/FINAL_REPORT.md`). The 12 most critical corrections (Cerebras model = `gemma-4-31b`, RAG hardcoded disabled in production, AI rotation has 9 providers not 11, DRF throttling is configured, RateLimitMiddleware exists, mobile is Capacitor wrapper, etc.) have been applied. Treat the docs as authoritative.
+⚠️ **Verification status (2026-11-01)**: the 2026-11 audit re-read the code and found several statements in older docs wrong — e.g. RAG is **enabled** by default (only `DISABLE_RAG` / `DISABLE_RAG_IN_PRODUCTION` turn it off; there is no DEBUG gate), the AI rotation has **10 entries** (no DeepSeek or Ollama), and there is no "PDFs > 50 MB are skipped" guard. Where docs and code disagree, trust the code and `docs/audit/OVERNIGHT_MISSION_FINAL_REPORT.md`.
 
 ## Project Overview
 
@@ -34,7 +35,7 @@ Only after reading the relevant documentation should you open individual source 
 - **Frontend**: Next.js 16 + React 19 + TypeScript + Tailwind 4 + Radix UI
 - **Backend**: Django 5 + DRF + SimpleJWT
 - **Database**: SQLite3 (with Postgres-ready config via `dj-database-url`)
-- **AI**: 11-provider round-robin with RAG over TF-IDF SQLite store
+- **AI**: 10-entry provider rotation (`AIService._call_ai`) with RAG over the SQLite chunk store (whole-store BM25, `ai_engine/lexical_index.py`); `AI_OFFLINE_MODE=1` answers extractively with no external call
 - **Auth**: Custom JWT + Supabase (hybrid); django-axes brute-force protection
 - **Deployment**: Render (backend) + Vercel (frontend); GitHub Actions CI
 - **Live**: `cracklabs.app` ↔ `api.cracklabs.app/api/`
@@ -53,10 +54,13 @@ python manage.py runserver 8000
 python manage.py createsuperuser
 ```
 
-Tests / checks:
+Tests / checks (the test runner blanks every external-service secret and refuses a remote
+DATABASE_URL — see the "Hermetic test runs" block in settings.py; from PowerShell, never set
+`$env:X=''`, which deletes the variable and lets backend/.env load it):
 ```bash
 cd backend
-python manage.py test --verbosity=2              # Django test runner
+DATABASE_URL= SUPABASE_DATABASE_URL= DEBUG=True python manage.py test --parallel 1   # Django test runner (bash)
+python -m ai_eval.rag_benchmark --out ../docs/audit/rag   # RAG retrieval benchmark (needs a DB with the question bank)
 python manage.py check --deploy                  # Production checks
 python manage.py makemigrations --check --dry-run # Detect missing migrations
 python test_all.py                               # Comprehensive suite (DB, fixtures, AI keys, endpoints, auth)
@@ -65,7 +69,7 @@ python test_all.py --endpoints-only
 python test_all.py --auth-only
 python test_api_keys.py                          # Verify all AI provider keys
 python validate_questions.py                     # Question-bank QA
-python _train_all.py                             # Rebuild RAG index from Medura_Train/
+python manage.py train_ai                         # Index Medura_Train/ into the RAG store (_train_all.py no longer exists)
 python _export_fixture.py                        # DB → questions_fixture.json
 python _review_and_fix_answers.py export --year 2018
 ```
@@ -120,15 +124,15 @@ backend/
   video_engine/     edge-tts + moviepy slide video generation
   jobs/             Background job model + endpoints
   chroma_db/        rag_store.sqlite3 (TF-IDF chunks, NOT chromadb in name only)
-  Medura_Train/     Drop textbooks/PYQ/web_knowledge here, then run _train_all.py
+  Medura_Train/     Drop textbooks/PYQ/web_knowledge here, then run manage.py train_ai
   scripts/, *.py    Ad-hoc loader scripts, fixtures, validators
 ```
 
 ### Key Architectural Patterns
 
-1. **AI Provider Round-Robin** — `ai_engine/services.py` rotates across Groq → Cerebras → Gemini (2 models) → Cohere → OpenRouter ×2 → GitHub Models → HuggingFace → Mistral → NVIDIA Mistral → DeepSeek (paid, LAST) → Ollama (local fallback). Thread-safe counter with `threading.Lock`. 120 s deadline, 15–20 s per provider. Falls through on any error/timeout. **Never surface provider-error strings to users** — `_PROVIDER_ERROR_PHRASES` are filtered.
+1. **AI provider rotation** — `AIService._call_ai` (`ai_engine/services.py`) rotates over 10 entries: OmniRoute, Groq, Cerebras, Gemini (2 models), Cohere, OpenRouter, GitHub Models, HuggingFace, Mistral, OpenRouter2 (NVIDIA Mistral is initialised but not rotated; DeepSeek and Ollama are not implemented). A global counter picks the starting provider. When every provider fails it raises `AIUnavailable` (it used to return an outage sentence that views charged for and even saved as explanations); views refund tokens/free slots and answer with an offline extract or HTTP 503 `{code: 'ai_unavailable'}`. `AI_OFFLINE_MODE=1` = no external LLM call anywhere. **Never surface or persist provider-error strings.**
 
-2. **RAG Pipeline** — `ai_engine/rag_pipeline.py` ingests PDFs/MD/TXT from `Medura_Train/{textbooks,PYQ,web_knowledge}/`, chunks (~200–500 tokens), stores in `chroma_db/rag_store.sqlite3` with TF-IDF + IDF cache. Query → cosine similarity → top-K chunks → context injection. Disable via `DISABLE_RAG=1` env var for memory-constrained hosts. PDFs >50 MB are auto-skipped — use `.md` summaries.
+2. **RAG Pipeline** — `ai_engine/rag_pipeline.py` ingests PDFs/MD/TXT from `Medura_Train/{textbooks,PYQ,web_knowledge}/` into `chroma_db/rag_store.sqlite3`. Retrieval is BM25 over the **whole** store from an in-memory index (`ai_engine/lexical_index.py`: Greek/diacritic folding, one indexing pass per source file, personal/admin documents excluded, raw question papers only on request); constructing the pipeline is read-only. Benchmark and methodology: `docs/audit/RAG_BENCHMARK.md` (`python -m ai_eval.rag_benchmark`). RAG is on by default; `DISABLE_RAG=1` / `DISABLE_RAG_IN_PRODUCTION=1` turn it off. There is no automatic size limit on PDFs.
 
 3. **Fixture-First Question Management** — `backend/questions_fixture.json` is the production source of truth (loaded by `build.sh` on Render). DB edits via Django admin / REST API / `_review_and_fix_answers.py` CSV workflow → run `_export_fixture.py` → commit JSON → push.
 
