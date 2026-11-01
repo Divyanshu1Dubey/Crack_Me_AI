@@ -6,6 +6,8 @@
  * dashboard.
  */
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
 
 interface Row {
@@ -14,10 +16,23 @@ interface Row {
 }
 
 export default function SearchAnalyticsPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  // Client-side admin gate, same as the other admin pages.
+  const isAdmin = !!user && (user.role === "admin" || user.is_admin);
   const [d, setD] = useState<Row | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login?next=" + encodeURIComponent("/admin/recall/search-analytics"));
+      return;
+    }
+    if (!isAdmin) {
+      router.replace("/dashboard");
+      return;
+    }
     let alive = true;
     (async () => {
       try {
@@ -28,8 +43,10 @@ export default function SearchAnalyticsPage() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [authLoading, user, isAdmin, router]);
 
+  if (authLoading || !user) return <p className="p-6 text-slate-400">Checking admin access…</p>;
+  if (!isAdmin) return null;
   if (err) return <p className="p-6 text-rose-300">{err}</p>;
   if (!d) return <p className="p-6 text-slate-400">Loading…</p>;
 

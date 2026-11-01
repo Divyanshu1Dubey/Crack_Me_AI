@@ -1,12 +1,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI, authAPI, questionsAPI, testsAPI, textbooksAPI, extractApiErrorMessage } from '@/lib/api';
 import { blogAPI } from '@/lib/blogAPI';
+import {
+    PLATFORM_WIDE_CONFIRM_PHRASE,
+    SIMILAR_ENDPOINT_LIMIT,
+    curatedRelatedIds,
+    hasNextPage,
+    isPlatformWideConfirmed,
+    isValidAnswerLetter,
+    listCount,
+    listRows,
+    parseRelatedIds,
+    questionSearchParams,
+    sameIdSet,
+} from './_lib/adminHelpers';
+import { fetchAllSubjects, useSubjectTopics } from './_lib/useAdminTaxonomy';
 import {
     Users, BookOpen, FileText, AlertTriangle, TrendingUp,
     CheckCircle, Clock, Shield, Megaphone, Plus, Trash2,
@@ -70,6 +84,7 @@ type AdminTabKey =
     | 'tests'
     | 'textbooks'
     | 'analytics'
+    | 'weak_areas'
     | 'moderation'
     | 'broadcast'
     | 'security'
@@ -79,6 +94,34 @@ type AdminTabKey =
     | 'jobs'
     | 'blogs'
     | 'notes';
+
+interface QuestionFilterValues {
+    search: string;
+    subject: string;
+    difficulty: string;
+    year: string;
+    accuracyMin: string;
+    accuracyMax: string;
+    verified: string;
+    flagged: string;
+}
+
+const EMPTY_QUESTION_FILTERS: QuestionFilterValues = {
+    search: '',
+    subject: '',
+    difficulty: '',
+    year: '',
+    accuracyMin: '',
+    accuracyMax: '',
+    verified: 'all',
+    flagged: 'all',
+};
+
+const SYSTEM_ACTION_LABELS: Record<'resetAttempts' | 'clearAnalytics' | 'rerunEvaluation', string> = {
+    resetAttempts: 'Reset test attempts (deletes attempts and their question responses)',
+    clearAnalytics: 'Clear analytics (deletes topic stats, daily activity and badges, resets streaks and XP)',
+    rerunEvaluation: 'Re-run evaluation (deletes and rebuilds topic performance from responses)',
+};
 
 export default function AdminDashboardPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -91,8 +134,6 @@ export default function AdminDashboardPage() {
     const [form, setForm] = useState({ title: '', message: '', priority: 'normal', expires_at: '' });
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<AdminTabKey>('overview');
-    const [adminSearch, setAdminSearch] = useState('');
-    const [adminFilter, setAdminFilter] = useState('all');
     // Users & token management
     const [userList, setUserList] = useState<any[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
@@ -113,17 +154,23 @@ export default function AdminDashboardPage() {
     const [deviceModalList, setDeviceModalList] = useState<any[]>([]);
     const [subModalOpen, setSubModalOpen] = useState(false);
     const [subModalUserId, setSubModalUserId] = useState<number | null>(null);
-    const [systemScope, setSystemScope] = useState<'all' | 'user'>('all');
+    // Single-user scope is the safe default; platform-wide (scope=all) runs
+    // also need the typed PLATFORM_WIDE_CONFIRM_PHRASE.
+    const [systemScope, setSystemScope] = useState<'all' | 'user'>('user');
     const [systemUserId, setSystemUserId] = useState('');
+    const [systemConfirmText, setSystemConfirmText] = useState('');
     const [systemActionLoading, setSystemActionLoading] = useState(false);
     // Feedback queue
     const [feedbackList, setFeedbackList] = useState<any[]>([]);
     const [feedbackLoading, setFeedbackLoading] = useState(false);
+    const [feedbackTotal, setFeedbackTotal] = useState(0);
+    const [feedbackNextPage, setFeedbackNextPage] = useState<number | null>(null);
     // Question bank control
     const [questionList, setQuestionList] = useState<any[]>([]);
     const [questionsLoading, setQuestionsLoading] = useState(false);
     const [questionSubjects, setQuestionSubjects] = useState<any[]>([]);
-    const [questionTopics, setQuestionTopics] = useState<any[]>([]);
+    const { ensureTopics, topicsFor, topicsLoading } = useSubjectTopics();
+    const [questionActionMessage, setQuestionActionMessage] = useState('');
     const [questionPage, setQuestionPage] = useState(1);
     const [questionTotal, setQuestionTotal] = useState(0);
     const [questionHasNext, setQuestionHasNext] = useState(false);
@@ -162,6 +209,14 @@ export default function AdminDashboardPage() {
         related_question_ids: '',
     });
     const [savingEdit, setSavingEdit] = useState(false);
+    // Related-PYQ links are only rewritten when the admin actually changes the
+    // field (linkRelatedPyqs replaces the whole similar_questions set, in
+    // both directions). `editingRelatedInitial` is what the field started as.
+    const [editingRelatedInitial, setEditingRelatedInitial] = useState('');
+    const [relatedIdsLoadingFor, setRelatedIdsLoadingFor] = useState<number | null>(null);
+    const [relatedIdsLocked, setRelatedIdsLocked] = useState(false);
+    const editingQuestionIdRef = useRef<number | null>(null);
+    editingQuestionIdRef.current = editingQuestionId;
     const [createForm, setCreateForm] = useState({
         question_text: '',
         option_a: '',
@@ -268,6 +323,8 @@ export default function AdminDashboardPage() {
     const [blogCategoryFilter, setBlogCategoryFilter] = useState('');
     const [blogPage, setBlogPage] = useState(1);
     const [blogTotal, setBlogTotal] = useState(0);
+    const [blogHasNext, setBlogHasNext] = useState(false);
+    const [blogMessage, setBlogMessage] = useState('');
     const [blogShowForm, setBlogShowForm] = useState(false);
     const [blogEditingId, setBlogEditingId] = useState<number | null>(null);
     const [blogSaving, setBlogSaving] = useState(false);
@@ -356,13 +413,17 @@ export default function AdminDashboardPage() {
         } catch { /* ignore */ }
     };
 
-    const fetchUsers = () => {
+    // `overrides` lets Reset refetch with the cleared filters immediately
+    // (the state setters have not re-rendered yet when it runs).
+    const fetchUsers = (overrides?: { search?: string; role?: string; status?: string }) => {
         setUsersLoading(true);
         const params: Record<string, string | number> = { limit: 300 };
-        const effectiveSearch = userSearchTerm || adminSearch;
+        const effectiveSearch = overrides?.search ?? userSearchTerm;
+        const role = overrides?.role ?? userRoleFilter;
+        const statusFilter = overrides?.status ?? userStatusFilter;
         if (effectiveSearch.trim()) params.q = effectiveSearch.trim();
-        if (userRoleFilter !== 'all') params.role = userRoleFilter;
-        if (userStatusFilter !== 'all') params.status = userStatusFilter;
+        if (role !== 'all') params.role = role;
+        if (statusFilter !== 'all') params.status = statusFilter;
 
         authAPI.adminListUsers(params)
             .then(res => setUserList(Array.isArray(res.data) ? res.data : res.data?.results || res.data?.users || []))
@@ -374,42 +435,57 @@ export default function AdminDashboardPage() {
             .finally(() => setUsersLoading(false));
     };
 
-    const fetchFeedback = () => {
+    // Feedback is paginated (20 per page): page 1 replaces the list, later
+    // pages are appended by "Load more".
+    const fetchFeedback = (page = 1) => {
         setFeedbackLoading(true);
-        questionsAPI.getFeedback()
-            .then(res => setFeedbackList(Array.isArray(res.data) ? res.data : res.data?.results || []))
+        questionsAPI.getFeedback({ page: String(page) })
+            .then(res => {
+                const rows = listRows<any>(res.data);
+                setFeedbackList(prev => (page === 1 ? rows : [...prev, ...rows]));
+                setFeedbackTotal(listCount(res.data));
+                setFeedbackNextPage(hasNextPage(res.data) ? page + 1 : null);
+            })
             .catch(() => {})
             .finally(() => setFeedbackLoading(false));
     };
 
+    // Every subject (all pages). Topics are loaded per subject on demand
+    // through useSubjectTopics(), so pickers see the full taxonomy.
     const fetchQuestionSubjects = () => {
-        Promise.all([
-            questionsAPI.getSubjects().catch(() => ({ data: [] })),
-            questionsAPI.getTopics().catch(() => ({ data: [] })),
-        ])
-            .then(([subjectRes, topicRes]) => {
-                setQuestionSubjects(Array.isArray(subjectRes.data) ? subjectRes.data : subjectRes.data?.results || []);
-                setQuestionTopics(Array.isArray(topicRes.data) ? topicRes.data : topicRes.data?.results || []);
-            })
+        fetchAllSubjects()
+            .then((rows) => setQuestionSubjects(rows))
             .catch(() => {});
     };
 
-    const fetchQuestions = (pageOverride?: number) => {
+    const currentQuestionFilters = (): QuestionFilterValues => ({
+        search: questionSearch,
+        subject: questionSubject,
+        difficulty: questionDifficulty,
+        year: questionYear,
+        accuracyMin: questionAccuracyMin,
+        accuracyMax: questionAccuracyMax,
+        verified: questionVerified,
+        flagged: questionFlagged,
+    });
+
+    // `filterOverride` lets Reset refetch with the cleared filters immediately
+    // (the state setters have not re-rendered yet when it runs).
+    const fetchQuestions = (pageOverride?: number, filterOverride?: QuestionFilterValues) => {
         setQuestionsLoading(true);
         const pageToLoad = pageOverride ?? questionPage;
-        const params: Record<string, string | number> = { page: pageToLoad };
-        const effectiveSearch = questionSearch.trim();
-        if (effectiveSearch.trim()) params.search = effectiveSearch.trim();
-        if (/^\d+$/.test(effectiveSearch)) params.question_id = Number(effectiveSearch);
-        if (questionSubject) params.subject = Number(questionSubject);
-        if (questionDifficulty) params.difficulty = questionDifficulty;
-        if (questionYear) params.year = Number(questionYear);
-        if (questionAccuracyMin) params.accuracy_min = Number(questionAccuracyMin);
-        if (questionAccuracyMax) params.accuracy_max = Number(questionAccuracyMax);
-        if (questionVerified === 'verified') params.is_verified_by_admin = 'true';
-        if (questionVerified === 'unverified') params.is_verified_by_admin = 'false';
-        if (questionFlagged === 'flagged') params.flagged = 'true';
-        if (questionFlagged === 'clean') params.flagged = 'false';
+        const filters = filterOverride ?? currentQuestionFilters();
+        // A numeric search is an id lookup and is sent as question_id only.
+        const params: Record<string, string | number> = { page: pageToLoad, ...questionSearchParams(filters.search) };
+        if (filters.subject) params.subject = Number(filters.subject);
+        if (filters.difficulty) params.difficulty = filters.difficulty;
+        if (filters.year) params.year = Number(filters.year);
+        if (filters.accuracyMin) params.accuracy_min = Number(filters.accuracyMin);
+        if (filters.accuracyMax) params.accuracy_max = Number(filters.accuracyMax);
+        if (filters.verified === 'verified') params.is_verified_by_admin = 'true';
+        if (filters.verified === 'unverified') params.is_verified_by_admin = 'false';
+        if (filters.flagged === 'flagged') params.flagged = 'true';
+        if (filters.flagged === 'clean') params.flagged = 'false';
 
         questionsAPI.list(params)
             .then((res) => {
@@ -444,7 +520,7 @@ export default function AdminDashboardPage() {
         }
         setActiveTab(tab);
         if (tab === 'users' && userList.length === 0) fetchUsers();
-        if (tab === 'feedback' && feedbackList.length === 0) fetchFeedback();
+        if (tab === 'feedback' && feedbackList.length === 0) fetchFeedback(1);
         if (tab === 'questions') {
             if (questionSubjects.length === 0) fetchQuestionSubjects();
             if (aiPromptVersions.length === 0) fetchAiPromptVersions();
@@ -466,8 +542,11 @@ export default function AdminDashboardPage() {
             if (questionSubjects.length === 0) fetchQuestionSubjects();
         }
         // Note: the `analytics` tab is intercepted above and deep-linked
-        // to /admin/analytics-dashboard. The legacy weak-area panel
-        // remains reachable from the dashboard page itself.
+        // to /admin/analytics-dashboard. The weak-area intelligence panel
+        // (/analytics/admin/weak-area-control/) has its own `weak_areas` tab.
+        if (tab === 'weak_areas' && !weakAreaData) {
+            fetchWeakAreaControl();
+        }
         if (tab === 'moderation') {
             fetchIssueQueue();
         }
@@ -478,7 +557,7 @@ export default function AdminDashboardPage() {
             fetchAuditLogs();
         }
         if (tab === 'blogs' && blogList.length === 0) {
-            fetchBlogs();
+            fetchBlogs({ page: 1 });
         }
     };
 
@@ -582,20 +661,31 @@ export default function AdminDashboardPage() {
         setAuditLoading(false);
     };
 
-    const fetchBlogs = () => {
+    // Blog posts are paginated (20 per page). `overrides` lets Apply/Reset and
+    // the pager pass the page and filters explicitly instead of reading state
+    // that has not re-rendered yet.
+    const fetchBlogs = (overrides?: { page?: number; search?: string; category?: string }) => {
         setBlogLoading(true);
-        const params: Record<string, string | number> = { page: blogPage };
-        if (blogSearch.trim()) params.search = blogSearch.trim();
-        if (blogCategoryFilter) params.category = blogCategoryFilter;
-        if (blogCategoryFilter) params.is_published = 'all';
+        const page = overrides?.page ?? blogPage;
+        const search = overrides?.search ?? blogSearch;
+        const category = overrides?.category ?? blogCategoryFilter;
+        setBlogPage(page);
+        const params: Record<string, string | number> = { page };
+        if (search.trim()) params.search = search.trim();
+        if (category) params.category = category;
+        if (category) params.is_published = 'all';
         blogAPI.list(params)
             .then((res: any) => {
                 const payload = res.data;
-                const rows = Array.isArray(payload) ? payload : payload?.results || [];
+                const rows = listRows<any>(payload);
                 setBlogList(rows);
-                setBlogTotal(Number(payload?.count ?? rows.length));
+                setBlogTotal(listCount(payload));
+                setBlogHasNext(hasNextPage(payload));
             })
-            .catch(() => setBlogList([]))
+            .catch(() => {
+                setBlogList([]);
+                setBlogHasNext(false);
+            })
             .finally(() => setBlogLoading(false));
     };
 
@@ -625,7 +715,19 @@ export default function AdminDashboardPage() {
         setBlogShowForm(true);
     };
 
-    const openBlogEdit = (post: any) => {
+    const openBlogEdit = async (listRow: any) => {
+        // The list serializer (BlogPostListSerializer) has no body,
+        // description, subcategory or author_role, so filling the form from
+        // the list row and saving wiped them. Load the full post first.
+        setBlogMessage('');
+        let post = listRow;
+        try {
+            const res = await blogAPI.get(Number(listRow.id));
+            post = { ...listRow, ...(res.data || {}) };
+        } catch (err: any) {
+            setBlogMessage(`Could not load the full post: ${extractApiErrorMessage(err?.response?.data, 'request failed')}. Editing is disabled so the body is not overwritten.`);
+            return;
+        }
         setBlogForm({
             slug: post.slug || '',
             title: post.title || '',
@@ -680,9 +782,11 @@ export default function AdminDashboardPage() {
             setBlogShowForm(false);
             setBlogEditingId(null);
             resetBlogForm();
+            setBlogMessage('');
             fetchBlogs();
-        } catch {
+        } catch (err: any) {
             // keep form open on failure
+            setBlogMessage(`Could not save the post: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
         }
         setBlogSaving(false);
     };
@@ -919,6 +1023,15 @@ export default function AdminDashboardPage() {
     };
 
     const runChunkAction = async (action: 'delete' | 'merge' | 'rechunk', chunkId?: number) => {
+        // All three rewrite RAG chunks irreversibly (delete is a hard delete;
+        // merge and re-chunk replace the selected chunks).
+        const confirmText =
+            action === 'delete'
+                ? `Permanently delete chunk #${chunkId}? This cannot be undone.`
+                : action === 'merge'
+                    ? `Merge ${selectedChunkIds.length} selected chunks into one? The originals are replaced and this cannot be undone.`
+                    : `Re-chunk ${selectedChunkIds.length} selected chunk(s)? The originals are replaced and this cannot be undone.`;
+        if (!window.confirm(confirmText)) return;
         try {
             if (action === 'delete' && chunkId) await textbooksAPI.deleteChunk(chunkId);
             if (action === 'merge') await textbooksAPI.mergeChunks(selectedChunkIds);
@@ -979,6 +1092,7 @@ export default function AdminDashboardPage() {
         { key: 'tests', label: 'Tests Engine', icon: FileText },
         { key: 'textbooks', label: 'Textbooks', icon: Database },
         { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+        { key: 'weak_areas', label: 'Weak Areas', icon: AlertTriangle },
         { key: 'moderation', label: 'Moderation', icon: ShieldCheck },
         { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
         { key: 'security', label: 'Security', icon: Shield },
@@ -1024,14 +1138,26 @@ export default function AdminDashboardPage() {
         setUserSearchTerm('');
         setUserRoleFilter('all');
         setUserStatusFilter('all');
-        setTimeout(() => fetchUsers(), 0);
+        fetchUsers({ search: '', role: 'all', status: 'all' });
     };
 
-    const handleToggleUserBlock = async (targetUserId: number, currentlyActive: boolean) => {
+    const describeUser = (targetUserId: number, username?: string) =>
+        username ? `${username} (#${targetUserId})` : `user #${targetUserId}`;
+
+    const isSelf = (targetUserId: number) => Number(user?.id) === Number(targetUserId);
+
+    const handleToggleUserBlock = async (targetUserId: number, currentlyActive: boolean, username?: string) => {
+        const blocked = currentlyActive;
+        if (blocked) {
+            if (isSelf(targetUserId)) {
+                setUserActionMessage('You cannot block your own account.');
+                return;
+            }
+            if (!window.confirm(`Block ${describeUser(targetUserId, username)}? They will not be able to sign in until they are unblocked.`)) return;
+        }
         setUserActionLoadingId(targetUserId);
         setUserActionMessage('');
         try {
-            const blocked = currentlyActive;
             await authAPI.adminToggleUserBlock(targetUserId, blocked);
             setUserActionMessage(blocked ? 'User blocked successfully' : 'User unblocked successfully');
             fetchUsers();
@@ -1041,11 +1167,22 @@ export default function AdminDashboardPage() {
         setUserActionLoadingId(null);
     };
 
-    const handleToggleUserRole = async (targetUserId: number, currentRole: string) => {
+    const handleToggleUserRole = async (targetUserId: number, currentRole: string, username?: string) => {
+        const nextRole = currentRole === 'admin' ? 'student' : 'admin';
+        const who = describeUser(targetUserId, username);
+        if (nextRole === 'student' && isSelf(targetUserId)) {
+            setUserActionMessage('You cannot remove your own admin access.');
+            return;
+        }
+        // Making someone an admin sets is_superuser and is_staff on the backend
+        // (accounts/views.py AdminUserRoleUpdateView), so it must be deliberate.
+        const confirmText = nextRole === 'admin'
+            ? `Make ${who} an admin?\n\nThis grants full admin access (Django superuser + staff): user management, payments, question bank and platform-wide resets.`
+            : `Remove admin access from ${who}? They become a student and lose superuser/staff rights.`;
+        if (!window.confirm(confirmText)) return;
         setUserActionLoadingId(targetUserId);
         setUserActionMessage('');
         try {
-            const nextRole = currentRole === 'admin' ? 'student' : 'admin';
             await authAPI.adminUpdateUserRole(targetUserId, nextRole);
             setUserActionMessage(`Role updated to ${nextRole}`);
             fetchUsers();
@@ -1055,7 +1192,12 @@ export default function AdminDashboardPage() {
         setUserActionLoadingId(null);
     };
 
-    const handleResetUserProgress = async (targetUserId: number) => {
+    const handleResetUserProgress = async (targetUserId: number, username?: string) => {
+        if (!window.confirm(
+            `Reset ALL learning progress for ${describeUser(targetUserId, username)}?\n\n` +
+            'This permanently deletes their test attempts and responses, bookmarks, notes, flashcards, discussions, ' +
+            'topic stats, daily activity and badges, and resets their streak and XP. It cannot be undone.'
+        )) return;
         setUserActionLoadingId(targetUserId);
         setUserActionMessage('');
         try {
@@ -1119,25 +1261,51 @@ export default function AdminDashboardPage() {
 
     const runSystemAction = async (action: 'resetAttempts' | 'clearAnalytics' | 'rerunEvaluation') => {
         const payload: { scope: 'all' | 'user'; user_id?: number } = { scope: systemScope };
+        let target: string;
         if (systemScope === 'user') {
             const id = Number(systemUserId);
-            if (!id) return;
+            if (!Number.isInteger(id) || id <= 0) {
+                setUserActionMessage('Enter the user ID for a single-user action.');
+                return;
+            }
             payload.user_id = id;
+            target = `user #${id}`;
+        } else {
+            // Platform-wide: every student's data. Needs the typed phrase AND
+            // a confirm dialog naming the action.
+            if (!isPlatformWideConfirmed(systemConfirmText)) {
+                setUserActionMessage(`Type ${PLATFORM_WIDE_CONFIRM_PHRASE} to run a platform-wide action.`);
+                return;
+            }
+            target = 'ALL USERS (platform-wide)';
         }
+        if (!window.confirm(`${SYSTEM_ACTION_LABELS[action]} for ${target}?\n\nThis rewrites stored data and cannot be undone.`)) return;
 
         setSystemActionLoading(true);
         setUserActionMessage('');
         try {
-            if (action === 'resetAttempts') await authAPI.adminResetAttempts(payload);
-            if (action === 'clearAnalytics') await authAPI.adminClearAnalytics(payload);
-            if (action === 'rerunEvaluation') await authAPI.adminRerunEvaluation(payload);
-            setUserActionMessage('System action completed');
+            let res: any = null;
+            if (action === 'resetAttempts') res = await authAPI.adminResetAttempts(payload);
+            if (action === 'clearAnalytics') res = await authAPI.adminClearAnalytics(payload);
+            if (action === 'rerunEvaluation') res = await authAPI.adminRerunEvaluation(payload);
+            const results = (res?.data?.results || {}) as Record<string, unknown>;
+            const summary = Object.entries(results)
+                .filter(([key, value]) => typeof value === 'number' && key !== 'user_id')
+                .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${value}`)
+                .join(', ');
+            setUserActionMessage(`System action completed for ${target}${summary ? ` (${summary})` : ''}`);
             fetchUsers();
-        } catch {
-            setUserActionMessage('System action failed.');
+        } catch (err: any) {
+            setUserActionMessage(`System action failed: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
         }
+        // Each platform-wide run needs the phrase typed again.
+        setSystemConfirmText('');
         setSystemActionLoading(false);
     };
+
+    const systemActionDisabled =
+        systemActionLoading ||
+        (systemScope === 'user' ? !systemUserId : !isPlatformWideConfirmed(systemConfirmText));
 
     const handleBackupData = async () => {
         setDataActionBusy('backup');
@@ -1234,7 +1402,7 @@ export default function AdminDashboardPage() {
         setQuestionFlagged('all');
         setExpandedQuestionIds([]);
         setQuestionPage(1);
-        fetchQuestions(1);
+        fetchQuestions(1, EMPTY_QUESTION_FILTERS);
     };
 
     const handleQuestionVerifyToggle = async (id: number, currentlyVerified: boolean) => {
@@ -1290,9 +1458,39 @@ export default function AdminDashboardPage() {
         setBulkActionLoading(false);
     };
 
+    // Pre-fill the related-PYQ field with the question's curated links. The
+    // list serializer's `related_question_ids` is always [] today (it reads a
+    // non-existent attribute), so fall back to the curated rows of
+    // GET /questions/<id>/similar/. That endpoint returns at most
+    // SIMILAR_ENDPOINT_LIMIT rows, so a full page means the list may be cut
+    // off: the field is then locked instead of risking a partial rewrite.
+    const loadCuratedRelatedIds = (questionId: number) => {
+        setRelatedIdsLoadingFor(questionId);
+        questionsAPI.getSimilar(questionId)
+            .then((res) => {
+                if (editingQuestionIdRef.current !== questionId) return;
+                const ids = curatedRelatedIds(res.data);
+                const value = ids.join(', ');
+                setEditingRelatedInitial(value);
+                setEditingForm((prev) => ({ ...prev, related_question_ids: value }));
+                setRelatedIdsLocked(ids.length >= SIMILAR_ENDPOINT_LIMIT);
+            })
+            .catch(() => {
+                // Unknown current links: lock the field rather than overwrite them.
+                if (editingQuestionIdRef.current === questionId) setRelatedIdsLocked(true);
+            })
+            .finally(() => setRelatedIdsLoadingFor((current) => (current === questionId ? null : current)));
+    };
+
     const startInlineEdit = (q: any) => {
-        const relatedIds = Array.isArray(q.related_question_ids) ? q.related_question_ids.join(', ') : '';
+        const knownRelated = Array.isArray(q.related_question_ids) && q.related_question_ids.length > 0;
+        const relatedIds = knownRelated ? q.related_question_ids.join(', ') : '';
+        editingQuestionIdRef.current = Number(q.id);
         setEditingQuestionId(Number(q.id));
+        setEditingRelatedInitial(relatedIds);
+        setRelatedIdsLocked(false);
+        if (!knownRelated) loadCuratedRelatedIds(Number(q.id));
+        if (q.subject) ensureTopics(q.subject);
         setEditingForm({
             question_text: q.question_text || '',
             option_a: q.option_a || '',
@@ -1316,7 +1514,10 @@ export default function AdminDashboardPage() {
     };
 
     const cancelInlineEdit = () => {
+        editingQuestionIdRef.current = null;
         setEditingQuestionId(null);
+        setEditingRelatedInitial('');
+        setRelatedIdsLocked(false);
         setEditingForm({
             question_text: '',
             option_a: '',
@@ -1339,43 +1540,52 @@ export default function AdminDashboardPage() {
         });
     };
 
-    const parseRelatedIds = (value: string) => {
-        return value
-            .split(',')
-            .map((item) => Number(item.trim()))
-            .filter((id) => Number.isInteger(id) && id > 0);
+    // Save the inline editor. linkRelatedPyqs replaces the question's whole
+    // similar_questions set (both directions), so it is only called when the
+    // related-ids field was actually changed; an untouched field used to
+    // wipe every curated link on each Save / Save & Next.
+    const persistInlineEdit = async (id: number) => {
+        await questionsAPI.update(id, {
+            question_text: editingForm.question_text,
+            option_a: editingForm.option_a,
+            option_b: editingForm.option_b,
+            option_c: editingForm.option_c,
+            option_d: editingForm.option_d,
+            correct_answer: editingForm.correct_answer,
+            explanation: editingForm.explanation,
+            difficulty: editingForm.difficulty,
+            year: Number(editingForm.year),
+            subject: Number(editingForm.subject),
+            topic: editingForm.topic ? Number(editingForm.topic) : null,
+            paper: editingForm.paper ? Number(editingForm.paper) : 0,
+            concept_id: editingForm.concept_id,
+            book_name: editingForm.book_name,
+            chapter: editingForm.chapter,
+            page_number: editingForm.page_number,
+            reference_text: editingForm.reference_text,
+        });
+        const relatedIds = parseRelatedIds(editingForm.related_question_ids);
+        const relatedChanged = !sameIdSet(relatedIds, parseRelatedIds(editingRelatedInitial));
+        if (relatedChanged && !relatedIdsLocked) {
+            await questionsAPI.linkRelatedPyqs(id, relatedIds);
+        }
+    };
+
+    const reportInlineSaveError = (err: any) => {
+        console.error('Failed to save question edit:', err);
+        const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
+        setQuestionActionMessage(`Error saving question: ${msg}`);
     };
 
     const saveInlineEdit = async (id: number) => {
         setSavingEdit(true);
+        setQuestionActionMessage('');
         try {
-            await questionsAPI.update(id, {
-                question_text: editingForm.question_text,
-                option_a: editingForm.option_a,
-                option_b: editingForm.option_b,
-                option_c: editingForm.option_c,
-                option_d: editingForm.option_d,
-                correct_answer: editingForm.correct_answer,
-                explanation: editingForm.explanation,
-                difficulty: editingForm.difficulty,
-                year: Number(editingForm.year),
-                subject: Number(editingForm.subject),
-                topic: editingForm.topic ? Number(editingForm.topic) : null,
-                paper: editingForm.paper ? Number(editingForm.paper) : 0,
-                concept_id: editingForm.concept_id,
-                book_name: editingForm.book_name,
-                chapter: editingForm.chapter,
-                page_number: editingForm.page_number,
-                reference_text: editingForm.reference_text,
-            });
-            const relatedIds = parseRelatedIds(editingForm.related_question_ids);
-            await questionsAPI.linkRelatedPyqs(id, relatedIds);
+            await persistInlineEdit(id);
             cancelInlineEdit();
             fetchQuestions();
         } catch (err: any) {
-            console.error('Failed to save question edit:', err);
-            const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
-            setUserActionMessage(`Error saving question: ${msg}`);
+            reportInlineSaveError(err);
         }
         setSavingEdit(false);
     };
@@ -1383,28 +1593,9 @@ export default function AdminDashboardPage() {
     const saveInlineEditAndNext = async (id: number) => {
         if (savingEdit) return;
         setSavingEdit(true);
+        setQuestionActionMessage('');
         try {
-            await questionsAPI.update(id, {
-                question_text: editingForm.question_text,
-                option_a: editingForm.option_a,
-                option_b: editingForm.option_b,
-                option_c: editingForm.option_c,
-                option_d: editingForm.option_d,
-                correct_answer: editingForm.correct_answer,
-                explanation: editingForm.explanation,
-                difficulty: editingForm.difficulty,
-                year: Number(editingForm.year),
-                subject: Number(editingForm.subject),
-                topic: editingForm.topic ? Number(editingForm.topic) : null,
-                paper: editingForm.paper ? Number(editingForm.paper) : 0,
-                concept_id: editingForm.concept_id,
-                book_name: editingForm.book_name,
-                chapter: editingForm.chapter,
-                page_number: editingForm.page_number,
-                reference_text: editingForm.reference_text,
-            });
-            const relatedIds = parseRelatedIds(editingForm.related_question_ids);
-            await questionsAPI.linkRelatedPyqs(id, relatedIds);
+            await persistInlineEdit(id);
             const idx = questionList.findIndex((q: any) => Number(q.id) === Number(id));
             if (idx >= 0 && idx < questionList.length - 1) {
                 const nextQ = questionList[idx + 1];
@@ -1415,9 +1606,7 @@ export default function AdminDashboardPage() {
                 fetchQuestions();
             }
         } catch (err: any) {
-            console.error('Failed to save question edit:', err);
-            const msg = extractApiErrorMessage(err?.response?.data, 'Failed to save changes. Please try again.');
-            setUserActionMessage(`Error saving question: ${msg}`);
+            reportInlineSaveError(err);
         }
         setSavingEdit(false);
     };
@@ -1499,12 +1688,26 @@ export default function AdminDashboardPage() {
         }
     };
 
-    const handleDeleteQuestion = async (id: number) => {
+    // "Remove" = the durable soft delete (POST /questions/<id>/remove-from-bank/),
+    // the same action the questions editor uses. The old hard DELETE cascaded
+    // into students' QuestionResponse history and the next deploy import
+    // re-created the question anyway (no RemovedQuestion tombstone).
+    const handleRemoveQuestionFromBank = async (id: number) => {
+        const reason = window.prompt(
+            `Remove Q#${id} from the question bank?\n\n` +
+            'It is hidden from students immediately and the next deploy import will not re-create it. ' +
+            'Student history (attempts, bookmarks, notes) is kept, and the question can be restored later.\n\n' +
+            'Optional reason, then OK to remove (Cancel keeps the question):',
+            '',
+        );
+        if (reason === null) return;
+        setQuestionActionMessage('');
         try {
-            await questionsAPI.remove(id);
+            await questionsAPI.removeFromBank(id, { reason: reason.trim() });
+            setQuestionActionMessage(`Q#${id} removed from the bank.`);
             fetchQuestions();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            setQuestionActionMessage(`Could not remove Q#${id}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
         }
     };
 
@@ -1527,19 +1730,46 @@ export default function AdminDashboardPage() {
     };
 
     // AI Explain: generate complete explanation for a question from the list view.
-    // Admin selects correct_answer on the question, then clicks this button.
+    // Admin sets correct_answer on the question first, then clicks this button.
     const [aiExplainId, setAiExplainId] = useState<number | null>(null);
     const handleAiExplain = async (q: any) => {
-        const correctAnswer = (q.correct_answer || 'A').toUpperCase();
-        setAiExplainId(q.id);
+        const questionId = Number(q.id);
+        // The AI is told this letter is correct; never fall back to "A".
+        if (!isValidAnswerLetter(q.correct_answer)) {
+            setQuestionActionMessage(`Q#${questionId} has no correct answer set. Edit the question and set it before generating an explanation.`);
+            return;
+        }
+        const correctAnswer = String(q.correct_answer).trim().toUpperCase();
+        setAiExplainId(questionId);
+        setQuestionActionMessage('');
         try {
-            await questionsAPI.generateExplanation(q.id, {
-                correct_answer: correctAnswer,
-                regenerate_if_exists: true,
-            });
+            let res;
+            try {
+                res = await questionsAPI.generateExplanation(questionId, {
+                    correct_answer: correctAnswer,
+                    regenerate_if_exists: false,
+                });
+            } catch (err: any) {
+                // 409 = an explanation already exists; overwrite only on confirmation.
+                if (err?.response?.status !== 409) throw err;
+                if (!window.confirm(`Q#${questionId} already has an explanation. Overwrite it with AI-generated content (correct answer ${correctAnswer})?`)) {
+                    return;
+                }
+                res = await questionsAPI.generateExplanation(questionId, {
+                    correct_answer: correctAnswer,
+                    regenerate_if_exists: true,
+                });
+            }
+            // The endpoint marks a previously unverified question as
+            // "Verified by Admin" while saving the AI output. Unreviewed AI
+            // content must not carry that badge, so restore the unverified state.
+            if (!q.is_verified_by_admin && res?.data?.question?.is_verified_by_admin) {
+                await questionsAPI.unverify(questionId).catch(() => undefined);
+            }
+            setQuestionActionMessage(`AI explanation generated and saved for Q#${questionId}. Review it, then use Verify once it is correct.`);
             fetchQuestions();
-        } catch {
-            // Keep UI stable on API failure.
+        } catch (err: any) {
+            setQuestionActionMessage(`AI explanation failed for Q#${questionId}: ${extractApiErrorMessage(err?.response?.data, 'request failed')}`);
         } finally {
             setAiExplainId(null);
         }
@@ -1693,6 +1923,7 @@ export default function AdminDashboardPage() {
     const beginExtractionItemEdit = (item: any) => {
         setEditingExtractionItemId(Number(item.id));
         setEditingExtractionItem({ ...item });
+        if (item.subject) ensureTopics(item.subject);
     };
 
     const cancelExtractionItemEdit = () => {
@@ -1789,54 +2020,19 @@ export default function AdminDashboardPage() {
                         </div>
                     </div>
 
-                    <div className="rounded-xl border bg-card p-3 flex flex-wrap items-end gap-3">
-                        <div className="min-w-56 flex-1">
-                            <label className="text-xs font-medium text-muted-foreground block mb-1">Global Admin Search</label>
-                            <Input
-                                placeholder="Search users, questions, IDs, announcements..."
-                                value={adminSearch}
-                                onChange={(e) => setAdminSearch(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-muted-foreground block mb-1">Quick Filter</label>
-                            <select
-                                className="h-10 rounded-md border bg-background px-3 text-sm"
-                                value={adminFilter}
-                                onChange={(e) => setAdminFilter(e.target.value)}
-                            >
-                                <option value="all">All</option>
-                                <option value="priority">Priority</option>
-                                <option value="pending">Pending</option>
-                                <option value="flagged">Flagged</option>
-                                <option value="verified">Verified</option>
-                            </select>
-                        </div>
-                        <Button variant="outline" onClick={() => { setAdminSearch(''); setAdminFilter('all'); }}>
-                            Reset
-                        </Button>
-                    </div>
+                    {/* The "Global Admin Search" / "Quick Filter" bar was removed:
+                        neither control searched or filtered anything (only the
+                        Users tab ever read the search term). Each tab has its
+                        own working search and filters. */}
 
                     {/* ===== OVERVIEW TAB ===== */}
                     {activeTab === 'overview' && (<>
 
-                    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
                         <Card>
                             <CardContent className="p-4">
                                 <p className="text-xs text-muted-foreground">Modules Mapped</p>
                                 <p className="text-2xl font-bold">{moduleTabs.length}</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="p-4">
-                                <p className="text-xs text-muted-foreground">Search Scope</p>
-                                <p className="text-sm font-medium truncate">{adminSearch || 'Global control scope'}</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="p-4">
-                                <p className="text-xs text-muted-foreground">Current Filter</p>
-                                <p className="text-sm font-medium capitalize">{adminFilter}</p>
                             </CardContent>
                         </Card>
                         <Card>
@@ -2038,7 +2234,7 @@ export default function AdminDashboardPage() {
                                         <CardTitle className="flex items-center gap-2 text-lg">
                                             <Users className="w-5 h-5" /> All Users
                                         </CardTitle>
-                                        <Button variant="outline" size="sm" onClick={fetchUsers} disabled={usersLoading}>
+                                        <Button variant="outline" size="sm" onClick={() => fetchUsers()} disabled={usersLoading}>
                                             {usersLoading ? 'Loading...' : 'Refresh'}
                                         </Button>
                                     </div>
@@ -2080,23 +2276,34 @@ export default function AdminDashboardPage() {
                                             <select
                                                 className="h-10 rounded-md border bg-background px-3 text-sm"
                                                 value={systemScope}
-                                                onChange={(e) => setSystemScope(e.target.value as 'all' | 'user')}
+                                                onChange={(e) => {
+                                                    setSystemScope(e.target.value as 'all' | 'user');
+                                                    setSystemConfirmText('');
+                                                }}
                                             >
-                                                <option value="all">Scope: All users</option>
                                                 <option value="user">Scope: Single user</option>
+                                                <option value="all">Scope: All users</option>
                                             </select>
-                                            <Input
-                                                type="number"
-                                                placeholder="User ID (required for user scope)"
-                                                value={systemUserId}
-                                                onChange={(e) => setSystemUserId(e.target.value)}
-                                                disabled={systemScope !== 'user'}
-                                            />
+                                            {systemScope === 'user' ? (
+                                                <Input
+                                                    type="number"
+                                                    placeholder="User ID (required for user scope)"
+                                                    value={systemUserId}
+                                                    onChange={(e) => setSystemUserId(e.target.value)}
+                                                />
+                                            ) : (
+                                                <Input
+                                                    placeholder={`Type ${PLATFORM_WIDE_CONFIRM_PHRASE} to enable`}
+                                                    value={systemConfirmText}
+                                                    onChange={(e) => setSystemConfirmText(e.target.value)}
+                                                    aria-label={`Type ${PLATFORM_WIDE_CONFIRM_PHRASE} to confirm a platform-wide action`}
+                                                />
+                                            )}
                                             <Button
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => runSystemAction('resetAttempts')}
-                                                disabled={systemActionLoading || (systemScope === 'user' && !systemUserId)}
+                                                disabled={systemActionDisabled}
                                             >
                                                 Reset Attempts
                                             </Button>
@@ -2104,16 +2311,21 @@ export default function AdminDashboardPage() {
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => runSystemAction('clearAnalytics')}
-                                                disabled={systemActionLoading || (systemScope === 'user' && !systemUserId)}
+                                                disabled={systemActionDisabled}
                                             >
                                                 Clear Analytics
                                             </Button>
                                         </div>
+                                        {systemScope === 'all' && (
+                                            <p className="text-xs text-destructive mt-2">
+                                                Platform-wide: these actions change every student&apos;s attempts and analytics and cannot be undone.
+                                            </p>
+                                        )}
                                         <div className="mt-2 flex justify-end">
                                             <Button
                                                 size="sm"
                                                 onClick={() => runSystemAction('rerunEvaluation')}
-                                                disabled={systemActionLoading || (systemScope === 'user' && !systemUserId)}
+                                                disabled={systemActionDisabled}
                                             >
                                                 Re-run Evaluation
                                             </Button>
@@ -2185,7 +2397,7 @@ export default function AdminDashboardPage() {
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        onClick={() => handleToggleUserBlock(Number(u.id || u.user_id), Boolean(u.is_active))}
+                                                                        onClick={() => handleToggleUserBlock(Number(u.id || u.user_id), Boolean(u.is_active), u.username)}
                                                                         disabled={userActionLoadingId === Number(u.id || u.user_id)}
                                                                     >
                                                                         {u.is_active ? 'Block' : 'Unblock'}
@@ -2193,7 +2405,7 @@ export default function AdminDashboardPage() {
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        onClick={() => handleToggleUserRole(Number(u.id || u.user_id), String(u.role || 'student'))}
+                                                                        onClick={() => handleToggleUserRole(Number(u.id || u.user_id), String(u.role || 'student'), u.username)}
                                                                         disabled={userActionLoadingId === Number(u.id || u.user_id)}
                                                                     >
                                                                         {u.role === 'admin' ? 'Make Student' : 'Make Admin'}
@@ -2201,7 +2413,7 @@ export default function AdminDashboardPage() {
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        onClick={() => handleResetUserProgress(Number(u.id || u.user_id))}
+                                                                        onClick={() => handleResetUserProgress(Number(u.id || u.user_id), u.username)}
                                                                         disabled={userActionLoadingId === Number(u.id || u.user_id)}
                                                                     >
                                                                         Reset Progress
@@ -2243,14 +2455,17 @@ export default function AdminDashboardPage() {
                                     <CardTitle className="flex items-center gap-2 text-lg">
                                         <MessageSquare className="w-5 h-5" /> Question Feedback
                                     </CardTitle>
-                                    <Button variant="outline" size="sm" onClick={fetchFeedback} disabled={feedbackLoading}>
+                                    <Button variant="outline" size="sm" onClick={() => fetchFeedback(1)} disabled={feedbackLoading}>
                                         {feedbackLoading ? 'Loading...' : 'Refresh'}
                                     </Button>
                                 </div>
-                                <CardDescription>Review flagged questions. Resolving rewards the user with 2 tokens.</CardDescription>
+                                <CardDescription>
+                                    Review flagged questions. Resolving rewards the user with 2 tokens.
+                                    {feedbackTotal > 0 && ` Showing ${feedbackList.length} of ${feedbackTotal}.`}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {feedbackLoading ? (
+                                {feedbackLoading && feedbackList.length === 0 ? (
                                     <p className="text-sm text-muted-foreground animate-pulse text-center py-4">Loading feedback...</p>
                                 ) : feedbackList.length === 0 ? (
                                     <p className="text-sm text-muted-foreground text-center py-4">No feedback submissions yet</p>
@@ -2280,6 +2495,18 @@ export default function AdminDashboardPage() {
                                                 </div>
                                             </div>
                                         ))}
+                                        {feedbackNextPage !== null && (
+                                            <div className="flex justify-center pt-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => fetchFeedback(feedbackNextPage)}
+                                                    disabled={feedbackLoading}
+                                                >
+                                                    {feedbackLoading ? 'Loading...' : 'Load more'}
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </CardContent>
@@ -2331,7 +2558,10 @@ export default function AdminDashboardPage() {
                                         <select
                                             className="h-10 rounded-md border bg-background px-3 text-sm"
                                             value={createForm.subject}
-                                            onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
+                                            onChange={(e) => {
+                                                setCreateForm({ ...createForm, subject: e.target.value, topic: '' });
+                                                ensureTopics(e.target.value);
+                                            }}
                                         >
                                             <option value="">Select subject</option>
                                             {questionSubjects.map((s: any) => (
@@ -2342,13 +2572,14 @@ export default function AdminDashboardPage() {
                                             className="h-10 rounded-md border bg-background px-3 text-sm"
                                             value={createForm.topic}
                                             onChange={(e) => setCreateForm({ ...createForm, topic: e.target.value })}
+                                            disabled={!createForm.subject}
                                         >
-                                            <option value="">Optional topic</option>
-                                            {questionTopics
-                                                .filter((t: any) => !createForm.subject || String(t.subject) === createForm.subject)
-                                                .map((t: any) => (
-                                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                                ))}
+                                            <option value="">
+                                                {!createForm.subject ? 'Optional topic (pick a subject first)' : topicsLoading(createForm.subject) ? 'Loading topics…' : 'Optional topic'}
+                                            </option>
+                                            {topicsFor(createForm.subject).map((t: any) => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
                                         </select>
                                         <select
                                             className="h-10 rounded-md border bg-background px-3 text-sm"
@@ -2531,17 +2762,20 @@ export default function AdminDashboardPage() {
                                                                             <Input value={editingExtractionItem.correct_answer || ''} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, correct_answer: e.target.value })} placeholder="Correct (A/B/C/D)" />
                                                                             <Input type="number" value={editingExtractionItem.year || ''} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, year: Number(e.target.value) || null })} placeholder="Year" />
                                                                             <Input type="number" value={editingExtractionItem.paper || ''} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, paper: Number(e.target.value) || 0 })} placeholder="Paper" />
-                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.subject || '')} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, subject: Number(e.target.value) || null, topic: null })}>
+                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.subject || '')} onChange={(e) => { setEditingExtractionItem({ ...editingExtractionItem, subject: Number(e.target.value) || null, topic: null }); ensureTopics(e.target.value); }}>
                                                                                 <option value="">Subject</option>
                                                                                 {questionSubjects.map((s: any) => (
                                                                                     <option key={s.id} value={s.id}>{s.name}</option>
                                                                                 ))}
                                                                             </select>
-                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.topic || '')} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, topic: Number(e.target.value) || null })}>
-                                                                                <option value="">Topic</option>
-                                                                                {questionTopics.filter((t: any) => !editingExtractionItem.subject || Number(t.subject) === Number(editingExtractionItem.subject)).map((t: any) => (
+                                                                            <select className="h-9 rounded-md border bg-background px-3 text-xs" value={String(editingExtractionItem.topic || '')} onChange={(e) => setEditingExtractionItem({ ...editingExtractionItem, topic: Number(e.target.value) || null })} disabled={!editingExtractionItem.subject}>
+                                                                                <option value="">{topicsLoading(editingExtractionItem.subject) ? 'Loading topics…' : 'Topic'}</option>
+                                                                                {topicsFor(editingExtractionItem.subject).map((t: any) => (
                                                                                     <option key={t.id} value={t.id}>{t.name}</option>
                                                                                 ))}
+                                                                                {editingExtractionItem.topic && !topicsFor(editingExtractionItem.subject).some((t: any) => Number(t.id) === Number(editingExtractionItem.topic)) && (
+                                                                                    <option value={String(editingExtractionItem.topic)}>{editingExtractionItem.topic_name || `Topic #${editingExtractionItem.topic}`}</option>
+                                                                                )}
                                                                             </select>
                                                                         </div>
                                                                         <textarea
@@ -2573,6 +2807,11 @@ export default function AdminDashboardPage() {
                                     <details className="rounded-lg border p-3 mb-4 bg-muted/20">
                                         <summary className="cursor-pointer text-sm font-medium">AI Prompt Editor and Version History</summary>
                                         <div className="space-y-3 mt-3">
+                                        <p className="text-xs text-amber-700 dark:text-amber-300 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 p-2">
+                                            Note: saved prompt versions are stored for the record only. AI generation
+                                            (Regenerate AI, AI Explain) does not use this prompt text yet; the active
+                                            version is only shown as a label in the AI Timeline.
+                                        </p>
                                         <div className="grid md:grid-cols-2 gap-2">
                                             <Input
                                                 placeholder="Prompt version name"
@@ -2740,6 +2979,12 @@ export default function AdminDashboardPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
+                                    {questionActionMessage && (
+                                        <div role="status" className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs flex items-start gap-2">
+                                            <span className="flex-1">{questionActionMessage}</span>
+                                            <button type="button" className="opacity-70 hover:opacity-100" onClick={() => setQuestionActionMessage('')} aria-label="Dismiss message">×</button>
+                                        </div>
+                                    )}
                                     <div className="mb-3 flex flex-wrap items-center gap-2">
                                         <Badge variant="outline">Selected: {selectedQuestionIds.length}</Badge>
                                         <Button
@@ -2786,6 +3031,7 @@ export default function AdminDashboardPage() {
                                                 onChange={(e) => {
                                                     setBulkMetaSubject(e.target.value);
                                                     setBulkMetaTopic('');
+                                                    ensureTopics(e.target.value);
                                                 }}
                                             >
                                                 <option value="">No subject change</option>
@@ -2797,13 +3043,14 @@ export default function AdminDashboardPage() {
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
                                                 value={bulkMetaTopic}
                                                 onChange={(e) => setBulkMetaTopic(e.target.value)}
+                                                disabled={!bulkMetaSubject}
                                             >
-                                                <option value="">No topic change</option>
-                                                {questionTopics
-                                                    .filter((t: any) => !bulkMetaSubject || String(t.subject) === bulkMetaSubject)
-                                                    .map((t: any) => (
-                                                        <option key={t.id} value={t.id}>{t.name}</option>
-                                                    ))}
+                                                <option value="">
+                                                    {!bulkMetaSubject ? 'No topic change (pick a subject to set one)' : topicsLoading(bulkMetaSubject) ? 'Loading topics…' : 'No topic change'}
+                                                </option>
+                                                {topicsFor(bulkMetaSubject).map((t: any) => (
+                                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                                ))}
                                             </select>
                                             <select
                                                 className="h-9 rounded-md border bg-background px-3 text-sm"
@@ -2945,24 +3192,31 @@ export default function AdminDashboardPage() {
                                                                     <select
                                                                         className="h-10 rounded-md border bg-background px-3 text-sm"
                                                                         value={editingForm.subject}
-                                                                        onChange={(e) => setEditingForm({ ...editingForm, subject: e.target.value, topic: '' })}
+                                                                        onChange={(e) => {
+                                                                            setEditingForm({ ...editingForm, subject: e.target.value, topic: '' });
+                                                                            ensureTopics(e.target.value);
+                                                                        }}
                                                                     >
                                                                         <option value="">Select subject</option>
                                                                         {questionSubjects.map((s: any) => (
                                                                             <option key={s.id} value={s.id}>{s.name}</option>
                                                                         ))}
+                                                                        {editingForm.subject && !questionSubjects.some((s: any) => String(s.id) === editingForm.subject) && (
+                                                                            <option value={editingForm.subject}>{q.subject_name || `Subject #${editingForm.subject}`}</option>
+                                                                        )}
                                                                     </select>
                                                                     <select
                                                                         className="h-10 rounded-md border bg-background px-3 text-sm"
                                                                         value={editingForm.topic}
                                                                         onChange={(e) => setEditingForm({ ...editingForm, topic: e.target.value })}
                                                                     >
-                                                                        <option value="">Optional topic</option>
-                                                                        {questionTopics
-                                                                            .filter((t: any) => !editingForm.subject || String(t.subject) === editingForm.subject)
-                                                                            .map((t: any) => (
-                                                                                <option key={t.id} value={t.id}>{t.name}</option>
-                                                                            ))}
+                                                                        <option value="">{topicsLoading(editingForm.subject) ? 'Loading topics…' : 'Optional topic'}</option>
+                                                                        {topicsFor(editingForm.subject).map((t: any) => (
+                                                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                                                        ))}
+                                                                        {editingForm.topic && !topicsFor(editingForm.subject).some((t: any) => String(t.id) === editingForm.topic) && (
+                                                                            <option value={editingForm.topic}>{String(q.topic) === editingForm.topic && q.topic_name ? q.topic_name : `Topic #${editingForm.topic}`}</option>
+                                                                        )}
                                                                     </select>
                                                                     <select
                                                                         className="h-10 rounded-md border bg-background px-3 text-sm"
@@ -2996,7 +3250,11 @@ export default function AdminDashboardPage() {
                                                                     <Input
                                                                         value={editingForm.related_question_ids}
                                                                         onChange={(e) => setEditingForm({ ...editingForm, related_question_ids: e.target.value })}
-                                                                        placeholder="Related PYQ IDs (comma-separated)"
+                                                                        placeholder={relatedIdsLoadingFor === Number(q.id) ? 'Loading related PYQs…' : 'Related PYQ IDs (comma-separated)'}
+                                                                        disabled={relatedIdsLoadingFor === Number(q.id) || relatedIdsLocked}
+                                                                        title={relatedIdsLocked
+                                                                            ? 'The current related-PYQ links could not be fully loaded, so this field is locked to avoid overwriting them.'
+                                                                            : 'Replaces the curated related PYQs. Left unchanged, existing links are kept.'}
                                                                     />
                                                                 </div>
                                                                 <textarea
@@ -3159,9 +3417,10 @@ export default function AdminDashboardPage() {
                                                         <Button
                                                             size="sm"
                                                             variant="destructive"
-                                                            onClick={() => handleDeleteQuestion(Number(q.id))}
+                                                            onClick={() => handleRemoveQuestionFromBank(Number(q.id))}
+                                                            title="Remove from question bank (soft delete; survives deploys; restorable)"
                                                         >
-                                                            Delete
+                                                            Remove
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -3416,7 +3675,7 @@ export default function AdminDashboardPage() {
                         </div>
                     )}
 
-                    {activeTab === 'analytics' && (
+                    {activeTab === 'weak_areas' && (
                         <div className="space-y-4">
                             <Card>
                                 <CardHeader>
@@ -3452,6 +3711,18 @@ export default function AdminDashboardPage() {
                                                     ))}
                                                 </div>
                                             </div>
+                                            {Array.isArray(weakAreaData.student_weak_areas) && weakAreaData.student_weak_areas.length > 0 && (
+                                                <div className="rounded-md border p-3 bg-background">
+                                                    <p className="text-xs font-medium text-muted-foreground mb-2">Student Weak Areas{weakAreaUserId ? ` (user #${weakAreaUserId})` : ''}</p>
+                                                    <div className="space-y-1 max-h-52 overflow-auto">
+                                                        {weakAreaData.student_weak_areas.map((t: any, idx: number) => (
+                                                            <div key={`${t.topic_id ?? 'none'}-${idx}`} className="text-xs rounded border p-2">
+                                                                {t.topic__name || '—'} ({t.subject__name || '—'}) • Attempts: {t.total_attempts || 0} • Accuracy: {Number(t.accuracy || 0).toFixed(1)}%
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                             <div className="rounded-md border p-3 bg-background">
                                                 <p className="text-xs font-medium text-muted-foreground mb-2">Cohort Weak Areas</p>
                                                 <div className="space-y-1 max-h-52 overflow-auto">
@@ -3857,7 +4128,7 @@ export default function AdminDashboardPage() {
                                             </CardDescription>
                                         </div>
                                         <div className="flex gap-2">
-                                            <Button size="sm" onClick={fetchBlogs} disabled={blogLoading}>
+                                            <Button size="sm" onClick={() => fetchBlogs()} disabled={blogLoading}>
                                                 {blogLoading ? 'Loading...' : 'Refresh'}
                                             </Button>
                                             <Button size="sm" onClick={openBlogCreate}>
@@ -3874,7 +4145,7 @@ export default function AdminDashboardPage() {
                                             placeholder="Search by title, slug, body..."
                                             value={blogSearch}
                                             onChange={(e) => setBlogSearch(e.target.value)}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') { setBlogPage(1); fetchBlogs(); } }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') { fetchBlogs({ page: 1 }); } }}
                                         />
                                         <input
                                             className="h-10 rounded-md border bg-background px-3 text-sm"
@@ -3882,9 +4153,15 @@ export default function AdminDashboardPage() {
                                             value={blogCategoryFilter}
                                             onChange={(e) => setBlogCategoryFilter(e.target.value)}
                                         />
-                                        <Button size="sm" onClick={() => { setBlogPage(1); fetchBlogs(); }}>Apply</Button>
-                                        <Button size="sm" variant="outline" onClick={() => { setBlogSearch(''); setBlogCategoryFilter(''); setBlogPage(1); fetchBlogs(); }}>Reset</Button>
+                                        <Button size="sm" onClick={() => fetchBlogs({ page: 1 })}>Apply</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setBlogSearch(''); setBlogCategoryFilter(''); fetchBlogs({ page: 1, search: '', category: '' }); }}>Reset</Button>
                                     </div>
+                                    {blogMessage && (
+                                        <div role="alert" className="mb-4 rounded-md border border-red-400 bg-red-50 dark:bg-red-900/30 dark:border-red-700 px-3 py-2 text-xs text-red-800 dark:text-red-200 flex items-start gap-2">
+                                            <span className="flex-1">{blogMessage}</span>
+                                            <button type="button" className="opacity-70 hover:opacity-100" onClick={() => setBlogMessage('')} aria-label="Dismiss message">×</button>
+                                        </div>
+                                    )}
 
                                     {/* Create / Edit form */}
                                     {blogShowForm && (
@@ -4029,6 +4306,27 @@ export default function AdminDashboardPage() {
                                                     ))}
                                                 </tbody>
                                             </table>
+                                        </div>
+                                    )}
+                                    {(blogPage > 1 || blogHasNext) && (
+                                        <div className="flex justify-between items-center mt-4">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => fetchBlogs({ page: Math.max(1, blogPage - 1) })}
+                                                disabled={blogPage <= 1 || blogLoading}
+                                            >
+                                                Previous
+                                            </Button>
+                                            <span className="text-xs text-muted-foreground">Page {blogPage}</span>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => fetchBlogs({ page: blogPage + 1 })}
+                                                disabled={!blogHasNext || blogLoading}
+                                            >
+                                                Next
+                                            </Button>
                                         </div>
                                     )}
                                 </CardContent>

@@ -6,6 +6,10 @@ import { questionsAPI } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import QuestionEditModal from './QuestionEditModal';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { buildYearOptions, computeDisplayRenumber, listRows, matchesQuestionConfirm } from '../_lib/adminHelpers';
+import { fetchAllSubjects, useSubjectTopics } from '../_lib/useAdminTaxonomy';
+
+const PAGE_SIZE = 20;
 
 export default function AdminQuestionsEditorPage() {
   const router = useRouter();
@@ -31,9 +35,15 @@ export default function AdminQuestionsEditorPage() {
   const [editing, setEditing] = useState<any | null>(null);
   const onEdit = (q: any) => setEditing(q);
 
+  // The PATCH response uses the detail serializer, which lacks some list
+  // fields (duplicate_count, why_* ...): merge instead of replacing the row.
+  const mergeSavedQuestion = (saved: any) => {
+    setQuestions((prev) => prev.map((q) => (q.id === saved.id ? { ...q, ...saved } : q)));
+  };
+
   // Save & Next: after saving current question, open the next one in the list
   const handleSaveAndNext = (saved: any) => {
-    setQuestions(questions.map((q) => (q.id === saved.id ? saved : q)));
+    mergeSavedQuestion(saved);
     // Find the index of the saved question in the current list
     const idx = questions.findIndex((q) => q.id === saved.id);
     if (idx >= 0 && idx < questions.length - 1) {
@@ -77,6 +87,13 @@ export default function AdminQuestionsEditorPage() {
     }
   }, [onEdit]);
 
+  // At the end of a page, "Next" moves to the next page and opens its first
+  // question once fetchQuestions() has loaded it with the *current* filters.
+  // (It used to run its own fetch from a callback whose deps omitted the
+  // filters, so it could open a question from a stale filter set, and it
+  // fetched the page twice.)
+  const openFirstAfterLoadRef = useRef(false);
+
   const goToNextQuestion = useCallback(() => {
     const currentQuestions = questionsRef.current;
     const currentEditing = editingRef.current;
@@ -85,32 +102,9 @@ export default function AdminQuestionsEditorPage() {
     if (idx < currentQuestions.length - 1) {
       onEdit(currentQuestions[idx + 1]);
     } else if (page < totalPages) {
+      openFirstAfterLoadRef.current = true;
       setNavLoading(true);
       setPage(p => p + 1);
-      setTimeout(async () => {
-        try {
-          const params: any = { page: page + 1, page_size: 20, ordering: 'display_number' };
-          if (examType) params.exam_type = examType;
-          if (year) params.year = year;
-          if (subjectId) params.subject = subjectId;
-          if (topicId) params.topic = topicId;
-          if (difficulty) params.difficulty = difficulty;
-          if (needsReview) params.needs_review = true;
-          if (isDropped) params.is_dropped = true;
-          if (isControversial) params.is_controversial = true;
-          if (isImageBased) params.is_image_based = true;
-          if (search) params.search = search;
-          const res = await questionsAPI.list(params);
-          const nextQuestions = res.data.results || res.data;
-          if (nextQuestions.length > 0) {
-            onEdit(nextQuestions[0]);
-          }
-        } catch (e) {
-          console.error('Failed to fetch next page', e);
-        } finally {
-          setNavLoading(false);
-        }
-      }, 300);
     }
   }, [page, totalPages, onEdit]);
 
@@ -128,9 +122,11 @@ export default function AdminQuestionsEditorPage() {
   // Drag and drop state
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
-  // Subjects and Topics for inline editing
+  // Subjects (all pages) and topics (per subject, on demand) for the filters
+  // and inline editing. A single unpaginated GET only returned 20 of each.
   const [subjects, setSubjects] = useState<any[]>([]);
-  const [topics, setTopics] = useState<any[]>([]);
+  const { ensureTopics, topicsFor, topicsLoading } = useSubjectTopics();
+  const [yearOptions, setYearOptions] = useState<number[]>(() => buildYearOptions([]));
 
   // Per-exam counts so the user can see which exam has what before filtering
   const [examCounts, setExamCounts] = useState<Record<string, number>>({});
@@ -146,15 +142,23 @@ export default function AdminQuestionsEditorPage() {
     try {
       // Use centralized api.ts so base URL failover (DigitalOcean primary
       // + onrender.com blacklist) applies and the Supabase/Django auth
-      // interceptor adds the bearer token. Both endpoints are admin-gated.
-      const [subRes, topRes] = await Promise.all([
-        questionsAPI.getSubjects(),
-        questionsAPI.getTopics(),
-      ]);
-      setSubjects(subRes.data?.results || subRes.data || []);
-      setTopics(topRes.data?.results || topRes.data || []);
+      // interceptor adds the bearer token. Every subject page is loaded;
+      // topics are loaded per subject when a subject filter is picked or a
+      // row's topic picker is opened (useSubjectTopics).
+      setSubjects(await fetchAllSubjects());
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Year filter options from the years the bank actually has (it was a
+  // hard-coded 1996-2025 range, so 2026 papers could not be filtered).
+  const fetchYears = async () => {
+    try {
+      const res = await questionsAPI.getYears();
+      setYearOptions(buildYearOptions(res.data));
+    } catch (e) {
+      console.error('Failed to fetch years', e);
     }
   };
 
@@ -186,8 +190,24 @@ export default function AdminQuestionsEditorPage() {
 
   useEffect(() => {
     fetchTaxonomy();
-    fetchExamCounts();
   }, []);
+
+  // Counts and years are admin list queries: run them only once the admin
+  // gate has passed (on mount they ran before auth was ready, i.e. as an
+  // anonymous request with anonymous counts).
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin) return;
+    fetchExamCounts();
+    fetchYears();
+  }, [isAuthenticated, isAdmin]);
+
+  // Drag-to-reorder rewrites student-facing display numbers, which are
+  // scoped by exam/year/paper. It is only offered when the list is narrowed
+  // to one exam and one year with no other filter, so a drag renumbers
+  // questions of a single paper instead of an arbitrary mix of papers/years.
+  const reorderEnabled =
+    !!examType && !!year && !search && !subjectId && !topicId && !difficulty &&
+    !needsReview && !isDropped && !isControversial && !isImageBased;
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -199,7 +219,10 @@ export default function AdminQuestionsEditorPage() {
       return;
     }
     try {
-      const params: any = { page, page_size: 20, ordering: 'display_number' };
+      // `ordering` is only honoured once the backend lists display_number /
+      // paper in QuestionViewSet.ordering_fields; until then rows come back
+      // newest first and are sorted client-side below when reordering.
+      const params: any = { page, page_size: PAGE_SIZE, ordering: reorderEnabled ? 'paper,display_number' : 'display_number' };
       if (needsReview) params.needs_review = true;
       if (isDropped) params.is_dropped = true;
       if (examType) params.exam_type = examType;
@@ -212,26 +235,39 @@ export default function AdminQuestionsEditorPage() {
       if (search) params.search = search;
 
       const res = await questionsAPI.list(params);
-      const results = res.data?.results || res.data || [];
-      setQuestions(Array.isArray(results) ? results : []);
+      let rows = listRows<any>(res.data);
+      if (reorderEnabled) {
+        // Show the paper in display order so drag positions mean something.
+        rows = [...rows].sort((a, b) =>
+          (Number(a.paper ?? 0) - Number(b.paper ?? 0)) ||
+          ((a.display_number ?? Number.MAX_SAFE_INTEGER) - (b.display_number ?? Number.MAX_SAFE_INTEGER)) ||
+          (a.id - b.id));
+      }
+      setQuestions(rows);
       const count = res.data?.count;
       if (typeof count === 'number' && count > 0) {
-        setTotalPages(Math.max(1, Math.ceil(count / 20)));
-      } else if (Array.isArray(results)) {
+        setTotalPages(Math.max(1, Math.ceil(count / PAGE_SIZE)));
+      } else {
         setTotalPages(1);
+      }
+      if (openFirstAfterLoadRef.current) {
+        openFirstAfterLoadRef.current = false;
+        if (rows.length > 0) onEdit(rows[0]);
       }
     } catch (error: any) {
       console.error('Failed to load questions:', error);
       const detail = error?.response?.data?.detail || error?.message || '';
       setPageError(detail || 'Failed to load questions. Check your connection and try again.');
     } finally {
+      openFirstAfterLoadRef.current = false;
+      setNavLoading(false);
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased]);
+  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, isAuthenticated, isAdmin]);
 
   // Client-side admin gate. Backend enforces permissions; this just keeps
   // non-admins from seeing destructive affordances.
@@ -248,6 +284,13 @@ export default function AdminQuestionsEditorPage() {
 
   // Reset page whenever filters change so the user doesn't sit on an empty page
   const resetPage = () => setPage(1);
+
+  // Search box / button: going back to page 1 already refetches (page is an
+  // effect dependency); calling fetchQuestions() as well raced two requests.
+  const runSearch = () => {
+    if (page !== 1) setPage(1);
+    else fetchQuestions();
+  };
 
   const clearAllFilters = () => {
     setExamType('');
@@ -295,7 +338,7 @@ export default function AdminQuestionsEditorPage() {
         admin_edited: true
       });
       // Update local state
-      setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value, admin_edited: true } : q));
+      setQuestions((prev) => prev.map(q => q.id === id ? { ...q, [field]: value, admin_edited: true } : q));
     } catch (error) {
       console.error(error);
       setPageError('Failed to update question. Change has been reverted.');
@@ -303,31 +346,42 @@ export default function AdminQuestionsEditorPage() {
     }
   };
 
+  // Drag-to-reorder. Display numbers are what students see, scoped by
+  // exam/year/paper, so this only runs when the list is narrowed to one exam
+  // and one year (reorderEnabled), only between rows of the same paper, and
+  // it re-assigns the numbers those rows already have in the new order
+  // (instead of page-relative 1..20 for every row on the page). Only rows
+  // whose number changes are saved, after a confirmation.
   const handleDrop = async (dropIdx: number) => {
-    if (draggedIdx === null || draggedIdx === dropIdx) return;
-
-    const newQuestions = [...questions];
-    const draggedItem = newQuestions[draggedIdx];
-    newQuestions.splice(draggedIdx, 1);
-    newQuestions.splice(dropIdx, 0, draggedItem);
-
-    // Re-assign display numbers based on new order (simplistic approach for current page)
-    const updatedQuestions = newQuestions.map((q, idx) => ({
-      ...q,
-      display_number: (page - 1) * 20 + idx + 1
-    }));
-
-    setQuestions(updatedQuestions);
+    const fromIdx = draggedIdx;
     setDraggedIdx(null);
+    if (fromIdx === null || fromIdx === dropIdx) return;
+    if (!reorderEnabled) {
+      setPageError('To drag-reorder, filter to one exam and one year (no other filters), then drag within a paper.');
+      return;
+    }
 
-    // Bulk update metadata on backend
+    const result = computeDisplayRenumber(questions, fromIdx, dropIdx);
+    if (!result.ok) {
+      setPageError(result.reason);
+      return;
+    }
+    if (result.changes.length === 0) {
+      setQuestions(result.rows);
+      return;
+    }
+    const paper = Number(questions[fromIdx]?.paper ?? 0) || 0;
+    const scope = `${examType.toUpperCase().replace('_', ' ')} ${year}${paper ? ` paper ${paper}` : ''}`;
+    if (!window.confirm(`Renumber ${result.changes.length} question(s) in ${scope}? Students see these display numbers.`)) return;
+
+    setQuestions(result.rows);
     try {
-      await Promise.all(updatedQuestions.map(q =>
-        questionsAPI.update(q.id, { display_number: q.display_number, admin_edited: true })
+      await Promise.all(result.changes.map((change) =>
+        questionsAPI.update(change.id, { display_number: change.display_number, admin_edited: true })
       ));
     } catch (e) {
       console.error(e);
-      setPageError('Error updating display numbers. Reverted to original order.');
+      setPageError('Error updating display numbers. Reloaded the current order from the server.');
       fetchQuestions();
     }
   };
@@ -426,7 +480,9 @@ export default function AdminQuestionsEditorPage() {
 
   const submitRemoveForBank = async () => {
     if (!removeFor) return;
-    if (removeConfirmId.trim() !== String(removeFor.id)) {
+    // The dialog asks for "Q<id>"; the old check only accepted the bare id,
+    // so typing exactly what was asked never enabled the button.
+    if (!matchesQuestionConfirm(removeConfirmId, removeFor.id)) {
       setRemoveError(`Type Q${removeFor.id} exactly to confirm.`);
       return;
     }
@@ -538,13 +594,13 @@ export default function AdminQuestionsEditorPage() {
             className="border border-gray-300 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 p-2 rounded w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (resetPage(), fetchQuestions())}
+            onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
           />
 
           <select
             className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded min-w-40"
             value={subjectId}
-            onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); resetPage(); }}
+            onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); ensureTopics(e.target.value); resetPage(); }}
           >
             <option value="">All Subjects</option>
             {subjects.map((s) => (
@@ -558,12 +614,10 @@ export default function AdminQuestionsEditorPage() {
             onChange={(e) => { setTopicId(e.target.value); resetPage(); }}
             disabled={!subjectId}
           >
-            <option value="">All Topics</option>
-            {topics
-              .filter((t) => !subjectId || String(t.subject) === String(subjectId))
-              .map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+            <option value="">{subjectId && topicsLoading(subjectId) ? 'Loading topics…' : 'All Topics'}</option>
+            {topicsFor(subjectId).map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
           </select>
 
           <select
@@ -572,7 +626,7 @@ export default function AdminQuestionsEditorPage() {
             onChange={(e) => { setYear(e.target.value); resetPage(); }}
           >
             <option value="">All Years</option>
-            {Array.from({ length: 30 }, (_, i) => 2025 - i).map((y) => (
+            {yearOptions.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
@@ -628,7 +682,7 @@ export default function AdminQuestionsEditorPage() {
           </div>
 
           <button
-            onClick={() => { resetPage(); fetchQuestions(); }}
+            onClick={runSearch}
             className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
           >
             Search
@@ -641,7 +695,14 @@ export default function AdminQuestionsEditorPage() {
           <thead className="bg-gray-50 dark:bg-slate-800">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">ID / UUID</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Disp # (Drag)</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider"
+                title={reorderEnabled
+                  ? 'Drag rows within a paper to renumber them.'
+                  : 'Drag-reorder is available when filtered to one exam and one year (no other filters).'}
+              >
+                {reorderEnabled ? 'Disp # (Drag)' : 'Disp #'}
+              </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Subject & Topic</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Text</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wider">Flags</th>
@@ -654,11 +715,14 @@ export default function AdminQuestionsEditorPage() {
             ) : questions.map((q, idx) => (
               <tr
                 key={q.id}
-                draggable
-                onDragStart={() => setDraggedIdx(idx)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => handleDrop(idx)}
-                className={draggedIdx === idx ? "opacity-50 bg-gray-100 dark:bg-slate-700" : "hover:bg-gray-50 dark:hover:bg-slate-800 cursor-move transition-colors"}
+                draggable={reorderEnabled}
+                onDragStart={() => { if (reorderEnabled) setDraggedIdx(idx); }}
+                onDragOver={(e) => { if (reorderEnabled) e.preventDefault(); }}
+                onDrop={() => { if (reorderEnabled) handleDrop(idx); }}
+                onDragEnd={() => setDraggedIdx(null)}
+                className={draggedIdx === idx
+                  ? "opacity-50 bg-gray-100 dark:bg-slate-700"
+                  : `hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${reorderEnabled ? 'cursor-move' : ''}`}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                   {q.id}<br/>
@@ -677,13 +741,17 @@ export default function AdminQuestionsEditorPage() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-slate-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-slate-400 cursor-grab">⣿</span>
+                    {reorderEnabled && <span className="text-gray-500 dark:text-slate-400 cursor-grab">⣿</span>}
+                    {/* Uncontrolled input keyed on the number: after a drag
+                        renumber it re-mounts with the new value (a stale value
+                        would be PATCHed back on the next blur). */}
                     <input
+                      key={`dn-${q.id}-${q.display_number ?? ''}`}
                       type="number"
                       className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-16 text-center rounded"
                       defaultValue={q.display_number || ''}
                       onBlur={(e) => {
-                        if (e.target.value !== String(q.display_number)) {
+                        if (e.target.value !== String(q.display_number ?? '')) {
                           handleUpdate(q.id, 'display_number', parseInt(e.target.value) || null);
                         }
                       }}
@@ -699,14 +767,24 @@ export default function AdminQuestionsEditorPage() {
                     >
                       <option value="">No Subject</option>
                       {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {q.subject && !subjects.some((s) => s.id === q.subject) && (
+                        <option value={q.subject}>{q.subject_name || `Subject #${q.subject}`}</option>
+                      )}
                     </select>
+                    {/* Topics load per subject when the picker is opened; until
+                        then the row's current topic is shown on its own. */}
                     <select
                       className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-1 w-full rounded text-xs"
                       value={q.topic || ''}
-                      onChange={(e) => handleUpdate(q.id, 'topic', parseInt(e.target.value))}
+                      onFocus={() => ensureTopics(q.subject)}
+                      onMouseDown={() => ensureTopics(q.subject)}
+                      onChange={(e) => handleUpdate(q.id, 'topic', e.target.value ? parseInt(e.target.value) : null)}
                     >
-                      <option value="">No Topic</option>
-                      {topics.filter(t => t.subject === q.subject).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      <option value="">{topicsLoading(q.subject) ? 'Loading topics…' : 'No Topic'}</option>
+                      {topicsFor(q.subject).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      {q.topic && !topicsFor(q.subject).some((t) => t.id === q.topic) && (
+                        <option value={q.topic}>{q.topic_name || `Topic #${q.topic}`}</option>
+                      )}
                     </select>
                   </div>
                 </td>
@@ -740,20 +818,16 @@ export default function AdminQuestionsEditorPage() {
                   >
                     Remove
                   </button>
-                  {q.duplicate_count > 1 ? (
+                  {/* The "Merge / Split" placeholder (it only showed a "coming
+                      soon" error banner) was removed; merging is offered when
+                      duplicates exist. */}
+                  {q.duplicate_count > 1 && (
                     <button
                       onClick={() => openMergeDuplicates(q)}
                       className="text-orange-800 hover:text-orange-900 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:text-orange-100 border border-orange-300 dark:border-orange-800 px-3 py-1 rounded font-semibold"
                       title={`${q.duplicate_count} identical copies detected — review & merge`}
                     >
                       Merge Duplicates
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setPageError('Merge/Split feature coming soon!')}
-                      className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:text-indigo-100 border border-indigo-200 dark:border-indigo-800 px-3 py-1 rounded"
-                    >
-                      Merge / Split
                     </button>
                   )}
                 </td>
@@ -782,13 +856,16 @@ export default function AdminQuestionsEditorPage() {
       </div>
 
       {editing && (
+        // key: a fresh modal per question. Without it React reused the
+        // instance on Save & Next / Prev / Next, so the form kept the
+        // previous question's text (whenever the next one already had an
+        // explanation) and saving wrote it into the next question.
         <QuestionEditModal
+          key={editing.id}
           question={editing}
           images={editing.images ?? []}
           onClose={() => setEditing(null)}
-          onSaved={(updated: any) => {
-            setQuestions(questions.map((q) => (q.id === updated.id ? updated : q)));
-          }}
+          onSaved={mergeSavedQuestion}
           onSaveAndNext={handleSaveAndNext}
         />
       )}
@@ -1046,7 +1123,7 @@ export default function AdminQuestionsEditorPage() {
               <button
                 onClick={submitRemoveForBank}
                 disabled={
-                  removeSubmitting || removeConfirmId.trim() !== String(removeFor.id)
+                  removeSubmitting || !matchesQuestionConfirm(removeConfirmId, removeFor.id)
                 }
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
               >

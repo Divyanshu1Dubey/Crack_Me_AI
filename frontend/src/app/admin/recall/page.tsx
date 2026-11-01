@@ -4,6 +4,8 @@
  * Aggregates QuestionImportJob + QuestionImage + DuplicateCluster.
  */
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
 
 interface ImportJob {
@@ -18,12 +20,27 @@ interface ImportJob {
 interface Cluster { id: number; canonical_question_id: number; detection_method: string; member_count?: number; created_at?: string }
 
 export default function AdminRecallPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  // Client-side admin gate, same as the other admin pages (the backend is
+  // the authoritative RBAC; this keeps non-admins from loading the page).
+  const isAdmin = !!user && (user.role === "admin" || user.is_admin);
+
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [images, setImages] = useState<any[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login?next=" + encodeURIComponent("/admin/recall"));
+      return;
+    }
+    if (!isAdmin) {
+      router.replace("/dashboard");
+      return;
+    }
     let alive = true;
     (async () => {
       try {
@@ -41,7 +58,12 @@ export default function AdminRecallPage() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [authLoading, user, isAdmin, router]);
+
+  if (authLoading || !user) {
+    return <p className="p-6 text-slate-400">Checking admin access…</p>;
+  }
+  if (!isAdmin) return null;
 
   if (err) return <p className="p-6 text-rose-300">{err}</p>;
 

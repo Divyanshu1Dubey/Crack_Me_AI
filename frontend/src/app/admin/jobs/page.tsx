@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { jobsAPI, questionsAPI } from '@/lib/api';
+import { hasNextPage, listCount, listRows } from '../_lib/adminHelpers';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,9 @@ export default function AdminJobsPage() {
     const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
 
     const [jobs, setJobs] = useState<any[]>([]);
+    const [jobsTotal, setJobsTotal] = useState(0);
+    const [jobsNextPage, setJobsNextPage] = useState<number | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [tracks, setTracks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -55,31 +59,41 @@ export default function AdminJobsPage() {
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<JobForm>(EMPTY_FORM);
 
-    const fetchJobs = useCallback(async () => {
-        setLoading(true);
+    // The jobs list is paginated (20 per page): page 1 replaces the list,
+    // "Load more" appends the next page.
+    const fetchJobs = useCallback(async (page = 1) => {
+        if (page === 1) setLoading(true);
+        else setLoadingMore(true);
         setError(null);
         try {
-            const res = await jobsAPI.list();
-            const rows = res.data.results || res.data || [];
-            setJobs(Array.isArray(rows) ? rows : []);
-            // Use centralized api.ts so base URL failover (DigitalOcean primary
-            // + onrender.com blacklist) applies. Falls back silently if the
-            // exam-tracks endpoint is unavailable — jobs work fine without it.
-            try {
-                const trackRes = await questionsAPI.getExamTracks();
-                const trackData = trackRes.data?.results || trackRes.data || [];
-                setTracks(Array.isArray(trackData) ? trackData : []);
-            } catch {
-                setTracks([]);
-            }
+            const res = await jobsAPI.list({ page });
+            const rows = listRows<any>(res.data);
+            setJobs(prev => (page === 1 ? rows : [...prev, ...rows]));
+            setJobsTotal(listCount(res.data));
+            setJobsNextPage(hasNextPage(res.data) ? page + 1 : null);
         } catch (err) {
             console.error(err);
             setError('Could not load jobs. Check the API connection.');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     }, []);
 
+    // Exam tracks for the target-track picker. Use centralized api.ts so base
+    // URL failover (DigitalOcean primary + onrender.com blacklist) applies.
+    // Falls back silently if the endpoint is unavailable — jobs work without it.
+    const fetchTracks = useCallback(async () => {
+        try {
+            const trackRes = await questionsAPI.getExamTracks();
+            setTracks(listRows<any>(trackRes.data));
+        } catch {
+            setTracks([]);
+        }
+    }, []);
+
+    // Single load, after the admin gate. (A second unconditional effect used
+    // to fetch everything again on every mount, even for non-admins.)
     useEffect(() => {
         if (authLoading) return;
         if (!user) {
@@ -90,12 +104,9 @@ export default function AdminJobsPage() {
             router.replace('/dashboard');
             return;
         }
-        fetchJobs();
-    }, [authLoading, user, isAdmin, router, fetchJobs]);
-
-    useEffect(() => {
-        fetchJobs();
-    }, [fetchJobs]);
+        fetchJobs(1);
+        fetchTracks();
+    }, [authLoading, user, isAdmin, router, fetchJobs, fetchTracks]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -104,7 +115,7 @@ export default function AdminJobsPage() {
         try {
             await jobsAPI.create({ ...formData, admin_edited: true });
             setFormData(EMPTY_FORM);
-            await fetchJobs();
+            await fetchJobs(1);
         } catch (err) {
             console.error(err);
             setError('Error creating job. Verify all fields are valid.');
@@ -118,7 +129,9 @@ export default function AdminJobsPage() {
         setDeletingId(id);
         try {
             await jobsAPI.remove(id);
-            await fetchJobs();
+            // Drop it locally so rows already loaded with "Load more" stay.
+            setJobs(prev => prev.filter(job => job.id !== id));
+            setJobsTotal(total => Math.max(0, total - 1));
         } catch (err) {
             console.error(err);
             setError('Could not delete job.');
@@ -153,7 +166,7 @@ export default function AdminJobsPage() {
                         Manage medical job postings shown to candidates.
                     </p>
                 </div>
-                <Button variant="outline" onClick={fetchJobs} disabled={loading}>
+                <Button variant="outline" onClick={() => fetchJobs(1)} disabled={loading}>
                     {loading ? 'Refreshing…' : 'Refresh'}
                 </Button>
             </div>
@@ -278,9 +291,10 @@ export default function AdminJobsPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Existing Jobs ({jobs.length})</CardTitle>
+                    <CardTitle>Existing Jobs ({jobsTotal || jobs.length})</CardTitle>
                     <CardDescription>
                         Posted jobs visible on the candidate jobs board.
+                        {jobsTotal > jobs.length && ` Showing ${jobs.length} of ${jobsTotal}.`}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -342,6 +356,18 @@ export default function AdminJobsPage() {
                                     </Button>
                                 </div>
                             ))}
+                            {jobsNextPage !== null && (
+                                <div className="flex justify-center pt-1">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => fetchJobs(jobsNextPage)}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading…' : 'Load more'}
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>

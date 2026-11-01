@@ -3,18 +3,27 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { announcementsAPI, analyticsAPI } from '@/lib/api';
+import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
+import { listRows } from '../_lib/adminHelpers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Megaphone, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
+/**
+ * Uses the analytics announcements API (/api/analytics/announcements/):
+ * that is the model the student header and dashboard read. This page used
+ * to post {title, message, priority} to /api/questions/announcements/, a
+ * different model whose required field is `body`, so every create failed
+ * with 400 and nothing it stored ever reached a student.
+ */
 interface AnnouncementItem {
   id: number;
   title: string;
   message?: string;
-  body?: string;
   priority?: string;
+  is_expired?: boolean;
+  expires_at?: string | null;
   created_at?: string;
 }
 
@@ -31,6 +40,7 @@ export default function AdminAnnouncementsPage() {
     title: '',
     message: '',
     priority: 'normal',
+    expires_at: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -48,11 +58,11 @@ export default function AdminAnnouncementsPage() {
     fetchAnnouncements();
   }, [authLoading, user, isAdmin, router]);
 
+  // Lists the announcements students currently see (active, sent, not expired).
   const fetchAnnouncements = async () => {
     try {
-      const res = await announcementsAPI.list();
-      const data = res.data?.results || res.data || [];
-      setAnnouncements(Array.isArray(data) ? (data as AnnouncementItem[]) : []);
+      const res = await analyticsAPI.getAnnouncements();
+      setAnnouncements(listRows<AnnouncementItem>(res.data));
     } catch (error) {
       console.error('Error fetching announcements:', error);
       setBanner({ kind: 'error', text: 'Could not load announcements.' });
@@ -67,19 +77,32 @@ export default function AdminAnnouncementsPage() {
       setBanner({ kind: 'error', text: 'Title and message are required.' });
       return;
     }
+    let expiresAt: string | undefined;
+    if (formData.expires_at) {
+      const parsed = new Date(formData.expires_at);
+      if (Number.isNaN(parsed.getTime())) {
+        setBanner({ kind: 'error', text: 'Expiry date is not valid.' });
+        return;
+      }
+      expiresAt = parsed.toISOString();
+    }
     setSubmitting(true);
     try {
-      await announcementsAPI.create({
+      await analyticsAPI.createAnnouncement({
         title: formData.title.trim(),
         message: formData.message.trim(),
         priority: formData.priority,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
       });
-      setBanner({ kind: 'success', text: 'Announcement created.' });
-      setFormData({ title: '', message: '', priority: 'normal' });
+      setBanner({ kind: 'success', text: 'Announcement published to students.' });
+      setFormData({ title: '', message: '', priority: 'normal', expires_at: '' });
       await fetchAnnouncements();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating announcement:', error);
-      setBanner({ kind: 'error', text: 'Could not create announcement. Check console for details.' });
+      setBanner({
+        kind: 'error',
+        text: `Could not create announcement: ${extractApiErrorMessage(error?.response?.data, 'request failed')}`,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +111,7 @@ export default function AdminAnnouncementsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this announcement?')) return;
     try {
-      await announcementsAPI.remove(id);
+      await analyticsAPI.deleteAnnouncement(id);
       setBanner({ kind: 'success', text: 'Announcement deleted.' });
       await fetchAnnouncements();
     } catch (error) {
@@ -116,7 +139,7 @@ export default function AdminAnnouncementsPage() {
           <Megaphone className="w-6 h-6" /> Manage Announcements
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Create and manage announcements shown to users. Backend enforces admin permissions.
+          Create and manage announcements shown to users (student header and dashboard). Backend enforces admin permissions.
         </p>
       </div>
 
@@ -189,6 +212,15 @@ export default function AdminAnnouncementsPage() {
                 <option value="urgent">Urgent</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Expires (optional)</label>
+              <Input
+                type="datetime-local"
+                value={formData.expires_at}
+                onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
+                disabled={submitting}
+              />
+            </div>
             <Button type="submit" disabled={submitting}>
               {submitting ? 'Creating…' : 'Create Announcement'}
             </Button>
@@ -198,7 +230,8 @@ export default function AdminAnnouncementsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Existing Announcements</CardTitle>
+          <CardTitle>Live Announcements</CardTitle>
+          <p className="text-xs text-muted-foreground">Active and not expired, as students see them.</p>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -218,8 +251,9 @@ export default function AdminAnnouncementsPage() {
                       Priority: <span className="font-medium">{ann.priority || 'normal'}</span>
                       {' · '}
                       Created: {ann.created_at ? new Date(ann.created_at).toLocaleString() : '—'}
+                      {ann.expires_at && <>{' · '}Expires: {new Date(ann.expires_at).toLocaleString()}</>}
                     </p>
-                    <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message || ann.body}</p>
+                    <p className="text-sm mt-2 whitespace-pre-wrap wrap-break-word">{ann.message}</p>
                   </div>
                   <Button
                     variant="destructive"
