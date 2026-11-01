@@ -21,7 +21,8 @@ from analytics.serializers import (
     DailyActivitySerializer, StudyStreakSerializer,
     StudentAnnouncementSerializer,
 )
-from analytics.views import promote_due_scheduled_announcements, student_announcements, subject_totals
+from analytics.views import (ANSWERED_TEST_ATTEMPT, promote_due_scheduled_announcements, student_announcements,
+                             subject_totals)
 
 
 def _exam_source_q(exam_source: str) -> Q:
@@ -51,8 +52,9 @@ class DashboardBundleView(APIView):
         now = timezone.localdate()
         days_120 = now - datetime.timedelta(days=120)
 
-        # ── 1. Overall stats + subject performance (mirrors DashboardView) ──
-        attempts = TestAttempt.objects.filter(user=user, is_completed=True)
+        # ── 1. Overall stats + subject performance (mirrors DashboardView;
+        # an empty submit is not a test taken) ──
+        attempts = TestAttempt.objects.filter(user=user, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
         overall = attempts.aggregate(
             total_tests=Count('id'),
             avg_score=Avg('score'),
@@ -96,6 +98,7 @@ class DashboardBundleView(APIView):
                 'total_incorrect': total_incorrect,
                 'overall_accuracy': overall_accuracy,
                 'total_time_hours': round((overall['total_time'] or 0) / 3600, 1),
+                'total_time_minutes': round((overall['total_time'] or 0) / 60),
             },
             'subject_performance': subject_performance,
         }

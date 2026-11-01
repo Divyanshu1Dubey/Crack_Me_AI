@@ -5,7 +5,7 @@ import math
 import os
 import threading
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from io import StringIO
 from rest_framework.views import APIView
 from django.core.cache import cache
@@ -14,6 +14,8 @@ from django.core.validators import validate_email
 from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from rest_framework.utils.urls import remove_query_param, replace_query_param
+from django.db import connection
 from django.http import Http404, HttpResponse
 from django.db.models import (Sum, Avg, Count, F, Q, Exists, OuterRef, Value, BooleanField, ExpressionWrapper,
                               FloatField, Min)
@@ -27,9 +29,21 @@ from .serializers import (TopicPerformanceSerializer, DailyActivitySerializer, F
                           MistakeNotebookSerializer)
 from tests_engine.models import TestAttempt
 from questions.models import Question
+from accounts.emails import run_in_background as _accounts_run_in_background
 from accounts.permissions import IsControlTowerAdmin
 
 logger = logging.getLogger(__name__)
+
+# A submitted test with no answer at all is not a test taken: the submit
+# view gives it no XP, no daily activity and no study time
+# (tests_engine.views), so the stats and the leaderboard skip it too.
+ANSWERED_TEST_ATTEMPT = Q(correct_count__gt=0) | Q(incorrect_count__gt=0)
+
+# AnalyticsEvent names written only by the server. The public ingest
+# endpoint refuses them, so clients cannot forge these ledger rows.
+QUEST_FREEZE_EVENT = 'quest_streak_freeze_used'
+XP_LEDGER_START_EVENT = 'xp_ledger_start'
+SERVER_ONLY_EVENTS = (QUEST_FREEZE_EVENT, XP_LEDGER_START_EVENT)
 
 
 from django.core.mail import send_mail
@@ -77,26 +91,23 @@ def send_admin_notification_email(subject, message) -> bool:
 
 
 def _run_in_background(func, *args) -> None:
-    """Run a best-effort notification off the request thread (after the
-    current transaction commits), so slow SMTP never delays the response.
-    ``ADMIN_NOTIFICATIONS_SYNC`` runs it inline (tests)."""
-    if getattr(settings, 'ADMIN_NOTIFICATIONS_SYNC', False):
-        func(*args)
-        return
+    """Run a best-effort notification after the current transaction commits,
+    off the request thread, so slow SMTP never delays the response.
 
-    def _target():
-        from django.db import connection
+    Uses the shared helper (accounts.emails.run_in_background; it runs the
+    task synchronously under the in-memory test mail backend). A worker
+    thread closes the DB connection it opened, which the helper does not.
+    """
+    caller = threading.get_ident()
+
+    def _task():
         try:
             func(*args)
-        except Exception:
-            logger.exception('Background admin notification failed')
         finally:
-            connection.close()
+            if threading.get_ident() != caller:
+                connection.close()
 
-    from django.db import transaction
-    transaction.on_commit(
-        lambda: threading.Thread(target=_target, name='admin-notify', daemon=True).start()
-    )
+    _accounts_run_in_background(_task)
 
 
 class _DefaultRateThrottle(UserRateThrottle):
@@ -172,7 +183,7 @@ class DashboardView(APIView):
         cached = cache.get(cache_key)
         if cached is not None:
             return Response(cached)
-        attempts = TestAttempt.objects.filter(user=user, is_completed=True)
+        attempts = TestAttempt.objects.filter(user=user, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
 
         # Overall stats
         overall = attempts.aggregate(
@@ -220,6 +231,7 @@ class DashboardView(APIView):
                 'total_incorrect': total_incorrect,
                 'overall_accuracy': overall_accuracy,
                 'total_time_hours': round((overall['total_time'] or 0) / 3600, 1),
+                'total_time_minutes': round((overall['total_time'] or 0) / 60),
             },
             'subject_performance': subject_perf,
         })
@@ -327,7 +339,10 @@ class ScorePredictionView(APIView):
 
     def get(self, request):
         user = request.user
-        attempts = TestAttempt.objects.filter(user=user, is_completed=True).select_related('test').order_by('-started_at')
+        attempts = (
+            TestAttempt.objects.filter(user=user, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
+            .select_related('test').order_by('-started_at')
+        )
         attempt_count = attempts.count()
 
         if attempt_count < 3:
@@ -414,7 +429,7 @@ class PerformanceTrendView(APIView):
         # froze after the 20th test), charted oldest -> newest.
         attempts = list(TestAttempt.objects.filter(
             user=request.user, is_completed=True
-        ).select_related('test').order_by('-started_at')[:20])
+        ).filter(ANSWERED_TEST_ATTEMPT).select_related('test').order_by('-started_at')[:20])
         attempts.reverse()
 
         trend_data = []
@@ -511,7 +526,17 @@ class FeedbackListCreateView(APIView):
         total = feedbacks.count()
         start = (page - 1) * page_size
         serializer = FeedbackSerializer(feedbacks[start:start + page_size], many=True)
-        return Response({'results': serializer.data, 'count': total, 'page': page, 'page_size': page_size})
+        # DRF-style links, so clients can reach older feedback page by page.
+        url = request.build_absolute_uri()
+        next_url = replace_query_param(url, 'page', page + 1) if start + page_size < total else None
+        if page <= 1:
+            previous_url = None
+        elif page == 2:
+            previous_url = remove_query_param(url, 'page')
+        else:
+            previous_url = replace_query_param(url, 'page', page - 1)
+        return Response({'results': serializer.data, 'count': total, 'page': page, 'page_size': page_size,
+                         'next': next_url, 'previous': previous_url})
 
     def post(self, request):
         serializer = FeedbackSerializer(data=request.data)
@@ -847,9 +872,10 @@ class AnnouncementListView(APIView):
         if getattr(user, 'is_admin', False):
             # Admins manage every announcement, including ones targeted at
             # students (the role filter used to hide those from the admin
-            # list, so they could not be deleted). ?scope=all adds drafts,
-            # scheduled, inactive and expired rows.
-            if request.query_params.get('scope') == 'all':
+            # list, so they could not be deleted). ?scope=all (or ?all=1)
+            # adds drafts, scheduled, inactive and expired rows.
+            params = request.query_params
+            if params.get('scope') == 'all' or (params.get('all') or '').lower() in ('1', 'true'):
                 rows = Announcement.objects.all()
             else:
                 rows = _live_announcements(now)
@@ -970,11 +996,35 @@ def _scoped_by_user(qs, user_ids, eligible_only):
     return qs.values('user_id').order_by()
 
 
+def _xp_ledger_start():
+    """When the XP ledger started, from its stored marker.
+
+    MIN(XPEvent.created_at) moves later whenever the earliest rows go away
+    (they are deleted with their user), and the days it skips would then be
+    re-derived from activity on top of everyone's real ledger rows. So the
+    first answer is stored once, as a server-only AnalyticsEvent marker
+    (the public ingest endpoint refuses that name), and kept.
+    """
+    marker = (
+        AnalyticsEvent.objects.filter(event_name=XP_LEDGER_START_EVENT)
+        .order_by('created_at').values_list('created_at', flat=True).first()
+    )
+    if marker is not None:
+        return marker
+    first = XPEvent.objects.aggregate(first=Min('created_at'))['first']
+    if first is not None:
+        try:
+            AnalyticsEvent.objects.create(event_name=XP_LEDGER_START_EVENT, created_at=first)
+        except Exception:  # the marker is an optimisation; never fail the board over it
+            logger.warning('Could not store the XP ledger start marker', exc_info=True)
+    return first
+
+
 def _xp_ledger_first_day():
     """Local midnight of the first day the XP ledger covers; None when empty."""
     first = cache.get('analytics:xp_ledger_first')
     if first is None:
-        first = XPEvent.objects.aggregate(first=Min('created_at'))['first']
+        first = _xp_ledger_start()
         if first is None:
             return None
         try:
@@ -1002,7 +1052,8 @@ def _rebuilt_period_xp(start, end, user_ids, eligible_only) -> dict:
         daily = daily.filter(date__lt=timezone.localtime(end).date())
     daily = _scoped_by_user(daily, user_ids, eligible_only).annotate(
         answered=Sum('questions_attempted'), correct=Sum('correct_answers'))
-    tests = _scoped_by_user(_window(TestAttempt.objects.filter(is_completed=True), 'completed_at'),
+    tests = _scoped_by_user(_window(TestAttempt.objects.filter(is_completed=True).filter(ANSWERED_TEST_ATTEMPT),
+                                    'completed_at'),
                             user_ids, eligible_only).annotate(
         t_correct=Sum('correct_count'), t_incorrect=Sum('incorrect_count'), t_count=Count('id'))
     quests = _scoped_by_user(_window(UserQuest.objects.filter(is_claimed=True), 'completed_at'),
@@ -1153,7 +1204,7 @@ class LeaderboardView(APIView):
         streaks = {s.user_id: s for s in StudyStreak.objects.filter(user_id__in=shown_ids)}
         accuracy_rows = {
             r['user_id']: r for r in (
-                TestAttempt.objects.filter(user_id__in=shown_ids, is_completed=True)
+                TestAttempt.objects.filter(user_id__in=shown_ids, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
                 .values('user_id').order_by()
                 .annotate(total_correct=Sum('correct_count'), total_incorrect=Sum('incorrect_count'), tests_done=Count('id'))
             )
@@ -1403,15 +1454,16 @@ class AdminWeakAreaControlView(APIView):
 def _notebook_queryset(user):
     """The user's Mistake Notebook rows, annotated with whether the answer key
     may be shown (see MistakeNotebookSerializer.to_representation): premium /
-    admin users, free showcase questions, or questions the user actually
-    answered (question bank, or a completed test)."""
+    admin / staff users, free showcase questions, or questions the user
+    actually answered (question bank, or a completed test) -- except
+    scholarship-test questions, whose answers non-subscribers never see."""
     from accounts.models_freemium import FreeShowcaseQuestion
     from accounts.utils import is_premium
     from questions.models import QuestionAttempt
     from tests_engine.models import QuestionResponse
 
     qs = MistakeNotebook.objects.filter(user=user).select_related('question__subject', 'question__topic')
-    if is_premium(user):
+    if is_premium(user) or getattr(user, 'is_staff', False):
         return qs.annotate(answer_visible=Value(True, output_field=BooleanField()))
     return qs.annotate(
         answered_in_bank=Exists(QuestionAttempt.objects.filter(user=user, question_id=OuterRef('question_id'))),
@@ -1669,8 +1721,7 @@ class UserQuestDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-QUEST_FREEZE_EVENT = 'quest_streak_freeze_used'  # server-written AnalyticsEvent ledger
-QUEST_FREEZE_COOLDOWN_DAYS = 7
+QUEST_FREEZE_COOLDOWN_DAYS = 7  # freezes are a server-written AnalyticsEvent ledger (QUEST_FREEZE_EVENT)
 
 
 def _parse_bool(value) -> bool:
@@ -1762,13 +1813,21 @@ class StudyTimeView(APIView):
 
     def get(self, request):
         qs = StudyTimeBreakdown.objects.filter(user=request.user)
-        # Date range filter
-        start = request.query_params.get('start')
-        end = request.query_params.get('end')
-        if start:
-            qs = qs.filter(date__gte=start)
-        if end:
-            qs = qs.filter(date__lte=end)
+        # Date range filter (?start= / ?end=, YYYY-MM-DD). A malformed date
+        # used to reach the database and fail with a 500.
+        bounds = {}
+        for key in ('start', 'end'):
+            raw = (request.query_params.get(key) or '').strip()
+            if not raw:
+                continue
+            try:
+                bounds[key] = date.fromisoformat(raw)
+            except ValueError:
+                return Response({'error': f'{key} must be a date in YYYY-MM-DD format'}, status=400)
+        if 'start' in bounds:
+            qs = qs.filter(date__gte=bounds['start'])
+        if 'end' in bounds:
+            qs = qs.filter(date__lte=bounds['end'])
 
         serializer = StudyTimeBreakdownSerializer(qs, many=True)
         # Aggregate totals

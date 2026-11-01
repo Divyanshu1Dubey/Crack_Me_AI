@@ -185,13 +185,17 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
 
 
 def mistake_answer_visible(instance) -> bool:
-    """True when the annotated notebook row may expose its answer key."""
-    return bool(
-        getattr(instance, 'answer_visible', False)
-        or getattr(instance, 'answered_in_bank', False)
-        or getattr(instance, 'answered_in_test', False)
-        or getattr(instance, 'is_showcase', False)
-    )
+    """True when the annotated notebook row may expose its answer key.
+
+    Having answered a question is enough, except for scholarship-test
+    questions: their answers stay hidden from non-subscribers everywhere
+    (unless the question is also a free showcase question).
+    """
+    if getattr(instance, 'answer_visible', False) or getattr(instance, 'is_showcase', False):
+        return True
+    answered = getattr(instance, 'answered_in_bank', False) or getattr(instance, 'answered_in_test', False)
+    question = getattr(instance, 'question', None)
+    return bool(answered and not getattr(question, 'is_scholarship_eligible', False))
 
 
 class TopicNoteListSerializer(serializers.Serializer):

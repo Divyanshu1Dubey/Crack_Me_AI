@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { questsAPI } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -78,9 +78,11 @@ export default function QuestsPage() {
         }
     };
 
+    // The route layout puts this page inside the app shell (.page-container),
+    // which already pads the page; keep our own padding only outside it.
     if (loading) {
         return (
-            <div className="max-w-4xl mx-auto p-6 space-y-4">
+            <div className="max-w-4xl mx-auto p-6 [.page-container_&]:p-0 space-y-4">
                 <Skeleton className="h-8 w-48" />
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}
             </div>
@@ -91,7 +93,7 @@ export default function QuestsPage() {
     const completedQuests = quests.filter(q => q.is_completed);
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="max-w-4xl mx-auto p-4 md:p-6 [.page-container_&]:p-0 space-y-6">
             {/* Header */}
             <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
@@ -111,10 +113,10 @@ export default function QuestsPage() {
                             <div className="text-4xl">🔥</div>
                             <div>
                                 <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                                    {streak.current_streak} days
+                                    {streak.current_streak} {streak.current_streak === 1 ? 'day' : 'days'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                    Best: {streak.longest_streak} days
+                                    Best: {streak.longest_streak} {streak.longest_streak === 1 ? 'day' : 'days'}
                                 </div>
                             </div>
                         </div>
@@ -142,14 +144,15 @@ export default function QuestsPage() {
                         const progress = quest.target_value > 0
                             ? Math.min((quest.current_value / quest.target_value) * 100, 100)
                             : 0;
+                        const remaining = Math.max(0, quest.target_value - quest.current_value);
                         return (
                             <Card key={quest.id}>
                                 <CardContent className="p-4">
                                     <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-primary/10 rounded-lg">
+                                        <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                                             <Icon className="w-5 h-5 text-primary" />
                                         </div>
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <div className="font-medium">{quest.title}</div>
                                             <p className="text-sm text-muted-foreground">{quest.description}</p>
                                             <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
@@ -167,13 +170,22 @@ export default function QuestsPage() {
                                                 </Badge>
                                             </div>
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleComplete(quest.id)}
-                                            disabled={completing === quest.id || progress < 100}
-                                        >
-                                            {completing === quest.id ? '...' : 'Claim'}
-                                        </Button>
+                                        {/* Claim appears only once the quest is done; a disabled
+                                            primary button read as a broken action. */}
+                                        {progress >= 100 ? (
+                                            <Button
+                                                size="sm"
+                                                className="shrink-0"
+                                                onClick={() => handleComplete(quest.id)}
+                                                disabled={completing === quest.id}
+                                            >
+                                                {completing === quest.id ? 'Claiming…' : 'Claim'}
+                                            </Button>
+                                        ) : (
+                                            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground tabular-nums">
+                                                {remaining} to go
+                                            </span>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>

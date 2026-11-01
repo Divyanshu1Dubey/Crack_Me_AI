@@ -413,23 +413,28 @@ export default function RoadmapPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Tab Buttons */}
-                    <div className="flex gap-3">
+                    {/* Tab Buttons: two equal halves with short labels on
+                        phones (the second tab used to run off the screen). */}
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
                         <Button
                             variant={activeTab === 'plan' ? 'default' : 'outline'}
                             onClick={() => setActiveTab('plan')}
-                            className="gap-2"
+                            className="gap-2 min-w-0"
+                            aria-pressed={activeTab === 'plan'}
                         >
                             <Brain className="w-4 h-4" />
-                            Personalized Study Plan
+                            <span className="sm:hidden">Study Plan</span>
+                            <span className="hidden sm:inline">Personalized Study Plan</span>
                         </Button>
                         <Button
                             variant={activeTab === 'highyield' ? 'default' : 'outline'}
                             onClick={() => setActiveTab('highyield')}
-                            className="gap-2"
+                            className="gap-2 min-w-0"
+                            aria-pressed={activeTab === 'highyield'}
                         >
                             <TrendingUp className="w-4 h-4" />
-                            High Yield Topics
+                            <span className="sm:hidden">High Yield</span>
+                            <span className="hidden sm:inline">High Yield Topics</span>
                         </Button>
                     </div>
 

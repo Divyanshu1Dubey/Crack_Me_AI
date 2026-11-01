@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { flashcardsAPI, aiAPI } from '@/lib/api';
+import api, { flashcardsAPI, aiAPI } from '@/lib/api';
 import {
     Layers, Plus, RotateCcw, CheckCircle, Clock,
     ChevronLeft, ChevronRight, Brain, Trash2, X,
@@ -36,6 +36,49 @@ const difficultyColors: Record<string, string> = {
     hard: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
 };
 
+/**
+ * GET /questions/flashcards/analytics/ -- computed over ALL of the user's
+ * cards on the server (the list endpoint is paginated, so counting the
+ * loaded page undercounted). retention_rate is a 0-1 fraction from the real
+ * review history, null before the first review.
+ */
+interface FlashcardStats {
+    total_cards: number;
+    due_today?: number;
+    /** Older API name of due_today. */
+    cards_due_today?: number;
+    reviewed_cards?: number;
+    retention_rate?: number | null;
+    avg_ease_factor?: number;
+    avg_interval?: number;
+    interval_distribution?: Record<string, number>;
+}
+
+const LIST_PAGE_SIZE = 100;
+const MAX_LIST_PAGES = 20;
+
+/** Every card of the (paginated) flashcard list, following DRF's `next` links. */
+async function fetchAllCards(params: Record<string, string> = {}): Promise<Flashcard[]> {
+    const rows: Flashcard[] = [];
+    let res = await api.get('/questions/flashcards/', { params: { ...params, page_size: LIST_PAGE_SIZE } });
+    for (let page = 1; page <= MAX_LIST_PAGES; page++) {
+        const body = res.data;
+        if (Array.isArray(body)) return [...rows, ...body];
+        rows.push(...(body?.results || []));
+        const next: string | null = body?.next || null;
+        if (!next || page === MAX_LIST_PAGES) break;
+        // `next` is absolute; keep the path + query relative to the API base (/api).
+        res = await api.get(next.replace(/^.*?\/api(?=\/)/, ''));
+    }
+    return rows;
+}
+
+/** "84%" from a 0-1 retention fraction (a 0-100 value is taken as-is). */
+function formatRetention(rate: number | null | undefined): string {
+    if (typeof rate !== 'number' || Number.isNaN(rate)) return '—';
+    return `${Math.round(rate <= 1 ? rate * 100 : rate)}%`;
+}
+
 const qualityLabels = [
     { q: 0, label: 'Blackout', color: 'bg-red-500 hover:bg-red-600', desc: 'No idea' },
     { q: 1, label: 'Wrong', color: 'bg-red-400 hover:bg-red-500', desc: 'Incorrect' },
@@ -63,24 +106,24 @@ export default function FlashcardsPage() {
     const [noteText, setNoteText] = useState('');
     const [generatingMnemonic, setGeneratingMnemonic] = useState(false);
     const [showStudyTools, setShowStudyTools] = useState(false);
-    const [analytics, setAnalytics] = useState<{
-        total_cards: number; cards_due_today: number; retention_rate: number;
-        avg_ease_factor: number; avg_interval: number;
-        interval_distribution: Record<string, number>;
-    } | null>(null);
+    const [analytics, setAnalytics] = useState<FlashcardStats | null>(null);
+
+    const refreshAnalytics = useCallback(() => {
+        flashcardsAPI.analytics()
+            .then(res => { if (res.data) setAnalytics(res.data as FlashcardStats); })
+            .catch(() => { /* keep the last numbers */ });
+    }, []);
 
     const fetchCards = useCallback(() => {
         setLoading(true);
         Promise.all([
-            flashcardsAPI.list().catch(() => ({ data: [] })),
-            flashcardsAPI.list({ due: 'true' }).catch(() => ({ data: [] })),
+            fetchAllCards().catch(() => [] as Flashcard[]),
+            fetchAllCards({ due: 'true' }).catch(() => [] as Flashcard[]),
             flashcardsAPI.analytics().catch(() => ({ data: null })),
-        ]).then(([allRes, dueRes, analyticsRes]) => {
-            const all = Array.isArray(allRes.data) ? allRes.data : allRes.data?.results || [];
-            const due = Array.isArray(dueRes.data) ? dueRes.data : dueRes.data?.results || [];
+        ]).then(([all, due, analyticsRes]) => {
             setCards(all);
             setDueCards(due);
-            if (analyticsRes.data) setAnalytics(analyticsRes.data);
+            if (analyticsRes.data) setAnalytics(analyticsRes.data as FlashcardStats);
             setLoading(false);
         });
     }, []);
@@ -98,7 +141,7 @@ export default function FlashcardsPage() {
         try {
             // personal_note is accepted by the serializer; it used to be dropped here.
             const payload = { front: form.front, back: form.back, difficulty: form.difficulty, personal_note: form.note.trim() };
-            const response = await flashcardsAPI.create(payload);
+            await flashcardsAPI.create(payload);
             setForm({ front: '', back: '', difficulty: 'medium', note: '' });
             setCreateSuccess(true);
             setTimeout(() => {
@@ -127,6 +170,7 @@ export default function FlashcardsPage() {
                 setCurrentIndex(updated.length - 1);
             }
             if (updated.length === 0) setMode('browse');
+            refreshAnalytics();
         } catch { /* ignore */ }
     };
 
@@ -135,6 +179,7 @@ export default function FlashcardsPage() {
             await flashcardsAPI.delete(id);
             setCards(cards.filter(c => c.id !== id));
             setDueCards(dueCards.filter(c => c.id !== id));
+            refreshAnalytics();
         } catch { /* ignore */ }
     };
 
@@ -147,11 +192,13 @@ export default function FlashcardsPage() {
         } catch { /* ignore */ }
     };
 
-    const generateMnemonic = async (topic: string) => {
+    const generateMnemonic = async (topic: string): Promise<string | null> => {
         setGeneratingMnemonic(true);
         try {
             const res = await aiAPI.generateMnemonic({ topic });
-            return res.data.mnemonic;
+            // An offline / outage reply is not a mnemonic; never save it into a card.
+            const text = res.data?.offline ? '' : res.data?.mnemonic;
+            return typeof text === 'string' && text.trim() ? text : null;
         } catch {
             return null;
         } finally {
@@ -161,9 +208,12 @@ export default function FlashcardsPage() {
 
     const handleGenerateMnemonicForCard = async () => {
         if (!form.front.trim()) return;
+        setCreateError(null);
         const mnemonic = await generateMnemonic(form.front);
         if (mnemonic) {
             setForm({ ...form, back: form.back ? `${form.back}\n\n🧠 Mnemonic: ${mnemonic}` : `🧠 Mnemonic: ${mnemonic}` });
+        } else {
+            setCreateError('Could not generate a mnemonic right now. Please try again in a moment.');
         }
     };
 
@@ -177,12 +227,12 @@ export default function FlashcardsPage() {
     if (authLoading) return null;
 
     const currentCard = dueCards[currentIndex];
-    // From real review history: a card counts once it has been graded at least
-    // once (new cards start at ease 2.5, so they used to show as "retained").
-    const reviewedCards = cards.filter(c => (c.review_count || 0) > 0);
-    const retentionPct = reviewedCards.length > 0
-        ? Math.round((reviewedCards.filter(c => c.ease_factor >= 2.5).length / reviewedCards.length) * 100)
-        : null;
+    // Stats come from the server over all cards and the real review history
+    // (counting the loaded cards' review_count hid every lapsed card, since a
+    // lapse resets it, and only ever saw the first page).
+    const totalCards = analytics?.total_cards ?? cards.length;
+    const dueToday = analytics?.due_today ?? analytics?.cards_due_today ?? dueCards.length;
+    const reviewedCards = analytics?.reviewed_cards;
 
     return (
         <>
@@ -250,7 +300,7 @@ export default function FlashcardsPage() {
                                         <BookOpen className="w-6 h-6 text-emerald-500 mb-2" />
                                         <h4 className="font-semibold text-sm mb-1">Smart Review</h4>
                                         <p className="text-xs text-muted-foreground mb-3">SM-2 algorithm optimizes your review schedule</p>
-                                        <Badge variant="outline" className="text-xs">{cards.length} cards tracked</Badge>
+                                        <Badge variant="outline" className="text-xs">{totalCards} {totalCards === 1 ? 'card' : 'cards'} tracked</Badge>
                                     </div>
                                 </div>
                             </CardContent>
@@ -264,7 +314,7 @@ export default function FlashcardsPage() {
                                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
                                     <Layers className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-blue-500" />
                                     <div>
-                                        <p className="text-xl sm:text-2xl font-bold">{cards.length}</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{totalCards}</p>
                                         <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Total Cards</p>
                                     </div>
                                 </CardContent>
@@ -273,7 +323,7 @@ export default function FlashcardsPage() {
                                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
                                     <Clock className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-amber-500" />
                                     <div>
-                                        <p className="text-xl sm:text-2xl font-bold">{dueCards.length}</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{dueToday}</p>
                                         <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Due for Review</p>
                                     </div>
                                 </CardContent>
@@ -282,7 +332,9 @@ export default function FlashcardsPage() {
                                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
                                     <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-emerald-500" />
                                     <div>
-                                        <p className="text-xl sm:text-2xl font-bold">{reviewedCards.length}</p>
+                                        <p className="text-xl sm:text-2xl font-bold" title="Cards you have graded at least once">
+                                            {typeof reviewedCards === 'number' ? reviewedCards : '—'}
+                                        </p>
                                         <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Reviewed</p>
                                     </div>
                                 </CardContent>
@@ -299,21 +351,22 @@ export default function FlashcardsPage() {
                             <CardContent className="pb-4">
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-emerald-600" title="Share of your reviewed cards you recalled easily">
-                                            {retentionPct === null ? '—' : `${retentionPct}%`}
+                                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400" title="Share of your reviews you recalled (not forgotten)">
+                                            {/* Older APIs (no reviewed_cards) sent an ease-based number, not retention. */}
+                                            {typeof reviewedCards === 'number' ? formatRetention(analytics.retention_rate) : '—'}
                                         </p>
                                         <p className="text-[10px] text-muted-foreground">Retention Rate</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-blue-600">{analytics.avg_ease_factor}</p>
+                                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{analytics.avg_ease_factor ?? '—'}</p>
                                         <p className="text-[10px] text-muted-foreground">Avg Ease Factor</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-amber-600">{analytics.avg_interval}d</p>
+                                        <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{typeof analytics.avg_interval === 'number' ? `${analytics.avg_interval}d` : '—'}</p>
                                         <p className="text-[10px] text-muted-foreground">Avg Interval</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-purple-600">{analytics.cards_due_today}</p>
+                                        <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{dueToday}</p>
                                         <p className="text-[10px] text-muted-foreground">Due Today</p>
                                     </div>
                                 </div>
@@ -325,7 +378,7 @@ export default function FlashcardsPage() {
                                             { key: '8_30_days', color: 'bg-emerald-400', label: '8-30d' },
                                             { key: '30_plus_days', color: 'bg-blue-400', label: '30d+' },
                                         ].map(({ key, color }) => {
-                                            const count = analytics.interval_distribution[key] || 0;
+                                            const count = analytics.interval_distribution?.[key] || 0;
                                             const pct = analytics.total_cards > 0 ? (count / analytics.total_cards) * 100 : 0;
                                             return pct > 0 ? <div key={key} className={`${color} rounded-full`} style={{ width: `${pct}%` }} title={`${key}: ${count} cards`} /> : null;
                                         })}

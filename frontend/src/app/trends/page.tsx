@@ -15,6 +15,7 @@ import {
     ChevronDown, ChevronUp
 } from 'lucide-react';
 import api from '@/lib/api';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 
@@ -101,16 +102,20 @@ const HIGH_YIELD_TOPICS = [
 ];
 
 export default function TrendsPage() {
+    // Member page (like the endpoint): wait for auth, then load. The request
+    // used to fire before the session was ready and render only dashes.
+    const { ready } = useRequireAuth();
     const [stats, setStats] = useState<StatsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [expandedSubject, setExpandedSubject] = useState<number | null>(0);
 
     useEffect(() => {
+        if (!ready) return;
         api.get('/analytics/pyq-trends/', { params: { exam_source: 'UPSC CMS' } }).then(res => {
             setStats(res.data);
             setLoading(false);
         }).catch(() => setLoading(false));
-    }, []);
+    }, [ready]);
 
     // Process trends data
     const trends: TrendItem[] = stats?.trends || [];
@@ -203,6 +208,11 @@ export default function TrendsPage() {
                         </div>
                     </div>
 
+                    {years.length === 0 ? (
+                        <p className="p-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                            {stats ? 'No dated UPSC CMS questions in the bank yet.' : 'Could not load exam trends. Please refresh the page.'}
+                        </p>
+                    ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -224,7 +234,10 @@ export default function TrendsPage() {
                                                 <div className="w-3 h-12 rounded-full" style={{ background: sub.color || 'var(--accent-primary)' }}></div>
                                                 <div>
                                                     <div className="font-black text-lg group-hover:text-[var(--accent-primary)] transition-colors">{sub.name}</div>
-                                                    <div className="text-xs text-[var(--text-secondary)] font-bold tracking-widest uppercase">{sub.code} Section</div>
+                                                    {/* The "Imported" bucket is shown as "Expert Curated"; its code is internal. */}
+                                                    {sub.code && sub.code.toUpperCase() !== 'IMPORTED' && (
+                                                        <div className="text-xs text-[var(--text-secondary)] font-bold tracking-widest uppercase">{sub.code} Section</div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -268,6 +281,7 @@ export default function TrendsPage() {
                             </tbody>
                         </table>
                     </div>
+                    )}
                 </div>
 
                 {/* Curated PYQ High-Yield Topics (editorial list, not computed) */}

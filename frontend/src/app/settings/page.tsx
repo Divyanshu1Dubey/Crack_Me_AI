@@ -35,10 +35,19 @@ export default function SettingsPage() {
         ip_address: string;
         last_login: string;
         is_active: boolean;
+        /** Set by the API when this row is the device making the request. */
+        is_current?: boolean;
     }
     const [devices, setDevices] = useState<Device[]>([]);
     const [loadingDevices, setLoadingDevices] = useState(false);
     const [deviceError, setDeviceError] = useState<string | null>(null);
+    // api.ts sends a device that is over the limit here with ?deviceLimit=1.
+    // Read after mount (client only) so the page needs no Suspense boundary.
+    const [deviceLimitHit, setDeviceLimitHit] = useState(false);
+    useEffect(() => {
+        setDeviceLimitHit(new URLSearchParams(window.location.search).get('deviceLimit') === '1');
+    }, []);
+    const deviceLimit = user?.is_subscribed ? 4 : 2;
 
     useEffect(() => {
         if (ready && user) {
@@ -92,6 +101,10 @@ export default function SettingsPage() {
         try {
             await authAPI.logoutDevice(deviceId);
             setDevices(devices.filter(d => d.id !== deviceId));
+            if (deviceLimitHit) {
+                setDeviceLimitHit(false);
+                setMessage({ type: 'success', text: 'Device removed. You can keep using CrackLabs on this device.' });
+            }
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
             setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to remove device' });
@@ -119,19 +132,36 @@ export default function SettingsPage() {
                     </div>
                 )}
 
+                {deviceLimitHit && (
+                    <div role="alert" className="glass-card p-4 mb-6 flex items-start gap-3 max-w-2xl" style={{
+                        borderColor: 'rgba(245,158,11,0.45)',
+                        background: 'rgba(245,158,11,0.08)',
+                    }}>
+                        <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div className="text-sm">
+                            <p className="font-semibold text-foreground">Device limit reached</p>
+                            <p className="text-muted-foreground mt-0.5">
+                                Your plan allows {deviceLimit} signed-in devices. Remove a device under{' '}
+                                <a href="#connected-devices" className="font-medium text-primary underline-offset-2 hover:underline">Connected Devices</a>{' '}
+                                to keep using CrackLabs on this one.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-6 max-w-2xl">
-                    {/* Profile Bonus Banner */}
+                    {/* Profile Bonus Banner (stacks on phones so the copy keeps its width) */}
                     {!user?.profile_bonus_rewarded && (
-                        <div className="glass-card p-4 flex items-center justify-between gap-4 border-dashed animate-fadeInUp" style={{
+                        <div className="glass-card p-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 border-dashed animate-fadeInUp" style={{
                             borderColor: 'rgba(245,158,11,0.4)',
                             background: 'linear-gradient(135deg, rgba(245,158,11,0.07) 0%, rgba(251,191,36,0.03) 100%)',
                         }}>
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
                                     <Gift className="w-5 h-5 animate-pulse" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-sm text-foreground">Get 10 Free Tokens! 🎁</h4>
+                                    <h4 className="font-bold text-sm text-foreground">Get 10 Free Tokens!&nbsp;🎁</h4>
                                     <p className="text-xs text-muted-foreground mt-0.5">Fill in both your Mobile Number and name of College in your profile to claim your bonus tokens.</p>
                                 </div>
                             </div>
@@ -273,14 +303,14 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Connected Devices */}
-                    <div className="glass-card p-6">
-                        <div className="flex items-center justify-between mb-4">
+                    <div id="connected-devices" className="glass-card p-6 scroll-mt-24">
+                        <div className="flex items-center justify-between gap-3 mb-4">
                             <h3 className="font-bold flex items-center gap-2">
                                 <Laptop className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
                                 Connected Devices
                             </h3>
-                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-800 text-slate-300">
-                                {devices.length} / {user?.is_subscribed ? '4' : '2'} Limits
+                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+                                {devices.length} of {deviceLimit} devices
                             </span>
                         </div>
                         <p className="text-xs text-muted-foreground mb-4">
@@ -297,19 +327,20 @@ export default function SettingsPage() {
                             {loadingDevices ? (
                                 <div className="text-sm text-muted-foreground animate-pulse">Loading devices...</div>
                             ) : devices.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">No active devices found.</div>
+                                <div className="text-sm text-muted-foreground">Only this device is signed in.</div>
                             ) : (
-                                devices.map((device, idx) => (
-                                    <div key={device.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/50 border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 rounded-lg bg-slate-800/80">
-                                                <Laptop className="w-4 h-4 text-slate-400" />
+                                devices.map((device) => (
+                                    <div key={device.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="p-2 rounded-lg bg-muted shrink-0">
+                                                <Laptop className="w-4 h-4 text-muted-foreground" />
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-medium flex items-center gap-2">
-                                                    {device.device_name || 'Unknown Device'}
-                                                    {idx === 0 && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">This Device</span>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-medium flex items-center gap-2 min-w-0">
+                                                    <span className="truncate" title={device.device_name || undefined}>{device.device_name || 'Unknown Device'}</span>
+                                                    {/* Only when the API marks the row; the first row is just the most recent sign-in. */}
+                                                    {device.is_current === true && (
+                                                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold uppercase">This Device</span>
                                                     )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground mt-0.5">
@@ -317,10 +348,12 @@ export default function SettingsPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <button 
+                                        <button
+                                            type="button"
                                             onClick={() => handleRemoveDevice(device.id)}
-                                            className="p-2 rounded-lg hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
-                                            title="Logout Device"
+                                            className="p-2 rounded-lg shrink-0 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
+                                            title="Log out this device"
+                                            aria-label={`Log out ${device.device_name || 'this device'}`}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -336,7 +369,7 @@ export default function SettingsPage() {
                             <LogOut className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
                             Session
                         </h3>
-                        <button onClick={() => { logout(); router.push('/'); }} className="btn-secondary text-sm">
+                        <button onClick={async () => { await logout(); router.push('/'); }} className="btn-secondary text-sm">
                             Logout
                         </button>
                     </div>

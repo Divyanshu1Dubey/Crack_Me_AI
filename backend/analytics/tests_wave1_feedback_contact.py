@@ -16,6 +16,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from analytics.models import ContactMessage, Feedback
+from analytics.views import _deliver_contact_email
 
 User = get_user_model()
 CONTACT = '/api/analytics/contact/'
@@ -24,7 +25,10 @@ LOCMEM = 'django.core.mail.backends.locmem.EmailBackend'
 CONSOLE = 'django.core.mail.backends.console.EmailBackend'
 
 
-@override_settings(ADMIN_NOTIFICATIONS_SYNC=True, EMAIL_BACKEND=LOCMEM)
+# The admin email goes out after commit (accounts.emails.run_in_background,
+# synchronous under the in-memory mail backend), so requests run inside
+# captureOnCommitCallbacks(execute=True).
+@override_settings(EMAIL_BACKEND=LOCMEM)
 class ContactUsTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -33,7 +37,8 @@ class ContactUsTests(TestCase):
     def _post(self, **data):
         payload = {'name': 'Asha', 'email': 'asha@example.com', 'subject': 'USMLE waitlist', 'message': 'Hello'}
         payload.update(data)
-        return self.client.post(CONTACT, payload, format='json')
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(CONTACT, payload, format='json')
 
     def test_message_is_stored_and_emailed(self):
         r = self._post()
@@ -53,9 +58,11 @@ class ContactUsTests(TestCase):
 
     @override_settings(EMAIL_BACKEND=CONSOLE)
     def test_console_backend_counts_as_not_delivered(self):
+        msg = ContactMessage.objects.create(name='Asha', email='asha@example.com', subject='s', message='m')
         with mock.patch('sys.stdout', new_callable=io.StringIO):
-            self._post()
-        self.assertFalse(ContactMessage.objects.get().email_delivered)
+            self.assertFalse(_deliver_contact_email(msg.pk, 'subject', 'body'))
+        msg.refresh_from_db()
+        self.assertFalse(msg.email_delivered)
 
     def test_error_when_neither_stored_nor_emailed(self):
         with mock.patch.object(ContactMessage.objects, 'create', side_effect=RuntimeError('db down')), \
@@ -80,7 +87,7 @@ class ContactUsTests(TestCase):
         self.assertEqual((msg.email, msg.user_id), ('contact-u@example.com', user.id))
 
 
-@override_settings(ADMIN_NOTIFICATIONS_SYNC=True, EMAIL_BACKEND=LOCMEM)
+@override_settings(EMAIL_BACKEND=LOCMEM)
 class FeedbackTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -90,8 +97,9 @@ class FeedbackTests(TestCase):
         self.client.force_authenticate(self.student)
 
     def _submit(self, i=0):
-        return self.client.post(FEEDBACK, {'category': 'bug', 'rating': 4, 'title': f'T{i}', 'message': 'M'},
-                                format='json')
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(FEEDBACK, {'category': 'bug', 'rating': 4, 'title': f'T{i}', 'message': 'M'},
+                                    format='json')
 
     def test_submit_stores_and_notifies(self):
         r = self._submit()

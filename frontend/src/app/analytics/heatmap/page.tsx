@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import { useRequireAuth } from "@/lib/hooks/useRequireAuth";
 
 interface HeatMapCell { n: number; correct: number }
 interface HeatMap { [subjectId: string]: { [dow: string]: HeatMapCell } }
@@ -29,25 +30,28 @@ async function loadSubjectNames(): Promise<Record<string, string>> {
 }
 
 export default function HeatmapPage() {
+  // Member page: wait for auth (logged-out visitors go to /login?next=...).
+  const { ready } = useRequireAuth();
   const [data, setData] = useState<HeatMap | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     (async () => {
       try {
         const r = await api.get("/analytics/heatmap/subject/");
         if (alive) setData(r.data || {});
-      } catch (e: any) {
-        if (alive) setErr(e?.response?.status === 401 ? "Please log in to view your heatmap." : "Heatmap failed to load. Please try again.");
+      } catch {
+        if (alive) setErr("Heatmap failed to load. Please try again.");
       }
     })();
     loadSubjectNames()
       .then((n) => { if (alive) setNames(n); })
       .catch(() => { /* fall back to ids */ });
     return () => { alive = false; };
-  }, []);
+  }, [ready]);
 
   if (err) return <p role="alert" className="p-6 text-destructive">{err}</p>;
   if (!data) return <p className="p-6 text-muted-foreground">Loading heatmap…</p>;

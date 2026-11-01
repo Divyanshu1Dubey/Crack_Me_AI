@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Phone, Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 // Known ?subject= slugs used by CTAs elsewhere (e.g. /exams/usmle).
 const SUBJECT_PRESETS: Record<string, string> = {
@@ -24,6 +25,8 @@ function subjectFromQuery(raw: string | null): string {
 }
 
 export default function ContactPage() {
+    const { user } = useAuth();
+    const accountEmail = (user?.email || '').trim();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [subject, setSubject] = useState('');
@@ -39,6 +42,12 @@ export default function ContactPage() {
         const preset = subjectFromQuery(new URLSearchParams(window.location.search).get('subject'));
         if (preset) setSubject(current => current || preset);
     }, []);
+
+    // Signed-in users: start from the account email (still editable) instead
+    // of making them retype an address we already know.
+    useEffect(() => {
+        if (accountEmail) setEmail(current => current || accountEmail);
+    }, [accountEmail]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -61,7 +70,7 @@ export default function ContactPage() {
                 : "Thanks! We've received your message and will reply by email.");
             setSuccess(true);
             setName('');
-            setEmail('');
+            setEmail(accountEmail);
             setSubject('');
             setMessage('');
         } catch (err: unknown) {
@@ -119,7 +128,7 @@ export default function ContactPage() {
                                             <Mail className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <p className="text-xs text-muted-foreground">Gmail Support</p>
+                                            <p className="text-xs text-muted-foreground">Email support</p>
                                             <p className="text-sm font-semibold text-foreground">crackwith.ai@gmail.com</p>
                                         </div>
                                     </a>
@@ -169,11 +178,12 @@ export default function ContactPage() {
                                             <div className="grid sm:grid-cols-2 gap-4">
                                                 <div className="space-y-1.5">
                                                     <label htmlFor="contact-name" className="text-xs font-semibold text-muted-foreground">Your Name</label>
-                                                    <Input 
-                                                        id="contact-name" 
-                                                        placeholder="Dr. Divyanshu" 
-                                                        value={name} 
-                                                        onChange={e => setName(e.target.value)} 
+                                                    <Input
+                                                        id="contact-name"
+                                                        placeholder="Your full name"
+                                                        value={name}
+                                                        onChange={e => setName(e.target.value)}
+                                                        autoComplete="name"
                                                     />
                                                 </div>
                                                 <div className="space-y-1.5">

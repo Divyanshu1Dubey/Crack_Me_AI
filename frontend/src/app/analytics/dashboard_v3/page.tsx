@@ -5,7 +5,9 @@
  * seven round-trips.
  */
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import api from "@/lib/api";
+import { useRequireAuth } from "@/lib/hooks/useRequireAuth";
 
 interface Dashboard {
   accuracy?: { total: number; correct: number; accuracy_pct: number };
@@ -18,23 +20,48 @@ interface Dashboard {
 }
 
 export default function DashboardV3Page() {
+  // Member page: wait for auth (logged-out visitors go to /login?next=...).
+  const { ready } = useRequireAuth();
   const [d, setD] = useState<Dashboard | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     (async () => {
       try {
         const r = await api.get("/analytics/dashboard_v3/");
-        if (alive) setD(r.data);
-      } catch (e: any) {
-        if (alive) setErr(e?.message || "Failed to load dashboard");
+        if (alive) { setD(r.data); setErr(null); }
+      } catch {
+        // A readable message, not the raw HTTP error.
+        if (alive) setErr("Could not load your analytics. Please try again.");
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [ready, reloadKey]);
 
-  if (err) return <p className="p-6 text-rose-300">Dashboard error: {err}</p>;
+  if (err) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-6 text-foreground">
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <p className="text-destructive">{err}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => { setErr(null); setReloadKey((k) => k + 1); }}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              Try again
+            </button>
+            <Link href="/analytics" className="rounded-md px-3 py-1.5 text-xs font-medium text-primary hover:underline">
+              Back to Analytics
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
   if (!d) return <p className="p-6 text-muted-foreground">Loading dashboard…</p>;
 
   return (

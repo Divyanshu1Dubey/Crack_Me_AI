@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { studyTimeAPI } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,8 +51,8 @@ function isoDaysAgo(days: number): string {
 }
 
 export default function StudyTimePage() {
-    const router = useRouter();
-    const { isAuthenticated, loading: authLoading } = useAuth();
+    // Member-only page: logged-out visitors go to /login?next=/study-time.
+    const { ready } = useRequireAuth();
     const [rows, setRows] = useState<StudyRow[]>([]);
     const [range, setRange] = useState<Range>('30');
     const [loading, setLoading] = useState(true);
@@ -61,8 +60,7 @@ export default function StudyTimePage() {
     const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
-        if (authLoading) return;
-        if (!isAuthenticated) { router.push('/login'); return; }
+        if (!ready) return;
         let alive = true;
         setLoading(true);
         setError(null);
@@ -78,7 +76,7 @@ export default function StudyTimePage() {
             if (alive) setLoading(false);
         });
         return () => { alive = false; };
-    }, [authLoading, isAuthenticated, range, reloadKey, router]);
+    }, [ready, range, reloadKey]);
 
     const summary = useMemo(() => {
         const totalSeconds = rows.reduce((sum, r) => sum + (r.seconds || 0), 0);
@@ -104,8 +102,10 @@ export default function StudyTimePage() {
     const maxSubjectSeconds = Math.max(1, ...summary.subjects.map(s => s.seconds));
     const studyDays = summary.days.length;
 
+    // The route layout puts this page inside the app shell (.page-container),
+    // which already pads the page; keep our own padding only outside it.
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="max-w-4xl mx-auto p-4 md:p-6 [.page-container_&]:p-0 space-y-6">
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -222,7 +222,7 @@ export default function StudyTimePage() {
                                             <div className="font-medium">
                                                 {localDate(date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                                             </div>
-                                            <div className="text-sm text-muted-foreground">{day.questions} questions</div>
+                                            <div className="text-sm text-muted-foreground">{day.questions} {day.questions === 1 ? 'question' : 'questions'}</div>
                                         </div>
                                         <Badge variant="secondary" className="text-sm tabular-nums">{formatDuration(day.seconds)}</Badge>
                                     </div>
