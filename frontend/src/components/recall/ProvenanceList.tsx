@@ -42,20 +42,20 @@ export default function ProvenanceList({ questionId }: Props) {
     return () => { alive = false; };
   }, [questionId]);
 
-  if (err) return <p className="text-sm text-rose-300">Provenance unavailable: {err}</p>;
-  if (!rows) return <p className="text-sm text-slate-400">Loading provenance…</p>;
+  if (err) return <p className="text-sm text-rose-600 dark:text-rose-300">Provenance unavailable: {err}</p>;
+  if (!rows) return <p className="text-sm text-muted-foreground">Loading provenance…</p>;
   if (rows.length === 0) {
-    return <p className="text-sm text-slate-500">No recall source attached.</p>;
+    return <p className="text-sm text-muted-foreground">No recall source attached.</p>;
   }
   return (
-    <ul className="divide-y divide-slate-700/40 rounded border border-slate-700/40 bg-slate-900/40">
+    <ul className="divide-y divide-border rounded border border-border bg-card">
       {rows.map((r) => (
-        <li key={r.id} className="px-3 py-2 text-sm text-slate-200">
+        <li key={r.id} className="px-3 py-2 text-sm text-foreground">
           <div className="flex items-center justify-between">
             <span className="font-mono">{r.recall_source_filename || `Source #${r.id}`}</span>
-            <span className="text-xs text-slate-400">page {r.page_number}</span>
+            <span className="text-xs text-muted-foreground">page {r.page_number}</span>
           </div>
-          <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-400">
+          <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span>sha16: <code>{r.recall_source_sha16}</code></span>
             {r.extraction_confidence != null ? (
               <span>extract conf: {Number(r.extraction_confidence).toFixed(2)}</span>

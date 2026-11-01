@@ -74,9 +74,9 @@ export default function PracticeExamTimer({ totalSeconds, onExpire }: Props) {
     return (
         <div
             className={`mb-3 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold
-                        ${danger ? "bg-rose-900/60 text-rose-100" :
-                          warn ? "bg-amber-900/60 text-amber-100" :
-                          "bg-slate-800/80 text-slate-100"}`}
+                        ${danger ? "bg-rose-500/15 text-rose-700 dark:text-rose-200" :
+                          warn ? "bg-amber-500/15 text-amber-800 dark:text-amber-200" :
+                          "bg-muted text-foreground"}`}
             role="status"
             aria-live="polite"
         >

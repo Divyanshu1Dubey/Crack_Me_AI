@@ -4,7 +4,9 @@
  * Thin shell that delegates the body to <ExamQuestionBank> with
  * examType='cms' / examSource='UPSC CMS'. Honours `?exam=neet-pg` (and
  * similar slugs) so users can switch exams via the URL — the same bank
- * UI is rendered with the matching exam params.
+ * UI is rendered with the matching exam params. `?year=`, `?bookmarked=1`
+ * and `?q=<id>` pre-seed the filters / open a question, as on the NEET PG
+ * and INI-CET banks.
  *
  * Phase 9 (2026-07-26): the bank body was extracted to
  * `frontend/src/components/question/ExamQuestionBank.tsx` so NEET-PG and
@@ -84,6 +86,7 @@ function QuestionsContent() {
         <ExamQuestionBank
             examType={examType}
             examSource={examSource}
+            defaultYear={searchParams.get('year')}
             initialQueryId={searchParams.get('q')}
             initialBookmarkOnly={searchParams.get('bookmarked') === '1'}
         />

@@ -2,7 +2,7 @@
 /**
  * /recall/search — Phase-3 advanced search results page.
  * Pure client component: drives `RecallSearchBox` and shows results
- * inline.
+ * inline. Uses the theme tokens so it reads in light and dark themes.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -23,21 +23,21 @@ interface Row {
 export default function RecallSearchPage() {
   const [rows, setRows] = useState<Row[]>([]);
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 text-slate-100">
+    <div className="mx-auto max-w-5xl px-4 py-6 text-foreground">
       <h1 className="mb-4 text-2xl font-semibold">Recall bank search</h1>
       <RecallSearchBox onResults={(r) => setRows(r)} />
 
       <section className="mt-6 space-y-3">
         {rows.map((r) => (
-          <article key={r.id} className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
+          <article key={r.id} className="rounded-lg border border-border bg-card p-3">
             <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
               <RecallBadge status={r.recall_status} />
-              {r.year ? <span className="rounded bg-slate-700/60 px-2 py-0.5">{r.year}</span> : null}
-              {r.subject_name ? <span className="rounded bg-slate-700/60 px-2 py-0.5">{r.subject_name}</span> : null}
-              {r.topic_name ? <span className="rounded bg-slate-700/40 px-2 py-0.5">{r.topic_name}</span> : null}
-              {r.difficulty ? <span className="rounded bg-amber-500/60 px-2 py-0.5 text-black">{r.difficulty}</span> : null}
+              {r.year ? <span className="rounded bg-muted px-2 py-0.5">{r.year}</span> : null}
+              {r.subject_name ? <span className="rounded bg-muted px-2 py-0.5">{r.subject_name}</span> : null}
+              {r.topic_name ? <span className="rounded bg-muted/60 px-2 py-0.5 text-muted-foreground">{r.topic_name}</span> : null}
+              {r.difficulty ? <span className="rounded bg-amber-500/20 px-2 py-0.5 text-amber-900 dark:text-amber-200">{r.difficulty}</span> : null}
               <span className="ml-auto">
-                <Link href={`/practice?id=${r.id}`} className="text-emerald-300 underline">
+                <Link href={`/practice?id=${r.id}`} className="text-emerald-700 underline dark:text-emerald-300">
                   Practice →
                 </Link>
               </span>
@@ -46,9 +46,9 @@ export default function RecallSearchPage() {
           </article>
         ))}
         {rows.length === 0 ? (
-          <p className="text-sm text-slate-500">No matches yet. Try a broader keyword.</p>
+          <p className="text-sm text-muted-foreground">No matches yet. Try a broader keyword.</p>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

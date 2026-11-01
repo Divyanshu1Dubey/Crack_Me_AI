@@ -26,7 +26,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
@@ -53,6 +53,7 @@ import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
+import { collectPages, normaliseTextbookReferences, type TextbookReference } from '@/components/question/practiceData';
 
 /** Color-swatch chip used inside the exam-mode palette legend. */
 function LegendChip({ color, label }: { color: string; label: string }) {
@@ -164,6 +165,7 @@ function ExamQuestionBankInner({
     // entire /questions session while a question is open.
     const { setQuestionFocused } = useQuestionFocus();
     const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
 
     // `examType` is the source of truth for which bank we're showing. We
@@ -171,6 +173,11 @@ function ExamQuestionBankInner({
     // is authoritative. (The standalone `/questions` page has its own
     // override behaviour; see `QuestionsBankSlim` below.)
     const [selectedExam, setSelectedExam] = useState<string>(examType);
+    // /questions?exam=… keeps this component mounted when only the query
+    // changes, so follow the prop instead of keeping the first exam.
+    if (examType !== selectedExam) {
+        setSelectedExam(examType);
+    }
 
     const [questions, setQuestions] = useState<Question[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -206,9 +213,23 @@ function ExamQuestionBankInner({
     const [flagError, setFlagError] = useState<string | null>(null);
     const [showAiDeepDive, setShowAiDeepDive] = useState(false);
     const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(initialBookmarkOnly ?? false);
+    // `?year=` / `?bookmarked=1` can change while this component stays
+    // mounted (a link to the same route with a new query). Re-seed the
+    // filters when the URL-derived props change; the user's own filter
+    // edits don't touch the URL, so they are left alone otherwise.
+    const [seededYear, setSeededYear] = useState(defaultYear ?? '');
+    if ((defaultYear ?? '') !== seededYear) {
+        setSeededYear(defaultYear ?? '');
+        setSelectedYear(defaultYear ?? '');
+    }
+    const [seededBookmarkOnly, setSeededBookmarkOnly] = useState(!!initialBookmarkOnly);
+    if (!!initialBookmarkOnly !== seededBookmarkOnly) {
+        setSeededBookmarkOnly(!!initialBookmarkOnly);
+        setBookmarkedOnly(!!initialBookmarkOnly);
+    }
     // Image viewer modal state — null when closed. Clicking a thumbnail
     // in the question image carousel opens ImageViewer at the right index,
-    // matching the standalone NEET-PG / INI-CET player UX.
+    // the same viewer the timed test player (/tests/[id]) uses.
     const [viewImageIdx, setViewImageIdx] = useState<number | null>(null);
 
     const [yearModalOpen, setYearModalOpen] = useState(false);
@@ -220,9 +241,13 @@ function ExamQuestionBankInner({
     const [examQuestions, setExamQuestions] = useState<Question[]>([]);
     const [examQuestionsLoading, setExamQuestionsLoading] = useState(false);
 
+    // `{references: TextbookReference[]}` after a lookup, `{error: true}` on failure.
     const [textbookRef, setTextbookRef] = useState<any>(null);
     const [textbookLoading, setTextbookLoading] = useState(false);
     const [textbookScreenshot, setTextbookScreenshot] = useState<string | null>(null);
+    // Question id the in-flight textbook lookup belongs to; a response for
+    // a question the student has since left is dropped.
+    const textbookRequestFor = useRef<number | null>(null);
 
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -284,11 +309,20 @@ function ExamQuestionBankInner({
         return () => clearInterval(interval);
     }, [aiLoading]);
 
-    // Initial list + stats + subjects + years.
+    // Stats + subjects + years. The question list itself is loaded by the
+    // filter effect below so the first request already carries ?year= /
+    // ?bookmarked=1 — previously this effect fetched an unfiltered page
+    // that usually resolved last (it also waited for /stats/) and replaced
+    // the filtered list.
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
+        if (!authLoading && !isAuthenticated) {
+            // Keep the deep link (path + query) so login returns here.
+            const query = searchParams.toString();
+            const next = `${pathname || '/questions'}${query ? `?${query}` : ''}`;
+            router.replace(`/login?next=${encodeURIComponent(next)}`);
+            return;
+        }
         if (isAuthenticated) {
-            setListError(null);
             // Fetch every page of subjects — the DRF default page_size=20 caps the
             // response at 20 rows, so a single fetch was clipping 'Expert Curated'
             // (id=291 + id=309, alphabetically last) into page 2 and dropping it
@@ -309,35 +343,25 @@ function ExamQuestionBankInner({
                 }
                 return collected;
             };
-            Promise.all([
-                questionsAPI.list({ page: 1, page_size: PAGE_SIZE, exam_type: selectedExam }),
-                // Subjects are NOT filtered by exam_type: the Question → Subject FK
-                // model uses the same medical subject names across CMS / NEET PG /
-                // INI-CET tracks, and the loader's "Imported" bucket is itself
-                // tagged exam_type='cms'. Filtering by exam_type=cms therefore
-                // hides every real medical subject (Anatomy, Surgery, etc.) and
-                // leaves only the two "Expert Curated" rows, which is what users
-                // were seeing before this fix.
-                fetchAllSubjects(),
-                questionsAPI.getYears(),
-                questionsAPI.getStats({ exam_source: examSource }),
-            ]).then(([qRes, allSubjects, yRes, statsRes]) => {
-                const qData = qRes.data;
-                setQuestions(qData.results || qData || []);
-                setTotalCount(qData.count || (qData.results || qData || []).length);
-                setSubjects(allSubjects);
-                setYears(yRes.data.results || yRes.data || []);
-                setQbankStats(statsRes.data);
-            }).catch((err: unknown) => {
-                const apiError = err as { response?: { data?: unknown } };
-                if (apiError.response?.data) {
-                    setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
-                    return;
-                }
-                setListError('Unable to load questions right now. Please refresh and try again.');
-            }).finally(() => setLoading(false));
+            // Subjects are NOT filtered by exam_type: the Question → Subject FK
+            // model uses the same medical subject names across CMS / NEET PG /
+            // INI-CET tracks, and the loader's "Imported" bucket is itself
+            // tagged exam_type='cms'. Filtering by exam_type=cms therefore
+            // hides every real medical subject (Anatomy, Surgery, etc.) and
+            // leaves only the two "Expert Curated" rows, which is what users
+            // were seeing before this fix.
+            // Each request settles on its own so a slow or failing /stats/
+            // never blocks the filters or the list.
+            fetchAllSubjects().then(setSubjects).catch(() => { /* filter dropdown stays empty */ });
+            questionsAPI.getYears()
+                .then(yRes => setYears(yRes.data.results || yRes.data || []))
+                .catch(() => { /* year dropdown stays empty */ });
+            questionsAPI.getStats({ exam_source: examSource })
+                .then(statsRes => setQbankStats(statsRes.data))
+                .catch(() => { /* stats panel stays hidden */ });
         }
-    }, [authLoading, isAuthenticated, router, selectedExam]);
+        // searchParams / pathname only shape the login redirect.
+    }, [authLoading, isAuthenticated, router, examSource]);
 
     // Honour `?q=ID` from the URL on first mount after questions load.
     useEffect(() => {
@@ -350,23 +374,33 @@ function ExamQuestionBankInner({
         }
     }, [initialQueryId, loading, isAuthenticated, questions, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Only the newest list request may write the list: a slower response
+    // for an older filter set must not replace the current one.
+    const listRequestSeq = useRef(0);
     const fetchQuestions = (params: Record<string, string | number>) => {
+        const seq = ++listRequestSeq.current;
         setLoading(true);
         setListError(null);
         questionsAPI.list(params).then(res => {
+            if (seq !== listRequestSeq.current) return;
             const d = res.data;
             setQuestions(d.results || d || []);
             setTotalCount(d.count || (d.results || d || []).length);
         }).catch((err: unknown) => {
+            if (seq !== listRequestSeq.current) return;
             const apiError = err as { response?: { data?: unknown } };
             if (apiError.response?.data) {
                 setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
                 return;
             }
             setListError('Unable to load questions right now. Please refresh and try again.');
-        }).finally(() => setLoading(false));
+        }).finally(() => {
+            if (seq === listRequestSeq.current) setLoading(false);
+        });
     };
 
+    // List load: runs once auth resolves (so ?year= / ?bookmarked=1 apply
+    // to the very first request) and again whenever a filter changes.
     useEffect(() => {
         if (!isAuthenticated) return;
         const params: Record<string, string | number> = { page: 1, page_size: PAGE_SIZE };
@@ -379,7 +413,7 @@ function ExamQuestionBankInner({
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
+    }, [isAuthenticated, selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
 
     const handlePageChange = (newPage: number) => {
         setPage(newPage);
@@ -408,7 +442,7 @@ function ExamQuestionBankInner({
         }
         if (!isAuthenticated) return;
 
-        const params: Record<string, string | number> = { page: 1, page_size: 100 };
+        const params: Record<string, string | number> = { page_size: 100 };
         if (selectedYear) params.year = selectedYear;
         if (selectedSubject) params.subject = selectedSubject;
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
@@ -417,32 +451,29 @@ function ExamQuestionBankInner({
         params.exam_type = selectedExam;
 
         setExamQuestionsLoading(true);
-        const collected: Question[] = [];
+        let cancelled = false;
         const HARD_CAP = 600;
         const MAX_PAGES = 30;
 
-        const fetchPage = (pageNum: number): Promise<void> => {
-            return questionsAPI.list({ ...params, page: pageNum })
-                .then(res => {
-                    const d = res.data;
-                    const items: Question[] = (d.results || d || []);
-                    collected.push(...items);
-                    const total = d.count || items.length;
-                    const reachedEnd = items.length < 100 || collected.length >= total || collected.length >= HARD_CAP;
-                    if (reachedEnd || pageNum >= MAX_PAGES) {
-                        setExamQuestions(collected);
-                        setExamQuestionsLoading(false);
-                        return;
-                    }
-                    return fetchPage(pageNum + 1);
-                })
-                .catch(() => {
-                    setExamQuestions(collected);
-                    setExamQuestionsLoading(false);
-                });
-        };
+        // Follow the API's `next` links instead of assuming the server used
+        // page_size=100 (it used to send 20 rows, which ended the old
+        // `items.length < 100` loop after the first page).
+        collectPages<Question>(
+            (pageNum) => questionsAPI.list({ ...params, page: pageNum }).then(res => res.data),
+            { maxItems: HARD_CAP, maxPages: MAX_PAGES, isCancelled: () => cancelled },
+        )
+            .then(({ items }) => {
+                if (cancelled) return;
+                setExamQuestions(items);
+                setExamQuestionsLoading(false);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setExamQuestions([]);
+                setExamQuestionsLoading(false);
+            });
 
-        fetchPage(1);
+        return () => { cancelled = true; };
     }, [studyMode, selectedYear, selectedSubject, selectedDifficulty, selectedExam, searchQuery, isAuthenticated, bookmarkedOnly]);
 
     // When the open question was shown; answers report the time spent so
@@ -463,6 +494,7 @@ function ExamQuestionBankInner({
         setTextbookRef(null);
         setTextbookScreenshot(null);
         setTextbookLoading(false);
+        textbookRequestFor.current = null;
         Promise.all([
             questionsAPI.get(id),
             questionsAPI.getSimilar(id),
@@ -510,10 +542,12 @@ function ExamQuestionBankInner({
             setShowAnswer(true);
             const qId = questionDetail.id;
             const isCorrect = opt === questionDetail.correct_answer;
-            questionsAPI.attempt(qId, { selected_answer: opt, time_spent_seconds: secondsOnQuestion() }).then(() => {
+            questionsAPI.attempt(qId, { selected_answer: opt, time_spent_seconds: secondsOnQuestion() }).then((res) => {
                 // Mark the row answered in the list (previously only when a
                 // token was earned, so most answers never showed up there).
-                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
+                // Prefer the server's verdict when it sends one.
+                const verdict = typeof res?.data?.is_correct === 'boolean' ? res.data.is_correct : isCorrect;
+                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: verdict } : q));
             }).catch(() => { });
         }
     };
@@ -523,8 +557,9 @@ function ExamQuestionBankInner({
         setShowAnswer(true);
         const qId = questionDetail.id;
         const isCorrect = selectedAnswer === questionDetail.correct_answer;
-        questionsAPI.attempt(qId, { selected_answer: selectedAnswer, time_spent_seconds: secondsOnQuestion() }).then(() => {
-            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
+        questionsAPI.attempt(qId, { selected_answer: selectedAnswer, time_spent_seconds: secondsOnQuestion() }).then((res) => {
+            const verdict = typeof res?.data?.is_correct === 'boolean' ? res.data.is_correct : isCorrect;
+            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: verdict } : q));
         }).catch(() => { });
         setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
     };
@@ -610,6 +645,14 @@ function ExamQuestionBankInner({
         .finally(() => setFlagSubmitting(false));
     };
 
+    // Fullscreen year practice (/questions/practice) for the current exam.
+    const fullscreenPracticeHref = (year: string | null) => {
+        const params = new URLSearchParams();
+        if (year) params.set('year', year);
+        params.set('exam', selectedExam);
+        return `/questions/practice?${params.toString()}`;
+    };
+
     const diffBadge = (d: string) => {
         const cls = d === 'easy' ? 'badge-easy' : d === 'hard' ? 'badge-hard' : 'badge-medium';
         return <span className={`badge ${cls}`}>{d}</span>;
@@ -670,12 +713,11 @@ function ExamQuestionBankInner({
                                     type="button"
                                     onClick={() => {
                                         analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null, 'simulator');
-                                        const slug = String(selectedExam).replace('_', '-');
-                                        if (slug === 'neet-pg') {
-                                            router.push(`/questions/neet-pg/practice?year=${selectedYear}`);
-                                        } else {
-                                            router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
-                                        }
+                                        // Every exam opens the fullscreen one-question player. The
+                                        // NEET PG branch used to push /questions/neet-pg/practice —
+                                        // the bank route already on screen — so the button only
+                                        // changed the URL.
+                                        router.push(fullscreenPracticeHref(selectedYear));
                                     }}
                                     className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                                 >
@@ -1460,9 +1502,8 @@ function ExamQuestionBankInner({
                                                         // Defence-in-depth: strip double-encoded UTF-8 mojibake
                                                         // (e.g. iÃ©iÃiÃ©) before rendering, and fall back to a
                                                         // generic "Question #N" placeholder when the text is
-                                                        // still unreadable after cleanup. Mirrors the
-                                                        // NeetPgPlayer guard (line ~977) so the same DB
-                                                        // content renders cleanly across both surfaces.
+                                                        // still unreadable after cleanup (the same guard the
+                                                        // list cards above use).
                                                         const cleaned = decodeMojiB(sq.question_text || '');
                                                         const garbled = isLikelyGarbled(cleaned);
                                                         return (
@@ -1741,22 +1782,39 @@ function ExamQuestionBankInner({
                                         {!textbookRef && !textbookLoading && (
                                             <button
                                                 onClick={() => {
+                                                    const qid = detail.id;
+                                                    textbookRequestFor.current = qid;
                                                     setTextbookLoading(true);
                                                     setTextbookRef(null);
                                                     setTextbookScreenshot(null);
                                                     aiAPI.textbookReference({ question_text: detail.question_text })
                                                         .then(res => {
-                                                            setTextbookRef(res.data);
-                                                            aiAPI.getScreenshot(detail.id)
+                                                            if (textbookRequestFor.current !== qid) return;
+                                                            // The endpoint returns {references: [{book, page, excerpt, …}]}.
+                                                            setTextbookRef({ references: normaliseTextbookReferences(res.data) });
+                                                            // A stored page screenshot is already on the detail payload;
+                                                            // otherwise ask the endpoint, and only accept a URL from it
+                                                            // (`screenshot_path` is a server filesystem path).
+                                                            const storedShot = typeof detail.page_screenshot === 'string' ? detail.page_screenshot : '';
+                                                            if (storedShot) {
+                                                                setTextbookScreenshot(storedShot);
+                                                                return;
+                                                            }
+                                                            aiAPI.getScreenshot(qid)
                                                                 .then(sRes => {
-                                                                    if (sRes.data?.screenshot_url) setTextbookScreenshot(sRes.data.screenshot_url);
+                                                                    if (textbookRequestFor.current !== qid) return;
+                                                                    const url = sRes.data?.screenshot_url;
+                                                                    if (typeof url === 'string' && url) setTextbookScreenshot(url);
                                                                 })
                                                                 .catch(() => {});
                                                         })
                                                         .catch(() => {
+                                                            if (textbookRequestFor.current !== qid) return;
                                                             setTextbookRef({ error: true });
                                                         })
-                                                        .finally(() => setTextbookLoading(false));
+                                                        .finally(() => {
+                                                            if (textbookRequestFor.current === qid) setTextbookLoading(false);
+                                                        });
                                                 }}
                                                 className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                                             >
@@ -1773,19 +1831,24 @@ function ExamQuestionBankInner({
                                                 <span className="text-xs font-medium text-indigo-600">Looking up textbook references...</span>
                                             </div>
                                         )}
-                                        {textbookRef && !textbookRef.error && (
+                                        {textbookRef && !textbookRef.error && (textbookRef.references.length > 0 || textbookScreenshot) && (
                                             <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-950/10 dark:border-indigo-900/30">
                                                 <CardContent className="p-4 space-y-2">
                                                     <h5 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
                                                         <Bookmark className="w-3.5 h-3.5" /> 📖 Textbook Reference
                                                     </h5>
-                                                    {textbookRef.book_name && <p className="text-sm font-semibold">{textbookRef.book_name}</p>}
-                                                    {textbookRef.chapter && <p className="text-xs text-muted-foreground">Chapter: {textbookRef.chapter}</p>}
-                                                    {textbookRef.page_range && <p className="text-xs text-muted-foreground">Pages: {textbookRef.page_range}</p>}
-                                                    {textbookRef.excerpt && <p className="text-xs leading-relaxed mt-1 italic text-muted-foreground">&quot;{textbookRef.excerpt}&quot;</p>}
-                                                    {textbookRef.reference && typeof textbookRef.reference === 'string' && (
-                                                        <p className="text-xs leading-relaxed text-muted-foreground">{textbookRef.reference}</p>
-                                                    )}
+                                                    {textbookRef.references.map((ref: TextbookReference, i: number) => (
+                                                        <div key={`${ref.book}-${ref.page}-${i}`} className={i > 0 ? 'pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40' : ''}>
+                                                            {ref.book && <p className="text-sm font-semibold">{ref.book}</p>}
+                                                            {ref.chapter && <p className="text-xs text-muted-foreground">Chapter: {ref.chapter}</p>}
+                                                            {ref.page && <p className="text-xs text-muted-foreground">Page: {ref.page}</p>}
+                                                            {ref.excerpt && (
+                                                                <p className="text-xs leading-relaxed mt-1 italic text-muted-foreground">
+                                                                    &quot;{ref.excerpt}{ref.excerpt.length >= 300 ? '…' : ''}&quot;
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                     {textbookScreenshot && (
                                                         <div className="mt-2 rounded-lg overflow-hidden border border-border/40 bg-white">
                                                             <img
@@ -1802,7 +1865,7 @@ function ExamQuestionBankInner({
                                                 </CardContent>
                                             </Card>
                                         )}
-                                        {textbookRef?.error && (
+                                        {textbookRef && (textbookRef.error || (textbookRef.references.length === 0 && !textbookScreenshot)) && (
                                             <Card className="border-border/60">
                                                 <CardContent className="p-3 text-center text-xs text-muted-foreground">
                                                     No textbook mapping available for this question.
@@ -1866,14 +1929,12 @@ function ExamQuestionBankInner({
                             <div className="grid gap-3">
                                 <button
                                     onClick={() => {
-                                        const slug = String(selectedExam).replace('_', '-');
-                                        if (slug === 'neet-pg') {
-                                            router.push(`/questions/neet-pg/practice?year=${modalYear}`);
-                                        } else if (slug === 'ini-cet' || slug === 'ini_cet') {
-                                            router.push(`/questions/inicet/practice?year=${modalYear}`);
-                                        } else {
-                                            router.push(`/questions/practice?year=${modalYear}&exam=${selectedExam}`);
-                                        }
+                                        // Open the fullscreen player for every exam. The NEET PG /
+                                        // INI-CET branches pushed the bank route already on screen,
+                                        // so the click only changed the URL and left the modal open.
+                                        setYearModalOpen(false);
+                                        setSimulationError(null);
+                                        router.push(fullscreenPracticeHref(modalYear));
                                     }}
                                     className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer"
                                 >
@@ -1936,7 +1997,7 @@ function ExamQuestionBankInner({
 
             {/* Image viewer modal — opens when the user clicks a thumbnail
                 in the image carousel above. Reuses the same ImageViewer
-                component the standalone NEET-PG / INI-CET players use, so
+                component the timed test player (/tests/[id]) uses, so
                 pinch-zoom, side-by-side, and fullscreen all work. Previously
                 the carousel used <a target="_blank"> which would leak
                 potentially-short-lived presigned S3 URLs into a new tab. */}
