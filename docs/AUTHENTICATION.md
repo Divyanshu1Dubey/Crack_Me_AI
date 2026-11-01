@@ -100,7 +100,8 @@ sequenceDiagram
     U->>FE: Make authenticated request
     FE->>API: Authorization: Bearer <supabase_access_token> + X-Session-ID
     API->>API: SupabaseJWTAuthentication reads token
-    API->>SB: GET /auth/v1/user (cached 5 min per token digest)
+    Note over API: a malformed or expired token is refused without a call, a GoTrue refusal is cached 60 s (§12)
+    API->>SB: GET /auth/v1/user (cached up to 5 min, never past the token's exp)
     SB-->>API: { id, email, email_confirmed_at, app_metadata, ... }
     API->>DB: CustomUser by supabase_uid (first sign-in: link by confirmed email, §4.1)
     API->>API: reject blocked accounts, enforce the device limit (§6)
@@ -146,6 +147,15 @@ It applies the sign-in rule: an admin/staff row is linked only to the Supabase i
 - **`SUPABASE_ANON_KEY`** (or `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_AUTH_VERIFY_KEY`; the same public key as the frontend's `NEXT_PUBLIC_SUPABASE_ANON_KEY`) is sent as `apikey` when verifying tokens. Without it the service-role key is used (`accounts.W002`), and without either every Supabase sign-in fails.
 - **`CORE_DATA_BACKUP_PATH`** must point at a persistent volume in production, or the admin Backup / Restore data endpoints answer `503 {code: "backup_not_configured"}` (`accounts.W003`). `manage.py backup_core_data --output PATH` / `restore_core_data --input PATH` still work.
 
+### 4.3 Usernames (public handles)
+
+`CustomUser.username` is public: discussion threads, the leaderboard, a question's `verified_by_username` and topic notes' `created_by_username` show it, never a first / last name or the email (`crack_cms.public_names.public_handle`, `analytics.views._public_name`). A username that still shows the email address (an `@`, or the email's local part with an optional `_<n>` suffix) is shown as no name (`null`, or `""` in those string fields).
+
+- **New accounts** (Supabase first sign-in, the dev-only local register) keep the username chosen at sign-up (Supabase `user_metadata.username`, or the local register's `username`) only when it passes the Settings rules: 3–30 characters of `[A-Za-z0-9_.]`, at least one letter or digit, not the email or its local part, not a name reserved for the team. Only a trusted admin identity (Supabase `app_metadata` or the env allowlist, §4.1) may keep a team name. A taken name gets `_2`, `_3`, … within 30 characters. Every other account (no name given, as with Google OAuth, or a refused name) gets a generated `learner_<8 hex>` handle (`accounts/handles.py`). The email's local part is never used.
+- **Changing it**: learners pick another handle in Settings (`PATCH /api/auth/profile/`: the same rules, unique ignoring case, at most 10 changes an hour; see [`API_REFERENCE.md`](./API_REFERENCE.md#put--patch-apiauthprofile)).
+- **Backfill**: migration `accounts.0027_rename_email_derived_usernames` gives every student account whose username shows its email a generated handle, the same as `python manage.py rename_email_derived_usernames --apply`; admin, staff and superuser accounts are skipped, and the renames cannot be reverted. The command (dry run unless `--apply`) reports what is left, e.g. accounts created by the previous release while this one deployed, and lists the skipped admin / staff ids.
+- **Why renaming is safe**: sign-ins match `supabase_uid`, then the confirmed email (`user_metadata.username` is read only when the account is created); JWTs (dev-only local auth) carry the user id; django-axes lockouts only apply to the Django admin and the dev-only local password forms.
+
 ---
 
 ## 5. Token Refresh Strategy
@@ -158,37 +168,47 @@ The Supabase client refreshes its session internally. In addition, on a `401` th
 
 ## 6. Device Limit (2 free / 4 subscribed)
 
-A user may be signed in on up to **2 devices on a free plan and 4 with an active subscription**. Sessions are not limited to one device; the old `CustomUser.session_key` / `current_session_id` fields are unused, and `session_invalid` is no longer emitted.
+A user may be signed in on up to **2 devices on a free plan and 4 with an active subscription**. The 4-device cap follows an active `Subscription` row (`accounts.utils.is_premium`), not the `CustomUser.is_subscribed` flag. Sessions are not limited to one device; the old `CustomUser.session_key` / `current_session_id` fields are unused, and `session_invalid` is no longer emitted.
 
 ```mermaid
 sequenceDiagram
-    participant D as Device (X-Session-ID = d)
+    participant D as Browser (X-Session-ID = d)
     participant API as SupabaseJWTAuthentication
     participant DB as UserDevice
 
-    D->>API: any request, Bearer token + X-Session-ID: d
-    API->>DB: UserDevice(user, device_fingerprint=d)?
-    alt unknown device and fewer than cap devices seen in the last 30 days
-        API->>DB: enrol d (is_active=true)
-        API-->>D: 200
-    else unknown device, cap reached
-        API-->>D: 401 {code: "device_limit_reached"} (except device-management paths)
-    else known device, logged out (is_active=false)
+    D->>API: any request, Bearer token (session_id claim = s) + X-Session-ID: d
+    API->>DB: device bound to session s?
+    alt bound device logged out, s replaced by a newer sign-in, or d logged out before its session was recorded
+        API->>API: sign session s out in Supabase (GoTrue logout, once)
         API-->>D: 401 {code: "device_inactive"}
-    else known device, but cap-many other devices were used more recently
-        API-->>D: 401 {code: "device_limit_reached"}
+    else bound device active, or the active device d (bound to s now, its old session retired)
+        alt cap-many other devices were used more recently
+            API-->>D: 401 {code: "device_limit_reached"}
+        else within the cap
+            API-->>D: 200
+        end
+    else new device (unknown d, or no usable header), or d logged out under an older session
+        alt fewer than cap active devices seen in the last 30 days
+            API->>DB: enrol (or re-enrol) the device, bound to s
+            API-->>D: 200
+        else cap reached
+            API-->>D: 401 {code: "device_limit_reached"} (device-management paths pass without enrolling)
+        end
     end
 ```
 
 **Mechanism** (`accounts/supabase_rest_auth.py::_enforce_device_limits`):
-- The device is the `X-Session-ID` header (`crack_device_id`, generated by `api.ts`). Values that do not look like a device token (UUID, `dev_…` / `ses_…`, or 16–128 safe characters) are ignored: the request stays authenticated but nothing is enrolled, so enumerating ids cannot multiply devices. A request without the header is not counted.
+- A device is a browser bound to the Supabase auth session that uses it. `UserDevice.device_fingerprint` is the `X-Session-ID` header (`crack_device_id`, generated by `api.ts`); `UserDevice.session_id` (migration `accounts.0025`) is the `session_id` claim of the verified access token, which the client can neither omit nor forge. Header values that do not look like a device token (UUID, `dev_…` / `ses_…`, or 16–128 safe characters) are ignored, so enumerating ids cannot multiply devices.
+- The session binding is looked up first. A logged-out or replaced session gets `device_inactive` whatever header it sends or omits, and its Supabase session is ended through GoTrue `POST /auth/v1/logout?scope=local` (best effort, once per session).
+- A session without a usable header is a device of its own (fingerprint `sid:<session id>`) and takes a slot. Only a token without a `session_id` claim (GoTrue always sets it) that also lacks a usable header is not tracked.
+- Signing in again on the same browser keeps its slot: the device row moves to the new session and the old session is retired (kept as an inactive `sid:<session id>` row, never listed), so one device id is one seat at a time. A fresh sign-in on a logged-out browser is re-enrolled if a slot is free. A device logged out before its session was recorded gets `device_inactive`; the browser then signs in with a fresh device id.
 - A **new** device is enrolled only while the user has fewer active devices than the cap among those seen in the last 30 days (older devices stay listed in Settings but no longer hold a slot).
 - After a 4 → 2 downgrade, the most recently used devices keep their slots (judged on `last_login` before the current request). `last_login` is refreshed at most once a minute.
 - An over-limit device may still call `/auth/profile/`, `/auth/devices/…`, `/auth/subscribe/…` and the read-only `GET /auth/tokens/` and `GET /analytics/announcements/`; these never enrol it. That lets it open Settings and remove a device, or buy the 4-device plan on `/subscription`.
 - Admins (`role='admin'`) are exempt from device tracking.
-- `GET /api/auth/devices/` lists active devices with `is_current` (true for the requesting device); `POST /api/auth/devices/logout/ {device_id}` logs one out.
+- `GET /api/auth/devices/` lists active devices with `is_current` (true for the row resolved from the request's Supabase session, else the row of its `X-Session-ID`); `POST /api/auth/devices/logout/ {device_id}` logs one out.
 
-**Frontend** (`frontend/src/lib/api.ts`, `deviceLimit.ts`): `device_limit_reached` keeps the session and opens `/settings?deviceLimit=1`, except while the user is already on `/settings` or `/subscription`. `device_inactive` drops the stored device id and signs out, so the next sign-in enrols a fresh device.
+**Frontend** (`frontend/src/lib/api.ts`, `deviceLimit.ts`): `device_limit_reached` keeps the session and opens `/settings?deviceLimit=1`, except while the user is already on `/settings` or `/subscription`. A `device_inactive` answer to a request that still carried an older session's token (another tab, a request in flight during a sign-in) is retried once with the current token; otherwise `device_inactive` drops the stored device id and signs out, so the next sign-in enrols a fresh device.
 
 ---
 
@@ -270,11 +290,12 @@ The frontend `middleware.ts` (`src/utils/supabase/middleware.ts`) redirects sign
 5. **Authentication**: `accounts.supabase_rest_auth.SupabaseJWTAuthentication` (primary) + `SessionAuthentication` fallback.
 6. **Authorization**: per-view DRF permission classes (`IsAuthenticated`, `IsAdminUser`, `IsControlTowerAdmin`).
 7. **Brute-force**: `django-axes` — 5 failed attempts → 30 min lockout per `[username, ip_address]`. Resets on success.
-8. **Device limit**: `UserDevice` rows keyed by `X-Session-ID`, 2 devices free / 4 subscribed (`device_limit_reached`, `device_inactive`; §6).
+8. **Device limit**: `UserDevice` rows keyed by `X-Session-ID` and bound to the access token's Supabase session, 2 devices free / 4 with an active subscription (`device_limit_reached`, `device_inactive`; §6).
 9. **Rate limiting** (verified from `settings.py`):
    - DRF: `AnonRateThrottle` 120/min, `UserRateThrottle` 600/min, `ScopedRateThrottle admin_control_tower` 180/min, `ai_tutor` 30/min
    - Custom: `questions.middleware.RateLimitMiddleware` — `QUESTION_BANK_RATE_LIMIT` (default 300) GETs per `QUESTION_BANK_RATE_WINDOW` (60 s) on `/api/questions/`, per user or, when anonymous, per client IP
    - Client IP behind proxies: set `NUM_PROXIES` (DRF throttles and the limiter) and, on DigitalOcean, `TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP` (limiter only); check with `GET /api/health/client-ip/` as an admin. Unset, every anonymous request shares the proxy's bucket.
+   - Supabase token verification (runs before the DRF throttles): a per-process cap on concurrent GoTrue calls and, once the client IP is known, a per-IP budget; over either the answer is `429 auth_verification_busy` (§12).
    - AI provider-level: Groq 30 RPM, Gemini 15 RPM, etc.
 10. **AI error filtering**: `_PROVIDER_ERROR_PHRASES` prevents provider-internal error text from reaching users.
 11. **Sentry**: unhandled exception capture (when `SENTRY_DSN` set).
@@ -291,7 +312,7 @@ The frontend `middleware.ts` (`src/utils/supabase/middleware.ts`) redirects sign
 | Account takeover by email | Identity linked by `supabase_uid`; privileged rows link only to their original identity (§4.1); Supabase "Confirm email" + "Secure email change" required (§4.2) |
 | Privilege escalation | DRF permission classes + `is_staff` checks |
 | CSRF | Bearer auth on write endpoints; CSRF on Django session endpoints |
-| Open redirect | Only `FRONTEND_URL` is used for email links |
+| Open redirect | Only `FRONTEND_URL` is used for email links; every post-sign-in `?next=` (`/login`, `/auth/callback`, and the path `auth.tsx` remembers across an OAuth / magic-link round trip) goes through `safeInternalPath` (`frontend/src/lib/auth-redirect.ts`). Only same-origin paths pass: the value must start with a single `/`; control characters, whitespace, back-slashes, doubled separators and `:` are rejected; it is resolved with the URL parser and must keep the site origin, and its canonical path (path + query + hash) is what gets used |
 | AI provider error leakage | `_PROVIDER_ERROR_PHRASES` filter |
 | Mass token drain | Rate limits + token balance check + provider rotation |
 | SQL injection | Django ORM parameterized queries |
@@ -311,7 +332,7 @@ The frontend `middleware.ts` (`src/utils/supabase/middleware.ts`) redirects sign
 ┌─────────────────┐
 │  Authenticated   │   ← first request: CustomUser created or linked (supabase_uid), TokenBalance seeded
 └────────┬────────┘
-         │ UserDevice enrolled from X-Session-ID (within the 2 / 4 device cap)
+         │ UserDevice enrolled for the browser (X-Session-ID), bound to the Supabase session (within the 2 / 4 device cap)
          ▼
 ┌─────────────────┐
 │  Active session  │   ← X-Session-ID + Bearer token
@@ -364,18 +385,27 @@ api.interceptors.request.use(async (config) => {
 ```
 
 ### `lib/api.ts` response interceptor (order of checks)
-1. **Session-ending codes** — `account_blocked`, `email_not_confirmed`, `email_required`, `account_link_required`, `device_inactive` (and the legacy `user_inactive` / `session_invalid`): `endSessionAfterApiError()` clears the session (and, for `device_inactive`, the device id) and redirects to `/login?authError=<message>` (not when already on `/login`, so the form can show the error).
-2. **`device_limit_reached`** — keeps the session and opens `/settings?deviceLimit=1`, unless the page is `/settings` or `/subscription` (`deviceLimit.ts`).
-3. **`upgrade_required`** (402) — opens the global upgrade modal with `feature` / `remaining` / `cap`.
-4. **401** — one bounded session refresh and retry (§5).
-5. **502/503/504** — idempotent requests (GET / HEAD / OPTIONS) are retried once on `FALLBACK_API_BASE_URL`; a POST is never replayed.
+1. **`auth_verification_busy`** (429) — retried once after `Retry-After` (at most 2 s). Safe for every method: the answer comes from authentication, before any view runs.
+2. **`device_inactive` for a request sent with an older session's token** (another tab, a request in flight during a sign-in) — retried once with the current session's token before anything is signed out.
+3. **Session-ending codes** — `account_blocked`, `email_not_confirmed`, `email_required`, `account_link_required`, `device_inactive` (and the legacy `user_inactive` / `session_invalid`): `endSessionAfterApiError()` clears the session (and, for `device_inactive`, the device id) and redirects to `/login?authError=<message>` (not when already on `/login`, so the form can show the error).
+4. **`device_limit_reached`** — keeps the session and opens `/settings?deviceLimit=1`, unless the page is `/settings` or `/subscription` (`deviceLimit.ts`).
+5. **`upgrade_required`** (402) — opens the global upgrade modal with `feature` / `remaining` / `cap`.
+6. **401** — one bounded session refresh and retry (§5).
+7. **502/503/504** — idempotent requests (GET / HEAD / OPTIONS) are retried once on `FALLBACK_API_BASE_URL`; a POST is never replayed.
 
 ---
 
 ## 12. Backend Auth Wiring
 
 ### `accounts/supabase_rest_auth.py` — `SupabaseJWTAuthentication` (first in `DEFAULT_AUTHENTICATION_CLASSES`)
-- Reads `Authorization: Bearer …`; verifies it with Supabase `GET /auth/v1/user` (`apikey` = the public key, §4.2), caching a valid answer for 5 minutes per SHA-256 digest of the whole token
+- Reads `Authorization: Bearer …` and verifies it with Supabase `GET /auth/v1/user` (`apikey` = the public key, §4.2). DRF authenticates before its throttles run, so every bearer value reaches this check; it is bounded by these verification limits (each value a Django setting or an environment variable of the same name):
+  - **Pre-check**: a value that cannot be a live access token (not a JWT, `alg` `none`, no `sub`, no `exp` or one 10 s or more in the past, over 16,384 characters) is refused locally, without a call.
+  - **Caches** (key: SHA-256 digest of the whole token; the `rate_limit` cache alias, else `default`): a valid answer is cached for `SUPABASE_TOKEN_CACHE_SECONDS` (default 300) and never past the token's `exp`; a token GoTrue refused (a 4xx other than 408 / 429) is not checked again for 60 s.
+  - **One shared call**: concurrent requests with the same token in one process wait for a single GoTrue call.
+  - **Concurrency cap**: at most `SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS` GoTrue calls at a time per process (default 2; 0 = no cap).
+  - **Per-IP budget**: `SUPABASE_AUTH_VERIFY_RATE_PER_IP` GoTrue calls per client IP per minute (default 240, applied only once `TRUSTED_CLIENT_IP_HEADER` or `NUM_PROXIES` is set, since until then every request carries the proxy's address; 0 = off).
+  - **Timeout**: `SUPABASE_AUTH_TIMEOUT_SECONDS` (default 3 s).
+  - Over the cap or the budget the request is answered `429 {"detail": "...", "code": "auth_verification_busy"}` with `Retry-After: 1`, without a call; a request waiting on a shared call gets the same answer when that call hit a limit or did not finish within the timeout + 1 s. `api.ts` retries once (§11).
 - Resolves / links / creates the `CustomUser` (§4.1) and seeds its `TokenBalance`
 - Rejects blocked accounts (`account_blocked`) and enforces the device limit (§6); failures are `401` with a machine-readable `code`
 - Answers `WWW-Authenticate: Bearer realm="api"`, so expired tokens are `401` (not `403`) and the frontend's refresh-on-401 runs

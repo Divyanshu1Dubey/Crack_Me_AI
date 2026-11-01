@@ -29,7 +29,7 @@ selected.
 | Status | Colour | Meaning |
 |---|---|---|
 | `pending` | Yellow | Extracted but not yet reviewed. |
-| `needs_review` | Orange | Parser was not confident (e.g. missing answer marker). |
+| `needs_review` | Orange | Parser was not confident (e.g. missing answer marker), or a publish held the row ([below](#rows-held-at-publish)). |
 | `approved` | Green | Ready for the next publish pass. |
 | `rejected` | Red | Excluded from publishing. |
 | `published` | Blue | Already promoted to a live `Question` row. |
@@ -172,6 +172,28 @@ needs_review = q.correct_answer not in "ABCD" and bool(q.question_text)
 
 After this initial flag, the admin can manually `reset` the row to
 `pending` so it reappears in the default review queue.
+
+## Rows held at publish
+
+Publishing (`material_importer.publishing.publish_extracted_question`) puts
+an approved row back to `needs_review`, with a review note, when
+
+- it has no valid A–D answer: `Not published: no valid correct answer (A-D)
+  was extracted.`, or
+- its stem or options carry an answer / explanation label or a correctness
+  flag: `Not published: answer / explanation label in the stem or options
+  (<codes>).`, with `answer_label_in_public_text`,
+  `explanation_label_in_public_text`, `answer_flag_in_option` and / or
+  `answer_flag_in_stem`.
+
+A row held for a label or a flag must have its stem or options cleaned
+before it is approved again. The Import Center questions API is read-only
+apart from decisions and re-classification, so edit the text in Django admin
+(`/admin/material_importer/extractedquestion/<id>/change/`): remove the label
+or flag and the text after it from the stem or option (the answer belongs in
+*Correct answer*, an explanation in *Explanation*). Re-approving without
+editing holds the row again on the next publish. Note that a decision
+replaces `review_note` with the reviewer's note.
 
 ## Performance
 

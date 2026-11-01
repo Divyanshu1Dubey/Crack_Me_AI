@@ -9,10 +9,11 @@
 - **Base URL**: `https://crackcms-vsthc.ondigitalocean.app/api` (production), `http://localhost:8000/api` (dev). The legacy Render URL `https://crackcms-backend.onrender.com/api` is intentionally blacklisted as unhealthy in `frontend/src/lib/api.ts`.
 - **Content-Type**: `application/json` for all write requests.
 - **Authentication header**: `Authorization: Bearer <token>` (Supabase access token preferred; Django JWT accepted).
-- **Session header**: `X-Session-ID: <crack_device_id>` (auto-injected by `frontend/src/lib/api.ts`). It identifies the device for the device limit (2 devices on a free plan, 4 with a subscription; see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6).
+- **Session header**: `X-Session-ID: <crack_device_id>` (auto-injected by `frontend/src/lib/api.ts`). It identifies the browser; the backend binds it to the access token's Supabase session (`session_id` claim) for the device limit (2 devices on a free plan, 4 with a subscription; see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6).
 - **Timestamps**: ISO 8601 UTC.
 - **All write endpoints** require either JWT or Supabase session.
 - **Pagination**: page-based, `?page=1&page_size=20`. The project default (`crack_cms.pagination.StandardResultsSetPagination`) is 20 rows per page, `?page_size=` up to 100, response `{count, next, previous, results}`. Endpoints that return a plain array or their own page shape say so below.
+- **Search**: `?search=` (DRF `SearchFilter`, project-wide as `crack_cms.filters.BoundedSearchFilter`) uses the first 10 distinct terms (case-insensitive), each cut to 100 characters. Terms are AND-ed, so ignoring extra terms can only widen the result.
 
 ### Standard Error Response
 
@@ -38,7 +39,7 @@
 | 404 | Not found |
 | 409 | Conflict (duplicate, or an import operation that is already running) |
 | 410 | Gone: disabled legacy endpoints (local register / login, password reset) |
-| 429 | Rate-limited (DRF throttles), or `insufficient_tokens` on token-metered AI endpoints |
+| 429 | Rate-limited (DRF throttles), `insufficient_tokens` on token-metered AI endpoints, or `auth_verification_busy` when the access token could not be checked with Supabase right now (`Retry-After: 1`) |
 | 500 | Internal server error |
 | 503 | `{ "code": "ai_unavailable" }` when no AI provider answered (nothing is charged); also `backup_not_configured`, `payments_unavailable` |
 | 502 / 503 / 504 | Backend unavailable: `api.ts` retries idempotent requests (GET / HEAD / OPTIONS) once on `NEXT_PUBLIC_API_FALLBACK_URL` |
@@ -86,6 +87,8 @@ Response `200`:
 ```
 The full field list is `accounts.serializers.UserSerializer` (it also carries `is_admin`, `is_premium`, `token_info`, `subscription_info`, the scholarship fields and the AI-tutor quota). The frontend decides admin access from `role` / `is_admin` in this response, not from Supabase metadata.
 
+`is_subscribed` and `subscription_info` come from `Subscription` rows only (an active row; `is_premium` is also true for admins and superusers). The `CustomUser.is_subscribed` column is a mirror: a bare flag without a row no longer yields a "Legacy Early Bird (Lifetime)" plan. Accounts flagged before `accounts.0011` got real rows from migration `accounts.0026` where a signed payment is on record ([`DATA_MODEL.md`](./DATA_MODEL.md#subscription)).
+
 ### `PUT / PATCH /api/auth/profile/`
 **Auth**: required.
 
@@ -94,6 +97,9 @@ Partial update (PATCH) example:
 { "college": "AIIMS Bhubaneswar", "target_year": 2027 }
 ```
 Response `200`: updated user.
+
+`username` is the public handle (discussions, leaderboard) and is writable (`accounts.handles.handle_error`). A new value must be 3–30 characters of letters, digits, `_` and `.` with at least one letter or digit; unique ignoring case; without `@`; not the user's own email local part (also with a `_<n>` suffix); and not a name reserved for the team (`admin`, `support`, `moderator`, `cracklabs…`, `crackcms…`, …, compared without `_` / `.` and trailing digits) unless the account is admin, staff or superuser. An unchanged value is accepted as is. Errors are `400 {"username": ["<reason>"]}`, e.g. `"This username is taken. Please choose another."`.
+Username changes, refused attempts included, are limited to 10 per account per hour: `429 {"detail": "Too many username changes. Please try again later. Expected available in N seconds."}` with `Retry-After`. Reads and saves that keep the username are not counted.
 
 ---
 
@@ -108,13 +114,13 @@ Response `200`:
   "expires_in": 3600
 }
 ```
-The set is stored on the user (`CustomUser.scholarship_challenge`) until the attempt is submitted: starting again re-issues the **same** five questions with a new token, so a student cannot re-roll the set. `400` once the price is unlocked, `403` after 2 attempts. With fewer than five eligible questions the response is `{ "questions": [], "challenge_token": null, "expires_in": 0 }`.
+The set is stored on the user (`CustomUser.scholarship_challenge`) until the attempt is submitted: starting again re-issues the **same** five questions with a new token, so a student cannot re-roll the set. The stem and options are cut at any answer / explanation label or correctness flag an import left in them (`questions.answer_leak.redact_public_text`). `400` once the price is unlocked, `403` after 2 attempts, `409 {code: "already_subscribed"}` for a caller with an active plan (staff excepted). With fewer than five eligible questions the response is `{ "questions": [], "challenge_token": null, "expires_in": 0 }`.
 
 ### `POST /api/auth/verify-scholarship/`
 **Auth**: required.
-Request: `{ "answers": { "812": "B", "907": "A", ... }, "challenge_token": "<from /scholarship/start/>" }` (exactly five answers; ids must be the issued set).
-Response `200`: `{ "status": "passed" | "failed", "score": 5, "message": "..." }`. A 5/5 on the first attempt unlocks ₹79, on the second ₹99 (`scholarship_granted_price`).
-Errors: `400 {code: "scholarship_expired"}` (token older than 1 h), `400 {code: "scholarship_not_started"}` (bad token, a token already submitted, or any set other than the one stored for the current attempt), `400` for other ids, `403` after 2 attempts.
+Request: `{ "answers": { "812": "B", "907": "A", ... }, "challenge_token": "<from /scholarship/start/>" }` (exactly five answers, each `A`–`D`; ids must be the issued set). A blank answer is `400 {"error": "Answer all 5 questions before submitting."}` and uses no attempt.
+Response `200`: `{ "status": "passed" | "failed", "score": 5 | null, "message": "..." }`. `score` is `5` on a pass and `null` on a failure: a failed attempt never reports how many answers were right. A 5/5 on the first attempt unlocks ₹79, on the second ₹99 (`scholarship_granted_price`).
+Errors: `400 {code: "scholarship_expired"}` (token older than 1 h), `400 {code: "scholarship_not_started"}` (bad token, a token already submitted, or any set other than the one stored for the current attempt), `400` for other ids, `403` after 2 attempts, `409 {code: "already_subscribed"}` for a caller with an active plan (staff excepted; no attempt is used).
 
 ---
 
@@ -131,10 +137,10 @@ Password reset goes through Supabase (`resetPasswordForEmail`, then `updateUser`
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/auth/devices/` | Active devices of the current user, newest first. Each row carries `is_current: true` for the device the request comes from (its `X-Session-ID`), else `false`. |
-| POST | `/api/auth/devices/logout/` | Log a device out `{ "device_id": 7 }` (sets `is_active=False`; that device's next request gets `401 device_inactive`) |
+| GET | `/api/auth/devices/` | Active devices of the current user, newest first. Each row carries `is_current: true` for the device the request comes from (the row the authenticator resolved from the request's Supabase session, else the row of its `X-Session-ID`), else `false`. |
+| POST | `/api/auth/devices/logout/` | Log a device out `{ "device_id": 7 }` (sets `is_active=False`; every later request of that device's Supabase session gets `401 device_inactive`, whatever `X-Session-ID` it sends, and the first one also ends that session in Supabase: GoTrue `logout?scope=local`, best effort) |
 
-Device limit: a new device (unknown `X-Session-ID`) beyond the cap (2 free / 4 subscribed, counting devices seen in the last 30 days) gets `401 {code: "device_limit_reached"}` on every request except `/auth/profile/`, `/auth/devices/…`, `/auth/subscribe/…` and the read-only `GET /auth/tokens/` and `GET /analytics/announcements/`, which are answered without enrolling it. Admins are exempt. Details: [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.
+Device limit: a new device (an unknown `X-Session-ID`, or a Supabase session without a usable header) beyond the cap (2 free / 4 with an active `Subscription` row, counting devices seen in the last 30 days) gets `401 {code: "device_limit_reached"}` on every request except `/auth/profile/`, `/auth/devices/…`, `/auth/subscribe/…` and the read-only `GET /auth/tokens/` and `GET /analytics/announcements/`, which are answered without enrolling it. Admins are exempt. Details: [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.
 
 ---
 
@@ -185,7 +191,7 @@ Device limit: a new device (unknown `X-Session-ID`) beyond the cap (2 free / 4 s
 | POST | `/api/auth/subscribe/order/` | `{ "plan": "1_month" }` → `{ "order_id": "...", "amount": 199, "currency": "INR" }` |
 | POST | `/api/auth/subscribe/verify/` | `{ "razorpay_payment_id", "razorpay_order_id", "razorpay_signature" }` |
 | POST | `/api/auth/subscribe/webhook/` | Razorpay webhook (server-to-server) |
-| GET | `/api/auth/subscribe/status/` | `{ "active": true, "plan": "1_month", "expires_at": "..." }` |
+| GET | `/api/auth/subscribe/status/` | `{ "is_subscribed": true, "subscription": { "id", "plan", "plan_display_name", "status", "is_active", "starts_at", "expires_at", "days_remaining", "amount_paid", "razorpay_order_id", "created_at" } }`; `subscription` is `null` without an active plan. From `Subscription` rows only: a bare `is_subscribed` flag no longer yields a "Legacy Early Bird (Lifetime)" plan. |
 
 ---
 
@@ -242,10 +248,26 @@ Response `200` (student row, abbreviated):
   ]
 }
 ```
-List rows never carry the answer or explanation for students (`effective_answer` / `effective_explanation` are `null`). On a row the viewer may not see the answer of, the textbook fields are blanked (`reference_text`, `book_name`, `chapter`, `page_number` → `""`, `textbook_references` → `[]`), `concept_tags` keeps only `high_yield`, explanation images and answer media (video, page screenshot) are dropped, and the viewer's own `user_is_correct` / `user_selected_answer` are `null`. Admin rows (`QuestionAdminListSerializer`) add `correct_answer`, `explanation`, the AI and lock fields, `updated_at` and `is_active`.
+List rows never carry the answer or explanation for students (`effective_answer` / `effective_explanation` are `null`). On a row the viewer may not see the answer of, the textbook fields are blanked (`reference_text`, `book_name`, `chapter`, `page_number` → `""`, `textbook_references` → `[]`), `concept_tags` keeps only `high_yield`, explanation images and answer media (video, page screenshot) are dropped, and the viewer's own `user_is_correct` / `user_selected_answer` are `null`. On such a row the stem and options are also cut at any answer / explanation label or correctness flag an import left in them (`Correct Answer: B`, `Explanation: …`, a tick or `(correct)` on an option; `questions.answer_leak.redact_public_text`). Admin rows (`QuestionAdminListSerializer`) add `correct_answer`, `explanation`, the AI and lock fields, `updated_at` and `is_active`.
+
+`?search=` uses the first 10 distinct terms, each at most 100 characters (see Conventions). For a caller without premium or staff access, a locked row whose public text carries an answer label or flag matches only on the text that caller sees (`questions/locked_text_search.py`; the set of those rows is found by one scan, cached for 1 h and dropped when a save leaves an active row leaking).
 
 ### `GET /api/questions/<id>/`
-Single question detail. The answer and explanation fields (`correct_answer`, `explanation`, `mnemonic`, the AI and `effective_*` fields, ...) are redacted unless the caller may see the answer.
+Single question detail. The answer and explanation fields (`correct_answer`, `explanation`, `mnemonic`, the AI and `effective_*` fields, ...) are redacted unless the caller may see the answer; the stem and options are then cut as on list rows.
+
+### `GET /api/questions/recall_search/`
+**Auth**: public. Signed-in free accounts get free-showcase rows only; anonymous callers get the stem and options of the whole active bank. Filters: `q`; the recall fields `exam_type`, `year`, `session`, `recall_status`, `clinical_category`, `question_type`, `difficulty`, `is_image_based`, `concept_id`, `subject`, `topic`; the keyword filters `diagnosis`, `drug`, `disease`, `investigation`, `clinical_system`, `subtopic`; the image filters `modality`, `image_ocr`, `has_image`, `has_diagram`, `has_table`; `min_confidence`. `?page=&page_size=` (default 25, at most 100).
+Response: `{ count, page, page_size, facets, results }` (`results` are question-list rows), cached 60 s per caller.
+`q` matches the stem as a whole and through its first 8 distinct tokens of at least 2 characters (each cut to 40 characters, OR-ed); the keyword filters and `image_ocr` are cut to 100 characters. For a caller without premium or staff access, a locked row whose public text carries an answer label or flag matches `q` and the keyword filters only on the text that caller sees (as for `?search=`).
+
+### `GET /api/questions/<id>/ai/{why_correct,why_incorrect,clinical,mnemonic,concept}/`
+**Auth**: public. The reveal-panel sections; the response key is `why_correct`, `why_incorrect`, `clinical_significance`, `memory_trick` or `concept`. These GETs never wait on an LLM: they serve stored or cached text.
+- `200 {"<field>": "<text>"}`, or `200 {"<field>": null}` when there is no text and none will be generated (anonymous caller, `why_incorrect`, a recent failed generation, AI offline).
+- `202 {"<field>": null, "pending": true}`: an authenticated caller who may see the answer asked for a missing section. One background generation for the question is queued, or is already queued or running; it writes every missing section with one LLM call (`questions.tasks.generate_reveal_sections_task`). Ask again later.
+- `200 {"<field>": null, "rate_limited": true}`: the caller's hourly budget of questions with new AI sections is spent (`AI_PER_QUESTION_HOURLY_LIMIT`, default 60; admins and staff are not limited).
+- `200 {"<field>": null, "locked": true}`: the caller may not see this question's answer.
+
+Generation runs on the django-q worker (`backend/Procfile`: `worker: python manage.py qcluster`); without a worker no section is generated. The concept has no `Question` column and is kept only in the cache, so it is generated only when the default cache is shared between processes (`REDIS_URL`, not LocMem). `ai/related_pyqs/` (`?limit=`, default 8, at most 25) cuts a related stem that holds an answer label or flag when the viewer may not see that question's answer.
 
 ### `POST /api/questions/<id>/bookmark/`
 **Auth**: required. Toggle bookmark.
@@ -391,10 +413,11 @@ Stem figures are public. An explanation figure (stored with role `explanation`, 
 ### `POST /api/questions/<id>/resolve-dispute/`
 **Auth**: admin. Mark dispute as resolved.
 
-### `POST /api/questions/<id>/report/`
-**Auth**: required.
-Request: `{ "feedback_type": "wrong_answer", "description": "..." }`
-Response `201`: `{ "id": 12, "status": "pending" }`.
+### `POST /api/questions/feedback/`
+**Auth**: optional (anonymous reports are throttled by `AnonRateThrottle`). Report a problem with a question.
+Request: `{ "question": 35, "category": "wrong_answer", "comment": "..." }` (`category`: `wrong_answer`, `discrepancy`, `out_of_syllabus`, `typo`, `explanation_needed`, `other`).
+Response `201`: the report (`QuestionFeedbackSerializer`: `id`, `question`, `question_text`, `user`, `username`, `category`, `comment`, `status: "new"`, ...). A non-staff reporter must name an active question, otherwise `400 {"question": ["Invalid pk \"<id>\" - object does not exist."]}`. The `question_text` in the response is the stem as the question bank shows it to that caller: cut at an answer label or flag on a question whose answer the caller may not see, `""` for an inactive question. Staff get the stored stem.
+Listing reports, `feedback/admin-queue/`, `PATCH feedback/<id>/status/` and `PATCH feedback/<id>/resolve/` are admin-only.
 
 ---
 
@@ -452,13 +475,15 @@ Response `201`: `{ "id": 12, "status": "pending" }`.
 
 Threads discuss the answer, so they follow the answer entitlement: on a question whose answer the viewer may not see (a free account outside the free showcase, or any scholarship question) the viewer sees only their own posts. Admins, staff and premium users see everything.
 
+Each post's `username` is the author's handle, or `null` when the username shows the author's email address (`crack_cms.public_names.public_handle`).
+
 ---
 
 ### Chat Assistant (Question Bank)
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/questions/chat/` | `{ "message": "Explain UMN vs LMN", "question_id": 35 }` → token-metered AI response |
+| POST | `/api/questions/chat/` | `{ "message": "Explain UMN vs LMN", "question_id": 35 }` → token-metered AI response. A `message` over 4,000 characters (the AI Tutor's `MAX_AI_INPUT_CHARS`) is `400 {"error": "Message is too long (max 4000 characters)."}`, checked before anything is charged. |
 
 ---
 
@@ -474,6 +499,8 @@ with status `402`. Scoring a question is a right / wrong signal (and a test can 
 
 ### `GET /api/tests/`
 Paginated tests (`TestSerializer`): filters `?test_type=&subject=&topic=&exam_type=&is_published=`; `?scope=library` (official library only) or `?scope=mine` (the viewer's generated tests).
+
+Subject names follow the question bank's display rule (the loader's `Imported` bucket reads `Expert Curated`). In `title` (list, detail, the `test` of `/start/`) and in an attempt's `test_title`, a title part equal to that bucket's name is shown as `Expert Curated` (`Imported — 20 Questions` → `Expert Curated — 20 Questions`); stored titles are unchanged.
 
 ### `GET /api/tests/<id>/`
 Test detail with its questions. For non-admins the questions omit `textbook_references`, `reference_text`, `concept_tags` and `concept_id`, and (without full access) the explanation figures of questions outside the free set.
@@ -521,12 +548,14 @@ Request:
 Only questions of this test are scored, each once; the score counts the whole paper (`correct − incorrect × negative_mark_value` when negative marking is on).
 Response `200`: the attempt (`TestAttemptSerializer`: `id, test, test_title, started_at, completed_at, score, total_marks, correct_count, incorrect_count, unanswered_count, time_taken_seconds, is_completed, is_late, accuracy`) plus `xp_earned`. `is_late` is true when the submit came later than the time limit + 120 s: the attempt is scored but earns no XP and stays off the leaderboard.
 Errors: `400 {error: "Invalid attempt"}`; `400 {code: "already_submitted", attempt_id, result}` for a repeated submit (with the stored result); `402 upgrade_required` per the free-plan rules (the attempt stays open).
+A submit also drops the user's cached `/api/analytics/dashboard_v3/` results and those of its sub-endpoints, so they show the attempt at once.
 
 ### `GET /api/tests/<id>/review/?attempt_id=99`
-Per-question review of a completed attempt: `{ attempt_id, score, total_marks, accuracy, total_time, correct, incorrect, unanswered, is_late, subject_breakdown, questions }`. Each row carries `correct_answer`, `selected_answer`, `is_correct`, `explanation`, `mnemonic`, `concept_explanation`, `textbook_references`, `book_reference`, `chapter`, `page_number`, `concept_tags`, ... and `answer_locked`. For a question the user may not see the answer of, `answer_locked` is `true`, `correct_answer` is `null` and `explanation`, `mnemonic`, `concept_explanation` are `""` and `textbook_references` `[]`. Such rows only appear in attempts scored before the free-plan rule, or while the user was premium.
+Per-question review of a completed attempt: `{ attempt_id, score, total_marks, accuracy, total_time, correct, incorrect, unanswered, is_late, subject_breakdown, questions }`. Each row carries `question_text`, `options`, `correct_answer`, `selected_answer`, `is_correct`, `explanation`, `mnemonic`, `subject`, `concept_explanation`, `textbook_references`, `book_reference`, `chapter`, `page_number`, `concept_tags`, ... and `answer_locked`. A row's `subject` and the `subject_breakdown` keys show the loader bucket as `Expert Curated`.
+For a question the user may not see the answer of (`tests_engine.entitlement.lock_answer`), `answer_locked` is `true`, `correct_answer` is `null`, `explanation`, `mnemonic`, `concept_explanation`, `book_reference`, `chapter` and `page_number` are `""`, `textbook_references` is `[]`, and `concept_tags` keeps only non-revealing markers (`high_yield`). Its `question_text` and `options` are cut as on locked question-bank rows (`questions.answer_leak.redact_public_text`): at any answer / explanation label or correctness flag (a tick, `(correct)`, `[wrong]`), together with the reason printed after a flag. The row keeps the student's own `selected_answer` and `is_correct`: `/submit/` re-checks entitlement and never scores a locked question, so such rows only appear in attempts scored before the free-plan rule, or while the user was premium.
 
 ### `GET /api/tests/attempts/` and `GET /api/tests/attempts/<id>/`
-The user's attempts (`TestAttemptSerializer`, including `is_late`). The detail adds `responses`, each with a slim, entitlement-aware `question_detail` snapshot (`id`, text and options, subject / topic, `year`, `paper`, `difficulty`, `exam_source`, `correct_answer`, `explanation`, `mnemonic`, `concept_explanation`, `textbook_references`, `answer_locked`), locked the same way as `/review/`.
+The user's attempts (`TestAttemptSerializer`, including `is_late`). The detail adds `responses`, each with a slim, entitlement-aware `question_detail` snapshot (`id`, text and options, subject / topic, `year`, `paper`, `difficulty`, `exam_source`, `correct_answer`, `explanation`, `mnemonic`, `concept_explanation`, `textbook_references`, `answer_locked`), locked the same way as `/review/`, stem and options included. `subject_name` follows the display rule.
 
 ---
 
@@ -544,7 +573,13 @@ The user's attempts (`TestAttemptSerializer`, including `is_late`). The detail a
 | GET | `/api/analytics/study-time/` | Per-subject study-time breakdown |
 | GET | `/api/analytics/streak/` | Current streak + longest |
 | GET | `/api/analytics/badges/` | Earned badges + locked badges |
-| GET | `/api/analytics/leaderboard/` | Global ranking; `?period=weekly` |
+| GET | `/api/analytics/leaderboard/` | Personal envelope `{ kind, period, me, rival, live_board, live_board_enabled, invite }`; `?period=weekly` (default) / `monthly` / `all` |
+| GET | `/api/analytics/dashboard_v3/` | Combined dashboard payload (accuracy, average time, weak subjects / topics, trend, revision progress, PYQ coverage; `cache: "hit"` / `"miss"`) |
+| GET | `/api/analytics/heatmap/subject/`, `/revision_progress/`, `/pyq_coverage/`, `/average_time/` | The dashboard's sub-results, one per endpoint |
+
+Leaderboard: `rival` is the period's top learner other than the viewer; `live_board` (top 10) is filled only once `LEADERBOARD_LIVE_THRESHOLD` (default 50) learners are ranked. Other learners (`rival`, `live_board` rows) appear only by `username`, which is `null` for a learner whose username shows their email address (an `@`, or its local part); never a real name or a name taken from the email. `me.public_username` (string or `null`) is the name other learners see for the viewer (`null`: listed without a name); `me.username` stays the viewer's own display name (their name, else their username).
+
+`dashboard_v3/`, `heatmap/subject/`, `revision_progress/`, `pyq_coverage/` and `average_time/` are cached per user for 60 s; a dashboard miss also fills the four sub-endpoint entries. `?nocache=1` recomputes only for admin, staff and superuser accounts (everyone else gets the cached result). The PYQ coverage bank totals are cached for all users for 300 s. A question-bank answer or a test submit drops the user's entries. Response shapes are unchanged.
 
 ### Mistake Notebook
 
@@ -552,12 +587,14 @@ Filled automatically from wrong answers in the question bank and in completed te
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/analytics/mistake-notebook/` | `{ results, count, page, page_size }` (`page_size` up to 100); filters `?review_status=&is_flagged=true&subject=&topic=` |
+| GET | `/api/analytics/mistake-notebook/` | `{ results, count, page, page_size }` (`page_size` up to 100); filters `?review_status=&is_flagged=true&subject=&topic=`; `?due=true` keeps the entries due for review now, oldest first (combines with the other filters) |
 | POST | `/api/analytics/mistake-notebook/` | `{ "question": 35, "user_note": "...", "is_flagged": true }`: (re-)adds a question the user really answered wrong (bank or completed test), else `400`; `201` when created |
 | PATCH / DELETE | `/api/analytics/mistake-notebook/<id>/` | Update `user_note` / `is_flagged`, or delete the entry |
 | POST | `/api/analytics/mistake-notebook/<id>/review/` | Mark reviewed; schedules the next review (1 → 3 → 7 days; `mastered` after 5 reviews) |
-| GET | `/api/analytics/mistake-notebook/due/` | Entries due for review now: `{ results, count }` |
+| GET | `/api/analytics/mistake-notebook/due/` | Entries due for review now (not `mastered`), oldest first: `{ results, count, page, page_size }` with `?page=&page_size=` (default 20, at most 100); `count` is the whole due set |
 | GET | `/api/analytics/mistake-notebook/stats/` | `{ total, by_status, flagged, due_today }` |
+
+On a row with `answer_locked: true` (list, `due/`, `?due=true`, PATCH, `review/`, POST), `correct_answer` and `explanation` are `""`, the stem and options are cut at any answer / explanation label, and the options lose correctness flags (`(correct)`, `[Correct answer]`, `(wrong)`, `(Ans)`, ticks, crosses): the same redaction as a locked `/api/tests/<id>/review/` row.
 
 ### Feedback & Contact
 
@@ -759,10 +796,12 @@ curl https://crackcms-vsthc.ondigitalocean.app/api/questions/ \
 | `email_not_confirmed` | 401 | The Supabase identity has not confirmed its email. Signs out. |
 | `email_required` | 401 | A Supabase identity without an email (phone-only / anonymous). Signs out. |
 | `account_link_required` | 401 | The email belongs to an admin/staff row (or a row linked to another identity) that this Supabase identity may not link to automatically; an operator links it with `manage.py link_supabase_identity`. The frontend signs out with "This account must be verified by an administrator". |
-| `device_inactive` | 401 | This device was logged out (Settings or admin). `api.ts` drops its device id and signs out. |
+| `device_inactive` | 401 | This device's Supabase session was logged out (Settings or admin) or replaced by a newer sign-in on that browser; refused whatever `X-Session-ID` is sent. `api.ts` retries a request sent with an older session's token once with the current token; otherwise it drops the device id and signs out. |
 | `device_limit_reached` | 401 | A new device beyond the plan's cap (2 free / 4 subscribed). `api.ts` keeps the session and opens `/settings?deviceLimit=1` (not while on `/settings` or `/subscription`). |
 | `upgrade_required` | 402 | Paywall; carries `feature` (`PYQ answers`, `Mock Tests`, `AI Tutor`, ...) and `message`. Opens the upgrade modal. |
 | `insufficient_tokens` | 429 | AI token balance below the action's cost (in `error`, with `available` / `required`). |
+| `auth_verification_busy` | 429 | The access token could not be checked with Supabase right now (verification capacity or the per-IP budget, [`AUTHENTICATION.md`](./AUTHENTICATION.md) §12); `Retry-After: 1`. `api.ts` retries once. |
+| `already_subscribed` | 409 | Scholarship start / verify by a caller with an active plan (staff excepted). |
 | `ai_unavailable` | 503 | No AI provider answered and no offline answer exists; nothing was charged. |
 | `already_submitted` | 400 | A test attempt was submitted again; the body carries the stored `result`. |
 | `scholarship_not_started` / `scholarship_expired` | 400 | Scholarship verify without a valid, current challenge token. |

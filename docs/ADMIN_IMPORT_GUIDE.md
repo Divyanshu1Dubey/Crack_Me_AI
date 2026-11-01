@@ -174,6 +174,41 @@ Every batch run is automatically validated. The system flags:
 - **Reference issues** — when a question references an image filename that
   doesn't exist in the source file.
 
+### Answer text in the stem or options (holds)
+
+The stem and the options are public text: every list row, test and search
+result shows them. A question whose stem or options carry an answer label
+(`Correct Answer: B`, `Ans: (b)`, an answer-key table), an explanation label
+(`Explanation: …`) or a correctness flag (a tick or cross, `(correct)`,
+`[wrong]`) is therefore never published automatically. The hold codes
+(`questions.answer_leak.label_hold_reasons`) are
+`answer_label_in_public_text`, `explanation_label_in_public_text`,
+`answer_flag_in_option` and `answer_flag_in_stem`.
+
+- **Import Center** (this guide): **Publish** puts such a row back to
+  `needs_review` with the review note `Not published: answer / explanation
+  label in the stem or options (<codes>).` A row without a valid A–D answer
+  is held the same way (`Not published: no valid correct answer (A-D) was
+  extracted.`). Clean the text in Django admin before approving the row
+  again; see [`REVIEW_QUEUE.md`](./REVIEW_QUEUE.md#rows-held-at-publish).
+- **Ingestion platform** (`/api/ingestion/`, `ingestion/conservative_gate.py`):
+  a Production Ready question is staged as Needs Review (`StagedQuestion`)
+  instead of imported, with the codes in `failing_axes`, next to the gate's other reasons
+  (`answer_not_single_a_to_d`, `option_beyond_d`, `subject_unresolved`,
+  `image_file_missing`).
+- **Recall importers** (`importers.neetpg.db_writer.DjangoWriter`: the
+  recall-import API `/api/imports/neetpg/` and `/api/imports/inicet/`,
+  `manage.py neetpg_import` / `neetpg_import_run` / `neetpg_import_all` and
+  `import_ini_cet`): a NEW question with such text goes to the extraction
+  review queue (`QuestionExtractionItem`, `pending`) with the note `answer /
+  explanation label in the stem or options (<codes>) — admin review`. A
+  re-import never fills an empty option of an existing question with such
+  text. (`manage.py import_neet_pg`, the separate NEET PG 2025 / 2020 paper
+  command, does not use this writer.)
+
+`python manage.py fix_answer_label_leaks` (dry run; `--apply`) repairs or
+deactivates questions already in the bank that carry such text.
+
 ---
 
 ## 7. Import Report
@@ -362,6 +397,7 @@ back to the parent batch.
 | High *Rejected* count | Missing answer markers in source file. | Check `needs_review` filter and use the Preview Drawer to fix manually. |
 | Images missing from preview | Source file used a non-image MIME we don't store. | Inspect `parse_warnings` for `image_format_unsupported`. |
 | Test build returns 0 | No `approved` rows yet. | Approve some questions first. |
+| Approved rows are back in `needs_review` after Publish | The publish held them: no valid A–D answer, or an answer / explanation label or correctness flag in the stem or options (the review note names the codes). | Fix the answer or clean the text in Django admin (`ExtractedQuestion`), then approve again; re-approving unedited text holds it again ([§6](#answer-text-in-the-stem-or-options-holds)). |
 | Publish / Republish / Rollback answers 409 | A publish or test rebuild is still running for the batch. | Wait for it to finish (a dead rebuild frees the batch after 5 minutes, a dead publish after 30). |
 | Rollback removed published questions | Caller passed `delete_published=true`. | They are soft-deleted with a `RemovedQuestion` tombstone, not destroyed; restore them from the question editor, or re-upload the source files into a new batch. |
 | Re-import with `import_docx_fidelity --rollback` left old questions live | Expected: `--rollback` keeps published questions. | Add `--remove-published` to take them out of the bank. |

@@ -147,10 +147,10 @@ Prevent account sharing on paid content: up to 2 signed-in devices on a free pla
 
 ### Files
 - Backend: `backend/accounts/supabase_rest_auth.py` (`_enforce_device_limits`), `views.py` (`UserDeviceListView`, `UserDeviceLogoutView`)
-- Frontend: `frontend/src/lib/api.ts` + `deviceLimit.ts` — `device_limit_reached` opens `/settings?deviceLimit=1` (not from `/settings` or `/subscription`); `device_inactive` drops the device id and signs out. `/settings` shows "This device" on the row with `is_current: true`.
+- Frontend: `frontend/src/lib/api.ts` + `deviceLimit.ts` — `device_limit_reached` opens `/settings?deviceLimit=1` (not from `/settings` or `/subscription`); `device_inactive` drops the device id and signs out (a request sent with an older session's token is first retried once with the current token). `/settings` shows "This device" on the row with `is_current: true`.
 
 ### Models
-- `accounts.UserDevice` (one row per `X-Session-ID`). `CustomUser.session_key` / `current_session_id` are unused legacy fields.
+- `accounts.UserDevice`: a browser (`X-Session-ID`) bound to the Supabase session that uses it (`session_id`, migration `accounts.0025`); a session without a usable header is a device of its own (`sid:<session>`). `CustomUser.session_key` / `current_session_id` are unused legacy fields.
 
 ### APIs
 | Method | Path | Description |
@@ -393,6 +393,8 @@ Rich post-answer explanations with structured JSON. The AI **independently verif
 }
 ```
 
+`category` is the subject label students see: the loader's `Imported` bucket reads `Expert Curated` (`ai_engine.offline.with_public_subject`, applied to fresh, cached and stored explanations and to the `context.subject` that explain-question stores). The same display rule applies to the knowledge-base citation and search `subject` (`/api/knowledge/ask/`, `/api/knowledge/search/`) and to the `/api/ai/high-yield/` headings (§15).
+
 ### Files
 - Backend: `backend/ai_engine/views.py::ExplainAfterAnswerView`, `services.py::explain_after_answer`
 
@@ -439,6 +441,8 @@ This protects students from being misled by wrong answer keys in old PYQs.
 | GET | `/api/ai/high-yield/` | High-yield topics |
 | GET | `/api/analytics/weak-topics/` | User's weak areas |
 | GET | `/api/analytics/roadmap/` | Roadmap based on weak topics |
+
+The `## <subject>` headings of `/api/ai/high-yield/` show subject labels as students see them, cached lists included. In the question-bank fallback (offline or no provider answered) an `Imported` and an `Expert Curated` subject share one `## Expert Curated` section, its topics re-ranked by the number of years and questions.
 
 ---
 

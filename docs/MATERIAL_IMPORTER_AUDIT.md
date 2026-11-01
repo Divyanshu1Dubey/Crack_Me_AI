@@ -138,9 +138,12 @@ Indexes: `(material, parse_status)`, `(file_sha256)`, `(content_hash)`, `(status
 - If `ai_service` is unavailable, returns the heuristic result.
 
 ### 4.6 `publishing.py:publish_extracted_question`
-- Creates a real `questions.Question` from an `ExtractedQuestion` row.
-- Resolves subject: prefers `eq.subject` → fallback `Subject.objects.filter(name='Imported')` → auto-creates with `exam_track='cms'`.
-- Year detection: scans question text for years 2010…current_year; the *earliest* plausible PYQ year wins.
+- Creates a real `questions.Question` from an `ExtractedQuestion` row (status `approved` or `pending`, not yet published, with a stem and at least one option).
+- Holds, instead of publishing (status back to `needs_review`, review note added once):
+  - no valid A–D answer: `Not published: no valid correct answer (A-D) was extracted.`
+  - an answer / explanation label or a correctness flag in the stem or the options (`questions.answer_leak.label_hold_reasons`): `Not published: answer / explanation label in the stem or options (<codes>).` with `answer_label_in_public_text`, `explanation_label_in_public_text`, `answer_flag_in_option` and / or `answer_flag_in_stem`. The text is not repaired automatically.
+- Resolves subject: prefers `eq.subject` → fallback `Imported` subject of the row's exam type (default `cms`), created with its `ExamTrack` if missing; students see it as `Expert Curated`.
+- Year: from the source file name only (`year_from_filename`: exactly one plausible year 2010…current year in the name); a year quoted in the stem is content, not the question's year. No single year → `0` (Expert Curated).
 
 ### 4.7 `enrichment.enrich_batch`
 - Streams all `ExtractedQuestion.status='pending'` rows for a batch, one at a time.

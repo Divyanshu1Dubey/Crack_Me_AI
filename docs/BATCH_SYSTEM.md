@@ -130,6 +130,17 @@ Effects:
 - For each `ExtractedQuestion.status='approved'`, the publish pipeline
   creates a `Question` row (via
   `material_importer.publishing.publish_extracted_question`).
+- Two kinds of row are not published. They go back to `needs_review` with a
+  review note (added once):
+  - no valid A–D answer: `Not published: no valid correct answer (A-D) was
+    extracted.`
+  - an answer / explanation label or a correctness flag in the stem or the
+    options (`questions.answer_leak.label_hold_reasons`; the stem and the
+    options are public text): `Not published: answer / explanation label in
+    the stem or options (<codes>).`, where the codes are
+    `answer_label_in_public_text`, `explanation_label_in_public_text`,
+    `answer_flag_in_option` and / or `answer_flag_in_stem`. The text is not
+    repaired automatically: clean it first ([`REVIEW_QUEUE.md`](./REVIEW_QUEUE.md#rows-held-at-publish)).
 - Then `mock_test_builder.build_for_batch()` rebuilds auto-tests:
   - One per `(subject)` → kind=`subject`.
   - One per `(subject, topic)` → kind=`topic`.
@@ -283,15 +294,21 @@ The batch detail page shows the most recent 25 entries; the dedicated
 ```bash
 # 1) Ingest a folder
 python manage.py ingest_cms_material \
-    --dir cms_exclusive_material/ \
-    --source-label "Q3 docs"
+    --path cms_exclusive_material/ \
+    --label "Q3 docs"
 
-# 2) Bulk approve all needs_review rows
-python manage.py enrich_pending_questions --status needs_review --action approve
+# 2) Approve the reviewed rows. There is no CLI for this: use the review
+#    queue (bulk Approve) or Django admin -> ExtractedQuestion -> "Mark
+#    selected as approved". (enrich_pending_questions --batch N runs AI
+#    enrichment on staged rows; it does not approve them.)
 
 # 3) Publish + build tests
 python manage.py publish_batch --all-pending --max-per-test 100
 ```
+
+Approved rows still go through the publish holds above: a row whose stem or
+options carry an answer / explanation label or a correctness flag is put back
+to `needs_review` on the next publish until its text is cleaned.
 
 ## Example: full lifecycle via the UI
 
@@ -300,5 +317,7 @@ python manage.py publish_batch --all-pending --max-per-test 100
    progress.
 3. Click **Publish &amp; Build Tests**.
 4. `/admin/import-center/review` — bulk approve the `needs_review` rows
-   that were auto-flagged.
+   that were auto-flagged. Rows held for an answer / explanation label or a
+   correctness flag in their text are held again on the next publish until
+   that text is cleaned (Django admin → `ExtractedQuestion`).
 5. Click **Publish &amp; Build Tests** again.
