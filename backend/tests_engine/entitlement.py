@@ -19,11 +19,18 @@ whose answer they may not see:
   (``has_locked_questions``). That also closes retakes of older tests;
 * ``/review/`` and the attempt detail still lock the answer parts of such
   rows (attempts finished before this rule, or while the student was
-  premium).
+  premium). Their stem and options are cut as on locked question-bank rows
+  (``questions.answer_leak.redact_public_text``): at any answer /
+  explanation label an import left in them, and at a correctness flag
+  such as "(correct)" or a tick, together with the reason printed after
+  it (``lock_answer``). The student's own pick and its right / wrong stay:
+  they are that attempt's result, shown when it was scored, and no new
+  attempt can be scored on such a question (the 402s above).
 """
 from django.db.models import Exists, OuterRef, Q
 
 from accounts.utils import is_premium
+from questions.answer_leak import redact_public_text
 
 # Values /review/ and the attempt detail return in place of the answer parts
 # of a question the student may not see. ``answer_locked`` tells the client.
@@ -34,6 +41,12 @@ LOCKED_REVIEW_VALUES = {
     'concept_explanation': '',
     'textbook_references': [],
     'reference_text': '',
+    # Textbook pointers: a chapter title can name the diagnosis (locked
+    # question-bank rows blank the same fields, see questions.views
+    # _ANSWER_REVEALING_DETAIL_FIELDS).
+    'book_reference': '',
+    'chapter': '',
+    'page_number': '',
 }
 
 LOCKED_TEST_FEATURE = 'Mock Tests'
@@ -120,11 +133,32 @@ def answer_visibility(user, question_ids, *, full_access=None) -> dict:
     return {qid: qid in free for qid in ids}
 
 
+def _redact_locked_text(row: dict) -> None:
+    """Cut the stem and the options of a locked row (in place) as on locked
+    question-bank rows: ``questions.answer_leak.redact_public_text``, the one
+    rule for every surface. A stem stops at its first answer / explanation
+    label and loses the flags (ticks, "(correct)") on the options it lists;
+    an option stops at its first label or correctness flag, the reason
+    printed after a flag goes with it ("Conjunctival xerosis <tick> (...)"
+    -> "Conjunctival xerosis"), and a flag that leads it is dropped. Rows carry
+    the options as ``option_a``..``option_d`` (attempt detail, the mistake
+    notebook of analytics.serializers) or as ``options`` ``{'A': ..}``
+    (/review/)."""
+    redact_public_text(row)
+
+
 def lock_answer(row: dict) -> dict:
     """Blank the answer parts of one review row (in place) and mark it."""
+    from questions.serializers import locked_concept_tags
+
     for key, value in LOCKED_REVIEW_VALUES.items():
         if key in row:
             row[key] = list(value) if isinstance(value, list) else value
+    if 'concept_tags' in row:
+        # Concept terms can name the answer: only markers such as
+        # "high_yield" stay, as on locked question-bank rows.
+        row['concept_tags'] = locked_concept_tags(row['concept_tags'])
+    _redact_locked_text(row)
     row['answer_locked'] = True
     return row
 

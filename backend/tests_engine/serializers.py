@@ -1,11 +1,49 @@
+import re
+
 from rest_framework import serializers
 from .entitlement import has_locked_questions, lock_answer
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
-from questions.serializers import QuestionListSerializer
+# Subject names follow the question bank's display rule: the loader's
+# "Imported" bucket (any case / spacing) reads "Expert Curated".
+from questions.serializers import PublicSubjectNameField, QuestionListSerializer, public_subject_name
+
+# TestViewSet.generate_test joins a title's parts with " | " and ends it in
+# " — N Questions" (the separators are kept by the split).
+_TITLE_PARTS_RE = re.compile(r'( — | \| )')
 
 
-class TestSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+def public_test_title(title):
+    """A stored test title as students see it. Subject tests generated on
+    the loader's bucket before wave 4 were stored as "Imported — 20
+    Questions": a title part that is exactly that bucket's name is shown
+    with ``public_subject_name`` ("Expert Curated — 20 Questions"). Every
+    other title (also "Imported Diseases — 20 Questions") is unchanged."""
+    if not isinstance(title, str) or not title:
+        return title
+    parts = _TITLE_PARTS_RE.split(title)
+    return ''.join(part if index % 2 else public_subject_name(part) for index, part in enumerate(parts))
+
+
+class PublicTestTitleField(serializers.CharField):
+    """A read-only test title, shown with ``public_test_title``."""
+
+    def to_representation(self, value):
+        return public_test_title(super().to_representation(value))
+
+
+class _PublicTitleMixin:
+    """Serializes ``title`` with ``public_test_title``. Only the output
+    changes: the stored title stays as saved."""
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if 'title' in data:
+            data['title'] = public_test_title(data['title'])
+        return data
+
+
+class TestSerializer(_PublicTitleMixin, serializers.ModelSerializer):
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
     attempt_count = serializers.SerializerMethodField()
     # Derived flag (2026-08-04): a test is free for the current user if it
@@ -73,7 +111,7 @@ class TestSerializer(serializers.ModelSerializer):
         return not has_locked_questions(user, obj, full_access=False)
 
 
-class TestDetailSerializer(serializers.ModelSerializer):
+class TestDetailSerializer(_PublicTitleMixin, serializers.ModelSerializer):
     questions = QuestionListSerializer(many=True, read_only=True)
 
     class Meta:
@@ -102,9 +140,7 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
 
     def get_question_detail(self, obj):
         q = obj.question
-        subject_name = q.subject.name if q.subject_id else ''
-        if subject_name == 'Imported':  # loader bucket, shown as in the question bank
-            subject_name = 'Expert Curated'
+        subject_name = public_subject_name(q.subject.name) if q.subject_id else ''
         row = {
             'id': q.id,
             'question_text': q.question_text,
@@ -133,7 +169,7 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
 
 
 class TestAttemptSerializer(serializers.ModelSerializer):
-    test_title = serializers.CharField(source='test.title', read_only=True)
+    test_title = PublicTestTitleField(source='test.title', read_only=True)
     accuracy = serializers.ReadOnlyField()
 
     class Meta:

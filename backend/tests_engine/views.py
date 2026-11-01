@@ -23,7 +23,7 @@ from .serializers import (
     SubmitAnswerSerializer,
 )
 from questions.models import Question, Subject, Topic
-from questions.serializers import QuestionListSerializer
+from questions.serializers import QuestionListSerializer, public_subject_name
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
 
@@ -740,7 +740,7 @@ class TestViewSet(viewsets.ModelViewSet):
             if subject is None:
                 return Response({'error': 'Invalid subject_id'}, status=status.HTTP_400_BAD_REQUEST)
             q_filter &= Q(subject_id=subject.pk)
-            title_parts.append(subject.name)
+            title_parts.append(public_subject_name(subject.name))
         elif test_type == 'topic':
             if topic_id is None:
                 return Response({'error': 'topic_id is required for a topic test'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1112,8 +1112,12 @@ class TestViewSet(viewsets.ModelViewSet):
             ))
 
         from django.core.cache import cache
+        from analytics.dashboard_v3 import invalidate_user_cache
         cache.delete(f'dashboard:{request.user.id}')
         cache.delete(f'dashboard_bundle:{request.user.id}')
+        # ... and /api/analytics/dashboard_v3/ with its sub-endpoints, which
+        # otherwise showed the submitted test only after their 60 s cache.
+        invalidate_user_cache(request.user.id)
 
         # The player only reads the totals and fetches /review/ separately;
         # the old nested per-question detail payload cost >1,000 queries.
@@ -1130,11 +1134,17 @@ class TestViewSet(viewsets.ModelViewSet):
         entitlement (tests_engine.entitlement.answer_visibility): for a
         question the student may not see, the row carries
         ``answer_locked: true`` instead of correct_answer, explanation,
-        mnemonic, concept_explanation and textbook_references (scholarship
-        questions included). Since /start/ and /submit/ refuse such tests to
-        a student without full access, a locked row only appears in an
-        attempt scored earlier (before that rule, or while premium): its
-        right / wrong is what the student was already shown.
+        mnemonic, concept_explanation, textbook_references and the textbook
+        pointers (scholarship questions included); its concept_tags keep
+        only markers such as "high_yield", and its stem and options are cut
+        as on locked question-bank rows, at any answer / explanation label
+        or correctness flag an import left in them (entitlement.lock_answer).
+        Since /start/ and /submit/ refuse such tests to a student without
+        full access (submit re-checks the questions, so one that left the
+        free set after /start/ is refused too), a locked row only appears in
+        an attempt scored earlier (before that rule, or while premium): its
+        selected_answer and is_correct are what the student was already
+        shown, so they stay.
         """
         attempt_id = request.query_params.get('attempt_id')
 
@@ -1156,7 +1166,7 @@ class TestViewSet(viewsets.ModelViewSet):
 
         for resp in responses:
             q = resp.question
-            subj = q.subject.name if q.subject else 'Unknown'
+            subj = public_subject_name(q.subject.name) if q.subject else 'Unknown'
 
             if subj not in subject_breakdown:
                 subject_breakdown[subj] = {'correct': 0, 'incorrect': 0, 'unanswered': 0}
