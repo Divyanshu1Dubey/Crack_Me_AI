@@ -3,9 +3,16 @@ Management command: seed_blogs
 Populates the BlogPost table from the frontend's static blog content files.
 
 Usage:
-    python manage.py seed_blogs              # insert/update all 64 posts
+    python manage.py seed_blogs              # create missing posts only
+    python manage.py seed_blogs --update     # also overwrite existing posts
     python manage.py seed_blogs --dry-run    # preview without writing
     python manage.py seed_blogs --clear      # delete all posts first
+
+build.sh runs this on every deploy. It used to ``update_or_create`` every
+post, so an admin's edits (or unpublishing) in Blog Management were reverted
+on each deploy. Existing posts are now left alone unless ``--update`` is
+passed explicitly. A post whose seeded body is only the placeholder text is
+created unpublished, so a stub article is never published.
 """
 import json
 import re
@@ -14,6 +21,13 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from blog_engine.models import BlogPost
+
+PLACEHOLDER_BODIES = {"", "full article content here."}
+
+
+def is_placeholder_body(body) -> bool:
+    """True for the stub bodies some seed rows carry instead of an article."""
+    return (body or "").strip().lower() in PLACEHOLDER_BODIES
 
 
 # ── Blog data extracted from frontend/src/content/blog/*.ts ─────────────
@@ -4094,10 +4108,13 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing to DB")
         parser.add_argument("--clear", action="store_true", help="Delete all existing blog posts first")
+        parser.add_argument("--update", action="store_true",
+                            help="Overwrite existing posts with the seed data (discards admin edits)")
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         clear_first = options["clear"]
+        overwrite = options.get("update", False)
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no changes will be written."))
@@ -4118,26 +4135,28 @@ class Command(BaseCommand):
         for post_data in BLOG_POSTS:
             slug = post_data["slug"]
 
-            # Build update_fields from the data
-            update_fields = [f for f in post_data if f != "slug"]
-
+            existing = BlogPost.objects.filter(slug=slug).exists()
+            if existing and not overwrite:
+                skipped += 1
+                continue
             if dry_run:
-                existing = BlogPost.objects.filter(slug=slug).exists()
                 if existing:
                     self.stdout.write(f"  [DRY-RUN] Would update: {slug}")
                     updated += 1
                 else:
                     self.stdout.write(f"  [DRY-RUN] Would create: {slug}")
                     created += 1
-            else:
-                obj, was_created = BlogPost.objects.update_or_create(
-                    slug=slug,
-                    defaults=post_data,
+            elif existing:
+                BlogPost.objects.filter(slug=slug).update(
+                    **{k: v for k, v in post_data.items() if k != "slug"}
                 )
-                if was_created:
-                    created += 1
-                else:
-                    updated += 1
+                updated += 1
+            else:
+                data = dict(post_data)
+                if is_placeholder_body(data.get("body")):
+                    data["is_published"] = False
+                BlogPost.objects.create(**data)
+                created += 1
 
         if not dry_run:
             self.stdout.write(self.style.SUCCESS(
@@ -4145,5 +4164,6 @@ class Command(BaseCommand):
             ))
         else:
             self.stdout.write(self.style.SUCCESS(
-                f"\nDry-run summary. Would create: {created}, Would update: {updated}"
+                f"\nDry-run summary. Would create: {created}, Would update: {updated}, "
+                f"Skipped existing: {skipped}"
             ))

@@ -32,7 +32,9 @@ class Command(BaseCommand):
             except Exception as e:  # pragma: no cover - defensive
                 self.stderr.write(f"job {original.id}: {e}")
                 continue
-            dispatch_job(retry_job.id)
+            task_id = dispatch_job(retry_job.id)
+            retry_job.summary = {"q_task_id": task_id, "retry_of_job": original.id}
+            retry_job.save(update_fields=["summary"])
             count += 1
             self.stdout.write(self.style.SUCCESS(
                 f"Retry {retry_job.id} <- {original.id} ({original.parent_exam})"

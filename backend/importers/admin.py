@@ -23,19 +23,9 @@ class RecallSourceAdmin(admin.ModelAdmin):
     list_filter = ("scan_type", "recall_status", "is_active")
     search_fields = ("pdf_filename", "publisher")
     readonly_fields = ("pdf_sha256", "pdf_size_bytes", "pdf_metadata", "created_at")
-
-    actions = ["action_rerun_import"]
-
-    @admin.action(description="Re-run importer for selected source(s)")
-    def action_rerun_import(self, request, queryset):
-        # Phase 2 ships a stub: the actual rerun hook lives in
-        # importers.neetpg.runner. We log + count so admins see the
-        # action was acknowledged.
-        self.message_user(
-            request,
-            f"Queued re-import for {queryset.count()} source(s). "
-            "Track progress at /api/imports/neetpg/jobs/.",
-        )
+    # No "re-run importer" action: it only printed "Queued re-import" and
+    # queued nothing. Re-imports go through `manage.py neetpg_retry` or the
+    # admin-only POST /api/imports/neetpg/jobs/<id>/retry/.
 
 
 @admin.register(QuestionSource)
@@ -59,20 +49,14 @@ class QuestionImageAdmin(admin.ModelAdmin):
     search_fields = ("caption", "ocr_text", "question__question_text")
     readonly_fields = ("sha256", "phash", "dhash", "bytes", "created_at")
 
-    actions = ["action_mark_watermarked", "action_re_ocr"]
+    # The "Re-run OCR" action was removed: it reported "Queued re-OCR" but
+    # never ran OCR.
+    actions = ["action_mark_watermarked"]
 
     @admin.action(description="Mark selected images as watermarked")
     def action_mark_watermarked(self, request, queryset):
         n = queryset.update(is_watermarked=True)
         self.message_user(request, f"Flagged {n} image(s) as watermarked.")
-
-    @admin.action(description="Re-run OCR on selected images")
-    def action_re_ocr(self, request, queryset):
-        self.message_user(
-            request,
-            f"Queued re-OCR for {queryset.count()} image(s). "
-            "Wire to importers.neetpg.ocr_engine.ocr_image() in phase 3.",
-        )
 
 
 class DuplicateMemberInline(admin.TabularInline):

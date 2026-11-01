@@ -25,10 +25,11 @@ type Batch = {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
-  summary: Record<string, unknown>;
+  summary: Record<string, unknown> & { publish?: PublishState };
   error_report: Array<Record<string, unknown>>;
   materials_count: number;
   needs_review_count: number;
+  is_stale?: boolean;
   recent_audit_logs?: Array<{
     id: number;
     level: string;
@@ -36,6 +37,18 @@ type Batch = {
     message: string;
     created_at: string;
   }>;
+};
+
+// Background publish progress, stored by the API in batch.summary.publish.
+type PublishState = {
+  state: 'running' | 'done' | 'failed';
+  started_at?: string;
+  finished_at?: string;
+  heartbeat_at?: string;
+  published?: number;
+  tests_built?: number;
+  rows_done?: number;
+  error?: string;
 };
 
 type Material = {
@@ -97,9 +110,14 @@ export default function BatchDetailPage() {
     if (!id) return;
     load();
     pollRef.current = setInterval(() => {
-      // Only poll while processing
+      // Only poll while parsing or while a background publish runs.
       setBatch((prev) => {
-        if (!prev || prev.status === 'processing' || prev.status === 'queued') {
+        if (
+          !prev ||
+          prev.status === 'processing' ||
+          prev.status === 'queued' ||
+          prev.summary?.publish?.state === 'running'
+        ) {
           load();
         }
         return prev;
@@ -144,6 +162,13 @@ export default function BatchDetailPage() {
   }
 
   const live = batch.status === 'processing' || batch.status === 'queued';
+  const publishState = batch.summary?.publish;
+  // Same 30-minute rule as the API: a "running" publish with no heartbeat
+  // for that long has died with its process and may be started again.
+  const lastBeat = publishState?.heartbeat_at || publishState?.started_at;
+  const publishStale =
+    publishState?.state === 'running' && !!lastBeat && Date.now() - new Date(lastBeat).getTime() > 30 * 60 * 1000;
+  const publishing = publishState?.state === 'running' && !publishStale;
 
   return (
     <div className="space-y-6">
@@ -156,23 +181,24 @@ export default function BatchDetailPage() {
           <span className={`rounded px-3 py-1 text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
           <button
             type="button"
-            disabled={live || actionPending === 'cancel'}
+            disabled={!live || actionPending === 'cancel'}
             onClick={() => doAction('cancel')}
+            title={live ? 'Stop parsing after the current file' : 'Only a queued or processing batch can be cancelled'}
             className="rounded border border-border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50"
           >
             {actionPending === 'cancel' ? 'Cancelling…' : 'Cancel'}
           </button>
           <button
             type="button"
-            disabled={batch.status !== 'completed' && batch.status !== 'partial' || actionPending === 'publish'}
+            disabled={(batch.status !== 'completed' && batch.status !== 'partial') || publishing || actionPending === 'publish'}
             onClick={() => doAction('publish')}
             className="rounded bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {actionPending === 'publish' ? 'Publishing…' : 'Publish &amp; Build Tests'}
+            {actionPending === 'publish' || publishing ? 'Publishing…' : 'Publish & Build Tests'}
           </button>
           <button
             type="button"
-            disabled={live || actionPending === 'republish'}
+            disabled={live || publishing || actionPending === 'republish'}
             onClick={() => doAction('republish')}
             className="rounded border border-border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50"
           >
@@ -180,7 +206,7 @@ export default function BatchDetailPage() {
           </button>
           <button
             type="button"
-            disabled={live || actionPending === 'rollback'}
+            disabled={live || publishing || actionPending === 'rollback'}
             onClick={() => {
               if (confirm('Rollback will delete ALL materials, staging rows, and auto-generated tests for this batch. Continue?')) {
                 doAction('rollback', { delete_published: false });
@@ -195,6 +221,47 @@ export default function BatchDetailPage() {
 
       {actionError && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{actionError}</div>
+      )}
+
+      {live && batch.is_stale && (
+        <div className="rounded border border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
+          No progress for over 30 minutes — the background parse has probably stopped (for example after a
+          server restart). Cancel this batch and upload the files again.
+        </div>
+      )}
+
+      {publishState && (
+        <div
+          className={`rounded border p-3 text-sm ${
+            publishState.state === 'failed' || publishStale
+              ? 'border-red-300 bg-red-50 text-red-800'
+              : publishing
+                ? 'border-blue-300 bg-blue-50 text-blue-800'
+                : 'border-green-300 bg-green-50 text-green-800'
+          }`}
+        >
+          {publishing && (
+            <>
+              Publishing in the background
+              {publishState.rows_done ? ` (${publishState.rows_done} rows processed)` : ''}… this page updates
+              automatically.
+            </>
+          )}
+          {publishStale && (
+            <>
+              The last publish stopped reporting progress (probably a server restart). Publishing is safe to
+              repeat — already-published questions are skipped — so you can start it again.
+            </>
+          )}
+          {publishState.state === 'done' && (
+            <>
+              Last publish: {publishState.published ?? 0} question(s) published, {publishState.tests_built ?? 0}{' '}
+              test(s) built
+              {publishState.finished_at ? ` (${new Date(publishState.finished_at).toLocaleString()})` : ''}.
+            </>
+          )}
+          {publishState.state === 'failed' && <>Last publish failed: {publishState.error || 'unknown error'}</>}
+        </div>
       )}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">

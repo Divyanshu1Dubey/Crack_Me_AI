@@ -10,6 +10,7 @@ in isolation.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
@@ -21,7 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .ai_classifier import ClassificationResult, HeuristicClassifier, classify_question
-from .duplicate_detector import DuplicateDetector
+from .duplicate_detector import DuplicateDetector, question_dedup_hash, question_dedup_text
 from .models import (
     ExtractedQuestion,
     ExtractedTheory,
@@ -49,29 +50,48 @@ def _file_sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def _store_image(material: ImportMaterial, idx: int, img_bytes: bytes, mime: str, original_filename: str) -> str:
-    """Save an extracted image under MEDIA_ROOT/imported/<batch>/<material>/<idx>.<ext>.
+# Raster formats we accept from imported documents, keyed by Pillow format.
+# Anything else (SVG, WMF/EMF, unknown blobs) is skipped: SVG can carry
+# script and the public image proxy would serve it from the API origin.
+_RASTER_FORMATS: dict[str, tuple[str, str]] = {
+    "PNG": ("image/png", "png"),
+    "JPEG": ("image/jpeg", "jpg"),
+    "GIF": ("image/gif", "gif"),
+    "WEBP": ("image/webp", "webp"),
+}
 
-    Returns the public URL (relative to MEDIA_URL).
+
+def _sniff_raster(img_bytes: bytes) -> tuple[str, str] | None:
+    """Return (mime, ext) when Pillow confirms the bytes are an allowed raster image."""
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(img_bytes)) as im:
+            fmt = (im.format or "").upper()
+            im.verify()
+    except Exception:
+        return None
+    return _RASTER_FORMATS.get(fmt)
+
+
+def _store_image(material: ImportMaterial, idx: int, img_bytes: bytes, mime: str, original_filename: str):
+    """Save an extracted raster image under MEDIA_ROOT/imported/<batch>/<material>/<idx>.<ext>.
+
+    Returns ``(storage_name, public_url, mime)`` or ``None`` when the bytes
+    are not a verified PNG/JPEG/GIF/WEBP image (the claimed ``mime`` from
+    the document is not trusted). ``storage_name`` is what
+    ``ImportedImage.stored_path`` must hold so publishing can read the file
+    back through the storage backend.
     """
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
 
-    ext_map = {
-        "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
-        "image/webp": "webp", "image/svg+xml": "svg",
-    }
-    ext = ext_map.get(mime, "bin")
+    sniffed = _sniff_raster(img_bytes)
+    if sniffed is None:
+        return None
+    real_mime, ext = sniffed
     rel = f"imported/batch_{material.batch_id}/material_{material.id}/img_{idx:03d}.{ext}"
     saved = default_storage.save(rel, ContentFile(img_bytes))
-    return default_storage.url(saved)
-
-
-def _norm_text(s: str) -> str:
-    import re
-    s = (s or "").lower()
-    s = re.sub(r"[^a-z0-9\s]+", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
+    return saved, default_storage.url(saved), real_mime
 
 
 def _seed_existing_dedup(primed: DuplicateDetector) -> None:
@@ -86,7 +106,6 @@ def _seed_existing_dedup(primed: DuplicateDetector) -> None:
     """
     from questions.models import Question
     from .duplicate_detector import _shingles
-    from .parser.text_utils import content_hash
 
     cache_path = Path(getattr(settings, "MEDIA_ROOT", "/tmp")) / "_cache" / "dedup_index.json"
     fingerprint = None
@@ -95,7 +114,10 @@ def _seed_existing_dedup(primed: DuplicateDetector) -> None:
 
     # P19 — cache schema version. Bump when the on-disk format changes; the
     # cached file is silently discarded if the version doesn't match.
-    CACHE_SCHEMA_VERSION = "1"
+    # "2": the key covers the stem AND the (sorted) options, so distinct
+    # questions sharing a generic stem ("Which of the following is not
+    # true?") are no longer collapsed into one.
+    CACHE_SCHEMA_VERSION = "2"
 
     try:
         population = Question.objects.count()
@@ -122,14 +144,15 @@ def _seed_existing_dedup(primed: DuplicateDetector) -> None:
         # Full-scan fallback. Slow but always correct.
         qs = (
             Question.objects.all()
-            .only("question_text")
+            .only("question_text", "option_a", "option_b", "option_c", "option_d")
             .iterator(chunk_size=500)
         )
         for q in qs:
-            norm = _norm_text(q.question_text)
+            options = [q.option_a, q.option_b, q.option_c, q.option_d]
+            norm = question_dedup_text(q.question_text, options)
             if not norm:
                 continue
-            h = content_hash(q.question_text)
+            h = question_dedup_hash(q.question_text, options)
             primed._seen_hashes[h] = h
             sh = _shingles(norm)
             primed._seen_shingles[h] = sh
@@ -231,9 +254,11 @@ def _persist_parsed_document(
         "questions_saved": 0,
         "questions_rejected": 0,
         "questions_deduplicated": 0,
+        "duplicates_staged": 0,
         "theory_saved": 0,
         "images_saved": 0,
         "images_duplicate": 0,
+        "images_rejected": 0,
     }
 
     # ----- Images ----------------------------------------------------------
@@ -251,16 +276,22 @@ def _persist_parsed_document(
             continue
         seen_image_hashes.add(sha)
         try:
-            url = _store_image(material, idx, img.raw_bytes, img.mime_type, img.filename)
+            stored = _store_image(material, idx, img.raw_bytes, img.mime_type, img.filename)
         except Exception as exc:
             log.warning("Failed to store image %s: %s", img.filename, exc)
             continue
+        if stored is None:
+            # Not a verified PNG/JPEG/GIF/WEBP (e.g. SVG, WMF/EMF): never stored.
+            summary["images_rejected"] += 1
+            log.info("Skipping non-raster image %s (%s)", img.filename, img.mime_type)
+            continue
+        storage_name, url, real_mime = stored
         image_rows.append(ImportedImage(
             material=material,
             original_filename=img.filename,
-            stored_path=url,
+            stored_path=storage_name,
             public_url=url,
-            mime_type=img.mime_type,
+            mime_type=real_mime,
             width=img.width,
             height=img.height,
             size_bytes=len(img.raw_bytes),
@@ -279,14 +310,26 @@ def _persist_parsed_document(
     # ----- Questions -------------------------------------------------------
     classifier = HeuristicClassifier()
     pending_rows: list[ExtractedQuestion] = []
+    material_hashes: set[str] = set()
     for q in parsed.questions:
-        dup = dedup.check(q)
-        if dup.is_duplicate:
-            summary["questions_deduplicated"] += 1
-            continue
         if not (q.question_text and (q.option_a or q.option_b or q.option_c or q.option_d)):
             summary["questions_rejected"] += 1
             continue
+        dup = dedup.check(q)
+        duplicate_meta: dict = {}
+        if dup.is_duplicate:
+            summary["questions_deduplicated"] += 1
+            if dup.content_hash in material_hashes:
+                # The same question twice in this file: nothing new to review.
+                continue
+            # Stage it as a visible "duplicate" row instead of dropping it, so
+            # an admin can check the match (and approve it if it is wrong).
+            duplicate_meta = {
+                "of_hash": dup.duplicate_of_hash,
+                "score": round(dup.similarity_score, 3),
+                "reason": dup.reason,
+            }
+        material_hashes.add(dup.content_hash)
         classification = classify_question(q, use_ai=use_ai) if use_ai else classifier.classify(q)
         subject = _resolve_subject(classification.subject)
         topic = _resolve_topic(subject, classification.topic) if subject else None
@@ -296,8 +339,22 @@ def _persist_parsed_document(
         prov_h.update((q.correct_answer or "").encode("utf-8", errors="ignore")); prov_h.update(b"\x1f")
         prov_h.update((q.explanation or "").encode("utf-8", errors="ignore"))
         provenance_checksum = prov_h.hexdigest()
-        # P17 — needs_review flag for ambiguous cases (missing correct marker but otherwise OK).
-        needs_review = q.correct_answer not in "ABCD" and bool(q.question_text)
+        # P17 — needs_review flag for ambiguous cases (missing correct marker
+        # but otherwise OK). NB: ``"" in "ABCD"`` is True, so the old substring
+        # test let rows with NO answer through as plain "pending".
+        needs_review = (q.correct_answer or "").strip().upper() not in {"A", "B", "C", "D"}
+        if duplicate_meta:
+            row_status = "duplicate"
+        else:
+            row_status = "needs_review" if needs_review else "pending"
+        classification_meta = dict(classification.raw or {})
+        duplicate_of = None
+        if duplicate_meta:
+            classification_meta["duplicate"] = duplicate_meta
+            duplicate_of = (
+                ExtractedQuestion.objects.filter(content_hash=dup.duplicate_of_hash)
+                .exclude(status="duplicate").order_by("id").first()
+            )
         pending_rows.append(ExtractedQuestion(
             material=material,
             position_index=q.position_index,
@@ -317,17 +374,20 @@ def _persist_parsed_document(
             inferred_difficulty=classification.difficulty or "medium",
             inferred_bloom_level=classification.bloom_level or "",
             classification_confidence=classification.confidence or 0.0,
-            classification_meta=classification.raw or {},
+            classification_meta=classification_meta,
             subject=subject,
             topic=topic,
             content_hash=dup.content_hash,
+            duplicate_of=duplicate_of,
+            review_note=(f"Possible duplicate ({dup.reason})" if duplicate_meta else ""),
             provenance_checksum=provenance_checksum,
             image_refs=q.image_refs or [],
-            status="needs_review" if needs_review else "pending",
+            status=row_status,
         ))
     if pending_rows:
         ExtractedQuestion.objects.bulk_create(pending_rows, batch_size=200)
-        summary["questions_saved"] = len(pending_rows)
+        summary["duplicates_staged"] = sum(1 for r in pending_rows if r.status == "duplicate")
+        summary["questions_saved"] = len(pending_rows) - summary["duplicates_staged"]
         # P3 — per-question image linking via the M2M.
         # Each ExtractedQuestion's image_refs is the list of filenames that
         # belong to it (set by the fidelity extractor). Map those to
@@ -344,7 +404,6 @@ def _persist_parsed_document(
                 for ipk in img_pks:
                     rows.append(Through(importedimage_id=ipk, extractedquestion_id=eq_pk))
                 Through.objects.bulk_create(rows, ignore_conflicts=True)
-        summary["questions_saved"] = len(pending_rows)
 
     # ----- Theory ----------------------------------------------------------
     theory_rows: list[ExtractedTheory] = []
@@ -376,8 +435,17 @@ def ingest_path(
     use_ai: bool = False,
     max_files: int | None = None,
     force: bool = False,
+    batch: ImportBatch | None = None,
 ) -> ImportBatch:
     """Ingest a single file or an entire folder. Returns the ImportBatch.
+
+    ``batch``: an existing (normally ``queued``) ImportBatch to fill — the
+    Import Center upload view creates the batch up front so it can return
+    its id, and the background ingest must report into THAT batch. Without
+    it a new batch is created (CLI / admin re-run behaviour).
+
+    A batch whose status becomes ``cancelled`` (Import Center "Cancel") is
+    honoured between files: the loop stops and the status stays cancelled.
 
     ``force=True`` bypasses the cross-batch dedup check (P1 escape hatch) so
     a fidelity upgrade or a deliberately re-imported fixture always lands new
@@ -389,13 +457,25 @@ def ingest_path(
         raise FileNotFoundError(path)
     factory = ParserFactory()
 
-    batch = ImportBatch.objects.create(
-        source_label=source_label or Path(path).name,
-        root_path=path,
-        status="processing",
-        started_at=timezone.now(),
-        created_by=created_by,
-    )
+    if batch is None:
+        batch = ImportBatch.objects.create(
+            source_label=source_label or Path(path).name,
+            root_path=path,
+            status="processing",
+            started_at=timezone.now(),
+            created_by=created_by,
+        )
+    else:
+        batch.refresh_from_db()
+        if batch.status == "cancelled":
+            log.info("ingest_path: batch %s was cancelled before it started", batch.id)
+            return batch
+        batch.status = "processing"
+        batch.started_at = batch.started_at or timezone.now()
+        batch.root_path = batch.root_path or path
+        if created_by is not None and batch.created_by_id is None:
+            batch.created_by = created_by
+        batch.save(update_fields=["status", "started_at", "root_path", "created_by", "updated_at"])
 
     # Decide which files to process.
     if os.path.isfile(path):
@@ -426,14 +506,26 @@ def ingest_path(
         "questions_saved": 0,
         "questions_rejected": 0,
         "questions_deduplicated": 0,
+        "duplicates_staged": 0,
         "theory_saved": 0,
         "images_saved": 0,
         "images_duplicate": 0,
+        "images_rejected": 0,
     }
     error_log: list[dict] = []
+    files_failed = 0
+    cancelled = False
 
     for idx, fp in enumerate(files):
         if max_files and idx >= max_files:
+            break
+        # Honour an admin "Cancel" between files.
+        if ImportBatch.objects.filter(pk=batch.pk, status="cancelled").exists():
+            cancelled = True
+            ImportAuditLog.objects.create(
+                batch=batch, level="warning", code="cancel_honoured",
+                message=f"Stopped after {idx} of {len(files)} file(s): batch was cancelled.",
+            )
             break
         rel = os.path.relpath(fp, path)
         try:
@@ -466,10 +558,10 @@ def ingest_path(
             material.duplicate_count = summary["questions_deduplicated"]
             material.parsed_at = timezone.now()
             material.save()
-            summary_total["questions_rejected"] += summary["questions_rejected"]
             for k, v in summary.items():
-                summary_total[k] += v
+                summary_total[k] = summary_total.get(k, 0) + v
             if parsed.errors:
+                files_failed += 1
                 for err in parsed.errors[:5]:
                     error_log.append({"file": rel, "error": err})
                     ImportAuditLog.objects.create(
@@ -484,6 +576,7 @@ def ingest_path(
                 )
         except Exception as exc:
             log.exception("Failed to ingest %s", fp)
+            files_failed += 1
             error_log.append({"file": rel, "error": str(exc)})
             try:
                 ImportAuditLog.objects.create(
@@ -493,6 +586,7 @@ def ingest_path(
             except Exception:
                 pass
         batch.files_processed = idx + 1
+        batch.files_failed = files_failed
         batch.questions_extracted = summary_total["questions_saved"]
         batch.questions_found = summary_total["questions_found"]
         batch.questions_rejected = summary_total["questions_rejected"]
@@ -500,14 +594,21 @@ def ingest_path(
         batch.images_extracted = summary_total["images_saved"]
         batch.duplicates_skipped = summary_total["questions_deduplicated"]
         batch.save(update_fields=[
-            "files_processed", "questions_extracted", "questions_found",
+            "files_processed", "files_failed", "questions_extracted", "questions_found",
             "questions_rejected", "theory_blocks_extracted",
             "images_extracted", "duplicates_skipped", "updated_at",
         ])
 
-    batch.status = "partial" if error_log else "completed"
+    # Re-read the status: a Cancel that arrived during the last file wins.
+    if cancelled or ImportBatch.objects.filter(pk=batch.pk, status="cancelled").exists():
+        batch.status = "cancelled"
+    else:
+        batch.status = "partial" if error_log else "completed"
     batch.finished_at = timezone.now()
-    batch.summary = summary_total
+    # Merge, never replace: the upload view stores uploaded_files here and
+    # the publish / test builder keep their own keys in the same dict.
+    current = ImportBatch.objects.filter(pk=batch.pk).values_list("summary", flat=True).first() or {}
+    batch.summary = {**current, **summary_total}
     batch.error_report = error_log[:200]
-    batch.save()
+    batch.save(update_fields=["status", "finished_at", "summary", "error_report", "updated_at"])
     return batch

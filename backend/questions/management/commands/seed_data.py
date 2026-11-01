@@ -1,7 +1,15 @@
 """
 Management command to seed the database with sample UPSC CMS questions.
-Run: python manage.py seed_data
+Run: python manage.py seed_data                 # subjects + topics (+ samples when DEBUG)
+     python manage.py seed_data --with-samples  # also insert the sample questions
+
+The 15 sample questions are hand-written demo content, not real PYQs. They
+are only inserted when DEBUG is on or --with-samples is passed, always with
+year=0 ("Expert Curated") so they are never presented as a PYQ of a given
+year, never over an admin-removed (tombstoned) stem, and never over an
+existing question with the same text (existing rows are not modified).
 """
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from questions.models import Subject, Topic, Question
 
@@ -9,8 +17,15 @@ from questions.models import Subject, Topic, Question
 class Command(BaseCommand):
     help = 'Seeds the database with sample UPSC CMS questions and subjects'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--with-samples', action='store_true',
+            help='Insert the demo sample questions even when DEBUG is off.',
+        )
+
     def handle(self, *args, **options):
         self.stdout.write('🏥 Seeding UPSC CMS database...\n')
+        with_samples = bool(options.get('with_samples')) or bool(getattr(settings, 'DEBUG', False))
 
         # Create Subjects
         subjects_data = [
@@ -355,21 +370,29 @@ class Command(BaseCommand):
         ]
 
         created_count = 0
+        if not with_samples:
+            self.stdout.write('\n⏭ Sample questions skipped (DEBUG is off; pass --with-samples to insert them).')
+            questions = []
+        from questions.import_protection import is_removed
+        from questions.text_encoding import normalize_text
         for q_data in questions:
-            q, created = Question.objects.get_or_create(
-                question_text=q_data['question_text'],
-                year=q_data['year'],
-                defaults=q_data
-            )
-            if created:
-                created_count += 1
+            q_data = {**q_data, 'year': 0}  # demo content, not a PYQ of any year
+            text = q_data['question_text']
+            if is_removed(text):
+                continue
+            stored_form = normalize_text(Question()._normalize_statement_text(text))
+            if Question.objects.filter(question_text__in=[text, stored_form]).exists():
+                continue  # never touch an existing (possibly admin-edited) row
+            Question.objects.create(**q_data)
+            created_count += 1
 
         self.stdout.write(f'\n📝 Created {created_count} sample questions (total: {Question.objects.count()})')
 
-        # Create some similar question mappings
-        cardio_qs = Question.objects.filter(topic__name='Cardiology')
-        nephro_qs = Question.objects.filter(topic__name='Nephrology')
-        if cardio_qs.count() >= 2:
+        # Create some similar question mappings — only between the samples
+        # (this used to link two arbitrary real Cardiology questions).
+        sample_texts = [q['question_text'] for q in questions]
+        cardio_qs = Question.objects.filter(topic__name='Cardiology', question_text__in=sample_texts)
+        if with_samples and cardio_qs.count() >= 2:
             q1, q2 = cardio_qs[:2]
             q1.similar_questions.add(q2)
 

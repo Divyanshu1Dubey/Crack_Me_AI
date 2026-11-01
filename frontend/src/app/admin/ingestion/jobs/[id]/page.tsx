@@ -71,6 +71,13 @@ export default function JobDetail() {
         </p>
       </header>
 
+      {job.waiting_for_worker && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          This job has been queued for more than 5 minutes. Ingestion jobs run on the background worker
+          (<code>python manage.py qcluster</code>); nothing will happen until a worker is running.
+        </div>
+      )}
+
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="PR" value={`${job.qa_v2_production_ready_pct ?? 0}%`} />
         <Stat label="NR" value={`${job.qa_v2_needs_review_pct ?? 0}%`} />

@@ -3,15 +3,29 @@
 These views are deliberately thin — they delegate to `runner` and the
 existing `QuestionImportJob` model. They DO NOT modify any existing
 viewset or endpoint.
+
+Every endpoint is admin-only (``IsControlTowerAdmin``): import jobs and
+their reports are internal. ``source_dir`` must lie inside an allow-listed
+root (``RECALL_IMPORT_ALLOWED_ROOTS``, os.pathsep-separated; default: the
+repo's ``material/`` folder and ``MEDIA_ROOT/ingestion_uploads`` /
+``MEDIA_ROOT/recall_uploads``) and ``run_id`` must be a plain token, so the
+API cannot be pointed at arbitrary server paths.
+
+The views are parameterised by ``task_path`` / ``config_module`` so the
+INI-CET importer reuses them with its own task and output folder.
 """
 from __future__ import annotations
 
+import importlib
 import logging
+import os
+import re
 from pathlib import Path
 
-from django.http import FileResponse, Http404
+from django.conf import settings
+from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, permissions, status
+from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -20,11 +34,59 @@ from questions.models import QuestionImportJob
 
 LOG = logging.getLogger(__name__)
 
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+NEETPG_TASK = "importers.neetpg.tasks.run_recall_import"
+NEETPG_CONFIG = "importers.neetpg.config"
+
+
+class QuestionImportJobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestionImportJob
+        fields = [
+            "id", "job_type", "status", "source_filename",
+            "summary", "error_report", "created_at", "updated_at",
+        ]
+        read_only_fields = fields
+
+
+def allowed_source_roots() -> list[Path]:
+    raw = os.environ.get("RECALL_IMPORT_ALLOWED_ROOTS", "")
+    roots = [Path(p) for p in raw.split(os.pathsep) if p.strip()]
+    if not roots:
+        media = Path(settings.MEDIA_ROOT)
+        roots = [
+            Path(settings.BASE_DIR).parent / "material",
+            media / "ingestion_uploads",
+            media / "recall_uploads",
+        ]
+    return [r.resolve() for r in roots]
+
+
+def validate_source_dir(raw) -> Path | None:
+    """Resolved ``raw`` if it is an existing directory inside an allowed root."""
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        candidate = Path(raw).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if not candidate.is_dir():
+        return None
+    for root in allowed_source_roots():
+        try:
+            candidate.relative_to(root)
+            return candidate
+        except ValueError:
+            continue
+    return None
+
 
 class ImportJobListView(generics.ListAPIView):
-    """List recall PDF import jobs."""
-    permission_classes = [permissions.IsAuthenticated]
+    """List recall PDF import jobs (GET) and start an import run (POST)."""
+    permission_classes = [IsControlTowerAdmin]
+    serializer_class = QuestionImportJobSerializer
     pagination_class = None  # simple list, paginate client-side if needed
+    task_path = NEETPG_TASK
 
     def get_queryset(self):
         return (
@@ -34,33 +96,27 @@ class ImportJobListView(generics.ListAPIView):
         )
 
     def post(self, request, *args, **kwargs):
-        # Admin-only: kick off an import run via django_q.
-        if not (request.user and (getattr(request.user, "is_admin", False) or request.user.is_superuser)):
-            return Response({"detail": "admin only"}, status=status.HTTP_403_FORBIDDEN)
-
-        source_dir = request.data.get("source_dir")
-        if not source_dir or not Path(source_dir).exists():
-            return Response({"detail": "valid source_dir required"}, status=status.HTTP_400_BAD_REQUEST)
+        source_dir = validate_source_dir(request.data.get("source_dir"))
+        if source_dir is None:
+            return Response(
+                {"detail": "source_dir must be an existing folder inside an allowed import root."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Lazy import to avoid Django startup-time cost.
         from django_q.tasks import async_task
-        from .runner import run_import
 
+        force = bool(request.data.get("force"))
         job = QuestionImportJob.objects.create(
             job_type="pdf",
             status="queued",
-            source_filename=Path(source_dir).name,
-            stored_file_path=source_dir,
-            summary={"source_dir": source_dir, "force": bool(request.data.get("force"))},
+            source_filename=source_dir.name,
+            stored_file_path=str(source_dir),
+            summary={"source_dir": str(source_dir), "force": force},
             created_by=request.user if request.user.is_authenticated else None,
         )
 
-        task_id = async_task(
-            "importers.neetpg.tasks.run_recall_import",
-            job.id,
-            source_dir,
-            bool(request.data.get("force")),
-        )
+        task_id = async_task(self.task_path, job.id, str(source_dir), force)
         job.summary["q_task_id"] = task_id
         job.save(update_fields=["summary"])
 
@@ -71,7 +127,8 @@ class ImportJobListView(generics.ListAPIView):
 
 
 class ImportJobDetailView(generics.RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsControlTowerAdmin]
+    serializer_class = QuestionImportJobSerializer
 
     def get_object(self):
         return get_object_or_404(
@@ -82,7 +139,8 @@ class ImportJobDetailView(generics.RetrieveAPIView):
 
 
 class ImportJobRetryView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin]
+    task_path = NEETPG_TASK
 
     def post(self, request, pk: int):
         job = get_object_or_404(QuestionImportJob, id=pk, job_type="pdf")
@@ -91,14 +149,20 @@ class ImportJobRetryView(APIView):
                 {"detail": f"job status is {job.status}, only failed/completed can be retried"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        source_dir = validate_source_dir(job.stored_file_path)
+        if source_dir is None:
+            return Response(
+                {"detail": "the job's source folder is missing or outside the allowed import roots"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         from django_q.tasks import async_task
         job.status = "queued"
         job.save(update_fields=["status"])
         task_id = async_task(
-            "importers.neetpg.tasks.run_recall_import",
+            self.task_path,
             job.id,
-            job.stored_file_path,
-            True,  # force
+            str(source_dir),
+            True,  # force: re-parse; the writer still never overwrites admin edits
         )
         job.summary["retry_task_id"] = task_id
         job.save(update_fields=["summary"])
@@ -107,13 +171,16 @@ class ImportJobRetryView(APIView):
 
 class ImportReportView(APIView):
     """Return the markdown reports bundle for a given run_id."""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsControlTowerAdmin]
+    config_module = NEETPG_CONFIG
 
     def get(self, request, run_id: str):
-        from .config import get_config
-        cfg = get_config()
-        rep_dir = cfg.reports_dir / run_id
-        if not rep_dir.exists():
+        if not RUN_ID_RE.match(run_id or ""):
+            raise Http404("run_id not found")
+        cfg = importlib.import_module(self.config_module).get_config()
+        reports_root = cfg.reports_dir.resolve()
+        rep_dir = (reports_root / run_id).resolve()
+        if rep_dir.parent != reports_root or not rep_dir.is_dir():
             raise Http404("run_id not found")
 
         bundle = {}

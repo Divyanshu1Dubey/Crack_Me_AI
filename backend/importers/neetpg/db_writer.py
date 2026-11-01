@@ -6,8 +6,20 @@ into `Question` / `RecallSource` / `QuestionSource` / `QuestionImage` /
 
 Design contract:
 - Idempotent: re-running the same source produces the same row set.
+- Re-imports never overwrite: an existing Question (matched on
+  ``recall_text_hash + exam_type``) only gets EMPTY fields filled, and a
+  row an admin touched (``admin_edited``, ``lock_answer``,
+  ``is_verified_by_admin``) is not modified at all. Admin answer /
+  explanation / tagging corrections survive any re-run.
+- No guessing: a NEW question without a valid A–D answer, or whose subject
+  cannot be resolved, is sent to the extraction review queue instead of
+  going live (it used to go live with answer "A" and the first Subject in
+  the catalogue).
+- Exam-scoped: ``exam_type`` / ``exam_source`` come from the writer's
+  ``exam_type`` (they used to be hard-coded to NEET PG).
 - Soft-delete: never hard-deletes. `Question.is_active=False` is the
-  rollback handle.
+  rollback handle; ``rollback_for_job`` matches the writer's
+  ``source_job_ref`` exactly (callers namespace it, e.g. "ingestion:12").
 - Append-only provenance: `QuestionSource` rows are never updated.
 - Faithful to existing schema: only Phase-2 fields + new models are
   touched. Existing fields default-fill.
@@ -50,13 +62,44 @@ from .models import ImageRecord, ParsedQuestion
 
 LOG = logging.getLogger(__name__)
 
+VALID_ANSWERS = ("A", "B", "C", "D")
+
+# Question.exam_source label per exam (the recall importers' convention).
+EXAM_SOURCES = {
+    "neet_pg": "NEET PG (recall)",
+    "ini_cet": "INI-CET (recall)",
+    "fmge": "FMGE (recall)",
+    "usmle": "USMLE (recall)",
+    "plab": "PLAB (recall)",
+}
+
+# Fields a re-import may fill on an existing, unprotected Question — only
+# while they are still empty. Nothing else is ever overwritten.
+_FILL_IF_EMPTY = (
+    "option_a", "option_b", "option_c", "option_d",
+    "explanation", "source", "page_number",
+)
+
+
+def is_protected(question: Question) -> bool:
+    """True when an admin has touched the row: re-imports must not modify it."""
+    return bool(
+        getattr(question, "admin_edited", False)
+        or getattr(question, "lock_answer", False)
+        or getattr(question, "lock_explanation", False)
+        or getattr(question, "is_verified_by_admin", False)
+    )
+
 
 @dataclass
 class WriterStats:
     questions_created: int = 0
     questions_updated: int = 0
+    questions_protected: int = 0
+    questions_staged_for_review: int = 0
     questions_soft_deleted: int = 0
     images_created: int = 0
+    images_linked: int = 0
     sources_created: int = 0
     question_sources_created: int = 0
     extraction_items_created: int = 0
@@ -67,10 +110,20 @@ class DjangoWriter:
     """Writes parsed output into the production schema."""
 
     def __init__(self, import_job: Optional[QuestionImportJob] = None,
-                 batch_size: int = 500, exam_type: str = "neet_pg"):
+                 batch_size: int = 500, exam_type: str = "neet_pg",
+                 exam_source: Optional[str] = None,
+                 source_job_ref: Optional[str] = None):
         self.import_job = import_job
         self.batch_size = batch_size
         self.exam_type = exam_type
+        self.exam_source = exam_source or EXAM_SOURCES.get(exam_type, f"{exam_type} (recall)")
+        # Value stamped into QuestionSource.import_job_id (the rollback key).
+        # Defaults to the legacy QuestionImportJob id; other pipelines pass a
+        # namespaced ref ("ingestion:<id>") so ids of different job tables
+        # can never collide.
+        if source_job_ref is None:
+            source_job_ref = str(import_job.id) if import_job is not None else ""
+        self.source_job_ref = source_job_ref
         self.stats = WriterStats()
 
     # ---------------------------------------------------------------- RecallSource
@@ -116,10 +169,14 @@ class DjangoWriter:
                        recall_source: RecallSource,
                        subject: Optional[Subject] = None,
                        topic: Optional[Topic] = None) -> Optional[Question]:
-        """Write or update one Question + its QuestionSource bridge row.
+        """Write one Question (or reuse the existing one) + its QuestionSource row.
 
-        Returns None when the question was sent to the extraction review
-        queue (empty stem / missing options).
+        An existing row is never overwritten: admin-protected rows are left
+        untouched and other rows only get their empty fields filled.
+
+        Returns None when the stem is tombstoned or the question was sent to
+        the extraction review queue (empty stem / missing options, and for a
+        new question: no valid A–D answer or no resolvable subject).
         """
         text_hash = deduplicator.text_sha256(q.stem or q.stem_raw)
 
@@ -131,8 +188,8 @@ class DjangoWriter:
             question_text_hash=text_hash,
         ).exists():
             LOG.info(
-                "Skipping NEET PG (recall) Q hash=%s — admin-removed tombstone",
-                text_hash[:12],
+                "Skipping %s Q hash=%s — admin-removed tombstone",
+                self.exam_source, text_hash[:12],
             )
             return None
 
@@ -152,6 +209,26 @@ class DjangoWriter:
 
         correct_answer = self._first_answer_label(q)
         confidence = Decimal(str(round(q.confidence_score, 3))).quantize(Decimal("0.001"))
+
+        existing = (
+            Question.objects
+            .filter(recall_text_hash=text_hash, exam_type=self.exam_type)
+            .order_by("id")
+            .first()
+        )
+        resolved_subject = subject or self._subject_row_for(q.subject)
+        if existing is None:
+            # Never guess: no valid answer / no subject → admin review queue.
+            if correct_answer is None:
+                self._emit_extraction_item(q, recall_source, status="pending",
+                                           note="no valid answer (A-D) extracted — admin review")
+                self.stats.questions_staged_for_review += 1
+                return None
+            if resolved_subject is None:
+                self._emit_extraction_item(q, recall_source, status="pending",
+                                           note="subject could not be resolved — admin review")
+                self.stats.questions_staged_for_review += 1
+                return None
 
         # Pull year from (in order): recall_source.pdf_filename (e.g.
         # NEET-PG-2021-...) → recall_source PDF metadata creationDate →
@@ -174,13 +251,13 @@ class DjangoWriter:
             "option_b": normalize_text(options_text[1] or ""),
             "option_c": normalize_text(options_text[2] or ""),
             "option_d": normalize_text(options_text[3] or ""),
-            "correct_answer": correct_answer or "A",
+            "correct_answer": correct_answer or "",
             "year": guessed_year,
-            "subject": subject or self._subject_row_for(q.subject) or self._default_subject(),
+            "subject": resolved_subject,
             "topic": topic,
             "difficulty": q.difficulty if q.difficulty in ("easy", "medium", "hard") else "medium",
-            "exam_type": "neet_pg",
-            "exam_source": "NEET PG (recall)",
+            "exam_type": self.exam_type,
+            "exam_source": self.exam_source,
             "explanation": normalize_text(q.explanation or ""),
             "concept_tags": list({t for t in (q.subject, q.topic, q.subtopic) if t} or []),
             "recall_status": "recall",
@@ -198,14 +275,20 @@ class DjangoWriter:
         }
 
         with transaction.atomic():
-            question, created = Question.objects.update_or_create(
-                recall_text_hash=text_hash,
-                exam_type=self.exam_type,
-                defaults=defaults,
-            )
+            if existing is None:
+                question = Question.objects.create(**defaults)
+                created = True
+            else:
+                question = existing
+                created = False
+                if is_protected(existing):
+                    # Admin-corrected row: leave every field alone.
+                    self.stats.questions_protected += 1
+                else:
+                    self._fill_empty_fields(existing, defaults, correct_answer)
 
             try:
-                QuestionSource.objects.get_or_create(
+                _qs, qs_created = QuestionSource.objects.get_or_create(
                     question=question,
                     recall_source=recall_source,
                     page_number=q.page_number or 0,
@@ -215,9 +298,11 @@ class DjangoWriter:
                         "extracted_text": q.stem or q.stem_raw or "",
                         "ocr_confidence": defaults["ocr_confidence"],
                         "extraction_confidence": defaults["extraction_confidence"],
-                        "import_job_id": str(self.import_job.id) if self.import_job else "",
+                        "import_job_id": self.source_job_ref,
                     },
                 )
+                if qs_created:
+                    self.stats.question_sources_created += 1
             except IntegrityError:
                 # Mid-PDF re-import can collide on
                 # uniq_question_source_page_qno. The question text is already
@@ -238,6 +323,33 @@ class DjangoWriter:
         self._maybe_form_cluster(question, text_hash)
         return question
 
+    def _fill_empty_fields(self, question: Question, parsed: dict,
+                           correct_answer: Optional[str]) -> None:
+        """Fill only the still-empty fields of an existing, unprotected row."""
+        changed: list[str] = []
+        for field in _FILL_IF_EMPTY:
+            new_value = parsed.get(field)
+            if new_value and not (getattr(question, field, "") or "").strip():
+                setattr(question, field, new_value)
+                changed.append(field)
+        if correct_answer and (question.correct_answer or "") not in VALID_ANSWERS:
+            question.correct_answer = correct_answer
+            changed.append("correct_answer")
+        if parsed.get("topic") is not None and question.topic_id is None:
+            question.topic = parsed["topic"]
+            changed.append("topic")
+        if parsed.get("year") and not question.year:
+            question.year = parsed["year"]
+            changed.append("year")
+        if parsed.get("concept_tags") and not question.concept_tags:
+            question.concept_tags = parsed["concept_tags"]
+            changed.append("concept_tags")
+        if parsed.get("is_image_based") and not question.is_image_based:
+            question.is_image_based = True
+            changed.append("is_image_based")
+        if changed:
+            question.save(update_fields=changed)
+
     # ---------------------------------------------------------------- Images
 
     def write_image(self, img: ImageRecord,
@@ -245,17 +357,52 @@ class DjangoWriter:
                     recall_source: RecallSource) -> Optional[QuestionImage]:
         """Save an extracted image into QuestionImage.
 
-        Dedup by sha256_short — if an image with the same sha exists,
-        we link to the existing one (no duplicate row).  Also writes
-        the raw bytes into ``MEDIA_ROOT/<recall_path>`` so the image
-        is served by Django at MEDIA_URL.
+        Dedup by sha256_short — if THIS question already has the image, the
+        existing row is returned. If the same image belongs to another
+        question, a new row for this question re-uses the stored file (no
+        second copy on disk); it used to return the other question's row,
+        so the second question silently got no image. Also writes the raw
+        bytes into ``MEDIA_ROOT/<recall_path>`` so the image is served by
+        Django at MEDIA_URL.
         """
         if not img.sha256_short:
             return None
 
-        existing = QuestionImage.objects.filter(sha256_short=img.sha256_short).first()
-        if existing:
-            return existing
+        own = QuestionImage.objects.filter(
+            question=question, sha256_short=img.sha256_short,
+        ).first()
+        if own:
+            return own
+        shared = (
+            QuestionImage.objects
+            .filter(sha256_short=img.sha256_short)
+            .exclude(file="").exclude(file__isnull=True)
+            .order_by("id")
+            .first()
+        )
+        if shared is not None:
+            qi = QuestionImage.objects.create(
+                question=question,
+                recall_source=recall_source,
+                page_number=img.page_number,
+                image_index_in_page=img.image_index_in_page,
+                file=shared.file.name,
+                mime=shared.mime or img.mime or "image/png",
+                width=shared.width or img.width or 0,
+                height=shared.height or img.height or 0,
+                bytes=shared.bytes or img.bytes or 0,
+                sha256=shared.sha256 or img.sha256 or "",
+                sha256_short=img.sha256_short,
+                phash=img.phash or shared.phash or "",
+                dhash=img.dhash or shared.dhash or "",
+                modality=img.modality or shared.modality or "other",
+                caption=img.caption or "",
+                caption_source=img.caption_source or "none",
+                role="illustration",
+                is_active=True,
+            )
+            self.stats.images_linked += 1
+            return qi
 
         # Copy the bytes into MEDIA_ROOT so the browser can fetch them.
         # We persist under ``recall_images/<sha16>/<sha16>.<ext>`` — a
@@ -331,13 +478,32 @@ class DjangoWriter:
 
     @transaction.atomic
     def rollback_for_job(self) -> int:
-        """Soft-delete every Question whose QuestionSource.import_job_id matches."""
-        if not self.import_job:
+        """Soft-delete the Questions this writer's job created.
+
+        Matches ``QuestionSource.import_job_id == self.source_job_ref``
+        exactly (an empty ref matches nothing). A question that also has
+        provenance from another import (it existed before this job and the
+        job only matched it) is left active — rolling back one job must not
+        take down another job's questions. Admin-protected rows are left
+        alone as well.
+        """
+        ref = (self.source_job_ref or "").strip()
+        if not ref:
             return 0
-        qs = Question.objects.filter(
-            recall_sources__import_job_id=str(self.import_job.id),
-            is_active=True,
-        ).distinct()
+        candidate_ids = set(
+            QuestionSource.objects.filter(import_job_id=ref)
+            .values_list("question_id", flat=True)
+        )
+        if not candidate_ids:
+            return 0
+        shared_ids = set(
+            QuestionSource.objects.filter(question_id__in=candidate_ids)
+            .exclude(import_job_id=ref)
+            .values_list("question_id", flat=True)
+        )
+        own_ids = candidate_ids - shared_ids
+        qs = Question.objects.filter(id__in=own_ids, is_active=True)
+        qs = qs.exclude(admin_edited=True).exclude(lock_answer=True).exclude(is_verified_by_admin=True)
         n = qs.update(is_active=False)
         self.stats.questions_soft_deleted += n
         return n
@@ -392,8 +558,14 @@ class DjangoWriter:
 
     @staticmethod
     def _first_answer_label(q: ParsedQuestion) -> Optional[str]:
-        if q.answer_labels:
-            return q.answer_labels[0]
+        """First parsed answer label if it is a valid A–D option, else None.
+
+        (Labels such as "E" cannot be stored: Question has options A–D only.)
+        """
+        for label in (q.answer_labels or []):
+            label = (label or "").strip().upper()[:1]
+            if label in VALID_ANSWERS:
+                return label
         return None
 
     @staticmethod
@@ -401,12 +573,6 @@ class DjangoWriter:
         import re
         m = re.search(r"\b(20\d{2})\b", filename or "")
         return int(m.group(1)) if m else 0
-
-    @staticmethod
-    def _default_subject() -> Subject:
-        """Return the first Subject in the catalogue — safe default for recall imports
-        that haven't been auto-tagged yet."""
-        return Subject.objects.first()
 
     @staticmethod
     def _find_subject_for_stem(stem: str) -> Optional[Subject]:
@@ -455,20 +621,26 @@ class DjangoWriter:
         "psychiatry": "Psychiatry",
     }
 
-    @classmethod
-    def _subject_row_for(cls, name: Optional[str]) -> Optional[Subject]:
-        """Translate a topic_mapper string → Subject row. Cached per process."""
+    def _subject_row_for(self, name: Optional[str]) -> Optional[Subject]:
+        """Translate a topic_mapper string → Subject row.
+
+        Cached per writer (one import run). It used to be cached on the
+        class for the life of the process, so a long-running worker never
+        saw subjects created after its first import.
+        """
         if not name:
             return None
         norm = name.strip().lower()
-        target = cls._SUBJECT_NAME_MAP.get(norm, name.strip())
-        if not hasattr(cls, "_SUBJECT_CACHE"):
-            cls._SUBJECT_CACHE = {s.name.lower(): s for s in Subject.objects.all()}
+        target = self._SUBJECT_NAME_MAP.get(norm, name.strip())
+        cache = self.__dict__.get("_subject_cache")
+        if cache is None:
+            cache = {s.name.lower(): s for s in Subject.objects.all()}
+            self._subject_cache = cache
         # Try direct name first, then case-insensitive lookup, then catalog match.
-        if target.lower() in cls._SUBJECT_CACHE:
-            return cls._SUBJECT_CACHE[target.lower()]
+        if target.lower() in cache:
+            return cache[target.lower()]
         # Final fallback: fuzzy contains-match in catalogue.
-        for cat_name, subj in cls._SUBJECT_CACHE.items():
+        for cat_name, subj in cache.items():
             if target.lower() in cat_name or cat_name in target.lower():
                 return subj
         return None
@@ -499,7 +671,8 @@ class DjangoWriter:
             question=existing,
             defaults={"similarity_score": Decimal("1.000")},
         )
-        if existing.id != canonical.id:
+        if existing.id != canonical.id and not is_protected(existing):
+            # An admin-corrected row is never switched off by an import.
             existing.is_active = False
             existing.save(update_fields=["is_active"])
             self.stats.questions_soft_deleted += 1

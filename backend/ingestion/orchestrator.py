@@ -95,14 +95,32 @@ def _transition(job: ImportJob, *, to_status: str, **fields) -> None:
     job.save(update_fields=update_fields)
 
 
-def _build_mce_context(material: MaterialAsset, artefact_root: Path):
+def _profile_for(material: MaterialAsset, exam: Optional[str]):
+    """The MCE exam profile for this job: the exam the admin chose.
+
+    Only when the job carries no known exam do we fall back to guessing
+    from the file name (which defaults to NEET PG). The chosen exam used to
+    be ignored, so an "INI-CET" upload was processed — and imported — as
+    whatever its file name suggested.
+    """
+    from mce.profiles import get_profile, get_profile_for_filename
+
+    if exam:
+        try:
+            return get_profile(exam)
+        except KeyError:
+            LOG.warning("Unknown exam %r for material %s; guessing from file name",
+                        exam, material.sha256_short)
+    return get_profile_for_filename(material.original_filename)
+
+
+def _build_mce_context(material: MaterialAsset, artefact_root: Path, exam: Optional[str] = None):
     """Build the MCE MceContext for one material."""
-    from mce.profiles import get_profile_for_filename
     from mce.stages import MceContext
 
     pdf_path = Path(material.storage_path)
     full = material.sha256
-    profile = get_profile_for_filename(material.original_filename)
+    profile = _profile_for(material, exam)
     return MceContext(
         pdf_path=pdf_path,
         pdf_filename=material.original_filename,
@@ -137,17 +155,64 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     if job is None:
         return {"job_id": job_id, "error": "job not found"}
 
-    # Idempotency: if the job is already in a terminal state, no-op.
-    if job.status in (JOB_COMPLETED, JOB_CANCELLED):
+    # Only a queued job is run, and it is claimed atomically: two tasks for
+    # the same job (a re-dispatch, a duplicate catch-up run) must never
+    # process it concurrently. Anything already processing / finished is a
+    # no-op; failed / crashed jobs are re-run through a retry job instead.
+    if job.status != JOB_QUEUED:
         return {"job_id": job_id, "status": job.status, "noop": True}
+    now = timezone.now()
+    claimed = ImportJob.objects.filter(id=job.id, status=JOB_QUEUED).update(
+        status=JOB_PROCESSING, started_at=now, updated_at=now,
+    )
+    if not claimed:
+        job.refresh_from_db(fields=["status"])
+        return {"job_id": job_id, "status": job.status, "noop": True}
+    job.status = JOB_PROCESSING
+    job.started_at = now
+    _refresh_batch_counters(job.batch_run_id)
 
-    if job.status == JOB_QUEUED:
-        _transition(job, to_status=JOB_PROCESSING, started_at=timezone.now())
+    try:
+        return _run_claimed_job(job)
+    finally:
+        _refresh_batch_counters(job.batch_run_id)
 
+
+def _refresh_batch_counters(batch_id: Optional[int]) -> None:
+    """Recompute a BatchRun's counters and status from its jobs.
+
+    ``completed_jobs`` / ``failed_jobs`` were never updated, so batch pages
+    read "running · 0 completed · 0 failed" whatever happened.
+    """
+    if not batch_id:
+        return
+    from .constants import BATCH_CANCELLED, BATCH_DONE, BATCH_RUNNING
+    batch = BatchRun.objects.filter(id=batch_id).first()
+    if batch is None:
+        return
+    statuses = list(batch.jobs.values_list("status", flat=True))
+    completed = sum(1 for s in statuses if s == JOB_COMPLETED)
+    failed = sum(1 for s in statuses if s in (JOB_FAILED, JOB_CRASHED))
+    cancelled = sum(1 for s in statuses if s == JOB_CANCELLED)
+    terminal = completed + failed + cancelled
+    status = batch.status
+    if batch.status != BATCH_CANCELLED:
+        if statuses and terminal == len(statuses):
+            status = BATCH_CANCELLED if cancelled == len(statuses) else BATCH_DONE
+        elif statuses:
+            status = BATCH_RUNNING
+    BatchRun.objects.filter(id=batch_id).update(
+        completed_jobs=completed, failed_jobs=failed, status=status,
+        updated_at=timezone.now(),
+    )
+
+
+def _run_claimed_job(job: ImportJob) -> dict:
+    """Run the pipeline for a job this worker has claimed (status=processing)."""
     material = job.material_asset
     artefact_root = _artefact_root(material)
 
-    ctx = _build_mce_context(material, artefact_root)
+    ctx = _build_mce_context(material, artefact_root, exam=job.parent_exam)
     ck = latest_checkpoint(job)
     last_stage = ck.last_completed_stage if ck else ""
     resume_page = ck.last_processed_page if ck and ck.last_completed_stage == last_stage else None
@@ -259,9 +324,9 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
         summary["verdict"] = counts
         summary["summary_json"] = load_summary_json(artefact_root)
 
-        # Stage DB writer runs as part of the pipeline above (Stage
-        # ``db_writer``). After Stage 8 the QA verdict decides what
-        # actually lands in `questions.Question`. Mark complete.
+        # The ``db_writer`` stage above only emits artefacts; the gate is the
+        # only writer of `questions.Question` (QA V2 Production Ready rows,
+        # with the job's exam). Mark complete.
         _transition(job, to_status=JOB_COMPLETED, completed_at=timezone.now())
         _log(job, "INFO",
              f"Job completed PR={counts['pr']} NR={counts['nr']} EF={counts['ef']} "
@@ -273,9 +338,14 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     except Exception as e:
         LOG.exception("Unhandled error in orchestrator for job %s", job.id)
         _log(job, "ERROR", f"Orchestrator crashed: {e}", "")
-        _transition(job, to_status=JOB_CRASHED, completed_at=timezone.now(),
-                    error={"message": str(e)})
-        return {"job_id": job.id, "status": JOB_CRASHED, "error": str(e)}
+        job.refresh_from_db(fields=["status"])
+        try:
+            _transition(job, to_status=JOB_CRASHED, completed_at=timezone.now(),
+                        error={"message": str(e)})
+        except InvalidJobTransitionError:
+            # e.g. cancelled while the failing stage ran: keep that status.
+            pass
+        return {"job_id": job.id, "status": job.status, "error": str(e)}
 
 
 def create_job(
@@ -308,6 +378,7 @@ def cancel_job(job: ImportJob) -> bool:
             return False
         _transition(job, to_status=JOB_CANCELLED, completed_at=timezone.now())
         _log(job, "WARNING", "Job cancelled by operator", "")
+        _refresh_batch_counters(job.batch_run_id)
         return True
     except InvalidJobTransitionError:
         return False

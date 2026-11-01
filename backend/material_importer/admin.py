@@ -100,7 +100,7 @@ class ExtractedQuestionAdmin(admin.ModelAdmin):
         }),
         ("Provenance (P5)", {
             "fields": ("content_hash", "provenance_checksum", "image_refs", "raw_text"),
-            "description": "Traceability chain: content_hash covers question_text; provenance_checksum adds correct_answer + explanation. paragraph_index is the source paragraph in the DOCX.",
+            "description": "Traceability chain: content_hash covers question_text + options (the duplicate-detection key); provenance_checksum adds correct_answer + explanation. paragraph_index is the source paragraph in the DOCX.",
         }),
         ("Classification", {
             "fields": ("inferred_subject", "inferred_topic", "inferred_difficulty",

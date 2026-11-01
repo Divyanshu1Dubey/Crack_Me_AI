@@ -102,7 +102,14 @@ function JobsTable() {
                   <td className="p-2"><Link className="underline" href={`/admin/ingestion/jobs/${j.id}`}>#{j.id}</Link></td>
                   <td className="p-2">{j.parent_exam}</td>
                   <td className="p-2 font-mono text-xs">{j.material_asset}</td>
-                  <td className="p-2">{j.status}</td>
+                  <td className="p-2">
+                    {j.status}
+                    {j.waiting_for_worker && (
+                      <span className="ml-1 text-xs text-amber-600" title="Queued for over 5 minutes: is the qcluster worker running?">
+                        (no worker?)
+                      </span>
+                    )}
+                  </td>
                   <td className="p-2">{j.current_stage || "—"}</td>
                   <td className="p-2">
                     {j.qa_v2_production_ready_pct ?? 0} / {j.qa_v2_needs_review_pct ?? 0} / {j.qa_v2_extraction_failure_pct ?? 0}

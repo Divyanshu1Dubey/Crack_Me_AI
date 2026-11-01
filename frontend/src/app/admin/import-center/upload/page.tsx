@@ -234,7 +234,7 @@ export default function UploadPage() {
           disabled={!files.length || uploading}
           className="rounded bg-primary px-6 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          {uploading ? 'Uploading…' : 'Upload &amp; Parse'}
+          {uploading ? 'Uploading…' : 'Upload & Parse'}
         </button>
       </div>
     </div>

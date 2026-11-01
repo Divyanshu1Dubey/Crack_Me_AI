@@ -16,18 +16,29 @@ the ingestion framework. The conservative policy (Phase 1) is:
                                  write to ``questions.Question``.
 
 The strategy is configurable per-job via ``ImportJob.config.strategy``
-(defaults to ``auto-pr-only``). Two extra strategies exist for
-forward compatibility:
+(defaults to ``auto-pr-only``):
 
-  - ``auto-all``   : also auto-import Needs Review (currently
-                     deactivated, but the bucket is honoured if set).
   - ``manual``     : nothing auto-imports; everything goes to staging.
+  - ``auto-all``   : NOT offered any more (it was listed as "import Needs
+                     Review too" but never did). Legacy jobs that still
+                     carry it behave exactly like ``auto-pr-only`` and the
+                     gate logs that.
+
+Even a Production Ready question is held back (staged as Needs Review,
+with the reason in ``failing_axes``) when it cannot be stored faithfully:
+no single valid A–D answer, an option beyond D, a subject that cannot be
+resolved, or an attached Stage-3 image whose file is missing.
+
+Questions are written with the job's exam (``ImportJob.parent_exam``),
+and their ``QuestionSource.import_job_id`` is stamped ``ingestion:<job id>``
+so ``ingestion_rollback`` removes exactly this job's questions.
 
 Nothing here mutates the QA V2 thresholds. The verdict is the
 single source of truth.
 """
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -49,9 +60,86 @@ from .pipeline_stages import load_per_question_qa
 LOG = logging.getLogger("ingestion.conservative_gate")
 
 
+VALID_ANSWERS = ("A", "B", "C", "D")
+OPTION_LABELS = "ABCDEFGHIJ"
+
+
+def source_job_ref(job: ImportJob) -> str:
+    """``QuestionSource.import_job_id`` value for questions this job wrote.
+
+    Namespaced so it can never match a legacy ``QuestionImportJob`` id.
+    """
+    return f"ingestion:{job.id}"
+
+
 def _strategy(job: ImportJob) -> str:
     cfg = job.config or {}
-    return (cfg.get("strategy") or STRATEGY_AUTO_PR_ONLY).strip()
+    strategy = (cfg.get("strategy") or STRATEGY_AUTO_PR_ONLY).strip()
+    if strategy == STRATEGY_AUTO_ALL:
+        LOG.warning(
+            "Job %s uses retired strategy 'auto-all'; Needs Review questions are "
+            "never auto-imported — treating it as 'auto-pr-only'.", job.id,
+        )
+        return STRATEGY_AUTO_PR_ONLY
+    return strategy
+
+
+def _load_stage3_images(artefact_root: Path) -> dict[str, dict]:
+    """``{image_id: Stage-3 record}`` across every ``03_images/p*.json``."""
+    out: dict[str, dict] = {}
+    images_dir = artefact_root / "03_images"
+    if not images_dir.exists():
+        return out
+    for page_file in sorted(images_dir.glob("p*.json")):
+        try:
+            data = json.loads(page_file.read_text(encoding="utf-8"))
+        except Exception as e:  # pragma: no cover - corrupt artefact
+            LOG.warning("Could not load %s: %s", page_file, e)
+            continue
+        for rec in (data.get("images") or []):
+            if isinstance(rec, dict) and rec.get("id"):
+                out[rec["id"]] = rec
+    return out
+
+
+def _image_record(rec: dict, source_sha16: str):
+    """Stage-3 image dict → the recall writer's ``ImageRecord``."""
+    from importers.neetpg.models import ImageRecord
+    from questions.models import QuestionImage
+
+    modality = rec.get("modality") or "other"
+    if modality not in {c[0] for c in QuestionImage.MODALITY_CHOICES}:
+        modality = "other"
+    return ImageRecord(
+        source_sha16=rec.get("source_sha16") or source_sha16,
+        page_number=int(rec.get("page_number") or 0),
+        image_index_in_page=int(rec.get("image_index_in_page") or 0),
+        file_path=rec.get("file_path") or "",
+        mime=rec.get("mime") or "image/png",
+        width=int(rec.get("width") or 0),
+        height=int(rec.get("height") or 0),
+        bytes=int(rec.get("bytes") or 0),
+        sha256=rec.get("sha256") or "",
+        sha256_short=rec.get("sha256_short") or "",
+        phash=(rec.get("phash") or "")[:16],
+        dhash=(rec.get("dhash") or "")[:16],
+        modality=modality,
+        caption=rec.get("caption") or "",
+        caption_source=rec.get("caption_source") or "none",
+        extraction_confidence=float(rec.get("extraction_confidence") or 0.0),
+    )
+
+
+def _resolve_subject_name(payload: dict, filename: str) -> Optional[str]:
+    """Subject name from the payload, else the recall keyword / filename mapper."""
+    name = (payload.get("subject") or "").strip()
+    if name:
+        return name
+    from importers.neetpg import topic_mapper
+    return topic_mapper.map_subject(
+        payload.get("stem") or "",
+        fallback=topic_mapper.fallback_subject_from_filename(filename or ""),
+    )
 
 
 def _load_stage7_payloads(artefact_root: Path) -> dict[str, dict]:
@@ -114,82 +202,152 @@ def _stage_question(
     )
 
 
+def _parsed_options(payload: dict):
+    """Payload options → ``ParsedOption`` list, labelling unlabeled ones by position.
+
+    (Unlabeled options used to all become "A" and overwrite each other.)
+    """
+    from importers.neetpg.models import ParsedOption
+
+    opts = []
+    for idx, o in enumerate(payload.get("options") or []):
+        fallback = OPTION_LABELS[idx] if idx < len(OPTION_LABELS) else "?"
+        if isinstance(o, dict):
+            label = (o.get("label") or "").strip()[:1].upper() or fallback
+            opts.append(ParsedOption(label=label, text=o.get("text") or ""))
+        else:
+            opts.append(ParsedOption(label=fallback, text=str(o)))
+    return opts
+
+
+def _hold_reasons(payload: dict, options, subject_row, image_recs, image_ids) -> list[str]:
+    """Why a Production Ready payload cannot be stored faithfully (empty = OK)."""
+    reasons: list[str] = []
+    labels = {
+        (lbl or "").strip().upper()[:1]
+        for lbl in (payload.get("answer_labels") or [])
+        if (lbl or "").strip()
+    }
+    if len(labels) != 1 or not labels <= set(VALID_ANSWERS):
+        reasons.append("answer_not_single_a_to_d")
+    if any(o.label not in VALID_ANSWERS and (o.text or "").strip() for o in options):
+        reasons.append("option_beyond_d")
+    if subject_row is None:
+        reasons.append("subject_unresolved")
+    for iid in image_ids:
+        rec = image_recs.get(iid)
+        if not rec or not rec.get("file_path") or not Path(rec["file_path"]).is_file():
+            reasons.append("image_file_missing")
+            break
+    return reasons
+
+
 def _import_production_ready(
     *,
     job: ImportJob,
     pr_payloads: list[dict],
-) -> tuple[int, int, list[int]]:
-    """Call DjangoWriter for each PR payload. Returns (created, updated, staged_ids).
+    artefact_root: Optional[Path] = None,
+) -> tuple[int, int, int]:
+    """Write each PR payload through DjangoWriter. Returns (created, updated, held).
 
-    We snapshot ``WriterStats`` counters before and after; the writer
-    already maintains those counters correctly via
-    ``update_or_create`` return values (see
-    ``importers/neetpg/db_writer.py``).
+    The writer is exam-scoped to ``job.parent_exam`` and stamps the
+    namespaced ``source_job_ref``; it never overwrites admin-corrected rows.
+    Payloads that cannot be stored faithfully are staged for review
+    (``held``) instead of being written.
     """
     if not pr_payloads:
-        return (0, 0, [])
+        return (0, 0, 0)
+    from importers.neetpg.models import ParsedQuestion
+    from importers.neetpg.fingerprints import Fingerprint
+
     WriterCls = _authorise_writer()
-    writer = WriterCls(import_job=None)
+    writer = WriterCls(import_job=None, exam_type=job.parent_exam,
+                       source_job_ref=source_job_ref(job))
     pre_created = writer.stats.questions_created
     pre_updated = writer.stats.questions_updated
+    held = 0
+    asset = job.material_asset
+    image_recs = _load_stage3_images(artefact_root) if artefact_root else {}
+    # One RecallSource per PDF, created before the per-question savepoints
+    # so a failing question cannot roll it back from under the others.
+    fp = Fingerprint(
+        pdf_filename=asset.original_filename,
+        pdf_path=asset.storage_path,
+        pdf_sha256=asset.sha256,
+        pdf_sha256_short=asset.sha256_short,
+        size_bytes=asset.file_size,
+        page_count=asset.page_count or 0,
+        is_encrypted=False,
+        mtime=0.0,
+        metadata=asset.meta or {},
+    )
+    recall_source = writer.upsert_recall_source(
+        Path(asset.storage_path), fp,
+        scan_type="recall", recall_status="recall",
+    )
+
     for payload in pr_payloads:
+        page = int(payload.get("page_number") or 0)
+        qno = int(payload.get("question_number_in_pdf") or 0)
         try:
-            from importers.neetpg.models import ParsedQuestion, ParsedOption
-            opts = []
-            for o in (payload.get("options") or []):
-                if isinstance(o, dict):
-                    label = (o.get("label") or "").strip()[:1].upper() or "A"
-                    opts.append(ParsedOption(label=label, text=o.get("text") or ""))
-                else:
-                    opts.append(ParsedOption(label="A", text=str(o)))
+            options = _parsed_options(payload)
+            subject_name = _resolve_subject_name(payload, asset.original_filename)
+            subject_row = writer._subject_row_for(subject_name) if subject_name else None
+            image_ids = [i for i in (payload.get("image_ids") or []) if i]
+            reasons = _hold_reasons(payload, options, subject_row, image_recs, image_ids)
+            if reasons:
+                held += 1
+                _stage_question(
+                    job=job,
+                    qa_status=QA_NEEDS_REVIEW,
+                    review_status=REVIEW_PENDING,
+                    payload=payload,
+                    page_number=page,
+                    question_number_in_pdf=qno,
+                    failing_axes=reasons,
+                    failure_reason="Production Ready but held for review: " + ", ".join(reasons),
+                )
+                continue
+
             pq = ParsedQuestion(
-                source_sha16=job.material_asset.sha256_short,
-                page_number=int(payload.get("page_number") or 0),
-                question_number_in_pdf=int(payload.get("question_number_in_pdf") or 0),
+                source_sha16=asset.sha256_short,
+                page_number=page,
+                question_number_in_pdf=qno,
                 raw=payload.get("raw") or "",
                 stem=payload.get("stem") or "",
                 stem_raw=payload.get("stem_raw") or "",
-                options=opts,
+                options=options,
                 answer_labels=payload.get("answer_labels") or [],
                 explanation=payload.get("explanation") or "",
                 confidence_score=float(payload.get("confidence_score") or 0.0),
+                subject=subject_name,
+                is_image_based=bool(image_ids),
             )
-            from importers.neetpg.fingerprints import Fingerprint
-            asset = job.material_asset
-            fp = Fingerprint(
-                pdf_filename=asset.original_filename,
-                pdf_path=asset.storage_path,
-                pdf_sha256=asset.sha256,
-                pdf_sha256_short=asset.sha256_short,
-                size_bytes=asset.file_size,
-                page_count=asset.page_count or 0,
-                is_encrypted=False,
-                mtime=0.0,
-                metadata=asset.meta or {},
-            )
-            rs = writer.upsert_recall_source(
-                Path(asset.storage_path),
-                fp,
-                scan_type="recall",
-                recall_status="recall",
-            )
-            writer.write_question(pq, rs)
+            with transaction.atomic():
+                question = writer.write_question(pq, recall_source, subject=subject_row)
+                if question is not None:
+                    for iid in image_ids:
+                        writer.write_image(
+                            _image_record(image_recs[iid], asset.sha256_short),
+                            question, recall_source,
+                        )
         except Exception as e:  # pragma: no cover - defensive
-            LOG.exception("DjangoWriter failed for PR question on page %s: %s",
-                          payload.get("page_number"), e)
+            LOG.exception("DjangoWriter failed for PR question on page %s: %s", page, e)
+            held += 1
             _stage_question(
                 job=job,
                 qa_status=QA_NEEDS_REVIEW,
                 review_status=REVIEW_PENDING,
                 payload=payload,
-                page_number=int(payload.get("page_number") or 0),
-                question_number_in_pdf=int(payload.get("question_number_in_pdf") or 0),
+                page_number=page,
+                question_number_in_pdf=qno,
                 failing_axes=["writer_error"],
                 failure_reason=f"DjangoWriter raised: {e}",
             )
     created = writer.stats.questions_created - pre_created
     updated = writer.stats.questions_updated - pre_updated
-    return (created, updated, [])
+    job.images_imported = (job.images_imported or 0) + writer.stats.images_created + writer.stats.images_linked
+    return (created, updated, held)
 
 
 @transaction.atomic
@@ -200,17 +358,19 @@ def apply_qa_v2_verdict(
 ) -> dict[str, int]:
     """Apply the conservative import gate after Stage 8.
 
-    Returns counts: ``{"pr": int, "nr": int, "ef": int, "staged": int, "imported": int}``.
+    Returns counts: ``{"pr", "nr", "ef", "staged", "imported", "held"}``.
 
     Behaviour:
-      - PR counts per ImportJob summary, written via DjangoWriter.
+      - PR questions are written via DjangoWriter (exam = job.parent_exam),
+        except those ``held`` for review (see module docstring).
       - NR + EF create ``StagedQuestion`` rows; ``questions.Question``
         is NOT touched.
       - The ``strategy`` field on ``job.config`` selects between
-        ``auto-pr-only`` (default) / ``auto-all`` / ``manual``.
+        ``auto-pr-only`` (default) / ``manual`` (legacy ``auto-all`` =
+        ``auto-pr-only``).
     """
     strategy = _strategy(job)
-    counts = {"pr": 0, "nr": 0, "ef": 0, "staged": 0, "imported": 0}
+    counts = {"pr": 0, "nr": 0, "ef": 0, "staged": 0, "imported": 0, "held": 0}
 
     per_q = load_per_question_qa(artefact_root)
     if not per_q:
@@ -245,7 +405,7 @@ def apply_qa_v2_verdict(
 
         if status == QA_PRODUCTION_READY:
             counts["pr"] += 1
-            if strategy in (STRATEGY_AUTO_PR_ONLY, STRATEGY_AUTO_ALL):
+            if strategy == STRATEGY_AUTO_PR_ONLY:
                 pr_payloads.append(payload)
             else:
                 _stage_question(
@@ -290,10 +450,14 @@ def apply_qa_v2_verdict(
         else:
             LOG.warning("Unknown QA status %s for job %s page %s", status, job.id, page)
 
-    # Only run the writer for the auto strategies.
-    if strategy in (STRATEGY_AUTO_PR_ONLY, STRATEGY_AUTO_ALL) and pr_payloads:
-        created, updated, _ = _import_production_ready(job=job, pr_payloads=pr_payloads)
+    # Only run the writer for the auto strategy.
+    if strategy == STRATEGY_AUTO_PR_ONLY and pr_payloads:
+        created, updated, held = _import_production_ready(
+            job=job, pr_payloads=pr_payloads, artefact_root=artefact_root,
+        )
         counts["imported"] = created + updated
+        counts["held"] = held
+        counts["staged"] += held
 
     # Persist the QA percentages on the job for the dashboard.
     total = sum(v for v in (counts["pr"], counts["nr"], counts["ef"]) if v)
@@ -303,7 +467,8 @@ def apply_qa_v2_verdict(
         job.qa_v2_extraction_failure_pct = round(100.0 * counts["ef"] / total, 2)
         job.qa_v2_total_questions = total
     job.questions_imported = counts["imported"]
-    job.questions_staged_nr = counts["nr"]
+    # Held-back PR questions sit in the review queue as Needs Review rows.
+    job.questions_staged_nr = counts["nr"] + counts["held"]
     job.questions_staged_ef = counts["ef"]
     job.save(update_fields=[
         "qa_v2_production_ready_pct",
@@ -313,6 +478,7 @@ def apply_qa_v2_verdict(
         "questions_imported",
         "questions_staged_nr",
         "questions_staged_ef",
+        "images_imported",
     ])
     LOG.info(
         "Job %s gate verdict: PR=%s NR=%s EF=%s imported=%s staged=%s (strategy=%s)",

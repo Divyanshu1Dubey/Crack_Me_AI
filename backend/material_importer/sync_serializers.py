@@ -136,6 +136,7 @@ class ImportBatchListSerializer(serializers.ModelSerializer):
 
     materials_count = serializers.SerializerMethodField()
     needs_review_count = serializers.SerializerMethodField()
+    is_stale = serializers.SerializerMethodField()
 
     class Meta:
         model = ImportBatch
@@ -157,12 +158,26 @@ class ImportBatchListSerializer(serializers.ModelSerializer):
             "started_at",
             "finished_at",
             "created_at",
+            "updated_at",
             "created_by",
             "materials_count",
             "needs_review_count",
+            "is_stale",
             "summary",
         )
         read_only_fields = fields
+
+    def get_is_stale(self, obj: ImportBatch) -> bool:
+        """A queued / processing batch that stopped reporting progress.
+
+        Parsing runs in an in-process background thread; if the process
+        restarts the batch would otherwise look "processing" forever.
+        """
+        if obj.status not in ("queued", "processing") or not obj.updated_at:
+            return False
+        from .api_views import STALE_AFTER
+        from django.utils import timezone
+        return timezone.now() - obj.updated_at > STALE_AFTER
 
     def get_materials_count(self, obj: ImportBatch) -> int:
         return obj.materials.count()

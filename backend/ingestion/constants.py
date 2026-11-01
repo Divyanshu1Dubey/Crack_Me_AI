@@ -174,12 +174,15 @@ REVIEW_STATUS_CHOICES = [
 # ---------------------------------------------------------------- Import strategies
 
 STRATEGY_AUTO_PR_ONLY = "auto-pr-only"
+# Retired: it was offered as "Auto-import Production Ready + Needs Review"
+# but never imported Needs Review questions (and auto-publishing unreviewed
+# questions to students is not wanted). Kept only so legacy job configs
+# still parse; the gate treats it as auto-pr-only. Not accepted by the API.
 STRATEGY_AUTO_ALL = "auto-all"
 STRATEGY_MANUAL = "manual"
 
 STRATEGY_CHOICES = [
     (STRATEGY_AUTO_PR_ONLY, "Auto-import Production Ready only (conservative)"),
-    (STRATEGY_AUTO_ALL, "Auto-import Production Ready + Needs Review"),
     (STRATEGY_MANUAL, "Manual approval for every question"),
 ]
 

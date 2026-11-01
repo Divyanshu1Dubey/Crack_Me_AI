@@ -321,6 +321,14 @@ class VideoGeneratorService:
                 logger.info("Q%s: V2 video already cached; skipping render", question_id)
                 return True
 
+            # Fail fast (before minutes of rendering) when the finished video
+            # could not be stored anywhere students can play it from.
+            if not self._storage_configured():
+                raise RuntimeError(
+                    "Video storage is not configured (SUPABASE_URL / "
+                    "SUPABASE_SERVICE_ROLE_KEY missing); cannot publish the video."
+                )
+
             question.video_status = "processing"
             question.video_error = ""
             question.save(update_fields=["video_status", "video_error"])
@@ -906,15 +914,26 @@ Reference: {_reference_text(q, ai_payload)}
         if os.path.getsize(vtt_path) < 32:
             raise ValueError("VTT subtitles file is unexpectedly small.")
 
+    @staticmethod
+    def _storage_configured() -> bool:
+        return bool(os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'))
+
     def _upload(self, file_path: str, file_name: str, content_type: str = "video/mp4") -> str | None:
+        """Upload to Supabase storage; None on any failure.
+
+        Missing credentials are a failure too. This used to return a fake
+        ``https://dev.local/...`` URL, which the caller saved as a
+        "completed" video, so students got a broken player.
+        """
+        if not self._storage_configured():
+            logger.error('Video storage is not configured (SUPABASE_URL / '
+                         'SUPABASE_SERVICE_ROLE_KEY missing); not uploading %s.', file_name)
+            return None
+
         from supabase import create_client
 
         url = os.environ.get('SUPABASE_URL')
         key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
-
-        if not url or not key:
-            logger.warning('Supabase creds missing. Returning mock dev URL.')
-            return f'https://dev.local/{self.bucket}/{file_name}'
 
         try:
             client = create_client(url, key)

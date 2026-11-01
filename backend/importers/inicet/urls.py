@@ -1,12 +1,13 @@
-"""URL routes for the recall importer API.
+"""URL routes for the INI-CET recall importer API.
 
-Mounted at `/api/imports/neetpg/` from `crack_cms/urls.py`.
+Intended mount point: `/api/imports/inicet/` (not yet included from
+`crack_cms/urls.py`).
 """
 from django.urls import path
 
 from . import views
 
-app_name = "importers_neetpg"
+app_name = "importers_inicet"
 
 urlpatterns = [
     path("jobs/", views.ImportJobListView.as_view(), name="jobs-list"),

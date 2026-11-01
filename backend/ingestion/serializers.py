@@ -104,9 +104,30 @@ class ImportLogSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def _waiting_for_worker(job) -> bool:
+    """A job still queued well after creation: no django-q worker picked it up.
+
+    Jobs run only on the django-q cluster (``python manage.py qcluster``);
+    without one they stay queued forever. The UI shows this flag instead of
+    pretending the job is about to start.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+
+    return bool(
+        job.status == "queued"
+        and job.created_at
+        and timezone.now() - job.created_at > timedelta(minutes=5)
+    )
+
+
 class ImportJobSerializer(serializers.ModelSerializer):
     stages = ImportJobStageSerializer(many=True, read_only=True)
     checkpoints = ImportCheckpointSerializer(many=True, read_only=True)
+    waiting_for_worker = serializers.SerializerMethodField()
+
+    def get_waiting_for_worker(self, obj) -> bool:
+        return _waiting_for_worker(obj)
 
     class Meta:
         model = ImportJob
@@ -140,12 +161,18 @@ class ImportJobSerializer(serializers.ModelSerializer):
             "updated_at",
             "stages",
             "checkpoints",
+            "waiting_for_worker",
         ]
         read_only_fields = fields
 
 
 class ImportJobListSerializer(serializers.ModelSerializer):
     """Lightweight version used by /jobs/ (no nested stages/checkpoints)."""
+
+    waiting_for_worker = serializers.SerializerMethodField()
+
+    def get_waiting_for_worker(self, obj) -> bool:
+        return _waiting_for_worker(obj)
 
     class Meta:
         model = ImportJob
@@ -171,6 +198,7 @@ class ImportJobListSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "created_at",
+            "waiting_for_worker",
         ]
         read_only_fields = fields
 

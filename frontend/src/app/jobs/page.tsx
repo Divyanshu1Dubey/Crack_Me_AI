@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { jobsAPI } from '@/lib/api';
@@ -49,7 +50,12 @@ export default function JobsPage() {
 }
 
 function JobsContent() {
-    const { ready } = useRequireAuth();
+    // The jobs board is public (the API lists active postings to anyone);
+    // only bookmarking needs an account. Wait for auth to resolve so a
+    // signed-in user's bookmarks come back with the first page.
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    const router = useRouter();
+    const ready = !authLoading;
     const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +100,10 @@ function JobsContent() {
     };
 
     const toggleBookmark = async (jobId: number) => {
+        if (!isAuthenticated) {
+            router.push(`/login?next=${encodeURIComponent('/jobs')}`);
+            return;
+        }
         try {
             await jobsAPI.bookmark(jobId);
             setJobs(prev => prev.map(job => 

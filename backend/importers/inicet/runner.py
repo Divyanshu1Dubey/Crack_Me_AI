@@ -271,27 +271,17 @@ def _persist_into_db(
             scan_type=scan_type, recall_status=recall_status,
         )
 
-        questions_by_stem: dict[str, object] = {}
+        written: list[tuple] = []
         for q in parsed_questions:
             row = writer.write_question(q, recall_source)
             if row is not None:
-                key = (q.stem or q.stem_raw or "").strip()[:80]
-                if key:
-                    questions_by_stem[key] = row
+                written.append((q, row))
 
-        images_written = 0
-        for img in image_records:
-            target = None
-            stem_key = (getattr(img, "question_stem", "") or "").strip()[:80]
-            if stem_key:
-                target = questions_by_stem.get(stem_key)
-            if target is None:
-                # Best-effort fallback: link to the first question so we
-                # never lose the image row.
-                target = next(iter(questions_by_stem.values()), None)
-            if target is not None:
-                if writer.write_image(img, target, recall_source) is not None:
-                    images_written += 1
+        # Attach images by page; ambiguous ones stay unlinked for review
+        # (they used to all fall back to the PDF's first question).
+        from importers.image_linking import link_images_by_page
+        image_stats = link_images_by_page(writer, written, image_records, recall_source)
+        images_written = image_stats["images_linked"]
 
         return {
             "available": True,
@@ -303,7 +293,10 @@ def _persist_into_db(
             "sources_created": writer.stats.sources_created,
             "extraction_items_created": writer.stats.extraction_items_created,
             "duplicate_clusters_created": writer.stats.duplicate_clusters_created,
+            "questions_protected": writer.stats.questions_protected,
+            "questions_staged_for_review": writer.stats.questions_staged_for_review,
             "images_written": images_written,
+            **{k: v for k, v in image_stats.items() if k != "images_linked"},
         }
     except Exception as e:
         LOG.exception("DB persistence failed for %s", pdf_path.name)

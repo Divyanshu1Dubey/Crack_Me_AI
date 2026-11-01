@@ -384,7 +384,10 @@ class BatchRunListView(APIView):
                 batch=batch,
                 config={"strategy": strategy, "force": False},
             )
-            dispatch_job(job.id)
+            task_id = dispatch_job(job.id)
+            # Recorded so ingestion_run_pending does not dispatch it twice.
+            job.summary = {"q_task_id": task_id}
+            job.save(update_fields=["summary"])
 
         audit(
             actor=request.user,

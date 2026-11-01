@@ -1,8 +1,12 @@
+import os
+
 from rest_framework import viewsets, permissions, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from django.db import transaction
 from django.db.models import Q, Avg
+from django.http import FileResponse
 from questions.models import Question
 from .models import Textbook, Chapter, PDFUpload, TextbookChunk, QuestionReferenceOverride
 from .serializers import (
@@ -13,6 +17,24 @@ from .serializers import (
     QuestionReferenceOverrideSerializer,
 )
 from accounts.permissions import IsControlTowerAdmin
+
+# TextbookChunk rows are NOT read by the AI tutor: retrieval uses the RAG
+# store (ai_engine/rag_pipeline.py over chroma_db/rag_store.sqlite3) and
+# the knowledge_base app. Approving / rejecting / merging chunks here only
+# curates this table. The chunk endpoints say so in every response, so the
+# admin UI can label the panel honestly.
+CHUNK_GOVERNANCE_NOTE = (
+    "Textbook chunks are a curation table only; the AI tutor does not read them "
+    "(it retrieves from the RAG store and the knowledge base)."
+)
+
+# Rows the old upload endpoint seeded for every student upload. They carry no
+# content and are hidden from the explorer and its statistics.
+PLACEHOLDER_CHUNK_PREFIX = "Uploaded source placeholder for "
+
+
+def _real_chunks():
+    return TextbookChunk.objects.exclude(chunk_text__startswith=PLACEHOLDER_CHUNK_PREFIX)
 
 
 class TextbookViewSet(viewsets.ModelViewSet):
@@ -30,8 +52,8 @@ class TextbookViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='chunks')
     def chunks(self, request):
-        """Chunk explorer for RAG governance with optional filters."""
-        queryset = TextbookChunk.objects.select_related('textbook', 'upload').all()
+        """Chunk explorer (curation table; not used by AI retrieval) with optional filters."""
+        queryset = _real_chunks().select_related('textbook', 'upload')
         textbook_id = request.query_params.get('textbook_id')
         page_number = request.query_params.get('page_number')
         query = request.query_params.get('q', '').strip()
@@ -56,7 +78,12 @@ class TextbookViewSet(viewsets.ModelViewSet):
 
         rows = queryset[:300]
         serializer = TextbookChunkSerializer(rows, many=True, context={'request': request})
-        return Response({'count': len(serializer.data), 'results': serializer.data})
+        return Response({
+            'count': len(serializer.data),
+            'results': serializer.data,
+            'affects_ai_tutor': False,
+            'note': CHUNK_GOVERNANCE_NOTE,
+        })
 
     @action(detail=False, methods=['post'], url_path='chunks/delete')
     def chunk_delete(self, request):
@@ -139,7 +166,7 @@ class TextbookViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='chunks/diagnostics')
     def chunk_diagnostics(self, request):
-        queryset = TextbookChunk.objects.all()
+        queryset = _real_chunks()
         total = queryset.count()
         approved = queryset.filter(is_approved=True).count()
         rejected = queryset.filter(is_rejected=True).count()
@@ -150,6 +177,8 @@ class TextbookViewSet(viewsets.ModelViewSet):
             'rejected_chunks': rejected,
             'approval_rate': round((approved / total) * 100, 2) if total else 0,
             'avg_quality_score': round(avg_quality, 2),
+            'affects_ai_tutor': False,
+            'note': CHUNK_GOVERNANCE_NOTE,
         })
 
     @action(detail=False, methods=['post'], url_path='chunks/mark')
@@ -251,21 +280,60 @@ class TextbookViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Reference override saved', 'override': serializer.data})
 
 
+class _UploadCreateThrottle(UserRateThrottle):
+    """At most 20 new uploads per user per hour (defined here, no settings scope)."""
+    scope = 'textbook_upload'
+    rate = '20/hour'
+
+
 class PDFUploadViewSet(viewsets.ModelViewSet):
+    """A student's personal "My Uploads" files.
+
+    Uploads are validated (type by magic bytes, 20 MB per file, per-user
+    quota — see ``serializers``) and stored for the owner's reference only:
+    they are NOT processed or indexed into the AI tutor, and no placeholder
+    "RAG" chunk is created for them any more. Files are served to their
+    owner through ``download`` (authenticated, attachment, no-sniff);
+    ``/media/`` is not served in production.
+    """
+
     serializer_class = PDFUploadSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
 
     def get_queryset(self):
         return PDFUpload.objects.filter(user=self.request.user)
 
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.action == 'create':
+            throttles = [*throttles, _UploadCreateThrottle()]
+        return throttles
+
     def perform_create(self, serializer):
-        upload = serializer.save(user=self.request.user)
-        # Seed an initial chunk record for manual governance workflows.
-        TextbookChunk.objects.create(
-            textbook=upload.textbook,
-            upload=upload,
-            book_name=upload.textbook.name if upload.textbook else upload.title,
-            page_number=1,
-            chunk_text=f"Uploaded source placeholder for {upload.title}. Replace with parser-derived chunks.",
-            quality_score=0.5,
-        )
+        serializer.save(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        stored = instance.file
+        instance.delete()
+        if stored:
+            try:
+                stored.storage.delete(stored.name)
+            except Exception:  # pragma: no cover - storage edge case
+                pass
+
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request, pk=None):
+        upload = self.get_object()  # owner-scoped by get_queryset
+        if not upload.file:
+            return Response({'error': 'File missing'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            handle = upload.file.open('rb')
+        except (FileNotFoundError, OSError):
+            return Response({'error': 'File missing'}, status=status.HTTP_404_NOT_FOUND)
+        filename = os.path.basename(upload.file.name) or f'upload-{upload.id}'
+        response = FileResponse(handle, as_attachment=True, filename=filename,
+                                content_type='application/octet-stream')
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+        response['Cache-Control'] = 'private, no-store'
+        return response
