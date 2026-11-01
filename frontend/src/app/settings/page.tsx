@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
@@ -7,7 +8,7 @@ import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI } from '@/lib/api';
-import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2 } from 'lucide-react';
+import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2, X } from 'lucide-react';
 
 const THEME_OPTIONS = [
     { value: 'light', label: 'Light' },
@@ -48,6 +49,16 @@ export default function SettingsPage() {
         setDeviceLimitHit(new URLSearchParams(window.location.search).get('deviceLimit') === '1');
     }, []);
     const deviceLimit = user?.is_subscribed ? 4 : 2;
+
+    /** Hide the device-limit notice and drop ?deviceLimit=1, so a refresh does not bring it back. */
+    const dismissDeviceLimitNotice = () => {
+        setDeviceLimitHit(false);
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has('deviceLimit')) return;
+        params.delete('deviceLimit');
+        const query = params.toString();
+        router.replace(`${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`, { scroll: false });
+    };
 
     useEffect(() => {
         if (ready && user) {
@@ -96,13 +107,23 @@ export default function SettingsPage() {
         }
     }, [ready]);
 
-    const handleRemoveDevice = async (deviceId: number) => {
-        if (!confirm('Remove this device session? You will be logged out of that device.')) return;
+    const handleRemoveDevice = async (device: Device) => {
+        const confirmText = device.is_current === true
+            ? 'This is the device you are using now. Remove it? You will be signed out here.'
+            : 'Remove this device session? You will be logged out of that device.';
+        if (!confirm(confirmText)) return;
         try {
-            await authAPI.logoutDevice(deviceId);
-            setDevices(devices.filter(d => d.id !== deviceId));
+            await authAPI.logoutDevice(device.id);
+            setDevices(devices.filter(d => d.id !== device.id));
+            if (device.is_current === true) {
+                // Sign out here now, as the confirm said: the backend answers this
+                // device's next request with device_inactive, and api.ts then
+                // drops the device id, signs out and opens /login.
+                void fetchDevices();
+                return;
+            }
             if (deviceLimitHit) {
-                setDeviceLimitHit(false);
+                dismissDeviceLimitNotice();
                 setMessage({ type: 'success', text: 'Device removed. You can keep using CrackLabs on this device.' });
             }
         } catch (err: unknown) {
@@ -138,14 +159,31 @@ export default function SettingsPage() {
                         background: 'rgba(245,158,11,0.08)',
                     }}>
                         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                        <div className="text-sm">
+                        <div className="text-sm flex-1 min-w-0">
                             <p className="font-semibold text-foreground">Device limit reached</p>
                             <p className="text-muted-foreground mt-0.5">
                                 Your plan allows {deviceLimit} signed-in devices. Remove a device under{' '}
                                 <a href="#connected-devices" className="font-medium text-primary underline-offset-2 hover:underline">Connected Devices</a>{' '}
                                 to keep using CrackLabs on this one.
+                                {/* Subscription stays usable from this over-limit device (lib/deviceLimit.ts). */}
+                                {user && !user.is_subscribed && (
+                                    <>
+                                        {' '}Or{' '}
+                                        <Link href="/subscription" className="font-medium text-primary underline-offset-2 hover:underline">upgrade to a plan</Link>
+                                        , which allows 4 devices.
+                                    </>
+                                )}
                             </p>
                         </div>
+                        <button
+                            type="button"
+                            onClick={dismissDeviceLimitNotice}
+                            className="p-1 -m-1 rounded-md shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            aria-label="Dismiss device limit notice"
+                            title="Dismiss"
+                        >
+                            <X className="w-4 h-4" aria-hidden="true" />
+                        </button>
                     </div>
                 )}
 
@@ -340,7 +378,7 @@ export default function SettingsPage() {
                                                     <span className="truncate" title={device.device_name || undefined}>{device.device_name || 'Unknown Device'}</span>
                                                     {/* Only when the API marks the row; the first row is just the most recent sign-in. */}
                                                     {device.is_current === true && (
-                                                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold uppercase">This Device</span>
+                                                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold uppercase">This device</span>
                                                     )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground mt-0.5">
@@ -350,7 +388,7 @@ export default function SettingsPage() {
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => handleRemoveDevice(device.id)}
+                                            onClick={() => handleRemoveDevice(device)}
                                             className="p-2 rounded-lg shrink-0 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
                                             title="Log out this device"
                                             aria-label={`Log out ${device.device_name || 'this device'}`}

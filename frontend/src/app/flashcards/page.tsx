@@ -10,7 +10,7 @@ import {
     Layers, Plus, RotateCcw, CheckCircle, Clock,
     ChevronLeft, ChevronRight, Brain, Trash2, X,
     Sparkles, Edit3, Save, BookOpen, Lightbulb, StickyNote,
-    Wand2, Loader2
+    Wand2, Loader2, AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -94,6 +94,8 @@ export default function FlashcardsPage() {
     const [cards, setCards] = useState<Flashcard[]>([]);
     const [dueCards, setDueCards] = useState<Flashcard[]>([]);
     const [loading, setLoading] = useState(true);
+    // The card list could not be loaded: show Retry, not "No flashcards yet".
+    const [loadError, setLoadError] = useState(false);
     const [mode, setMode] = useState<'browse' | 'review' | 'create' | 'study'>('browse');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [flipped, setFlipped] = useState(false);
@@ -116,14 +118,19 @@ export default function FlashcardsPage() {
 
     const fetchCards = useCallback(() => {
         setLoading(true);
+        setLoadError(false);
         Promise.all([
-            fetchAllCards().catch(() => [] as Flashcard[]),
-            fetchAllCards({ due: 'true' }).catch(() => [] as Flashcard[]),
+            fetchAllCards(),
+            fetchAllCards({ due: 'true' }),
+            // The stats are optional: the cards still work without them.
             flashcardsAPI.analytics().catch(() => ({ data: null })),
         ]).then(([all, due, analyticsRes]) => {
             setCards(all);
             setDueCards(due);
             if (analyticsRes.data) setAnalytics(analyticsRes.data as FlashcardStats);
+        }).catch(() => {
+            setLoadError(true);
+        }).finally(() => {
             setLoading(false);
         });
     }, []);
@@ -192,15 +199,23 @@ export default function FlashcardsPage() {
         } catch { /* ignore */ }
     };
 
-    const generateMnemonic = async (topic: string): Promise<string | null> => {
+    /** A mnemonic, or the reason there is none (null = the generic retry message). */
+    const generateMnemonic = async (topic: string): Promise<{ mnemonic: string | null; error: string | null }> => {
         setGeneratingMnemonic(true);
         try {
             const res = await aiAPI.generateMnemonic({ topic });
             // An offline / outage reply is not a mnemonic; never save it into a card.
             const text = res.data?.offline ? '' : res.data?.mnemonic;
-            return typeof text === 'string' && text.trim() ? text : null;
-        } catch {
-            return null;
+            return { mnemonic: typeof text === 'string' && text.trim() ? text : null, error: null };
+        } catch (err: any) {
+            const data = err?.response?.data;
+            // 503 ai_unavailable: no model answered and nothing was charged.
+            if (data?.code === 'ai_unavailable') {
+                return { mnemonic: null, error: 'AI is unavailable right now. Nothing was charged; please try again in a few minutes.' };
+            }
+            // e.g. out of AI tokens: the server's own message says what to do.
+            const message = typeof data?.message === 'string' ? data.message.trim() : '';
+            return { mnemonic: null, error: message ? message.slice(0, 240) : null };
         } finally {
             setGeneratingMnemonic(false);
         }
@@ -209,11 +224,11 @@ export default function FlashcardsPage() {
     const handleGenerateMnemonicForCard = async () => {
         if (!form.front.trim()) return;
         setCreateError(null);
-        const mnemonic = await generateMnemonic(form.front);
+        const { mnemonic, error } = await generateMnemonic(form.front);
         if (mnemonic) {
             setForm({ ...form, back: form.back ? `${form.back}\n\n🧠 Mnemonic: ${mnemonic}` : `🧠 Mnemonic: ${mnemonic}` });
         } else {
-            setCreateError('Could not generate a mnemonic right now. Please try again in a moment.');
+            setCreateError(error || 'Could not generate a mnemonic right now. Please try again in a moment.');
         }
     };
 
@@ -249,7 +264,7 @@ export default function FlashcardsPage() {
                                 <p className="text-sm text-muted-foreground">Spaced repetition with personal notes & AI mnemonics</p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             {mode === 'review' ? (
                                 <Button variant="outline" onClick={() => { setMode('browse'); setFlipped(false); }}>
                                     <X className="w-4 h-4 mr-1" /> Exit Review
@@ -307,8 +322,8 @@ export default function FlashcardsPage() {
                         </Card>
                     )}
 
-                    {/* Stats */}
-                    {mode !== 'review' && (
+                    {/* Stats (hidden while the cards could not be loaded) */}
+                    {mode !== 'review' && !loadError && (
                         <div className="grid grid-cols-3 gap-2 sm:gap-4">
                             <Card>
                                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
@@ -343,7 +358,7 @@ export default function FlashcardsPage() {
                     )}
 
                     {/* SR Analytics */}
-                    {mode !== 'review' && analytics && analytics.total_cards > 0 && (
+                    {mode !== 'review' && !loadError && analytics && analytics.total_cards > 0 && (
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-primary" /> Spaced Repetition Analytics</CardTitle>
@@ -581,7 +596,19 @@ export default function FlashcardsPage() {
                     {/* Browse Mode — card list */}
                     {mode !== 'review' && !loading && (
                         <>
-                            {cards.length === 0 ? (
+                            {loadError ? (
+                                <Card className="border-destructive/30">
+                                    <CardContent className="p-8 sm:p-12 text-center space-y-4">
+                                        <AlertCircle className="w-10 h-10 mx-auto text-destructive" aria-hidden="true" />
+                                        <p className="text-muted-foreground" role="alert">
+                                            Could not load your flashcards. Check your connection and try again.
+                                        </p>
+                                        <Button variant="outline" onClick={fetchCards}>
+                                            <RotateCcw className="w-4 h-4 mr-1" /> Retry
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ) : cards.length === 0 ? (
                                 <Card>
                                     <CardContent className="p-12 text-center">
                                         <Layers className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
@@ -606,7 +633,7 @@ export default function FlashcardsPage() {
                                                         <div className="flex gap-1">
                                                             <Button
                                                                 variant="ghost" size="icon"
-                                                                className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                                                                className="h-7 w-7 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100"
                                                                 onClick={() => {
                                                                     setEditingNote(card.id);
                                                                     setNoteText(card.personal_note || '');

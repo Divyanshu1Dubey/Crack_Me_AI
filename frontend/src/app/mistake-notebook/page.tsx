@@ -3,13 +3,17 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { mistakeNotebookAPI } from '@/lib/api';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 import { extractAnalysisFromJson, sanitizeOptionText, sanitizeQuestionText } from '@/lib/textCleanup';
 import { FormattedText, FormattedOptionText } from '@/components/FormattedText';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flag, RotateCcw } from 'lucide-react';
+import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Flag, Lock, RotateCcw } from 'lucide-react';
+
+/** Paywall feature label of a locked answer (backend questions.views.UPGRADE_REQUIRED_FEATURE). */
+const ANSWERS_FEATURE = 'PYQ answers';
 
 /** Shape of `MistakeNotebookSerializer` (backend/analytics/serializers.py). */
 interface MistakeEntry {
@@ -23,6 +27,11 @@ interface MistakeEntry {
     selected_answer: string | null;
     correct_answer: string;
     explanation: string;
+    /**
+     * True when the plan does not include this question's answer (free plan,
+     * not a showcase question): correct_answer and explanation are blank.
+     */
+    answer_locked?: boolean;
     subject_name: string;
     topic_name: string;
     exam_type: string;
@@ -82,6 +91,7 @@ function formatNextReview(iso: string | null): string {
 export default function MistakeNotebookPage() {
     // Member-only page: logged-out visitors go to /login?next=/mistake-notebook.
     const { ready } = useRequireAuth();
+    const { show: showPaywall } = usePaywall();
     const [entries, setEntries] = useState<MistakeEntry[]>([]);
     const [count, setCount] = useState(0);
     const [page, setPage] = useState(1);
@@ -211,7 +221,7 @@ export default function MistakeNotebookPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Filter mistakes">
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter mistakes">
                 {FILTERS.map(f => (
                     <Button
                         key={f.key}
@@ -271,7 +281,9 @@ export default function MistakeNotebookPage() {
                 <div className="space-y-3">
                     {entries.map(entry => {
                         const open = expanded === entry.id;
-                        const correct = (entry.correct_answer || '').toUpperCase();
+                        // Locked: the plan does not include this answer (the server blanked it).
+                        const locked = entry.answer_locked === true;
+                        const correct = locked ? '' : (entry.correct_answer || '').toUpperCase();
                         const picked = (entry.selected_answer || '').toUpperCase();
                         const options = [
                             { letter: 'A', text: entry.option_a },
@@ -311,9 +323,20 @@ export default function MistakeNotebookPage() {
                                             <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:border-red-800 dark:text-red-300">
                                                 Your answer: {picked || 'Skipped'}
                                             </Badge>
-                                            <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                                Correct: {correct || '?'}
-                                            </Badge>
+                                            {locked ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => showPaywall(ANSWERS_FEATURE)}
+                                                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+                                                    aria-label="Correct answer locked. See plans to unlock answers."
+                                                >
+                                                    <Lock className="w-3 h-3" aria-hidden="true" /> Answer locked
+                                                </button>
+                                            ) : (
+                                                <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                                    Correct: {correct || '?'}
+                                                </Badge>
+                                            )}
                                         </div>
                                     )}
 
@@ -340,7 +363,20 @@ export default function MistakeNotebookPage() {
                                                     </div>
                                                 );
                                             })}
-                                            {explanation ? (
+                                            {locked ? (
+                                                <div className="flex flex-col gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                                                    <div className="flex items-start gap-2 text-foreground">
+                                                        <Lock className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                                                        <span>
+                                                            The correct answer and explanation of this question are part of Premium.
+                                                            Your notebook still keeps the question and your answer for review.
+                                                        </span>
+                                                    </div>
+                                                    <Button size="sm" className="shrink-0 self-start sm:self-auto" onClick={() => showPaywall(ANSWERS_FEATURE)}>
+                                                        Unlock answers
+                                                    </Button>
+                                                </div>
+                                            ) : explanation ? (
                                                 <div className="rounded-md bg-muted/50 p-3 text-sm">
                                                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Explanation</div>
                                                     <FormattedText text={withoutImageTokens(explanation)} />
@@ -362,7 +398,7 @@ export default function MistakeNotebookPage() {
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Button variant="outline" size="sm" onClick={() => setExpanded(open ? null : entry.id)} aria-expanded={open}>
                                             {open ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
-                                            {open ? 'Hide answer' : 'Review answer'}
+                                            {locked ? (open ? 'Hide question' : 'Review question') : (open ? 'Hide answer' : 'Review answer')}
                                         </Button>
                                         {entry.review_status !== 'mastered' && (
                                             <Button size="sm" onClick={() => handleReview(entry.id)} disabled={reviewing === entry.id}>

@@ -1041,7 +1041,10 @@ def _rebuilt_period_xp(start, end, user_ids, eligible_only) -> dict:
     up to now). Uses the award values above, so it is an approximation:
       * question bank -- DailyActivity counts first answers of both the bank
         and tests, so the test answers of the same days are subtracted;
-      * tests -- completed TestAttempt rows; quests -- claimed UserQuest rows.
+      * tests -- completed, on-time TestAttempt rows (a late submit earns no
+        XP and stays off the leaderboard; its answers are still subtracted
+        from the day's DailyActivity, since they are not bank answers);
+        quests -- claimed UserQuest rows.
     """
     def _window(qs, field):
         qs = qs.filter(**{f'{field}__gte': start})
@@ -1055,7 +1058,10 @@ def _rebuilt_period_xp(start, end, user_ids, eligible_only) -> dict:
     tests = _scoped_by_user(_window(TestAttempt.objects.filter(is_completed=True).filter(ANSWERED_TEST_ATTEMPT),
                                     'completed_at'),
                             user_ids, eligible_only).annotate(
-        t_correct=Sum('correct_count'), t_incorrect=Sum('incorrect_count'), t_count=Count('id'))
+        t_correct=Sum('correct_count', filter=Q(is_late=False)),
+        t_incorrect=Sum('incorrect_count', filter=Q(is_late=False)),
+        t_count=Count('id', filter=Q(is_late=False)),
+        all_correct=Sum('correct_count'), all_incorrect=Sum('incorrect_count'))
     quests = _scoped_by_user(_window(UserQuest.objects.filter(is_claimed=True), 'completed_at'),
                              user_ids, eligible_only).annotate(quest_xp=Sum('xp_reward'))
 
@@ -1063,9 +1069,10 @@ def _rebuilt_period_xp(start, end, user_ids, eligible_only) -> dict:
     xp = defaultdict(int)
     for r in daily:
         t = test_rows.get(r['user_id'], {})
-        t_correct = t.get('t_correct') or 0
-        bank_answered = max(0, (r['answered'] or 0) - t_correct - (t.get('t_incorrect') or 0))
-        bank_correct = min(bank_answered, max(0, (r['correct'] or 0) - t_correct))
+        # Every test answer (late ones too) is in DailyActivity; none is a bank answer.
+        all_test_correct = t.get('all_correct') or 0
+        bank_answered = max(0, (r['answered'] or 0) - all_test_correct - (t.get('all_incorrect') or 0))
+        bank_correct = min(bank_answered, max(0, (r['correct'] or 0) - all_test_correct))
         xp[r['user_id']] += bank_correct * XP_QBANK_CORRECT + (bank_answered - bank_correct) * XP_QBANK_WRONG
     for user_id, t in test_rows.items():
         xp[user_id] += (t.get('t_correct') or 0) * XP_TEST_CORRECT + (t.get('t_count') or 0) * XP_TEST_COMPLETED
@@ -1202,9 +1209,12 @@ class LeaderboardView(APIView):
         shown_ids = {user_id for user_id, _ in top} | {user.id}
         users = {u.pk: u for u in get_user_model().objects.filter(pk__in=shown_ids).only('id', 'username')}
         streaks = {s.user_id: s for s in StudyStreak.objects.filter(user_id__in=shown_ids)}
+        # Late submits are scored but kept off the leaderboard (no accuracy,
+        # no tests_completed here); the dashboard still counts them as practice.
         accuracy_rows = {
             r['user_id']: r for r in (
-                TestAttempt.objects.filter(user_id__in=shown_ids, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
+                TestAttempt.objects.filter(user_id__in=shown_ids, is_completed=True, is_late=False)
+                .filter(ANSWERED_TEST_ATTEMPT)
                 .values('user_id').order_by()
                 .annotate(total_correct=Sum('correct_count'), total_incorrect=Sum('incorrect_count'), tests_done=Count('id'))
             )
@@ -1453,23 +1463,26 @@ class AdminWeakAreaControlView(APIView):
 
 def _notebook_queryset(user):
     """The user's Mistake Notebook rows, annotated with whether the answer key
-    may be shown (see MistakeNotebookSerializer.to_representation): premium /
-    admin / staff users, free showcase questions, or questions the user
-    actually answered (question bank, or a completed test) -- except
-    scholarship-test questions, whose answers non-subscribers never see."""
-    from accounts.models_freemium import FreeShowcaseQuestion
+    may be shown (see MistakeNotebookSerializer.to_representation).
+
+    The rule is the question bank's (questions.views.user_can_view_answer):
+    premium / admin / staff users see every answer, anyone else only the
+    free showcase questions -- questions.views.free_showcase_rows(), which
+    never includes a scholarship-challenge question. Having answered the
+    question is no ground: every wrong answer lands here, whatever test it
+    came from (free plans used to take generated tests over the whole bank),
+    and the keys a lapsed subscription once showed stay locked like
+    everywhere else.
+    """
     from accounts.utils import is_premium
-    from questions.models import QuestionAttempt
-    from tests_engine.models import QuestionResponse
+    from questions.views import free_showcase_rows
 
     qs = MistakeNotebook.objects.filter(user=user).select_related('question__subject', 'question__topic')
+    # is_premium already counts admins and superusers (accounts.utils).
     if is_premium(user) or getattr(user, 'is_staff', False):
         return qs.annotate(answer_visible=Value(True, output_field=BooleanField()))
     return qs.annotate(
-        answered_in_bank=Exists(QuestionAttempt.objects.filter(user=user, question_id=OuterRef('question_id'))),
-        answered_in_test=Exists(QuestionResponse.objects.filter(
-            attempt__user=user, attempt__is_completed=True, question_id=OuterRef('question_id'))),
-        is_showcase=Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('question_id'))),
+        is_showcase=Exists(free_showcase_rows().filter(question_id=OuterRef('question_id'))),
     )
 
 
@@ -1924,7 +1937,15 @@ class AdminCampaignListCreateView(APIView):
 
 class AdminCampaignSendNowView(APIView):
     """Publish a campaign now (in-app: dashboard feed + notification bell;
-    nothing is emailed or pushed) and record its target audience size."""
+    nothing is emailed or pushed) and record its target audience size.
+
+    "Now" pulls a future scheduled time forward to now: the feeds
+    (_live_announcements) hide a row until its scheduled time, so a
+    scheduled campaign published now used to stay invisible until then.
+    An expired campaign is refused (400 ``code: 'expired'``): the feeds
+    never show it, so publishing it only reported an audience that never
+    saw it.
+    """
 
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'admin_control_tower'
@@ -1935,14 +1956,26 @@ class AdminCampaignSendNowView(APIView):
         except Announcement.DoesNotExist:
             return Response({'error': 'Campaign not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        now = timezone.now()
+        # Same test as the feeds: live only while expires_at > now.
+        if campaign.expires_at and campaign.expires_at <= now:
+            return Response(
+                {'error': 'This campaign has expired. Set a later expiry first.', 'code': 'expired'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         users = _campaign_audience(campaign.audience_filter)
 
-        campaign.sent_at = timezone.now()
+        campaign.sent_at = now
         campaign.delivery_status = 'sent'
         campaign.is_active = True
         campaign.delivery_count = users.count()
         campaign.failure_report = ''
-        campaign.save(update_fields=['sent_at', 'delivery_status', 'is_active', 'delivery_count', 'failure_report'])
+        update_fields = ['sent_at', 'delivery_status', 'is_active', 'delivery_count', 'failure_report']
+        if campaign.scheduled_for and campaign.scheduled_for > now:
+            campaign.scheduled_for = now
+            update_fields.append('scheduled_for')
+        campaign.save(update_fields=update_fields)
 
         return Response(AnnouncementSerializer(campaign).data)
 

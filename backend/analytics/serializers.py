@@ -175,27 +175,32 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Rows come from analytics.views._notebook_queryset(), which annotates
-        # whether the user may see this question's answer (premium, showcase
-        # or actually answered it). Anything else -- e.g. rows planted through
-        # the old unchecked POST -- keeps the stem but not the key.
-        if not mistake_answer_visible(instance):
+        # whether the user may see this question's answer (premium / staff,
+        # or a free showcase question). Every other row keeps the stem, the
+        # options and the student's own wrong pick, but not the key;
+        # answer_locked tells the client to offer the upgrade instead.
+        visible = mistake_answer_visible(instance)
+        if not visible:
             data['correct_answer'] = ''
             data['explanation'] = ''
+        data['answer_locked'] = not visible
         return data
 
 
 def mistake_answer_visible(instance) -> bool:
     """True when the annotated notebook row may expose its answer key.
 
-    Having answered a question is enough, except for scholarship-test
-    questions: their answers stay hidden from non-subscribers everywhere
-    (unless the question is also a free showcase question).
+    Same rule as questions.views.user_can_view_answer: premium / admin /
+    staff rows (``answer_visible``), otherwise only free showcase questions
+    (``is_showcase``) -- and never a scholarship-challenge question, even
+    one an admin also showcased. Unannotated rows stay locked.
     """
-    if getattr(instance, 'answer_visible', False) or getattr(instance, 'is_showcase', False):
+    if getattr(instance, 'answer_visible', False):
         return True
-    answered = getattr(instance, 'answered_in_bank', False) or getattr(instance, 'answered_in_test', False)
+    if not getattr(instance, 'is_showcase', False):
+        return False
     question = getattr(instance, 'question', None)
-    return bool(answered and not getattr(question, 'is_scholarship_eligible', False))
+    return not getattr(question, 'is_scholarship_eligible', False)
 
 
 class TopicNoteListSerializer(serializers.Serializer):

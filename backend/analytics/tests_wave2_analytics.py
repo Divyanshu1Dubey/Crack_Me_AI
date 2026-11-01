@@ -188,9 +188,10 @@ class IngestHardeningTests(TestCase):
             self.assertEqual(r.status_code, 400, name)
         self.assertFalse(AnalyticsEvent.objects.exists())
 
+    @override_settings(ANALYTICS_COUNTRY_HEADER='', TRUSTED_CLIENT_IP_HEADER='')
     def test_country_comes_from_the_edge_header(self):
         r = self.client.post(self.URL, {'event_name': 'page_view', 'path': '/blog/x', 'country': 'ZZ'},
-                             format='json', HTTP_X_VERCEL_IP_COUNTRY='in')
+                             format='json', HTTP_CF_IPCOUNTRY='in')
         self.assertEqual(r.status_code, 200, r.data)
         ev = AnalyticsEvent.objects.get(pk=r.data['id'])
         self.assertEqual((ev.event_name, ev.path, ev.country), ('page_view', '/blog/x', 'IN'))
@@ -227,7 +228,9 @@ class AdminAnnouncementAliasTests(TestCase):
 
 
 class ScholarshipNotebookTests(TestCase):
-    def test_scholarship_answers_hidden_from_free_users_who_answered(self):
+    def test_scholarship_answers_hidden_from_free_users_even_when_showcased(self):
+        from accounts.models_freemium import FreeShowcaseQuestion
+
         subject = Subject.objects.create(name='Sch Subject', code='SCH')
         plain = Question.objects.create(question_text='Plain', option_a='A', option_b='B', option_c='C',
                                         option_d='D', correct_answer='B', explanation='plain why', subject=subject,
@@ -236,7 +239,9 @@ class ScholarshipNotebookTests(TestCase):
                                               option_d='D', correct_answer='D', explanation='secret why',
                                               subject=subject, year=2024, is_scholarship_eligible=True)
         user = User.objects.create_user(username='sch-free', password='x')
-        for q in (plain, scholarship):
+        for position, q in enumerate((plain, scholarship)):
+            # An admin put both in the free showcase; the scholarship one stays locked.
+            FreeShowcaseQuestion.objects.create(question=q, year=2024, position=position)
             QuestionAttempt.objects.create(user=user, question=q, selected_answer='A', is_correct=False)
             MistakeNotebook.objects.create(user=user, question=q, selected_answer='A', correct_answer='',
                                            is_correct=False)
@@ -245,6 +250,7 @@ class ScholarshipNotebookTests(TestCase):
         rows = {r['question']: r for r in client.get('/api/analytics/mistake-notebook/').data['results']}
         self.assertEqual((rows[plain.id]['correct_answer'], rows[plain.id]['explanation']), ('B', 'plain why'))
         self.assertEqual((rows[scholarship.id]['correct_answer'], rows[scholarship.id]['explanation']), ('', ''))
+        self.assertTrue(rows[scholarship.id]['answer_locked'])
 
         admin = User.objects.create_user(username='sch-admin', password='x', role='admin')
         QuestionAttempt.objects.create(user=admin, question=scholarship, selected_answer='A', is_correct=False)

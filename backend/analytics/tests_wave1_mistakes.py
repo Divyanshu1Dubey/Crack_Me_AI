@@ -65,7 +65,8 @@ class MistakeNotebookHardeningTests(TestCase):
         entry = MistakeNotebook.objects.get(user=self.user, question=self.q_answered)
         # Selected answer comes from the real attempt, review state from the server.
         self.assertEqual((entry.selected_answer, entry.review_status, entry.user_note), ('B', 'new', 'remember'))
-        self.assertEqual(r.data['correct_answer'], 'C')
+        # Free plan, not a showcase question: the key stays locked.
+        self.assertEqual((r.data['correct_answer'], r.data['explanation'], r.data['answer_locked']), ('', '', True))
 
     def test_post_counts_only_completed_test_mistakes(self):
         test = Test.objects.create(title='MN test', test_type='mixed')
@@ -77,7 +78,8 @@ class MistakeNotebookHardeningTests(TestCase):
         TestAttempt.objects.filter(pk=live.pk).update(is_completed=True, completed_at=timezone.now())
         r = self.client.post(URL, {'question': self.q_answered.id}, format='json')
         self.assertEqual(r.status_code, 201, r.data)
-        self.assertEqual(r.data['correct_answer'], 'C')
+        # Added, but a completed test does not unlock the key for a free user.
+        self.assertEqual((r.data['correct_answer'], r.data['explanation']), ('', ''))
 
     def test_post_existing_entry_updates_only_note_and_flag(self):
         entry = self._entry(self.q_answered)
@@ -118,7 +120,10 @@ class MistakeNotebookHardeningTests(TestCase):
         r = self.client.post(f'{URL}{entry.id}/review/')
         self.assertEqual(r.status_code, 200, r.data)
         self.assertEqual((r.data['review_status'], r.data['review_count']), ('learning', 1))
-        self.assertEqual(r.data['correct_answer'], 'C')
+        self.assertEqual((r.data['correct_answer'], r.data['answer_locked']), ('', True))
+        FreeShowcaseQuestion.objects.create(question=self.q_answered, year=2024, position=1)
+        r = self.client.post(f'{URL}{entry.id}/review/')
+        self.assertEqual((r.data['review_count'], r.data['correct_answer'], r.data['answer_locked']), (2, 'C', False))
 
     # ── answer visibility on GET ─────────────────────────────────────────
     def _listed(self, client=None):
@@ -131,20 +136,26 @@ class MistakeNotebookHardeningTests(TestCase):
         self.assertEqual((row['correct_answer'], row['explanation']), ('', ''))
         self.assertEqual(row['question_text'], 'Notebook Q1')  # the stem is not secret
 
-    def test_answer_visible_when_answered_showcase_or_premium(self):
+    def test_answer_visible_only_for_showcase_or_premium(self):
         self._entry(self.q_premium)
         self._entry(self.q_answered)
         self._entry(self.q_other)
+        # e.g. answered while subscribed: a bank attempt does not unlock the key later.
         QuestionAttempt.objects.create(user=self.user, question=self.q_answered, selected_answer='A', is_correct=False)
         FreeShowcaseQuestion.objects.create(question=self.q_other, year=2024, position=1)
         rows = self._listed()
         self.assertEqual(rows[self.q_premium.id]['correct_answer'], '')
-        self.assertEqual(rows[self.q_answered.id]['correct_answer'], 'C')
+        self.assertEqual((rows[self.q_answered.id]['correct_answer'], rows[self.q_answered.id]['answer_locked']),
+                         ('', True))
         self.assertEqual(rows[self.q_other.id]['explanation'], 'Explanation 3')
+        self.assertFalse(rows[self.q_other.id]['answer_locked'])
 
         Subscription.objects.create(user=self.user, plan='1_year', status='active',
                                     expires_at=timezone.now() + timedelta(days=30))
-        self.assertEqual(self._listed()[self.q_premium.id]['correct_answer'], 'C')
+        rows = self._listed()
+        self.assertEqual(rows[self.q_premium.id]['correct_answer'], 'C')
+        self.assertEqual(rows[self.q_answered.id]['explanation'], 'Explanation 2')
+        self.assertFalse(any(row['answer_locked'] for row in rows.values()))
 
     def test_other_users_entries_stay_private(self):
         entry = self._entry(self.q_answered)

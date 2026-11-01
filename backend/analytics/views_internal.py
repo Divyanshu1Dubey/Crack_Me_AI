@@ -21,15 +21,19 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from crack_cms.client_ip import header_to_meta_key
 
 from .models import AnalyticsEvent
 
@@ -38,16 +42,53 @@ logger = logging.getLogger(__name__)
 # Client event names are snake_case (frontend/src/lib/analytics.ts).
 _EVENT_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{0,63}$')
 
-# Two-letter country code set by the CDN / edge in front of the API.
-_COUNTRY_HEADERS = ('HTTP_X_VERCEL_IP_COUNTRY', 'HTTP_CF_IPCOUNTRY', 'HTTP_CLOUDFRONT_VIEWER_COUNTRY')
+# The country header each edge sets, keyed by the client-IP header the same
+# edge sets (settings.TRUSTED_CLIENT_IP_HEADER, see crack_cms/client_ip.py).
+_EDGE_COUNTRY_HEADERS = {
+    'HTTP_CF_CONNECTING_IP': 'HTTP_CF_IPCOUNTRY',
+    'HTTP_X_VERCEL_FORWARDED_FOR': 'HTTP_X_VERCEL_IP_COUNTRY',
+    'HTTP_CLOUDFRONT_VIEWER_ADDRESS': 'HTTP_CLOUDFRONT_VIEWER_COUNTRY',
+}
+# Default: Cloudflare's header (the DigitalOcean App Platform edge in front of
+# the API is Cloudflare, which overwrites CF-IPCountry on what it forwards).
+# Set ANALYTICS_COUNTRY_HEADER when the deployment sits behind another edge.
+_DEFAULT_COUNTRY_HEADER = 'HTTP_CF_IPCOUNTRY'
+_DISABLED = ('none', 'off', '-')
+
+
+def _country_meta_key() -> str:
+    """META key of the one country header this deployment trusts ('' = none).
+
+    Any client can send any header, so only the header of the edge actually
+    in front of the API is read -- never a list of every CDN's header, where
+    a forged ``X-Vercel-IP-Country`` outranked the real ``CF-IPCountry``:
+      1. ``ANALYTICS_COUNTRY_HEADER`` (setting or env), e.g. ``CF-IPCountry``
+         or ``X-Vercel-IP-Country``; ``none`` stores no country;
+      2. otherwise the country header of the edge that
+         ``TRUSTED_CLIENT_IP_HEADER`` names (the client-IP trust setting),
+         e.g. ``X-Vercel-Forwarded-For`` -> ``X-Vercel-IP-Country``;
+      3. otherwise ``CF-IPCountry``.
+    So ``X-Vercel-IP-Country`` counts only when the deployment says requests
+    reach the API through Vercel.
+    """
+    explicit = getattr(settings, 'ANALYTICS_COUNTRY_HEADER', None)
+    if explicit is None:
+        explicit = os.getenv('ANALYTICS_COUNTRY_HEADER', '')
+    explicit = str(explicit or '').strip()
+    if explicit:
+        return '' if explicit.lower() in _DISABLED else header_to_meta_key(explicit)
+    edge = header_to_meta_key(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', ''))
+    return _EDGE_COUNTRY_HEADERS.get(edge, _DEFAULT_COUNTRY_HEADER)
 
 
 def _client_country(request) -> str | None:
-    """ISO 3166-1 alpha-2 country from the edge headers, if any ('XX' = unknown)."""
-    for header in _COUNTRY_HEADERS:
-        code = str(request.META.get(header) or '').strip().upper()
-        if len(code) == 2 and code.isascii() and code.isalpha() and code != 'XX':
-            return code
+    """ISO 3166-1 alpha-2 country from the trusted edge header ('XX' = unknown)."""
+    header = _country_meta_key()
+    if not header:
+        return None
+    code = str(request.META.get(header) or '').strip().upper()
+    if len(code) == 2 and code.isascii() and code.isalpha() and code != 'XX':
+        return code
     return None
 
 
