@@ -124,6 +124,61 @@ def _ai_unavailable_response(*, offline: bool = False, message: str = None) -> R
     )
 
 
+# ─── Question-bank entitlement ──────────────────────────────────────────
+#
+# An explanation of a question-bank question reveals its answer: stored and
+# cached explanations, the curated explanation served offline, the DB answer
+# key behind `is_correct` / `ai_verified_answer`, and any fresh AI text built
+# from that key. So the explain endpoints apply the question bank's ONE rule
+# (questions.views.user_can_view_answer) to every DB question, on every path
+# (stored, cached, generated, offline, outage), before anything is served.
+
+ANSWER_PAYWALL_FEATURE = 'PYQ answers'
+
+
+def _can_view_answer(user, question) -> bool:
+    """True when ``user`` may see the answer / explanation of the DB
+    ``question``: staff, premium subscribers, or an admin-curated free
+    showcase question (``questions.views.user_can_view_answer``).
+    Scholarship-test questions are never explained to non-premium users,
+    even when showcased. Fails closed."""
+    try:
+        from questions.views import user_can_view_answer
+
+        if not user_can_view_answer(user, question):
+            return False
+        if getattr(question, 'is_scholarship_eligible', False):
+            from accounts.utils import is_premium
+            return bool(
+                user is not None and getattr(user, 'is_authenticated', False) and (
+                    getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
+                    or getattr(user, 'is_staff', False) or is_premium(user)
+                )
+            )
+        return True
+    except Exception:
+        logger.exception('Answer entitlement check failed for Q%s; denying',
+                         getattr(question, 'pk', question))
+        return False
+
+
+def _answer_paywall_response() -> Response:
+    """402 ``upgrade_required`` -- the question bank's paywall envelope (the
+    frontend interceptor opens the upgrade modal on it). Nothing is charged."""
+    return Response(
+        {
+            'code': 'upgrade_required',
+            'feature': ANSWER_PAYWALL_FEATURE,
+            'message': (
+                'This question is part of the premium question bank. '
+                'Subscribe to see answers and explanations.'
+            ),
+            'charged': False,
+        },
+        status=402,
+    )
+
+
 class IsAdminUser(BasePermission):
     """Custom permission to only allow admin users."""
 
@@ -497,13 +552,30 @@ def _offline_text_response(request, question: str, *, key: str, reason: str,
 
 
 def _run_text_endpoint(request, *, question: str, mode: str, key: str, amount: int,
-                       freemium: bool, generate) -> Response:
+                       freemium: bool, generate, offline_fallback: bool = True,
+                       unavailable_message: str = None) -> Response:
     """Shared flow of the text-answer AI endpoints (tutor, mnemonic, explain,
     analyze): offline mode → free extractive answer; otherwise charge, call
     ``generate(service)``, and on AIUnavailable refund everything and fall
-    back to the extractive answer (or a 503)."""
+    back to the extractive answer (or a 503).
+
+    ``offline_fallback=False`` (mnemonic): an extract of textbook sentences
+    is not what was asked for, so when no model answers the caller gets the
+    503 ``ai_unavailable`` (with ``unavailable_message``) instead."""
+    def fallback(reason, passages=None):
+        if not offline_fallback:
+            offline = reason == REASON_OFFLINE_MODE
+            message = unavailable_message
+            if message and offline:
+                message = f'{message} AI generation is switched off (offline mode). You were not charged.'
+            elif message:
+                message = f'{message} The AI is unavailable right now. You were not charged — please try again in a few minutes.'
+            return _ai_unavailable_response(offline=offline, message=message)
+        return _offline_text_response(request, question, key=key, reason=reason,
+                                      passages=passages, mode=mode)
+
     if ai_offline_mode():
-        return _offline_text_response(request, question, key=key, reason=REASON_OFFLINE_MODE, mode=mode)
+        return fallback(REASON_OFFLINE_MODE)
 
     charge_err = _charge_ai_call(request, amount=amount, freemium=freemium)
     if charge_err is not None:
@@ -515,8 +587,7 @@ def _run_text_endpoint(request, *, question: str, mode: str, key: str, amount: i
     except AIUnavailable as exc:
         _refund_ai_call(request, amount=amount)
         reason = REASON_OFFLINE_MODE if exc.offline else REASON_PROVIDERS_DOWN
-        return _offline_text_response(request, question, key=key, reason=reason,
-                                      passages=exc.passages, mode=mode)
+        return fallback(reason, passages=exc.passages)
     except Exception as e:
         logger.error(f"AI {mode} failed: {e}")
         _refund_ai_call(request, amount=amount)
@@ -525,7 +596,7 @@ def _run_text_endpoint(request, *, question: str, mode: str, key: str, amount: i
     if not isinstance(text, str) or is_unusable_text(text):
         # Defence in depth: never hand an outage sentence over as an answer.
         _refund_ai_call(request, amount=amount)
-        return _offline_text_response(request, question, key=key, reason=REASON_PROVIDERS_DOWN, mode=mode)
+        return fallback(REASON_PROVIDERS_DOWN)
 
     payload = {key: text}
     _record_chat_turn(request, payload, mode=mode, question=question, answer=text)
@@ -552,7 +623,14 @@ class AskTutorView(AITutorThrottleMixin, APIView):
 
 
 class GenerateMnemonicView(AITutorThrottleMixin, APIView):
-    """Generate memory tricks for medical topics."""
+    """Generate memory tricks for medical topics.
+
+    Only a model can write a mnemonic: when none answers (outage or
+    AI_OFFLINE_MODE) this is a free 503 ``ai_unavailable``, never the
+    extractive textbook answer (clients saved that, offline notice included,
+    as a flashcard "mnemonic")."""
+
+    UNAVAILABLE_MESSAGE = 'A mnemonic needs the AI to write it.'
 
     def get_permissions(self):
         return _get_permission()
@@ -566,6 +644,7 @@ class GenerateMnemonicView(AITutorThrottleMixin, APIView):
             request, question=f'{topic} {concept}'.strip(), mode='mnemonic', key='mnemonic',
             amount=10, freemium=True,
             generate=lambda service: service.generate_mnemonic(topic, concept),
+            offline_fallback=False, unavailable_message=self.UNAVAILABLE_MESSAGE,
         )
 
 
@@ -611,6 +690,9 @@ _TRANSIENT_EXPLANATION_KEYS = (
     'is_correct', 'offline', 'offline_reason', 'offline_notice', 'charged', 'cached',
     'chat_session_id',
 )
+# ExplainQuestionView's markdown answer, kept next to the rich JSON in the
+# same ai_explanation (explain-question serves it; explain-answer does not).
+_ANALYSIS_KEYS = ('analysis', 'context')
 
 
 def _parse_stored_json(raw):
@@ -664,7 +746,13 @@ def _persist_rich_explanation(q, result: dict, service) -> list:
     data = {k: v for k, v in result.items() if k not in _TRANSIENT_EXPLANATION_KEYS}
     fields = []
     if _stored_ai_explanation(q) is None:
-        q.ai_explanation = json.dumps(data, ensure_ascii=False)
+        stored = dict(data)
+        if _stored_analysis_markdown(q) is not None:
+            # Keep explain-question's markdown (e.g. an admin regeneration)
+            # next to the new rich JSON instead of discarding it.
+            previous = _parse_stored_json(getattr(q, 'ai_explanation', '')) or {}
+            stored.update({k: previous[k] for k in _ANALYSIS_KEYS if k in previous})
+        q.ai_explanation = json.dumps(stored, ensure_ascii=False)
         q.ai_generated_at = timezone.now()
         q.ai_model = _ai_model_label(service)
         q.ai_version = 'v2-verify'
@@ -726,6 +814,10 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
     questions) the client's question is explained but nothing is stored and
     no dispute flag is set.
 
+    A DB question is only explained to users entitled to its answer
+    (``_can_view_answer``); anyone else gets the 402 ``upgrade_required``
+    envelope before any stored, cached, offline or AI path runs.
+
     Cost: 10 tokens, charged only when a new explanation is generated (stored
     and cached explanations are free) and refunded when the AI fails.
     """
@@ -755,6 +847,12 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
             options = _options_param(request.data.get('options'))
             db_question = self._exact_match(question_text, options)
 
+        # Paywall: the stored / cached / curated explanation, the DB key
+        # behind is_correct and any explanation generated from it reveal the
+        # answer of a bank question the caller may not be entitled to.
+        if db_question is not None and not _can_view_answer(request.user, db_question):
+            return _answer_paywall_response()
+
         if db_question is not None:
             question_text = db_question.question_text or ''
             options = {
@@ -776,6 +874,8 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
         if db_question is not None:
             stored = _stored_ai_explanation(db_question)
             if stored:
+                for key in _ANALYSIS_KEYS:
+                    stored.pop(key, None)
                 stored['is_correct'] = is_correct
                 return Response(stored)
 
@@ -836,9 +936,12 @@ class ExplainAfterAnswerView(AITutorThrottleMixin, APIView):
     def _offline(request, db_question, question_text, options, correct_answer, selected_answer,
                  subject, topic, reason, passages=None):
         """Free answer from stored data: the question's curated explanation
-        plus textbook sentences; a 503 when neither exists."""
+        plus textbook sentences; a 503 when neither exists. The curated
+        explanation and the DB key are only served to entitled users."""
         payload = None
         if db_question is not None:
+            if not _can_view_answer(getattr(request, 'user', None), db_question):
+                return _answer_paywall_response()
             payload = stored_rich_explanation(db_question, selected_answer=selected_answer)
         query = question_text
         if correct_answer and options.get(correct_answer):
@@ -897,7 +1000,13 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
     or unusable ai_explanation; a custom-prompt answer goes to that user
     alone. Replacing an existing shared explanation (``force_regenerate``)
     is admin-only — a student's regenerate returns a fresh answer without
-    storing it.
+    storing it. An admin regeneration over a valid rich explain-after-answer
+    explanation is stored next to it (``analysis`` key) instead of replacing
+    it, so the two explain endpoints stop regenerating each other's work.
+
+    The prompt carries the DB answer key, so the question is only explained
+    to users entitled to its answer (``_can_view_answer``): anyone else gets
+    the 402 ``upgrade_required`` envelope, on every path.
 
     Cost: 10 tokens (admins / unlimited plans bypass). Refunded on AI failure.
     """
@@ -915,6 +1024,8 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
         )
         if not q:
             return Response({'error': f'Question {question_id} not found'}, status=404)
+        if not _can_view_answer(request.user, q):
+            return _answer_paywall_response()
 
         client_prompt = _as_text(request.data.get("prompt"))
         if len(client_prompt) > MAX_AI_PROMPT_CHARS:
@@ -973,10 +1084,11 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
         ai_model = _ai_model_label(service)
         persisted = False
         if not client_prompt and not q.lock_explanation:
-            has_valid = _stored_ai_explanation(q) is not None or _stored_analysis_markdown(q) is not None
+            rich = _stored_ai_explanation(q)
+            has_valid = rich is not None or _stored_analysis_markdown(q) is not None
             if not has_valid or (force_regen and is_admin):
                 try:
-                    q.ai_explanation = json.dumps({
+                    stored = {
                         "analysis": analysis,
                         "context": {
                             "subject": getattr(q.subject, 'name', '') if q.subject_id else '',
@@ -985,12 +1097,22 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
                             "exam_type": q.exam_type,
                             "exam_source": q.exam_source,
                         },
-                    })
+                    }
+                    fields = ["ai_explanation", "ai_model", "ai_generated_at", "updated_at"]
+                    if rich is not None:
+                        # Keep the rich explain-after-answer JSON (students'
+                        # explain-answer serves it) and store the regenerated
+                        # markdown next to it; replacing it made the next
+                        # explain-answer call pay to regenerate (and overwrite)
+                        # the admin's analysis.
+                        stored = {**rich, **stored}
+                    else:
+                        q.ai_version = "explain-question-v1"
+                        fields.append("ai_version")
+                    q.ai_explanation = json.dumps(stored, ensure_ascii=False)
                     q.ai_model = ai_model
                     q.ai_generated_at = timezone.now()
-                    q.ai_version = "explain-question-v1"
-                    q.save(update_fields=["ai_explanation", "ai_model", "ai_generated_at",
-                                          "ai_version", "updated_at"])
+                    q.save(update_fields=fields)
                     persisted = True
                 except Exception as save_exc:  # noqa: BLE001
                     logger.warning("ExplainQuestion: cache write failed for Q%s: %s", q.id, save_exc)
@@ -1006,7 +1128,10 @@ class ExplainQuestionView(AITutorThrottleMixin, APIView):
     @staticmethod
     def _offline(request, q, reason, passages=None):
         """Free markdown answer from the question's curated fields plus
-        textbook sentences; a 503 when neither exists."""
+        textbook sentences; a 503 when neither exists. Only for users
+        entitled to the question's answer."""
+        if not _can_view_answer(getattr(request, 'user', None), q):
+            return _answer_paywall_response()
         stored = stored_rich_explanation(q)
         correct = _answer_letter(q.correct_answer)
         query = q.question_text or ''
@@ -1269,12 +1394,30 @@ class RAGAnswerView(AITutorThrottleMixin, APIView):
         return Response(result)
 
 
+def _snippet(text, limit: int) -> str:
+    """``text`` cut to ``limit`` characters at a word boundary (with an
+    ellipsis when cut)."""
+    text = _as_text(text)
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    return (cut[: cut.rfind(' ')] if ' ' in cut else cut).rstrip(' ,;:') + '…'
+
+
 class TextbookReferenceView(AITutorThrottleMixin, APIView):
-    """Find textbook references for a question or topic.
+    """Find textbook references (book + page) for a question or topic.
 
     Auth required even in DEBUG: textbook-reference lookups drive real
     RAG cost and must not be reachable by anonymous callers.
+
+    The call is free and the store holds copyrighted textbooks, so each
+    reference carries only a short locating snippet
+    (REFERENCE_EXCERPT_CHARS), not a passage — three 300-character excerpts
+    per call made it a bulk-extraction path once rag-search went admin-only.
     """
+
+    MAX_REFERENCES = 3
+    REFERENCE_EXCERPT_CHARS = 160
 
     def get_permissions(self):
         return [IsAuthenticated()]
@@ -1285,7 +1428,14 @@ class TextbookReferenceView(AITutorThrottleMixin, APIView):
             return err
 
         service = AIService()
-        references = service.find_textbook_reference(question_text)
+        references = []
+        for ref in (service.find_textbook_reference(question_text) or [])[:self.MAX_REFERENCES]:
+            if not isinstance(ref, dict):
+                continue
+            ref = dict(ref)
+            if 'excerpt' in ref:
+                ref['excerpt'] = _snippet(ref.get('excerpt'), self.REFERENCE_EXCERPT_CHARS)
+            references.append(ref)
         return Response({'references': references})
 
 
@@ -1545,52 +1695,123 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
         return Response({'questions': questions, 'count': len(questions), 'cost': self.GENERATION_COST})
 
 
-class PageScreenshotView(APIView):
-    """Extract a page screenshot from a textbook PDF."""
+class PageScreenshotView(AITutorThrottleMixin, APIView):
+    """The textbook page a question cites, as ``{screenshot_url}``.
+
+    The first successful render is saved to ``question.page_screenshot`` (the
+    question detail payload then carries it too) and served from there; a
+    failed lookup is remembered for MISS_CACHE_SECONDS, and only one render
+    per question runs at a time, so repeated clicks neither rescan the
+    textbook folders nor re-render a 200-DPI page. Only URLs are returned --
+    never a server filesystem path (the old ``screenshot_path``).
+    """
+
+    MISS_CACHE_SECONDS = 3600
+    RENDER_LOCK_SECONDS = 120
 
     def get_permissions(self):
         return _get_permission()
 
     def get(self, request, question_id):
         from questions.models import Question
-        from .document_processor import DocumentProcessor
-        import os
 
-        try:
-            question = Question.objects.get(id=question_id)
-        except Question.DoesNotExist:
+        question = Question.objects.filter(id=question_id).first()
+        if question is None:
             return Response({'error': 'Question not found'}, status=404)
 
-        # Check if screenshot already exists
-        if question.page_screenshot:
-            return Response({'screenshot_url': question.page_screenshot.url})
+        stored = self._stored_url(question)
+        if stored:
+            return Response({'screenshot_url': self._absolute(request, stored)})
 
-        # Try to find textbook reference and generate screenshot
-        if question.page_number and question.book_name:
-            # Find the PDF
-            train_dir = str(getattr(__import__('django.conf', fromlist=['settings']).settings, 'MEDURA_TRAIN_DIR', ''))
-            textbook_dirs = [
-                os.path.join(train_dir, 'textbooks'),
-                train_dir,
-            ]
+        miss_key = f'ai_page_screenshot_miss_v1:{question.id}'
+        lock_key = f'ai_page_screenshot_lock_v1:{question.id}'
+        try:
+            if cache.get(miss_key):
+                return Response({'error': 'No screenshot available'}, status=404)
+            if not cache.add(lock_key, 1, timeout=self.RENDER_LOCK_SECONDS):
+                return Response({'status': 'rendering'}, status=202)
+        except Exception:
+            logger.debug('Page screenshot cache unavailable', exc_info=True)
+        try:
+            url = self._render_and_store(question)
+        finally:
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                pass
+        if not url:
+            try:
+                cache.set(miss_key, True, timeout=self.MISS_CACHE_SECONDS)
+            except Exception:
+                pass
+            return Response({'error': 'No screenshot available'}, status=404)
+        return Response({'screenshot_url': self._absolute(request, url)})
 
-            for tb_dir in textbook_dirs:
-                if not os.path.exists(tb_dir):
-                    continue
-                for f in os.listdir(tb_dir):
-                    if f.endswith('.pdf') and question.book_name.lower() in f.lower():
-                        pdf_path = os.path.join(tb_dir, f)
-                        try:
-                            page_num = int(question.page_number) - 1
-                            screenshot_dir = str(getattr(__import__('django.conf', fromlist=['settings']).settings, 'TEXTBOOK_SCREENSHOT_DIR', '/tmp'))
-                            os.makedirs(screenshot_dir, exist_ok=True)
-                            output = DocumentProcessor.extract_page_image(pdf_path, page_num, screenshot_dir)
-                            if output:
-                                return Response({'screenshot_path': output})
-                        except (ValueError, Exception) as e:
-                            logger.error(f"Screenshot extraction failed: {e}")
+    @staticmethod
+    def _stored_url(question) -> str:
+        if not question.page_screenshot:
+            return ''
+        try:
+            return question.page_screenshot.url
+        except Exception:
+            return ''
 
-        return Response({'error': 'No screenshot available'}, status=404)
+    @staticmethod
+    def _absolute(request, url: str) -> str:
+        """Absolute URL, like the detail serializer's ``page_screenshot``."""
+        if url.startswith(('http://', 'https://')):
+            return url
+        return request.build_absolute_uri(url)
+
+    @staticmethod
+    def _page_index(page_number):
+        """0-based page index from '123' / '123-125' / 'p. 123', or None."""
+        import re
+        match = re.search(r'\d+', str(page_number or ''))
+        if not match:
+            return None
+        page = int(match.group(0))
+        return page - 1 if page >= 1 else None
+
+    @staticmethod
+    def _find_pdf(book_name: str):
+        train_dir = str(getattr(django_settings, 'MEDURA_TRAIN_DIR', '') or '')
+        needle = (book_name or '').strip().lower()
+        if not train_dir or not needle:
+            return None
+        for tb_dir in (os.path.join(train_dir, 'textbooks'), train_dir):
+            if not os.path.isdir(tb_dir):
+                continue
+            for name in sorted(os.listdir(tb_dir)):
+                if name.lower().endswith('.pdf') and needle in name.lower():
+                    return os.path.join(tb_dir, name)
+        return None
+
+    def _render_and_store(self, question):
+        """Render the cited page into ``question.page_screenshot``; its URL,
+        or None when there is no reference, PDF or page."""
+        import tempfile
+        from django.core.files import File
+        from .document_processor import DocumentProcessor
+
+        page_index = self._page_index(question.page_number)
+        pdf_path = self._find_pdf(question.book_name) if page_index is not None else None
+        if not pdf_path:
+            return None
+        try:
+            with tempfile.TemporaryDirectory(prefix='page-shot-') as tmp:
+                output = DocumentProcessor.extract_page_image(pdf_path, page_index, tmp)
+                if not output or not os.path.isfile(output):
+                    return None
+                with open(output, 'rb') as fh:
+                    question.page_screenshot.save(
+                        f'q{question.id}_{os.path.basename(output)}', File(fh), save=False,
+                    )
+            question.save(update_fields=['page_screenshot', 'updated_at'])
+            return question.page_screenshot.url
+        except Exception:
+            logger.exception('Page screenshot render failed for Q%s', question.id)
+            return None
 
 
 class AIStatusView(APIView):

@@ -1388,8 +1388,13 @@ Analyze:
     @classmethod
     def is_valid_explanation(cls, data) -> bool:
         """True for a parsed, non-failed explain-after-answer dict whose body
-        is real text (not an outage sentence or provider error)."""
-        if not isinstance(data, dict) or data.get('_failed'):
+        is real text (not an outage sentence or provider error).
+
+        Legacy unparsed-fallback rows are rejected: they carry
+        ``raw_response`` and hold raw prose or truncated JSON in
+        ``why_correct`` (a fenced block or text starting with ``{``), so they
+        are regenerated instead of being served to every student."""
+        if not isinstance(data, dict) or data.get('_failed') or 'raw_response' in data:
             return False
         if 'analysis' in data and not any(data.get(k) for k in cls.EXPLANATION_CORE_KEYS):
             return False  # ExplainQuestionView's markdown shape, not the rich one
@@ -1397,7 +1402,11 @@ Analyze:
         if not any(isinstance(b, str) and b.strip() for b in bodies):
             return False
         why = data.get('why_correct')
-        return not (isinstance(why, str) and why.strip() and is_unusable_text(why))
+        if isinstance(why, str) and why.strip():
+            stripped = why.strip()
+            if stripped.startswith(('```', '{')) or is_unusable_text(stripped):
+                return False
+        return True
 
     @staticmethod
     def explanation_cache_key(question_text: str, options: Optional[dict] = None,
@@ -1584,16 +1593,25 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
                 return parsed
         return None
 
+    # The admin prompt is an operator instruction stored in the DB; bound it
+    # so a pasted document cannot blow up every generation's cost.
+    MAX_ADMIN_PROMPT_CHARS = 4000
+
     def generate_admin_explanation(
         self, question_text: str, options: dict, correct_answer: str,
         subject: str = "", topic: str = "", exam_type: str = "cms",
         existing_explanation: str = "", image_descriptions: list = None,
+        user_prompt: str = "",
     ) -> dict:
         """Generate a complete explanation for a question in the admin editor.
 
         Used by the content-team workflow: admin selects the correct answer → clicks
         "AI Generate" → all explanation fields are populated. The admin's selected
         correct_answer is the source of truth; the AI must NOT change it.
+
+        ``user_prompt`` is the active admin prompt version
+        (``AdminAIPromptVersion.prompt_text``), led with like
+        ``analyze_question``'s, while the JSON contract below stays binding.
 
         Returns a dict mapping field names → values that can be applied directly
         to the Question model instance.
@@ -1646,6 +1664,16 @@ RULES:
 - For why_wrong fields where the option equals the correct answer, write a brief explanation of the key distinguishing feature instead
 - Do NOT include any markdown code fences — return raw JSON only
 """
+
+        admin_instruction = (user_prompt or "").strip()[:self.MAX_ADMIN_PROMPT_CHARS]
+        if admin_instruction:
+            prompt = (
+                f"{admin_instruction}\n\n"
+                "Apply the editorial instruction above to the explanation fields, "
+                "but keep the verified correct answer and respond in the exact JSON "
+                "format requested below.\n\n---\n\n"
+                f"{prompt}"
+            )
 
         raw = ''
         try:

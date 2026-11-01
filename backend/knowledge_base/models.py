@@ -2,10 +2,16 @@
 Knowledge Base models for the Monica AI tutor.
 
 This app extends (does NOT replace) the existing ai_engine pipeline:
-- ai_engine/sqlite_rag.py and rag_pipeline.py remain as the SQLite
-  fallback when Supabase/Postgres is unavailable.
-- knowledge_base adds Postgres-pgvector + BM25 + KG + citation engine
-  on top of a *whitelisted* source list.
+- ai_engine/rag_pipeline.py (the legacy textbook store) remains the
+  fallback while the knowledge base has too few approved chunks
+  (``settings.KB_FALLBACK_THRESHOLD``).
+- knowledge_base adds hybrid retrieval (an in-Python BM25 index plus,
+  when a real embedding model is available, cosine similarity over the
+  JSON vectors in KnowledgeEmbedding), a knowledge-graph boost and a
+  citation engine on top of a *whitelisted* source list. It is
+  database-agnostic: there is no pgvector column, no tsvector / Postgres
+  full-text index and no vector index (see knowledge_base/retrieval/
+  pipeline.py).
 
 Design contract:
 - Every chunk records its license + source_url + attribution
@@ -211,10 +217,14 @@ class KnowledgeEmbedding(models.Model):
     - Use a different vector store per environment
     - Run A/B between two embedding models
 
-    We store vectors as JSON (list[float]) to remain engine-agnostic.
-    On Postgres+pgvector we ALSO write to a `vector(384)` column
-    managed by a follow-up migration; for SQLite / dev, the JSON field
-    is the canonical store and retrieval falls back to NumPy cosine.
+    We store vectors as JSON (list[float]) to remain engine-agnostic, on
+    every database: the JSON field is the only store (there is no pgvector
+    `vector(...)` column or vector index), and retrieval computes cosine
+    similarity in Python over a bounded scan of these rows. Rows are only
+    written by a real embedding model -- never by the deterministic hash
+    pseudo-embedding (``EmbeddingService._hash_embed``), which carries no
+    meaning (``manage.py kb_cleanup_legacy`` removes rows written by it
+    before that rule).
     """
 
     EMBED_MODELS = [

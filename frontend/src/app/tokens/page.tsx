@@ -2,7 +2,8 @@
  * tokens/page.tsx — AI Token Wallet & Management page.
  * Shows: balance stats (available, purchased, credits), usage progress bars
  * (daily/weekly limits), token purchase options (₹10–₹500), transaction history.
- * Admin users see ∞ (unlimited) badge. Integrates with authAPI endpoints.
+ * Admin users and unlimited-AI plans see ∞ (no metering). Integrates with
+ * authAPI endpoints.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
@@ -10,11 +11,12 @@ import { useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { authAPI } from '@/lib/api';
+import api, { authAPI } from '@/lib/api';
+import { isUnmeteredAi } from '@/hooks/useTokenWallet';
 import {
     Coins, Zap, ShoppingCart, Clock, TrendingUp,
     Gift, Shield, CheckCircle, AlertCircle, Loader2,
-    Users, ArrowRightLeft, Send, RefreshCw
+    Users, ArrowRightLeft, Send, RefreshCw, Sparkles
 } from 'lucide-react';
 
 interface TokenBalance {
@@ -26,6 +28,8 @@ interface TokenBalance {
     daily_tokens_used: number;
     weekly_tokens_used: number;
     is_admin: boolean;
+    /** Plan bypasses token metering (sent once accounts' serializer exposes it). */
+    unlimited_ai?: boolean;
 }
 
 interface Transaction {
@@ -69,17 +73,52 @@ interface PlatformStats {
     };
 }
 
+interface AdminUsersPage {
+    users?: AdminUser[];
+    platform_stats?: PlatformStats;
+    count?: number;
+    limit?: number;
+    offset?: number;
+}
+
+interface AdminPaging {
+    count: number;
+    limit: number;
+    offset: number;
+}
+
+/** The admin overview returns at most `limit` users per call (default
+ *  1000); totals in platform_stats always cover everyone. */
+async function fetchAdminTokenUsers(offset: number): Promise<AdminUsersPage> {
+    const res = await api.get('/auth/tokens/admin/users/', { params: offset > 0 ? { offset } : undefined });
+    return (res.data || {}) as AdminUsersPage;
+}
+
+function pagingOf(data: AdminUsersPage): AdminPaging {
+    const shown = data.users?.length || 0;
+    return {
+        count: typeof data.count === 'number' ? data.count : shown,
+        limit: typeof data.limit === 'number' && data.limit > 0 ? data.limit : Math.max(shown, 1),
+        offset: typeof data.offset === 'number' ? data.offset : 0,
+    };
+}
+
 const PURCHASE_OPTIONS = [
     { amount: 10, price: 10, label: 'Starter' },
     { amount: 25, price: 25, label: 'Basic' },
     { amount: 50, price: 50, label: 'Popular', popular: true },
     { amount: 100, price: 100, label: 'Pro' },
     { amount: 250, price: 250, label: 'Premium' },
-    { amount: 500, price: 500, label: 'Unlimited' },
+    { amount: 500, price: 500, label: 'Max' },
 ];
 
+/** Token purchases are switched off server-side (TokenPurchaseView answers
+ *  503 `payments_unavailable`) until the payment integration ships, so the
+ *  packs are shown as unavailable instead of as clickable options. */
+const TOKEN_PURCHASES_ENABLED = false;
+
 export default function TokensPage() {
-    const { ready } = useRequireAuth();
+    const { ready, user } = useRequireAuth();
     const [balance, setBalance] = useState<TokenBalance | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -90,6 +129,7 @@ export default function TokensPage() {
     // Admin state
     const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
     const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+    const [adminPaging, setAdminPaging] = useState<AdminPaging | null>(null);
     const [adminTab, setAdminTab] = useState<'overview' | 'grant' | 'transfer'>('overview');
     const [grantUserId, setGrantUserId] = useState('');
     const [grantAmount, setGrantAmount] = useState('');
@@ -117,25 +157,32 @@ export default function TokensPage() {
     useEffect(() => {
         if (balance?.is_admin) {
             setAdminLoading(true);
-            authAPI.adminGetAllUsers()
-                .then(res => {
-                    setAdminUsers(res.data.users || []);
-                    setPlatformStats(res.data.platform_stats || null);
+            fetchAdminTokenUsers(0)
+                .then(data => {
+                    setAdminUsers(data.users || []);
+                    setPlatformStats(data.platform_stats || null);
+                    setAdminPaging(pagingOf(data));
                 })
                 .catch(() => {})
                 .finally(() => setAdminLoading(false));
         }
     }, [balance]);
 
-    const loadAdminData = async () => {
+    const loadAdminData = async (offset: number = adminPaging?.offset ?? 0) => {
         setAdminLoading(true);
         try {
-            const res = await authAPI.adminGetAllUsers();
-            setAdminUsers(res.data.users || []);
-            setPlatformStats(res.data.platform_stats || null);
+            const data = await fetchAdminTokenUsers(offset);
+            setAdminUsers(data.users || []);
+            setPlatformStats(data.platform_stats || null);
+            setAdminPaging(pagingOf(data));
         } catch { /* ignore */ }
         setAdminLoading(false);
     };
+
+    // Plans with unlimited AI (1-year / legacy / admin grant) are never
+    // metered by the backend, so the wallet is informational for them.
+    const unlimitedPlan = !balance?.is_admin && !user?.is_admin && isUnmeteredAi(balance, user);
+    const unmetered = Boolean(balance?.is_admin) || unlimitedPlan;
 
     const handleGrant = async () => {
         if (!grantUserId || !grantAmount || adminAction) return;
@@ -269,6 +316,17 @@ export default function TokensPage() {
                     </div>
                 )}
 
+                {/* Unlimited-AI plan (1 year / legacy / admin grant): never metered */}
+                {unlimitedPlan && (
+                    <div className="glass-card p-4 mb-6 flex items-center gap-3" style={{ borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.06)' }}>
+                        <Sparkles className="w-5 h-5 shrink-0" style={{ color: '#10b981' }} />
+                        <div>
+                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Unlimited AI plan</span>
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Your plan includes unlimited AI. Tokens are not deducted.</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* ─── SUPER ADMIN TOKEN MANAGEMENT ─── */}
                 {balance?.is_admin && (
                     <div className="mb-8">
@@ -277,7 +335,7 @@ export default function TokensPage() {
                                 <Users className="w-5 h-5" style={{ color: '#8b5cf6' }} />
                                 Token Management
                             </h2>
-                            <button onClick={loadAdminData} className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>
+                            <button onClick={() => loadAdminData()} className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>
                                 <RefreshCw className={`w-3 h-3 ${adminLoading ? 'animate-spin' : ''}`} /> Refresh
                             </button>
                         </div>
@@ -361,6 +419,32 @@ export default function TokensPage() {
                                                 ))}
                                             </tbody>
                                         </table>
+                                    </div>
+                                )}
+                                {adminPaging && adminPaging.count > adminPaging.limit && (
+                                    <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t text-xs"
+                                        style={{ borderColor: 'rgba(139,149,168,0.1)', color: 'var(--text-secondary)' }}>
+                                        <span>
+                                            Showing {adminUsers.length ? adminPaging.offset + 1 : 0}–{adminPaging.offset + adminUsers.length} of {adminPaging.count} wallets
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => loadAdminData(Math.max(0, adminPaging.offset - adminPaging.limit))}
+                                                disabled={adminLoading || adminPaging.offset === 0}
+                                                className="px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>
+                                                Previous
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => loadAdminData(adminPaging.offset + adminPaging.limit)}
+                                                disabled={adminLoading || adminPaging.offset + adminPaging.limit >= adminPaging.count}
+                                                className="px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>
+                                                Next
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -451,8 +535,8 @@ export default function TokensPage() {
                             <Zap className="w-5 h-5" style={{ color: '#f59e0b' }} />
                             <span className="text-xs font-bold uppercase" style={{ color: 'var(--text-secondary)' }}>Available</span>
                         </div>
-                        <div className="text-3xl font-bold" style={{ color: balance?.is_admin ? '#8b5cf6' : '#f59e0b' }}>
-                            {balance?.is_admin ? '∞' : balance?.available || 0}
+                        <div className="text-3xl font-bold" style={{ color: balance?.is_admin ? '#8b5cf6' : unlimitedPlan ? '#10b981' : '#f59e0b' }}>
+                            {unmetered ? '∞' : balance?.available || 0}
                         </div>
                     </div>
                     <div className="token-stat-card">
@@ -485,7 +569,7 @@ export default function TokensPage() {
                 </div>
 
                 {/* Usage Progress Bar */}
-                {!balance?.is_admin && balance && (
+                {!unmetered && balance && (
                     <div className="glass-card p-5 mb-8">
                         <h3 className="text-sm font-bold mb-4">Usage This Period</h3>
                         <div className="space-y-3">
@@ -518,19 +602,37 @@ export default function TokensPage() {
                 )}
 
                 {/* Purchase Section */}
-                {!balance?.is_admin && (
+                {!unmetered && (
                     <div className="mb-8">
                         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
                             Buy More Tokens
                         </h2>
+                        {/* Token purchases are temporarily disabled while payment
+                            integration is being finalized (the backend answers 503 +
+                            code "payments_unavailable"). Say so before the packs, and
+                            show the packs as unavailable rather than selectable. */}
+                        {!TOKEN_PURCHASES_ENABLED && (
+                            <div
+                                className="mb-4 flex items-start gap-2 text-xs p-3 rounded-lg text-amber-800 dark:text-amber-300"
+                                style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
+                                role="status"
+                            >
+                                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                                <span>
+                                    <strong>Token purchases are temporarily unavailable.</strong>{' '}
+                                    Payment integration is being finalized. Your free daily/weekly tokens still work normally.
+                                </span>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                             {PURCHASE_OPTIONS.map(opt => (
                                 <div key={opt.amount}
-                                    className={`token-purchase-option ${selectedPurchase === opt.amount ? 'selected' : ''}`}
-                                    onClick={() => setSelectedPurchase(opt.amount)}>
+                                    className={`token-purchase-option relative ${TOKEN_PURCHASES_ENABLED ? '' : 'pointer-events-none opacity-60'} ${selectedPurchase === opt.amount ? 'selected' : ''}`}
+                                    aria-disabled={!TOKEN_PURCHASES_ENABLED || undefined}
+                                    onClick={TOKEN_PURCHASES_ENABLED ? () => setSelectedPurchase(opt.amount) : undefined}>
                                     {opt.popular && (
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 inline-block" style={{ background: 'rgba(6,182,212,0.15)', color: 'var(--accent-primary)' }}>
+                                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                                             MOST POPULAR
                                         </span>
                                     )}
@@ -541,7 +643,7 @@ export default function TokensPage() {
                                 </div>
                             ))}
                         </div>
-                        {selectedPurchase && (() => {
+                        {TOKEN_PURCHASES_ENABLED && selectedPurchase && (() => {
                             const opt = PURCHASE_OPTIONS.find(o => o.amount === selectedPurchase);
                             const price = opt ? opt.price.toLocaleString('en-IN') : selectedPurchase.toLocaleString('en-IN');
                             return (
@@ -551,22 +653,6 @@ export default function TokensPage() {
                                 </button>
                             );
                         })()}
-                        {/* Token purchases are temporarily disabled while payment
-                            integration is being finalized. The backend returns 503 +
-                            code "payments_unavailable"; we surface that here so
-                            students are not confused when the click fails silently. */}
-                        <div
-                            className="mt-4 flex items-start gap-2 text-xs p-3 rounded-lg"
-                            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#b45309' }}
-                            role="status"
-                            aria-live="polite"
-                        >
-                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
-                            <span>
-                                <strong>Token purchases are temporarily unavailable.</strong>{' '}
-                                Payment integration is being finalized. Your free daily/weekly tokens still work normally.
-                            </span>
-                        </div>
                         <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-secondary)' }}>
                             Purchased tokens never expire and are used after your free daily/weekly tokens
                         </p>

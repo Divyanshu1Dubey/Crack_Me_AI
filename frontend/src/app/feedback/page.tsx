@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
-import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download, AlertCircle } from 'lucide-react';
+import api, { analyticsAPI, extractApiErrorMessage } from '@/lib/api';
+import { MessageSquare, Send, Star, CheckCircle, Clock, Reply, Trash2, Download, AlertCircle, Loader2 } from 'lucide-react';
 
 interface FeedbackItem {
     id: number;
@@ -33,6 +33,30 @@ const categoryColor: Record<string, string> = {
     ui: '#06b6d4', ai: '#10b981', general: '#6b7280',
 };
 
+/** GET /analytics/feedback/ is paginated: {results, count, page, page_size}
+ *  (default page_size 50, max 200). */
+const FEEDBACK_PAGE_SIZE = 50;
+
+interface FeedbackListPage {
+    results?: FeedbackItem[];
+    count?: number;
+}
+
+function fetchFeedbackPage(page: number) {
+    return api.get('/analytics/feedback/', { params: { page, page_size: FEEDBACK_PAGE_SIZE } });
+}
+
+function rowsOf(body: unknown): FeedbackItem[] {
+    if (Array.isArray(body)) return body as FeedbackItem[];
+    const rows = (body as FeedbackListPage | null)?.results;
+    return Array.isArray(rows) ? rows : [];
+}
+
+function countOf(body: unknown): number | null {
+    const count = (body as FeedbackListPage | null)?.count;
+    return typeof count === 'number' ? count : null;
+}
+
 export default function FeedbackPage() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -44,23 +68,45 @@ export default function FeedbackPage() {
     const [error, setError] = useState<string | null>(null);
     const [replyingTo, setReplyingTo] = useState<number | null>(null);
     const [replyText, setReplyText] = useState('');
+    const [loadingMore, setLoadingMore] = useState(false);
 
-    // Form state
+    // Form state. The rating starts unset: a pre-filled 5/5 was stored for
+    // every submission whose author never touched the stars.
     const [category, setCategory] = useState('general');
-    const [rating, setRating] = useState(5);
+    const [rating, setRating] = useState(0);
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
 
     const isAdmin = user?.role === 'admin';
 
     const loadFeedback = () => {
-        analyticsAPI.getFeedback()
+        fetchFeedbackPage(1)
             .then(res => {
-                setFeedbacks(res.data.results || res.data || []);
-                setFeedbackCount(typeof res.data?.count === 'number' ? res.data.count : null);
+                setFeedbacks(rowsOf(res.data));
+                setFeedbackCount(countOf(res.data));
             })
             .catch(() => setError('Could not load feedback. Please refresh to try again.'))
             .finally(() => setLoading(false));
+    };
+
+    // The list is paginated: older feedback is fetched page by page. The
+    // next page is derived from what is on screen, so a reply or delete
+    // (applied locally) never skips or duplicates a row.
+    const hasMoreFeedback = feedbackCount !== null && feedbacks.length < feedbackCount;
+    const loadMoreFeedback = () => {
+        if (loadingMore) return;
+        const nextPage = Math.floor(feedbacks.length / FEEDBACK_PAGE_SIZE) + 1;
+        setLoadingMore(true);
+        setError(null);
+        fetchFeedbackPage(nextPage)
+            .then(res => {
+                const rows = rowsOf(res.data);
+                setFeedbacks(prev => [...prev, ...rows.filter(r => !prev.some(p => p.id === r.id))]);
+                const count = countOf(res.data);
+                if (count !== null) setFeedbackCount(count);
+            })
+            .catch(() => setError('Could not load more feedback. Please try again.'))
+            .finally(() => setLoadingMore(false));
     };
 
     useEffect(() => {
@@ -70,13 +116,13 @@ export default function FeedbackPage() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || !message.trim()) return;
+        if (!title.trim() || !message.trim() || rating === 0) return;
         setSubmitting(true);
         setError(null);
         analyticsAPI.submitFeedback({ category, rating, title: title.trim(), message: message.trim() })
             .then(() => {
                 setSuccess(true);
-                setTitle(''); setMessage(''); setCategory('general'); setRating(5);
+                setTitle(''); setMessage(''); setCategory('general'); setRating(0);
                 loadFeedback();
                 setTimeout(() => setSuccess(false), 3000);
             })
@@ -93,17 +139,31 @@ export default function FeedbackPage() {
             .finally(() => setSubmitting(false));
     };
 
+    // Reply / delete update the loaded list in place (reloading page 1 threw
+    // away every older page the admin had loaded).
     const handleReply = (id: number) => {
-        if (!replyText.trim()) return;
+        const reply = replyText.trim();
+        if (!reply) return;
         setError(null);
-        analyticsAPI.replyFeedback(id, { admin_reply: replyText.trim() })
-            .then(() => { setReplyingTo(null); setReplyText(''); loadFeedback(); })
+        analyticsAPI.replyFeedback(id, { admin_reply: reply })
+            .then(res => {
+                setReplyingTo(null);
+                setReplyText('');
+                const saved = (res.data && typeof res.data === 'object' ? res.data : {}) as Partial<FeedbackItem>;
+                setFeedbacks(prev => prev.map(f => (
+                    f.id === id ? { ...f, ...saved, admin_reply: saved.admin_reply ?? reply, is_read: true } : f
+                )));
+            })
             .catch(() => setError('Could not save the reply. Please try again.'));
     };
 
     const handleDelete = (id: number) => {
         setError(null);
-        analyticsAPI.deleteFeedback(id).then(() => loadFeedback())
+        analyticsAPI.deleteFeedback(id)
+            .then(() => {
+                setFeedbacks(prev => prev.filter(f => f.id !== id));
+                setFeedbackCount(c => (c === null ? c : Math.max(0, c - 1)));
+            })
             .catch(() => setError('Could not delete this feedback. Please try again.'));
     };
 
@@ -128,7 +188,7 @@ export default function FeedbackPage() {
                 <Header />
                 <div className="page-container">
                 <h1 className="text-2xl font-bold mb-1 flex items-center gap-2">
-                    <MessageSquare className="w-6 h-6" style={{ color: '#8b5cf6' }} />
+                    <MessageSquare className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
                     {isAdmin ? 'Student Feedback' : 'Send Feedback'}
                 </h1>
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
@@ -182,7 +242,12 @@ export default function FeedbackPage() {
                                 </select>
                             </div>
                             <div>
-                                <span id="feedback-rating-label" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Rating</span>
+                                <span id="feedback-rating-label" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                    Rating
+                                    {rating === 0 && (
+                                        <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>Tap a star to rate</span>
+                                    )}
+                                </span>
                                 <div className="flex gap-1 mt-1" role="group" aria-labelledby="feedback-rating-label">
                                     {[1, 2, 3, 4, 5].map(s => (
                                         <button key={s} type="button" onClick={() => setRating(s)}
@@ -215,9 +280,8 @@ export default function FeedbackPage() {
                                 required />
                         </div>
 
-                        <button type="submit" disabled={submitting || !title.trim() || !message.trim()}
-                            className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)' }}>
+                        <button type="submit" disabled={submitting || !title.trim() || !message.trim() || rating === 0}
+                            className="btn-primary flex items-center gap-2 px-6 py-2.5 rounded-lg disabled:opacity-50">
                             <Send className="w-4 h-4" />
                             {submitting ? 'Sending...' : 'Submit Feedback'}
                         </button>
@@ -323,6 +387,19 @@ export default function FeedbackPage() {
                                     )}
                                 </div>
                             ))}
+                            {hasMoreFeedback && (
+                                <div className="flex flex-col items-center gap-1 pt-2">
+                                    <button type="button" onClick={loadMoreFeedback} disabled={loadingMore}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                                        style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+                                        {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        {loadingMore ? 'Loading…' : 'Load older feedback'}
+                                    </button>
+                                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                        Showing {feedbacks.length} of {feedbackCount}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

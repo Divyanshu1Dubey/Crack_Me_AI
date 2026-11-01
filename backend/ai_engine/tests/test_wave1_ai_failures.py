@@ -402,6 +402,11 @@ class ExplainPersistenceTests(_Base):
         from ai_engine.views import ExplainAfterAnswerView, ExplainQuestionView
         self.ExplainAfter = ExplainAfterAnswerView
         self.ExplainQuestion = ExplainQuestionView
+        # Explanations of bank questions are paywalled (wave 2, C2): these
+        # tests are about persistence, so the student is a subscriber
+        # (metered plan: tokens are still charged and refunded).
+        Subscription.objects.create(user=self.student, plan='1_month', status='active',
+                                    expires_at=timezone.now() + timedelta(days=30))
         subject = Subject.objects.create(name='Pediatrics G5', code='PEDG5')
         self.q = Question.objects.create(
             question_text='Edema in nephrotic syndrome is due to?', option_a='Hypertension',

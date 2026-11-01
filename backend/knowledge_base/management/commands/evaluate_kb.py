@@ -22,9 +22,15 @@ class Command(BaseCommand):
             f"CiteAcc={result['citation_accuracy']:.2f} "
             f"(N={result['testcases_total']})"
         ))
+        if result.get("errors"):
+            self.stdout.write(self.style.WARNING(
+                f"  {result['errors']} case(s) had no AI answer (provider outage or "
+                f"AI_OFFLINE_MODE); they count as failures above."
+            ))
         for r in result["results"][:5]:
             mark = "✓" if r["ok"] else "✗"
+            note = f" ({r['error']})" if r.get("error") else ""
             self.stdout.write(
-                f"  {mark} [{r['confidence']}] {r['query'][:70]}\n"
+                f"  {mark} [{r['confidence']}] {r['query'][:70]}{note}\n"
                 f"     sources={r['source_hits']} keywords={r['keyword_hits']}"
             )

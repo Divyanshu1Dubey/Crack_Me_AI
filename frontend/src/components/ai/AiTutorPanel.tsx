@@ -21,8 +21,10 @@
  *   POST /api/ai/explain-question/<id>/
  *     body: { selected_answer?, question_text?, subject?, topic?,
  *             prompt?, force_regenerate? }
- *   resp: { explanation: <markdown>, cached: bool,
+ *   resp (axios `response.data`): { explanation: <markdown>, cached: bool,
  *           question_id: int, ai_model?: str, ai_generated_at?: ISO }
+ *   402 { code: 'upgrade_required' } when the user is not entitled to the
+ *   question's answer (the api.ts interceptor opens the upgrade modal).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiAPI } from "@/lib/api";
@@ -31,7 +33,7 @@ import { extractAnalysisFromJson } from "@/lib/textCleanup";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    AlertTriangle, Brain, Loader2, Sparkles, Square, Clock,
+    AlertTriangle, Brain, Loader2, Square, Clock,
     RotateCcw, Send,
 } from "lucide-react";
 
@@ -139,7 +141,10 @@ export default function AiTutorPanel({
         if (override?.forceRegenerate) payload.force_regenerate = true;
 
         try {
-            const r: any = await aiAPI.explainQuestion(questionId, payload, { signal: ctrl.signal });
+            const res: any = await aiAPI.explainQuestion(questionId, payload, { signal: ctrl.signal });
+            // aiAPI returns the axios response (the interceptor does not
+            // unwrap it): the payload is on `.data`.
+            const r: any = res?.data ?? {};
             const rawText = (r?.explanation ?? r?.text ?? r?.markdown ?? "");
             const text = extractAnalysisFromJson(rawText);
             setCached(!!r?.cached);
@@ -155,7 +160,9 @@ export default function AiTutorPanel({
             if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") {
                 // user-initiated stop — silent
             } else {
-                setError(e?.response?.data?.error || e?.message || "AI Tutor is unavailable right now");
+                // 402 upgrade_required / 503 ai_unavailable carry a readable `message`.
+                const data = e?.response?.data;
+                setError(data?.message || data?.error || e?.message || "AI Tutor is unavailable right now");
             }
         } finally {
             setLoading(false);

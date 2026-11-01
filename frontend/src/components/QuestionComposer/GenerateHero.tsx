@@ -7,6 +7,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Zap } from 'lucide-react';
+import { EXPLANATION_TOKEN_COST, GENERATION_TOKEN_COST } from './constants';
 import type { TrackMeta } from './constants';
 
 interface GenerateHeroProps {
@@ -34,7 +35,8 @@ export function GenerateHero({ trackMeta }: GenerateHeroProps) {
             </Badge>
           </div>
           <p className="text-sm md:text-base text-muted-foreground">
-            {trackMeta.tagline}. Every question costs 1 token — first 10 are free every day.
+            {trackMeta.tagline}. Each quiz costs {GENERATION_TOKEN_COST} tokens; AI explanations
+            cost {EXPLANATION_TOKEN_COST} each, only when you ask.
           </p>
         </div>
       </div>

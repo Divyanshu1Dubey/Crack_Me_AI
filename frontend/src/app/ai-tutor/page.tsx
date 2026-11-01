@@ -459,6 +459,11 @@ export default function AITutorPage() {
         }
     };
 
+    // Brand hues are -600/-700 shades that read well on light surfaces but
+    // turn dim on the dark theme; mixing them with the theme foreground keeps
+    // the hue and lifts the text contrast in both themes.
+    const legibleOn = (hex: string) => `color-mix(in srgb, ${hex} 55%, var(--color-foreground))`;
+
     const modes = [
         { key: 'tutor' as const, label: 'AI Tutor', icon: Brain, color: '#0e7490', desc: 'Ask any medical question' },
         { key: 'mnemonic' as const, label: 'Mnemonic', icon: Sparkles, color: '#d97706', desc: 'Generate memory tricks' },
@@ -515,7 +520,7 @@ export default function AITutorPage() {
                             style={{
                                 background: 'rgba(14, 116, 144, 0.08)',
                                 borderColor: 'rgba(14, 116, 144, 0.28)',
-                                color: '#0e7490',
+                                color: legibleOn('#0e7490'),
                             }}>
                             <Plus className="w-4 h-4" />
                             New Chat
@@ -585,7 +590,7 @@ export default function AITutorPage() {
                                                 <ModeIcon className="w-4 h-4" style={{ color: isActive ? 'white' : 'var(--text-secondary)' }} />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate" style={{ color: isActive ? '#0e7490' : 'var(--text-primary)' }}>
+                                                <p className="text-sm font-medium truncate" style={{ color: isActive ? legibleOn('#0e7490') : 'var(--text-primary)' }}>
                                                     {session.title || 'Untitled Chat'}
                                                 </p>
                                                 <div className="flex items-center gap-2 mt-0.5">
@@ -621,7 +626,7 @@ export default function AITutorPage() {
                             style={{
                                 background: mode === m.key ? `${m.color}20` : 'rgba(139, 149, 168, 0.05)',
                                 borderColor: mode === m.key ? m.color : 'transparent',
-                                color: mode === m.key ? m.color : 'var(--text-secondary)',
+                                color: mode === m.key ? legibleOn(m.color) : 'var(--text-secondary)',
                             }}>
                             <m.icon className="w-4 h-4" />
                             {m.label}
@@ -642,7 +647,7 @@ export default function AITutorPage() {
                                 {modes.find(m => m.key === mode)?.desc}
                             </h3>
                             <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                                {mode === 'textbook' ? 'Searches across Harrison, Ghai, Nelson & Park textbooks' : 'Powered by Gemini + Groq AI'}
+                                {mode === 'textbook' ? 'Searches across Harrison, Ghai, Nelson & Park textbooks' : 'Exam-focused answers with textbook references'}
                             </p>
                             <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
                                 {(suggestions[mode] || []).map((s, i) => (

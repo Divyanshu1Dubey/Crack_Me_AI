@@ -354,10 +354,13 @@ def stored_explanation_text(row) -> str:
                 data = json.loads(stripped)
             except ValueError:
                 data = None
-            if isinstance(data, dict) and not data.get('_failed'):
+            # Legacy unparsed fallbacks carry `raw_response` (raw prose or
+            # truncated JSON in why_correct): never an answer.
+            if isinstance(data, dict) and not data.get('_failed') and 'raw_response' not in data:
                 for key in ('why_correct', 'analysis'):
                     value = data.get(key)
-                    if isinstance(value, str) and not is_unusable_text(value):
+                    if (isinstance(value, str) and not is_unusable_text(value)
+                            and not value.strip().startswith(('{', '```'))):
                         return value.strip()
         elif not is_unusable_text(stripped):
             return stripped
@@ -384,7 +387,8 @@ def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optio
     """The closest active past question with a stored explanation, or None.
 
     Free users only get admin-curated showcase questions back, the same rule
-    the question bank applies to its retrieve endpoint.
+    the question bank applies to its retrieve endpoint, and never a
+    scholarship-test question (its answer would leak to test takers).
     """
     raw_terms = []
     for tok in tokenize(question_text or '', stem=False):
@@ -406,7 +410,10 @@ def find_similar_pyq(question_text: str, *, user=None, exclude_id=None) -> Optio
             qs = qs.exclude(pk=exclude_id)
         if not _user_sees_full_bank(user):
             from accounts.models_freemium import FreeShowcaseQuestion
-            qs = qs.filter(Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))))
+            qs = qs.filter(
+                Exists(FreeShowcaseQuestion.objects.filter(question_id=OuterRef('pk'))),
+                is_scholarship_eligible=False,
+            )
         rows = list(qs.values(
             'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'explanation', 'why_correct', 'admin_explanation_override',

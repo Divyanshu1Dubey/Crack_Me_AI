@@ -36,11 +36,12 @@ import {
   useGenerate,
 } from '@/components/QuestionComposer';
 import type { ComposerSubject, Difficulty } from '@/components/QuestionComposer';
-import { useTokenWallet } from '@/hooks/useTokenWallet';
+import { isUnmeteredAi, useTokenWallet } from '@/hooks/useTokenWallet';
 import { useAuth } from '@/lib/auth';
 
-/** Plans whose AI use is not token-metered (backend PLAN_FEATURES.unlimited_ai). */
-const UNLIMITED_AI_PLANS = new Set(['1_year', 'legacy', 'admin_grant']);
+/** Loader bucket for imported questions (stored as 'Imported', shown as
+ *  'Expert Curated'): a source, not a medical subject to generate on. */
+const NON_SUBJECT_BUCKETS = new Set(['Imported', 'Expert Curated']);
 
 export default function GeneratePage() {
     const { ready } = useRequireAuth();
@@ -67,32 +68,38 @@ export default function GeneratePage() {
             .then(res => {
                 if (cancelled) return;
                 const list = res.data?.results || res.data;
-                if (Array.isArray(list) && list.length > 0) {
-                    setSubjects(list);
-                }
+                // An empty list (e.g. a track with no subjects yet) must
+                // replace the previous track's subjects; the options then
+                // fall back to the curated per-track list.
+                setSubjects(Array.isArray(list) ? list : []);
             })
             .catch(() => { /* keep fallback list */ });
         return () => { cancelled = true; };
     }, [ready, hydrated, activeTrack]);
 
-    // Derived subject — no setState-in-effect. If the user has explicitly
-    // picked a subject, use that; otherwise use the active track's default.
-    // When the track changes, the explicit pick is reset by the
-    // user-facing onSubjectChange handler (or by switching tracks).
+    // Options first: real subjects only (no loader bucket), de-duplicated,
+    // else the curated per-track list.
+    const subjectOptions = useMemo(() => {
+        const names = Array.from(new Set(subjects.map(s => s.name)))
+            .filter(n => Boolean(n) && !NON_SUBJECT_BUCKETS.has(n));
+        return names.length > 0
+            ? names
+            : (FALLBACK_SUBJECTS_BY_TRACK[activeTrack] || FALLBACK_SUBJECTS_BY_TRACK.cms);
+    }, [subjects, activeTrack]);
+
+    // Derived subject — no setState-in-effect. The user's explicit pick, else
+    // the track's default, clamped to an existing option so the value shown
+    // in the select is the value sent (a pick from another track, or a
+    // default the list does not contain, falls back to the first option).
     const selectedSubject = useMemo(() => {
-        if (userPickedSubject) return userPickedSubject;
         const meta = TRACK_META[activeTrack] || TRACK_META.cms;
-        return meta.defaultSubject;
-    }, [userPickedSubject, activeTrack]);
+        const pick = userPickedSubject || meta.defaultSubject;
+        return subjectOptions.includes(pick) ? pick : subjectOptions[0];
+    }, [userPickedSubject, activeTrack, subjectOptions]);
 
     const handleSubjectChange = useCallback((s: string) => {
         setUserPickedSubject(s);
     }, []);
-
-    const subjectOptions = useMemo(() => {
-        if (subjects.length > 0) return subjects.map(s => s.name);
-        return FALLBACK_SUBJECTS_BY_TRACK[activeTrack] || FALLBACK_SUBJECTS_BY_TRACK.cms;
-    }, [subjects, activeTrack]);
 
     const trackMeta = TRACK_META[activeTrack] || TRACK_META.cms;
 
@@ -115,10 +122,8 @@ export default function GeneratePage() {
     // Surplus-token hint for the cost line (purely informational). The
     // balance endpoint returns `available` (there is no `balance` field, so
     // this warning never rendered); unlimited plans and admins are not metered.
-    const walletAvailable = (wallet as { available?: number } | null)?.available ?? wallet?.balance;
-    const unmetered =
-        Boolean(wallet?.is_admin || user?.is_admin) ||
-        Boolean(user?.subscription_info?.is_active && UNLIMITED_AI_PLANS.has(user.subscription_info.plan));
+    const walletAvailable = wallet?.available ?? wallet?.balance;
+    const unmetered = isUnmeteredAi(wallet, user);
     const insufficientTokens =
         !unmetered && typeof walletAvailable === 'number' && walletAvailable < GENERATION_TOKEN_COST;
 

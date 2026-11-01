@@ -11,6 +11,11 @@ Metrics reported:
 - MRR: mean reciprocal rank of the first acceptable source
 - Citation accuracy: % of answers whose generated citations mention at
   least one expected source
+
+A case whose answer cannot be generated (``AIUnavailable``: provider outage
+or AI_OFFLINE_MODE) is recorded as failed with ``error: 'ai_unavailable'``
+and the retrieval count of the passages Monica had found; the run goes on
+and reports how many cases errored.
 """
 
 import logging
@@ -117,11 +122,30 @@ def seed_golden_cases() -> int:
 
 
 def _evaluate_one(case: GoldenTestCase, monica: Monica) -> dict:
-    response = monica.answer(
-        case.query,
-        subject=case.expected_subject or None,
-        top_k=10,
-    )
+    from ai_engine.services import AIUnavailable
+
+    try:
+        response = monica.answer(
+            case.query,
+            subject=case.expected_subject or None,
+            top_k=10,
+        )
+    except AIUnavailable as exc:
+        # Monica raises (instead of returning a canned answer) when no model
+        # answers; one case must not abort the whole run.
+        logger.warning("evaluate_kb: no AI answer for case %s (%s)", case.id,
+                       "offline mode" if exc.offline else "providers unavailable")
+        return {
+            "case_id": case.id,
+            "query": case.query,
+            "retrieval_count": len(exc.passages or []),
+            "used_kb": False,
+            "confidence": "",
+            "source_hits": [],
+            "keyword_hits": [],
+            "ok": False,
+            "error": "ai_unavailable",
+        }
     answer_lower = (response.answer or "").lower()
     citations_lower = " ".join(
         (c.get("citation_text") or "") for c in response.citations
@@ -175,6 +199,7 @@ def run_evaluation(max_cases: Optional[int] = None) -> dict:
         # All results here are binary, so MRR ~= accuracy on source match
     mrr = mrr_n / max(len(results), 1)
     citation_accuracy = sum(1 for r in results if r["keyword_hits"]) / max(len(results), 1)
+    errors = sum(1 for r in results if r.get("error"))
 
     run = EvalRun.objects.create(
         started_at=started,
@@ -184,6 +209,7 @@ def run_evaluation(max_cases: Optional[int] = None) -> dict:
         recall_at_10=recall_at_10,
         mrr=mrr,
         citation_accuracy=citation_accuracy,
+        notes=(f"{errors} case(s) had no AI answer (ai_unavailable)" if errors else ""),
     )
     return {
         "eval_run_id": run.id,
@@ -192,5 +218,6 @@ def run_evaluation(max_cases: Optional[int] = None) -> dict:
         "recall_at_10": recall_at_10,
         "mrr": mrr,
         "citation_accuracy": citation_accuracy,
+        "errors": errors,
         "results": results,
     }

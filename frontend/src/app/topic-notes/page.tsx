@@ -1,18 +1,20 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { topicNotesAPI } from '@/lib/api';
+import api, { topicNotesAPI } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, Sparkles, Plus, Trash2, FileText } from 'lucide-react';
+import { FormattedText } from '@/components/FormattedText';
+import { BookOpen, Sparkles, Plus, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface TopicNote {
     id: number;
     title: string;
     content: string;
+    content_preview?: string;
     subject: number;
     subject_name: string;
     topic: number;
@@ -24,10 +26,28 @@ interface TopicNote {
     updated_at: string;
 }
 
+/** Students read published notes here (paginated: {count, next, results});
+ *  the admin library endpoint is admin-only. */
+const PUBLISHED_NOTES_URL = '/questions/topic-notes/published/';
+
+const EXAM_LABELS: Record<string, string> = {
+    cms: 'UPSC CMS',
+    neet_pg: 'NEET PG',
+    ini_cet: 'INI-CET',
+};
+
+/** Rows of a list endpoint that may or may not be paginated. */
+function rowsOf(body: unknown): TopicNote[] {
+    if (Array.isArray(body)) return body as TopicNote[];
+    const results = (body as { results?: unknown } | null)?.results;
+    return Array.isArray(results) ? (results as TopicNote[]) : [];
+}
+
 export default function TopicNotesPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const isAdmin = !!user && (user.role === 'admin' || !!user.is_admin);
+    const userId = user?.id ?? null;
     const [notes, setNotes] = useState<TopicNote[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -40,19 +60,54 @@ export default function TopicNotesPage() {
         content: '',
         source_question_ids: '',
     });
+    // Students: published notes, one page at a time.
+    const [publishedPage, setPublishedPage] = useState(1);
+    const [hasMorePublished, setHasMorePublished] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
 
     useEffect(() => {
         if (authLoading) return;
         if (!isAdmin) {
-            setLoading(false);
+            if (userId === null) {
+                setLoading(false);
+                return;
+            }
+            api.get(PUBLISHED_NOTES_URL, { params: { page: 1 } }).then(res => {
+                setNotes(rowsOf(res.data));
+                setPublishedPage(1);
+                setHasMorePublished(Boolean((res.data as { next?: unknown } | null)?.next));
+                setLoadError(false);
+            }).catch(() => {
+                setNotes([]);
+                setLoadError(true);
+            }).finally(() => setLoading(false));
             return;
         }
         topicNotesAPI.adminList().then(res => {
             // The admin library endpoint is paginated ({count, results}).
-            const body: any = res.data;
-            setNotes(Array.isArray(body) ? body : (body?.results || []));
+            setNotes(rowsOf(res.data));
         }).catch(() => setNotes([])).finally(() => setLoading(false));
-    }, [authLoading, isAdmin]);
+    }, [authLoading, isAdmin, userId]);
+
+    const loadMorePublished = async () => {
+        if (loadingMore) return;
+        const nextPage = publishedPage + 1;
+        setLoadingMore(true);
+        try {
+            const res = await api.get(PUBLISHED_NOTES_URL, { params: { page: nextPage } });
+            const rows = rowsOf(res.data);
+            setNotes(prev => [...prev, ...rows.filter(r => !prev.some(p => p.id === r.id))]);
+            setPublishedPage(nextPage);
+            setHasMorePublished(Boolean((res.data as { next?: unknown } | null)?.next));
+            setLoadError(false);
+        } catch {
+            setLoadError(true);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
     const handleCreate = async () => {
         if (!formData.title || !formData.subject || !formData.topic) return;
@@ -101,16 +156,92 @@ export default function TopicNotesPage() {
 
     if (!isAdmin) {
         return (
-            <div className="max-w-4xl mx-auto p-4 md:p-6">
-                <Card>
-                    <CardContent className="p-8 text-center text-muted-foreground">
-                        <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p>Topic notes are curated by the CrackLabs team.</p>
-                        <Button variant="outline" className="mt-4" onClick={() => router.push('/dashboard')}>
-                            Back to dashboard
-                        </Button>
-                    </CardContent>
-                </Card>
+            <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg shrink-0">
+                        <BookOpen className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                        <h1 className="text-2xl font-bold">Topic Notes</h1>
+                        <p className="text-sm text-muted-foreground">
+                            Revision notes compiled from PYQ explanations by the CrackLabs team
+                        </p>
+                    </div>
+                </div>
+
+                {notes.length === 0 ? (
+                    <Card>
+                        <CardContent className="p-8 text-center text-muted-foreground">
+                            <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p>
+                                {loadError
+                                    ? 'Topic notes could not be loaded. Please try again in a moment.'
+                                    : 'No topic notes have been published yet. They are curated by the CrackLabs team.'}
+                            </p>
+                            <Button variant="outline" className="mt-4" onClick={() => router.push('/dashboard')}>
+                                Back to dashboard
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <div className="space-y-3">
+                        {notes.map(note => {
+                            const expanded = expandedId === note.id;
+                            const meta = [note.subject_name, note.topic_name].filter(Boolean).join(' • ');
+                            return (
+                                <Card key={note.id}>
+                                    <CardContent className="p-4">
+                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                            <h3 className="font-semibold break-words min-w-0">{note.title}</h3>
+                                            <Badge variant="outline" className="text-xs">
+                                                {EXAM_LABELS[note.exam_type] || note.exam_type}
+                                            </Badge>
+                                        </div>
+                                        {(meta || note.source_question_count > 0) && (
+                                            <div className="text-xs text-muted-foreground mb-2">
+                                                {meta}
+                                                {meta && note.source_question_count > 0 ? ' • ' : ''}
+                                                {note.source_question_count > 0 ? `${note.source_question_count} source PYQs` : ''}
+                                            </div>
+                                        )}
+                                        {expanded ? (
+                                            <div className="text-sm text-foreground break-words">
+                                                <FormattedText text={note.content} />
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground line-clamp-3 break-words">
+                                                {note.content_preview || note.content}
+                                            </p>
+                                        )}
+                                        {note.content && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-2 -ml-2"
+                                                aria-expanded={expanded}
+                                                onClick={() => setExpandedId(expanded ? null : note.id)}
+                                            >
+                                                {expanded ? 'Show less' : 'Read note'}
+                                            </Button>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                        {hasMorePublished && (
+                            <div className="text-center">
+                                <Button variant="outline" onClick={loadMorePublished} disabled={loadingMore}>
+                                    {loadingMore ? 'Loading…' : 'Load more notes'}
+                                </Button>
+                                {loadError && (
+                                    <p className="text-xs text-red-600 dark:text-red-400 mt-2" role="alert">
+                                        More notes could not be loaded. Please try again.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     }
@@ -222,7 +353,13 @@ export default function TopicNotesPage() {
                 <Card>
                     <CardContent className="p-8 text-center text-muted-foreground">
                         <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p>No topic notes yet. Create one or generate from corrected PYQs.</p>
+                        <p>No topic notes yet. Use New Note to create one, then Generate to compile it from PYQ explanations.</p>
+                        {!showCreate && (
+                            <Button size="sm" className="mt-4" onClick={() => setShowCreate(true)}>
+                                <Plus className="w-4 h-4 mr-1" />
+                                New Note
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             ) : (
@@ -234,8 +371,8 @@ export default function TopicNotesPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <h3 className="font-semibold">{note.title}</h3>
-                                            <Badge variant="outline" className="text-xs capitalize">
-                                                {note.exam_type}
+                                            <Badge variant="outline" className="text-xs">
+                                                {EXAM_LABELS[note.exam_type] || note.exam_type}
                                             </Badge>
                                             {note.ai_generated && (
                                                 <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">

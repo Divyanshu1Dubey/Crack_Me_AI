@@ -8,7 +8,7 @@ class KnowledgeBaseConfig(AppConfig):
 
     - KnowledgeSource (whitelist registry of legal sources)
     - KnowledgeChunk (text + metadata + license + provenance)
-    - KnowledgeEmbedding (pgvector rows; SQLite-friendly JSON fallback)
+    - KnowledgeEmbedding (JSON vectors, compared in Python; no pgvector)
     - KnowledgeEntity / KnowledgeRelation (auto-built medical KG)
     - IngestionJob (audit trail for every run)
     - GoldenTestCase / EvalRun (retrieval quality harness)
