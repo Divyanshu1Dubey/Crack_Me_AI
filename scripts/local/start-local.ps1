@@ -23,7 +23,10 @@ param(
     [string]$LocalRoot = (Join-Path $env:USERPROFILE 'crack_local'),
     [string]$PgBin = 'C:\Program Files\PostgreSQL\16\bin',
     [switch]$SkipFrontend,
-    [switch]$SkipBackend
+    [switch]$SkipBackend,
+    # Pending migrations are applied to the local database before the backend
+    # starts (migrate_local.py refuses any non-local database).
+    [switch]$SkipMigrate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -106,6 +109,14 @@ if (-not $SkipBackend) {
         $python = Find-Python
         $env:DJANGO_ENV_FILE = '.env.localdev'
         $env:PYTHONUNBUFFERED = '1'
+        if (-not $SkipMigrate) {
+            Write-Host 'Applying pending migrations to the local database ...'
+            $ErrorActionPreference = 'Continue'
+            & $python (Join-Path $PSScriptRoot 'migrate_local.py') 2>&1 | Out-File (Join-Path $Logs 'migrate.log')
+            $migrateExit = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            if ($migrateExit -ne 0) { throw "Migrations failed or were refused (exit $migrateExit); see $Logs\migrate.log" }
+        }
         Write-Host 'Starting Django backend on http://127.0.0.1:8000 ...'
         $p = Start-Process -FilePath $python -ArgumentList @('manage.py', 'runserver', '127.0.0.1:8000', '--noreload') `
             -WorkingDirectory $Backend -WindowStyle Hidden -PassThru `

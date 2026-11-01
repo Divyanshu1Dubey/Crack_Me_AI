@@ -27,14 +27,18 @@ async function freshKeyedQuestion(request: APIRequestContext, session: Session, 
     throw new Error('no unanswered CMS question with an answer key for the premium user');
 }
 
-/** A forgiving matcher for the first words of a question stem as the UI renders it. */
+/**
+ * A forgiving matcher for a question stem as the UI renders it: four
+ * consecutive words, skipping the first (the UI strips "Q.12"-style labels),
+ * image tokens and markdown; numbers and punctuation in between may differ.
+ */
 function stemMatcher(text: string): RegExp {
     const words = String(text || '')
-        .replace(/<[^>]+>|\[[^\]]*\]\([^)]*\)|[*_`#>|]/g, ' ')
-        .split(/[^A-Za-z0-9]+/)
-        .filter(w => w.length > 1)
-        .slice(0, 5);
-    return new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^A-Za-z0-9]+'), 'i');
+        .replace(/\[\[[^\]]*\]\]|<[^>]+>|!?\[[^\]]*\]\([^)]*\)|[*_`#>|]/g, ' ')
+        .split(/[^A-Za-z]+/)
+        .filter(w => w.length >= 3 && !/^(question|img)$/i.test(w));
+    const pick = words.length > 5 ? words.slice(1, 5) : words.slice(0, 4);
+    return new RegExp(pick.join('[^A-Za-z]+'), 'i');
 }
 
 /** The option cards of the open question (letter badge first, then text). */
