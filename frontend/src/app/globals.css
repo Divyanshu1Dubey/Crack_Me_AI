@@ -482,17 +482,24 @@ body {
    Maps old class names to new design tokens
    ========================================== */
 
-.glass-card {
-  background: var(--glass-bg);
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius) + 2px);
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 30px rgba(15, 33, 47, 0.08);
-}
+/* @layer components (the card shimmer further down too): utilities on a
+   glass card win. Unlayered, the `border` shorthand flattened every
+   `border-l-4 border-l-pink-500` accent stripe to 1px grey, made
+   `border-dashed` solid, dropped `rounded-2xl` / `shadow-md` / `bg-card/85`,
+   and `position: relative` kept the AI Tutor composer from being `sticky`. */
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--color-border);
+    border-radius: calc(var(--radius) + 2px);
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(15, 33, 47, 0.08);
+  }
 
-.glass-card:hover {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  .glass-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
 }
 
 .gradient-text {
@@ -573,6 +580,16 @@ body {
     width: 100%;
     font-size: 14px;
     transition: border-color 0.2s ease;
+  }
+
+  /* A <select> centres its text in the content box, so the 10px vertical
+     padding plus a height utility (`h-9`) left ~14px for the line and
+     clipped the option text. Height instead of padding: same 43px as the
+     text inputs, and a height utility on the select still wins. */
+  select.input-field {
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 2.6875rem;
   }
 
   .input-field:focus {
@@ -920,58 +937,62 @@ body {
 /* Smooth scroll */
 html { scroll-behavior: smooth; }
 
-/* Stat card */
-.stat-card {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 20px;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-}
+/* Stat cards and badges are @layer components, like the buttons: a badge's
+   own `block w-fit` / `text-xs` or a card's padding utility wins. */
+@layer components {
+  /* Stat card */
+  .stat-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
 
-.stat-card:hover {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
+  .stat-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
 
-/* Badge */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
 
-.badge-easy {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-}
+  .badge-easy {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+  }
 
-[data-theme="dark"] .badge-easy {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-}
+  [data-theme="dark"] .badge-easy {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
 
-.badge-medium {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
-}
+  .badge-medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+  }
 
-[data-theme="dark"] .badge-medium {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-}
+  [data-theme="dark"] .badge-medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+  }
 
-.badge-hard {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-}
+  .badge-hard {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+  }
 
-[data-theme="dark"] .badge-hard {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  [data-theme="dark"] .badge-hard {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
 }
 
 /* Sidebar — production grade */
@@ -997,57 +1018,64 @@ html { scroll-behavior: smooth; }
   box-shadow: 1px 0 0 var(--color-border), 4px 0 24px rgba(2, 6, 23, 0.06);
 }
 
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  margin: 0 8px;
-  border-radius: 12px;
-  color: var(--color-muted-foreground);
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
-  border: 1px solid transparent;
-  text-decoration: none;
-  font-size: 14px;
-  position: relative;
-}
-.sidebar-link:focus-visible {
-  outline: 2px solid var(--color-ring);
-  outline-offset: 2px;
-}
+/* Sidebar links are @layer components so utilities on a link win: the
+   Sign Out button's `text-destructive` / `hover:bg-destructive/10` were
+   beaten by this rule and rendered grey. The drawer and tablet-rail
+   overrides below stay unlayered on purpose (they must beat utilities). */
+@layer components {
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin: 0 8px;
+    border-radius: 12px;
+    color: var(--color-muted-foreground);
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    border: 1px solid transparent;
+    text-decoration: none;
+    font-size: 14px;
+    position: relative;
+  }
+  .sidebar-link:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 
-.sidebar-link:hover {
-  color: var(--color-foreground);
-  background: color-mix(in srgb, var(--color-accent) 78%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
-  transform: translateX(2px);
-}
+  .sidebar-link:hover {
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-accent) 78%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+    transform: translateX(2px);
+  }
 
-.sidebar-link.active {
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  font-weight: 600;
-}
+  .sidebar-link.active {
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+    font-weight: 600;
+  }
 
-/* Active accent stripe — adds a 3px primary bar on the leading edge
-   of the active route, like Linear / Vercel sidebars. */
-.sidebar-link.active::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 60%;
-  background: var(--color-primary);
-  border-radius: 0 3px 3px 0;
+  /* Active accent stripe — adds a 3px primary bar on the leading edge
+     of the active route, like Linear / Vercel sidebars. */
+  .sidebar-link.active::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: var(--color-primary);
+    border-radius: 0 3px 3px 0;
+  }
 }
 
 .main-content {
   margin-left: 260px;
   padding: 20px;
-  padding-bottom: 36px;
+  /* --floating-dock-reserve: see the floating dock rules below. */
+  padding-bottom: max(36px, var(--floating-dock-reserve, 0px));
   min-height: 100vh;
 }
 
@@ -1104,6 +1132,31 @@ html { scroll-behavior: smooth; }
   body.floating-dock-visible:not(:has(.main-content)),
   body.floating-dock-visible:has(> footer) {
     padding-bottom: 5rem;
+  }
+}
+
+/* Tablets, pages without the shell (the immersive /questions/practice): the
+   48px button sits 24px up, over the right end of a full-width row such as
+   Previous / Next. Wide screens centre those columns away from the button. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  body.floating-dock-visible:not(:has(.main-content)) {
+    padding-bottom: 5.5rem;
+  }
+}
+
+/* Wider screens: the dock sits 24px from the bottom (the 48px Ask-AI button
+   below 1024px, plus the flashcard button above it from 1024px), while
+   .main-content ends with only 16-36px of padding, so the last row of a
+   page (pagination, a card's action) stayed under the buttons. While the
+   buttons are on screen, .main-content's bottom padding grows to clear them. */
+@media (min-width: 641px) {
+  body.floating-dock-visible {
+    --floating-dock-reserve: 5.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  body.floating-dock-visible {
+    --floating-dock-reserve: 8.5rem;
   }
 }
 
@@ -1298,6 +1351,7 @@ html { scroll-behavior: smooth; }
   .main-content {
     margin-left: 72px;
     padding: 16px;
+    padding-bottom: max(16px, var(--floating-dock-reserve, 0px));
   }
   /* Logo only: the wordmark and card padding do not fit the 72px rail. */
   .sidebar .sidebar-brand {
@@ -1408,14 +1462,18 @@ html { scroll-behavior: smooth; }
     scroll-behavior: auto !important;
   }
 }
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-muted-foreground);
-  padding: 0 20px;
-  margin-bottom: 4px;
+/* @layer components: a heading's own `mb-4` (Tests page sections) or the
+   sidebar's `mb-1.5` used to lose to this rule's 4px margin. */
+@layer components {
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+    padding: 0 20px;
+    margin-bottom: 4px;
+  }
 }
 
 /* AI Response Styling — Tailwind 4 compatible.
@@ -2263,21 +2321,24 @@ html { scroll-behavior: smooth; }
   opacity: 1;
 }
 
-/* Glass card shimmer on hover */
-.glass-card {
-  position: relative;
-  overflow: hidden;
-}
-.glass-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.02) 50%, transparent 70%);
-  transform: translateX(-100%);
-  transition: transform 0.6s ease;
-}
-.glass-card:hover::after {
-  transform: translateX(100%);
+/* Glass card shimmer on hover (same layer as the base .glass-card rule) */
+@layer components {
+  .glass-card {
+    position: relative;
+    overflow: hidden;
+  }
+  .glass-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.02) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+  }
+  .glass-card:hover::after {
+    transform: translateX(100%);
+  }
 }
 
 

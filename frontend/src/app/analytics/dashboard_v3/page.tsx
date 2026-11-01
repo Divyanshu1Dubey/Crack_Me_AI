@@ -41,9 +41,12 @@ export default function DashboardV3Page() {
     return () => { alive = false; };
   }, [ready, reloadKey]);
 
+  // The route layout wraps the page in AppShell, whose .page-container
+  // already pads it and sits inside the root layout's main landmark: plain
+  // divs, no second landmark and no own padding there.
   if (err) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-6 text-foreground">
+      <div className="mx-auto max-w-6xl px-4 py-6 [.page-container_&]:p-0 text-foreground">
         <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
           <p className="text-destructive">{err}</p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -59,14 +62,14 @@ export default function DashboardV3Page() {
             </Link>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
-  if (!d) return <p className="p-6 text-muted-foreground">Loading dashboard…</p>;
+  if (!d) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Loading dashboard…</p>;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 text-foreground">
-      <h1 className="text-2xl font-semibold">Analytics — Phase 3</h1>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 [.page-container_&]:p-0 text-foreground">
+      <h1 className="text-2xl font-semibold">Analytics Dashboard</h1>
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card title="Accuracy"
@@ -134,11 +137,11 @@ export default function DashboardV3Page() {
             </li>
           ))}
           {(d.revision_progress?.topics || []).length === 0 ? (
-            <p className="text-muted-foreground text-xs">No revision data yet.</p>
+            <li className="text-muted-foreground text-xs">No revision data yet.</li>
           ) : null}
         </ul>
       </section>
-    </main>
+    </div>
   );
 }
 

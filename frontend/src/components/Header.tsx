@@ -8,7 +8,6 @@ import useSWR from 'swr';
 import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone, Smartphone } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
@@ -17,16 +16,14 @@ import { Button } from '@/components/ui/button';
 import { usePWA } from '@/components/PWAProvider';
 import { useSidebar } from '@/context/SidebarContext';
 import { getPageTitle } from '@/lib/appShellRoutes';
+import { isUnmeteredAi, type TokenWallet } from '@/hooks/useTokenWallet';
+import { UsageBanner } from '@/components/paywall/UsageBanner';
+import { isUsageBannerRoute } from '@/lib/paywall/usageBannerRoutes';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
   loading: () => <div className="p-2 w-8 h-8" />,
 });
-
-interface TokenInfo {
-  available: number;
-  is_admin: boolean;
-}
 
 interface Announcement {
   id: number;
@@ -43,7 +40,10 @@ export default function Header() {
   // 38px wide, >=1025px only) sits over the header's left edge.
   const { desktopOpen } = useSidebar();
   const { data: tokenRes } = useSWR(user ? '/auth/tokens/' : null, () => authAPI.getTokenBalance().then(r => r.data), { refreshInterval: 60000 });
-  const tokenInfo = tokenRes as TokenInfo | undefined;
+  const tokenInfo = tokenRes as TokenWallet | undefined;
+  // Admins/staff and unlimited-AI plans are never charged (contract C12):
+  // their pill says "Unlimited" instead of a balance that does not apply.
+  const unmeteredAi = isUnmeteredAi(tokenInfo, user);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState<Announcement[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -197,6 +197,7 @@ export default function Header() {
     ? `User settings for ${user.first_name || user.username}`
     : 'User settings';
   const pageTitle = getPageTitle(pathname);
+  const showUsageBanner = isUsageBannerRoute(pathname);
 
   // Breakpoints: the floating menu button (globals.css) shows up to 768px
   // inclusive, so the 40px reserve and compact brand stay until 769px; the
@@ -206,6 +207,9 @@ export default function Header() {
   // an sm/md/lg/xl class on the same property: Tailwind emits the arbitrary
   // px variant first, so the named breakpoint wins (hence max-[769px] /
   // max-sm below).
+  // Phones (<640px) show no brand here: the round logo that sat after the
+  // menu button was half covered by the search button at 390px, and the
+  // menu drawer opens on the full BrandMark anyway.
   return (
     <>
       <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl min-[769px]:gap-3 min-[769px]:px-6 min-h-16">
@@ -213,11 +217,6 @@ export default function Header() {
       <div className={`flex min-w-0 items-center gap-2 pl-10 min-[769px]:gap-3 min-[769px]:pl-0 ${desktopOpen ? '' : 'min-[1025px]:pl-5'}`}>
         <div className="hidden shrink-0 sm:max-[769px]:block">
           <BrandMark href="/dashboard" compact showTagline={false} />
-        </div>
-        <div className="shrink-0 sm:hidden">
-          <Link href="/dashboard" aria-label="Home" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card/90 overflow-hidden shadow-sm">
-            <Image src="/cms-circle-logo.png" alt="CrackCMS logo" width={28} height={28} className="object-cover" />
-          </Link>
         </div>
         <div className="hidden h-9 w-1 shrink-0 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 min-[769px]:block" />
         <div className="hidden min-w-0 min-[769px]:block">
@@ -244,16 +243,17 @@ export default function Header() {
           <Search className="h-4 w-4" />
         </button>
 
-        {/* Token balance */}
+        {/* Token balance ("Unlimited" for admins/staff and unlimited-AI plans) */}
         {tokenInfo && (
           <Link
             href="/tokens"
-            aria-label={tokenInfo.is_admin ? 'AI tokens (admin)' : `${tokenInfo.available} AI tokens`}
+            aria-label={unmeteredAi ? 'AI tokens: unlimited' : `${tokenInfo.available ?? 0} AI tokens`}
+            title={unmeteredAi ? 'Unlimited AI use' : undefined}
             className="flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:border-amber-500/30 lg:px-3"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             <span className="hidden text-sm font-semibold text-amber-700 dark:text-amber-400 lg:inline">
-              {tokenInfo.is_admin ? 'Admin' : `${tokenInfo.available} Tokens`}
+              {unmeteredAi ? 'Unlimited' : `${tokenInfo.available ?? 0} Tokens`}
             </span>
           </Link>
         )}
@@ -372,11 +372,12 @@ export default function Header() {
           </Button>
         </div>
 
-        {/* Exam switcher: short exam code on phones, exam name from sm. */}
+        {/* Exam switcher: the exam name (UPSC CMS / NEET PG / INI-CET) from
+            380px, a short code on narrower phones. */}
         <ExamSwitcher compact />
 
         {/* Theme. On phones the toggle lives in the menu drawer (Sidebar),
-            so the logo, search, tokens, bell, exam and avatar fit at 360px. */}
+            so search, tokens, bell, exam name and avatar fit at 380px. */}
         <div className="hidden shrink-0 sm:block">
           <ThemeToggle />
         </div>
@@ -409,6 +410,10 @@ export default function Header() {
         )}
       </div>
     </header>
+      {/* Free-usage banner, directly under the header bar (the only place it
+          renders: PaywallRoot no longer does). It renders nothing for
+          premium, admin and logged-out users, or once dismissed. */}
+      {showUsageBanner ? <UsageBanner /> : null}
       {/* Outside <header>: its backdrop-filter makes it the containing block
           for fixed descendants, which squeezed the dialog's full-screen
           overlay into the 64px header bar. */}

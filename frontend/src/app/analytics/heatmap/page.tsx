@@ -53,19 +53,22 @@ export default function HeatmapPage() {
     return () => { alive = false; };
   }, [ready]);
 
-  if (err) return <p role="alert" className="p-6 text-destructive">{err}</p>;
-  if (!data) return <p className="p-6 text-muted-foreground">Loading heatmap…</p>;
+  // The route layout wraps the page in AppShell, whose .page-container
+  // already pads it and sits inside the root layout's main landmark: plain
+  // divs, no second landmark and no own padding there.
+  if (err) return <p role="alert" className="p-6 [.page-container_&]:px-0 text-destructive">{err}</p>;
+  if (!data) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Loading heatmap…</p>;
   const subjects = Object.keys(data);
   if (subjects.length === 0) {
     return (
-      <main className="p-4 sm:p-6 text-foreground">
+      <div className="p-4 sm:p-6 [.page-container_&]:p-0 text-foreground">
         <h1 className="mb-3 text-2xl font-semibold">Heatmap</h1>
         <p className="text-sm text-muted-foreground">Not enough practice data yet.</p>
-      </main>
+      </div>
     );
   }
   return (
-    <main className="p-4 sm:p-6 text-foreground">
+    <div className="p-4 sm:p-6 [.page-container_&]:p-0 text-foreground">
       <h1 className="mb-3 text-2xl font-semibold">Subject × Day-of-week heatmap</h1>
       <p className="mb-4 text-sm text-muted-foreground">Accuracy (%) by subject and weekday. Darker = higher accuracy.</p>
       <div className="overflow-x-auto">
@@ -100,6 +103,6 @@ export default function HeatmapPage() {
           </tbody>
         </table>
       </div>
-    </main>
+    </div>
   );
 }

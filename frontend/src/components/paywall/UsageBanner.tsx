@@ -1,9 +1,11 @@
 'use client';
 
 /**
- * UsageBanner (Task 8) — sticky amber banner at top of /questions, /tests,
- * /ai-tutor for free users. Shows remaining AI chats today + a CTA to
- * /subscription. Dismissable per session via localStorage.
+ * UsageBanner (Task 8) — amber card for free users, directly under the
+ * header bar: <Header> renders it on /questions, /tests, /simulator and
+ * /ai-tutor (lib/paywall/usageBannerRoutes.ts). Shows the AI chats used
+ * today + a CTA to /subscription. Dismissable via localStorage (and
+ * sessionStorage).
  */
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
@@ -22,11 +24,26 @@ interface UsageBannerProps {
 const STORAGE_KEY = 'crackcms:paywall:banner:dismissed';
 const SESSION_KEY = 'crackcms:paywall:banner:dismissed:session';
 
+// Storage can be missing or throw (private mode, blocked site data): the
+// banner then simply shows, and dismissing it still hides it for this view.
 function readDismissed(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(
-    sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(STORAGE_KEY),
-  );
+  try {
+    return Boolean(
+      window.sessionStorage.getItem(SESSION_KEY) || window.localStorage.getItem(STORAGE_KEY),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function writeDismissed(): void {
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, '1');
+    window.localStorage.setItem(STORAGE_KEY, '1');
+  } catch {
+    /* storage unavailable: dismissed for this render tree only */
+  }
 }
 
 export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: UsageBannerProps) {
@@ -40,8 +57,7 @@ export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: Usage
 
   const dismiss = useCallback(() => {
     if (typeof window === 'undefined') return;
-    sessionStorage.setItem(SESSION_KEY, '1');
-    localStorage.setItem(STORAGE_KEY, '1');
+    writeDismissed();
     setNonce(1);
   }, []);
 
@@ -64,30 +80,38 @@ export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: Usage
   const remaining = Math.max(0, cap - usedToday);
   const isDepleted = remaining === 0;
 
+  // Dark text on the light tint, light text on the dark tint: the banner
+  // used rose-100 / amber-100 text in both themes (unreadable in light mode).
+  // A rounded card the width of the header card above it (both sit in
+  // .main-content). Phones (<640px) drop the icon and the second clause,
+  // which wrapped the card over several lines; the Subscribe button stays.
   return (
     <div
-      className={`w-full ${isDepleted ? 'bg-rose-500/15 border-rose-500/40 text-rose-100'
-        : 'bg-amber-500/10 border-amber-500/30 text-amber-100'}
-        border-b backdrop-blur-sm`}
+      className={`mb-4 w-full rounded-xl border ${isDepleted
+        ? 'bg-rose-500/15 border-rose-500/40 text-rose-900 dark:text-rose-100'
+        : 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-100'}
+        backdrop-blur-sm`}
       role="region"
       aria-label="Free usage status"
     >
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2 text-sm">
-        <Sparkles size={16} aria-hidden="true" className="shrink-0" />
-        <p className="flex-1">
+      <div className="flex items-center gap-2 px-3 py-2 text-sm sm:gap-3 sm:px-4">
+        <Sparkles size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
+        <p className="min-w-0 flex-1">
           {isDepleted ? (
             <>
-              You&rsquo;ve used all <strong>{cap}/{cap}</strong> AI chats today. Subscribe for unlimited AI Tutor →
+              You&rsquo;ve used all <strong>{cap}/{cap}</strong> AI chats today.
+              <span className="hidden sm:inline"> Subscribe to remove the daily limit →</span>
             </>
           ) : (
             <>
-              <strong>{usedToday}/{cap}</strong> AI chats used today · Unlock all features from just ₹129/month →
+              <strong>{usedToday}/{cap}</strong> AI chats used today
+              <span className="hidden sm:inline"> · Unlock all features from just ₹129/month →</span>
             </>
           )}
         </p>
         <Link
           href="/subscription"
-          className="rounded-md bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-3 py-1 text-xs"
+          className="shrink-0 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-3 py-1 text-xs"
         >
           Subscribe
         </Link>
@@ -95,9 +119,9 @@ export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: Usage
           type="button"
           aria-label="Dismiss banner"
           onClick={dismiss}
-          className="ml-1 rounded-md p-1 text-current/70 hover:bg-white/10"
+          className="ml-1 shrink-0 rounded-md p-1.5 opacity-70 transition hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
         >
-          <X size={14} />
+          <X size={14} aria-hidden="true" />
         </button>
       </div>
     </div>

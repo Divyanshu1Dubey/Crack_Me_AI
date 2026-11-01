@@ -59,7 +59,7 @@ export default function ExamSwitcher({ compact = false }: { compact?: boolean })
     return (
       <div
         aria-hidden="true"
-        className={`h-9 rounded-xl bg-muted animate-pulse ${compact ? 'w-14 sm:w-[5.5rem]' : 'w-[140px]'}`}
+        className={`h-9 rounded-xl bg-muted animate-pulse ${compact ? 'w-14 min-[380px]:w-[5.5rem]' : 'w-[140px]'}`}
       />
     );
   }
@@ -76,7 +76,9 @@ export default function ExamSwitcher({ compact = false }: { compact?: boolean })
 
   if (compact) {
     // Header variant: the trigger itself is the pill, sized to its label
-    // (a fixed 36px trigger showed only "U..."). Phones get a short code.
+    // (a fixed 36px trigger showed only "U..."). The exam name fits the
+    // phone header from 380px (390px phones included); only narrower
+    // screens get the short code. Keep both spans on one breakpoint.
     return (
       <Select value={value} onValueChange={handleExamChange}>
         <SelectTrigger
@@ -85,8 +87,8 @@ export default function ExamSwitcher({ compact = false }: { compact?: boolean })
           className="h-9 w-auto shrink-0 gap-1 whitespace-nowrap rounded-xl border-border/80 bg-muted/70 px-2 py-0 text-[11px] font-semibold text-foreground shadow-none transition-colors hover:bg-accent focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-ring [&>svg]:h-3.5 [&>svg]:w-3.5"
         >
           <SelectValue>
-            <span className="sm:hidden">{EXAM_CODES[value]}</span>
-            <span className="hidden sm:inline">{EXAM_LABELS[value]}</span>
+            <span className="min-[380px]:hidden">{EXAM_CODES[value]}</span>
+            <span className="hidden min-[380px]:inline">{EXAM_LABELS[value]}</span>
           </SelectValue>
         </SelectTrigger>
         {options}

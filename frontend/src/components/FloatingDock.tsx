@@ -1,13 +1,30 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useDock } from '@/context/DockContext';
 import { useAuth } from '@/lib/auth';
 import { isFloatingDockHiddenRoute } from '@/lib/appShellRoutes';
-import { MessageSquare, Layers, X, Send, Save } from 'lucide-react';
+import { dockErrorNotice, parseDockReply, EMPTY_REPLY_TEXT, type DockCitation, type DockNotice } from '@/lib/dockChat';
+import { MessageSquare, Layers, X, Send, Save, WifiOff, BookOpen } from 'lucide-react';
 import { Button } from './ui/button';
 import api from '@/lib/api';
+
+// Replies are markdown. The renderer (react-markdown) loads on demand, so it
+// is not in the bundle every page ships; it is fetched when the panel opens.
+const ReplyMarkdown = dynamic(() => import('@/components/FloatingDockReply'), {
+  ssr: false,
+  loading: () => <p className="text-xs text-muted-foreground">Loading reply…</p>,
+});
+
+const NOTICE_CLASSES: Record<DockNotice['kind'], string> = {
+  unavailable: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+  limit: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+  upgrade: 'border-primary/30 bg-primary/10 text-foreground',
+  error: 'border-destructive/30 bg-destructive/10 text-destructive',
+};
 
 export function FloatingDock() {
   const { activePanel, setActivePanel, contextQuestionId, selectedText, setSelectedText } = useDock();
@@ -15,6 +32,12 @@ export function FloatingDock() {
   const pathname = usePathname();
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
+  // Offline extract (no AI model, not charged) and its textbook sources.
+  const [aiOffline, setAiOffline] = useState(false);
+  const [aiCitations, setAiCitations] = useState<DockCitation[]>([]);
+  // Outage / limit / upgrade message. Never stored as the reply, so it can
+  // not be rated or saved as a flashcard's back.
+  const [aiNotice, setAiNotice] = useState<DockNotice | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Both actions call login-only endpoints, so anonymous visitors (and the
@@ -33,17 +56,40 @@ export function FloatingDock() {
     return () => document.body.classList.remove('floating-dock-visible');
   }, [activePanel, hidden]);
 
+  // Fetch the reply renderer while the user types (same chunk as ReplyMarkdown).
+  useEffect(() => {
+    if (activePanel === 'ask-ai') import('@/components/FloatingDockReply').catch(() => { /* loads on render */ });
+  }, [activePanel]);
+
+  const clearReply = () => {
+    setAiResponse('');
+    setAiOffline(false);
+    setAiCitations([]);
+  };
+
   const handleAskAI = async () => {
-    if (!aiQuery.trim()) return;
+    if (!aiQuery.trim() || loading) return;
     setLoading(true);
+    setAiNotice(null);
     try {
       const res = await api.post('/questions/chat/', {
         message: aiQuery,
         context_question_id: contextQuestionId
       });
-      setAiResponse(res.data.reply || 'No response generated.');
-    } catch (e: any) {
-      setAiResponse('Error connecting to AI.');
+      const reply = parseDockReply(res.data);
+      if (reply) {
+        setAiResponse(reply.text);
+        setAiOffline(reply.offline);
+        setAiCitations(reply.citations);
+      } else {
+        clearReply();
+        setAiNotice({ kind: 'error', text: EMPTY_REPLY_TEXT });
+      }
+    } catch (err: unknown) {
+      // 503 ai_unavailable (not charged), 402 upgrade_required (api.ts also
+      // opens the upgrade modal), 429 token / rate limits, network errors.
+      clearReply();
+      setAiNotice(dockErrorNotice(err));
     } finally {
       setLoading(false);
     }
@@ -83,13 +129,15 @@ export function FloatingDock() {
         >
           <MessageSquare className="h-5 w-5" aria-hidden="true" />
         </Button>
-        {/* Phones get the AI button only: the stacked pair covered the right
-            edge of cards, and select-then-tap does not work well on touch. */}
+        {/* Phones and tablets get the AI button only: the stacked pair covered
+            the right edge of cards and the exam-mode "Palette" button
+            (bottom-20, below lg), and select-then-tap does not work well on
+            touch. Keep in step with --floating-dock-reserve in globals.css. */}
         <Button
           variant="secondary"
           size="icon"
           aria-label="Create flashcard from selected text"
-          className="hidden sm:inline-flex rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="hidden lg:inline-flex rounded-full shadow-lg h-11 w-11 sm:h-12 sm:w-12 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           onClick={() => {
             const selection = window.getSelection()?.toString();
             if (selection) {
@@ -130,6 +178,7 @@ export function FloatingDock() {
               </div>
             )}
             <textarea
+              aria-label="Your question for the AI assistant"
               className="w-full bg-background border rounded-md p-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
               rows={3}
               placeholder="Ask anything..."
@@ -139,11 +188,45 @@ export function FloatingDock() {
             <Button onClick={handleAskAI} disabled={loading} className="w-full">
               {loading ? 'Thinking...' : 'Send'} <Send className="w-4 h-4 ml-2" />
             </Button>
+            {aiNotice && (
+              <div role="status" className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${NOTICE_CLASSES[aiNotice.kind]}`}>
+                <p>{aiNotice.text}</p>
+                {aiNotice.href && aiNotice.linkLabel && (
+                  <Link
+                    href={aiNotice.href}
+                    onClick={() => setActivePanel('none')}
+                    className="mt-1 inline-block font-semibold underline underline-offset-2"
+                  >
+                    {aiNotice.linkLabel}
+                  </Link>
+                )}
+              </div>
+            )}
             {aiResponse && (
               <div className="mt-4 flex flex-col gap-2">
-                <div className="text-sm bg-muted/30 p-3 rounded-lg whitespace-pre-wrap border border-border/50">
-                  {aiResponse}
+                {aiOffline && (
+                  <p className="inline-flex w-fit items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                    <WifiOff className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    Offline answer · textbook library, no AI model · not charged
+                  </p>
+                )}
+                <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
+                  <ReplyMarkdown text={aiResponse} />
                 </div>
+                {aiCitations.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <p className="mb-1 flex items-center gap-1 font-semibold text-foreground">
+                      <BookOpen className="h-3 w-3" aria-hidden="true" /> Sources
+                    </p>
+                    <ul className="space-y-0.5 break-words">
+                      {aiCitations.map((c, i) => (
+                        <li key={`${c.book}-${c.page}-${i}`}>
+                          {c.book}{c.page ? ` · p. ${c.page}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
                     api.post('/ai/feedback/', { query: aiQuery, response_text: aiResponse, is_helpful: true })

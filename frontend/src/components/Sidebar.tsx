@@ -378,9 +378,10 @@ export default function Sidebar() {
                                                             {item.badge}
                                                         </span>
                                                     )}
-                                                    {/* No chevron next to the lock: both together clipped
-                                                        "Question Generator" when it was the active page. */}
-                                                    {isActive && !showLock && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
+                                                    {/* No chevron next to the lock or the AI badge: either
+                                                        one plus the chevron clipped "Question Generator"
+                                                        to "Question Genera..." on its own page. */}
+                                                    {isActive && !showLock && !item.badge && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
                                                 </Link>
                                             );
                                         })}
@@ -444,11 +445,14 @@ export default function Sidebar() {
                             <span className="sidebar-label text-sm">Sign In</span>
                         </Link>
                     ) : (
+                        // Red text/hover from the utilities: .sidebar-link sits in
+                        // @layer components (globals.css), so they now apply; the
+                        // unlayered rule used to turn Sign Out grey.
                         <button
                             onClick={handleLogout}
                             aria-label="Sign out"
                             title="Sign out"
-                            className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                            className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25"
                         >
                             <LogOut className="w-5 h-5 shrink-0" />
                             <span className="sidebar-label text-sm">Sign Out</span>

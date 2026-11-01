@@ -13,8 +13,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
+import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth';
 
 export default function IngestionLayout({
@@ -43,15 +42,11 @@ export default function IngestionLayout({
     );
   }
 
-  // App shell: the same markup as the per-page pattern (Sidebar + Header),
-  // so every ingestion page has the app navigation and the mobile menu.
+  // The shared app shell (Sidebar + Header, contract C6), so every
+  // ingestion page has the app navigation and the mobile menu.
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <div className="main-content">
-        <Header />
-        <div className="page-container ingestion-admin">{children}</div>
-      </div>
-    </div>
+    <AppShell>
+      <div className="ingestion-admin">{children}</div>
+    </AppShell>
   );
 }

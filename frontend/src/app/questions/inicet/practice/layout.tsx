@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
+import { INI_CET_QUESTION_COUNT } from "@/lib/bankStats";
 
+// The bank is a set of exam recalls (mostly 2025), sized in lib/bankStats;
+// the page filters by year and subject (no institute filter).
 export const metadata: Metadata = {
     title: "INI-CET Question Bank — Practice Previous Year Papers | CrackLabs",
     description:
-        "Practice 2,500+ INI-CET previous-year questions (2018-2025) with image-based drills, AI explanations, bookmarks, and spaced-repetition flashcards. Filter by institute, year, subject.",
+        `Practice INI-CET recall questions (${INI_CET_QUESTION_COUNT} in the bank) with AI explanations, bookmarks, and spaced-repetition flashcards. Filter by year and subject.`,
     keywords: [
         "INI-CET",
         "INI-CET question bank",
@@ -16,7 +19,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: "INI-CET Question Bank — CrackLabs",
         description:
-            "Practice the full INI-CET previous-year bank with image-based drills and AI explanations.",
+            "Practice the INI-CET recall bank with AI explanations and bookmarks.",
         url: "https://cracklabs.app/questions/inicet/practice",
         siteName: "CrackLabs",
         type: "website",
@@ -25,7 +28,7 @@ export const metadata: Metadata = {
         card: "summary_large_image",
         title: "INI-CET Question Bank — CrackLabs",
         description:
-            "Practice 2,500+ INI-CET PYQs with AI explanations and image-based drills.",
+            `Practice ${INI_CET_QUESTION_COUNT} INI-CET recall questions with AI explanations.`,
     },
     alternates: {
         canonical: "https://cracklabs.app/questions/inicet/practice",
