@@ -147,7 +147,8 @@ class ScholarshipPlanHolderTests(TestCase):
         self.assert_untouched(user)
 
     def test_a_legacy_lifetime_member_is_refused_too(self):
-        user = _user('w3blegacy', is_subscribed=True)  # grandfathered: no Subscription rows
+        user = _user('w3blegacy', is_subscribed=True)
+        Subscription.objects.create(user=user, plan='legacy', status='active', expires_at=None)  # lifetime
         client = _client(user)
         self.assert_refused(client.post(START))
         self.assert_refused(self.verify(client, user))

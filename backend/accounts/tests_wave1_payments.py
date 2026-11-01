@@ -6,7 +6,8 @@ provider (accounts.payments_mock: same HMAC scheme as Razorpay, no network).
 ACC-12  claim + activation are one transaction; replays report the real state;
         orders stranded by the old non-atomic code are recovered
 ACC-15  a stacked purchase extends from the LATEST live expiry
-ACC-08  grandfathered lifetime users keep premium after buying a dated plan
+ACC-08  a lifetime row outlives a stacked dated plan; a bare is_subscribed flag
+        (no row; set by the removed unpaid endpoint) is never turned into one
 ACC-22  the cached subscription status is invalidated on every change
 ACC-23  admin grants reject unknown plans
 ACC-19  no "complete your checkout" mail at order time; plan-specific receipt
@@ -225,19 +226,29 @@ class StackingAndLifetimeTests(TestCase):
         # Used to end on the same day as month1 (stacked on the 1-year row).
         self.assertEqual(month2.expires_at, month1.expires_at + timedelta(days=30))
 
-    def test_grandfathered_lifetime_user_keeps_premium_after_a_dated_plan(self):
+    def test_a_bare_flag_is_not_turned_into_a_lifetime_plan_by_a_dated_purchase(self):
+        # The removed unpaid /auth/subscribe/ endpoint left exactly this state
+        # (flag, no Subscription row). A Rs 129 month used to add a lifetime
+        # 'legacy' row with unlimited AI next to it.
         User.objects.filter(pk=self.user.pk).update(is_subscribed=True)
         self.user.refresh_from_db()
         monthly = Subscription.activate_from_payment(self.user, '1_month', 129)
-        legacy = Subscription.objects.get(user=self.user, plan='legacy')
-        self.assertIsNone(legacy.expires_at)
+        self.assertEqual(list(Subscription.objects.filter(user=self.user)), [monthly])
+        self.assertFalse(Subscription.get_active_subscription(self.user).unlimited_ai)
 
         Subscription.objects.filter(pk=monthly.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
-        active = Subscription.get_active_subscription(self.user)
-        self.assertEqual(active.pk, legacy.pk)
+        self.assertIsNone(Subscription.get_active_subscription(self.user))
         self.user.refresh_from_db()
-        self.assertTrue(self.user.is_subscribed)
+        self.assertFalse(self.user.is_subscribed)
 
+        from accounts.utils import is_premium
+        self.assertFalse(is_premium(self.user))
+
+    def test_a_real_legacy_row_still_outlives_a_dated_plan(self):
+        legacy = Subscription.activate_from_payment(self.user, 'legacy', 199)
+        monthly = Subscription.activate_from_payment(self.user, '1_month', 129)
+        Subscription.objects.filter(pk=monthly.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertEqual(Subscription.get_active_subscription(self.user).pk, legacy.pk)
         from accounts.utils import is_premium
         self.assertTrue(is_premium(self.user))
 

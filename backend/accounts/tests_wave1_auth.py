@@ -312,7 +312,12 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
         self.assertEqual(r.data['code'], 'device_inactive')
 
     def test_subscribed_user_gets_four_devices(self):
-        User.objects.filter(pk=self.user.pk).update(is_subscribed=True)
+        # An active plan (Subscription row); the bare is_subscribed flag no
+        # longer decides it (tests_z4_auth_hardening).
+        from accounts.models import Subscription
+        Subscription.objects.create(
+            user=self.user, plan='1_month', status='active', expires_at=timezone.now() + timedelta(days=20),
+        )
         for i in range(4):
             self.assertEqual(self.client_for(f'dev_device{i:08d}_x').get('/api/auth/tokens/').status_code, 200)
         r = self.client_for('dev_device00000004_x').get(self.PROBE)
@@ -343,6 +348,9 @@ class DeviceLimitTests(_SupabaseAuthTestCase):
         self.assertEqual(r.data['code'], 'device_limit_reached')
 
     def test_requests_without_or_with_spoofed_device_header_are_not_enrolled(self):
+        # These fake tokens carry no Supabase session id (real access tokens
+        # always do, and are then counted per session even without the
+        # header: tests_z4_auth_hardening.SessionBoundDeviceTests).
         self.assertEqual(self.bearer('tok-dev', self.payload).get('/api/auth/tokens/').status_code, 200)
         self.assertEqual(self.client_for('1').get('/api/auth/tokens/').status_code, 200)
         self.assertFalse(UserDevice.objects.filter(user=self.user).exists())

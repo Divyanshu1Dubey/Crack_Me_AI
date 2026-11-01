@@ -591,11 +591,12 @@ class SubscriptionWorkflowTests(TestCase):
     # ── SubscriptionStatusView response shape (B6 fix) ───────────────
 
     def test_legacy_user_status_has_full_shape(self):
-        """PR-A B6: legacy (user.is_subscribed=True but no Subscription row)
-        must return a serialized subscription stub with all required fields."""
-        # Make user look like a legacy/lifetime user
-        self.user.is_subscribed = True
-        self.user.save()
+        """PR-A B6: a legacy lifetime member must get a serialized subscription
+        with all required fields. (Such members have a real 'legacy' row: a
+        bare is_subscribed flag no longer counts, see accounts.0026.)"""
+        from .models import Subscription
+
+        Subscription.activate_from_payment(user=self.user, plan='legacy', amount_paid=199.00)
 
         self.client.force_login(self.user)
         resp = self.client.get(reverse('subscribe_status'))

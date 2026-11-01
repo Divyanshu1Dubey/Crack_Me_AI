@@ -8,7 +8,7 @@ Admin users bypass token limits.
 import logging
 
 from django.contrib.auth import get_user_model
-from rest_framework import generics, permissions, status
+from rest_framework import exceptions, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
@@ -83,10 +83,56 @@ class LoginView(APIView):
         )
 
 
+def _requests_username_change(request) -> bool:
+    """A PUT / PATCH whose body sets a username other than the caller's current one."""
+    if request.method not in ('PUT', 'PATCH'):
+        return False
+    data = request.data
+    if not hasattr(data, 'get') or 'username' not in data:
+        return False
+    value = data.get('username')
+    current = getattr(request.user, 'username', None) or ''
+    # UserSerializer trims the value and accepts an unchanged one as is.
+    return not (isinstance(value, str) and value.strip() == current)
+
+
+class _UsernameChangeThrottle(UserRateThrottle):
+    """Username changes -- and attempts at one -- per account: 10 an hour.
+
+    The answer to a new username says whether some account already uses it
+    ("This username is taken"), so trying names one after another is
+    limited. Reads and profile saves that keep the username are not counted.
+    The rate is set here, like _ScholarshipStartThrottle, so the scope needs
+    no DEFAULT_THROTTLE_RATES entry.
+    """
+    scope = 'username_change'
+    rate = '10/hour'
+    message = 'Too many username changes. Please try again later.'
+
+    def allow_request(self, request, view):
+        if not _requests_username_change(request):
+            return True
+        if super().allow_request(request, view):
+            return True
+        # Raised here rather than returning False, for a message that says
+        # which limit was hit (Retry-After is still set from ``wait``).
+        raise exceptions.Throttled(self.wait(), detail=self.message)
+
+
 class ProfileView(generics.RetrieveUpdateAPIView):
-    """Get or update the current user profile."""
+    """Get or update the current user profile.
+
+    ``username`` is the public handle and may be changed here: 3-30 letters,
+    digits, ``_`` and ``.``, unique (any case), not an email address or part
+    of the user's own (accounts.handles.handle_error). 400 with the reason.
+    Username changes are limited to 10 per hour (429; _UsernameChangeThrottle).
+    """
 
     serializer_class = UserSerializer
+
+    def get_throttles(self):
+        # The default anon / user rates, plus the limit on username changes.
+        return [*super().get_throttles(), _UsernameChangeThrottle()]
 
     def get_object(self):
         return self.request.user
@@ -274,12 +320,19 @@ class ScholarshipStartView(APIView):
             # The subscription page shows its "no scholarship questions" state.
             return Response({'questions': [], 'challenge_token': None, 'expires_in': 0})
 
+        from questions.answer_leak import redact_public_text
+
         chosen = _assign_scholarship_set(user.pk, attempts, eligible_ids)
         rows = {
             q['id']: q for q in Question.objects.filter(id__in=chosen).values(
                 'id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             )
         }
+        # The challenge taker never sees the answer: an answer key or an
+        # explanation glued into the stem / an option by an import is cut off
+        # at its label (questions.answer_leak), as for any locked question.
+        for row in rows.values():
+            redact_public_text(row)
         return Response({
             'questions': [rows[qid] for qid in chosen if qid in rows],
             'challenge_token': _issue_scholarship_challenge(user.pk, chosen, attempts),
@@ -290,8 +343,14 @@ class ScholarshipStartView(APIView):
 class VerifyScholarshipView(APIView):
     """Verify scholarship test answers and mark user profile as eligible for promo pricing.
 
-    POST {answers: {<question_id>: 'A'|'B'|'C'|'D'|''}, challenge_token}
-    The answered ids must be exactly the set issued by ScholarshipStartView.
+    POST {answers: {<question_id>: 'A'|'B'|'C'|'D'}, challenge_token}
+    -> {status: 'passed'|'failed', score: 5|null, message}
+    The answered ids must be exactly the set issued by ScholarshipStartView,
+    each with a letter (a blank is refused, without using up an attempt).
+    A failed attempt does not say how many answers were right (``score`` is
+    null): the count, with blanks or a guess on one question, was that
+    question's right/wrong signal, and the challenge questions' answers are
+    never shown to students without a plan.
     The attempt counter is checked and incremented under a row lock.
     Callers with an active plan get 409 already_subscribed (staff excepted),
     without using up an attempt.
@@ -317,7 +376,9 @@ class VerifyScholarshipView(APIView):
         # *distinct* scholarship-eligible questions, one letter each.
         # Previously the same question could be submitted several times
         # under different keys ("1", "01", "001") with A/B/C/D, or any
-        # question the user already knew could be used.
+        # question the user already knew could be used. Blanks are refused
+        # too: one guess plus four blanks used to turn the score into that
+        # question's right/wrong signal.
         normalized = {}
         for q_id, selected_opt in answers.items():
             try:
@@ -325,7 +386,9 @@ class VerifyScholarshipView(APIView):
             except (TypeError, ValueError):
                 return Response({"error": "Invalid question id in submission."}, status=status.HTTP_400_BAD_REQUEST)
             letter = str(selected_opt or '').strip().upper()
-            if qid_int in normalized or letter not in ('', 'A', 'B', 'C', 'D'):
+            if not letter:
+                return Response({"error": "Answer all 5 questions before submitting."}, status=status.HTTP_400_BAD_REQUEST)
+            if qid_int in normalized or letter not in ('A', 'B', 'C', 'D'):
                 return Response({"error": "Invalid test submission."}, status=status.HTTP_400_BAD_REQUEST)
             normalized[qid_int] = letter
 
@@ -405,16 +468,17 @@ class VerifyScholarshipView(APIView):
                 "score": SCHOLARSHIP_QUESTION_COUNT,
                 "message": f"Congratulations! You scored 100% and unlocked the ₹{locked.scholarship_granted_price} special offer!"
             })
+        # No count of correct answers on a failure (see the docstring).
         if locked.scholarship_test_attempts == 1:
             return Response({
                 "status": "failed",
-                "score": correct_count,
-                "message": f"You scored {correct_count}/5. You need 5/5. You have 1 attempt remaining for the ₹99 offer."
+                "score": None,
+                "message": "You did not get all 5 right. You need 5/5. You have 1 attempt remaining for the ₹99 offer."
             })
         return Response({
             "status": "failed",
-            "score": correct_count,
-            "message": f"You scored {correct_count}/5. Challenge Failed. No attempts remaining."
+            "score": None,
+            "message": "You did not get all 5 right. Challenge Failed. No attempts remaining."
         })
 
 
@@ -857,31 +921,10 @@ class SubscriptionStatusView(APIView):
             return Response(cached)
         sub = Subscription.get_active_subscription(user)
 
-        # Backward compat: if user.is_subscribed but no Subscription record,
-        # they are a grandfathered lifetime user. Route through
-        # _serialize_subscription so the response shape is identical to a
-        # real Subscription row (was missing `id`, `razorpay_order_id`,
-        # `created_at` before — broke downstream consumers). A user whose
-        # dated rows just expired is NOT grandfathered (it used to get a
-        # cached "Legacy Early Bird (Lifetime)" stub for that request).
-        if not sub and user.is_subscribed and not Subscription.objects.filter(user=user).exists():
-            legacy_stub = Subscription(
-                user=user,
-                plan='legacy',
-                plan_display_name='Legacy Early Bird (Lifetime)',
-                starts_at=user.created_at,
-                expires_at=None,
-                status='active',
-                amount_paid=0,
-                razorpay_order_id='legacy',
-            )
-            result = Response({
-                'is_subscribed': True,
-                'subscription': _serialize_subscription(legacy_stub),
-            })
-            cache.set(cache_key, result.data, 120)
-            return result
-
+        # Subscription rows only. The bare is_subscribed flag (no row) used to
+        # be reported as a "Legacy Early Bird (Lifetime)" plan, but the removed
+        # unpaid /auth/subscribe/ endpoint set it for anyone; accounts that
+        # paid before the Subscription model got real rows (accounts.0026).
         result = Response({
             'is_subscribed': sub.is_active if sub else False,
             'subscription': _serialize_subscription(sub) if sub else None,
@@ -2040,7 +2083,8 @@ class UserDeviceListView(APIView):
     """List all active devices for the authenticated user.
 
     Each row carries ``is_current``: true for the device this request comes
-    from (its X-Session-ID, the fingerprint the authenticator enrols).
+    from -- the one the authenticator resolved from the request's Supabase
+    session (``request.auth_device_id``), else the row of its X-Session-ID.
     """
 
     def get(self, request):
@@ -2048,11 +2092,15 @@ class UserDeviceListView(APIView):
         from .serializers import UserDeviceSerializer
         from .supabase_rest_auth import _is_valid_session_id
 
+        current_id = getattr(request, 'auth_device_id', None)
         current = request.META.get('HTTP_X_SESSION_ID') or ''
         devices = UserDevice.objects.filter(user=request.user, is_active=True).order_by('-last_login')
         serializer = UserDeviceSerializer(
             devices, many=True,
-            context={'current_device_fingerprint': current if _is_valid_session_id(current) else ''},
+            context={
+                'current_device_id': current_id,
+                'current_device_fingerprint': current if _is_valid_session_id(current) else '',
+            },
         )
         return Response(serializer.data)
 

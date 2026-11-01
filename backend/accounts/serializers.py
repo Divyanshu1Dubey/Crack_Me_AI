@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from django.db import DatabaseError
+from django.db import DatabaseError, IntegrityError, transaction
 from .models import AdminAuditLog, TokenBalance, TokenConfig, TokenTransaction
 from .supabase_auth import sync_user_to_supabase_auth
 
@@ -64,9 +64,18 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile — includes token balance info."""
+    # The public handle (discussions, leaderboard). The learner may change it
+    # (PATCH /api/auth/profile/); a new value must pass
+    # accounts.handles.handle_error. An unchanged value is accepted as is, so
+    # older usernames that predate those rules never block a profile save.
+    username = serializers.CharField(required=False, max_length=150)
     role = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
     token_info = serializers.SerializerMethodField()
+    # Whether an active plan (Subscription row) exists, not the raw column:
+    # the bare flag was set without payment by the removed /auth/subscribe/
+    # endpoint and grants nothing (accounts.utils.is_premium).
+    is_subscribed = serializers.SerializerMethodField()
     subscription_info = serializers.SerializerMethodField()
 
     is_online = serializers.SerializerMethodField()
@@ -88,7 +97,17 @@ class UserSerializer(serializers.ModelSerializer):
                   'subscription_info', 'last_seen', 'is_online',
                   'ai_tutor_used_today', 'ai_tutor_daily_cap',
                   'showcase_questions_remaining', 'is_premium']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
+        read_only_fields = ['id', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
+
+    def validate_username(self, value):
+        from .handles import handle_error
+
+        if self.instance is not None and value == self.instance.username:
+            return value
+        problem = handle_error(value, user=self.instance, User=User)
+        if problem:
+            raise serializers.ValidationError(problem)
+        return value
 
     def update(self, instance, validated_data):
         """Write only the fields this request edited.
@@ -99,10 +118,19 @@ class UserSerializer(serializers.ModelSerializer):
         is_subscribed, an admin block, the profile bonus flag) was silently
         undone by any profile edit.
         """
+        from .handles import HANDLE_TAKEN_MESSAGE
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if validated_data:
-            instance.save(update_fields=list(validated_data))
+            try:
+                with transaction.atomic():
+                    instance.save(update_fields=list(validated_data))
+            except IntegrityError:
+                # Another account took this username after validate_username ran.
+                if 'username' in validated_data:
+                    raise serializers.ValidationError({'username': [HANDLE_TAKEN_MESSAGE]})
+                raise
         return instance
 
     def get_is_online(self, obj):
@@ -118,10 +146,27 @@ class UserSerializer(serializers.ModelSerializer):
     def get_is_admin(self, obj):
         return obj.is_admin
 
-    def get_subscription_info(self, obj):
-        """Return current subscription details for the user."""
+    def _active_subscription(self, obj):
+        """Subscription.get_active_subscription(obj), once per user per serializer."""
         from .models import Subscription
-        sub = Subscription.get_active_subscription(obj)
+
+        cache = self.__dict__.setdefault('_active_subscription_cache', {})
+        if obj.pk not in cache:
+            cache[obj.pk] = Subscription.get_active_subscription(obj)
+        return cache[obj.pk]
+
+    def get_is_subscribed(self, obj):
+        return self._active_subscription(obj) is not None
+
+    def get_subscription_info(self, obj):
+        """Return current subscription details for the user.
+
+        From Subscription rows only: the bare ``is_subscribed`` flag (no row)
+        used to produce a "Legacy Early Bird (Lifetime)" stub, but the removed
+        unpaid /auth/subscribe/ endpoint set that flag for anyone. Accounts
+        that paid before the Subscription model got real rows (accounts.0026).
+        """
+        sub = self._active_subscription(obj)
         if sub:
             return {
                 'plan': sub.plan,
@@ -132,20 +177,6 @@ class UserSerializer(serializers.ModelSerializer):
                 'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
                 'days_remaining': sub.days_remaining,
                 'amount_paid': float(sub.amount_paid),
-            }
-        # Backward compat: grandfathered lifetime user (is_subscribed from
-        # before the Subscription model, so no rows at all). A user whose
-        # dated rows just expired is not one of them.
-        if obj.is_subscribed and not Subscription.objects.filter(user=obj).exists():
-            return {
-                'plan': 'legacy',
-                'plan_display_name': 'Legacy Early Bird (Lifetime)',
-                'status': 'active',
-                'is_active': True,
-                'starts_at': obj.created_at.isoformat() if obj.created_at else None,
-                'expires_at': None,
-                'days_remaining': -1,
-                'amount_paid': 0,
             }
         return None
 
@@ -368,8 +399,9 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
 
 
 class UserDeviceSerializer(serializers.ModelSerializer):
-    # True for the device the request comes from (context
-    # 'current_device_fingerprint', the request's X-Session-ID); always false
+    # True for the device the request comes from: context 'current_device_id'
+    # (the row the authenticator resolved from the Supabase session), else
+    # 'current_device_fingerprint' (the request's X-Session-ID); always false
     # without that context (e.g. the admin view of another user's devices).
     is_current = serializers.SerializerMethodField()
 
@@ -379,6 +411,9 @@ class UserDeviceSerializer(serializers.ModelSerializer):
         fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at', 'is_current']
 
     def get_is_current(self, obj):
+        current_id = self.context.get('current_device_id')
+        if current_id is not None:
+            return obj.pk == current_id
         current = self.context.get('current_device_fingerprint') or ''
         return bool(current) and obj.device_fingerprint == current
 

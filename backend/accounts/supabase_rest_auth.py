@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import os
 import re
+import threading
+import time
 from datetime import timedelta, timezone as dt_timezone
+from http.client import HTTPException
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
@@ -18,6 +23,39 @@ from rest_framework import authentication, exceptions
 from .models import TokenBalance
 
 logger = logging.getLogger(__name__)
+
+# ── Token verification limits ────────────────────────────────────────────
+# DRF authenticates before its throttles run, so every bearer value reaches
+# _fetch_supabase_user, whose GoTrue call (/auth/v1/user) blocks a worker
+# thread. These keep a flood of made-up tokens from tying up the workers.
+# Each value can be overridden by a Django setting or environment variable
+# of the same name.
+_MAX_TOKEN_LENGTH = 16384
+# A token counts as expired locally only this long after its ``exp`` (clock
+# skew): until then GoTrue decides.
+_EXP_LEEWAY_SECONDS = 10
+_DEFAULT_VERIFY_TIMEOUT_SECONDS = 3.0        # SUPABASE_AUTH_TIMEOUT_SECONDS (was 8 s)
+_DEFAULT_TOKEN_CACHE_SECONDS = 300           # SUPABASE_TOKEN_CACHE_SECONDS, never beyond the token's exp
+_REFUSED_TOKEN_CACHE_SECONDS = 60            # a token GoTrue refused is not re-checked for this long
+_DEFAULT_MAX_CONCURRENT_VERIFICATIONS = 2    # SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS, per process; 0 = no cap
+_DEFAULT_VERIFY_RATE_PER_IP = 240            # SUPABASE_AUTH_VERIFY_RATE_PER_IP, GoTrue calls per minute; 0 = off
+_VERIFY_RATE_WINDOW_SECONDS = 60
+_AUTH_CACHE_ALIAS = "rate_limit"             # large LocMem cap / Redis (settings.CACHES); else 'default'
+_VERIFIED_PREFIX = "supabase_jwt:"
+_REFUSED_PREFIX = "supabase_jwt_refused:"
+_BUDGET_PREFIX = "supabase_verify_ip:"
+_SESSION_REVOKED_PREFIX = "supabase_session_revoked:"
+
+# Device cap (docs/AUTHENTICATION.md §6).
+FREE_DEVICE_LIMIT = 2
+SUBSCRIBED_DEVICE_LIMIT = 4
+# UserDevice.device_fingerprint of a device known only by its Supabase
+# session (no usable X-Session-ID). ':' never matches _SESSION_ID_PATTERN, so
+# a client cannot address these rows through the header.
+_SESSION_FINGERPRINT_PREFIX = "sid:"
+# Supabase access tokens carry the auth session's id (a UUID) as ``session_id``.
+_SESSION_CLAIM_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 # Requests an over-the-limit device may still make, so the user can open
 # Settings and free a slot (list / log out devices, load the profile) or buy
@@ -57,9 +95,234 @@ def _auth_failed(code: str, detail: str) -> exceptions.AuthenticationFailed:
     return exceptions.AuthenticationFailed({"detail": detail, "code": code})
 
 
+def _verification_busy() -> exceptions.Throttled:
+    """429 for a request whose token cannot be checked right now (limits above)."""
+    exc = exceptions.Throttled(detail={
+        "detail": "Too many sign-in checks right now. Please retry in a moment.",
+        "code": "auth_verification_busy",
+    })
+    exc.wait = 1  # Retry-After
+    return exc
+
+
 def public_verify_key() -> str:
     """The first configured public key for token verification ('' if none)."""
     return next((v for v in (os.getenv(n, "").strip() for n in _PUBLIC_VERIFY_KEY_ENV_VARS) if v), "")
+
+
+def _supabase_url() -> str:
+    return (
+        os.getenv("SUPABASE_URL", "").strip()
+        or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
+        or ""
+    ).rstrip("/")
+
+
+def _config_value(name: str):
+    """Django setting ``name`` if defined, else the environment variable (None if neither / blank)."""
+    from django.conf import settings
+
+    value = getattr(settings, name, None)
+    if value is None:
+        value = os.getenv(name)
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    return value
+
+
+def _config_number(name: str, default, *, minimum=0, maximum=None, cast=int):
+    value = _config_value(name)
+    if value is None:
+        return default
+    try:
+        number = cast(value)
+    except (TypeError, ValueError):
+        return default
+    number = max(minimum, number)
+    return min(maximum, number) if maximum is not None else number
+
+
+def _verify_timeout() -> float:
+    return _config_number(
+        "SUPABASE_AUTH_TIMEOUT_SECONDS", _DEFAULT_VERIFY_TIMEOUT_SECONDS, minimum=0.5, maximum=10.0, cast=float,
+    )
+
+
+def _token_cache_seconds() -> int:
+    return _config_number("SUPABASE_TOKEN_CACHE_SECONDS", _DEFAULT_TOKEN_CACHE_SECONDS, minimum=0, maximum=3600)
+
+
+def _auth_cache():
+    """Cache for token checks and their counters ('rate_limit' alias, else 'default')."""
+    from django.conf import settings
+    from django.core.cache import caches
+
+    alias = _AUTH_CACHE_ALIAS if _AUTH_CACHE_ALIAS in getattr(settings, "CACHES", {}) else "default"
+    return caches[alias]
+
+
+def _cache_get(store, key):
+    try:
+        return store.get(key)
+    except Exception:  # noqa: BLE001 - a cache outage must not break sign-in
+        return None
+
+
+def _cache_set(store, key, value, timeout):
+    try:
+        store.set(key, value, timeout)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _b64url_json_object(segment: str):
+    try:
+        raw = base64.urlsafe_b64decode((segment + "=" * (-len(segment) % 4)).encode("ascii"))
+        value = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError):  # binascii.Error and JSONDecodeError are ValueErrors
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def unverified_jwt_parts(token: str):
+    """(header, payload) of a JWT-shaped ``token``, or None. NOT verified.
+
+    Only for values GoTrue has accepted, or to refuse values that cannot be
+    access tokens at all.
+    """
+    if not isinstance(token, str) or not token or len(token) > _MAX_TOKEN_LENGTH:
+        return None
+    parts = token.split(".")
+    if len(parts) != 3 or not all(parts):
+        return None
+    header = _b64url_json_object(parts[0])
+    payload = _b64url_json_object(parts[1])
+    if header is None or payload is None:
+        return None
+    return header, payload
+
+
+def plausible_access_token_claims(token: str, now: float | None = None):
+    """The payload of ``token`` if it can be a live Supabase access token, else None.
+
+    A local, network-free check (no signature check): a JWT with an ``alg``
+    other than "none", a ``sub`` and an ``exp`` that has not passed (give or
+    take _EXP_LEEWAY_SECONDS). Every access token GoTrue issues passes it;
+    anything that fails it would be refused by GoTrue as well.
+    """
+    parts = unverified_jwt_parts(token)
+    if parts is None:
+        return None
+    header, payload = parts
+    alg = header.get("alg")
+    if not isinstance(alg, str) or not alg.strip() or alg.strip().lower() == "none":
+        return None
+    sub = payload.get("sub")
+    if not isinstance(sub, str) or not sub.strip():
+        return None
+    exp = payload.get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return None
+    if exp <= (time.time() if now is None else now) - _EXP_LEEWAY_SECONDS:
+        return None
+    return payload
+
+
+def session_id_from_claims(claims) -> str | None:
+    """The Supabase auth session id (``session_id`` claim) of an access token, if any."""
+    if not isinstance(claims, dict):
+        return None
+    value = claims.get("session_id")
+    if not isinstance(value, str) or not _SESSION_CLAIM_PATTERN.match(value) or value == _NIL_UUID:
+        return None
+    return value.lower()
+
+
+def _verification_rate_per_ip() -> int:
+    """GoTrue calls allowed per client IP per minute (0 = no limit).
+
+    Off by default while the client address is unknown: without
+    TRUSTED_CLIENT_IP_HEADER / NUM_PROXIES every request carries the proxy's
+    address, so the budget would be one bucket for the whole site.
+    """
+    configured = _config_value("SUPABASE_AUTH_VERIFY_RATE_PER_IP")
+    if configured is not None:
+        try:
+            return max(0, int(configured))
+        except (TypeError, ValueError):
+            pass
+    from django.conf import settings
+    from rest_framework.settings import api_settings
+
+    from crack_cms.client_ip import parse_num_proxies
+
+    trusted_ip = bool(str(getattr(settings, "TRUSTED_CLIENT_IP_HEADER", "") or "").strip())
+    trusted_ip = trusted_ip or parse_num_proxies(api_settings.NUM_PROXIES) is not None
+    return _DEFAULT_VERIFY_RATE_PER_IP if trusted_ip else 0
+
+
+def _within_verification_budget(ip: str, store) -> bool:
+    """Count one GoTrue call for ``ip``; False once the per-minute budget is spent."""
+    limit = _verification_rate_per_ip()
+    if limit <= 0 or not ip:
+        return True
+    window = _VERIFY_RATE_WINDOW_SECONDS
+    key = f"{_BUDGET_PREFIX}{ip}:{int(time.time() // window)}"
+    try:
+        count = 1 if store.add(key, 1, timeout=window + 5) else store.incr(key)
+    except ValueError:  # expired between add() and incr()
+        _cache_set(store, key, 1, window + 5)
+        count = 1
+    except Exception:  # noqa: BLE001 - cache outage: fail open
+        return True
+    return count <= limit
+
+
+_SLOTS_LOCK = threading.Lock()
+_SLOTS: dict[int, threading.BoundedSemaphore] = {}
+
+
+def _verification_slots():
+    """Per-process cap on concurrent GoTrue calls (None = no cap)."""
+    size = _config_number(
+        "SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS", _DEFAULT_MAX_CONCURRENT_VERIFICATIONS, minimum=0, maximum=64,
+    )
+    if size <= 0:
+        return None
+    with _SLOTS_LOCK:
+        slots = _SLOTS.get(size)
+        if slots is None:
+            slots = _SLOTS[size] = threading.BoundedSemaphore(size)
+        return slots
+
+
+class _PendingVerification:
+    """One in-flight GoTrue call that concurrent requests with the same token share."""
+
+    __slots__ = ("done", "result", "busy")
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.result = None
+        self.busy = False
+
+
+_INFLIGHT_LOCK = threading.Lock()
+_INFLIGHT: dict[str, _PendingVerification] = {}
+
+
+def _device_limit_for(user) -> int:
+    """4 devices with an active plan, else 2.
+
+    Same rule as every other entitlement (accounts.utils.is_premium:
+    Subscription rows). The bare ``is_subscribed`` flag used to decide it,
+    which the removed unpaid /auth/subscribe/ endpoint had set for anyone.
+    """
+    from .utils import is_premium
+
+    return SUBSCRIBED_DEVICE_LIMIT if is_premium(user) else FREE_DEVICE_LIMIT
 
 
 def _is_device_management_request(request_obj) -> bool:
@@ -202,9 +465,25 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         if not token:
             return None
 
+        # For the per-IP budget of _fetch_supabase_user (DRF creates one
+        # authenticator per request).
+        self._current_request = request_obj
         supabase_user = self._fetch_supabase_user(token)
         if not supabase_user:
             return None
+
+        # GoTrue accepted this exact token, so its claims are genuine. The
+        # session id keys the device (_enforce_device_limits). Tokens that are
+        # not JWTs only occur with a patched verifier (tests).
+        parts = unverified_jwt_parts(token)
+        claims = parts[1] if parts else None
+        if claims is not None:
+            token_sub = str(claims.get("sub") or "")
+            verified_id = str(supabase_user.get("id") or "")
+            if token_sub and verified_id and token_sub != verified_id:
+                logger.error("Supabase token subject does not match the verified user; refusing the request.")
+                return None
+        session_id = session_id_from_claims(claims)
 
         user = self._upsert_local_user(supabase_user)
 
@@ -221,82 +500,129 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         if user.role == 'admin':
             return (user, None)
 
-        self._enforce_device_limits(request_obj, user)
+        self._enforce_device_limits(request_obj, user, session_id=session_id, token=token)
         return (user, token)
 
-    def _enforce_device_limits(self, request_obj, user):
-        """Track the X-Session-ID device and enforce the 2 (free) / 4 (subscribed) cap.
+    def _enforce_device_limits(self, request_obj, user, session_id=None, token=None):
+        """Track the user's devices and enforce the 2 (free) / 4 (premium) cap.
 
-        * A device the user (or an admin) logged out raises ``device_inactive``;
-          the frontend then drops its device id and signs out, so the next
-          sign-in enrols a fresh device.
-        * A NEW device is enrolled only while the user has fewer active devices
-          (seen in the last 30 days) than the cap; otherwise
-          ``device_limit_reached`` (except on the device-management paths, so
-          Settings can free a slot).
-        * Existing devices beyond the cap (e.g. after a 4 -> 2 downgrade): the
-          ones used most recently win, judged on last_login values from BEFORE
-          this request. (The old code refreshed last_login first, so the
-          current device always ranked newest and the cap never triggered.)
+        A device is a browser (its X-Session-ID, ``crack_device_id``) bound to
+        the Supabase auth session that uses it: the ``session_id`` claim of the
+        verified access token, which the client can neither omit nor forge
+        (UserDevice.session_id). The binding is looked up first, so:
+
+        * a session whose device was logged out (Settings / admin) or replaced
+          gets ``device_inactive`` whatever header it sends or omits, and its
+          Supabase session is ended as well (_end_supabase_session);
+        * a session without a usable header still counts: it is enrolled as a
+          device of its own (fingerprint ``sid:<session id>``) and needs a slot;
+        * a new sign-in on a browser takes over that browser's device row (no
+          new slot); the session it replaces is retired and refused from then
+          on, so one device id shared between people gives one seat at a time.
+
+        A NEW device is enrolled only while the user has fewer active devices
+        (seen in the last 30 days) than the cap; otherwise
+        ``device_limit_reached`` (except on the device-management paths, so
+        Settings can free a slot). Existing devices beyond the cap (e.g. after
+        a 4 -> 2 downgrade): the ones used most recently win, judged on
+        last_login values from BEFORE this request.
+
+        Tokens without a ``session_id`` claim (GoTrue always sets it; only
+        tokens minted outside Supabase sign-in lack it) fall back to the old
+        header-only rule.
         """
-        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
-
-        # SECURITY (Fix #3): reject any X-Session-ID that doesn't match a
-        # known device-token shape. Without this, an attacker can enumerate
-        # X-Session-ID: 1, 2, 3, ... and spawn unlimited parallel sessions,
-        # bypassing the per-user device limit. The request stays
-        # authenticated; the spoofed fingerprint is simply not enrolled.
-        if incoming_session_id and not _is_valid_session_id(incoming_session_id):
-            incoming_session_id = None
-        if not incoming_session_id:
-            return
-
         from .models import UserDevice
+
+        # SECURITY (Fix #3): only device-token shapes are accepted as
+        # X-Session-ID, so enumerating 1, 2, 3, ... cannot multiply devices.
+        header_value = request_obj.META.get('HTTP_X_SESSION_ID')
+        fingerprint = header_value if header_value and _is_valid_session_id(header_value) else None
+        if not session_id and not fingerprint:
+            return  # nothing identifies the device (token without a session id)
 
         # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
         # bookkeeping. X-Forwarded-For is attacker-controlled when the
         # client can reach the backend directly.
         ip = request_obj.META.get('REMOTE_ADDR', '').strip() or None
         user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
-        limit = 4 if getattr(user, 'is_subscribed', False) else 2
         management_request = _is_device_management_request(request_obj)
+        now = timezone.now()
+        limit_cache = []
 
-        def _limit_reached():
+        def device_limit():
+            if not limit_cache:  # one Subscription query, only when it matters
+                limit_cache.append(_device_limit_for(user))
+            return limit_cache[0]
+
+        def at_limit(count):
+            return count >= FREE_DEVICE_LIMIT and count >= device_limit()
+
+        def limit_reached():
             return _auth_failed(
                 "device_limit_reached",
-                f"Maximum device limit reached ({limit} devices). Please manage devices in Settings.",
+                f"Maximum device limit reached ({device_limit()} devices). Please manage devices in Settings.",
             )
 
-        now = timezone.now()
-        device = UserDevice.objects.filter(user=user, device_fingerprint=incoming_session_id).first()
+        def device_inactive():
+            self._end_supabase_session(token, session_id)
+            return _auth_failed("device_inactive", "This device has been logged out or blocked.")
+
+        device = None
+        if session_id:
+            # Inactive rows sort first: any logged-out or replaced binding ends the session.
+            bound = list(UserDevice.objects.filter(user=user, session_id=session_id).order_by('is_active', '-pk')[:2])
+            if bound:
+                if not bound[0].is_active:
+                    raise device_inactive()
+                device = bound[0]
+
         if device is None:
-            slots_taken = UserDevice.objects.filter(
-                user=user, is_active=True, last_login__gte=now - _DEVICE_STALE_AFTER,
-            ).count()
-            if slots_taken >= limit:
-                if management_request:
-                    return  # let it reach Settings without taking a slot
-                raise _limit_reached()
-            UserDevice.objects.get_or_create(
-                user=user,
-                device_fingerprint=incoming_session_id,
-                defaults={'device_name': user_agent, 'ip_address': ip, 'is_active': True},
-            )
-            return
+            row = UserDevice.objects.filter(user=user, device_fingerprint=fingerprint).first() if fingerprint else None
+            if row is not None and row.is_active:
+                if session_id and row.session_id != session_id:
+                    # A new sign-in on this browser: the slot moves to it.
+                    self._bind_device_to_session(row, session_id)
+                device = row
+            elif row is not None and (not session_id or not row.session_id):
+                # Logged out before its session was recorded (or a token
+                # without a session id): the browser must sign in again with a
+                # fresh device id, as before.
+                raise device_inactive()
+            else:
+                # A device this user has not used yet, or a fresh sign-in on a
+                # browser whose (recorded) session was logged out.
+                slots_taken = UserDevice.objects.filter(
+                    user=user, is_active=True, last_login__gte=now - _DEVICE_STALE_AFTER,
+                ).count()
+                if at_limit(slots_taken):
+                    if management_request:
+                        return  # let it reach Settings without taking a slot
+                    raise limit_reached()
+                if row is not None:
+                    device = self._reenrol_device(row, session_id, user_agent, ip, now)
+                else:
+                    device, _created = UserDevice.objects.get_or_create(
+                        user=user,
+                        device_fingerprint=fingerprint or _SESSION_FINGERPRINT_PREFIX + session_id,
+                        defaults={
+                            'device_name': user_agent, 'ip_address': ip, 'is_active': True,
+                            'session_id': session_id,
+                        },
+                    )
+                request_obj.auth_device_id = device.pk
+                return
 
-        if not device.is_active:
-            raise _auth_failed("device_inactive", "This device has been logged out or blocked.")
-
+        request_obj.auth_device_id = device.pk
         more_recent = (
             UserDevice.objects
             .filter(user=user, is_active=True, last_login__gt=device.last_login)
             .exclude(pk=device.pk)
             .count()
         )
-        if more_recent >= limit:
+        if at_limit(more_recent):
             if management_request:
                 return  # do not refresh last_login, or it would win its slot back
-            raise _limit_reached()
+            raise limit_reached()
 
         if (
             device.last_login is None
@@ -308,27 +634,135 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                 device_name=user_agent, ip_address=ip, last_login=now,
             )
 
+    @staticmethod
+    def _retire_session(user_id, session_id):
+        """Record ``session_id`` as ended: its requests get ``device_inactive`` from now on.
+
+        Kept as an inactive UserDevice row (``sid:<session id>``), never listed.
+        """
+        from .models import UserDevice
+
+        if not session_id:
+            return
+        retired, created = UserDevice.objects.get_or_create(
+            user_id=user_id,
+            device_fingerprint=_SESSION_FINGERPRINT_PREFIX + session_id,
+            defaults={'session_id': session_id, 'is_active': False, 'device_name': 'Ended session'},
+        )
+        if not created and (retired.is_active or retired.session_id != session_id):
+            UserDevice.objects.filter(pk=retired.pk).update(is_active=False, session_id=session_id)
+
+    def _bind_device_to_session(self, row, session_id):
+        """Move an active device row to a new Supabase session, retiring the old one."""
+        from .models import UserDevice
+
+        with transaction.atomic():
+            if row.session_id and row.session_id != session_id:
+                self._retire_session(row.user_id, row.session_id)
+            UserDevice.objects.filter(pk=row.pk).update(session_id=session_id)
+        row.session_id = session_id
+
+    def _reenrol_device(self, row, session_id, user_agent, ip, now):
+        """A fresh sign-in on a logged-out device row: enrol it again for the new session."""
+        from .models import UserDevice
+
+        with transaction.atomic():
+            if row.session_id and row.session_id != session_id:
+                self._retire_session(row.user_id, row.session_id)
+            UserDevice.objects.filter(pk=row.pk).update(
+                is_active=True, session_id=session_id, device_name=user_agent, ip_address=ip, last_login=now,
+            )
+        row.is_active, row.session_id, row.last_login = True, session_id, now
+        return row
+
+    def _end_supabase_session(self, token, session_id):
+        """Best effort: sign the logged-out device's Supabase session out (GoTrue /logout).
+
+        Our refusal already stops this session on every API call; ending it
+        upstream also stops its refresh token. Once per session.
+        """
+        if not token or not session_id:
+            return
+        supabase_url, verify_key = _supabase_url(), self._verify_key()
+        if not supabase_url or not verify_key:
+            return
+        store = _auth_cache()
+        try:
+            if not store.add(_SESSION_REVOKED_PREFIX + session_id, 1, timeout=86400):
+                return  # done already
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            store.delete(_VERIFIED_PREFIX + hashlib.sha256(token.encode("utf-8")).hexdigest())
+        except Exception:  # noqa: BLE001
+            pass
+        req = request.Request(
+            url=f"{supabase_url}/auth/v1/logout?scope=local",
+            data=b"",
+            headers={"Authorization": f"Bearer {token}", "apikey": verify_key},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=_verify_timeout()):
+                pass
+        except (OSError, HTTPException, ValueError) as exc:
+            logger.info("Could not end Supabase session %s upstream: %s", session_id, exc.__class__.__name__)
+
+    @staticmethod
+    def _verify_key() -> str:
+        """The key sent as ``apikey`` to GoTrue ('' if none; see _fetch_supabase_user)."""
+        global _service_role_fallback_logged
+        verify_key = public_verify_key()
+        if not verify_key:
+            verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+            if verify_key and not _service_role_fallback_logged:
+                _service_role_fallback_logged = True
+                logger.warning(
+                    "SupabaseJWTAuthentication is verifying tokens with the "
+                    "SUPABASE_SERVICE_ROLE_KEY fallback. Set SUPABASE_ANON_KEY "
+                    "(or SUPABASE_PUBLISHABLE_KEY / SUPABASE_AUTH_VERIFY_KEY) in "
+                    "the backend environment (principle of least privilege)."
+                )
+        return verify_key
+
     def _fetch_supabase_user(self, token: str):
-        # Cache Supabase JWT validation for the token's remaining lifetime
-        # (Supabase access tokens last ~1h). Avoids a 100–300 ms outbound
-        # HTTP call on every authenticated request.
-        from django.core.cache import cache
-        import hashlib
+        """GoTrue's user for ``token`` (GET /auth/v1/user, cached), or None.
+
+        DRF runs authentication BEFORE its throttles, so every bearer value of
+        every request reaches this method; it used to call Supabase (8 s
+        timeout, failures never remembered) for any string at all. Now:
+
+        * a value that cannot be a live access token (not a JWT, alg "none",
+          no ``sub``, ``exp`` passed) is refused locally, without a call;
+        * a token GoTrue refused (4xx) is not checked again for 60 s;
+        * a valid answer is cached per SHA-256 digest of the whole token for
+          SUPABASE_TOKEN_CACHE_SECONDS (300) and never beyond its ``exp``;
+        * requests carrying the same token share one call (a page fires
+          several at once), calls are capped per process
+          (SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS, so unknown tokens cannot
+          occupy every worker thread) and per client IP
+          (SUPABASE_AUTH_VERIFY_RATE_PER_IP per minute, once the client IP is
+          trusted); over a limit the request is answered 429
+          ``auth_verification_busy`` without a call;
+        * the call times out after SUPABASE_AUTH_TIMEOUT_SECONDS (3 s).
+        """
+        claims = plausible_access_token_claims(token)
+        if claims is None:
+            return None
         # SECURITY: key on a digest of the WHOLE token. The previous key used
         # token[:64], which for Supabase JWTs is just the (shared) header --
         # every user's token mapped to the same cache entry, so a request
         # within 5 minutes of another user's was authenticated as that user.
-        cache_key = "supabase_jwt:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
-        cached = cache.get(cache_key)
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        store = _auth_cache()
+        cached = _cache_get(store, _VERIFIED_PREFIX + digest)
         if cached is not None:
             return cached
+        if _cache_get(store, _REFUSED_PREFIX + digest):
+            return None
 
-        supabase_url = (
-            os.getenv("SUPABASE_URL", "").strip()
-            or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
-            or ""
-        ).rstrip("/")
-        # Token verification key resolution — order matters:
+        supabase_url = _supabase_url()
+        # Token verification key resolution (_verify_key) — order matters:
         #   1. SUPABASE_AUTH_VERIFY_KEY   (explicit override — recommended)
         #   2. SUPABASE_ANON_KEY          (anon / publishable key — safe)
         #   3. NEXT_PUBLIC_SUPABASE_ANON_KEY (frontend anon, safe)
@@ -351,45 +785,89 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         # It is reported by `manage.py check --deploy` (accounts.W002) and
         # logged once per process; remove it once every deployment sets
         # a public key (new-style publishable keys are as safe as anon).
-        global _service_role_fallback_logged
-        verify_key = public_verify_key()
-        if not verify_key:
-            verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            if verify_key and not _service_role_fallback_logged:
-                _service_role_fallback_logged = True
-                logger.warning(
-                    "SupabaseJWTAuthentication is verifying tokens with the "
-                    "SUPABASE_SERVICE_ROLE_KEY fallback. Set SUPABASE_ANON_KEY "
-                    "(or SUPABASE_PUBLISHABLE_KEY / SUPABASE_AUTH_VERIFY_KEY) in "
-                    "the backend environment (principle of least privilege)."
-                )
-
+        verify_key = self._verify_key()
         if not supabase_url or not verify_key:
             return None
+        return self._verify_with_gotrue(token, digest, claims, supabase_url, verify_key, store)
 
-        req = request.Request(
-            url=f"{supabase_url}/auth/v1/user",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "apikey": verify_key,
-            },
-            method="GET",
-        )
-
+    def _verify_with_gotrue(self, token, digest, claims, supabase_url, verify_key, store):
+        """One GoTrue check per token at a time in this process; the others wait for it."""
+        with _INFLIGHT_LOCK:
+            pending = _INFLIGHT.get(digest)
+            leader = pending is None
+            if leader:
+                pending = _INFLIGHT[digest] = _PendingVerification()
+        if not leader:
+            if not pending.done.wait(_verify_timeout() + 1.0) or pending.busy:
+                raise _verification_busy()
+            return pending.result
         try:
-            with request.urlopen(req, timeout=8) as resp:
-                if int(getattr(resp, "status", 0) or 0) != 200:
-                    return None
-                payload = resp.read().decode("utf-8", errors="ignore")
-                result = json.loads(payload)
-                # Cache valid token for 5 minutes (well within the 1h JWT lifetime)
+            pending.result = self._call_gotrue(token, digest, claims, supabase_url, verify_key, store)
+            return pending.result
+        except exceptions.Throttled:
+            pending.busy = True
+            raise
+        finally:
+            with _INFLIGHT_LOCK:
+                if _INFLIGHT.get(digest) is pending:
+                    del _INFLIGHT[digest]
+            pending.done.set()
+
+    def _client_ip_for_budget(self) -> str:
+        request_obj = getattr(self, "_current_request", None)
+        if request_obj is None:
+            return ""
+        try:
+            from crack_cms.client_ip import get_client_ip
+
+            return get_client_ip(request_obj) or ""
+        except Exception:  # noqa: BLE001 - no address: no per-IP budget
+            return ""
+
+    def _call_gotrue(self, token, digest, claims, supabase_url, verify_key, store):
+        if not _within_verification_budget(self._client_ip_for_budget(), store):
+            raise _verification_busy()
+        slots = _verification_slots()
+        if slots is not None and not slots.acquire(blocking=False):
+            raise _verification_busy()
+        try:
+            req = request.Request(
+                url=f"{supabase_url}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": verify_key,
+                },
+                method="GET",
+            )
+            try:
+                with request.urlopen(req, timeout=_verify_timeout()) as resp:
+                    if int(getattr(resp, "status", 0) or 0) != 200:
+                        return None
+                    result = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            except error.HTTPError as exc:
+                # GoTrue refused the token itself (expired, revoked, signed out,
+                # unknown user): do not ask again for a minute. 408 / 429 / 5xx
+                # say nothing about the token.
+                code = exc.code if isinstance(exc.code, int) else 0
+                if 400 <= code < 500 and code not in (408, 429):
+                    _cache_set(store, _REFUSED_PREFIX + digest, 1, _REFUSED_TOKEN_CACHE_SECONDS)
                 try:
-                    cache.set(cache_key, result, 300)
-                except Exception:
+                    exc.close()
+                except Exception:  # noqa: BLE001
                     pass
-                return result
-        except (error.HTTPError, error.URLError, TimeoutError, json.JSONDecodeError):
+                return None
+            except (OSError, HTTPException, ValueError):  # network, timeout, bad JSON
+                return None
+        finally:
+            if slots is not None:
+                slots.release()
+        if not isinstance(result, dict):
             return None
+        # Never serve a cached answer past the token's own expiry.
+        ttl = min(_token_cache_seconds(), int(float(claims["exp"]) - time.time()))
+        if ttl > 0:
+            _cache_set(store, _VERIFIED_PREFIX + digest, result, ttl)
+        return result
 
     def _upsert_local_user(self, supabase_user: dict):
         User = get_user_model()
@@ -643,18 +1121,23 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
     @staticmethod
     def _create_local_user(User, *, email, supabase_uid, metadata, defaults):
-        """Create the local row for a new Supabase identity. Returns (user, created)."""
-        username = (metadata.get("username") or "").strip()
-        if not username:
-            username = (email.split("@")[0] if "@" in email else "supabase_user").strip() or "supabase_user"
+        """Create the local row for a new Supabase identity. Returns (user, created).
 
-        # Ensure unique username for local user table.
-        base_username = username[:140]
-        username_candidate = base_username
-        suffix = 1
-        while User.objects.filter(username=username_candidate).exists():
-            suffix += 1
-            username_candidate = f"{base_username[:130]}_{suffix}"
+        The username is public (discussions, leaderboard): the one chosen at
+        sign-up (user_metadata.username) when it follows the Settings rules,
+        made unique, else -- Google sign-ups have none, or it would show the
+        email address, break the format rules or pass for the CrackLabs team
+        ("admin", "CrackLabs_Official") -- a generated ``learner_<hex>``
+        handle (accounts.handles). Only a trusted admin identity may keep a
+        team name. It used to be the email's local part, which for a Gmail
+        user is the address itself.
+        """
+        from .handles import username_for_new_account
+
+        username_candidate = username_for_new_account(
+            User, metadata.get("username"), email,
+            team_member=defaults.get("role") == "admin",
+        )
 
         try:
             with transaction.atomic():

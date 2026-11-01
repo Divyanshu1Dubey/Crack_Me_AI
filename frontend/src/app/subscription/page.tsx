@@ -68,6 +68,27 @@ type ScholarshipQuestion = ScholarshipChallengeQuestion;
 // on the second (accounts.views.VerifyScholarshipView).
 const SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR = 99;
 
+// POST /auth/verify-scholarship/ -> {status, score: 5 | null, message}. A
+// failed attempt never says how many answers were right (score is null).
+type ScholarshipResult = { status: 'passed' | 'failed'; score: number | null; message: string };
+
+function readScholarshipResult(data: unknown): ScholarshipResult {
+    const d = (data && typeof data === 'object' ? data : {}) as { status?: unknown; score?: unknown; message?: unknown };
+    return {
+        status: d.status === 'passed' ? 'passed' : 'failed',
+        score: typeof d.score === 'number' && Number.isFinite(d.score) ? d.score : null,
+        message: typeof d.message === 'string' ? d.message : '',
+    };
+}
+
+// Every challenge question needs an A-D answer: the server refuses a blank
+// with 400 (without using up an attempt).
+const SCHOLARSHIP_ANSWER_LETTERS: readonly string[] = ['A', 'B', 'C', 'D'];
+
+function allScholarshipAnswered(questions: ReadonlyArray<{ id: number }>, answers: Record<number, string>): boolean {
+    return questions.length > 0 && questions.every(q => SCHOLARSHIP_ANSWER_LETTERS.includes(answers[q.id]));
+}
+
 // Plan order for the "Upgrade to" / "Add" label on stacked purchases.
 const PLAN_TIER: Record<string, number> = { scholarship_1_month: 1, '1_month': 1, '3_months': 2, '1_year': 3 };
 
@@ -112,11 +133,7 @@ export default function SubscriptionPage() {
     const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [testSubmitting, setTestSubmitting] = useState(false);
-    const [testResult, setTestResult] = useState<{
-        status: 'passed' | 'failed';
-        score: number;
-        message: string;
-    } | null>(null);
+    const [testResult, setTestResult] = useState<ScholarshipResult | null>(null);
     const [aiAnalysis, setAiAnalysis] = useState<{
         correctCount: number;
         percentage: number;
@@ -276,6 +293,10 @@ export default function SubscriptionPage() {
     };
 
     const submitScholarshipTest = async () => {
+        if (!allScholarshipAnswered(scholarshipQuestions, selectedAnswers)) {
+            setScholarshipError(`Answer all ${scholarshipQuestions.length} questions before submitting.`);
+            return;
+        }
         setTestSubmitting(true);
         setSuccessMessage(null);
         setErrorMessage(null);
@@ -290,18 +311,20 @@ export default function SubscriptionPage() {
         try {
             // Call backend validation (scores only the set the server issued)
             const res = await authAPI.verifyScholarship(submissionAnswers, challengeToken);
-            const data = res.data;
-            setTestResult({
-                status: data.status,
-                score: data.score,
-                message: data.message
-            });
+            const result = readScholarshipResult(res.data);
+            setTestResult(result);
 
             // Refresh user profile info to pull updated scholarship eligibility
             await refreshProfile();
 
-            // Generate AI analysis
-            generateAiTestAnalysis(data.score, submissionAnswers, data.message);
+            // Only a pass carries a score (5); a failed attempt shows the
+            // banner and the server's message without a breakdown.
+            if (result.score !== null) {
+                generateAiTestAnalysis(result.score, submissionAnswers, result.message);
+            } else {
+                setAiAnalysis(null);
+                setGeneratingAnalysis(false);
+            }
 
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
@@ -315,8 +338,9 @@ export default function SubscriptionPage() {
         }
     };
 
-    // Instant score breakdown (computed locally from the server's score with
-    // UPSC CMS-style marking). It used to fake an "AI analysis" with a 1.5 s
+    // Score breakdown (computed locally from the server's score with UPSC
+    // CMS-style marking). The server sends a score only for a pass, so this
+    // runs only then. It used to fake an "AI analysis" with a 1.5 s
     // setTimeout; nothing here calls an AI model, so it is labelled honestly.
     const generateAiTestAnalysis = (score: number, _answers: Record<string, string>, testResultMsg: string) => {
         const correctCount = score;
@@ -908,7 +932,7 @@ export default function SubscriptionPage() {
                                     Diagnose 5/5 Correctly to Get Monthly Pass for ₹{scholarshipOfferPrice}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Get an instant score breakdown. Score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price!
+                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Results are instant: score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price!
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (
@@ -1340,6 +1364,8 @@ export default function SubscriptionPage() {
                                                         )}
                                                     </div>
                                                 </div>
+                                            ) : testResult.score === null ? (
+                                                <p className="text-xs text-muted-foreground">A score breakdown is shown only for a perfect 5/5.</p>
                                             ) : null}
 
                                             <div className="flex gap-3 justify-end">
@@ -1399,7 +1425,7 @@ export default function SubscriptionPage() {
                                             ) : (
                                                 <div className="space-y-6">
                                                     <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
-                                                        <span>QUESTION {currentQuestionIdx + 1} OF 5</span>
+                                                        <span>QUESTION {currentQuestionIdx + 1} OF {scholarshipQuestions.length}</span>
                                                         <Badge variant="outline" className="text-[10px] py-0.5 px-2">Negative marking active</Badge>
                                                     </div>
 
@@ -1455,9 +1481,9 @@ export default function SubscriptionPage() {
                                                             Previous
                                                         </Button>
 
-                                                        {currentQuestionIdx < 4 ? (
+                                                        {currentQuestionIdx < scholarshipQuestions.length - 1 ? (
                                                             <button
-                                                                onClick={() => setCurrentQuestionIdx(prev => Math.min(4, prev + 1))}
+                                                                onClick={() => setCurrentQuestionIdx(prev => Math.min(scholarshipQuestions.length - 1, prev + 1))}
                                                                 disabled={!selectedAnswers[scholarshipQuestions[currentQuestionIdx].id]}
                                                                 className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs py-2 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50"
                                                             >
@@ -1466,7 +1492,7 @@ export default function SubscriptionPage() {
                                                         ) : (
                                                             <button
                                                                 onClick={submitScholarshipTest}
-                                                                disabled={testSubmitting || !challengeToken || Object.keys(selectedAnswers).length < 5}
+                                                                disabled={testSubmitting || !challengeToken || !allScholarshipAnswered(scholarshipQuestions, selectedAnswers)}
                                                                 className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs py-2 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50"
                                                             >
                                                                 {testSubmitting ? 'Submitting...' : 'Submit Scholarship Test'}

@@ -10,6 +10,13 @@ import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { useAuth } from '@/lib/auth';
 import { extractApiErrorMessage } from '@/lib/api';
+import {
+    USERNAME_HINT,
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+    USERNAME_PATTERN,
+    usernameProblem,
+} from '@/app/settings/username';
 
 export default function RegisterPage() {
     const [form, setForm] = useState({ username: '', email: '', password: '', password2: '', first_name: '', last_name: '' });
@@ -32,6 +39,13 @@ export default function RegisterPage() {
         setError('');
         if (form.password !== form.password2) {
             setError('Passwords do not match');
+            return;
+        }
+        // Same rules as Settings (accounts/handles.py). The server would give
+        // a name that breaks them a generated learner_<hex> handle instead.
+        const usernameIssue = usernameProblem(form.username, form.email);
+        if (usernameIssue) {
+            setError(usernameIssue);
             return;
         }
         setLoading(true);
@@ -131,9 +145,19 @@ export default function RegisterPage() {
                         placeholder="Choose a username"
                         value={form.username}
                         onChange={handleChange}
-                        minLength={3}
+                        minLength={USERNAME_MIN_LENGTH}
+                        maxLength={USERNAME_MAX_LENGTH}
+                        pattern={USERNAME_PATTERN}
+                        title="3–30 letters, numbers, _ or ."
+                        autoComplete="nickname"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        aria-describedby="register-username-hint"
                         required
                     />
+                    <p id="register-username-hint" className="mt-1.5 text-xs text-muted-foreground">
+                        {USERNAME_HINT}
+                    </p>
                 </div>
 
                 <div>

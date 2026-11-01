@@ -601,8 +601,11 @@ class Subscription(models.Model):
     """
     Tracks a user's premium subscription with plan type, dates, and status.
 
-    Existing users who already had is_subscribed=True before this model was added
-    are grandfathered as 'lifetime' plans and never expire.
+    Premium is derived from these rows only (accounts.utils.is_premium);
+    ``CustomUser.is_subscribed`` is a mirror. Accounts that paid before this
+    model was added got the rows their payments prove from migration
+    accounts.0026 (accounts.legacy_subscriptions); a flag without payment
+    evidence grants nothing.
     """
     PLAN_CHOICES = [
         ('1_month', '1 Month Pass'),
@@ -768,9 +771,8 @@ class Subscription(models.Model):
             if not live:
                 CustomUser.objects.filter(pk=user.pk).update(is_subscribed=False)
                 # Keep the caller's instance in step: code that reads
-                # user.is_subscribed later in the same request (the
-                # "grandfathered lifetime" fallbacks) must not see the stale
-                # True and report a lifetime plan that just expired.
+                # user.is_subscribed later in the same request must not see
+                # the stale True.
                 if hasattr(user, 'is_subscribed'):
                     user.is_subscribed = False
                 return None
@@ -795,18 +797,19 @@ class Subscription(models.Model):
           1. Determine expiry using PLAN_FEATURES (or NONE for lifetime plans).
              Unknown plan codes raise ``ValueError`` (they used to become a
              never-expiring subscription with an invalid plan code).
-          2. A grandfathered lifetime user (``is_subscribed`` with no
-             Subscription rows) first gets their implicit lifetime plan
-             recorded as a 'legacy' row, so a dated purchase stacks next to
-             it instead of replacing it (they used to lose premium when the
-             dated row expired).
-          3. Dated plans EXTEND from the latest expiry among the user's live
+          2. Dated plans EXTEND from the latest expiry among the user's live
              dated rows (stacking is intentional). The old code extended from
              get_active_subscription()'s "best" row, which can expire before
              a stacked one, so a purchase could add no time at all.
-          4. Flip user.is_subscribed=True via filter-update (no User lock).
-          5. For plans with ``monthly_tokens``, credit those tokens via
+          3. Flip user.is_subscribed=True via filter-update (no User lock).
+          4. For plans with ``monthly_tokens``, credit those tokens via
              ``add_purchased_tokens`` + a TokenTransaction.
+
+        A bare ``is_subscribed`` flag (no Subscription row) is NOT turned into
+        a lifetime 'legacy' row here any more: the removed unpaid
+        /auth/subscribe/ endpoint set that flag for anyone, so a ₹129 month
+        bought lifetime unlimited AI. Accounts that paid before the
+        Subscription model existed got their rows from accounts.0026.
 
         Concurrency:
             The entire read-existing + create-new + flip-is_subscribed +
@@ -828,9 +831,6 @@ class Subscription(models.Model):
         now = timezone.now()
 
         with transaction.atomic():
-            if duration:
-                cls._record_grandfathered_lifetime(user)
-
             # Re-acquire the active subs inside this transaction (row locks +
             # lazy expiry) so the read is consistent with the upcoming write.
             # If the user already paid in another tab between request entry
@@ -886,38 +886,21 @@ class Subscription(models.Model):
             user.is_subscribed = True
         return sub
 
-    @classmethod
-    def _record_grandfathered_lifetime(cls, user):
-        """Materialise an implicit lifetime plan as a 'legacy' row.
-
-        Users who were ``is_subscribed`` before the Subscription model existed
-        have no rows and are treated as lifetime members (accounts.utils,
-        UserSerializer, SubscriptionStatusView). The first dated row would end
-        that: once it expired, get_active_subscription() cleared
-        is_subscribed. Call inside an atomic block.
-        """
-        is_subscribed = (
-            CustomUser.objects.filter(pk=user.pk).values_list('is_subscribed', flat=True).first()
-        )
-        if not is_subscribed or cls.objects.filter(user=user).exists():
-            return None
-        features = PLAN_FEATURES['legacy']
-        return cls.objects.create(
-            user=user,
-            plan='legacy',
-            plan_display_name=features['display_name'],
-            amount_paid=0,
-            razorpay_order_id='legacy',
-            status='active',
-            starts_at=getattr(user, 'created_at', None) or timezone.now(),
-            expires_at=None,
-        )
-
 
 class UserDevice(models.Model):
-    """Tracks devices a user has logged in from to enforce simultaneous device limits."""
+    """Tracks devices a user has logged in from to enforce simultaneous device limits.
+
+    ``device_fingerprint`` is the browser's X-Session-ID, or ``sid:<session>``
+    for a device known only by its Supabase session. ``session_id`` is the
+    Supabase auth session bound to the device (accounts.supabase_rest_auth).
+    Inactive ``sid:`` rows record ended sessions and are never listed.
+    """
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='devices')
     device_fingerprint = models.CharField(max_length=255)
+    session_id = models.CharField(
+        max_length=64, null=True, blank=True, default=None, db_index=True,
+        help_text='Supabase auth session (access-token session_id claim) bound to this device.',
+    )
     device_name = models.CharField(max_length=255, blank=True)
     browser = models.CharField(max_length=255, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)

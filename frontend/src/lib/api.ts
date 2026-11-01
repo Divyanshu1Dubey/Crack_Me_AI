@@ -33,7 +33,9 @@ const FALLBACK_API_BASE_URL = resolveFallbackApiBaseUrl();
 // Last Supabase session seen by the request interceptor.
 let cachedSession: { access_token: string } | null = null;
 
-// Device id sent as X-Session-ID; the backend counts devices by it.
+// Device id sent as X-Session-ID. The backend binds it to the Supabase
+// session of the access token (accounts/supabase_rest_auth.py), so signing in
+// again on this browser keeps its device slot.
 const DEVICE_ID_KEY = 'crack_device_id';
 const DEVICE_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
@@ -60,9 +62,10 @@ const writeDeviceIdCookie = (id: string | null) => {
 
 // Storage access can throw (site data blocked, some privacy modes / webviews).
 // Then keep the id in a first-party cookie. If that cannot be persisted
-// either, send no X-Session-ID at all (the backend skips device tracking):
-// a new id per page load used to enrol a new device on every visit and use
-// up the 2-device allowance within two page loads.
+// either, send no X-Session-ID at all: the backend then counts this browser
+// by its Supabase session (one device per sign-in). A new id per page load
+// used to enrol a new device on every visit and use up the 2-device
+// allowance within two page loads.
 const getOrCreateSessionId = (): string => {
   if (typeof window === 'undefined') return '';
   try {
@@ -155,6 +158,34 @@ export const endSessionAfterApiError = async (error: unknown): Promise<boolean> 
 // test submission, AI generation), and replaying it would run it twice.
 const IDEMPOTENT_METHODS = new Set(['get', 'head', 'options']);
 
+// 429 `auth_verification_busy`: the backend could not check the access token
+// with Supabase right now (accounts/supabase_rest_auth.py caps those checks).
+// It is answered during authentication, before any view runs, so retrying
+// once after Retry-After (at most 2 s) is safe for every method.
+export const AUTH_BUSY_CODE = 'auth_verification_busy';
+const AUTH_BUSY_MAX_WAIT_MS = 2000;
+
+/** Delay before retrying an `auth_verification_busy` answer (Retry-After, capped). */
+export const authBusyRetryDelayMs = (retryAfter: unknown): number => {
+  const seconds = Number(typeof retryAfter === 'string' || typeof retryAfter === 'number' ? retryAfter : NaN);
+  if (!Number.isFinite(seconds) || seconds < 0) return 1000;
+  return Math.min(AUTH_BUSY_MAX_WAIT_MS, seconds * 1000);
+};
+
+/**
+ * Token to retry a `device_inactive` answer with, or null to end the session.
+ *
+ * The backend refuses a Supabase session that was logged out or replaced by
+ * a newer sign-in on this browser. A request still carrying an older
+ * session's token (another tab, an in-flight call during a sign-in) must not
+ * sign out the CURRENT session: it is retried once with the current token.
+ */
+export const staleSessionRetryToken = (
+  code: string | undefined,
+  sentWith: string | null,
+  current: string | null,
+): string | null => (code === 'device_inactive' && sentWith && current && sentWith !== current ? current : null);
+
 // ── Supabase session refresh after a 401 ─────────────────────────────────
 // Bounded on purpose (see sessionRefreshGate.ts): when the backend rejects a
 // session that is actually valid, an unbounded refresh-per-401 looped with
@@ -194,6 +225,19 @@ const refreshSupabaseAccessToken = async (): Promise<string | null> => {
 
 /** A fresh access token to retry with after `failedToken` got a 401, or null. */
 const supabaseTokenAfter401 = createRefreshGate(refreshSupabaseAccessToken);
+
+/** The current Supabase session's access token (null in local-auth mode or when signed out). */
+const currentSupabaseAccessToken = async (): Promise<string | null> => {
+  if (typeof window === 'undefined' || isLocalAuthMode() || !isSupabaseAuthEnabled()) return null;
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
+  }
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -248,6 +292,8 @@ api.interceptors.response.use(
       _retry?: boolean;
       _apiBaseFailover?: boolean;
       _tokenRefresh?: boolean;
+      _authBusyRetry?: boolean;
+      _staleSessionRetry?: boolean;
       baseURL?: string;
       method?: string;
       headers?: Record<string, string>;
@@ -255,6 +301,28 @@ api.interceptors.response.use(
     const status = error.response?.status as number | undefined;
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
     const errorCode = getApiErrorCode(error);
+
+    if (status === 429 && errorCode === AUTH_BUSY_CODE && error.config && !originalRequest._authBusyRetry) {
+      originalRequest._authBusyRetry = true;
+      const headers = (error.response?.headers || {}) as { get?: (name: string) => unknown } & Record<string, unknown>;
+      const retryAfter = typeof headers.get === 'function' ? headers.get('retry-after') : headers['retry-after'];
+      await new Promise((resolve) => setTimeout(resolve, authBusyRetryDelayMs(retryAfter)));
+      return api(originalRequest);
+    }
+
+    // device_inactive for a request sent with an older session's token: retry
+    // once with the current session instead of signing that one out.
+    if (errorCode === 'device_inactive' && !originalRequest._staleSessionRetry) {
+      const retryToken = staleSessionRetryToken(
+        errorCode, bearerTokenOf(originalRequest.headers), await currentSupabaseAccessToken(),
+      );
+      if (retryToken && error.config) {
+        originalRequest._staleSessionRetry = true;
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${retryToken}`;
+        return api(originalRequest);
+      }
+    }
 
     // Blocked account, device logged out (Settings / admin), unconfirmed
     // email: sign out locally and explain on /login. Must run before the
@@ -845,7 +913,8 @@ export const mistakeNotebookAPI = {
   update: (id: number, data: Record<string, unknown>) => api.patch(`/analytics/mistake-notebook/${id}/`, data),
   remove: (id: number) => api.delete(`/analytics/mistake-notebook/${id}/`),
   review: (id: number) => api.post(`/analytics/mistake-notebook/${id}/review/`),
-  due: () => api.get('/analytics/mistake-notebook/due/'),
+  // Paged like list(): ?page=&page_size= (at most 100); `count` is the whole due set.
+  due: (params?: Record<string, string | number>) => api.get('/analytics/mistake-notebook/due/', { params }),
   stats: () => api.get('/analytics/mistake-notebook/stats/'),
 };
 

@@ -7,6 +7,7 @@ as user A for up to five minutes.
 import base64
 import io
 import json
+import time
 from unittest import mock
 
 from django.core.cache import cache
@@ -23,7 +24,8 @@ HEADER = _b64({'alg': 'HS256', 'kid': 'abcdEFGHij1234', 'typ': 'JWT'})
 
 
 def _token(sub):
-    payload = _b64({'iss': 'https://example.supabase.co/auth/v1', 'sub': sub})
+    # A live token: _fetch_supabase_user refuses expired / exp-less values locally.
+    payload = _b64({'iss': 'https://example.supabase.co/auth/v1', 'sub': sub, 'exp': int(time.time()) + 3600})
     return f'{HEADER}.{payload}.signature-{sub}'
 
 
