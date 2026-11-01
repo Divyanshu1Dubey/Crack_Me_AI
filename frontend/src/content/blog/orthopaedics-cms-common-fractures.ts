@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Orthopaedics', 'Fractures', 'UPSC CMS', 'NEET PG', 'Surgery'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2600,
-    primaryCta: { label: 'Practice Orthopaedics PYQs (free)', href: '/questions?topic=orthopaedics' },
+    primaryCta: { label: 'Practice Orthopaedics PYQs (free)', href: '/questions?subject=orthopaedics' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the most common fracture in elderly?', a: 'Hip fracture (femoral neck / intertrochanteric) is the most common fracture in elderly due to osteoporosis. Low-energy fall mechanism. Requires surgical fixation to prevent complications.' },

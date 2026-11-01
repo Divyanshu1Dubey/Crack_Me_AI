@@ -70,6 +70,11 @@ export const UPSC_CMS_PATTERN = {
     /** Fraction of a question's marks deducted for a wrong answer. */
     negativeMarkingFraction: 1 / 3,
     ageLimit: 'Below 32 years on 1 August of the exam year (relaxations as per UPSC rules)',
+    /** UPSC CMS caps attempts only through the age limit (unlike the Civil
+     *  Services exam's 6/9/unlimited rule, which /resources once showed). */
+    attemptsRule: 'No fixed limit; subject to age ceiling',
+    attemptsFaq:
+        'There is no fixed limit on the number of attempts for UPSC CMS. You can appear every year until you cross the upper age limit (below 32 years on 1 August of the exam year, with relaxations for reserved categories as per UPSC rules).',
 } as const;
 
 /** Marks a correct answer earns in a UPSC CMS paper (250 / 120 ≈ 2.083). */

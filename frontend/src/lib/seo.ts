@@ -1,3 +1,5 @@
+import { CMS_PYQ_PHRASE } from "./bankStats";
+
 export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cracklabs.app";
 
 // Note: buildCanonical() lives in lib/metadata.ts (more comprehensive — strips
@@ -10,9 +12,11 @@ export const brandName = "CrackLabs AI";
 export const siteTitle =
   "CrackCMS - UPSC CMS Preparation App with AI Tutor, PYQs and Mock Tests";
 export const siteDescription =
-  "Prepare for UPSC CMS and medical PG exams with CrackCMS by CrackLabs AI. Practice 2,000+ UPSC CMS PYQs (2018-2025), AI-explained MCQs, mock tests, and full exam simulations.";
+  `Prepare for UPSC CMS and medical PG exams with CrackCMS by CrackLabs AI. Practice ${CMS_PYQ_PHRASE}, AI-explained MCQs, mock tests, and full exam simulations.`;
 
-export const defaultOgImage = "/cms-circle-logo.png";
+/** 1200x630 social card generated from the logo (scripts/generate-brand-icons.mjs). */
+export const defaultOgImage = "/brand/og-image.png";
+export const defaultOgImageSize = { width: 1200, height: 630 } as const;
 
 export const seoKeywords = [
   "UPSC CMS preparation",

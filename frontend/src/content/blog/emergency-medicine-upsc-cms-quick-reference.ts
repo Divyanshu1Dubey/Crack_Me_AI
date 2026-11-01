@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Emergency Medicine', 'ACLS', 'ATLS', 'UPSC CMS', 'Medical Officers'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '12 min',
     wordCount: 3500,
-    primaryCta: { label: 'Practice Emergency Medicine PYQs', href: '/questions?topic=emergency-medicine' },
+    primaryCta: { label: 'Practice Emergency Medicine PYQs', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/medical-officer'],
     faqs: [
         { q: 'What is the cardiac arrest algorithm?', a: 'Check responsiveness, call for help, check pulse. If no pulse: start CPR (30:2), attach defibrillator. Shockable (VF/pVT): defibrillate then CPR. Non-shockable (asystole/PEA): CPR + epinephrine every 3-5 min. Post-ROSC: optimize perfusion, treat reversible causes (Hs and Ts).' },

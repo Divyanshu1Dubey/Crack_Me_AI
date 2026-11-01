@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BlogPostLayout } from '@/components/BlogPostLayout';
 import { buildPageMetadata } from '@/lib/metadata';
-import { getAllPostSlugs, getPostBySlug } from '@/lib/blog';
+import { getAllPostSlugs, getPostBySlug, postSocialImagePath } from '@/lib/blog';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         title: `${post.title} — CrackCMS Blog`,
         description: post.description,
         path: `/blog/${post.slug}`,
-        image: post.coverImage ?? '/cms-circle-logo.png',
+        image: postSocialImagePath(post),
         type: 'article',
         keywords: [
             post.category,

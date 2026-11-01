@@ -29,13 +29,15 @@ export interface AuthorProfile {
 }
 
 export const authors: Record<string, AuthorProfile> = {
+    // Now also the reviewer on posts whose named author would otherwise have
+    // reviewed his own work, so it carries no credential we cannot show.
     'crackcms-editorial': {
         slug: 'crackcms-editorial',
         name: 'CrackCMS Editorial Team',
-        credential: 'MBBS, MD, FRCP (clinicians)',
+        credential: 'Editorial team — CrackCMS',
         role: 'Clinical Content Editors, CrackCMS',
         bio:
-            'A practising physician panel that reviews every CrackCMS article for clinical accuracy, syllabus fit and exam relevance. We have between us sat UPSC CMS, NEET PG and INI-CET, and we write the way we wished someone had written for us.',
+            'The CrackCMS editorial team reviews every article for clinical accuracy, syllabus fit and exam relevance, following our editorial and medical-review policies, and writes the way we wished someone had written for us.',
         expertise: [
             'UPSC CMS',
             'NEET PG',
@@ -47,8 +49,8 @@ export const authors: Record<string, AuthorProfile> = {
             'PSM',
         ],
         sameAs: [
-            'https://cracklabs.app/about',
-            'https://cracklabs.app/editorial-policy',
+            'https://www.cracklabs.app/about',
+            'https://www.cracklabs.app/editorial-policy',
         ],
     },
     'dr-aarav-mehta': {
@@ -56,10 +58,12 @@ export const authors: Record<string, AuthorProfile> = {
         name: 'Dr. Aarav Mehta',
         credential: 'MBBS, MD (Internal Medicine)',
         role: 'Senior Editor — Medicine, CrackCMS',
+        // No "AIIMS-trained": an institution claim we cannot verify.
         bio:
-            'AIIMS-trained internist who runs the UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making NEET PG recall stick. Believes 7-hour sleep is the single highest-yield revision tool a candidate owns.',
+            'Internist who runs the UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making NEET PG recall stick. Believes 7-hour sleep is the single highest-yield revision tool a candidate owns.',
         expertise: ['Internal Medicine', 'ECG interpretation', 'Acid-base', 'UPSC CMS Medicine'],
-        sameAs: ['https://cracklabs.app/authors/aarav-mehta'],
+        // The author archive that exists (/authors/... was a 404).
+        sameAs: ['https://www.cracklabs.app/blog/author/dr-aarav-mehta'],
     },
 };
 

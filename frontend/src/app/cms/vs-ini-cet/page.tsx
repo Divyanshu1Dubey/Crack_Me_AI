@@ -4,6 +4,7 @@ import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { ArrowRight } from 'lucide-react';
 import Script from 'next/script';
+import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 
 export const metadata: Metadata = {
     title: 'UPSC CMS vs INI-CET — Which is Better for MD/MS After MBBS?',
@@ -117,7 +118,7 @@ export default function CMSVsINICETPage() {
                         <Link href="/cms" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">UPSC CMS</p>
                             <p className="mt-2 font-semibold group-hover:underline">Prepare for UPSC CMS <ArrowRight className="inline ml-1 h-4 w-4" /></p>
-                            <p className="mt-1 text-sm text-muted-foreground">2,000+ PYQs, AI tutor, mock tests, exam simulator for central government MO posts.</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{CMS_PYQ_COUNT} PYQs, AI tutor, mock tests, exam simulator for central government MO posts.</p>
                         </Link>
                         <Link href="/ini-cet" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">INI-CET</p>

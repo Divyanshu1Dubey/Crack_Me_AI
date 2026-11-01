@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Ophthalmology', 'Eye Diseases', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2400,
-    primaryCta: { label: 'Practice Ophthalmology PYQs (free)', href: '/questions?topic=ophthalmology' },
+    primaryCta: { label: 'Practice Ophthalmology PYQs (free)', href: '/questions?subject=ophthalmology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How many ophthalmology questions in UPSC CMS?', a: '3-4 questions typically. Focus on: refractive errors, common infections (conjunctivitis, keratitis), glaucoma, cataract, and diabetic retinopathy.' },

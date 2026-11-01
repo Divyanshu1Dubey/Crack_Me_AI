@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Pathology', 'Gross Pathology', 'Histology', 'UPSC CMS', 'NEET PG', 'Image-Based'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2800,
-    primaryCta: { label: 'Practice Pathology PYQs (free)', href: '/questions?topic=pathology' },
+    primaryCta: { label: 'Practice Pathology PYQs (free)', href: '/questions?subject=pathology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What pathology textbook is best for image recognition?', a: 'Robbins Basic Pathology has excellent histology images. Harsh Mohan is widely used in India and has good gross pathology descriptions. Use both for comprehensive coverage.' },

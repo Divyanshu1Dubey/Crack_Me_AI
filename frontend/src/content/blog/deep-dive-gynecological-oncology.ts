@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Gynae Oncology', 'HPV', 'Cervical Cancer', 'FIGO', 'OBG', 'UPSC CMS', 'NEET PG'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '11 min',
     wordCount: 3400,
-    primaryCta: { label: 'Practice OBG PYQs (free)', href: '/questions?topic=obg' },
+    primaryCta: { label: 'Practice OBG PYQs (free)', href: '/questions?subject=obg' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the most common cause of cervical cancer?', a: 'HPV infection, particularly types 16 and 18, causes ~70% of cervical cancers. HPV 16 accounts for ~50% and HPV 18 for ~20% of cases.' },

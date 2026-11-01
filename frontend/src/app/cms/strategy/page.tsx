@@ -6,7 +6,7 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = {
     title: 'UPSC CMS Study Plans — 6-Month, 3-Month, Last-Week',
-    description: 'UPSC CMS study plans built by UPSC CMS AIR-1. Choose your timeline — 6 months, 3 months, or last-week revision — and follow a precise day-by-day schedule.',
+    description: 'UPSC CMS study plans from the CrackCMS editorial team. Choose your timeline — 6 months, 3 months, or last-week revision — and follow a precise day-by-day schedule.',
     alternates: { canonical: '/cms/strategy', languages: { 'en-IN': '/cms/strategy' } },
     openGraph: { type: 'website', url: '/cms/strategy', title: 'UPSC CMS Study Plans | CrackCMS', siteName },
     twitter: { card: 'summary_large_image', title: 'UPSC CMS Study Plans | CrackCMS' },
@@ -36,7 +36,7 @@ export default function CMSStrategyIndexPage() {
                         UPSC CMS Study Plans
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
-                        Timeline-specific plans built by an UPSC CMS AIR-1. Pick your timeline below.
+                        Timeline-specific plans from the CrackCMS editorial team. Pick your timeline below.
                     </p>
                 </section>
                 <section className="mx-auto grid max-w-5xl gap-3 px-4 pb-16 sm:px-6 sm:grid-cols-2 lg:grid-cols-3">

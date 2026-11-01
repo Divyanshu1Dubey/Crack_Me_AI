@@ -7,6 +7,7 @@
  */
 import { questionBankHref } from '@/lib/seo';
 import { CMS_MARKS_PER_QUESTION, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
+import { CMS_PYQ_COUNT, CMS_PYQ_YEAR_COUNT, CMS_PYQ_YEARS, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 /** "96 Qs · ≈200 marks" from the official UPSC CMS split. */
 function cmsWeightage(subjectName: string): string {
@@ -85,10 +86,11 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     slug: 'cms',
     shortName: 'UPSC CMS',
     fullName: 'UPSC Combined Medical Services',
-    tagline: 'Crack the UPSC CMS exam with 2,000+ PYQs, mock tests & AI tutoring.',
+    tagline: `Crack the UPSC CMS exam with ${CMS_PYQ_COUNT} PYQs, mock tests & AI tutoring.`,
     description:
-      'UPSC CMS is the gateway to Central Govt medical officer posts — Railways, CGHS, Ordnance Factories. CrackCMS gives you every PYQ from 2018-2025, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.',
-    tags: ['Govt Job', 'Permanent', 'Class-I Officer', 'UPSC'],
+      `UPSC CMS is the gateway to Central Govt medical officer posts — Railways, CGHS, Ordnance Factories. CrackCMS gives you ${CMS_PYQ_COUNT} PYQs from ${CMS_PYQ_YEARS}, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.`,
+    // theme.badgeText ('UPSC') is rendered first, so it is not repeated here.
+    tags: ['Govt Job', 'Permanent', 'Class-I Officer'],
     primaryCta: { label: 'Start Year-wise PYQ', href: questionBankHref('cms') },
     secondaryCta: { label: 'Take Mock Test', href: '/tests' },
     theme: {
@@ -125,8 +127,8 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     ],
     pyqYears: [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018],
     stats: [
-      { value: '2,000+', label: 'Verified PYQs' },
-      { value: '8 yrs', label: 'Coverage 2018-25' },
+      { value: CMS_PYQ_COUNT, label: 'Verified PYQs' },
+      { value: `${CMS_PYQ_YEAR_COUNT} yrs`, label: `Coverage ${CMS_PYQ_YEARS}` },
       { value: '500', label: 'Max Marks' },
     ],
   },
@@ -135,10 +137,11 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     slug: 'neet-pg',
     shortName: 'NEET PG',
     fullName: 'NEET PG (National Eligibility cum Entrance Test — Postgraduate)',
-    tagline: 'Crack NEET PG with 1,200+ PYQs, full mocks & AI explanations — designed for PG aspirants.',
+    tagline: `Crack NEET PG with ${NEET_PG_QUESTION_COUNT} questions, full mocks & AI explanations — designed for PG aspirants.`,
     description:
-      'NEET PG is the single window for MD / MS / PG Diploma admissions across India. CrackCMS brings you the last 5 years of NEET PG PYQs (2020-2025), 19-subject high-yield maps, and an AI tutor trained on standard PG reference books.',
-    tags: ['Postgraduate', 'NBE', 'All India 50% Quota', 'NEET PG'],
+      `NEET PG is the single window for MD / MS / PG Diploma admissions across India. CrackCMS brings you ${NEET_PG_QUESTION_COUNT} NEET PG questions (mostly exam recalls), 19-subject high-yield maps, and an AI tutor trained on standard PG reference books.`,
+    // theme.badgeText ('NEET PG') is rendered first, so it is not repeated here.
+    tags: ['Postgraduate', 'NBE', 'All India 50% Quota'],
     primaryCta: { label: 'Start NEET PG PYQ', href: questionBankHref('neet-pg') },
     secondaryCta: { label: 'Browse NEET PG Subjects', href: '/exams/neet-pg#subjects' },
     theme: {
@@ -189,7 +192,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     ],
     pyqYears: [2025, 2024, 2023, 2022, 2021, 2020],
     stats: [
-      { value: '1,200+', label: 'NEET PG PYQs' },
+      { value: NEET_PG_QUESTION_COUNT, label: 'NEET PG questions' },
       { value: '19', label: 'PG Subjects' },
       { value: '800', label: 'Max Marks' },
     ],

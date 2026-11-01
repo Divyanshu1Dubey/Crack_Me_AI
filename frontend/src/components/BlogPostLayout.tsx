@@ -22,6 +22,11 @@ import FAQSection from '@/components/FAQSection';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import StructuredData from '@/components/StructuredData';
 import { CommentsGiscus } from '@/components/CommentsGiscus';
+// From the plain config module: a value imported from a 'use client' file
+// into this Server Component would be a (truthy) client reference.
+import { GISCUS_CONFIGURED } from '@/components/giscusConfig';
+import BlogHeadingAnchors from '@/components/BlogHeadingAnchors';
+import { CMS_PYQ_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 import {
     articleSchema,
     breadcrumbSchema,
@@ -31,7 +36,7 @@ import {
 } from '@/lib/metadata';
 import { siteName, siteUrl } from '@/lib/seo';
 import type { BlogPost } from '@/lib/blog';
-import { formatPostDate, getRelatedPosts, categoryToSlug } from '@/lib/blog';
+import { formatPostDate, getRelatedPosts, categoryToSlug, postSocialImagePath } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
 import AdSense from '@/components/AdSense';
 
@@ -96,7 +101,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
             citations: post.references,
             speakable: ['#start-reading .blog-article h2:first-of-type', '.blog-excerpt'],
             medicalPageType: medicalPage,
-            image: post.coverImage,
+            image: postSocialImagePath(post),
         }),
         personSchema({
             name: author.name,
@@ -235,9 +240,22 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                     <div className="grid gap-10 lg:grid-cols-12">
                         {/* Body */}
                         <div className="lg:col-span-8 min-w-0">
-                            <div className="blog-article">
+                            {/* Below lg the sidebar (and its TOC) renders after the whole
+                                article, so phones get a collapsible copy up front. */}
+                            {tocItems.length > 0 ? (
+                                <details className="lg:hidden mb-6 rounded-2xl border border-border bg-card p-4">
+                                    <summary className="cursor-pointer text-sm font-bold text-foreground flex items-center gap-2">
+                                        <ListTree className="h-4 w-4 text-muted-foreground" /> On this page
+                                    </summary>
+                                    <nav aria-label="Table of contents" className="mt-3">
+                                        <TocList items={tocItems} />
+                                    </nav>
+                                </details>
+                            ) : null}
+                            <div id="post-body" className="blog-article">
                                 <FormattedText text={post.body} />
                             </div>
+                            <BlogHeadingAnchors containerId="post-body" items={tocItems} />
 
                             {/* Share row */}
                             <AdSense slot="in-content" />
@@ -359,9 +377,10 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 <CardContent className="p-6 sm:p-8 text-center">
                                     <h3 className="text-lg font-bold">Hand this plan to your study group.</h3>
                                     <p className="mt-2 text-sm text-muted-foreground">
-                                        CrackCMS is a free study desk for medical PG aspirants — 3,300+ PYQs,
-                                        full mock simulators, spaced-repetition flashcards and an AI tutor
-                                        that compares stem formats across UPSC CMS and NEET PG.
+                                        CrackCMS is a free study desk for medical PG aspirants — {CMS_PYQ_COUNT} UPSC
+                                        CMS PYQs and a {NEET_PG_QUESTION_COUNT} question NEET PG bank, full mock
+                                        simulators, spaced-repetition flashcards and an AI tutor that compares stem
+                                        formats across UPSC CMS and NEET PG.
                                     </p>
                                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                                         <TrackedLink
@@ -388,39 +407,30 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 </CardContent>
                             </Card>
 
-                            {/* Comments */}
-                            <section className="mt-12">
-                                <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-                                    <MessageCircle className="h-5 w-5 text-primary" /> Join the discussion
-                                </h2>
-                                <CommentsGiscus slug={post.slug} />
-                            </section>
+                            {/* Comments — only once Giscus is configured (no placeholder). */}
+                            {GISCUS_CONFIGURED && (
+                                <section className="mt-12">
+                                    <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
+                                        <MessageCircle className="h-5 w-5 text-primary" /> Join the discussion
+                                    </h2>
+                                    <CommentsGiscus slug={post.slug} />
+                                </section>
+                            )}
                         </div>
 
                         {/* Sidebar — TOC + author + contact */}
                         <aside className="lg:col-span-4">
-                            <div className="lg:sticky lg:top-6 space-y-5">
+                            {/* top-20 clears the sticky 64px public nav */}
+                            <div className="lg:sticky lg:top-20 space-y-5">
                                 {tocItems.length > 0 ? (
                                     <nav
                                         aria-label="Table of contents"
-                                        className="rounded-2xl border border-border bg-card p-5"
+                                        className="hidden lg:block rounded-2xl border border-border bg-card p-5"
                                     >
                                         <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
                                             <ListTree className="h-4 w-4" /> On this page
                                         </h2>
-                                        <ol className="space-y-1.5 text-sm">
-                                            {tocItems.map((item, i) => (
-                                                <li key={item.id}>
-                                                    <a
-                                                        href={`#${item.id}`}
-                                                        className="text-foreground/80 hover:text-primary transition-colors"
-                                                    >
-                                                        <span className="text-muted-foreground mr-2">{i + 1}.</span>
-                                                        {item.label}
-                                                    </a>
-                                                </li>
-                                            ))}
-                                        </ol>
+                                        <TocList items={tocItems} />
                                     </nav>
                                 ) : null}
 
@@ -489,6 +499,25 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
  * body. We only use this when the post hasn't explicitly supplied a
  * pre-built `toc[]` (keeps older posts rendering without edit).
  */
+/** The numbered "On this page" list (sidebar on desktop, collapsible on phones). */
+function TocList({ items }: { items: { id: string; label: string }[] }) {
+    return (
+        <ol className="space-y-1.5 text-sm">
+            {items.map((item, i) => (
+                <li key={item.id}>
+                    <a
+                        href={`#${item.id}`}
+                        className="text-foreground/80 hover:text-primary transition-colors"
+                    >
+                        <span className="text-muted-foreground mr-2">{i + 1}.</span>
+                        {item.label}
+                    </a>
+                </li>
+            ))}
+        </ol>
+    );
+}
+
 function extractH2sFromMarkdown(markdown: string): { id: string; label: string }[] {
     const out: { id: string; label: string }[] = [];
     let inCode = false;

@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Neonatal Resuscitation', 'NRP', 'Paediatrics', 'UPSC CMS', 'NEET PG', 'Clinical Skills'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice Paediatrics PYQs (free)', href: '/questions?topic=paediatrics' },
+    primaryCta: { label: 'Practice Paediatrics PYQs (free)', href: '/questions?subject=paediatrics' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the initial step in neonatal resuscitation?', a: 'Provide warmth, clear airway if needed, dry and stimulate the baby. 90% of newborns breathe spontaneously after drying and stimulation.' },

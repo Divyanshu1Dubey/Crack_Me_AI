@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['ENT', 'Ear', 'Nose', 'Throat', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2400,
-    primaryCta: { label: 'Practice ENT PYQs (free)', href: '/questions?topic=ent' },
+    primaryCta: { label: 'Practice ENT PYQs (free)', href: '/questions?subject=ent' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How many ENT questions in UPSC CMS?', a: '2-4 questions from ENT in Paper I. Focus on: hearing loss types, sinusitis, epistaxis management, tonsillitis, and laryngeal conditions.' },

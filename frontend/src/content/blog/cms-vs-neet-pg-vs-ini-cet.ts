@@ -54,7 +54,7 @@ const post: BlogPost = {
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-vs-neet-pg-vs-ini-cet', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet', '/simulator'],
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet', '/simulator'],
     references: [
         {
             label: 'UPSC — Combined Medical Services Examination 2026',

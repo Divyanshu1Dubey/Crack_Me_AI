@@ -390,6 +390,17 @@ export function getPostBySlug(slug: string): BlogPost | undefined {
     return posts.find((p) => p.slug === slug);
 }
 
+/**
+ * Social / structured-data image for a post: the generated 1200×630 card
+ * from app/blog/[slug]/opengraph-image.tsx. The `coverImage` paths in the
+ * content files (/blog/og/<x>-cover.png) were never added to /public, so
+ * every twitter:image, Article JSON-LD image and RSS enclosure that used
+ * them was a 404.
+ */
+export function postSocialImagePath(post: Pick<BlogPost, 'slug'>): string {
+    return `/blog/${post.slug}/opengraph-image`;
+}
+
 /** All post slugs — used by `generateStaticParams`. */
 export function getAllPostSlugs(): string[] {
     return posts.map((p) => p.slug);

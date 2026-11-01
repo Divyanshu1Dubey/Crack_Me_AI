@@ -1,6 +1,6 @@
 // Regression tests for the shared exam-pattern constant and the public tools
 // (PUB-05, PUB-11, PUB-12, PUB-27, PUB-37, PUB-07).
-// Run: node --import ./tests/unit/register-ts-alias.mjs --test tests/unit/
+// Run (from frontend/): node --import ./tests/unit/register-ts-alias.mjs --test "tests/unit/*.test.mjs" "tests/unit/*.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

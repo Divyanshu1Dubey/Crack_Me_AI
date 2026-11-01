@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth';
 import {
   Activity,
@@ -27,18 +26,15 @@ import {
   Crown,
   Loader2
 } from 'lucide-react';
-import BrandMark from '@/components/BrandMark';
+import { PublicNavBar } from '@/components/PublicNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ExamCountdown from '@/components/ExamCountdown';
 import { CMS_MARKING_LABEL, UPSC_CMS_PATTERN, scoreCmsAttempt } from '@/lib/examPatterns';
+import { CMS_PYQ_COUNT, CMS_PYQ_PHRASE, CMS_PYQ_YEARS, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
+import { questionBankHref } from '@/lib/seo';
 import { PREMIUM_PLANS, LOWEST_PLAN_PRICE_INR } from '@/app/subscription/plans';
-
-const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
-  ssr: false,
-  loading: () => <div className="h-9 w-9 rounded-xl border border-border/70 bg-muted/60" aria-hidden="true" />,
-});
 
 const formatTimer = (seconds: number) => {
   const h = Math.floor(seconds / 3600);
@@ -70,7 +66,7 @@ const DEMO_SCORE = scoreCmsAttempt({ correct: DEMO_CORRECT, incorrect: DEMO_INCO
 const formatInr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
 export default function LandingPage() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // === INTERACTIVE WIDGET STATES ===
   const [pyqAnswer, setPyqAnswer] = useState<string | null>(null);
@@ -212,7 +208,7 @@ export default function LandingPage() {
   ];
 
   const stats = [
-    { value: '2000+', label: 'Verified PYQs', icon: FileText, desc: 'UPSC CMS 2018-2025' },
+    { value: CMS_PYQ_COUNT, label: 'Verified PYQs', icon: FileText, desc: `UPSC CMS ${CMS_PYQ_YEARS}` },
     { value: '5', label: 'Core Subjects', icon: Stethoscope, desc: 'Paper 1 & Paper 2' },
     { value: '47+', label: 'Topic Clusters', icon: Activity, desc: 'High-yield medical focus' },
     { value: '9', label: 'Exam Modes', icon: ShieldCheck, desc: 'From custom drills to full simulation' },
@@ -239,33 +235,8 @@ export default function LandingPage() {
       {/* Exam Countdown Banner */}
       <ExamCountdown />
 
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <BrandMark href="/" compact showTagline={false} />
-          <div className="flex items-center gap-2 sm:gap-3">
-            <ThemeToggle />
-            {isAuthenticated ? (
-              <Button asChild className="rounded-xl font-semibold shadow-sm shadow-primary/10">
-                <Link href="/dashboard">
-                  Open Dashboard <ChevronRight className="ml-1 w-4 h-4" />
-                </Link>
-              </Button>
-            ) : (
-              <>
-                <Button variant="ghost" asChild className="hidden sm:inline-flex font-medium text-muted-foreground hover:text-foreground">
-                  <Link href="/login">Log in</Link>
-                </Button>
-                <Button asChild className="rounded-xl font-semibold shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]">
-                  <Link href="/register">
-                    Start Free <ChevronRight className="ml-1 w-4 h-4" />
-                  </Link>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      {/* Navbar (shared with the other public pages; shows "Log in" on phones too) */}
+      <PublicNavBar />
 
       {/* ============================================
           HERO SECTION
@@ -388,8 +359,9 @@ export default function LandingPage() {
               Everything Needed for High-Performance CMS Prep
             </div>
             <h2 className="font-display text-3xl font-extrabold text-foreground sm:text-4xl lg:text-5xl tracking-tight">
-              We broken down exam preparation into modular, specialized engines that work together seamlessly. Explore them live below.
+              We&apos;ve broken down exam preparation into modular engines that work together.
             </h2>
+            <p className="text-base text-muted-foreground sm:text-lg">Explore them live below.</p>
             <div className="h-1 w-20 bg-linear-to-r from-blue-500 via-purple-500 to-cyan-500 rounded-full mx-auto" />
           </div>
 
@@ -398,7 +370,7 @@ export default function LandingPage() {
             {[
               {
                 title: 'UPSC CMS Question Bank',
-                description: '2,000+ UPSC CMS previous year questions (2018-2025) with AI-grounded medical explanations.',
+                description: `${CMS_PYQ_COUNT} UPSC CMS previous year questions (${CMS_PYQ_YEARS}) with AI-grounded medical explanations.`,
                 label: 'UPSC CMS',
                 icon: FileText,
                 color: 'from-emerald-500/10 to-teal-500/10',
@@ -424,8 +396,10 @@ export default function LandingPage() {
                 iconColor: 'text-purple-500',
               },
               {
-                title: 'Adaptive Mock Tests',
-                description: 'Timed exam engine simulating exact NBE and UPSC test environments.',
+                // No adaptive-difficulty test UI exists yet (testsAPI.generateAdaptive
+                // is unused), so this card sells only the timed mocks that do.
+                title: 'Timed Mock Tests',
+                description: 'Timed exam engine that follows the UPSC CMS and NEET PG paper pattern and marking.',
                 label: 'Mock Tests',
                 icon: Clock3,
                 color: 'from-cyan-500/10 to-blue-500/10',
@@ -452,7 +426,7 @@ export default function LandingPage() {
               },
             ].map((item, i) => {
               const hrefs = [
-                '/questions', '/questions', '/ai-tutor',
+                questionBankHref('cms'), questionBankHref('neet-pg'), '/ai-tutor',
                 '/tests', '/flashcards', '/analytics',
               ];
               const href = hrefs[i] || '#';
@@ -485,7 +459,8 @@ export default function LandingPage() {
                     {item.description}
                   </p>
 
-                  <div className="flex items-center gap-2 text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  {/* Always visible on touch widths (no hover); hover reveal from md up. */}
+                  <div className="flex items-center gap-2 text-xs font-semibold text-primary opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
                     Learn more <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
@@ -516,7 +491,7 @@ export default function LandingPage() {
                   Clinical PYQ Atlas
                 </h3>
                 <p className="text-base text-muted-foreground leading-relaxed">
-                  Unlock 2000+ active past questions from UPSC CMS (2018-2025). Every question is systematically indexed by subject, topic cluster, and difficulty grade, and enriched with voter-consensus answers and high-yield references.
+                  Unlock {CMS_PYQ_COUNT} past questions from UPSC CMS ({CMS_PYQ_YEARS}). Every question is systematically indexed by subject, topic cluster, and difficulty grade, and enriched with voter-consensus answers and high-yield references.
                 </p>
 
                 <ul className="space-y-3 font-semibold text-foreground text-sm">
@@ -564,7 +539,10 @@ export default function LandingPage() {
                       ].map((opt) => {
                         const isSelected = pyqAnswer === opt.key;
                         const isCorrect = opt.key === 'B';
-                        let btnStyle = "border-slate-700 hover:border-emerald-500/50 hover:bg-slate-800";
+                        // The card is always dark (bg-slate-950), so every state sets its
+                        // own light text colour instead of inheriting text-foreground,
+                        // which is near-black in light mode.
+                        let btnStyle = "border-slate-700 text-slate-200 hover:border-emerald-500/50 hover:bg-slate-800";
 
                         if (pyqAnswer !== null) {
                           if (isCorrect) {
@@ -572,7 +550,7 @@ export default function LandingPage() {
                           } else if (isSelected) {
                             btnStyle = "border-red-500 bg-red-500/10 text-red-300";
                           } else {
-                            btnStyle = "border-slate-700/50 opacity-40";
+                            btnStyle = "border-slate-700/50 text-slate-200 opacity-40";
                           }
                         }
 
@@ -752,17 +730,22 @@ export default function LandingPage() {
                             className="space-y-2 whitespace-pre-line"
                             dangerouslySetInnerHTML={{
                               __html: (() => {
+                                // '&' first, or the entities produced by the later
+                                // replacements get escaped a second time.
                                 const escapeHtml = (v: string) =>
                                   v
+                                    .replace(/&/g, '&amp;')
                                     .replace(/</g, '&lt;')
                                     .replace(/>/g, '&gt;')
                                     .replace(/"/g, '&quot;')
-                                    .replace(/'/g, '&#39;')
-                                    .replace(/&/g, '&amp;');
-                                const raw = tutorConversations[activeTutorTopic].reply;
+                                    .replace(/'/g, '&#39;');
+                                // Markdown "* " list markers -> bullets (only **bold** is rendered).
+                                const raw = tutorConversations[activeTutorTopic].reply.replace(/^\* /gm, '• ');
                                 const parts = raw.split(/\*\*(.*?)\*\*/g);
                                 return parts
-                                  .map((p, i) => (i % 2 === 1 ? `<strong class="text-indigo-400">${p}</strong>` : escapeHtml(p)))
+                                  .map((p, i) => (i % 2 === 1
+                                    ? `<strong class="text-indigo-400">${escapeHtml(p)}</strong>`
+                                    : escapeHtml(p).replace(/\*([^*\n]+)\*/g, '<em>$1</em>')))
                                   .join('');
                               })()
                             }}
@@ -783,13 +766,13 @@ export default function LandingPage() {
             <div className="grid gap-12 lg:grid-cols-12 items-center relative z-10">
               <div className="lg:col-span-6 space-y-6">
                 <Badge className="bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/15 border-0 font-bold uppercase tracking-wider text-[10px]">
-                  ADAPTIVE SYSTEM
+                  EXAM SIMULATOR
                 </Badge>
                 <h3 className="font-display text-2xl font-extrabold text-foreground sm:text-3xl lg:text-4xl leading-tight">
                   Smart Exam Engine
                 </h3>
                 <p className="text-base text-muted-foreground leading-relaxed">
-                  Take control of your preparation with adaptive testing modes that mimic UPSC CMS exam conditions. Features automated timers, negative marking scoring, and immediate breakdown reviews.
+                  Take control of your preparation with timed testing modes that mimic UPSC CMS exam conditions. Features automated timers, negative marking scoring, and immediate breakdown reviews.
                 </p>
 
                 <ul className="space-y-3 font-semibold text-foreground text-sm">
@@ -1276,7 +1259,7 @@ export default function LandingPage() {
                   <div className="grid gap-4 sm:grid-cols-2 pt-2">
                     {[
                       { title: "AI Tutor", desc: "AI credits on every plan; unlimited AI explanations on the 1-year plan." },
-                      { title: "Full QBank & Simulations", desc: "2,000+ year-wise UPSC CMS PYQs (2018-2025), the NEET PG bank and full-length mock tests." },
+                      { title: "Full QBank & Simulations", desc: `${CMS_PYQ_PHRASE} by year, the NEET PG bank (${NEET_PG_QUESTION_COUNT} questions) and full-length mock tests.` },
                       { title: "Analytics & Weak Areas", desc: "Subject and topic accuracy, streaks and mistake review." },
                       { title: "Spaced-Repetition Flashcards", desc: "SM-2 flashcards for high-yield facts and mnemonics." }
                     ].map((item, i) => (
@@ -1531,27 +1514,28 @@ export default function LandingPage() {
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {[
+              // Canonical exam URLs: /exams/<slug> declares these as its canonical.
               {
-                href: '/exams/cms',
+                href: '/cms',
                 badge: 'UPSC',
                 name: 'UPSC CMS',
-                desc: 'Combined Medical Services. 2,000+ PYQs from 2018-2025. Paper I (Medicine + Paediatrics) and Paper II (Surgery + OBG + PSM).',
+                desc: `Combined Medical Services. ${CMS_PYQ_COUNT} PYQs from ${CMS_PYQ_YEARS}. Paper I (Medicine + Paediatrics) and Paper II (Surgery + OBG + PSM).`,
                 gradient: 'from-cyan-600 to-blue-700',
                 icon: '🩺',
               },
               {
-                href: '/exams/neet-pg',
+                href: '/neet-pg',
                 badge: 'NEET PG',
                 name: 'NEET PG',
-                desc: 'Postgraduate entrance. 1,200+ PYQs across 19 PG subjects (2020-2025). All-India 50% quota + State quota prep.',
+                desc: `Postgraduate entrance. ${NEET_PG_QUESTION_COUNT} questions across 19 PG subjects. All-India 50% quota + State quota prep.`,
                 gradient: 'from-emerald-600 to-teal-700',
                 icon: '🎓',
               },
               {
-                href: '/exams/usmle',
+                href: '/usmle',
                 badge: 'USMLE',
                 name: 'USMLE',
-                desc: 'Step 1 + Step 2 CK. High-yield lists, NBME-style vignettes. Beta access — join the waitlist.',
+                desc: 'Step 1 + Step 2 CK guide and AI tutor. The USMLE question bank is in development — join the waitlist.',
                 gradient: 'from-indigo-600 to-violet-700',
                 icon: '🌎',
               },

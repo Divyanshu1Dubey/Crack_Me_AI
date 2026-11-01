@@ -50,7 +50,7 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise CMS PYQ by subject (free)',
-        href: '/questions?exam=CMS',
+        href: '/questions?exam=cms',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-2024-cutoff', surface: 'inline_cta' },
     },

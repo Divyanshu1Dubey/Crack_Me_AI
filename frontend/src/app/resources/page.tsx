@@ -100,8 +100,9 @@ export default function ResourcesPage() {
                     Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material
                 </p>
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {/* Tabs — wrap instead of scrolling sideways, so "FAQ" and
+                    "Recommended Books" are visible at 390px too. */}
+                <div className="flex flex-wrap gap-2 mb-6">
                     {tabs.map(t => (
                         <button key={t.key} onClick={() => setActiveTab(t.key)}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
@@ -245,22 +246,23 @@ export default function ResourcesPage() {
                                             <h4 className="text-sm font-bold mb-2">Age Limits</h4>
                                             <div className="space-y-2">
                                                 {Object.entries(guide.eligibility.age_limit).map(([cat, age]) => (
-                                                    <div key={cat} className="flex justify-between text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
-                                                        <span className="uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
-                                                        <span>{age as string}</span>
+                                                    <div key={cat} className="flex justify-between gap-3 text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
+                                                        <span className="shrink-0 uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
+                                                        <span className="text-right">{age as string}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
                                         <div>
                                             <h4 className="text-sm font-bold mb-2">Attempt Limits</h4>
+                                            {/* From the shared exam facts, like the marking scheme above:
+                                                UPSC CMS has no attempt cap (the API row used to carry the
+                                                Civil Services 6 / 9 / unlimited rule). */}
                                             <div className="space-y-2">
-                                                {Object.entries(guide.eligibility.attempts).map(([cat, attempts]) => (
-                                                    <div key={cat} className="flex justify-between text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
-                                                        <span className="uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
-                                                        <span>{attempts as string}</span>
-                                                    </div>
-                                                ))}
+                                                <div className="flex justify-between gap-3 text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
+                                                    <span className="shrink-0 uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>All categories</span>
+                                                    <span className="text-right">{UPSC_CMS_PATTERN.attemptsRule}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -355,7 +357,13 @@ export default function ResourcesPage() {
                                         Common doubts answered with verified information from official UPSC sources
                                     </p>
                                 </div>
-                                {guide.faq.map((faq: FAQ, i: number) => (
+                                {guide.faq.map((apiFaq: FAQ, i: number) => {
+                                    // The API's attempts answer carried the Civil Services
+                                    // rule; UPSC CMS has no attempt cap (see examPatterns).
+                                    const faq = /how many attempts/i.test(apiFaq.q)
+                                        ? { ...apiFaq, a: UPSC_CMS_PATTERN.attemptsFaq }
+                                        : apiFaq;
+                                    return (
                                     <div key={i} className="glass-card overflow-hidden">
                                         <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
                                             className="w-full flex items-start gap-3 p-5 text-left">
@@ -378,7 +386,8 @@ export default function ResourcesPage() {
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 

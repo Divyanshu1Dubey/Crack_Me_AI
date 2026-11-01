@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Physiology', 'Guyton', 'Ganong', 'Mnemonics', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2600,
-    primaryCta: { label: 'Practice Physiology PYQs (free)', href: '/questions?topic=physiology' },
+    primaryCta: { label: 'Practice Physiology PYQs (free)', href: '/questions?subject=physiology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Which physiology textbook is best for UPSC CMS?', a: 'Ganong Review of Medical Physiology is exam-focused and concise. Guyton and Hall Textbook of Medical Physiology is more detailed. For quick revision: GK Pal is excellent for Indian exam aspirants.' },

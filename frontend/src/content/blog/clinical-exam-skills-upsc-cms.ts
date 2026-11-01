@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Clinical Examination', 'CVS', 'RS', 'CNS', 'UPSC CMS', 'NEET PG', 'Medical Officers'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice Clinical Exam PYQs (free)', href: '/questions?topic=clinical-examination' },
+    primaryCta: { label: 'Practice Clinical Exam PYQs (free)', href: '/questions' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Are clinical examination skills tested in UPSC CMS?', a: 'Yes — through clinical vignettes that describe physical findings and ask for diagnosis or next management step. Image-based questions may show clinical signs or examination findings.' },

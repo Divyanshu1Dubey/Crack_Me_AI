@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Radiology', 'X-Ray', 'CT', 'MRI', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2600,
-    primaryCta: { label: 'Practice Radiology PYQs (free)', href: '/questions?topic=radiology' },
+    primaryCta: { label: 'Practice Radiology PYQs (free)', href: '/questions?subject=radiology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How is radiology tested in UPSC CMS?', a: 'As image-based questions showing X-rays, CT or MRI images. Questions ask you to identify the modality, the finding, or the diagnosis. Chest X-rays are the most common.' },

@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['ECG', 'Cardiology', 'UPSC CMS', 'NEET PG', 'Clinical Skills', 'Medical Officers'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '12 min',
     wordCount: 3500,
-    primaryCta: { label: 'Practice Cardiology PYQs (free)', href: '/questions?topic=cardiology' },
+    primaryCta: { label: 'Practice Cardiology PYQs (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How many ECG questions come in UPSC CMS?', a: 'Typically 3-5 ECG-based questions appear in UPSC CMS Paper I and II combined. They test rate, rhythm, axis, and specific diagnoses like STEMI, AF, and hyperkalemia.' },

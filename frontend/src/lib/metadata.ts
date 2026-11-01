@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { siteName, siteUrl, defaultOgImage } from "@/lib/seo";
+import { CMS_PYQ_COUNT, CMS_PYQ_YEARS } from "@/lib/bankStats";
+
+/** The square source logo (1254×1254) — used for Organization/publisher logos. */
+const LOGO_PATH = "/cms-circle-logo.png";
 
 /**
  * Build a canonical absolute URL for a given path. Strips trailing slashes
@@ -13,13 +17,13 @@ export function buildCanonical(path: string): string {
 }
 
 /**
- * Drop a trailing brand suffix ("… | CrackCMS", "… — CrackCMS") from a page
- * title. The root layout's title template already appends " | CrackCMS",
- * so titles that carried their own suffix rendered as
- * "… | CrackCMS | CrackCMS".
+ * Drop a trailing brand suffix ("… | CrackCMS", "… — CrackCMS",
+ * "… — CrackCMS by CrackLabs AI") from a page title. The root layout's
+ * title template already appends " | CrackCMS", so titles that carried their
+ * own suffix rendered as "… | CrackCMS | CrackCMS".
  */
 export function stripBrandSuffix(title: string): string {
-    return title.replace(/\s*[|—–-]\s*(CrackCMS|CrackLabs AI)\s*$/i, "").trim();
+    return title.replace(/\s*[|—–-]\s*(CrackCMS(?:\s+by\s+CrackLabs AI)?|CrackLabs AI)\s*$/i, "").trim();
 }
 
 /**
@@ -70,10 +74,10 @@ export function buildPageMetadata({
             images: [
                 {
                     url: ogImage,
-                    // The default brand logo is a 1254×1254 square; other
-                    // images passed here are 1200×630 OG renders.
-                    width: image === defaultOgImage ? 1254 : 1200,
-                    height: image === defaultOgImage ? 1254 : 630,
+                    // The raw logo is a 1254×1254 square; the default image
+                    // and the blog covers are 1200×630 OG renders.
+                    width: image === LOGO_PATH ? 1254 : 1200,
+                    height: image === LOGO_PATH ? 1254 : 630,
                     alt: `${title} — ${siteName}`,
                 },
             ],
@@ -122,7 +126,7 @@ export function orgSchema() {
             height: 1254,
         },
         description:
-            "CrackCMS is a study platform for MBBS graduates preparing for UPSC CMS and NEET PG, organised around 2,000+ UPSC CMS previous-year questions (2018-2025) with AI explanations, mock tests and analytics.",
+            `CrackCMS is a study platform for MBBS graduates preparing for UPSC CMS and NEET PG, organised around ${CMS_PYQ_COUNT} UPSC CMS previous-year questions (${CMS_PYQ_YEARS}) with AI explanations, mock tests and analytics.`,
         sameAs: [
             "https://github.com/Divyanshu1Dubey/Crack_Me_AI",
             "https://twitter.com/cracklabs",

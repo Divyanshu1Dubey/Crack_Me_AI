@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-20',
     readingTime: '6 min',
     wordCount: 1800,
-    primaryCta: { label: 'Practice Clinical Skills PYQs', href: '/questions?topic=clinical-skills' },
+    primaryCta: { label: 'Practice Clinical Skills PYQs', href: '/questions' },
     relatedExamPaths: ['/cms', '/medical-officer'],
     faqs: [],
     toc: [],

@@ -37,8 +37,8 @@ const post: BlogPost = {
     author: 'CrackCMS Editorial',
     authorRole: 'Editorial Team, CrackCMS',
     datePublished: '2026-07-30',
-    dateModified: '2026-07-30',
-    updatedAt: '2026-07-30',
+    dateModified: '2026-11-01',
+    updatedAt: '2026-11-01',
     readingTime: '9 min',
     toc: [
         { id: 'upsc-cms-2026-key-dates', label: 'UPSC CMS 2026 — key dates at a glance' },
@@ -54,7 +54,7 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise 100 CMS PYQs (free)',
-        href: '/questions?exam=CMS&topic=notification-2026',
+        href: '/questions?exam=cms',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-2026-notification', surface: 'inline_cta' },
     },
@@ -79,11 +79,12 @@ const post: BlogPost = {
     ],
     revisionLog: [
         { date: '2026-07-30', note: 'Initial publication. Dates, vacancies, pattern, and eligibility verified against the official UPSC CMS 2026 notification page on upsc.gov.in.' },
+        { date: '2026-11-01', note: 'Added a status note: the written exam was held on 02 August 2026; result and personality-test dates are on upsc.gov.in.' },
     ],
     faqs: [
         {
-            q: 'When is the UPSC CMS 2026 exam?',
-            a: 'The UPSC Combined Medical Services Examination 2026 is scheduled for 02 August 2026 (Sunday), conducted as a Computer-Based Test (CBT) on a single day. This is the date given in the official UPSC CMS 2026 notification on upsc.gov.in.',
+            q: 'When was the UPSC CMS 2026 exam?',
+            a: 'The UPSC Combined Medical Services Examination 2026 was held on 02 August 2026 (Sunday), conducted as a Computer-Based Test (CBT) on a single day — the date given in the official UPSC CMS 2026 notification on upsc.gov.in.',
         },
         {
             q: 'When was the UPSC CMS 2026 notification released?',
@@ -114,7 +115,9 @@ const post: BlogPost = {
             a: 'UPSC publishes the result on upsc.gov.in. The exact date is not announced in the original notification; candidates are advised to monitor the official UPSC examination page for the published result date.',
         },
     ],
-    body: `This post is the **single verified reference** for the UPSC CMS 2026 cycle on CrackCMS. Every date, number, and eligibility rule below is sourced from the official UPSC CMS 2026 notification on [upsc.gov.in](https://upsc.gov.in/examinations/combined-medical-services-examination). If you find any discrepancy between this post and the official UPSC page, the official page is correct — please [report it to our editorial team](/editorial-policy) and we will update this post.
+    body: `> **Update (1 Nov 2026):** The UPSC CMS 2026 written exam was held on 02 August 2026. Check [upsc.gov.in](https://upsc.gov.in/examinations/combined-medical-services-examination) for the result and the personality-test schedule. The details below describe the 2026 cycle as notified.
+
+This post is the **single verified reference** for the UPSC CMS 2026 cycle on CrackCMS. Every date, number, and eligibility rule below is sourced from the official UPSC CMS 2026 notification on [upsc.gov.in](https://upsc.gov.in/examinations/combined-medical-services-examination). If you find any discrepancy between this post and the official UPSC page, the official page is correct — please [report it to our editorial team](/editorial-policy) and we will update this post.
 
 > **The fastest way to use this post:** jump to the section you need from the table of contents. If you only have 60 seconds, read "Key dates at a glance" and "Vacancies" below.
 

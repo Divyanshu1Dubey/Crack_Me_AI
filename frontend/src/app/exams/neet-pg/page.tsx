@@ -8,17 +8,18 @@
 import type { Metadata } from 'next';
 import { ExamMicrosite } from '@/components/exams/ExamMicrosite';
 import { EXAM_CONFIGS } from '@/app/exams/_data';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 export const metadata: Metadata = {
-  title: 'NEET PG — Crack PYQs 2020-2025',
+  title: 'NEET PG — Recall PYQs, Mocks & AI Tutor',
   description:
-    'Crack NEET PG with 1,200+ PYQs from 2020-2025, 19 PG subjects mapped to high-yield topics, full mocks and an AI tutor. Standalone NEET PG microsite.',
+    `Crack NEET PG with ${NEET_PG_QUESTION_COUNT} questions (mostly exam recalls), 19 PG subjects mapped to high-yield topics, full mocks and an AI tutor. Standalone NEET PG microsite.`,
   // Same exam as /neet-pg: point search engines at the main landing page.
   alternates: { canonical: '/neet-pg' },
   openGraph: {
     title: 'NEET PG Preparation | CrackCMS',
     description:
-      '1,200+ NEET PG PYQs · 19 PG subjects · High-yield topic maps · AI tutor.',
+      `${NEET_PG_QUESTION_COUNT} NEET PG questions · 19 PG subjects · High-yield topic maps · AI tutor.`,
     url: 'https://www.cracklabs.app/exams/neet-pg',
     siteName: 'CrackCMS',
     type: 'website',

@@ -6,7 +6,9 @@
  * Loaded ONLY after the user grants `marketing` consent (it used to render
  * for every visitor). Uses the official PostHog snippet (no npm dep, see
  * posthogLoaderScript in lib/analytics.ts) so the bundle stays small.
- * Revoking consent later calls opt_out_capturing().
+ * Revoking consent later calls opt_out_capturing(); PostHog persists that,
+ * so the loader's `loaded` callback opts back in when consent is granted
+ * again on a later visit (POSTHOG_REOPT_IN_ON_LOAD in lib/analytics.ts).
  *
  * Page-view capture is handled by PostHog's autoload, but custom events
  * flow through `analytics.event(...)` in `lib/analytics.ts`.

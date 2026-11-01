@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Pharmacology', 'Drug Classification', 'UPSC CMS', 'NEET PG', 'KD Tripathi'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice Pharmacology PYQs (free)', href: '/questions?topic=pharmacology' },
+    primaryCta: { label: 'Practice Pharmacology PYQs (free)', href: '/questions?subject=pharmacology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Which pharmacology textbook is best for UPSC CMS?', a: 'KD Tripathi Essentials of Medical Pharmacology is the standard for Indian exams. Katzung Basic and Clinical Pharmacology is more comprehensive. For quick reference: Rang and Dales Pharmacology.' },

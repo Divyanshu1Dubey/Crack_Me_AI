@@ -3,13 +3,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Brain, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { siteName, siteUrl } from '@/lib/seo';
+import { CMS_PYQ_COUNT, CMS_PYQ_YEARS, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const title = 'About CrackCMS — AI-Assisted Medical Exam Preparation';
 const description = 'CrackCMS (by CrackLabs AI) is an AI-assisted preparation platform for UPSC CMS and NEET PG, with guides for INI-CET, FMGE, USMLE and medical officer exams. Our mission, team, and story.';
 const canonical = '/about';
 
 export const metadata: Metadata = buildLegalMetadata({ title, description, canonical });
-import Breadcrumbs from '@/components/Breadcrumbs';
 import { jsonLdString } from '@/lib/metadata';
 
 const team = [
@@ -17,10 +17,10 @@ const team = [
     { role: 'Editorial & content', name: 'CrackCMS Editorial Team', bio: 'Curates the question banks and explanations against standard textbooks, following our editorial and medical-review policies.' },
 ];
 
-// Counts from the live question bank (UPSC CMS ~2,277, NEET PG ~4,202, Nov 2026).
+// Bank sizes come from lib/bankStats.ts (one figure for the whole site).
 const stats = [
-    { number: '2,000+', label: 'UPSC CMS PYQs (2018–2025)' },
-    { number: '4,000+', label: 'NEET PG questions' },
+    { number: CMS_PYQ_COUNT, label: `UPSC CMS PYQs (${CMS_PYQ_YEARS})` },
+    { number: NEET_PG_QUESTION_COUNT, label: 'NEET PG questions' },
     { number: '5', label: 'Core CMS subjects covered' },
     { number: 'Multi-model', label: 'AI tutor with provider fallback' },
 ];
@@ -36,7 +36,7 @@ export default function AboutPage() {
     const orgSchema = {
         '@context': 'https://schema.org',
         '@type': 'AboutPage',
-        url: canonical,
+        url: `${siteUrl}${canonical}`,
         name: title,
         description,
         mainEntity: {
@@ -45,7 +45,7 @@ export default function AboutPage() {
             url: siteUrl,
             foundingDate: '2024',
             founders: [{ '@type': 'Person', name: 'Divyanshu Dubey' }],
-            numberOfEmployees: '10-50',
+            // No numberOfEmployees: the page itself says "a small team".
             areaServed: 'Worldwide',
             knowsAbout: [
                 'UPSC CMS', 'NEET PG', 'INI-CET', 'FMGE', 'USMLE', 'Medical Officer Exams',
@@ -58,7 +58,15 @@ export default function AboutPage() {
         <>
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(orgSchema) }} />
 
-            <LegalLayout title={title} description={description} lastUpdated="July 21, 2026" canonical={canonical} schemaType="AboutPage">
+            <LegalLayout
+                title={title}
+                description={description}
+                lastUpdated="July 21, 2026"
+                canonical={canonical}
+                schemaType="AboutPage"
+                badge="Our story"
+                after={<AboutCta />}
+            >
                 <h2>Our mission</h2>
                 <p>
                     CrackCMS exists to give every medical aspirant in India and around the world a fair
@@ -70,7 +78,7 @@ export default function AboutPage() {
 
                 <h2>What we&apos;ve built</h2>
                 <p>
-                    <strong>2,000+ UPSC CMS previous-year questions</strong> (2018–2025) and a 4,000+ question
+                    <strong>{CMS_PYQ_COUNT} UPSC CMS previous-year questions</strong> ({CMS_PYQ_YEARS}) and a {NEET_PG_QUESTION_COUNT} question
                     NEET PG bank, paired with AI-generated explanations, mnemonics, clinical pearls, textbook
                     references, and similar-PYQ links. Several large-language-model providers rotate behind
                     the scenes so the AI tutor stays available when one provider is slow or down.
@@ -111,7 +119,8 @@ export default function AboutPage() {
                     {team.map(member => (
                         <div key={member.role} className="rounded-2xl border border-border bg-card p-5">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-linear-to-br from-primary to-teal-500 text-base font-black text-white">
-                                {member.name.split(' ').map(s => s[0]).slice(0, 2).join('')}
+                                {/* Initials from words that start with a letter ("MS (Computer Science)" gave "M("). */}
+                                {member.name.split(' ').filter((w) => /^[A-Za-z]/.test(w)).map((w) => w[0]).slice(0, 2).join('')}
                             </div>
                             <p className="mt-3 text-sm font-bold text-foreground">{member.name}</p>
                             <p className="text-xs font-semibold uppercase tracking-wider text-primary">{member.role}</p>
@@ -136,20 +145,29 @@ export default function AboutPage() {
                     Questions, partnerships, or press inquiries: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>.
                     For learner support, see our <Link href="/contact" className="text-primary underline">Contact page</Link>.
                 </p>
-
-                <div className="not-prose mt-10 rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-lg font-bold text-foreground">Ready to start studying?</p>
-                            <p className="text-sm text-muted-foreground">Create a free account in 30 seconds.</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Link href="/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create account</Link>
-                            <Link href="/subscription" className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-bold text-foreground hover:bg-muted">See premium</Link>
-                        </div>
-                    </div>
-                </div>
             </LegalLayout>
         </>
+    );
+}
+
+/**
+ * Closing CTA, rendered by LegalLayout outside `.legal-content`: inside it,
+ * the unlayered `.legal-content a` rule (primary colour + underline) beat the
+ * buttons' utilities and hid the "Create account" label on its primary fill.
+ */
+function AboutCta() {
+    return (
+        <div className="mt-10 rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="text-lg font-bold text-foreground">Ready to start studying?</p>
+                    <p className="text-sm text-muted-foreground">Create a free account in 30 seconds.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Link href="/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create account</Link>
+                    <Link href="/subscription" className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-bold text-foreground hover:bg-muted">See premium</Link>
+                </div>
+            </div>
+        </div>
     );
 }

@@ -1,6 +1,8 @@
 import type { BookDeepDiveContent } from '@/components/BookDeepDiveLayout';
 
-const REVIEWER = { name: 'Dr. Ananya Reddy', credentials: 'MBBS, AIIMS New Delhi (2018), UPSC CMS AIR-1 (2024)' };
+// Same reviewer as cutoffData.ts (the previous named "AIR-1" reviewer could
+// not be verified — not acceptable on medical pages).
+const REVIEWER = { name: 'CrackCMS Editorial Team', credentials: 'Editorial team — CrackCMS' };
 
 export const CMS_BOOKS: Record<string, BookDeepDiveContent> = {
     harrison: {

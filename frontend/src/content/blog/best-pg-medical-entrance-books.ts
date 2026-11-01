@@ -55,7 +55,7 @@ const post: BlogPost = {
         eventName: 'blog_practice_intent',
         eventParams: { source: 'best-pg-books', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet'],
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet'],
     references: [
         {
             label: 'UPSC — Previous Year Question Papers (2009–2024)',

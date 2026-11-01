@@ -50,7 +50,7 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise 50 CMS PYQs matched to this plan',
-        href: '/questions?exam=CMS&topic=last-week-revision',
+        href: '/questions?exam=cms',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-last-5-days', surface: 'inline_cta' },
     },
@@ -126,7 +126,7 @@ const post: BlogPost = {
     ],
     body: `If you are reading this five days before the UPSC CMS exam, you are in good company — and in good danger. The good news is that the vast majority of rankers do not study more in the last week. They study less, but they triage harder. The bad news is that many candidates panic-crash at this exact point and burn two days doing nothing productive.
 
-This plan is what we recommend at CrackCMS for the final-week routine. It is not glamorous. There is no secret source. It is a structured schedule, a sleep contract, and a list of MCQ patterns drawn from analysis of [UPSC CMS previous-year papers](/questions?exam=CMS).
+This plan is what we recommend at CrackCMS for the final-week routine. It is not glamorous. There is no secret source. It is a structured schedule, a sleep contract, and a list of MCQ patterns drawn from analysis of [UPSC CMS previous-year papers](/questions?exam=cms).
 
 > **The single rule of the last 5 days:** every hour is *high-yield recall*, *mock-test scoring*, or *body-clock tuning*. Nothing else.
 
@@ -230,7 +230,7 @@ This is the most counter-intuitive day. **Rest is revision now.**
 
 ## 7 MCQ-solving patterns to internalise
 
-These seven patterns cover ~70% of CMS stems. Practise them via [PYQs](/questions?exam=CMS) in filter mode.
+These seven patterns cover ~70% of CMS stems. Practise them via [PYQs](/questions?exam=cms) in filter mode.
 
 ### 1. The most-common-answer rule
 In any "all of the following except" or "most likely cause" stem, **the textbook-classic presentation is the answer ~80% of the time.** If you recognise the pattern from standard teaching, pick it; do not second-guess.
@@ -340,7 +340,7 @@ Every clinical claim and statistical figure in this article is anchored to a pri
 
 ### About the author
 
-**Dr. Aarav Mehta, MBBS, MD (Internal Medicine)** — AIIMS-trained internist who runs the CrackCMS UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making recall stick. See the [CrackCMS editorial team](/about) for the full review panel and our [medical review policy](/medical-review-policy).
+**Dr. Aarav Mehta, MBBS, MD (Internal Medicine)** — internist who runs the CrackCMS UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making recall stick. See the [CrackCMS editorial team](/about) for the full review panel and our [medical review policy](/medical-review-policy).
 
 *This article was independently reviewed by the CrackCMS clinical editorial panel. It is for educational purposes and does not replace your textbook or your judgement. Always cross-check drug doses, treatment guidelines and cutoff statistics against the latest official sources before your exam day.*`,
 };

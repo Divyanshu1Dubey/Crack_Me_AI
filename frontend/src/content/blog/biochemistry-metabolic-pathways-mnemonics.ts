@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Biochemistry', 'Metabolism', 'Mnemonics', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2400,
-    primaryCta: { label: 'Practice Biochemistry PYQs (free)', href: '/questions?topic=biochemistry' },
+    primaryCta: { label: 'Practice Biochemistry PYQs (free)', href: '/questions?subject=biochemistry' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Which biochemistry textbook is best for exams?', a: 'Harper Illustrated Biochemistry is excellent with good diagrams. Lippincott is more student-friendly. Satyanarayana is popular in India for its simplified approach and exam-oriented presentation.' },

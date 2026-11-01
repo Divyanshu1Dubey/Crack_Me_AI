@@ -16,13 +16,13 @@ CrackCMS (by CrackLabs AI, cracklabs.app) is an AI-powered medical exam preparat
 
 ## Core Features
 
-1. Question Bank: 1,920+ previous-year questions across UPSC CMS (2009-2024)
+1. Question Bank: 1,800+ UPSC CMS previous-year questions (2018-2025), plus a 4,000+ question NEET PG bank and an INI-CET recall bank of about 100 questions
    - Each question has AI-generated explanations with mnemonics
    - Textbook references (Harrison's, Robbins, Park, OP Ghai, etc.)
    - Similar PYQ links for pattern recognition
 
 2. AI Tutor: Multi-model AI assistant trained on standard medical textbooks
-   - 11 LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, etc.)
+   - Several LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, etc.)
    - RAG-grounded responses from indexed textbook chapters
    - Supports Socratic, Viva, and High-Yield chat modes
 

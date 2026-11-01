@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Hypertension', 'JNC 8', 'ACC/AHA', 'Guidelines', 'Cardiology', 'UPSC CMS', 'NEET PG'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '14 min',
     wordCount: 4000,
-    primaryCta: { label: 'Practice Cardiology PYQs (free)', href: '/questions?topic=cardiology' },
+    primaryCta: { label: 'Practice Cardiology PYQs (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the BP target for patients under 60 per JNC 8?', a: 'JNC 8 recommends <140/90 mmHg for adults under 60. For those 60+, <150/90 mmHg. These targets differ from ACC/AHA which recommends <130/80 for all adults.' },

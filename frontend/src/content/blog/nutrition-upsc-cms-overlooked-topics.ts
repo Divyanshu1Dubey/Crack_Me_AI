@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Nutrition', 'Biochemistry', 'Vitamins', 'UPSC CMS', 'NEET PG'],
     difficulty: 'beginner',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '7 min',
     wordCount: 2100,
-    primaryCta: { label: 'Practice Biochemistry PYQs (free)', href: '/questions?topic=biochemistry' },
+    primaryCta: { label: 'Practice Biochemistry PYQs (free)', href: '/questions?subject=biochemistry' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What are the most important vitamin deficiencies to know?', a: 'Vitamin A (night blindness), B1/Thiamine (beriberi, Wernicke-Korsakoff), B3/Niacin (pellagra - 3Ds), B6 (sideroblastic anemia), B12 (subacute combined degeneration), C (scurvy), D (rickets), K (bleeding).' },

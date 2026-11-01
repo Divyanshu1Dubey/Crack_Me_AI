@@ -1,9 +1,9 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
 import { questionBankHref } from '@/lib/seo';
 import { FMGE_PATTERN } from '@/lib/examPatterns';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const content: ExamLandingContent = {
     slug: 'fmge',
@@ -37,7 +37,7 @@ const content: ExamLandingContent = {
         { label: 'Qualifying degree', value: 'Primary Medical Qualification (MBBS or equivalent) from a foreign institution listed in WHO World Directory of Medical Schools' },
         { label: 'Citizenship', value: 'Indian citizen or Overseas Citizen of India (OCI)' },
         { label: 'Document requirements', value: 'Eligibility Certificate from NMC, Passport, MBBS degree certificate, Internship certificate (if completed)' },
-        { label: 'No age limit', value: 'Any age, but you must appear within 10 years of completing MBBS (as per NMC rules)' },
+        { label: 'Age / time limit', value: 'No age limit, but you must appear within 10 years of completing MBBS (as per NMC rules)' },
     ],
     syllabus: [
         { subject: 'Pre-clinical: Anatomy, Physiology, Biochemistry', weight: '~20%', topics: 'As per GMER 2019' },
@@ -58,12 +58,13 @@ const content: ExamLandingContent = {
         { q: 'What is the FMGE pass mark?', a: '50% aggregate (150 out of 300). There is no negative marking.' },
         { q: 'Who conducts FMGE?', a: 'The National Board of Examinations in Medical Sciences (NBEMS) conducts FMGE twice a year — June and December sessions.' },
         { q: 'Can FMGE preparation be done in 3 months?', a: 'Yes, with disciplined study: solve 4,000+ MCQs, take one full mock every Sunday, focus on Indian-context epidemiology and pharmacology, and use AI tutor for weak subjects.' },
-        { q: 'Does CrackCMS have an FMGE question bank?', a: 'A dedicated FMGE bank is not live yet. Until it is, practise with our NEET PG bank, which covers the same MBBS subjects, and use the AI tutor for weak topics.' },
+        { q: 'Does CrackCMS have an FMGE question bank?', a: `A dedicated FMGE bank is not live yet. Until it is, practise with our ${NEET_PG_QUESTION_COUNT} question NEET PG bank, which covers the same MBBS subjects, and use the AI tutor for weak topics.` },
     ],
     accentFrom: 'from-amber-600',
     accentTo: 'to-orange-700',
     emoji: '🌍',
-    pyqCount: '4,000+ NEET PG',
+    // No FMGE-tagged questions exist, so the card names the bank it really uses.
+    pyqCount: `${NEET_PG_QUESTION_COUNT} NEET PG`,
     pyqHref: questionBankHref('neet-pg'),
 };
 
@@ -72,9 +73,6 @@ export const metadata = buildExamMetadata(content);
 export default function FMGEPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'FMGE', path: '/fmge' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">FMGE Comparisons & Resources</h2>

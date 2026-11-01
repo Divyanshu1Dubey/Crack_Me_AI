@@ -4,7 +4,7 @@ import { ArrowRight, CheckCircle2, GraduationCap, Sparkles, Trophy, X } from 'lu
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { defaultOgImage, defaultOgImageSize, siteName, siteUrl } from '@/lib/seo';
 import { jsonLdString } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
@@ -57,7 +57,7 @@ export function buildComparisonMetadata(c: ComparisonContent, path: string): Met
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: title }],
+            images: [{ url: defaultOgImage, ...defaultOgImageSize, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },

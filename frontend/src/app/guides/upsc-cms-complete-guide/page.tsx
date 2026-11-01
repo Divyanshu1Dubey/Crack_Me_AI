@@ -1,6 +1,7 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import { CMS_NEGATIVE_MARKING_TEXT, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
 import { CMS_CUTOFFS } from '@/lib/cutoffData';
+import { CMS_PYQ_PHRASE } from '@/lib/bankStats';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
@@ -218,7 +219,7 @@ export default function UPSCCMSGuide() {
 
             <h2>Why CrackCMS for UPSC CMS?</h2>
             <ul>
-                <li>2,000+ previous-year UPSC CMS questions (2018-2025) with AI explanations</li>
+                <li>{CMS_PYQ_PHRASE} with AI explanations</li>
                 <li>Real-exam simulator with negative marking and 120-min timer</li>
                 <li>AI tutor trained on Harrison, Bailey, Ghai, Park, Dutta</li>
                 <li>Spaced-repetition flashcards for high-yield mnemonics</li>

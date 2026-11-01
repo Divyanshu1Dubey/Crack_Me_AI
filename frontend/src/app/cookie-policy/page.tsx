@@ -20,7 +20,7 @@ export default function CookiePolicyPage() {
             <p>
                 Cookies are small text files placed on your device when you visit a website. They help the
                 site remember your actions and preferences (such as login, theme, language) over a period
-                of time. CrackCMS also uses similar technologies including <em>localStorage</em>,
+                of time. CrackCMS also uses similar technologies including <em>localStorage</em>,{' '}
                 <em>sessionStorage</em>, and IndexedDB.
             </p>
 

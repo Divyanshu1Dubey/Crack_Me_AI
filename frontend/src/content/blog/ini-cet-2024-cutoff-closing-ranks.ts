@@ -51,11 +51,11 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise INI-CET image-based PYQs (free)',
-        href: '/questions?exam=INI_CET',
+        href: '/questions?exam=ini-cet',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'ini-cet-2024-cutoff', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/inicet', '/simulator', '/blog/neet-pg-vs-ini-cet'],
+    relatedExamPaths: ['/ini-cet', '/simulator', '/blog/neet-pg-vs-ini-cet'],
     references: [
         {
             label: 'AIIMS Examinations — INI-CET Result + Allotment archive',
@@ -75,7 +75,7 @@ const post: BlogPost = {
         },
         {
             label: 'CrackCMS — INI-CET PYQ archive',
-            url: 'https://cracklabs.app/questions?exam=INI_CET',
+            url: 'https://www.cracklabs.app/questions?exam=ini-cet',
         },
     ],
     revisionLog: [
@@ -273,7 +273,7 @@ AIIMS-INISS and PGINI are superspecialty (DM/MCh) exams. INI-CET is for MD/MS.
 2. PGIMER Chandigarh. *Official seat matrix*. [pgimer.edu.in](https://pgimer.edu.in/)
 3. JIPMER Puducherry. *Seat matrix + closing ranks*. [jipmer.edu.in](https://jipmer.edu.in/)
 4. NIMHANS. *Seat matrix*. [nimhans.ac.in](https://nimhans.ac.in/)
-5. CrackCMS. *INI-CET PYQ archive*. [cracklabs.app/questions?exam=INI_CET](https://cracklabs.app/questions?exam=INI_CET)
+5. CrackCMS. *INI-CET PYQ archive*. [cracklabs.app/questions?exam=ini-cet](https://www.cracklabs.app/questions?exam=ini-cet)
 
 ---
 

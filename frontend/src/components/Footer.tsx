@@ -7,14 +7,17 @@ import { useAuth } from '@/lib/auth';
 import { siteName, siteUrl } from '@/lib/seo';
 import { Mail, MapPin, MessageCircle, Phone, Github, Twitter, Linkedin } from 'lucide-react';
 import { jsonLdString } from '@/lib/metadata';
+import { CMS_PYQ_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 /**
  * Site-wide Footer with rich internal linking for SEO. Renders on every
  * page via the root layout. Includes structured-data SiteNavigationElement
  * schema so Google can read the link graph directly.
  *
- * The brand block ships with the real CrackCMS logo (`crack-cms-logo.jpg`)
- * and a clear, human contact strip: email, WhatsApp number, and address.
+ * The brand block uses the same circular logo as the header, hero and
+ * Organization JSON-LD (`cms-circle-logo.png`; the old winged JPG was
+ * unreadable at 40px and showed as a white tile in dark mode), plus a
+ * clear, human contact strip: email, WhatsApp number, and address.
  * No auto-generated tagline is used — the copy is hand-written to read
  * like a note from a colleague, not a marketing AI.
  */
@@ -79,16 +82,14 @@ export default function Footer() {
             ],
         },
         {
+            // Public pages only: this footer is shown to signed-out visitors,
+            // and /jobs, /tokens, /leaderboard, /bookmarks and /analytics are
+            // login-gated (the public vacancy guide is "Govt Doctor Jobs").
             title: 'Company',
             links: [
                 { label: 'About CrackCMS', href: '/about' },
                 { label: 'Contact Us', href: '/contact' },
                 { label: 'Premium Plans', href: '/subscription' },
-                { label: 'AI Tokens', href: '/tokens' },
-                { label: 'Government Jobs', href: '/jobs' },
-                { label: 'Leaderboard', href: '/leaderboard' },
-                { label: 'Bookmarks', href: '/bookmarks' },
-                { label: 'Analytics', href: '/analytics' },
             ],
         },
         {
@@ -131,20 +132,20 @@ export default function Footer() {
                         <div className="lg:col-span-3">
                             <Link href="/" className="inline-flex items-center gap-3" aria-label={`${siteName} home`}>
                                 <Image
-                                    src="/crack-cms-logo.jpg"
+                                    src="/cms-circle-logo.png"
                                     alt={`${siteName} logo`}
                                     width={40}
                                     height={40}
-                                    className="h-10 w-10 rounded-xl object-cover"
+                                    className="h-10 w-10 rounded-full border border-border/70 object-cover"
                                     priority={false}
                                 />
                                 <span className="text-base font-black tracking-tight">{siteName}</span>
                             </Link>
                             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                                 A study desk for every MBBS graduate preparing for UPSC CMS, NEET PG,
-                                INI-CET, FMGE, USMLE or a Medical Officer post — built around 2,000+
-                                UPSC CMS previous-year questions and a NEET PG bank, to help you study
-                                smarter, not longer.
+                                INI-CET, FMGE, USMLE or a Medical Officer post — built around {CMS_PYQ_COUNT}{' '}
+                                UPSC CMS previous-year questions and a {NEET_PG_QUESTION_COUNT} question NEET PG
+                                bank, to help you study smarter, not longer.
                             </p>
 
                             {/* Contact strip — email + WhatsApp + location */}

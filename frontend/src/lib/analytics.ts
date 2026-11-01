@@ -999,6 +999,17 @@ export default analytics;
 /* ----------------------------------------------------------------------- */
 
 /**
+ * Passed to posthog.init as `loaded`. The loader only renders while
+ * `marketing` consent is granted, but PostHog persists an earlier
+ * opt_out_capturing() (consent revoked on a previous visit); without this
+ * it would initialise opted out and capture nothing after a re-grant.
+ * PostHog calls `loaded` before its first page view, and respect_dnt still
+ * applies after opting in.
+ */
+export const POSTHOG_REOPT_IN_ON_LOAD =
+    'function(ph){try{if(ph.has_opted_out_capturing&&ph.has_opted_out_capturing()){ph.opt_in_capturing();}}catch(e){}}';
+
+/**
  * The official PostHog web snippet (stub queue + async /static/array.js),
  * followed by posthog.init(key, options). Rendered by PostHogInit only after
  * `marketing` consent. The previous hand-edited snippet was not valid
@@ -1008,5 +1019,6 @@ export function posthogLoaderScript(key: string, options: Record<string, unknown
     const snippet =
         '!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);';
     const safeJson = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
-    return `${snippet}window.posthog.init(${safeJson(key)},${safeJson(options)});`;
+    // `loaded` is a function, so it is spliced in after the JSON options.
+    return `${snippet}window.posthog.init(${safeJson(key)},Object.assign(${safeJson(options)},{loaded:${POSTHOG_REOPT_IN_ON_LOAD}}));`;
 }

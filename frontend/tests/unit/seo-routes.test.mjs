@@ -1,7 +1,9 @@
 // Regression tests for robots / sitemap / canonicals / structured data /
 // internal links on the public site (PUB-01..04, PUB-09, PUB-16, PUB-17,
 // PUB-21, PUB-23, PUB-30, PUB-31, PUB-38, PUB-41, PUB-06, PUB-07, PUB-18).
-// Run: node --import ./tests/unit/register-ts-alias.mjs --test tests/unit/
+// Run (from frontend/; quoted globs — the bare directory form fails with
+// ERR_UNSUPPORTED_DIR_IMPORT on Node 22):
+//   node --import ./tests/unit/register-ts-alias.mjs --test "tests/unit/*.test.mjs" "tests/unit/*.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';

@@ -241,13 +241,13 @@ The 4-month plan is *intensity*. Same coverage as 8 months, but compressed.
 
 | Subject | Primary text | Companion | PYQ source |
 |---|---|---|---|
-| **Medicine** | Harrison | API Medicine | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **Surgery** | Bailey & Love (short) | Manipal Textbook | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **OBG** | DC Dutta | Williams Obstetrics (selective) | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **Paediatrics** | OP Ghai | IAP Textbook | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **Pathology** | Robbins (general + systemic) | Harsh Mohan | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **Pharmacology** | KD Tripathi | Sharma & Sharma | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
-| **Microbiology** | Ananthanarayanan | Apurba Sastry | [CrackCMS PYQ archive](/questions?exam=NEET_PG) |
+| **Medicine** | Harrison | API Medicine | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **Surgery** | Bailey & Love (short) | Manipal Textbook | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **OBG** | DC Dutta | Williams Obstetrics (selective) | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **Paediatrics** | OP Ghai | IAP Textbook | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **Pathology** | Robbins (general + systemic) | Harsh Mohan | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **Pharmacology** | KD Tripathi | Sharma & Sharma | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
+| **Microbiology** | Ananthanarayanan | Apurba Sastry | [CrackCMS PYQ archive](/questions?exam=neet-pg) |
 
 > See our [Best PG Medical Entrance Books](/blog/best-pg-medical-entrance-books) post for the complete shortlist with PYQ citations.
 

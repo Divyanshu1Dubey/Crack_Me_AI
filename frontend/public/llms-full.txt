@@ -36,7 +36,7 @@ CrackCMS (full product name: Crack_Me_AI) is an AI-powered exam-preparation plat
 
 | Track | URL | Coverage |
 |---|---|---|
-| UPSC CMS | /cms | 1,920+ PYQs, MCQ practice, cutoffs, books, strategy |
+| UPSC CMS | /cms | 1,800+ PYQs (2018–2025), MCQ practice, cutoffs, books, strategy |
 | NEET PG | /neet-pg | Practice, comparison vs USMLE |
 | INI-CET | /ini-cet | AIIMS / PGIMER / JIPMER PG entrance |
 | FMGE | /fmge | Foreign Medical Graduate screening exam |

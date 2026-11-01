@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import {
+    GISCUS_CATEGORY,
+    GISCUS_CATEGORY_ID,
+    GISCUS_CONFIGURED,
+    GISCUS_REPO,
+    GISCUS_REPO_ID,
+} from '@/components/giscusConfig';
 
 interface CommentsGiscusProps {
     slug: string;
     /**
      * Configured against the public CrackCMS GitHub Discussions repo. If the
-     * repo or category changes, update GISCUS_REPO / GISCUS_CATEGORY_ID below
-     * (or wire up env vars).
+     * repo or category changes, update giscusConfig.ts (or wire up env vars).
      */
 }
 
@@ -23,20 +29,10 @@ interface CommentsGiscusProps {
  *   - repo:        `Divyanshu1Dubey/crackcms-blog` (a public GitHub repo with
  *                  Discussions enabled — see TODO below if it's not yet
  *                  created).
- *   - repoId + categoryId: derived from GitHub Discussions setup; set once the
- *     repo is configured. Until then, the component renders an inline fallback
- *     so the page never breaks.
- *
- * TODO: enable the actual embed by (1) creating the public `crackcms-blog` repo
- * on GitHub, (2) enabling Discussions on it, and (3) running giscus.app once
- * to fetch the repoId + categoryId for the General category, then uncomment
- * the loader below.
+ *   - repoId + categoryId: derived from GitHub Discussions setup (see
+ *     giscusConfig.ts). Until they are set, this renders nothing and
+ *     BlogPostLayout leaves the comments section out.
  */
-const GISCUS_REPO = 'Divyanshu1Dubey/crackcms-blog';
-const GISCUS_REPO_ID = ''; // TODO: fill from giscus.app after repo setup
-const GISCUS_CATEGORY_ID = ''; // TODO: fill from giscus.app after repo setup
-const GISCUS_CATEGORY = 'General';
-
 export function CommentsGiscus({ slug }: CommentsGiscusProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -69,27 +65,11 @@ export function CommentsGiscus({ slug }: CommentsGiscusProps) {
         containerRef.current.appendChild(script);
     }, [slug]);
 
+    if (!GISCUS_CONFIGURED) return null;
+
     return (
         <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
-            {GISCUS_REPO_ID && GISCUS_CATEGORY_ID ? (
-                <div ref={containerRef} className="giscus" />
-            ) : (
-                <div className="text-sm text-muted-foreground leading-relaxed">
-                    <p className="font-semibold text-foreground">Comments are opening soon.</p>
-                    <p className="mt-2">
-                        The CrackCMS blog uses GitHub Discussions for comments (no spam, no third-party
-                        trackers). The discussion forum is being set up and comments will appear here
-                        automatically once it&apos;s live.
-                    </p>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                        In the meantime, ping us at{' '}
-                        <a href="mailto:crackwith.ai@gmail.com" className="text-primary underline">
-                            crackwith.ai@gmail.com
-                        </a>{' '}
-                        or use the in-app AI tutor for any clarification.
-                    </p>
-                </div>
-            )}
+            <div ref={containerRef} className="giscus" />
         </div>
     );
 }

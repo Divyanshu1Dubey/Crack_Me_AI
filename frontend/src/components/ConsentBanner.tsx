@@ -105,9 +105,11 @@ export default function ConsentBanner() {
                     </div>
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                         We use cookies to keep you signed in and remember your
-                        preferences. Only with your permission do we measure
-                        traffic and performance, record anonymised sessions to
-                        fix bugs, or (if ads are enabled) show ads.
+                        preferences, and we count page views in aggregate
+                        without cookies or personal data (Simple Analytics).
+                        Only with your permission do we use analytics tools to
+                        measure traffic and performance, record anonymised
+                        sessions to fix bugs, or (if ads are enabled) show ads.
                         You can change your choice any time in the{' '}
                         <Link href="/cookie-policy" className="text-primary underline">
                             cookie policy

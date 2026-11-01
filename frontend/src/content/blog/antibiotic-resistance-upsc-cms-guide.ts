@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Antibiotics', 'Resistance', 'Pharmacology', 'UPSC CMS', 'NEET PG', 'Microbiology'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3200,
-    primaryCta: { label: 'Practice Pharmacology PYQs (free)', href: '/questions?topic=pharmacology' },
+    primaryCta: { label: 'Practice Pharmacology PYQs (free)', href: '/questions?subject=pharmacology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What are the main antibiotic resistance mechanisms?', a: 'The four main mechanisms are: (1) Enzymatic inactivation (beta-lactamases), (2) Efflux pumps, (3) Target modification (altered binding sites), and (4) Reduced permeability (porin changes).' },

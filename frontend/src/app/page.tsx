@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import LandingPage from './_landing/LandingPage';
-import { defaultOgImage, siteDescription, siteName, siteTitle, siteUrl } from '@/lib/seo';
+import { defaultOgImage, defaultOgImageSize, siteDescription, siteName, siteTitle, siteUrl } from '@/lib/seo';
 import { jsonLdString, softwareAppSchema } from '@/lib/metadata';
 
 /**
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
         title: siteTitle,
         description: siteDescription,
         siteName,
-        images: [{ url: defaultOgImage, width: 1254, height: 1254, alt: 'CrackCMS UPSC CMS Preparation Platform' }],
+        images: [{ url: defaultOgImage, ...defaultOgImageSize, alt: 'CrackCMS UPSC CMS Preparation Platform' }],
     },
 };
 

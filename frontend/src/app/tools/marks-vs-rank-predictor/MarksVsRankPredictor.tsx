@@ -161,7 +161,7 @@ export default function MarksVsRankPredictor() {
     <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
       <h3 className="text-xl font-bold">Marks Vs Rank Predictor 2026</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        Enter your expected marks in each paper ({PAPER1_MAX} + {PAPER2_MAX} written, {INTERVIEW_MAX} Personality Test,
+        Enter your expected marks in each paper ({PAPER1_MAX} + {PAPER2_MAX} written, {INTERVIEW_MAX} Personality Test,{' '}
         {TOTAL_MARKS} in all) for a rough, illustrative estimate of your category-wise rank and percentile. UPSC does not
         publish score distributions, so treat the result as a ballpark only.
       </p>

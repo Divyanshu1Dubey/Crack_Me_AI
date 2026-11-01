@@ -25,7 +25,8 @@ interface Props { cfg: ExamConfig }
 export function ExamMicrosite({ cfg }: Props) {
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+      {/* Same container as the hero, so the crumb lines up with it. */}
+      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
         <Breadcrumbs items={[{ name: cfg.shortName, path: `/exams/${cfg.slug}` }]} />
       </div>
       {/* ── HERO ───────────────────────────────────────────── */}
@@ -281,25 +282,16 @@ export function ExamMicrosite({ cfg }: Props) {
               {cfg.primaryCta.label} <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </Button>
+          {/* Anonymous visitors have no dashboard, so the second CTA is the
+              exam's own secondary action (e.g. "Take Mock Test"). */}
           <Button asChild size="lg" variant="outline">
-            <Link href="/dashboard">Back to Dashboard</Link>
+            <Link href={cfg.secondaryCta.href}>{cfg.secondaryCta.label}</Link>
           </Button>
         </div>
       </section>
 
-      {/* footer-light */}
-      <footer className="border-t border-border/40 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} CrackCMS · {cfg.shortName} microsite</span>
-          <span className="flex items-center gap-3">
-            <Link href="/exams/cms" className="hover:text-primary">UPSC CMS</Link>
-            <span>·</span>
-            <Link href="/exams/neet-pg" className="hover:text-primary">NEET PG</Link>
-            <span>·</span>
-            <Link href="/exams/usmle" className="hover:text-primary">USMLE</Link>
-          </span>
-        </div>
-      </footer>
+      {/* No microsite footer strip: the global Footer (root layout) already
+          links every exam, and the page ended with two footers. */}
     </div>
   );
 }

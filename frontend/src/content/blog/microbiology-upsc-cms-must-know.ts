@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Microbiology', 'Bacteria', 'Viruses', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2800,
-    primaryCta: { label: 'Practice Microbiology PYQs (free)', href: '/questions?topic=microbiology' },
+    primaryCta: { label: 'Practice Microbiology PYQs (free)', href: '/questions?subject=microbiology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the best microbiology textbook for exams?', a: 'Ananthanarayan and Panikers Textbook of Microbiology is the standard. Jawetz for medical microbiology. For parasitology: Chatterjeas Parasitology.' },

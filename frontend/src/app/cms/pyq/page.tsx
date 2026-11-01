@@ -7,16 +7,16 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 export const metadata: Metadata = {
     title: 'UPSC CMS Previous Year Questions (PYQs) by Year — 2020-2024',
     description:
-        'Practise every UPSC CMS previous year question from 2020 to 2024. Year-wise PYQ papers with subject-wise filters, cutoffs, toppers, and AI explanations.',
+        'Practise UPSC CMS previous year questions from 2020 to 2024. Year-wise PYQ papers with subject-wise filters, published cutoffs, and AI explanations.',
     alternates: { canonical: '/cms/pyq', languages: { 'en-IN': '/cms/pyq' } },
     openGraph: {
         type: 'website',
         url: '/cms/pyq',
         title: 'UPSC CMS Previous Year Questions (PYQs) by Year | CrackCMS',
-        description: 'Year-wise UPSC CMS PYQs with cutoffs, toppers, and AI explanations.',
+        description: 'Year-wise UPSC CMS PYQs with published cutoffs and AI explanations.',
         siteName,
     },
-    twitter: { card: 'summary_large_image', title: 'UPSC CMS PYQs by Year | CrackCMS', description: 'Year-wise UPSC CMS PYQs with cutoffs, toppers, and AI explanations.' },
+    twitter: { card: 'summary_large_image', title: 'UPSC CMS PYQs by Year | CrackCMS', description: 'Year-wise UPSC CMS PYQs with published cutoffs and AI explanations.' },
     robots: { index: true, follow: true },
 };
 
@@ -61,8 +61,8 @@ export default function CMSPyqIndexPage() {
                         UPSC CMS Previous Year Questions by Year
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
-                        Pick a year to practise the full UPSC CMS paper with subject filters, AI explanations,
-                        cutoffs, and topper scores. Updated within 24 hours of every UPSC notification.
+                        Pick a year to practise the full UPSC CMS paper with subject filters, AI explanations
+                        and the published cutoffs.
                     </p>
                 </section>
                 <section className="mx-auto grid max-w-5xl gap-4 px-4 pb-16 sm:px-6 sm:grid-cols-2 lg:grid-cols-3">

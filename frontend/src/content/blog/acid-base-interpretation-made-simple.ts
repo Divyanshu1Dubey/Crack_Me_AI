@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Acid-Base', 'ABG', 'Internal Medicine', 'UPSC CMS', 'NEET PG', 'Clinical Skills'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '11 min',
     wordCount: 3300,
-    primaryCta: { label: 'Practice Medicine PYQs (free)', href: '/questions?topic=general-medicine' },
+    primaryCta: { label: 'Practice Medicine PYQs (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the first step in acid-base interpretation?', a: 'Always start with pH. If pH < 7.35 = acidosis. If pH > 7.45 = alkalosis. Then look at PaCO2 (respiratory component) and HCO3- (metabolic component).' },

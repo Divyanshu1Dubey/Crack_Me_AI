@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Paper 1', 'Paper 2', 'UPSC CMS', 'Strategy', 'Time Allocation'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',

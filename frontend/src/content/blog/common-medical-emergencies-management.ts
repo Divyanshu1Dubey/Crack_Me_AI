@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Medical Emergencies', 'Management', 'Protocols', 'MBBS', 'Clinical Skills'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '11 min',
     wordCount: 3200,
-    primaryCta: { label: 'Practice Emergency Management PYQs', href: '/questions?topic=emergency-medicine' },
+    primaryCta: { label: 'Practice Emergency Management PYQs', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/medical-officer'],
     faqs: [
         { q: 'What is MONA for ACS?', a: 'MONA = Morphine, Oxygen, Nitrates, Aspirin. Updated protocol: Aspirin 300mg chewable + P2Y12 inhibitor (Ticagrelor/Clopidogrel) + Anticoagulant (Heparin) + PCI if STEMI.' },

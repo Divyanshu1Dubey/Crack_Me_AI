@@ -1,6 +1,7 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const title = 'NEET PG Complete Guide 2026 — Pattern, Syllabus, Books, AIR Prediction, Strategy';
 const description = 'Complete NEET PG 2026 guide — exam pattern (200 MCQs, -1 negative marking), subject-wise syllabus, topper-recommended books, AIR prediction, image-based questions, and a 6-month study plan.';
@@ -186,11 +187,10 @@ export default function NEETPGGuide() {
 
             <h2>Why CrackCMS for NEET PG?</h2>
             <ul>
-                <li>18,000+ NEET PG MCQs across all 19 subjects</li>
+                <li>{NEET_PG_QUESTION_COUNT} NEET PG questions (mostly exam recalls) across the 19 subjects</li>
                 <li>AI tutor trained on Harrison, Robbins, Bailey, Ghai, Park, Dutta</li>
-                <li>All-India rank prediction after every mock test</li>
                 <li>Spaced-repetition flashcards adapted to your weak areas</li>
-                <li>Image-based MCQ drill with 1,000+ curated images</li>
+                <li>Image-based recall questions (radiology, histopathology, ECG) in a zoomable viewer</li>
             </ul>
         </GuideLayout>
     );

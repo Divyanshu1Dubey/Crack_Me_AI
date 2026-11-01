@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Forensic Medicine', 'UPSC CMS', 'NEET PG', 'High-Yield'],
     difficulty: 'beginner',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '7 min',
     wordCount: 2100,
-    primaryCta: { label: 'Practice Forensic Medicine PYQs (free)', href: '/questions?topic=forensic-medicine' },
+    primaryCta: { label: 'Practice Forensic Medicine PYQs (free)', href: '/questions?subject=forensic-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How many forensic medicine questions in UPSC CMS?', a: 'Approximately 4-5 questions from Forensic Medicine in Paper I. These are often straightforward recall questions that are easy to score if you know the facts.' },

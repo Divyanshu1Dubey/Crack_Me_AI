@@ -1,7 +1,7 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { CMS_PYQ_COUNT, CMS_PYQ_PHRASE, CMS_PYQ_YEAR_COUNT, CMS_PYQ_YEARS } from '@/lib/bankStats';
 import {
     CMS_MARKS_PER_QUESTION,
     CMS_NEGATIVE_MARKING_TEXT,
@@ -21,17 +21,17 @@ const content: ExamLandingContent = {
     name: 'UPSC CMS',
     fullName: 'Combined Medical Services Examination',
     title: 'UPSC CMS Preparation 2026 — AI Tutor, PYQs, Mock Tests',
-    description: 'Prepare for UPSC CMS 2026 with 2,000+ previous year questions (2018-2025), AI explanations, full mock test series, and an exam simulator on CrackCMS.',
-    tagline: 'Crack the Combined Medical Services exam with an AI tutor, 2,000+ PYQs (2018-2025), and full UPSC CMS mock tests.',
+    description: `Prepare for UPSC CMS with ${CMS_PYQ_COUNT} previous year questions (${CMS_PYQ_YEARS}), AI explanations, full mock test series, and an exam simulator on CrackCMS.`,
+    tagline: `Crack the Combined Medical Services exam with an AI tutor, ${CMS_PYQ_COUNT} PYQs (${CMS_PYQ_YEARS}), and full UPSC CMS mock tests.`,
     heroBullets: [
-        '2,000+ previous-year UPSC CMS questions (2018-2025)',
+        `${CMS_PYQ_COUNT} previous-year UPSC CMS questions (${CMS_PYQ_YEARS})`,
         'AI tutor that explains every answer with mnemonics & textbook references',
         `Real-exam simulator with one-third negative marking and a ${paper1.durationMinutes}-min countdown per paper`,
         'Personalised analytics — see exactly which topics are dragging your rank',
     ],
     stats: [
-        { number: '2,000+', label: 'UPSC CMS PYQs (2018–2025)' },
-        { number: '2018–2025', label: 'Years covered' },
+        { number: CMS_PYQ_COUNT, label: `UPSC CMS PYQs (${CMS_PYQ_YEARS})` },
+        { number: `${CMS_PYQ_YEAR_COUNT} yrs`, label: `Years covered (${CMS_PYQ_YEARS})` },
         { number: String(UPSC_CMS_PATTERN.writtenMarks), label: `Written exam marks (${paper1.marks} + ${paper2.marks})` },
         { number: UPSC_CMS_PATTERN.modeShort, label: 'Single-day, two papers' },
     ],
@@ -56,7 +56,7 @@ const content: ExamLandingContent = {
         { label: 'Nationality', value: 'Indian citizen (or subject of Nepal/Bhutan; Tibetan refugee with intent to settle in India)' },
         { label: 'Qualifying degree', value: 'MBBS (final year appearing or passed) from an NMC-recognised institution' },
         { label: 'Age limit', value: '32 years (relaxation for reserved categories per UPSC rules)' },
-        { label: 'Attempts', value: 'No fixed limit; subject to age ceiling' },
+        { label: 'Attempts', value: UPSC_CMS_PATTERN.attemptsRule },
         { label: 'Medical fitness', value: 'Must meet the physical/medical standards prescribed for the post applied for' },
     ],
     syllabus: [
@@ -84,7 +84,7 @@ const content: ExamLandingContent = {
         { q: 'When was UPSC CMS 2026?', a: `The UPSC CMS 2026 written exam was scheduled for 02 August 2026 (Sunday), as a single-day Computer-Based Test. The notification was released on 11 March 2026 and advertised ${UPSC_CMS_CYCLE.vacancies.toLocaleString('en-IN')} Medical Officer posts. Results and cut-offs are published by UPSC on upsc.gov.in; the next cycle's dates appear in its notification.` },
         { q: 'What is the UPSC CMS 2026 syllabus?', a: 'The CMS syllabus covers General Medicine, Surgery, Paediatrics, OBG, Preventive & Social Medicine, ENT, Ophthalmology, Anaesthesia and Orthopaedics. See the table above for high-yield topics.' },
         { q: 'Who is eligible for UPSC CMS?', a: 'Any Indian citizen with an MBBS degree from an NMC-recognised college, aged under 32 (relaxations for SC/ST/OBC/PwD), may apply.' },
-        { q: 'How many PYQs does CrackCMS have for UPSC CMS?', a: 'CrackCMS hosts 2,000+ previous-year UPSC CMS questions from 2018 to 2025, with AI-powered explanations, mnemonics, textbook references and similar-PYQ links.' },
+        { q: 'How many PYQs does CrackCMS have for UPSC CMS?', a: `CrackCMS hosts ${CMS_PYQ_PHRASE}, with AI-powered explanations, mnemonics, textbook references and similar-PYQ links.` },
         { q: 'Can I attempt a free UPSC CMS mock test on CrackCMS?', a: `Yes — free accounts get ${FREE_DAILY_AI_TOKENS} AI tokens a day and can take short practice tests of up to 20 questions. Full-length mock tests and the complete question bank need a premium plan (from ₹${LOWEST_PLAN_PRICE_INR}/month).` },
         { q: 'Does CrackCMS follow the latest UPSC CMS exam pattern?', a: `Yes. Our mock tests use the two-paper, ${UPSC_CMS_PATTERN.totalQuestions}-question format with one-third negative marking and a ${paper1.durationMinutes}-minute countdown per paper.` },
         { q: 'How should I prepare for UPSC CMS in 6 months?', a: 'Start with subject-wise PYQs to build a baseline, take one full mock every Sunday, spend 30 minutes daily on AI tutor for weak topics, and revise mnemonics using our spaced-repetition flashcards.' },
@@ -92,7 +92,7 @@ const content: ExamLandingContent = {
     accentFrom: 'from-indigo-600',
     accentTo: 'to-violet-700',
     emoji: '🏛️',
-    pyqCount: '2,000+',
+    pyqCount: CMS_PYQ_COUNT,
     // Slugs must exist in content/blog (ExamLandingLayout links /blog/<slug>).
     relatedBlogPosts: [
         {
@@ -127,9 +127,6 @@ export const metadata = buildExamMetadata(content);
 export default function CMSPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Essential UPSC CMS Resources</h2>

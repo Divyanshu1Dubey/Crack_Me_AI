@@ -58,7 +58,7 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise both exams side-by-side (free)',
-        href: '/questions?exam=CMS+NEET+PG&topic=shared-overlap',
+        href: '/questions?exam=cms',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'dual-last-week', surface: 'inline_cta' },
     },
@@ -348,11 +348,11 @@ That’s it. Don’t read full chapters on these. You’ll get 80% of marks from
 
 Attempting both UPSC CMS and NEET PG in the same 3-month window is **brave, not foolish**. The shared 60% means your effective study time is **2x** what a single-exam aspirant gets, not 0.5x. The risk is that you try to chase 100% of both syllabi instead of 60% + 60% = 120% of high-yield overlap + 40% + 40% of low-yield filler.
 
-The [CMS question bank](/questions?exam=CMS) + [NEET PG question bank](/questions?exam=NEET+PG) + [AI tutor](/ai-tutor) + [simulator](/simulator) are built precisely for this dual-aspirant reality. Pick the exam tag at the top, run any of the seven-day protocols above, and let the AI tutor auto-track your recall gaps.
+The [CMS question bank](/questions?exam=cms) + [NEET PG question bank](/questions?exam=neet-pg) + [AI tutor](/ai-tutor) + [simulator](/simulator) are built precisely for this dual-aspirant reality. Pick the exam tag at the top, run any of the seven-day protocols above, and let the AI tutor auto-track your recall gaps.
 
 You have everything you need. Now go pass both.
 
-— [Dr. Aarav Mehta, MBBS, MD (Internal Medicine)](/authors/aarav-mehta) · Senior Editor — Medicine, CrackCMS
+— [Dr. Aarav Mehta, MBBS, MD (Internal Medicine)](/blog/author/dr-aarav-mehta) · Senior Editor — Medicine, CrackCMS
 
 *Medically reviewed by the CrackCMS content team. See our [editorial policy](/editorial-policy) and [medical review policy](/medical-review-policy). Past performance is not a guarantee of future rank; treat this as a high-quality preparation framework, not a substitute for individual judgement. If you are in distress during exam week, please reach out: [iCall 9152987821](https://icallhelpline.org/), [Vandrevala Foundation 1860-2662-345](https://www.vandrevalafoundation.com/).*
 

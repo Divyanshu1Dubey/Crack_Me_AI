@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Confused Topics', 'Pairs', 'UPSC CMS', 'NEET PG', 'Differential Diagnosis'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice Confusing Topic PYQs', href: '/questions?topic=confused-topics' },
+    primaryCta: { label: 'Practice Confusing Topic PYQs', href: '/questions' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Why do confused topics appear in pairs?', a: 'Exam setters deliberately place similar-sounding conditions or drugs together to test depth of knowledge. This is the most common exam technique across all medical PG exams.' },

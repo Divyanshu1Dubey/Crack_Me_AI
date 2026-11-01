@@ -24,7 +24,8 @@ import { FloatingDock } from "@/components/FloatingDock";
 import { PaywallRoot } from "@/components/paywall/PaywallRoot";
 import { PaywallProvider } from "@/lib/paywall/paywallContext";
 import Footer from "@/components/Footer";
-import { defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
+import PublicNav from "@/components/PublicNav";
+import { defaultOgImage, defaultOgImageSize, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
 import { graphSchema, jsonLdString, orgSchema, websiteSchema } from "@/lib/metadata";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
@@ -86,8 +87,7 @@ export const metadata: Metadata = {
     images: [
       {
         url: defaultOgImage,
-        width: 1254,
-        height: 1254,
+        ...defaultOgImageSize,
         alt: "CrackCMS UPSC CMS Preparation Platform",
       },
     ],
@@ -110,9 +110,14 @@ export const metadata: Metadata = {
     },
   },
   manifest: "/manifest.json",
+  // Correctly sized PNGs generated from the 1254px logo
+  // (scripts/generate-brand-icons.mjs) instead of the 900 KB original.
   icons: {
-    icon: [{ url: "/cms-circle-logo.png", type: "image/png" }],
-    apple: [{ url: "/cms-circle-logo.png", type: "image/png" }],
+    icon: [
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -136,13 +141,12 @@ export default function RootLayout({
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
-        {/* Preconnect to critical origins — shaves 100-300ms off LCP by eliminating
-            TCP+TLS handshakes for fonts, API, and analytics resources. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Preconnect to the API origin to shave the TCP+TLS handshake off LCP.
+            No preconnects to Google hosts: a preconnect opens a connection
+            (exposing the visitor's IP) before any consent choice. next/font
+            self-hosts the fonts, and gtag.js is only fetched after the
+            visitor allows analytics (see the consent bootstrap below). */}
         {apiOrigin && <link rel="preconnect" href={apiOrigin} />}
-        <link rel="preconnect" href="https://www.googletagmanager.com" />
-        <link rel="preconnect" href="https://www.google-analytics.com" />
         <link rel="dns-prefetch" href="https://scripts.simpleanalyticscdn.com" />
         <link rel="dns-prefetch" href="https://*.clarity.ms" />
 
@@ -229,6 +233,8 @@ export default function RootLayout({
                             <TrafficAnalytics />
                           </Suspense>
                           <BackendWarmup />
+                          {/* Brand + Log in bar for public pages that have no header of their own. */}
+                          <PublicNav />
                           <main id="main-content">{children}</main>
                           <Footer />
                           <FloatingDock />

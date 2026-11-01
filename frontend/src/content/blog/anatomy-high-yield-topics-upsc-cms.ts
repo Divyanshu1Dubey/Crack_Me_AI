@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Anatomy', 'High-Yield', 'UPSC CMS', 'NEET PG', 'Subject Strategy'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2400,
-    primaryCta: { label: 'Practice Anatomy PYQs (free)', href: '/questions?topic=anatomy' },
+    primaryCta: { label: 'Practice Anatomy PYQs (free)', href: '/questions' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Which anatomy textbook is best for UPSC CMS?', a: 'BD Chaurasias Human Anatomy is the standard for exams. For neuroanatomy, Snells Clinical Neuroanatomy. For embryology, Langman. Focus on diagrams and clinical correlations.' },

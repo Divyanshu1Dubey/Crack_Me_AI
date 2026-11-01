@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['One-Liners', 'Quick Revision', 'UPSC CMS', 'Medicine', 'Surgery', 'Flashcards'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice PYQs on Medicine (free)', href: '/questions?topic=general-medicine' },
+    primaryCta: { label: 'Practice PYQs on Medicine (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms'],
     faqs: [
         { q: 'Are one-liners really effective for UPSC CMS?', a: 'Yes. UPSC CMS has a high proportion of direct-knowledge one-liner questions. Memorizing these gives you guaranteed marks with minimal effort. Many toppers credit one-liner revision for 30-40 extra marks.' },

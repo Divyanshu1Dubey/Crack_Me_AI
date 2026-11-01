@@ -4,9 +4,10 @@ import { TrackedLink } from '@/components/TrackedLink';
 import { ArrowLeft, CalendarDays, Clock, User, BookOpen, GraduationCap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { defaultOgImage, defaultOgImageSize, siteName, siteUrl } from '@/lib/seo';
 import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 
 interface GuideLayoutProps {
     /** SEO title */
@@ -64,7 +65,7 @@ export function buildGuideMetadata({
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: title }],
+            images: [{ url: defaultOgImage, ...defaultOgImageSize, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large' } },
@@ -190,7 +191,7 @@ export function GuideLayout({
                         <CardContent className="p-6 sm:p-8 text-center">
                             <h3 className="text-lg font-bold">Ready to start practising?</h3>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                CrackCMS combines AI tutoring with 2,000+ UPSC CMS PYQs and a full mock-test simulator.
+                                CrackCMS combines AI tutoring with {CMS_PYQ_COUNT} UPSC CMS PYQs and a full mock-test simulator.
                             </p>
                             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                                 <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'guide_layout' }} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create free account</TrackedLink>

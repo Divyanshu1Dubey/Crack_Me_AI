@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['PSM', 'Epidemiology', 'Biostatistics', 'Park', 'NHK', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '10 min',
     wordCount: 3000,
-    primaryCta: { label: 'Practice PSM PYQs (free)', href: '/questions?topic=psm' },
+    primaryCta: { label: 'Practice PSM PYQs (free)', href: '/questions?subject=psm' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Which PSM textbook is best for UPSC CMS?', a: 'Park Textbook of Preventive and Social Medicine is the standard. For National Health Programs: use the latest NHM guidelines from mohfw.gov.in. For statistics: refer to any biostatistics chapter in Park or Mahajan.' },

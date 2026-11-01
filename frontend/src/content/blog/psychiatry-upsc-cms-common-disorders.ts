@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Psychiatry', 'ICD', 'Drugs', 'UPSC CMS', 'NEET PG'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2600,
-    primaryCta: { label: 'Practice Psychiatry PYQs (free)', href: '/questions?topic=psychiatry' },
+    primaryCta: { label: 'Practice Psychiatry PYQs (free)', href: '/questions?subject=psychiatry' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the difference between ICD-10 and ICD-11 classifications?', a: 'ICD-11 (2022) simplified classifications: F32 = single episode depressive disorder, F33 = recurrent depressive disorder, F20 = schizophrenia, F31 = bipolar disorder. UPSC CMS now references ICD-11.' },

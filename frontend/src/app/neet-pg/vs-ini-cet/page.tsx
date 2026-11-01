@@ -4,6 +4,7 @@ import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { ArrowRight } from 'lucide-react';
 import Script from 'next/script';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 export const metadata: Metadata = {
     title: 'NEET PG vs INI-CET — Which is Better? (2026 Comparison)',
@@ -144,7 +145,7 @@ export default function NEETPGVsINICETPage() {
                         <Link href="/neet-pg" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">NEET PG</p>
                             <p className="mt-2 font-semibold group-hover:underline">NEET PG Preparation <ArrowRight className="inline ml-1 h-4 w-4" /></p>
-                            <p className="mt-1 text-sm text-muted-foreground">2,300+ PYQs, AI tutor, mock tests, and a complete NEET PG landing page.</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{NEET_PG_QUESTION_COUNT} questions, AI tutor, mock tests, and a complete NEET PG landing page.</p>
                         </Link>
                         <Link href="/ini-cet" className="group rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">INI-CET</p>

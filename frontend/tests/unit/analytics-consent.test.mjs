@@ -1,6 +1,6 @@
 // Regression tests for consent gating, the backend relay payload and the
 // PostHog loader (PUB-08, AN-10, PUB-28/AN-01).
-// Run: node --import ./tests/unit/register-ts-alias.mjs --test tests/unit/
+// Run (from frontend/): node --import ./tests/unit/register-ts-alias.mjs --test "tests/unit/*.test.mjs" "tests/unit/*.test.ts"
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';

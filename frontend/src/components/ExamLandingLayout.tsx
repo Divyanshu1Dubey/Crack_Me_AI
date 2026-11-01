@@ -5,7 +5,8 @@ import { CheckCircle2, Sparkles, Target, BookOpen, Brain, FileText, Trophy, Zap,
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { questionBankHref, siteName, siteUrl, type QuestionBankExam } from '@/lib/seo';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import { defaultOgImage, defaultOgImageSize, questionBankHref, siteName, siteUrl, type QuestionBankExam } from '@/lib/seo';
 import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
 import { premiumAggregateOffer } from '@/app/subscription/plans';
 import { getPostBySlug } from '@/lib/blog';
@@ -42,8 +43,14 @@ export interface ExamLandingContent {
     accentTo: string;
     /** Badge emoji */
     emoji?: string;
-    /** Number of PYQs in our bank for this exam */
-    pyqCount: string;
+    /** Size of the question bank this page practises with, e.g. "1,800+"
+     *  (rendered as "<pyqCount> PYQs"). Omit when there is no honest figure. */
+    pyqCount?: string;
+    /** Second hero button. Defaults to "Try PYQs" -> pyqHref. */
+    secondaryCta?: { label: string; href: string };
+    /** "Why CrackCMS" cards. Defaults to the generic six (AI tutor, PYQs,
+     *  mock tests, ...); pass exam-specific ones when those do not apply. */
+    features?: { title: string; body: string }[];
     /** Optional: hand-picked blog posts to surface at the bottom of the
      *  landing page (max 4). Builds the internal-link cluster between
      *  high-authority landing pages and the /blog content silo. Each slug
@@ -58,6 +65,32 @@ export interface ExamLandingContent {
 }
 
 const BANK_EXAMS: QuestionBankExam[] = ['cms', 'neet-pg', 'ini-cet', 'fmge', 'usmle'];
+
+/** Pages whose exam the /simulator reproduces (the UPSC CMS two-paper
+ *  format). State MO exams and INI-CET/FMGE use other patterns. */
+const CMS_SIMULATOR_SLUGS = ['cms'];
+
+/** Icons for the "Why CrackCMS" cards, in card order. */
+const FEATURE_ICONS = [Brain, FileText, Target, BookOpen, Trophy, Zap];
+
+/** The "Why CrackCMS" cards. Exam-neutral wording: FMGE has no negative
+ *  marking and USMLE is not tested from Indian PG textbooks, so pages whose
+ *  exam differs pass their own `features`. */
+function defaultFeatures(c: ExamLandingContent, pyqHref: string | null): { title: string; body: string }[] {
+    return [
+        { title: 'AI tutor', body: `Personalised explanations, mnemonics and clinical pearls for every ${c.name} question.` },
+        pyqHref === null
+            ? { title: 'Question bank coming soon', body: `A dedicated ${c.name} question bank is in development; the AI tutor and guides are available now.` }
+            : {
+                  title: c.pyqCount ? `${c.pyqCount} PYQs` : 'PYQ practice',
+                  body: 'Previous-year questions with step-by-step solutions, sorted by subject, topic and year.',
+              },
+        { title: 'Timed mock tests', body: 'Mock tests that mirror the real exam pattern, marking scheme and timing.' },
+        { title: 'Textbook-referenced', body: 'Explanations point to Harrison, Bailey & Love, Ghai, Park, Nelson and other standard texts.' },
+        { title: 'Gamified streaks', body: 'Daily streaks, badges, leaderboards and XP to keep you consistent for 6 months.' },
+        { title: 'Works on any device', body: 'Install it as an app on your phone (PWA) or use it in any browser.' },
+    ];
+}
 
 export type ExamLandingLayoutProps =
     | { content: ExamLandingContent; children?: React.ReactNode }
@@ -93,7 +126,7 @@ export function buildExamMetadata(c: ExamLandingContent): Metadata {
             title: c.title,
             description: c.description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: `${c.name} preparation on CrackCMS` }],
+            images: [{ url: defaultOgImage, ...defaultOgImageSize, alt: `${c.name} preparation on CrackCMS` }],
         },
         twitter: {
             card: 'summary_large_image',
@@ -115,6 +148,8 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
     const pyqHref = c.pyqHref === undefined
         ? questionBankHref(BANK_EXAMS.includes(c.slug as QuestionBankExam) ? (c.slug as QuestionBankExam) : 'cms')
         : c.pyqHref;
+    const secondaryCta = c.secondaryCta ?? (pyqHref ? { label: 'Try PYQs', href: pyqHref } : null);
+    const features = c.features ?? defaultFeatures(c, pyqHref);
 
     // JSON-LD: Course + FAQPage + BreadcrumbList
     const jsonLd = {
@@ -160,6 +195,11 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
+                {/* Same container as the hero, so the crumb lines up with its content. */}
+                <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+                    <Breadcrumbs items={[{ name: c.name, path: canonical }]} />
+                </div>
+
                 {/* ─── HERO ─── */}
                 <section className={`relative overflow-hidden border-b border-border bg-linear-to-br ${c.accentFrom} ${c.accentTo}`}>
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_55%)] pointer-events-none" />
@@ -169,7 +209,7 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                                 {c.emoji || '🎯'} {c.fullName}
                             </Badge>
                             <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl">
-                                Crack {c.name} with <span className="text-yellow-300">AI-powered</span> prep
+                                Crack {c.name} with <span className="whitespace-nowrap text-yellow-300">AI-powered</span> prep
                             </h1>
                             <p className="mt-4 max-w-xl text-base text-white/85 sm:text-lg">{c.tagline}</p>
                             <ul className="mt-6 space-y-2">
@@ -184,9 +224,9 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                                 <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
                                     <Link href="/register">Start Free <ArrowRight className="h-4 w-4" /></Link>
                                 </Button>
-                                {pyqHref && (
+                                {secondaryCta && (
                                     <Button asChild size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
-                                        <Link href={pyqHref}><BookOpen className="h-4 w-4" /> Try PYQs</Link>
+                                        <Link href={secondaryCta.href}><BookOpen className="h-4 w-4" /> {secondaryCta.label}</Link>
                                     </Button>
                                 )}
                             </div>
@@ -195,8 +235,9 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                             </p>
                         </div>
 
-                        {/* Stats card */}
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4 self-center">
+                        {/* Stats card — desktop only; smaller screens get the
+                            compact strip below instead of the same four stats twice. */}
+                        <div className="hidden lg:grid grid-cols-2 gap-3 sm:gap-4 self-center">
                             {c.stats.map(s => (
                                 <div key={s.label} className="rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 p-5 sm:p-6 shadow-xl">
                                     <p className="text-3xl sm:text-4xl font-black text-white">{s.number}</p>
@@ -207,8 +248,8 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                     </div>
                 </section>
 
-                {/* ─── STAT TILES (light) ─── */}
-                <section className="border-b border-border bg-card/50">
+                {/* ─── STAT TILES (light) — below lg only; desktop shows the hero cards ─── */}
+                <section className="border-b border-border bg-card/50 lg:hidden">
                     <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-border sm:grid-cols-4">
                         {c.stats.map(s => (
                             <div key={`b-${s.label}`} className="bg-card p-5 sm:p-6 text-center">
@@ -230,26 +271,20 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                         </h2>
                     </div>
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[
-                            { icon: Brain, title: 'AI tutor', body: `Personalised explanations, mnemonics and clinical pearls for every ${c.name} question.` },
-                            pyqHref === null
-                                ? { icon: FileText, title: 'Question bank coming soon', body: `A dedicated ${c.name} question bank is in development; the AI tutor and guides are available now.` }
-                                : { icon: FileText, title: `${c.pyqCount} PYQs`, body: 'Previous-year questions with step-by-step solutions, sorted by subject, topic and year.' },
-                            { icon: Target, title: 'Adaptive tests', body: 'Mock tests that mirror the real exam pattern, with negative marking and real-time ranking.' },
-                            { icon: BookOpen, title: 'Textbook-linked', body: 'Every answer links to Harrison, Bailey & Love, Ghai, Park, Nelson and other standard texts.' },
-                            { icon: Trophy, title: 'Gamified streaks', body: 'Daily streaks, badges, leaderboards and XP to keep you consistent for 6 months.' },
-                            { icon: Zap, title: 'Works on any device', body: 'Install it as an app on your phone (PWA) or use it in any browser.' },
-                        ].map(f => (
+                        {features.map((f, i) => {
+                            const Icon = FEATURE_ICONS[i % FEATURE_ICONS.length];
+                            return (
                             <Card key={f.title} className="border-border/60 bg-card">
                                 <CardContent className="p-6">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                        <f.icon className="h-5 w-5" />
+                                        <Icon className="h-5 w-5" />
                                     </div>
                                     <h3 className="mt-3 text-base font-bold text-foreground">{f.title}</h3>
                                     <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
                                 </CardContent>
                             </Card>
-                        ))}
+                            );
+                        })}
                     </div>
                 </section>
 
@@ -264,13 +299,33 @@ export function ExamLandingLayout(props: ExamLandingLayoutProps) {
                                 <h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">
                                     Latest {c.name} paper structure
                                 </h2>
-                                <p className="mt-3 text-muted-foreground">
-                                    CrackCMS mock tests follow the official {c.name} pattern so you practise
-                                    in the exact format you&apos;ll face on exam day.
-                                </p>
-                                <Button asChild className="mt-6 gap-2">
-                                    <Link href="/simulator">Try the simulator <ArrowRight className="h-4 w-4" /></Link>
-                                </Button>
+                                {pyqHref === null ? (
+                                    <p className="mt-3 text-muted-foreground">
+                                        The official {c.name} format at a glance. {c.name} mock tests will
+                                        follow once the question bank launches.
+                                    </p>
+                                ) : !CMS_SIMULATOR_SLUGS.includes(c.slug) ? (
+                                    // /simulator runs the UPSC CMS paper format only.
+                                    <>
+                                        <p className="mt-3 text-muted-foreground">
+                                            The official {c.name} format at a glance. Practise timed question sets
+                                            in the question bank while you prepare.
+                                        </p>
+                                        <Button asChild className="mt-6 gap-2">
+                                            <Link href={pyqHref}>Practise questions <ArrowRight className="h-4 w-4" /></Link>
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="mt-3 text-muted-foreground">
+                                            CrackCMS mock tests follow the official {c.name} pattern so you practise
+                                            in the exact format you&apos;ll face on exam day.
+                                        </p>
+                                        <Button asChild className="mt-6 gap-2">
+                                            <Link href="/simulator">Try the simulator <ArrowRight className="h-4 w-4" /></Link>
+                                        </Button>
+                                    </>
+                                )}
                             </div>
                             <div className="rounded-2xl border border-border bg-card overflow-hidden">
                                 <table className="w-full text-sm">

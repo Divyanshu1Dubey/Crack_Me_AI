@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['CNS', 'Neuroanatomy', 'Mnemonics', 'UPSC CMS', 'NEET PG', 'PYQ Analysis'],
     difficulty: 'beginner',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2800,
-    primaryCta: { label: 'Practice Neuroanatomy PYQs (free)', href: '/questions?topic=neuroanatomy' },
+    primaryCta: { label: 'Practice Neuroanatomy PYQs (free)', href: '/questions?subject=anatomy' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What are the most important CNS topics for UPSC CMS?', a: 'Blood supply of brain, cranial nerves, basal ganglia, thalamus, cerebellum, spinal cord tracts, and Brocas/Wernickes areas. These account for 80% of neuroanatomy questions.' },

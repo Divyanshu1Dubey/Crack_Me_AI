@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['TB', 'RNTCP', 'MDR-TB', 'Respiratory Medicine', 'UPSC CMS', 'NEET PG'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '12 min',
     wordCount: 3600,
-    primaryCta: { label: 'Practice Respiratory PYQs (free)', href: '/questions?topic=respiratory-medicine' },
+    primaryCta: { label: 'Practice Respiratory PYQs (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the first-line treatment for pulmonary TB?', a: '2HRZE / 4HR (Isoniazid, Rifampicin, Pyrazinamide, Ethambutol for 2 months intensive phase; Isoniazid + Rifampicin for 4 months continuation phase).' },

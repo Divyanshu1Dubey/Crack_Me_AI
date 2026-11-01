@@ -52,7 +52,7 @@ const post: BlogPost = {
         eventName: 'blog_practice_intent',
         eventParams: { source: 'neet-pg-vs-ini-cet', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/neet-pg', '/inicet', '/blog/neet-pg-2024-cutoff-category-wise'],
+    relatedExamPaths: ['/neet-pg', '/ini-cet', '/blog/neet-pg-2024-cutoff-category-wise'],
     references: [
         {
             label: 'AIIMS Examinations — INI-CET (official portal)',

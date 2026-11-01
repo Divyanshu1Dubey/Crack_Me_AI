@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 const title = 'How AI Is Transforming Medical Education — UPSC CMS, NEET PG';
-const description = 'How AI tutors, large language models, and adaptive MCQs are reshaping medical exam preparation. A practising clinician&apos;s perspective.';
+const description = 'How AI tutors, large language models, and adaptive MCQs are reshaping medical exam preparation. A practising clinician’s perspective.';
 const slug = 'ai-in-medical-education';
 
 export const metadata: Metadata = buildGuideMetadata({ title, description, slug });

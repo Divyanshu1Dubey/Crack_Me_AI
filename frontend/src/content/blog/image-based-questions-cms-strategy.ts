@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Image-Based', 'UPSC CMS', 'NEET PG', 'INI-CET', 'X-Ray', 'ECG', 'Exam Strategy'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,8 +19,9 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '8 min',
     wordCount: 2600,
-    primaryCta: { label: 'Try Image-Based Questions (free)', href: '/questions?mode=image' },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet'],
+    // /practice has an "Image-only" mode; /questions ignored ?mode=.
+    primaryCta: { label: 'Try Image-Based Questions (free)', href: '/practice?mode=image_only' },
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet'],
     faqs: [
         { q: 'How many image-based questions in UPSC CMS?', a: 'UPSC CMS typically has 10-15 image-based questions across both papers. These include X-rays, ECGs, histology slides, dermatology images, and clinical photographs.' },
         { q: 'What types of images appear in UPSC CMS?', a: 'Chest X-rays, ECGs, CT/MRI images, histology slides, skin lesion photos, ophthalmoscopy images, and diagrams. Radiology and Dermatology are the most image-heavy subjects.' },

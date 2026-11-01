@@ -14,6 +14,10 @@ import { UPSC_CMS_PATTERN } from '@/lib/examPatterns';
  *    empty sections automatically).
  */
 // Subject split, totals and cutoffs come from the shared sources (normaliseYear).
+// keyTrends are qualitative topic notes only: no per-year question counts
+// (the split is fixed by the notice — PSM is 40 every year — so counts such
+// as "PSM had 38 questions" contradicted the table on the same page), and no
+// claims about firsts, rankers or new question formats without a source.
 type CmsYear = Omit<
     PyqYearContent,
     'examSlug' | 'examName' | 'examLandingPath' | 'topSubjects' | 'totalQuestions' | 'totalSubjects'
@@ -24,11 +28,9 @@ const cmsYears: Record<number, CmsYear> = {
     2024: {
         year: 2024,
         keyTrends: [
-            'Increased weightage on cardiovascular emergencies — 14 direct STEMI/ACLS questions across Paper I & II.',
-            'New image-based questions on radiology (CT chest, MRI brain) appearing for the first time in Paper II Surgery.',
-            'Preventive & Social Medicine saw a shift toward newer National Health Programme questions (PMJAY, TB-Mukt Bharat).',
-            'Multiple-best-answer (MBA) questions introduced as a small pilot — 4 questions per paper.',
-            'Time pressure was the leading cause of unattempted questions among top 50 rankers.',
+            'Cardiovascular emergencies (STEMI, ACLS) were a recurring theme across Paper I and Paper II.',
+            'Image-based radiology questions (CT chest, MRI brain) appeared in the Surgery section of Paper II.',
+            'Preventive & Social Medicine included newer National Health Programme topics (PMJAY, TB-Mukt Bharat).',
             'Standard pharmacology questions on antimicrobial stewardship were a recurring theme.',
         ],
         faqs: [
@@ -38,11 +40,11 @@ const cmsYears: Record<number, CmsYear> = {
             },
             {
                 q: `How can I practise CMS ${2024} PYQs on CrackCMS?`,
-                a: `Create a free CrackCMS account, head to the Question Bank, filter by Exam = CMS and Year = ${2024}, and solve the questions with full AI explanations. Premium users unlock adaptive mock simulations based on this paper.`,
+                a: `Create a free CrackCMS account, head to the Question Bank, filter by Exam = CMS and Year = ${2024}, and solve the questions with full AI explanations. Premium users can also attempt the whole paper in timed exam mode.`,
             },
             {
                 q: `Should I attempt mock tests in CMS ${2024} pattern?`,
-                a: `Yes. The CMS ${2024} pattern (240 questions, 2 papers, 0.33 negative marking) is the closest model for upcoming CMS exams. Practice full-length mocks under timed conditions to build exam-day stamina.`,
+                a: `Yes. The CMS ${2024} pattern (240 questions, 2 papers, one-third negative marking) is the closest model for upcoming CMS exams. Practice full-length mocks under timed conditions to build exam-day stamina.`,
             },
         ],
     },
@@ -50,8 +52,8 @@ const cmsYears: Record<number, CmsYear> = {
         year: 2023,
         keyTrends: [
             'High emphasis on one-liner pharmacology — antimicrobial and anti-tubercular drug mechanisms.',
-            'Paper II Surgery had 12 direct trauma and ATLS protocol questions.',
-            'Paediatrics had a new cluster of IMNCI and growth-chart-based questions.',
+            'The Surgery section of Paper II tested trauma and ATLS protocols repeatedly.',
+            'Paediatrics included a cluster of IMNCI and growth-chart-based questions.',
             'OBG questions on high-risk pregnancy and gestational hypertension were common.',
             'Standard textbooks most cited: Harrison, Bailey & Love, Park, Ghai.',
         ],
@@ -62,9 +64,9 @@ const cmsYears: Record<number, CmsYear> = {
     2022: {
         year: 2022,
         keyTrends: [
-            'Increasing weight on community medicine — biostatistics questions noticeably higher.',
-            'Cardiology dominated Paper I with 18 direct questions on arrhythmias and heart failure.',
-            'First paper to include dedicated questions on national COVID-19 management protocols.',
+            'Community medicine leaned on biostatistics.',
+            'Cardiology — arrhythmias and heart failure — featured prominently in Paper I.',
+            'Included questions on national COVID-19 management protocols.',
         ],
         faqs: [
         ],
@@ -72,9 +74,8 @@ const cmsYears: Record<number, CmsYear> = {
     2021: {
         year: 2021,
         keyTrends: [
-            'PSM continued to gain weight — 38 questions, the highest in the decade.',
             'Surgery paper heavily tested GI bleeding and operative emergencies.',
-            'New questions on geriatric medicine appeared for the first time.',
+            'Included questions on geriatric medicine.',
         ],
         faqs: [
         ],
@@ -82,9 +83,7 @@ const cmsYears: Record<number, CmsYear> = {
     2020: {
         year: 2020,
         keyTrends: [
-            'Pre-pandemic paper, slightly lower difficulty in Surgery.',
-            'PSM had 40 questions — a high-water mark for the decade.',
-            'Pharmacology one-liners from standard texts were the deciding factor between top 100 and top 50.',
+            'Pharmacology one-liners from standard texts were a recurring theme.',
         ],
         faqs: [
         ],

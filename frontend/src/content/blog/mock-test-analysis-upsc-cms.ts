@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Mock Tests', 'Analysis', 'Score Report', 'UPSC CMS', 'Weak Areas'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',

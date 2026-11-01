@@ -26,9 +26,9 @@ const guides = [
     { slug: 'neet-pg-complete-guide', title: 'NEET PG Complete Guide 2026', desc: 'How to prepare for NEET PG in 6 months — exam pattern, subject-wise strategy, topper tips, AIR prediction, and image-based questions.', tag: 'NEET PG', emoji: '🩺', readTime: '11 min' },
     { slug: 'ini-cet-complete-guide', title: 'INI-CET Complete Guide', desc: 'Crack INI-CET for AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST — eligibility, pattern, syllabus, and the image-based question drill.', tag: 'INI-CET', emoji: '🏥', readTime: '10 min' },
     { slug: 'fmge-complete-guide', title: 'FMGE Complete Guide', desc: 'Pass the MCI Screening Test on your first attempt — syllabus, books, strategy, and Indian-context clinical reasoning.', tag: 'FMGE', emoji: '🌍', readTime: '9 min' },
-    { slug: 'usmle-step-1-guide', title: 'USMLE Step 1 Guide for Indian MBBS Students', desc: 'A comprehensive Step 1 roadmap — First Aid, Pathoma, UWorld, study schedule, and IMG-specific advice.', tag: 'USMLE', emoji: '🇺🇸', readTime: '10 min' },
+    { slug: 'usmle-step-1-guide', title: 'USMLE Step 1 Guide for Indian MBBS Students', desc: 'A comprehensive Step 1 roadmap — First Aid, Pathoma, UWorld, study schedule, and IMG-specific advice.', tag: 'USMLE', emoji: '🗽', readTime: '10 min' },
     { slug: 'medical-officer-jobs', title: 'Government Medical Officer Jobs After MBBS', desc: 'Every central and state MBBS doctor post — UPSC CMS, AIIMS MO, state PSCs, NHM, ESIC, Railways, Defence.', tag: 'Careers', emoji: '🏛️', readTime: '8 min' },
-    { slug: 'ai-in-medical-education', title: 'How AI Is Transforming Medical Education', desc: 'A practising clinician&apos;s perspective on large-language-model tutors, adaptive MCQs, and the future of exam prep.', tag: 'EdTech', emoji: '🤖', readTime: '7 min' },
+    { slug: 'ai-in-medical-education', title: 'How AI Is Transforming Medical Education', desc: 'A practising clinician’s perspective on large-language-model tutors, adaptive MCQs, and the future of exam prep.', tag: 'EdTech', emoji: '🤖', readTime: '7 min' },
     { slug: 'study-plan-builder', title: 'Build a Personalised Study Plan', desc: 'A step-by-step framework to build a 6-month UPSC CMS or NEET PG study plan using PYQs, AI tutor, and spaced repetition.', tag: 'Strategy', emoji: '📅', readTime: '6 min' },
 ];
 

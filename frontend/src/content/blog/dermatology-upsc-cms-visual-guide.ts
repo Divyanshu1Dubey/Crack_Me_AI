@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Dermatology', 'Skin Lesions', 'UPSC CMS', 'NEET PG', 'Visual Guide', 'Image-Based'],
     difficulty: 'intermediate',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '9 min',
     wordCount: 2600,
-    primaryCta: { label: 'Practice Dermatology PYQs (free)', href: '/questions?topic=dermatology' },
+    primaryCta: { label: 'Practice Dermatology PYQs (free)', href: '/questions?subject=dermatology' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'How many dermatology questions in UPSC CMS?', a: 'Typically 2-3 dermatology questions in Paper I. Most are image-based — showing a rash or lesion and asking for diagnosis or treatment.' },

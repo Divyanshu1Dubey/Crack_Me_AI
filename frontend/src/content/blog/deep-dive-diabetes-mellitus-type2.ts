@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Diabetes', 'Endocrinology', 'Type 2 DM', 'Complications', 'UPSC CMS', 'NEET PG'],
     difficulty: 'advanced',
     authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
     authorRole: 'Senior Editor — Medicine, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '13 min',
     wordCount: 3800,
-    primaryCta: { label: 'Practice Endocrinology PYQs (free)', href: '/questions?topic=endocrinology' },
+    primaryCta: { label: 'Practice Endocrinology PYQs (free)', href: '/questions?subject=general-medicine' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the first-line drug for Type 2 Diabetes?', a: 'Metformin is first-line unless contraindicated. It reduces hepatic gluconeogenesis and improves peripheral insulin sensitivity. Start at 500mg daily, titrate to 2000mg/day.' },

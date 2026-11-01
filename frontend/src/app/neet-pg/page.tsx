@@ -2,8 +2,9 @@
  * /neet-pg — NEET PG microsite (full custom landing experience).
  *
  * Standalone design — completely independent of the shared /exams/[slug]
- * microsite. Pulls LIVE subject/year counts from /api/questions/ and
- * /api/questions/subjects/ so the page always reflects the real QBank.
+ * microsite. Pulls LIVE NEET PG subject/year counts from
+ * /api/questions/stats/?exam_source=NEET PG so the page reflects the real
+ * QBank (static copy uses the shared figure in lib/bankStats.ts).
  *
  * Design language
  *   - Medical emerald/teal palette (distinct from CMS blue / USMLE indigo).
@@ -20,11 +21,12 @@
  */
 import type { Metadata } from 'next';
 import NeetPgLanding from '@/components/neet-pg/NeetPgLanding';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 export const metadata: Metadata = {
-  title: 'NEET PG 2026 — 2,300+ PYQs · 19 Subjects · AI Tutor',
+  title: `NEET PG 2026 — ${NEET_PG_QUESTION_COUNT} Questions · 19 Subjects · AI Tutor`,
   description:
-    'India\'s dedicated NEET PG preparation platform — 2,300+ previous year MCQs from 2018-2025 across 19 PG subjects, image-rich recall questions, AI tutor trained on Harrison, Robbins, Bailey & Love, and full mock tests.',
+    `India's dedicated NEET PG preparation platform — ${NEET_PG_QUESTION_COUNT} NEET PG questions (mostly image-rich exam recalls) across 19 PG subjects, an AI tutor trained on Harrison, Robbins, Bailey & Love, and full mock tests.`,
   keywords: [
     'NEET PG 2026',
     'NEET PG preparation',
@@ -39,7 +41,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'NEET PG 2026 Preparation | CrackCMS',
     description:
-      '2,300+ NEET PG PYQs · 19 PG subjects · Image-rich recalls · AI tutor · Full mocks.',
+      `${NEET_PG_QUESTION_COUNT} NEET PG questions · 19 PG subjects · Image-rich recalls · AI tutor · Full mocks.`,
     url: 'https://www.cracklabs.app/neet-pg',
     siteName: 'CrackCMS',
     type: 'website',
@@ -48,7 +50,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'NEET PG 2026 Preparation | CrackCMS',
     description:
-      '2,300+ NEET PG PYQs across 19 subjects with AI tutor & mock tests.',
+      `${NEET_PG_QUESTION_COUNT} NEET PG questions across 19 subjects with AI tutor & mock tests.`,
   },
 };
 

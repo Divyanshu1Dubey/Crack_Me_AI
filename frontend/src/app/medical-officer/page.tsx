@@ -1,8 +1,8 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
 import { questionBankHref } from '@/lib/seo';
+import { CMS_PYQ_COUNT, CMS_PYQ_PHRASE } from '@/lib/bankStats';
 
 const content: ExamLandingContent = {
     slug: 'medical-officer',
@@ -12,13 +12,13 @@ const content: ExamLandingContent = {
     description: 'Prepare for Medical Officer recruitment exams — state PSC, NHM, ESIC, Railways & Defence. Practice PYQs, mock tests and AI explanations on CrackCMS.',
     tagline: 'Crack Medical Officer recruitment exams — state PSCs, NHM, ESIC, Railways, Defence. AI-powered MCQs and mock tests.',
     heroBullets: [
-        '2,000+ UPSC CMS PYQs (2018-2025) — the central Medical Officer recruitment exam',
+        `${CMS_PYQ_PHRASE} — the central Medical Officer recruitment exam`,
         'Core MO subjects covered: Medicine, PSM, Surgery, OBG, Paediatrics',
         'AI tutor explains every answer with public-health context',
         'Mock tests with negative marking and countdown timers',
     ],
     stats: [
-        { number: '2,000+', label: 'UPSC CMS PYQs' },
+        { number: CMS_PYQ_COUNT, label: 'UPSC CMS PYQs' },
         { number: '5', label: 'Core clinical subjects' },
         { number: 'Level 10', label: 'Central MO pay level' },
         { number: 'AI', label: 'Tutor on every question' },
@@ -61,7 +61,7 @@ const content: ExamLandingContent = {
     accentFrom: 'from-sky-600',
     accentTo: 'to-blue-700',
     emoji: '🩺',
-    pyqCount: '2,000+ UPSC CMS',
+    pyqCount: `${CMS_PYQ_COUNT} UPSC CMS`,
     pyqHref: questionBankHref('cms'),
 };
 
@@ -70,9 +70,6 @@ export const metadata = buildExamMetadata(content);
 export default function MedicalOfficerPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'Medical Officer', path: '/medical-officer' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Career Paths After Medical Officer Exam</h2>
