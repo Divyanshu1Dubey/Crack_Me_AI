@@ -55,6 +55,9 @@ class QuestionAudit(models.Model):
     evidence_summary = models.JSONField(default=dict, blank=True)
     method_version = models.CharField(max_length=32)
     is_stale = models.BooleanField(default=False, db_index=True, help_text='key / stem / options changed since the audit')
+    content_changed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='last change of the stem or an option; human decisions made before it no longer count')
     audited_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -84,6 +87,9 @@ class AuditResolution(models.Model):
     key_change = models.ForeignKey('questions.AnswerKeyChange', on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='+')
     status_before = models.CharField(max_length=32, blank=True, default='')
+    stored_key = models.CharField(max_length=1, blank=True, default='', help_text='the key after the decision')
+    stem_hash = models.CharField(max_length=64, blank=True, default='',
+                                 help_text='questions.content_hashes.stem_hash the decision was made for')
     resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='+')
     resolved_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -107,3 +113,55 @@ class ReviewClaim(models.Model):
     claimed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
     claimed_at = models.DateTimeField()
     expires_at = models.DateTimeField()
+
+
+class SourceKey(models.Model):
+    """The answer a source document prints for a question, recovered without AI (2026-11).
+
+    A coaching compilation's "Answer Key" table or an inline "Ans." line, read from the document the
+    question was imported from by ``ai_eval.recover_source_keys`` (needs the PDFs, so it runs where they
+    are) and loaded anywhere with ``manage.py import_source_keys``. Evidence tier 4: a secondary source,
+    usually the very document the bank copied, so it shows whether the import kept the printed key, not
+    whether that key is medically right. The audit uses it as a review signal; it never changes a key.
+    """
+
+    METHOD_CHOICES = [('answer_key_table', 'Answer-key table'), ('inline_answer', 'Inline answer line')]
+    OPTION_ORDER_CHOICES = [
+        ('same', 'Same option order (checked through the option text)'),
+        ('reordered', 'Different option order (mapped through the option text)'),
+        ('assumed_same', 'Option order not checked'),
+    ]
+
+    question = models.ForeignKey('questions.Question', on_delete=models.CASCADE, related_name='source_keys')
+    source_file = models.CharField(max_length=255, help_text='file name of the source document')
+    source_sha256 = models.CharField(max_length=64, blank=True, default='')
+    question_page = models.PositiveIntegerField(help_text='1-based PDF page the question starts on')
+    question_number = models.PositiveIntegerField(help_text='the number the source prints for the question')
+    answer_page = models.PositiveIntegerField(null=True, blank=True, help_text='1-based PDF page of the printed answer')
+    chapter = models.CharField(max_length=160, blank=True, default='', help_text='source chapter title on that page')
+    source_exam = models.CharField(max_length=16, blank=True, default='', help_text='exam named by the chapter title')
+    source_year = models.PositiveSmallIntegerField(null=True, blank=True, help_text='year named by the chapter title')
+    printed_letter = models.CharField(max_length=1, help_text='the letter the source prints')
+    letter = models.CharField(max_length=1, help_text="printed_letter in the bank's option order")
+    option_order = models.CharField(max_length=16, choices=OPTION_ORDER_CHOICES)
+    method = models.CharField(max_length=24, choices=METHOD_CHOICES)
+    located = models.BooleanField(help_text='the stem was found in the source text (not only a page / number link)')
+    stem_hash = models.CharField(max_length=64, help_text='questions.content_hashes.stem_hash at recovery')
+    recovery_version = models.CharField(max_length=32)
+    recovered_at = models.DateTimeField()
+    imported_at = models.DateTimeField(auto_now_add=True, help_text='first import into this database')
+
+    class Meta:
+        ordering = ['question_id', 'source_file', 'question_page']
+        constraints = [
+            models.UniqueConstraint(fields=['question', 'source_file', 'question_page', 'question_number'],
+                                    name='kaudit_source_key_location'),
+        ]
+
+    def __str__(self):
+        return f'Q{self.question_id}: {self.letter} ({self.source_file} p.{self.question_page})'
+
+    @property
+    def confident(self) -> bool:
+        """The stem was found in the source and the letter was mapped through the option text."""
+        return bool(self.located and self.option_order in ('same', 'reordered'))

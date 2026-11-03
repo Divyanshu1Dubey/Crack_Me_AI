@@ -46,16 +46,18 @@ class EditorialWorkflowTestCase(TestCase):
 
     def test_change_answer_key_success_and_immutability(self):
         old_key = self.question.correct_answer
-        change = change_answer_key(
-            self.question,
-            new_key="B",
-            actor=self.admin,
-            reason="ECG confirms STEMI; standard clinical protocol indicates AMI.",
-            source="editor_test",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            change = change_answer_key(
+                self.question,
+                new_key="B",
+                actor=self.admin,
+                reason="ECG confirms STEMI; standard clinical protocol indicates AMI.",
+                source="editor_test",
+            )
         self.question.refresh_from_db()
         self.assertEqual(self.question.correct_answer, "B")
-        self.assertEqual(self.question.answer_key_status, "verified")
+        # The audit re-classifies on commit: a staff change that cites no evidence is not "verified".
+        self.assertEqual(self.question.answer_key_status, "likely_correct")
         self.assertEqual(change.old_key, "A")
         self.assertEqual(change.new_key, "B")
         self.assertEqual(change.changed_by, self.admin)

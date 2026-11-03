@@ -19,6 +19,21 @@ from questions.models import AnswerKeyChange, Question
 
 logger = logging.getLogger("questions.editorial")
 
+# The only fields ``change_answer_key(explanation_fields=...)`` and ``save_explanation`` write. Anything
+# else in the dict (``correct_answer``, ``answer_key_status``, ``verified_by``, ``is_active``, ...) is
+# rejected: the editor and review-queue endpoints pass the client's dict through.
+EXPLANATION_FIELDS = ("explanation", "concept_explanation", "mnemonic")
+
+
+def _audit_before(question) -> tuple[str, int | None]:
+    """(status, id) of the question's answer-key audit, for the AnswerKeyChange record."""
+    try:
+        from key_audit.models import QuestionAudit
+    except ImportError:  # pragma: no cover - key_audit not installed
+        return "", None
+    row = QuestionAudit.objects.filter(question_id=question.pk).values("status", "id").first()
+    return (row["status"], row["id"]) if row else ("", None)
+
 
 def change_answer_key(
     question: Question,
@@ -61,15 +76,18 @@ def change_answer_key(
 
     if old_key == clean_key:
         raise ValidationError(f"Question #{question.id} already has correct_answer={clean_key!r}.")
+    unknown = sorted(set(explanation_fields or {}) - set(EXPLANATION_FIELDS))
+    if unknown:
+        raise ValidationError(f"Not an explanation field: {', '.join(unknown)}.")
 
+    audit_status_before, audit_id = _audit_before(question)
     with transaction.atomic():
         # Determine explanation handling
         explanation_action = "kept_stale"
         if explanation_fields:
             explanation_action = "replaced"
             for k, v in explanation_fields.items():
-                if hasattr(question, k):
-                    setattr(question, k, v)
+                setattr(question, k, v if isinstance(v, str) else "")
             question.explanation_for_key = clean_key
             question.explanation_stem_hash = old_stem_hash
             question.explanation_status = "human_edited"
@@ -80,10 +98,12 @@ def change_answer_key(
 
         # Update the question's answer key
         question.correct_answer = clean_key
-        # Unset dispute and review flags upon verified editorial key change
+        # Unset dispute and review flags upon an editorial key change
         question.is_disputed = False
         question.needs_review = False
-        question.answer_key_status = "verified" if (actor and actor.is_staff) else "likely_correct"
+        # The answer-key audit sets the status again on commit (key_audit.services.on_question_changed):
+        # a change that cites strong evidence becomes "verified", one without "likely_correct".
+        question.answer_key_status = "unaudited"
 
         # Save question updates
         question.save()
@@ -98,6 +118,8 @@ def change_answer_key(
             reason=clean_reason,
             evidence=list(evidence or []),
             explanation_action=explanation_action,
+            audit_status_before=audit_status_before,
+            audit_id=audit_id,
         )
 
         # Trigger content hooks on transaction commit
@@ -127,8 +149,7 @@ def save_explanation(
     current_stem_hash = stem_hash(question)
     target_key = for_key or question.correct_answer
 
-    allowed_fields = ("explanation", "mnemonic", "concept_explanation")
-    for f in allowed_fields:
+    for f in EXPLANATION_FIELDS:
         if f in fields:
             setattr(question, f, fields[f])
 
@@ -166,27 +187,58 @@ def mark_explanation_reviewed(question: Question, *, actor) -> None:
     question.save(update_fields=["explanation_reviewed_by", "explanation_reviewed_at", "explanation_status"])
 
 
-def verify_question(question: Question, *, actor) -> None:
-    """Verify a question's answer key and content by staff."""
-    question.answer_key_status = "verified"
+def _record_decision(question: Question, *, actor, resolution: str, reason: str) -> str:
+    """Record an editor decision for the answer-key audit and re-audit the question.
+
+    The decision is an immutable ``key_audit.AuditResolution``; the audit turns it into the status
+    (a confirmation without cited evidence is "likely_correct", never "verified"). Returns the new
+    ``answer_key_status`` ('' when the audit is not installed).
+    """
+    try:
+        from key_audit.models import AuditResolution, QuestionAudit
+        from key_audit.services import audit_questions
+    except ImportError:  # pragma: no cover - key_audit not installed
+        return ""
+    audit = QuestionAudit.objects.filter(question_id=question.pk).first()
+    AuditResolution.objects.create(
+        question=question, audit=audit, resolution=resolution, reason=reason, evidence=[],
+        status_before=audit.status if audit else "", stored_key=valid_key(question.correct_answer),
+        stem_hash=stem_hash(question), resolved_by=actor,
+    )
+    prepared = audit_questions([Question.objects.get(pk=question.pk)], save=True)[0]
+    return prepared.fields["status"]
+
+
+def verify_question(question: Question, *, actor) -> str:
+    """Record a staff confirmation of the question's key; returns the audit status it leads to."""
     question.verified_by = actor
     question.verified_at = timezone.now()
     question.is_disputed = False
     question.needs_review = False
-    question.save(update_fields=["answer_key_status", "verified_by", "verified_at", "is_disputed", "needs_review"])
+    question.save(update_fields=["verified_by", "verified_at", "is_disputed", "needs_review"])
+    return _record_decision(question, actor=actor, resolution="key_confirmed",
+                            reason="Key confirmed in the question editor (no evidence cited).")
 
 
-def unverify_question(question: Question, *, actor, reason: str = "") -> None:
-    """Revert verification status to needs_review."""
-    question.answer_key_status = "needs_review"
+def unverify_question(question: Question, *, actor, reason: str = "") -> str:
+    """Withdraw a verification: the question goes back to the review queue."""
     question.needs_review = True
     question.verified_by = None
     question.verified_at = None
-    question.save(update_fields=["answer_key_status", "needs_review", "verified_by", "verified_at"])
+    question.save(update_fields=["needs_review", "verified_by", "verified_at"])
+    text = (reason or "").strip()
+    return _record_decision(question, actor=actor, resolution="deferred",
+                            reason=text if len(text) >= 10 else "Verification withdrawn in the question editor.")
 
 
 def rescore_key_change(change: AnswerKeyChange, *, actor, apply: bool = False) -> dict[str, Any]:
-    """Dry-run or apply score re-calculation for test attempts affected by a key change."""
+    """Count the test submissions a key change affects (dry run only).
+
+    Re-scoring is not implemented: ``apply=True`` raises instead of marking the change "done" without
+    recomputing a single score.
+    """
+    if apply:
+        raise NotImplementedError("Re-scoring test submissions after a key change is not implemented yet.")
     # Counts attempts that had selected either old_key or new_key
     from tests_engine.models import TestSubmission
     affected_submissions = TestSubmission.objects.filter(
@@ -199,12 +251,7 @@ def rescore_key_change(change: AnswerKeyChange, *, actor, apply: bool = False) -
         "old_key": change.old_key,
         "new_key": change.new_key,
         "affected_submissions_count": affected_submissions,
-        "apply": apply,
+        "apply": False,
     }
-    if apply:
-        change.rescore_status = "done"
-        change.rescored_at = timezone.now()
-        change.rescored_by = actor
-        change.save(update_fields=list(AnswerKeyChange.RESCORE_FIELDS))
     return result
 

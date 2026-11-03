@@ -152,11 +152,12 @@ class VerifyQuestionView(APIView):
 
         if action_type == "unverify":
             reason = request.data.get("reason", "")
-            unverify_question(question, actor=request.user, reason=reason)
-            return Response({"ok": True, "answer_key_status": "needs_review", "is_verified": False})
+            new_status = unverify_question(question, actor=request.user, reason=reason)
+            return Response({"ok": True, "answer_key_status": new_status or "needs_review", "is_verified": False})
 
-        verify_question(question, actor=request.user)
-        return Response({"ok": True, "answer_key_status": "verified", "is_verified": True})
+        # The audit decides the status: a confirmation without cited evidence is "likely_correct".
+        new_status = verify_question(question, actor=request.user)
+        return Response({"ok": True, "answer_key_status": new_status or "likely_correct", "is_verified": True})
 
 
 class ReviewExplanationView(APIView):
