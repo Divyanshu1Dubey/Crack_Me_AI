@@ -276,10 +276,53 @@ export default function AITutorPage() {
                     chatRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             }, 100);
+            return true;
         } catch {
             setShowHistory(false);
+            return false;
         }
     };
+
+    // Reopen the chat that was open before a page refresh (ported from
+    // branch feat/ai-production-unification). Keyed per user so a shared
+    // browser never reopens someone else's chat.
+    const sessionStorageKey = user?.id ? `ai_tutor_session_id:${user.id}` : null;
+    const restoredSessionRef = useRef(false);
+    useEffect(() => {
+        if (!ready || !sessionStorageKey || restoredSessionRef.current) return;
+        restoredSessionRef.current = true;
+        let saved: number | null = null;
+        try {
+            const raw = window.localStorage.getItem(sessionStorageKey);
+            const parsed = raw ? Number(raw) : NaN;
+            saved = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+        } catch {
+            saved = null;
+        }
+        if (saved === null) return;
+        loadSession(saved).then((ok) => {
+            if (!ok) {
+                try {
+                    window.localStorage.removeItem(sessionStorageKey);
+                } catch {
+                    // storage unavailable
+                }
+            }
+        });
+    }, [ready, sessionStorageKey]);
+
+    useEffect(() => {
+        if (!sessionStorageKey || !restoredSessionRef.current) return;
+        try {
+            if (currentSessionId) {
+                window.localStorage.setItem(sessionStorageKey, String(currentSessionId));
+            } else {
+                window.localStorage.removeItem(sessionStorageKey);
+            }
+        } catch {
+            // storage unavailable — the chat still works, it just won't reopen
+        }
+    }, [currentSessionId, sessionStorageKey]);
 
     const startNewChat = () => {
         setMessages([]);
