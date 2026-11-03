@@ -1,7 +1,11 @@
 /**
  * auth.tsx — Authentication context provider for CrackCMS.
  * Provides useAuth() hook with: user, login, register, logout, loading state.
- * Uses Supabase sessions as the single auth source when Supabase is configured.
+ * The sign-in source is chosen at build time (NEXT_PUBLIC_AUTH_MODE,
+ * lib/localSession.ts): Supabase sessions (default), the dev-only local
+ * tokens ("local") or the Django-native sign-in ("django": email/password,
+ * Google Identity Services, emailed confirmation / reset links; no Supabase
+ * client is created).
  * Wraps the entire app via AuthProvider in layout.tsx.
  */
 'use client';
@@ -16,10 +20,24 @@ import {
 import {
     clearLocalTokens,
     fetchLocalProfile,
+    getLocalAccessToken,
+    googleSignIn,
+    hasStoredTokenSession,
+    isDjangoAuthMode,
     isLocalAuthMode,
     localLogin,
     localRegister,
+    nativeLogin,
+    nativeLogout,
+    nativeRegister,
+    requestPasswordReset,
+    syncPresenceCookies,
+    TOKEN_SESSION_ENDED_EVENT,
+    type TokenAuthResult,
+    watchTokenSession,
 } from './localAuth';
+import { authBuildMode, type AuthBuildMode } from './localSession';
+import { googleSignInConfigured } from './googleIdentity';
 import api, { getSessionEndingMessage } from './api';
 import { safeInternalPath } from './auth-redirect';
 
@@ -57,6 +75,10 @@ interface User {
     ai_tutor_daily_cap?: number | null;
     showcase_questions_remaining?: number | null;
     is_premium?: boolean;
+    // Django-native sign-in (AUTH_PROVIDER=django): how this account can sign
+    // in, and whether its email address is confirmed.
+    auth_methods?: { password: boolean; google: boolean };
+    email_verified?: boolean;
 }
 
 export type { User };
@@ -88,8 +110,19 @@ interface AuthContextType {
      */
     setUser: (updater: User | null | ((current: User | null) => User | null)) => void;
     resetPassword: (email: string) => Promise<void>;
+    /** Django mode: sign in with the ID token from the Google Identity Services button. */
+    googleLogin: (credential: string) => Promise<User>;
+    /**
+     * Django mode: adopt the session an emailed link signed in (verify email,
+     * reset password, connect Google): load the profile and set the user.
+     */
+    completeTokenSignIn: (result: TokenAuthResult) => Promise<User>;
     isAuthenticated: boolean;
     isSupabaseAuth: boolean;
+    /** Which sign-in this build uses (NEXT_PUBLIC_AUTH_MODE). */
+    authMode: AuthBuildMode;
+    /** Django mode with NEXT_PUBLIC_GOOGLE_CLIENT_ID set: show the Google button. */
+    googleSignInEnabled: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -107,14 +140,27 @@ const AuthContext = createContext<AuthContextType>({
     refreshProfile: async () => undefined,
     setUser: () => undefined,
     resetPassword: async () => undefined,
+    googleLogin: async () => {
+        throw new Error('AuthProvider is not mounted');
+    },
+    completeTokenSignIn: async () => {
+        throw new Error('AuthProvider is not mounted');
+    },
     isAuthenticated: false,
     isSupabaseAuth: false,
+    authMode: 'supabase',
+    googleSignInEnabled: false,
 });
 
 const SUPABASE_AUTH_ENABLED = isSupabaseAuthEnabled();
 // Dev-only: NEXT_PUBLIC_AUTH_MODE=local uses the backend's /auth/local/*
 // endpoints instead of Supabase (see lib/localAuth.ts).
 const LOCAL_AUTH_MODE = isLocalAuthMode();
+// NEXT_PUBLIC_AUTH_MODE=django: the Django-native sign-in (/auth/native/*,
+// /auth/google/*), the backend running AUTH_PROVIDER=django.
+const DJANGO_AUTH_MODE = isDjangoAuthMode();
+const AUTH_MODE = authBuildMode();
+const GOOGLE_SIGN_IN_ENABLED = googleSignInConfigured();
 
 /**
  * Fetch the backend profile (role, is_premium, subscription_info).
@@ -164,6 +210,31 @@ const fetchBackendProfileWithRefresh = (accessToken: string, force = false): Pro
     });
     return promise;
 };
+
+/**
+ * Django mode: the backend profile of the stored session, through the same
+ * Axios client (stored token, X-Session-ID -- the backend binds this browser's
+ * device slot to the new session on this first request --, refresh-once-on-401
+ * shared across tabs, the session-ending codes, GET failover).
+ */
+const fetchTokenProfile = (force = false): Promise<unknown> => {
+    const token = getLocalAccessToken();
+    if (token) return fetchBackendProfileWithRefresh(token, force);
+    // Only a refresh token left: the 401 makes api.ts refresh and retry.
+    return api.get('/auth/profile/').then((response) => response.data);
+};
+
+/** Django mode: did this profile failure end the session (vs a blip that keeps it)? */
+const tokenSessionEnded = (error: unknown): boolean =>
+    Boolean(getSessionEndingMessage(error)) || !hasStoredTokenSession();
+
+// Django mode, first profile load: a 5xx / network blip is retried after these
+// delays before the visitor is treated as signed out (the stored session is
+// kept, so the next page load can still resume it).
+const PROFILE_RETRY_DELAYS_MS = [1000, 3000];
+
+const asProfileRecord = (profile: unknown): Record<string, unknown> | null =>
+    profile && typeof profile === 'object' ? (profile as Record<string, unknown>) : null;
 
 // Auth events after which the backend profile can differ. TOKEN_REFRESHED
 // is deliberately absent: a new access token does not change the profile,
@@ -278,6 +349,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 mounted = false;
             };
         }
+        if (DJANGO_AUTH_MODE) {
+            let mounted = true;
+            const loadProfile = async () => {
+                if (!hasStoredTokenSession()) {
+                    syncPresenceCookies(null);
+                    if (mounted) {
+                        setUserState(null);
+                        setLoading(false);
+                    }
+                    return;
+                }
+                for (let attempt = 0; ; attempt += 1) {
+                    try {
+                        const profile = await fetchTokenProfile(attempt > 0);
+                        syncPresenceCookies(asProfileRecord(profile));
+                        if (mounted) setUserState(profile as User);
+                        break;
+                    } catch (error: unknown) {
+                        if (tokenSessionEnded(error) || attempt >= PROFILE_RETRY_DELAYS_MS.length) {
+                            if (mounted) setUserState(null);
+                            break;
+                        }
+                        await new Promise((resolve) => setTimeout(resolve, PROFILE_RETRY_DELAYS_MS[attempt]));
+                        if (!mounted) return;
+                    }
+                }
+                if (mounted) setLoading(false);
+            };
+            void loadProfile();
+
+            // Other tabs: signed out there -> signed out here; signed in (or
+            // into another account) there -> load that profile. A refreshed
+            // token of the same account changes nothing.
+            const stopWatching = watchTokenSession({
+                onSignedOut: () => {
+                    if (mounted) setUserState(null);
+                },
+                onAccountChanged: () => {
+                    fetchTokenProfile(true)
+                        .then((profile) => {
+                            syncPresenceCookies(asProfileRecord(profile));
+                            if (mounted) setUserState(profile as User);
+                        })
+                        .catch((error: unknown) => {
+                            if (mounted && tokenSessionEnded(error)) setUserState(null);
+                        });
+                },
+            });
+            // This tab: the refresh token was refused for good (api.ts).
+            const onSessionEnded = () => {
+                if (mounted) setUserState(null);
+            };
+            window.addEventListener(TOKEN_SESSION_ENDED_EVENT, onSessionEnded);
+            return () => {
+                mounted = false;
+                stopWatching();
+                window.removeEventListener(TOKEN_SESSION_ENDED_EVENT, onSessionEnded);
+            };
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             setLoading(false);
             return;
@@ -356,12 +486,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
+    /**
+     * Django mode: the tokens of a new session are stored (lib/localAuth.ts);
+     * load the profile through the shared client, which also binds this
+     * browser's device slot to the session (X-Session-ID).
+     */
+    const adoptTokenSession = async (result: TokenAuthResult): Promise<User> => {
+        try {
+            const profile = await fetchTokenProfile(true);
+            syncPresenceCookies(asProfileRecord(profile));
+            setUserState(profile as User);
+            return profile as User;
+        } catch (error: unknown) {
+            const sessionEnded = getSessionEndingMessage(error);
+            if (sessionEnded || !hasStoredTokenSession()) {
+                setUserState(null);
+                throw new Error(sessionEnded || 'Sign-in failed. Please try again.');
+            }
+            // A blip loading the profile: the sign-in answer carries it too.
+            const fallback = result.user as unknown as User;
+            setUserState(fallback);
+            return fallback;
+        }
+    };
+
     const login = async (identifier: string, password: string) => {
         if (LOCAL_AUTH_MODE) {
             const result = await localLogin(identifier, password);
             const profile = ((await fetchLocalProfile()) ?? result.user) as unknown as User;
             setUserState(profile);
             return profile;
+        }
+        if (DJANGO_AUTH_MODE) {
+            const email = (identifier || '').trim();
+            if (!email.includes('@')) {
+                throw new Error('Enter your email address to sign in.');
+            }
+            return adoptTokenSession(await nativeLogin(email, password));
         }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Authentication is not configured.');
@@ -417,6 +578,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const result = await localRegister(formData);
             setUserState(((await fetchLocalProfile()) ?? result.user) as unknown as User);
             return { needsEmailConfirmation: false };
+        }
+        if (DJANGO_AUTH_MODE) {
+            // Always "check your email": the account is created when the
+            // emailed /verify-email link is opened (the same answer whether
+            // or not the address is taken).
+            const { needsEmailConfirmation } = await nativeRegister(formData);
+            return { needsEmailConfirmation };
         }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Authentication is not configured.');
@@ -494,6 +662,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (LOCAL_AUTH_MODE) {
             throw new Error('Password reset is not available in local development mode. Use the seeded test accounts (see backend/.env.localdev).');
         }
+        if (DJANGO_AUTH_MODE) {
+            const address = email.trim();
+            if (!address.includes('@')) {
+                throw new Error('Enter a valid email address.');
+            }
+            // 202 for any address; the link (/reset-password#uid=..&token=..)
+            // is mailed when an account has it. Also sets a first password
+            // for accounts that only used Google.
+            await requestPasswordReset(address);
+            return;
+        }
         if (!SUPABASE_AUTH_ENABLED) {
             throw new Error('Password reset is available only when Supabase auth is enabled.');
         }
@@ -538,9 +717,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message || `Unable to sign in with ${provider}.`);
     };
 
+    const googleLogin = async (credential: string): Promise<User> => {
+        if (!DJANGO_AUTH_MODE) {
+            throw new Error('Google sign-in is not available here.');
+        }
+        return adoptTokenSession(await googleSignIn(credential));
+    };
+
+    const completeTokenSignIn = (result: TokenAuthResult): Promise<User> => {
+        if (!DJANGO_AUTH_MODE) {
+            return Promise.reject(new Error('This sign-in link is not available here.'));
+        }
+        return adoptTokenSession(result);
+    };
+
     const logout = async () => {
         if (LOCAL_AUTH_MODE) {
             clearLocalTokens();
+            setUserState(null);
+            return;
+        }
+        if (DJANGO_AUTH_MODE) {
+            // Tokens go first (here and, via the storage event, in the other
+            // tabs); the backend then ends the session (best effort).
+            nativeLogout();
             setUserState(null);
             return;
         }
@@ -566,6 +766,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (LOCAL_AUTH_MODE) {
             const profile = await fetchLocalProfile();
             setUserState((current) => (profile as User | null) ?? current);
+            return;
+        }
+        if (DJANGO_AUTH_MODE) {
+            if (!hasStoredTokenSession()) {
+                syncPresenceCookies(null);
+                setUserState(null);
+                return;
+            }
+            try {
+                // Explicit refresh (e.g. after a payment): never reuse a recent fetch.
+                const profile = await fetchTokenProfile(true);
+                syncPresenceCookies(asProfileRecord(profile));
+                setUserState(profile as User);
+            } catch (error: unknown) {
+                // Only a session that is definitively over clears the user; a
+                // blip (5xx, 429, network) keeps it as is (AUTH-06).
+                if (tokenSessionEnded(error)) setUserState(null);
+            }
             return;
         }
         const supabase = getSupabaseBrowserClient();
@@ -669,8 +887,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             refreshProfile,
             setUser,
             resetPassword,
+            googleLogin,
+            completeTokenSignIn,
             isAuthenticated: !!user,
             isSupabaseAuth: SUPABASE_AUTH_ENABLED,
+            authMode: AUTH_MODE,
+            googleSignInEnabled: GOOGLE_SIGN_IN_ENABLED,
         }}>
             {children}
         </AuthContext.Provider>

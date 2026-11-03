@@ -9,7 +9,9 @@
  *   - textbooksAPI: Textbook index and chapters
  *   - authAPI: Token balance, purchase, transaction history
  * Base URL: NEXT_PUBLIC_API_URL or http://127.0.0.1:8000/api
- * Auth: Supabase access tokens are attached automatically when Supabase is configured.
+ * Auth: Supabase access tokens are attached automatically when Supabase is
+ * configured; in the token modes (NEXT_PUBLIC_AUTH_MODE=local / django) the
+ * stored access token (lib/localAuth.ts) is attached and refreshed on 401.
  */
 import axios from 'axios';
 import {
@@ -18,9 +20,18 @@ import {
   isInvalidRefreshTokenError,
   isSupabaseAuthEnabled,
 } from './supabase';
-import { clearLocalTokens, getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
+import {
+  clearLocalTokens,
+  getLocalAccessToken,
+  isDjangoAuthMode,
+  isTokenAuthMode,
+  refreshAccessToken,
+  refreshLocalAccessToken,
+  TOKEN_SESSION_ENDED_EVENT,
+} from './localAuth';
 import { createRefreshGate } from './sessionRefreshGate';
 import { DEVICE_LIMIT_SETTINGS_URL, shouldOpenSettingsForDeviceLimit } from './deviceLimit';
+import { getOrCreateSessionId, resetDeviceId } from './deviceId';
 
 import {
   USE_API_PROXY,
@@ -33,75 +44,17 @@ const FALLBACK_API_BASE_URL = resolveFallbackApiBaseUrl();
 // Last Supabase session seen by the request interceptor.
 let cachedSession: { access_token: string } | null = null;
 
-// Device id sent as X-Session-ID. The backend binds it to the Supabase
-// session of the access token (accounts/supabase_rest_auth.py), so signing in
-// again on this browser keeps its device slot.
-const DEVICE_ID_KEY = 'crack_device_id';
-const DEVICE_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-
-const newDeviceId = () => 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-
-const readDeviceIdCookie = (): string | null => {
-  try {
-    const match = document.cookie.match(new RegExp(`(?:^|; )${DEVICE_ID_KEY}=([^;]*)`));
-    return match ? decodeURIComponent(match[1]) : null;
-  } catch {
-    return null;
-  }
-};
-
-const writeDeviceIdCookie = (id: string | null) => {
-  try {
-    document.cookie = id
-      ? `${DEVICE_ID_KEY}=${encodeURIComponent(id)}; Path=/; SameSite=Lax; Max-Age=${DEVICE_ID_COOKIE_MAX_AGE}`
-      : `${DEVICE_ID_KEY}=; Path=/; SameSite=Lax; Max-Age=0`;
-  } catch {
-    // Cookies blocked as well.
-  }
-};
-
-// Storage access can throw (site data blocked, some privacy modes / webviews).
-// Then keep the id in a first-party cookie. If that cannot be persisted
-// either, send no X-Session-ID at all: the backend then counts this browser
-// by its Supabase session (one device per sign-in). A new id per page load
-// used to enrol a new device on every visit and use up the 2-device
-// allowance within two page loads.
-const getOrCreateSessionId = (): string => {
-  if (typeof window === 'undefined') return '';
-  try {
-    let id = window.localStorage.getItem(DEVICE_ID_KEY);
-    if (!id) {
-      id = newDeviceId();
-      window.localStorage.setItem(DEVICE_ID_KEY, id);
-    }
-    return id;
-  } catch {
-    let id = readDeviceIdCookie();
-    if (!id) {
-      writeDeviceIdCookie(newDeviceId());
-      id = readDeviceIdCookie();
-    }
-    return id || '';
-  }
-};
-
-/** Forget this browser's device id, so the next sign-in enrols a new device. */
-const resetDeviceId = () => {
-  if (typeof window === 'undefined') return;
-  writeDeviceIdCookie(null);
-  try {
-    window.localStorage.removeItem(DEVICE_ID_KEY);
-  } catch {
-    // Storage unavailable: the cookie was cleared above.
-  }
-};
+// The device id sent as X-Session-ID lives in lib/deviceId.ts (shared with
+// the token-mode requests made outside this client).
 
 /**
  * Backend error codes that end this browser's session
  * (accounts/supabase_rest_auth.py; local dev auth also answers a blocked
  * account with `account_blocked`, `user_inactive` is SimpleJWT's own code,
  * kept for older backends). `session_invalid` is the legacy single-session
- * code, kept for older backends.
+ * code, kept for older backends. `session_revoked`: a Django-native session
+ * that was signed out, expired, ended by a password change / reset, or whose
+ * refresh token was used twice (accounts/native_sessions.py).
  */
 const SESSION_ENDING_MESSAGES: Record<string, string> = {
   account_blocked: 'Your account has been blocked. Contact support if you think this is a mistake.',
@@ -112,6 +65,7 @@ const SESSION_ENDING_MESSAGES: Record<string, string> = {
   account_link_required:
     'This account must be verified by an administrator before it can sign in. Please contact support.',
   session_invalid: "You're logged in on another device",
+  session_revoked: 'Your session has ended. Please sign in again.',
 };
 
 /** `code` field of a backend error response, if any. */
@@ -124,9 +78,15 @@ export const getApiErrorCode = (error: unknown): string | undefined => {
 /** User-facing message when `error` means the session is over (blocked account, logged-out device, ...). */
 export const getSessionEndingMessage = (error: unknown): string | null => {
   const code = getApiErrorCode(error);
-  return code && Object.prototype.hasOwnProperty.call(SESSION_ENDING_MESSAGES, code)
-    ? SESSION_ENDING_MESSAGES[code]
-    : null;
+  if (!code || !Object.prototype.hasOwnProperty.call(SESSION_ENDING_MESSAGES, code)) return null;
+  // Django-native sign-in: the authenticator answers these with 401. The same
+  // code in a view's 403 / 409 (e.g. "account_link_required" when connecting
+  // Google in Settings) is that request's answer, not the end of the session.
+  if (isDjangoAuthMode()) {
+    const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
+    if (status !== 401) return null;
+  }
+  return SESSION_ENDING_MESSAGES[code];
 };
 
 let sessionEndRedirecting = false;
@@ -142,7 +102,7 @@ export const endSessionAfterApiError = async (error: unknown): Promise<boolean> 
   if (sessionEndRedirecting) return true;
   if (getApiErrorCode(error) === 'device_inactive') resetDeviceId();
   cachedSession = null;
-  if (isLocalAuthMode()) {
+  if (isTokenAuthMode()) {
     clearLocalTokens();
   } else {
     await clearSupabaseLocalSession();
@@ -226,9 +186,9 @@ const refreshSupabaseAccessToken = async (): Promise<string | null> => {
 /** A fresh access token to retry with after `failedToken` got a 401, or null. */
 const supabaseTokenAfter401 = createRefreshGate(refreshSupabaseAccessToken);
 
-/** The current Supabase session's access token (null in local-auth mode or when signed out). */
+/** The current Supabase session's access token (null in the token auth modes or when signed out). */
 const currentSupabaseAccessToken = async (): Promise<string | null> => {
-  if (typeof window === 'undefined' || isLocalAuthMode() || !isSupabaseAuthEnabled()) return null;
+  if (typeof window === 'undefined' || isTokenAuthMode() || !isSupabaseAuthEnabled()) return null;
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return null;
   try {
@@ -237,6 +197,34 @@ const currentSupabaseAccessToken = async (): Promise<string | null> => {
   } catch {
     return null;
   }
+};
+
+/** This browser's current access token: the stored one in the token modes, else the Supabase session's. */
+const currentAccessToken = async (): Promise<string | null> => {
+  if (typeof window === 'undefined') return null;
+  if (isTokenAuthMode()) return getLocalAccessToken();
+  return currentSupabaseAccessToken();
+};
+
+/**
+ * Django mode: the refresh token was refused for good (lib/tokenRefresh.ts
+ * already cleared the stored session). A session-ending code (revoked,
+ * blocked, unconfirmed email, logged-out device) is explained on /login like
+ * any other; otherwise (expired after inactivity) the AuthProvider learns it
+ * through TOKEN_SESSION_ENDED_EVENT and the page's own guard sends the visitor
+ * to /login?next=... Returns true while the page is navigating away.
+ */
+const endTokenSessionAfterRefresh = async (code: string | undefined): Promise<boolean> => {
+  const ended = { response: { status: 401, data: { code } } };
+  if (getSessionEndingMessage(ended)) return endSessionAfterApiError(ended);
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new Event(TOKEN_SESSION_ENDED_EVENT));
+    } catch {
+      // Very old browsers: the next profile refresh notices the missing session.
+    }
+  }
+  return false;
 };
 
 const api = axios.create({
@@ -256,7 +244,7 @@ api.interceptors.request.use(async (config) => {
   if (config.headers.Authorization) {
     // The caller passed a token explicitly (e.g. AuthProvider's profile
     // fetch right after sign-in): keep it.
-  } else if (typeof window !== 'undefined' && isLocalAuthMode()) {
+  } else if (typeof window !== 'undefined' && isTokenAuthMode()) {
     const localToken = getLocalAccessToken();
     if (localToken) config.headers.Authorization = `Bearer ${localToken}`;
   } else if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
@@ -314,7 +302,7 @@ api.interceptors.response.use(
     // once with the current session instead of signing that one out.
     if (errorCode === 'device_inactive' && !originalRequest._staleSessionRetry) {
       const retryToken = staleSessionRetryToken(
-        errorCode, bearerTokenOf(originalRequest.headers), await currentSupabaseAccessToken(),
+        errorCode, bearerTokenOf(originalRequest.headers), await currentAccessToken(),
       );
       if (retryToken && error.config) {
         originalRequest._staleSessionRetry = true;
@@ -380,14 +368,31 @@ api.interceptors.response.use(
     // which has NO subscription_info. The refresh itself is bounded (see
     // supabaseTokenAfter401) so a backend that rejects valid sessions
     // cannot drive a refresh loop.
+    // Token modes (local / django): one refresh shared by concurrent requests
+    // and tabs (lib/tokenRefresh.ts), then a single retry. A request that
+    // failed with an older token than the stored one is retried with the
+    // stored one without a refresh.
     if (
       status === 401 &&
       !originalRequest._tokenRefresh &&
       typeof window !== 'undefined' &&
-      isLocalAuthMode()
+      isTokenAuthMode()
     ) {
       originalRequest._tokenRefresh = true;
-      const newToken = await refreshLocalAccessToken();
+      const failedToken = bearerTokenOf(originalRequest.headers);
+      let newToken: string | null = null;
+      if (isDjangoAuthMode()) {
+        const outcome = await refreshAccessToken(failedToken);
+        if (outcome.ok) {
+          newToken = outcome.access;
+        } else if (outcome.definitive && (failedToken || outcome.code !== 'no_refresh_token')) {
+          if (await endTokenSessionAfterRefresh(outcome.code)) {
+            return new Promise(() => {}); // page is navigating to /login
+          }
+        }
+      } else {
+        newToken = await refreshLocalAccessToken(failedToken);
+      }
       if (newToken) {
         originalRequest.headers = originalRequest.headers || {};
         (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
@@ -399,7 +404,7 @@ api.interceptors.response.use(
       status === 401 &&
       !originalRequest._tokenRefresh &&
       typeof window !== 'undefined' &&
-      !isLocalAuthMode() &&
+      !isTokenAuthMode() &&
       isSupabaseAuthEnabled()
     ) {
       originalRequest._tokenRefresh = true;
@@ -472,8 +477,21 @@ export const authAPI = {
     ),
   verifyScholarship: (answers: Record<string, string>, challengeToken?: string | null) =>
     api.post('/auth/verify-scholarship/', { answers, challenge_token: challengeToken || undefined }),
-  // Password reset is Supabase-only (auth.tsx resetPassword); the old Django
-  // /auth/password-reset/ endpoints now return 410.
+  // Password reset: Supabase mode goes through Supabase (auth.tsx
+  // resetPassword; the Django /auth/password-reset/ endpoints answer 410
+  // there). Django mode posts to them from lib/localAuth.ts.
+  // Django-native sign-in (NEXT_PUBLIC_AUTH_MODE=django), signed-in calls:
+  // change the password (the other sessions are ended; a wrong current
+  // password is a 400 `invalid_credentials`, never a 401), connect /
+  // disconnect Google sign-in, and which sign-in the backend runs.
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.post<{ detail: string; revoked_sessions?: number }>('/auth/native/password/', data),
+  googleLink: (credential: string) =>
+    api.post<{ detail: string; auth_methods?: { password: boolean; google: boolean } }>('/auth/google/link/', { credential }),
+  googleUnlink: () =>
+    api.delete<{ detail: string; auth_methods?: { password: boolean; google: boolean } }>('/auth/google/link/'),
+  authConfig: () =>
+    api.get<{ auth_provider: 'supabase' | 'django'; google_client_id: string; signup_enabled: boolean }>('/auth/config/'),
   // Device management
   getDevices: () => api.get('/auth/devices/'),
   logoutDevice: (device_id: number) => api.post('/auth/devices/logout/', { device_id }),

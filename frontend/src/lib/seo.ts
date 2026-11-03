@@ -123,6 +123,9 @@ export const privateNoIndexPrefixes = [
   "/auth/",
   "/reset-password",
   "/forgot-password",
+  // Emailed one-time links of the Django-native sign-in.
+  "/verify-email",
+  "/connect-google",
 ];
 
 export type QuestionBankExam = "cms" | "neet-pg" | "ini-cet" | "fmge" | "usmle";

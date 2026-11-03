@@ -9,7 +9,10 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
 
 export default function ForgotPasswordPage() {
-    const { resetPassword } = useAuth();
+    const { resetPassword, authMode } = useAuth();
+    // Django-native sign-in: the link works once and for PASSWORD_RESET_TIMEOUT
+    // (1 hour by default); it also sets a first password for Google-only accounts.
+    const isDjangoAuth = authMode === 'django';
     const [email, setEmail] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -35,7 +38,11 @@ export default function ForgotPasswordPage() {
             badge="Account Recovery"
             title="Regain Access"
             description="Enter your registered email address to receive a secure password reset link."
-            highlights={[
+            highlights={isDjangoAuth ? [
+                'Reset links work once and expire after an hour.',
+                'Signed up with Google? The same link sets a first password.',
+                'Ensure to check both your inbox and spam folders.',
+            ] : [
                 'Secure reset links remain active for 24 hours.',
                 'Ensure to check both your inbox and spam folders.',
                 'Regain access to your study dashboard seamlessly.',
@@ -51,6 +58,11 @@ export default function ForgotPasswordPage() {
                         <p className="mt-2 text-sm leading-6 text-muted-foreground">
                             If an account with that email exists, CrackCMS has sent a reset link. Check your inbox and spam folder.
                         </p>
+                        {isDjangoAuth && (
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                                The link works once and expires after an hour. Open it on any device to choose a new password; you will be signed in.
+                            </p>
+                        )}
                     </div>
                     <Button asChild variant="outline" className="rounded-2xl">
                         <Link href="/login">

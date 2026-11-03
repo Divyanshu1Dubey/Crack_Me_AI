@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, MailCheck, UserPlus } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { useAuth } from '@/lib/auth';
 import { extractApiErrorMessage } from '@/lib/api';
+import { AuthApiError, resendVerificationEmail } from '@/lib/localAuth';
 import {
     USERNAME_HINT,
     USERNAME_MAX_LENGTH,
@@ -25,9 +27,16 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | ''>('');
     // Set when Supabase "Confirm email" is on: the account exists but there
-    // is no session until the emailed link is opened.
+    // is no session until the emailed link is opened. Django-native sign-in:
+    // always (the account is created when the link is opened).
     const [confirmationSentTo, setConfirmationSentTo] = useState('');
-    const { register, oauthLogin, isSupabaseAuth } = useAuth();
+    // Django-native sign-in: error code (extra help), notices, resend, Google.
+    const [errorCode, setErrorCode] = useState('');
+    const [notice, setNotice] = useState('');
+    const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+    const [googleBusy, setGoogleBusy] = useState(false);
+    const { register, oauthLogin, googleLogin, isSupabaseAuth, authMode, googleSignInEnabled } = useAuth();
+    const isDjangoAuth = authMode === 'django';
     const router = useRouter();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +46,8 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setErrorCode('');
+        setNotice('');
         if (form.password !== form.password2) {
             setError('Passwords do not match');
             return;
@@ -57,6 +68,14 @@ export default function RegisterPage() {
             }
             router.push('/dashboard');
         } catch (err: unknown) {
+            if (err instanceof AuthApiError) {
+                // Django-native sign-up: {detail, code} (invalid_email,
+                // invalid_password with the validators' first message,
+                // signup_disabled, too_many_attempts).
+                setErrorCode(err.code || '');
+                setError(err.message || 'Registration failed');
+                return;
+            }
             const error = err as { response?: { data?: unknown } };
             if (error.response?.data) {
                 setError(extractApiErrorMessage(error.response.data, 'Registration failed'));
@@ -76,6 +95,43 @@ export default function RegisterPage() {
         }
     };
 
+    // Django-native sign-in: a Google account signs up (or in) directly.
+    const handleGoogleCredential = async (credential: string) => {
+        setError('');
+        setErrorCode('');
+        setNotice('');
+        setGoogleBusy(true);
+        try {
+            const signedIn = await googleLogin(credential);
+            const isAdmin = signedIn?.is_admin === true || (signedIn?.role || '').toLowerCase() === 'admin';
+            router.push(isAdmin ? '/admin' : '/dashboard');
+        } catch (err: unknown) {
+            const code = err instanceof AuthApiError ? err.code || '' : '';
+            setErrorCode(code);
+            if (code === 'google_link_required') {
+                setNotice(
+                    'Check your email to link your Google account. An account with this email address already exists, '
+                    + 'so we sent a link to that address. Open it within 30 minutes to connect Google sign-in; you will be signed in.',
+                );
+            } else {
+                setError(err instanceof Error && err.message ? err.message : 'Google sign-up failed. Please try again.');
+            }
+        } finally {
+            setGoogleBusy(false);
+        }
+    };
+
+    const handleResendConfirmation = async () => {
+        setResendState('sending');
+        try {
+            setNotice(await resendVerificationEmail(confirmationSentTo));
+            setResendState('sent');
+        } catch (err: unknown) {
+            setResendState('idle');
+            setError(err instanceof Error && err.message ? err.message : 'Could not send the email. Please try again.');
+        }
+    };
+
     return (
         <AuthShell
             badge="100% Free to Start"
@@ -88,8 +144,20 @@ export default function RegisterPage() {
             ]}
         >
             {error && (
-                <div className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+                <div role="alert" className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
                     {error}
+                    {errorCode === 'account_link_required' && (
+                        <>
+                            {' '}
+                            <Link href="/contact" className="font-semibold underline underline-offset-2">Contact support</Link>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {notice && (
+                <div role="status" className="mb-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    {notice}
                 </div>
             )}
 
@@ -100,11 +168,29 @@ export default function RegisterPage() {
                     </div>
                     <div className="space-y-1.5">
                         <p className="text-base font-semibold text-foreground">Check your inbox</p>
-                        <p className="text-sm text-muted-foreground break-words">
-                            We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
-                            Open it to activate your account, then sign in.
-                        </p>
+                        {isDjangoAuth ? (
+                            <p className="text-sm text-muted-foreground break-words">
+                                We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
+                                Open it to finish creating your account; you will be signed in. Already have an account
+                                with this email? Then the email tells you how to sign in instead.
+                            </p>
+                        ) : (
+                            <p className="text-sm text-muted-foreground break-words">
+                                We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
+                                Open it to activate your account, then sign in.
+                            </p>
+                        )}
                     </div>
+                    {isDjangoAuth && (
+                        <button
+                            type="button"
+                            onClick={handleResendConfirmation}
+                            disabled={resendState !== 'idle'}
+                            className="text-xs font-semibold text-primary underline underline-offset-2 disabled:opacity-60"
+                        >
+                            {resendState === 'sending' ? 'Sending...' : resendState === 'sent' ? 'Sent again' : "Didn't get it? Send it again"}
+                        </button>
+                    )}
                     <Button asChild variant="outline" className="w-full rounded-2xl">
                         <Link href="/login">Go to sign in</Link>
                     </Button>
@@ -211,9 +297,22 @@ export default function RegisterPage() {
                     />
                 </div>
 
-                <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
+                <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading || googleBusy}>
                     {loading ? 'Creating account...' : (<><UserPlus className="w-5 h-5" /> Create Account</>)}
                 </Button>
+
+                {isDjangoAuth && googleSignInEnabled && (<>
+                <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">or continue with</span>
+                    </div>
+                </div>
+                <GoogleSignInButton text="signup_with" onCredential={handleGoogleCredential} busy={googleBusy || loading} />
+                {googleBusy && <p className="text-center text-xs text-muted-foreground">Signing in with Google...</p>}
+                </>)}
 
                 {isSupabaseAuth && (<>
                 <div className="relative py-1">

@@ -9,7 +9,9 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { authAPI, extractApiErrorMessage } from '@/lib/api';
 import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Laptop, Trash2, X } from 'lucide-react';
+import { isDjangoAuthBuild } from '@/lib/localSession';
 import { USERNAME_HINT, USERNAME_MAX_LENGTH, profileUpdatePayload, usernameProblem } from './username';
+import SignInMethods from './SignInMethods';
 
 const PROFILE_SAVE_FAILED = 'Failed to update profile. Please try again.';
 
@@ -360,6 +362,9 @@ export default function SettingsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Sign-in methods (Django-native sign-in: password, Google) */}
+                    {isDjangoAuthBuild() && <SignInMethods />}
 
                     {/* Connected Devices */}
                     <div id="connected-devices" className="glass-card p-6 scroll-mt-24">
