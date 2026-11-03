@@ -236,10 +236,14 @@ class DeviceLimitMixin:
                 return
 
         request_obj.auth_device_id = device.pk
+        # Devices unseen for _DEVICE_STALE_AFTER do not hold a slot here either (they already did
+        # not for a new device): after a long pause every row is old, and the browser in use was
+        # refused because two other old rows had a slightly newer last_login.
+        stale_before = now - _DEVICE_STALE_AFTER
         if counted_rows is None:
             more_recent = (
                 UserDevice.objects
-                .filter(user=user, is_active=True, last_login__gt=device.last_login)
+                .filter(user=user, is_active=True, last_login__gt=device.last_login, last_login__gte=stale_before)
                 .exclude(pk=device.pk)
                 .count()
             )
@@ -247,6 +251,7 @@ class DeviceLimitMixin:
             more_recent = sum(
                 1 for r in counted_rows
                 if r.is_active and r.pk != device.pk and r.last_login is not None
+                and r.last_login >= stale_before
                 and (device.last_login is None or r.last_login > device.last_login)
             )
         if at_limit(more_recent):

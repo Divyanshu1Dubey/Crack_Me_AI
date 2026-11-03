@@ -41,7 +41,8 @@ class EdgeHeaderTests(SimpleTestCase):
             meta["HTTP_X_FORWARDED_FOR"] = xff
         return self.factory.get("/", REMOTE_ADDR=remote, **meta)
 
-    @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", REST_FRAMEWORK=_framework(NUM_PROXIES=1))
+    @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", TRUSTED_CLIENT_IP_HEADER_FROM="cloudflare",
+                       REST_FRAMEWORK=_framework(NUM_PROXIES=1))
     def test_cloudflare_header_only_from_a_cloudflare_hop(self):
         via_cf = self.request(xff=f"203.0.113.7, {CLOUDFLARE_EDGE}", HTTP_CF_CONNECTING_IP="203.0.113.7")
         self.assertEqual(get_client_ip(via_cf), "203.0.113.7")
@@ -55,6 +56,15 @@ class EdgeHeaderTests(SimpleTestCase):
         self.assertFalse(edge_header_trusted(direct))
 
     @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", REST_FRAMEWORK=_framework(NUM_PROXIES=None))
+    def test_unset_header_from_keeps_the_previous_behaviour(self):
+        # The Cloudflare-only restriction is opt-in: until TRUSTED_CLIENT_IP_HEADER_FROM is set, the
+        # header counts from any peer, as before (a deploy alone never changes the rate-limit keys).
+        behind_proxy = self.request(xff="198.51.100.1", HTTP_CF_CONNECTING_IP="198.51.100.1")
+        self.assertEqual(get_client_ip(behind_proxy), "198.51.100.1")
+        self.assertTrue(client_ip_known())
+
+    @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", TRUSTED_CLIENT_IP_HEADER_FROM="cloudflare",
+                       REST_FRAMEWORK=_framework(NUM_PROXIES=None))
     def test_without_num_proxies_the_peer_is_remote_addr(self):
         behind_proxy = self.request(xff="198.51.100.1", HTTP_CF_CONNECTING_IP="198.51.100.1")
         self.assertEqual(get_client_ip(behind_proxy), RAILWAY_PROXY)
@@ -98,31 +108,31 @@ class EdgeHeaderTests(SimpleTestCase):
         for network in client_ip.CLOUDFLARE_IP_RANGES:
             ipaddress.ip_network(network)  # raises on a typo
 
-    def test_num_proxies_defaults_to_one_on_railway_only(self):
+    def test_num_proxies_is_explicit_only(self):
         from crack_cms.client_ip import num_proxies_from_env
 
         self.assertIsNone(num_proxies_from_env({}))
         self.assertIsNone(num_proxies_from_env({"NUM_PROXIES": ""}))
-        self.assertEqual(num_proxies_from_env({"RAILWAY_ENVIRONMENT_ID": "env-1"}), 1)
-        self.assertEqual(num_proxies_from_env({"RAILWAY_ENVIRONMENT_ID": "env-1", "NUM_PROXIES": ""}), 1)
+        # No platform default: Railway's right-most hop has to be checked first (module docstring).
+        self.assertIsNone(num_proxies_from_env({"RAILWAY_ENVIRONMENT_ID": "env-1"}))
         self.assertEqual(num_proxies_from_env({"RAILWAY_ENVIRONMENT_ID": "env-1", "NUM_PROXIES": "2"}), 2)
         self.assertEqual(num_proxies_from_env({"RAILWAY_ENVIRONMENT_ID": "env-1", "NUM_PROXIES": "0"}), 0)
         self.assertEqual(num_proxies_from_env({"NUM_PROXIES": "1"}), 1)
 
-    def test_posture_check_knows_the_railway_default(self):
+    def test_posture_check_warns_until_num_proxies_is_set(self):
         import os
 
         from crack_cms import security
 
         base = {"DATABASE_URL": "postgresql://db.internal/app", "SUPABASE_DATABASE_URL": "",
-                "DJANGO_SECRET_KEY": "s3cure-" + "q" * 40, "NUM_PROXIES": "",
-                "TRUSTED_CLIENT_IP_HEADER": "CF-Connecting-IP"}
-        for railway, warns in (("", True), ("env-1", False)):
-            with mock.patch.dict(os.environ, {**base, "RAILWAY_ENVIRONMENT_ID": railway}, clear=False), \
+                "DJANGO_SECRET_KEY": "s3cure-" + "q" * 40, "TRUSTED_CLIENT_IP_HEADER": "CF-Connecting-IP"}
+        for railway, num_proxies, warns in (("", "", True), ("env-1", "", True), ("env-1", "1", False)):
+            env = {**base, "RAILWAY_ENVIRONMENT_ID": railway, "NUM_PROXIES": num_proxies}
+            with mock.patch.dict(os.environ, env, clear=False), \
                     mock.patch.object(security.LOG, "warning") as warning:
                 security.security_posture_check(is_production=True, is_ci=False)
             hits = [c for c in warning.call_args_list if "NUM_PROXIES is not set" in str(c)]
-            self.assertEqual(bool(hits), warns, railway)
+            self.assertEqual(bool(hits), warns, (railway, num_proxies))
 
 
 class ThrottleIdentTests(SimpleTestCase):
@@ -133,12 +143,23 @@ class ThrottleIdentTests(SimpleTestCase):
         request = self.factory.get("/", REMOTE_ADDR=RAILWAY_PROXY, **meta)
         return throttle_class().get_ident(request)
 
+    @override_settings(TRUSTED_CLIENT_IP_HEADER="", REST_FRAMEWORK=_framework(NUM_PROXIES=None))
+    def test_unconfigured_throttles_keep_drfs_key_never_the_shared_proxy(self):
+        # Nothing configured: REMOTE_ADDR is the platform proxy, one bucket for every visitor; the
+        # sign-in throttles keep DRF's per-client key instead (as before) and W007 asks for the setup.
+        meta = {"HTTP_X_FORWARDED_FOR": "198.51.100.1"}
+        request = self.factory.get("/", REMOTE_ADDR=RAILWAY_PROXY, **meta)
+        drf_key = BaseThrottle().get_ident(request)
+        self.assertEqual(self.ident(AnonRateThrottle, **meta), drf_key)
+        self.assertEqual(self.ident(ClientIPScopedRateThrottle, **meta), drf_key)
+        self.assertNotEqual(self.ident(ClientIPScopedRateThrottle, **meta), RAILWAY_PROXY)
+
     @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", REST_FRAMEWORK=_framework(NUM_PROXIES=None))
-    def test_unconfigured_general_throttles_keep_drfs_key_sign_in_ones_do_not(self):
-        meta = {"HTTP_X_FORWARDED_FOR": "198.51.100.1", "HTTP_CF_CONNECTING_IP": "198.51.100.1"}
+    def test_a_trusted_edge_header_keys_the_sign_in_throttles(self):
+        meta = {"HTTP_X_FORWARDED_FOR": "198.51.100.1", "HTTP_CF_CONNECTING_IP": "203.0.113.20"}
         request = self.factory.get("/", REMOTE_ADDR=RAILWAY_PROXY, **meta)
         self.assertEqual(self.ident(AnonRateThrottle, **meta), BaseThrottle().get_ident(request))  # unchanged
-        self.assertEqual(self.ident(ClientIPScopedRateThrottle, **meta), RAILWAY_PROXY)  # never steerable
+        self.assertEqual(self.ident(ClientIPScopedRateThrottle, **meta), "203.0.113.20")
 
     @override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", REST_FRAMEWORK=_framework(NUM_PROXIES=1))
     def test_configured_throttles_key_on_the_visitor(self):
@@ -162,7 +183,7 @@ class SupabaseBudgetTests(SimpleTestCase):
         from accounts import supabase_rest_auth as sra
 
         with mock.patch.dict("os.environ", {"SUPABASE_AUTH_VERIFY_RATE_PER_IP": ""}):
-            with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP",
+            with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", TRUSTED_CLIENT_IP_HEADER_FROM="cloudflare",
                                    REST_FRAMEWORK=_framework(NUM_PROXIES=None)):
                 self.assertEqual(sra._verification_rate_per_ip(), 0)  # one shared proxy address: off
             with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP",
@@ -176,7 +197,8 @@ class DiagnosticsTests(TestCase):
                                                      role="admin", is_staff=True)
         client = APIClient()
         client.force_authenticate(admin)
-        with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", REST_FRAMEWORK=_framework(NUM_PROXIES=1)):
+        with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", TRUSTED_CLIENT_IP_HEADER_FROM="cloudflare",
+                               REST_FRAMEWORK=_framework(NUM_PROXIES=1)):
             via_cf = client.get("/api/health/client-ip/", REMOTE_ADDR=RAILWAY_PROXY,
                                 HTTP_X_FORWARDED_FOR=f"203.0.113.7, {CLOUDFLARE_EDGE}",
                                 HTTP_CF_CONNECTING_IP="203.0.113.7").json()

@@ -361,7 +361,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    # Refuses the default password once committed in bootstrap_admin.py (public history).
+    {'NAME': 'accounts.password_validators.PublishedPasswordValidator'},
 ]
+# Extra SHA-256 digests for PublishedPasswordValidator (accounts/password_validators.py).
+PUBLISHED_PASSWORD_SHA256 = os.getenv('PUBLISHED_PASSWORD_SHA256', '').strip()
 
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
@@ -398,31 +402,34 @@ AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 # (crack_cms/throttling.py) all key on crack_cms.client_ip.get_client_ip:
 #   * NUM_PROXIES: the number of proxies in front of Django that append to
 #     X-Forwarded-For. The entry that many places from the right is the PEER,
-#     the address that connected to the outermost of them (Railway: 1, also the
-#     default there when unset -- RAILWAY_ENVIRONMENT_ID is present). Unset:
-#     the peer is REMOTE_ADDR -- the platform proxy, shared by every visitor --
-#     and DRF's general throttles keep their historical key (the raw,
-#     client-controlled X-Forwarded-For); the sign-in throttles and lockouts
-#     then share the proxy's bucket (accounts.W007, security_posture_check).
-#   * TRUSTED_CLIENT_IP_HEADER (e.g. "CF-Connecting-IP"): read only when the
-#     request came through that edge -- its peer is in
-#     TRUSTED_CLIENT_IP_HEADER_FROM ("cloudflare" = Cloudflare's published
-#     ranges, the default for CF-Connecting-IP; CIDRs; or "any", the default
-#     for other headers such as DO-Connecting-IP) and, when
-#     TRUSTED_CLIENT_IP_SECRET is set, it carries that value in
-#     TRUSTED_CLIENT_IP_SECRET_HEADER (e.g. added by a Cloudflare Transform
-#     Rule). A request that reaches the service around the edge (the
-#     *.up.railway.app hostname) is keyed on its peer whatever it sends.
+#     the address that connected to the outermost of them. Explicit only (no
+#     platform default: set it after checking the endpoint below). Unset: the
+#     peer is REMOTE_ADDR, DRF's throttles keep their historical key (the raw,
+#     client-controlled X-Forwarded-For), and so do the sign-in throttles
+#     unless a trusted edge header is configured (accounts.W007,
+#     security_posture_check).
+#   * TRUSTED_CLIENT_IP_HEADER (e.g. "CF-Connecting-IP"): the edge's client
+#     address. TRUSTED_CLIENT_IP_HEADER_FROM restricts it to requests whose
+#     peer is the edge ("cloudflare" = Cloudflare's published ranges; CIDRs;
+#     "any"). Unset means "any", the behaviour before the setting existed: the
+#     restriction is opt-in because it relies on NUM_PROXIES pointing at the
+#     Cloudflare hop -- if the platform's edge appends another hop, every
+#     visitor would share that address. With TRUSTED_CLIENT_IP_SECRET set, the
+#     header also needs that value in TRUSTED_CLIENT_IP_SECRET_HEADER (e.g.
+#     added by a Cloudflare Transform Rule). With the restriction on, a request
+#     that reaches the service around the edge (the *.up.railway.app hostname)
+#     is keyed on its peer whatever it sends.
 #
-# Railway behind Cloudflare (docs/DEPLOY_RAILWAY.md): NUM_PROXIES=1 and
-# TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP. Verify on the deployed service:
+# Railway behind Cloudflare (docs/DEPLOY_RAILWAY.md): TRUSTED_CLIENT_IP_HEADER=
+# CF-Connecting-IP; after the check below, NUM_PROXIES=1 and
+# TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare. Verify on the deployed service:
 # as an admin, GET /api/health/client-ip/ (crack_cms/diagnostics.py) shows
 # REMOTE_ADDR, X-Forwarded-For, the edge headers, the peer, whether the edge
 # header was honoured and the resulting address -- through api.cracklabs.app
 # the peer must be a Cloudflare address and client_ip your own address; on the
 # *.up.railway.app hostname, with a forged CF-Connecting-IP / X-Forwarded-For,
 # client_ip must still be your real address.
-NUM_PROXIES = num_proxies_from_env(os.environ)  # 1 on Railway when unset (crack_cms/client_ip.py)
+NUM_PROXIES = num_proxies_from_env(os.environ)  # explicit only (crack_cms/client_ip.py)
 TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
 TRUSTED_CLIENT_IP_HEADER_FROM = os.getenv('TRUSTED_CLIENT_IP_HEADER_FROM', '').strip()
 TRUSTED_CLIENT_IP_SECRET_HEADER = os.getenv('TRUSTED_CLIENT_IP_SECRET_HEADER', '').strip()

@@ -12,9 +12,11 @@ the peer; see crack_cms/client_ip.py):
   throttle themselves): ``get_client_ip`` once NUM_PROXIES is set. Without it
   they keep DRF's historical key, so an unconfigured deployment behaves as
   before.
-* ``ClientIPScopedRateThrottle``: always ``get_client_ip`` (``REMOTE_ADDR``
-  until NUM_PROXIES is set), for the sign-in endpoints, whose per-IP limits
-  must never be steerable with forged headers. ``accounts.W007`` warns in
+* ``ClientIPScopedRateThrottle``: ``get_client_ip`` as soon as the client
+  address is known (NUM_PROXIES, or a trusted edge header), for the sign-in
+  endpoints, whose per-IP limits must not be steerable with forged headers;
+  with nothing configured it keeps DRF's key rather than REMOTE_ADDR (the
+  platform proxy, one bucket for every visitor). ``accounts.W007`` warns in
   django mode while NUM_PROXIES is unset.
 
 Authenticated requests are keyed on the user as before (UserRateThrottle /
@@ -24,7 +26,7 @@ from __future__ import annotations
 
 from rest_framework import throttling
 
-from crack_cms.client_ip import get_client_ip, proxy_depth_configured
+from crack_cms.client_ip import client_ip_known, get_client_ip, proxy_depth_configured
 
 __all__ = [
     "AnonRateThrottle",
@@ -48,11 +50,24 @@ class ClientIPIdentMixin:
 
 
 class StrictClientIPIdentMixin:
-    """``get_ident`` from ``crack_cms.client_ip`` always: forged X-Forwarded-For / edge headers never count."""
+    """``get_ident`` from ``crack_cms.client_ip`` whenever it can tell visitors apart.
+
+    With nothing configured (no NUM_PROXIES, no edge header, no
+    TRUSTED_CLIENT_IP_HEADER_FROM), the client address would be REMOTE_ADDR,
+    i.e. the platform proxy shared by every visitor: one person could then use
+    up everyone's sign-in budget. DRF's own key (the raw X-Forwarded-For) is
+    kept in that case, as before; accounts.W007 asks for the configuration.
+    Once the operator restricts the edge header (TRUSTED_CLIENT_IP_HEADER_FROM),
+    the strict address is used even before NUM_PROXIES is set.
+    """
 
     def get_ident(self, request):
-        # Never DRF's fallback: without NUM_PROXIES it is the raw X-Forwarded-For.
-        return get_client_ip(request) or 'unknown'
+        from django.conf import settings
+
+        restricted = bool(str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER_FROM', '') or '').strip())
+        if client_ip_known() or restricted:
+            return get_client_ip(request) or 'unknown'
+        return super().get_ident(request)
 
 
 class AnonRateThrottle(ClientIPIdentMixin, throttling.AnonRateThrottle):

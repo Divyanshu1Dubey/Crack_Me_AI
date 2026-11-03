@@ -42,9 +42,12 @@ Supabase is retired. Production runs with `AUTH_PROVIDER=django` (backend) and `
   already has another Google identity answers `409 google_already_linked` (sign-in and confirm-link).
 * **Throttles / lockout**: per-IP and per-email scopes (`accounts/throttles.py`), per-link for `/verify-email/`. Every
   per-IP limit and django-axes key on `crack_cms.client_ip.get_client_ip`: `NUM_PROXIES` picks the hop the platform
-  proxy appended to `X-Forwarded-For`, and `TRUSTED_CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) is read only when that
-  hop is the edge's (Cloudflare's published ranges by default; `TRUSTED_CLIENT_IP_HEADER_FROM`, optional
-  `TRUSTED_CLIENT_IP_SECRET`). Forged headers on the `*.up.railway.app` hostname do not count. Axes locks the native
+  proxy appended to `X-Forwarded-For` (explicit only), and `TRUSTED_CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) gives
+  the visitor's address. Hardening is opt-in after checking `GET /api/health/client-ip/`:
+  `TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare` reads the header only when that hop is a Cloudflare address, so forged
+  headers on the `*.up.railway.app` hostname no longer count (or `TRUSTED_CLIENT_IP_SECRET` from a Cloudflare
+  Transform Rule). With nothing configured the sign-in throttles keep DRF's key rather than the shared proxy
+  address (`docs/DEPLOY_RAILWAY.md`). Axes locks the native
   sign-in per (username, IP); Django admin (`/admin/login/`) keeps the username lockout (5 failures from anywhere →
   30 min) and the IP lockout (`accounts.throttles.axes_lockout_parameters`). `check --deploy` warns
   (`accounts.W007`) while `NUM_PROXIES` is unset in django mode.
