@@ -56,9 +56,12 @@ _CLINICAL_ANSWER_FIELDS = (
 # Free-text ``q`` tokens: the stem, plus the same kind of answer-linked text.
 _Q_PUBLIC_FIELDS = ("question_text",)
 _Q_ANSWER_FIELDS = ("explanation", "mnemonic", "ai_explanation", "ai_clinical_pearl")
-# A ``[[img:N]]`` reference from these fields (and not from the stem) makes
-# an image an explanation figure (serializers.resolve_runtime_image_role).
+# A ``[[img:N]]`` reference from these fields (and not from the stem or an
+# option) makes an image an explanation figure; a reference from the stem or
+# an option makes it a stem-side figure whatever its stored role
+# (questions.image_context.runtime_role).
 _IMAGE_EXPLANATION_REF_FIELDS = ("explanation", "concept_explanation", "mnemonic")
+_IMAGE_STEM_SIDE_REF_FIELDS = ("question_text", "option_a", "option_b", "option_c", "option_d")
 
 
 def _text_match(raw: str, public_fields, answer_fields, answer_scope):
@@ -95,11 +98,11 @@ def _visible_images(answer_question_ids):
 
     ``answer_question_ids``: the ids of the questions whose answer the
     caller may read (a values() queryset), or None for every question.
-    Otherwise an explanation figure -- stored role 'explanation', or
-    referenced by ``[[img:N]]`` from the explanation text but not from the
-    stem -- counts only on those questions: it belongs to the explanation,
-    which the list rows hide on a locked question, and its OCR text can
-    name the answer.
+    Otherwise an explanation figure -- referenced by ``[[img:N]]`` from the
+    explanation text but not from the stem or an option, or stored as
+    'explanation' and not referenced from the stem or an option -- counts
+    only on those questions: it belongs to the explanation, which the list
+    rows hide on a locked question, and its OCR text can name the answer.
     """
     from django.db.models import CharField, Value
     from django.db.models.functions import Cast, Concat
@@ -115,9 +118,10 @@ def _visible_images(answer_question_ids):
     in_explanation = Q()
     for f in _IMAGE_EXPLANATION_REF_FIELDS:
         in_explanation |= Q(**{f"question__{f}__contains": token})
-    stem_figure = ~Q(role="explanation") & (
-        Q(question__question_text__contains=token) | ~in_explanation
-    )
+    in_stem_side = Q()
+    for f in _IMAGE_STEM_SIDE_REF_FIELDS:
+        in_stem_side |= Q(**{f"question__{f}__contains": token})
+    stem_figure = in_stem_side | (~Q(role="explanation") & ~in_explanation)
     return images.filter(stem_figure | Q(question_id__in=answer_question_ids))
 
 
@@ -443,31 +447,38 @@ def recall_question_images(self, request, pk=None):
     """GET /api/questions/{id}/images/  — list QuestionImage rows for a question.
 
     Goes through ``get_object()`` so removed / archived questions 404 for
-    non-admins. ``role`` is the runtime role (an image referenced only from
-    the explanation is 'explanation', which the stem gallery hides). Callers
-    who are not entitled to the answer get stem images only, without
-    captions (a caption can name the diagnosis); entitled callers get the
+    non-admins. ``role`` is the runtime role (``image_context.runtime_role``:
+    an image referenced only from the explanation is 'explanation', which
+    the stem gallery hides; one referenced from the stem or an option is a
+    stem-side figure). Callers who are not entitled to the answer get stem
+    images only, with the neutral ``alt_text`` but without captions (a
+    caption can name the diagnosis) and without OCR text (a recall
+    screenshot's OCR can carry the printed key); entitled callers get the
     explanation figures with a signed ``file_url``.
     """
+    from .image_context import option_letter_for, runtime_role
     from .models import QuestionImage
     from .recall_serializers import QuestionImageSerializer  # type: ignore
-    from .serializers import resolve_runtime_image_role
 
     question = self.get_object()
-    images = QuestionImage.objects.filter(question_id=question.pk, is_active=True).order_by("page_number", "image_index_in_page")
+    images = (QuestionImage.objects.filter(question_id=question.pk, is_active=True)
+              .order_by("page_number", "image_index_in_page", "id"))
     page_size, err = _int_param(request, "page_size", 50, minimum=1, maximum=200)
     if err is not None:
         return err
     images = list(images[:page_size])
     memo: dict = {}
-    roles = {img.id: resolve_runtime_image_role(question, img, memo) for img in images}
+    roles = {img.id: runtime_role(question, img, memo) for img in images}
+    option_labels = {img.id: option_letter_for(question, img) for img in images}
     data = QuestionImageSerializer(images, many=True, context={"request": request}).data
     for row in data:
         row["role"] = roles.get(row["id"], row.get("role"))
+        row["option_label"] = option_labels.get(row["id"], row.get("option_label", ""))
     if not self._can_view_answer(question):
         data = [row for row in data if row.get("role") != "explanation"]
         for row in data:
             row["caption"] = ""
+            row["ocr_text"] = ""
     else:
         # The serve endpoint returns explanation figures only with a signed
         # token (questions.image_access), issued to entitled callers.

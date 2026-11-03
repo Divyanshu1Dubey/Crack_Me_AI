@@ -70,6 +70,11 @@ urlpatterns = [
     # AI explanation endpoint
     path('<int:pk>/generate-explanation/', _generate_explanation, name='question-generate-explanation'),
 
+    # 2026-11 medical-accuracy groups own these route files (docs/audit/MEDICAL_ACCURACY_DESIGN.md);
+    # they come before the router, whose empty-prefix detail routes would otherwise shadow them.
+    path('', include('questions.urls_notes')),
+    path('', include('questions.urls_editorial')),
+
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
 ]

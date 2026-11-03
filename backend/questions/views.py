@@ -4081,9 +4081,16 @@ def _image_serve_allowed(request, img) -> bool:
     """Stem figures: always. Explanation figures (runtime role): with a
     valid signed token for this image id, or when the caller's own
     credentials (an API client's Authorization header, a staff session)
-    make it entitled to the question's answer. See QuestionImageServeView."""
+    make it entitled to the question's answer. See QuestionImageServeView.
+
+    The runtime role is ``questions.image_context.runtime_role``: a token in
+    the stem or an option makes the image a stem-side figure, whatever its
+    stored role (an option figure also cited by the explanation used to need
+    a token, so the option showed "missing image" before the answer)."""
+    from .image_context import runtime_role
+
     question = img.question
-    if resolve_runtime_image_role(question, img) != "explanation":
+    if runtime_role(question, img) != "explanation":
         return True
     if image_token_is_valid(img.id, request.query_params.get(IMAGE_TOKEN_PARAM)):
         return True
@@ -4147,8 +4154,9 @@ class QuestionImageServeView(APIView):
             .select_related("question")
             .only(
                 "id", "question", "file", "url", "mime", "width", "height", "role",
-                # resolve_runtime_image_role + user_can_view_answer
-                "question__question_text", "question__explanation",
+                # image_context.runtime_role + user_can_view_answer
+                "question__question_text", "question__option_a", "question__option_b",
+                "question__option_c", "question__option_d", "question__explanation",
                 "question__concept_explanation", "question__mnemonic",
                 "question__is_scholarship_eligible",
             )
@@ -4247,7 +4255,10 @@ class QuestionImageServeView(APIView):
                 if raster_mime == "image/jpeg" or raster_mime == "image/png" and target_w:
                     buf = BytesIO()
                     save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True}
-                    pil_img = pil_img.convert("RGB")
+                    # Transparency onto white: a plain convert("RGB") made the
+                    # background of line diagrams / ECG PNGs black.
+                    from .image_context import flatten_to_rgb
+                    pil_img = flatten_to_rgb(pil_img)
                     pil_img.save(buf, **save_kwargs)
                     out_mime = "image/jpeg"
                 else:
@@ -4325,15 +4336,14 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
     """Admin-only CRUD for `QuestionImage`. Supports direct upload via
     `POST /questions/images/` with multipart `question_id` + `file`.
 
-    **Auth**: `IsAdminUser`. Non-admins get 403.
-    **Optimistic lock**: PATCH / DELETE accept `If-Match: <updated_at>`
-    on the parent Question to prevent concurrent overwrites — but since
-    images live on their own resource, image PATCH uses image
-    `updated_at` via the same `If-Match` header.
+    **Auth**: the question editor's admins (`IsControlTowerAdmin`: role
+    'admin' or superuser) and staff accounts (`IsAdminUser`, the old rule).
+    A role-admin account without `is_staff` could edit a question but got
+    403 on its images. Others get 403. (No If-Match lock on images.)
     """
     queryset = QuestionImage.objects.all().order_by("-id")
     serializer_class = QuestionImageSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin | permissions.IsAdminUser]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def create(self, request, *args, **kwargs):

@@ -117,6 +117,11 @@ urlpatterns = [
     # Admin Import Center (Phase 1) — staff-only ingestion UI backend.
     path("api/admin/import/", include("material_importer.urls")),
     path("api/blog/", include("blog_engine.urls")),
+    # Medical-accuracy mission (2026-11): curated question evidence (admin page viewer, student
+    # citations), the answer-key review queue, and reference-store admin tools.
+    path("api/evidence/", include("evidence.urls")),
+    path("api/key-audit/", include("key_audit.urls")),
+    path("api/reference/", include("reference_corpus.urls")),
 ]
 
 if settings.DEBUG:

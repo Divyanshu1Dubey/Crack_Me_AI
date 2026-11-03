@@ -18,10 +18,17 @@ class QuestionImageSerializer(serializers.ModelSerializer):
             "ocr_confidence", "extraction_confidence",
             "has_diagram", "has_table", "is_watermarked",
             "role", "is_active", "created_at",
+            # 2026-11: student-safe description (shown before the answer) and
+            # the option an option figure belongs to.
+            "alt_text", "option_label", "caption_reveals_answer",
         ]
 
     def get_file_url(self, obj):
-        if not obj.file:
+        # The serve proxy handles every storage: the ImageField, a /media/
+        # URL and (admin uploads, ``url`` only) Supabase storage. Rows with
+        # neither a file nor a URL have nothing to serve. Admin uploads used
+        # to get None here, so the practice gallery never showed them.
+        if not obj.file and not (obj.url or "").strip():
             return None
         request = self.context.get("request")
         path = f"/api/questions/images/{obj.id}/serve/"

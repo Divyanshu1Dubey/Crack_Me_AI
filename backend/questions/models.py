@@ -338,6 +338,49 @@ class Question(models.Model):
         help_text='sha256 of normalised question text — used for cross-PDF dedup.',
     )
 
+    # ── Medical-accuracy provenance (2026-11, docs/audit/MEDICAL_ACCURACY_DESIGN.md) ──
+    # Computed only by questions.editorial.compute_explanation_status(); the answer-key
+    # status is written only by key_audit (and reset by editorial.change_answer_key).
+    EXPLANATION_STATUS_CHOICES = [
+        ('none', 'No explanation'),
+        ('pending_review', 'Pending review'),
+        ('ai_generated', 'AI-generated'),
+        ('human_edited', 'Human-edited'),
+        ('source_verified', 'Source-verified'),
+        ('reviewed', 'Fully reviewed'),
+    ]
+    EXPLANATION_ORIGIN_CHOICES = [
+        ('ai', 'AI'), ('human', 'Human'), ('mixed', 'Mixed'), ('import', 'Import'), ('legacy', 'Legacy / unknown'),
+    ]
+    ANSWER_KEY_STATUS_CHOICES = [
+        ('unaudited', 'Not audited'),
+        ('verified', 'Verified'),
+        ('likely_correct', 'Likely correct'),
+        ('needs_review', 'Needs review'),
+        ('contradictory_sources', 'Contradictory sources'),
+        ('insufficient_evidence', 'Insufficient evidence'),
+        ('image_context_missing', 'Image context missing'),
+    ]
+    explanation_status = models.CharField(max_length=20, choices=EXPLANATION_STATUS_CHOICES, default='none', db_index=True)
+    explanation_status_reason = models.CharField(max_length=40, blank=True, default='')
+    explanation_for_key = models.CharField(max_length=1, blank=True, default='',
+                                           help_text='The key the explanation fields were written for.')
+    explanation_stem_hash = models.CharField(max_length=64, blank=True, default='',
+                                             help_text='questions.content_hashes.stem_hash() when the explanation was saved.')
+    explanation_hash = models.CharField(max_length=64, blank=True, default='')
+    explanation_origin = models.CharField(max_length=12, choices=EXPLANATION_ORIGIN_CHOICES, blank=True, default='')
+    explanation_suggestion = models.ForeignKey(
+        'questions.ExplanationSuggestion', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    explanation_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_explanations',
+    )
+    explanation_reviewed_at = models.DateTimeField(null=True, blank=True)
+    explanation_reviewed_hash = models.CharField(max_length=64, blank=True, default='')
+    verified_hash = models.CharField(max_length=64, blank=True, default='',
+                                     help_text='Key + explanation hash the "Verified by Admin" badge was given for.')
+    answer_key_status = models.CharField(max_length=32, choices=ANSWER_KEY_STATUS_CHOICES, default='unaudited', db_index=True)
+
     class Meta:
         ordering = ['-year', 'subject']
         indexes = [
@@ -355,6 +398,8 @@ class Question(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['subject', 'is_active', 'difficulty']),
             models.Index(fields=['topic', 'is_active']),
+            models.Index(fields=['explanation_status', 'is_active'], name='q_expl_status_active'),
+            models.Index(fields=['answer_key_status', 'is_active'], name='q_key_status_active'),
         ]
 
     def _normalize_text_value(self, value):
@@ -510,10 +555,16 @@ class QuestionAIOperationLog(models.Model):
     OPERATION_CHOICES = [
         ('regenerate', 'Force Regenerate'),
         ('override', 'Admin Override'),
+        ('explain_suggestion', 'Explanation suggestion'),
+        ('key_change', 'Answer key change'),
+        ('verify', 'Verify'),
+        ('unverify', 'Unverify'),
+        ('explanation_review', 'Explanation review'),
     ]
 
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='ai_operation_logs')
     operation_type = models.CharField(max_length=30, choices=OPERATION_CHOICES)
+    meta = models.JSONField(default=dict, blank=True, help_text='for_key, suggestion_id, status, citation_count, ...')
     provider = models.CharField(max_length=80, blank=True)
     prompt_version = models.ForeignKey(AdminAIPromptVersion, on_delete=models.SET_NULL, null=True, blank=True, related_name='operation_logs')
     tokens_used = models.IntegerField(default=0)
@@ -966,6 +1017,16 @@ class QuestionImage(models.Model):
         default='',
         help_text='Supabase public URL for admin-uploaded images (empty for recall imports)',
     )
+    # Phase 8 (2026-11): student-safe description and role provenance.
+    ROLE_SOURCE_CHOICES = [
+        ('importer_default', 'Importer default'), ('admin', 'Admin'), ('token', 'Image token'),
+        ('position_heuristic', 'Position heuristic'),
+    ]
+    alt_text = models.CharField(max_length=200, blank=True, default='',
+                                help_text="Neutral pre-answer description, e.g. 'Chest radiograph, PA view'.")
+    caption_reveals_answer = models.BooleanField(default=True, help_text='Show the caption only after the answer is revealed.')
+    option_label = models.CharField(max_length=1, blank=True, default='', help_text="A-D for role='option'.")
+    role_source = models.CharField(max_length=20, choices=ROLE_SOURCE_CHOICES, default='importer_default')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1051,10 +1112,22 @@ class TopicNote(models.Model):
         ('usmle', 'USMLE'),
         ('fmge', 'FMGE'),
         ('other', 'Other'),
+        ('all', 'All exams (combined)'),
     ]
+    GENERATION_METHOD_CHOICES = [('manual', 'Manual'), ('extractive', 'Extractive (PYQ builder)'), ('llm', 'LLM')]
 
     title = models.CharField(max_length=300)
     content = models.TextField(help_text='Markdown-formatted note content.')
+    # PYQ-first builder (questions/notes_builder.py, 2026-11).
+    structured = models.JSONField(default=dict, blank=True, help_text='Canonical note; content is its rendering.')
+    generation_method = models.CharField(max_length=16, choices=GENERATION_METHOD_CHOICES, default='manual')
+    builder_version = models.CharField(max_length=32, blank=True, default='')
+    built_at = models.DateTimeField(null=True, blank=True)
+    source_fingerprint = models.CharField(max_length=64, blank=True, default='')
+    verified_source_count = models.PositiveIntegerField(default=0)
+    provisional_source_count = models.PositiveIntegerField(default=0)
+    excluded_source_count = models.PositiveIntegerField(default=0)
+    is_stale = models.BooleanField(default=False, db_index=True)
     topic = models.ForeignKey(
         'questions.Topic', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='topic_notes',
@@ -1267,4 +1340,161 @@ class MistakeNotebook(models.Model):
 
     def __str__(self):
         return f"{self.user.username} mistake: Q{self.question_id} ({self.review_status})"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Medical-accuracy mission (2026-11). Contracts: docs/audit/MEDICAL_ACCURACY_DESIGN.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class AnswerKeyChange(models.Model):
+    """Immutable record of one change of ``Question.correct_answer``.
+
+    Written only by ``questions.editorial.change_answer_key()`` (and, for history
+    recovered from revision snapshots, by its backfill with ``source='legacy_snapshot'``).
+    The original key is never lost: ``old_key`` plus the linked revision snapshot.
+    """
+
+    SOURCE_CHOICES = [
+        ('editor', 'Question editor'),
+        ('generate_explanation', 'Generate explanation'),
+        ('resolve_dispute', 'Resolve dispute'),
+        ('review_queue', 'Answer-key review queue'),
+        ('undo_revision', 'Undo to revision'),
+        ('management_command', 'Management command'),
+        ('legacy_snapshot', 'Recovered from revision history'),
+    ]
+    EXPLANATION_ACTION_CHOICES = [('kept_stale', 'Kept (marked stale)'), ('replaced', 'Replaced'), ('cleared', 'Cleared')]
+    RESCORE_CHOICES = [('pending', 'Pending'), ('done', 'Done'), ('skipped', 'Skipped')]
+    RESCORE_FIELDS = ('rescore_status', 'rescored_at', 'rescored_by')
+
+    question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name='key_changes')
+    old_key = models.CharField(max_length=1, blank=True, default='')
+    new_key = models.CharField(max_length=1)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='answer_key_changes')
+    changed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=24, choices=SOURCE_CHOICES)
+    reason = models.TextField()
+    # [{kind: passage|official_key|errata|guideline_url|note, source_sha256, source_title, edition, year, tier,
+    #   page_start, page_end, page_label, chunk_key, quote, quote_sha256, supports_option}]
+    evidence = models.JSONField(default=list, blank=True)
+    audit_status_before = models.CharField(max_length=32, blank=True, default='')
+    audit_id = models.IntegerField(null=True, blank=True, help_text='key_audit.QuestionAudit id at the time')
+    suggestion = models.ForeignKey('questions.ExplanationSuggestion', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    revision_snapshot = models.ForeignKey(QuestionRevisionSnapshot, on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='+')
+    explanation_action = models.CharField(max_length=12, choices=EXPLANATION_ACTION_CHOICES, blank=True, default='')
+    affected = models.JSONField(default=dict, blank=True,
+                                help_text='{qbank_attempts, test_responses, mistake_entries, flashcards}')
+    rescore_status = models.CharField(max_length=8, choices=RESCORE_CHOICES, default='pending')
+    rescored_at = models.DateTimeField(null=True, blank=True)
+    rescored_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='+')
+
+    class Meta:
+        ordering = ['-changed_at']
+        indexes = [models.Index(fields=['question', '-changed_at'], name='q_keychange_question')]
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None and not self._state.adding:
+            update_fields = kwargs.get('update_fields')
+            if not update_fields or not set(update_fields) <= set(self.RESCORE_FIELDS):
+                raise ValueError('AnswerKeyChange is immutable; only the rescore_* fields may be updated.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('AnswerKeyChange rows are never deleted.')
+
+    def __str__(self):
+        return f'Q{self.question_id} key {self.old_key or "-"} -> {self.new_key} ({self.source})'
+
+
+class ExplanationSuggestion(models.Model):
+    """AI / extractive explanation suggestion for one selected option. A suggestion, never a source:
+    nothing is written to the question until an admin saves it through ``questions.editorial``."""
+
+    MODE_CHOICES = [('llm', 'LLM'), ('extractive', 'Extractive (offline)')]
+    STATUS_CHOICES = [
+        ('ok', 'Supported by evidence'),
+        ('conflict', 'Evidence supports another option'),
+        ('insufficient_evidence', 'Insufficient evidence'),
+        ('image_context_missing', 'Image context missing'),
+        ('failed', 'Failed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='explanation_suggestions')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    for_key = models.CharField(max_length=1)
+    stored_key = models.CharField(max_length=1, blank=True, default='')
+    draft_stem_hash = models.CharField(max_length=64, blank=True, default='')
+    used_draft = models.BooleanField(default=False)
+    mode = models.CharField(max_length=12, choices=MODE_CHOICES)
+    provider = models.CharField(max_length=80, blank=True, default='')
+    model = models.CharField(max_length=120, blank=True, default='')
+    prompt_version = models.ForeignKey('questions.AdminAIPromptVersion', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='+')
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES)
+    fields = models.JSONField(default=dict, blank=True)            # explanation, why_correct, why_wrong_x, ...
+    field_citations = models.JSONField(default=dict, blank=True)   # {why_correct: ['P1', 'P2']}
+    citations = models.JSONField(default=list, blank=True)         # resolved passages only
+    dropped_claims = models.JSONField(default=list, blank=True)    # unresolved citations / invented references
+    option_evidence = models.JSONField(default=dict, blank=True)   # {A: {score, passage_ids}}
+    conflict = models.JSONField(null=True, blank=True)             # {evidence_supports, selected, stored, margin, summary}
+    image_context = models.JSONField(default=dict, blank=True)     # {required, available, missing_reason}
+    evidence_run_id = models.IntegerField(null=True, blank=True, help_text='reference_corpus.EvidenceRun id')
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='+')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['question', '-created_at'], name='q_suggestion_question')]
+
+    def __str__(self):
+        return f'Suggestion {self.id} Q{self.question_id} for {self.for_key}: {self.status}'
+
+
+class TopicNoteSource(models.Model):
+    """A PYQ cited by a built topic note, with the key status it had at build time."""
+
+    note = models.ForeignKey(TopicNote, on_delete=models.CASCADE, related_name='sources')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='topic_note_sources')
+    key_status = models.CharField(max_length=12)       # verified | provisional | excluded
+    reason = models.CharField(max_length=48, blank=True, default='')
+    answer_at_build = models.CharField(max_length=1, blank=True, default='')
+    cited = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['note', 'question'], name='uniq_topic_note_source')]
+        indexes = [models.Index(fields=['question'], name='q_notesource_question')]
+
+
+class QuestionAttemptLog(models.Model):
+    """Append-only log of question-bank / practice answers (QuestionAttempt keeps only the latest pick).
+    Powers per-option answer distribution and per-question attempt history."""
+
+    SOURCE_CHOICES = [('bank', 'Question bank'), ('practice', 'Practice'), ('backfill', 'Backfill')]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='attempt_log')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='attempt_log')
+    selected_answer = models.CharField(max_length=1)
+    is_correct = models.BooleanField(null=True, blank=True, help_text='None = the question had no valid key')
+    source = models.CharField(max_length=12, choices=SOURCE_CHOICES)
+    time_spent_seconds = models.PositiveIntegerField(default=0)
+    is_first = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'question', 'created_at'], name='q_attemptlog_user_q'),
+            models.Index(fields=['question', 'is_first'], name='q_attemptlog_first'),
+        ]
 
