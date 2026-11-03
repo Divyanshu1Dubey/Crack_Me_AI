@@ -154,8 +154,9 @@ class ClassifyRuleTests(SimpleTestCase):
         self.assertEqual(r.status, 'insufficient_evidence')
 
     def test_ai_content_issues(self):
-        r = self.run_rules(ai_reviews=[ai_review('A', issues=['garbled_text'])])
+        r = self.run_rules(ai_reviews=[ai_review('A', issues=['garbled_text', 'options_incomplete'])])
         self.assertEqual(r.reason, 'ai_content_defect')
+        self.assertEqual([s['code'] for s in r.signals].count('ai_content_defect'), 1)   # one per review
         r = self.run_rules(ai_reviews=[ai_review('A', issues=['wrong_subject'])])
         self.assertEqual(r.status, 'insufficient_evidence')
 

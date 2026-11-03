@@ -102,27 +102,45 @@ class ReviewQueueListView(_AdminView):
 
 
 class ReviewQueueSummaryView(_AdminView):
+    """Counts for the queue's tabs and filters (aggregated in the database; the open-signal counts read
+    only the signal lists, cached for a minute)."""
+
+    CACHE_SECONDS = 60
+
     def get(self, request):
+        from django.core.cache import cache
+        from django.db.models import Count
+        from django.db.models.fields.json import KT
+
         qs = QuestionAudit.objects.all()
-        if request.query_params.get('include_inactive') != 'true':
+        include_inactive = request.query_params.get('include_inactive') == 'true'
+        exam = request.query_params.get('exam') or ''
+        if not include_inactive:
             qs = qs.filter(question__is_active=True, question__is_dropped=False)
-        if request.query_params.get('exam'):
-            qs = qs.filter(question__exam_type=request.query_params['exam'])
-        statuses, reasons, signals, sources = Counter(), Counter(), Counter(), Counter()
-        stale = 0
-        for row in qs.values('status', 'status_reason', 'signals', 'is_stale', 'suggested_key', 'evidence_summary'):
-            statuses[row['status']] += 1
-            reasons[f"{row['status']}/{row['status_reason']}"] += 1
-            stale += bool(row['is_stale'])
-            for signal in row['signals'] or []:
-                if signal.get('opens_review') and not signal.get('settled_by_review'):
-                    signals[signal.get('code')] += 1
-            if row['suggested_key']:
-                sources[(row['evidence_summary'] or {}).get('suggested_from') or 'unknown'] += 1
+        if exam:
+            qs = qs.filter(question__exam_type=exam)
+        statuses = Counter({row['status']: row['n'] for row in qs.values('status').annotate(n=Count('id'))})
+        reasons = Counter({f"{row['status']}/{row['status_reason']}": row['n']
+                           for row in qs.values('status', 'status_reason').annotate(n=Count('id'))})
+        sources = Counter({row['source'] or 'unknown': row['n'] for row in qs.exclude(suggested_key='').annotate(
+            source=KT('evidence_summary__suggested_from')).values('source').annotate(n=Count('id'))})
+        from django.db.models import Max
+        version = QuestionAudit.objects.aggregate(n=Count('id'), at=Max('updated_at'))
+        stamp = version['at'].timestamp() if version['at'] else 0
+        cache_key = f"key_audit:open_signals:{exam}:{int(include_inactive)}:{version['n']}:{stamp}"
+        signals = cache.get(cache_key)
+        if signals is None:
+            counts = Counter()
+            for row in qs.values_list('signals', flat=True).iterator(chunk_size=2000):
+                for signal in row or []:
+                    if signal.get('opens_review') and not signal.get('settled_by_review'):
+                        counts[signal.get('code')] += 1
+            signals = dict(counts.most_common())
+            cache.set(cache_key, signals, self.CACHE_SECONDS)
         return Response({
-            'total': sum(statuses.values()), 'stale': stale,
+            'total': sum(statuses.values()), 'stale': qs.filter(is_stale=True).count(),
             'status': dict(statuses.most_common()), 'reasons': dict(reasons.most_common()),
-            'open_signals': dict(signals.most_common()), 'suggested_from': dict(sources.most_common()),
+            'open_signals': signals, 'suggested_from': dict(sources.most_common()),
             'claimed': len(_active_claims()),
         })
 

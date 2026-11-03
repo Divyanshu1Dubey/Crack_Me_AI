@@ -198,13 +198,15 @@ def collect(inp: AuditInput) -> tuple:
                 priority=AI_DISAGREE_PRIORITY.get(confidence, 40.0),
                 data={'reviewer': label, 'pass': review.get('pass'), 'confidence': confidence},
             ))
+        by_code = {}
         for issue in review.get('issues') or []:
             code = AI_ISSUE_SIGNALS.get(issue)
-            if issue == 'image_required' and not inp.image_missing:
-                continue   # an image is attached (or the deterministic check found no need)
-            if code:
-                signals.append(Signal(code, f'{label} reports {issue.replace("_", " ")}', at=_parse(review.get('at')),
-                                      data={'reviewer': label, 'issue': issue}))
+            if code:   # ('image_required' adds nothing: the deterministic image check decides)
+                by_code.setdefault(code, []).append(issue)
+        for code, issues in by_code.items():
+            words = ', '.join(i.replace('_', ' ') for i in issues)
+            signals.append(Signal(code, f'{label} reports {words}', at=_parse(review.get('at')),
+                                  data={'reviewer': label, 'issues': issues}))
 
     for review in inp.official_reviews:
         verdict, best = _effective(review, key)

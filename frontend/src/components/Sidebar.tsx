@@ -19,7 +19,7 @@ import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { navigateAfterAuthChange } from '@/lib/authNavigation';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, BarChart3, Lock, FileUp, Layers, type LucideIcon } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, BarChart3, Lock, FileUp, Layers, ClipboardCheck, type LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
@@ -128,6 +128,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon; exact?: bool
     { href: '/admin', label: 'Admin Dashboard', icon: ShieldAlert, exact: true },
     { href: '/admin/analytics-dashboard', label: 'Analytics Dashboard', icon: BarChart3 },
     { href: '/admin/questions-editor', label: 'Questions Editor', icon: FileQuestion },
+    { href: '/admin/review-queue', label: 'Answer-Key Review', icon: ClipboardCheck },
     { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
     { href: '/admin/jobs', label: 'Manage Jobs', icon: Briefcase },
     { href: '/admin/ingestion', label: 'Ingestion', icon: FileQuestion },
