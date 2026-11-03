@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { questionsAPI, topicNotesAPI, analyticsAPI } from '@/lib/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { questionsAPI } from '@/lib/api';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
-import { Sparkles, ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { buildQuestionEditPayload, isValidAnswerLetter, mergeGeneratedFields, unpersistedEditFields } from '../_lib/adminHelpers';
 
 interface QuestionEditModalProps {
   question: any;
@@ -13,38 +14,68 @@ interface QuestionEditModalProps {
   onSaveAndNext?: (updated: any) => void;
 }
 
-export default function QuestionEditModal({ question, images: initialImages, onClose, onSaved, onSaveAndNext }: QuestionEditModalProps) {
-  const [form, setForm] = useState({
-    question_text: question.question_text ?? '',
-    option_a: question.option_a ?? '',
-    option_b: question.option_b ?? '',
-    option_c: question.option_c ?? '',
-    option_d: question.option_d ?? '',
-    correct_answer: question.correct_answer ?? 'A',
-    explanation: question.explanation ?? '',
-    mnemonic: question.mnemonic ?? '',
-    concept_explanation: question.concept_explanation ?? '',
-    difficulty: question.difficulty ?? 'medium',
-    topic: question.topic ?? null,
-    needs_review: !!question.needs_review,
-    is_dropped: !!question.is_dropped,
-    is_controversial: !!question.is_controversial,
+type EditForm = ReturnType<typeof formFromQuestion>;
+
+// Text fields scrubbed of legacy bare /media/fixtures/images/... URLs on save.
+const SCRUBBED_TEXT_FIELDS = [
+  'question_text', 'option_a', 'option_b', 'option_c',
+  'option_d', 'explanation', 'mnemonic', 'concept_explanation',
+  'reference_text', 'shortcut_tip', 'why_correct',
+  'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
+] as const;
+
+// The fields generate-explanation treats as "an explanation already exists"
+// (backend questions/views.py generate_explanation existing_fields).
+const EXISTING_EXPLANATION_FIELDS = [
+  'explanation', 'concept_explanation', 'mnemonic', 'book_name', 'chapter', 'reference_text', 'shortcut_tip',
+] as const;
+
+// Editable fields from a list row, detail payload or 409 `current` body.
+function formFromQuestion(q: any) {
+  return {
+    question_text: q.question_text ?? '',
+    option_a: q.option_a ?? '',
+    option_b: q.option_b ?? '',
+    option_c: q.option_c ?? '',
+    option_d: q.option_d ?? '',
+    // No silent "A": an unset answer stays unset until the admin picks one
+    // (it used to default to A, which was then saved and fed to the AI).
+    correct_answer: isValidAnswerLetter(q.correct_answer) ? String(q.correct_answer).trim().toUpperCase() : '',
+    explanation: q.explanation ?? '',
+    mnemonic: q.mnemonic ?? '',
+    concept_explanation: q.concept_explanation ?? '',
+    difficulty: q.difficulty ?? 'medium',
+    topic: q.topic ?? null,
+    needs_review: !!q.needs_review,
+    is_dropped: !!q.is_dropped,
+    is_controversial: !!q.is_controversial,
     // AI-generated explanation fields (all editable by admin)
-    concept_keywords: Array.isArray(question.concept_keywords) ? question.concept_keywords.join(', ') : (question.concept_keywords ?? ''),
-    book_name: question.book_name ?? '',
-    chapter: question.chapter ?? '',
-    page_number: question.page_number ?? '',
-    reference_text: question.reference_text ?? '',
-    shortcut_tip: question.shortcut_tip ?? '',
-    why_correct: question.why_correct ?? '',
-    why_wrong_a: question.why_wrong_a ?? '',
-    why_wrong_b: question.why_wrong_b ?? '',
-    why_wrong_c: question.why_wrong_c ?? '',
-    why_wrong_d: question.why_wrong_d ?? '',
-  });
+    concept_keywords: Array.isArray(q.concept_keywords) ? q.concept_keywords.join(', ') : (q.concept_keywords ?? ''),
+    book_name: q.book_name ?? '',
+    chapter: q.chapter ?? '',
+    page_number: q.page_number ?? '',
+    reference_text: q.reference_text ?? '',
+    shortcut_tip: q.shortcut_tip ?? '',
+    why_correct: q.why_correct ?? '',
+    why_wrong_a: q.why_wrong_a ?? '',
+    why_wrong_b: q.why_wrong_b ?? '',
+    why_wrong_c: q.why_wrong_c ?? '',
+    why_wrong_d: q.why_wrong_d ?? '',
+  };
+}
+
+export default function QuestionEditModal({ question, images: initialImages, onClose, onSaved, onSaveAndNext }: QuestionEditModalProps) {
+  // The parent renders this with key={question.id}, so every question gets a
+  // fresh instance (state used to leak from one question into the next).
+  const [form, setForm] = useState<EditForm>(() => formFromQuestion(question));
+  // Server-side values the form was loaded from (or last saved to). Used to
+  // send is_controversial only when toggled and to detect edits the server
+  // did not store.
+  const baselineRef = useRef<EditForm>(form);
   const [images, setImages] = useState<QuestionImageLike[]>(initialImages);
   const [updatedAt, setUpdatedAt] = useState<string>(question.updated_at ?? '');
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<any | null>(null);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
@@ -55,11 +86,30 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   const fieldRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const formRef = useRef(form);
   formRef.current = form;
+  // True while AI-generated fields sit in the form unsaved (generation is a
+  // dry run: nothing is stored until Save), so closing asks first.
+  const aiUnsavedRef = useRef(false);
+
+  // Closing (×, Cancel, Escape) would silently drop unsaved AI output.
+  function requestClose() {
+    if (aiUnsavedRef.current && !window.confirm('The AI-generated fields are not saved yet. Close and discard them?')) return;
+    onClose();
+  }
+
+  // Latest save handlers for the keyboard shortcuts below. The listener is
+  // registered once; it used to capture the first render's save()/form, so
+  // Ctrl+S saved stale values and dropped the edits made since.
+  const saveRef = useRef<(force?: boolean) => Promise<boolean>>(async () => false);
+  const saveAndNextRef = useRef<() => Promise<void>>(async () => {});
+  const onCloseRef = useRef(requestClose);
+  onCloseRef.current = requestClose;
+  const hasSaveAndNextRef = useRef(Boolean(onSaveAndNext));
+  hasSaveAndNextRef.current = Boolean(onSaveAndNext);
 
   // Keyboard shortcuts for fast sequential processing:
   //   Ctrl/Cmd + S  → Save
   //   Ctrl/Cmd + →  → Save and Next question
-  //   Ctrl/Cmd + ←  → Save and Previous question
+  //   Ctrl/Cmd + ←  → Save, then Previous question (only if the save worked)
   //   Escape        → Close (only when not editing a text field)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -68,29 +118,30 @@ export default function QuestionEditModal({ question, images: initialImages, onC
 
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        save(false);
+        void saveRef.current(false);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight') {
         e.preventDefault();
-        save(false);
-        if (onSaveAndNext) onSaveAndNext(form);
+        if (hasSaveAndNextRef.current) void saveAndNextRef.current();
+        else void saveRef.current(false);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft') {
         e.preventDefault();
-        save(false);
-        window.dispatchEvent(new CustomEvent('admin-qeditor:prev'));
+        void saveRef.current(false).then((ok) => {
+          if (ok) window.dispatchEvent(new CustomEvent('admin-qeditor:prev'));
+        });
         return;
       }
       if (e.key === 'Escape' && !isEditing) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [saving, onClose]);
+  }, []);
 
   // Pre-compute resolved image HTML for every field that supports images.
   // The public practice page mirrors this same pattern.
@@ -104,11 +155,6 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     { key: 'mnemonic', label: 'Mnemonic' },
     { key: 'concept_explanation', label: 'Concept Explanation' },
   ] as const;
-
-  const cacheKey = useMemo(
-    () => `${question.id}:${images.map((i) => i.id).join('|')}`,
-    [question.id, images],
-  );
 
   // When the parent opens a new question (Save & Next, prev/next nav),
   // re-fetch the full detail payload. The list endpoint may strip
@@ -131,35 +177,13 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       try {
         const detail = await questionsAPI.get(question.id);
         if (cancelled) return;
-        const q = detail.data;
-        setForm({
-          question_text: q.question_text ?? '',
-          option_a: q.option_a ?? '',
-          option_b: q.option_b ?? '',
-          option_c: q.option_c ?? '',
-          option_d: q.option_d ?? '',
-          correct_answer: q.correct_answer ?? 'A',
-          explanation: q.explanation ?? '',
-          mnemonic: q.mnemonic ?? '',
-          concept_explanation: q.concept_explanation ?? '',
-          difficulty: q.difficulty ?? 'medium',
-          topic: q.topic ?? null,
-          needs_review: !!q.needs_review,
-          is_dropped: !!q.is_dropped,
-          is_controversial: !!q.is_controversial,
-          concept_keywords: Array.isArray(q.concept_keywords) ? q.concept_keywords.join(', ') : (q.concept_keywords ?? ''),
-          book_name: q.book_name ?? '',
-          chapter: q.chapter ?? '',
-          page_number: q.page_number ?? '',
-          reference_text: q.reference_text ?? '',
-          shortcut_tip: q.shortcut_tip ?? '',
-          why_correct: q.why_correct ?? '',
-          why_wrong_a: q.why_wrong_a ?? '',
-          why_wrong_b: q.why_wrong_b ?? '',
-          why_wrong_c: q.why_wrong_c ?? '',
-          why_wrong_d: q.why_wrong_d ?? '',
-        });
-        setUpdatedAt(q.updated_at ?? '');
+        // Detail values win; the list row fills what the detail serializer
+        // lacks (why_correct / why_wrong_*), which used to reset to empty
+        // here and could then be saved over the real values.
+        const next = formFromQuestion({ ...question, ...(detail.data || {}) });
+        setForm(next);
+        baselineRef.current = next;
+        setUpdatedAt(detail.data?.updated_at ?? '');
       } catch (e: any) {
         if (cancelled) return;
         console.warn('Failed to fetch full question detail, using prop data:', e);
@@ -170,11 +194,21 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
     loadFullQuestion();
     return () => { cancelled = true; };
-  }, [question.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question.id]);
 
+  // Rendered preview of the stem, from a debounced copy of the text.
+  // resolveImageTokens() keys its (bounded) cache on a hash of the text and
+  // images itself, so the key below is only a namespace: the old key (id +
+  // image ids) ignored the text and kept showing the first-rendered stem,
+  // and putting the whole stem in the key grew the cache on every pause.
+  const [previewSource, setPreviewSource] = useState<string>(form.question_text);
+  useEffect(() => {
+    const timer = setTimeout(() => setPreviewSource(form.question_text), 250);
+    return () => clearTimeout(timer);
+  }, [form.question_text]);
   const previewHtml = useMemo(
-    () => resolveImageTokens(form.question_text, images, cacheKey),
-    [form.question_text, images, cacheKey],
+    () => resolveImageTokens(previewSource, images, `qe:${question.id}`),
+    [previewSource, images, question.id],
   );
 
   // Returns insert-image button — used across every text field so the
@@ -384,14 +418,18 @@ export default function QuestionEditModal({ question, images: initialImages, onC
         const newImages = [...images, img];
         setImages(newImages);
         const token = `[[img:${img.id}]]`;
+        // Functional updates: the upload is async, and spreading the form
+        // captured before it dropped anything typed while it ran.
         if (ref) {
           const start = ref.selectionStart ?? ref.value.length;
           const end = ref.selectionEnd ?? ref.value.length;
-          const currentValue = (form as any)[fieldKey] ?? '';
-          setForm({ ...form, [fieldKey]: currentValue.slice(0, start) + token + currentValue.slice(end) });
+          setForm((prev) => {
+            const currentValue = (prev as any)[fieldKey] ?? '';
+            return { ...prev, [fieldKey]: currentValue.slice(0, start) + token + currentValue.slice(end) };
+          });
         } else {
           // No ref available — append to the end of the field.
-          setForm({ ...form, [fieldKey]: ((form as any)[fieldKey] ?? '') + token });
+          setForm((prev) => ({ ...prev, [fieldKey]: ((prev as any)[fieldKey] ?? '') + token }));
         }
       } catch (e: any) {
         setError('Failed to upload image: ' + (e?.response?.data?.detail || e?.message || 'unknown'));
@@ -406,14 +444,16 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     if (!confirm('Delete this image permanently?')) return;
     try {
       await questionsAPI.deleteImage(id);
-      setImages(images.filter((i) => i.id !== id));
+      setImages((prev) => prev.filter((i) => i.id !== id));
       const tokenRe = new RegExp(`\\[\\[img:${id}\\]\\]`, 'g');
-      const updated: any = { ...form };
-      for (const k of fieldsWithImages.map((f) => f.key)) {
-        const v = (form as any)[k];
-        if (typeof v === 'string') updated[k] = v.replace(tokenRe, '');
-      }
-      setForm(updated);
+      setForm((prev) => {
+        const updated: any = { ...prev };
+        for (const k of fieldsWithImages.map((f) => f.key)) {
+          const v = (prev as any)[k];
+          if (typeof v === 'string') updated[k] = v.replace(tokenRe, '');
+        }
+        return updated;
+      });
     } catch (e: any) {
       setError('Failed to delete image: ' + (e?.response?.data?.detail || e?.message || 'unknown'));
     }
@@ -434,63 +474,80 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
   }
 
-  async function save(force = false) {
+  // Bug 2026-07-28: scrub bare `/media/fixtures/images/...` URLs
+  // from every text field before sending. The legacy form of
+  // these URLs is unreachable in production (Django refuses to
+  // serve `/media/` when DEBUG=False) and the frontend's
+  // resolver only upgrades bare URLs to `[[img:N]]` when an
+  // attached QuestionImage row exists. If the admin pastes a
+  // bare URL into the textarea by mistake, we instead:
+  //   - replace it with the canonical `[[img:N]]` token if a
+  //     row already exists for this question+basename, OR
+  //   - replace it with a visible "[image unavailable: …]"
+  //     marker so the student doesn't see a broken-image icon
+  //     with no explanation.
+  function scrubMediaUrls(source: EditForm): EditForm {
+    const cleanedForm: EditForm = { ...source };
+    for (const k of SCRUBBED_TEXT_FIELDS) {
+      const v = (cleanedForm as any)[k];
+      if (typeof v !== 'string') continue;
+      (cleanedForm as any)[k] = v.replace(
+        /\/media\/fixtures\/images\/([^/\s)\]]+)\/([^\s)\]]+)/g,
+        (_match: string, _exam: string, relPath: string) => {
+            const base = relPath.split('/').pop() || relPath;
+            const match = images.find(
+              (img) => {
+                  const f = (img.file || img.url || '').toString();
+                  return f.split('/').pop()?.toLowerCase() === base.toLowerCase();
+              },
+            );
+            if (match) return `[[img:${match.id}]]`;
+            return `[image unavailable: ${base}]`;
+        },
+      );
+    }
+    return cleanedForm;
+  }
+
+  // PATCH the question (Save and Save & Next share this). Resolves to the
+  // saved row plus any edited fields the server did not store, or null when
+  // the save failed (the error / conflict banner is shown).
+  async function persist(force: boolean): Promise<{ saved: any; dropped: string[] } | null> {
+    // No save while a save is in flight or before the full question has
+    // loaded (the keyboard shortcuts bypass the disabled buttons).
+    if (savingRef.current || loadingDetail) return null;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     setConflict(null);
     try {
-      // Bug 2026-07-28: scrub bare `/media/fixtures/images/...` URLs
-      // from every text field before sending. The legacy form of
-      // these URLs is unreachable in production (Django refuses to
-      // serve `/media/` when DEBUG=False) and the frontend's
-      // resolver only upgrades bare URLs to `[[img:N]]` when an
-      // attached QuestionImage row exists. If the admin pastes a
-      // bare URL into the textarea by mistake, we instead:
-      //   - replace it with the canonical `[[img:N]]` token if a
-      //     row already exists for this question+basename, OR
-      //   - replace it with a visible "[image unavailable: …]"
-      //     marker so the student doesn't see a broken-image icon
-      //     with no explanation.
-      const cleanedForm: typeof form = { ...form };
-      const fields = [
-        'question_text', 'option_a', 'option_b', 'option_c',
-        'option_d', 'explanation', 'mnemonic', 'concept_explanation',
-        'reference_text', 'shortcut_tip', 'why_correct',
-        'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
-      ] as const;
-      for (const k of fields) {
-        const v = (cleanedForm as any)[k];
-        if (typeof v !== 'string') continue;
-        (cleanedForm as any)[k] = v.replace(
-          /\/media\/fixtures\/images\/([^/\s)\]]+)\/([^\s)\]]+)/g,
-          (_match: string, exam: string, relPath: string) => {
-              const base = relPath.split('/').pop() || relPath;
-              const match = images.find(
-                (img) => {
-                    const f = (img.file || img.url || '').toString();
-                    return f.split('/').pop()?.toLowerCase() === base.toLowerCase();
-                },
-              );
-              if (match) return `[[img:${match.id}]]`;
-              return `[image unavailable: ${base}]`;
-          },
-        );
-      }
-      const payload = {
-        ...cleanedForm,
-        admin_edited: true,
-        concept_keywords: form.concept_keywords,
-        book_name: form.book_name,
-        chapter: form.chapter,
-        page_number: form.page_number,
-      };
-      // Only send If-Match when we have a real updated_at. List-serialised rows
-      // don't include updated_at, so updatedAt may be '' on first edit — in that
-      // case skip the optimistic lock and let the server accept the save.
+      const baseline = baselineRef.current;
+      // concept_keywords goes out as a list, correct_answer only when it is a
+      // real letter, is_controversial only when toggled (buildQuestionEditPayload).
+      const payload = buildQuestionEditPayload(scrubMediaUrls(form), baseline);
+      // Optimistic lock: If-Match carries the row's updated_at (admin list
+      // rows and the detail payload both include it, so the first save is
+      // locked too; the server compares instants). Without a value, e.g. a
+      // row from an older serializer, the save goes through unlocked.
       const opts = force || !updatedAt ? undefined : { ifMatch: updatedAt };
       const res = await questionsAPI.update(question.id, payload, opts);
       setUpdatedAt(res.data.updated_at ?? updatedAt);
+      // The whole form was sent, generated fields included.
+      aiUnsavedRef.current = false;
+      // Edits the PATCH silently ignored (the field is absent from the
+      // response): keep them marked as unsaved and tell the admin.
+      const dropped = unpersistedEditFields(payload, baseline, res.data);
+      const nextBaseline: any = { ...form };
+      for (const field of dropped) nextBaseline[field] = (baseline as any)[field];
+      baselineRef.current = nextBaseline;
+      if (dropped.length > 0) {
+        setError(
+          `Saved, but the server did not store: ${dropped.join(', ')}. ` +
+          'Those edits are only in this form and will be lost if you leave it.',
+        );
+      }
       onSaved(res.data);
+      return { saved: res.data, dropped };
     } catch (e: any) {
       if (e?.response?.status === 409) {
         setConflict(e.response.data.current);
@@ -505,119 +562,80 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           : `Save failed: ${e?.message ?? 'unknown error'}`;
         setError(msg);
       }
+      return null;
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
-  async function saveAndNext() {
-    setSaving(true);
-    setError(null);
-    setConflict(null);
-    try {
-      const cleanedForm: typeof form = { ...form };
-      const textFields = [
-        'question_text', 'option_a', 'option_b', 'option_c',
-        'option_d', 'explanation', 'mnemonic', 'concept_explanation',
-        'reference_text', 'shortcut_tip', 'why_correct',
-        'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d',
-      ] as const;
-      for (const k of textFields) {
-        const v = (cleanedForm as any)[k];
-        if (typeof v !== 'string') continue;
-        (cleanedForm as any)[k] = v.replace(
-          /\/media\/fixtures\/images\/([^/\s)\]]+)\/([^\s)\]]+)/g,
-          (_match: string, exam: string, relPath: string) => {
-              const base = relPath.split('/').pop() || relPath;
-              const match = images.find((img) => (img.file || img.url || '').split('/').pop()?.toLowerCase() === base.toLowerCase());
-              if (match) return `[[img:${match.id}]]`;
-              return `[image unavailable: ${base}]`;
-          },
-        );
-      }
-      const payload = {
-        ...cleanedForm,
-        admin_edited: true,
-        concept_keywords: form.concept_keywords,
-        book_name: form.book_name,
-        chapter: form.chapter,
-        page_number: form.page_number,
-      };
-      const opts = !updatedAt ? undefined : { ifMatch: updatedAt };
-      const res = await questionsAPI.update(question.id, payload, opts);
-      setUpdatedAt(res.data.updated_at ?? updatedAt);
-      onSaved(res.data);
-      if (onSaveAndNext) onSaveAndNext(res.data);
-    } catch (e: any) {
-      if (e?.response?.status === 409) {
-        setConflict(e.response.data.current);
-      } else {
-        setError(e?.response?.data?.detail || e?.response?.data?.error || e?.message || 'Save failed.');
-      }
-    } finally {
-      setSaving(false);
-    }
+  async function save(force = false): Promise<boolean> {
+    return (await persist(force)) !== null;
   }
 
-  async function reloadFromConflict() {
+  async function saveAndNext(): Promise<void> {
+    const result = await persist(false);
+    // Stay on this question if the save failed or some edits were not stored.
+    if (result && result.dropped.length === 0 && onSaveAndNext) onSaveAndNext(result.saved);
+  }
+
+  saveRef.current = save;
+  saveAndNextRef.current = saveAndNext;
+
+  function reloadFromConflict() {
     if (!conflict) return;
-    setForm({
-      question_text: conflict.question_text ?? '',
-      option_a: conflict.option_a ?? '',
-      option_b: conflict.option_b ?? '',
-      option_c: conflict.option_c ?? '',
-      option_d: conflict.option_d ?? '',
-      correct_answer: conflict.correct_answer ?? 'A',
-      explanation: conflict.explanation ?? '',
-      mnemonic: conflict.mnemonic ?? '',
-      concept_explanation: conflict.concept_explanation ?? '',
-      difficulty: conflict.difficulty ?? 'medium',
-      topic: conflict.topic ?? null,
-      needs_review: !!conflict.needs_review,
-      is_dropped: !!conflict.is_dropped,
-      is_controversial: !!conflict.is_controversial,
-      concept_keywords: Array.isArray(conflict.concept_keywords) ? conflict.concept_keywords.join(', ') : (conflict.concept_keywords ?? ''),
-      book_name: conflict.book_name ?? '',
-      chapter: conflict.chapter ?? '',
-      page_number: conflict.page_number ?? '',
-      reference_text: conflict.reference_text ?? '',
-      shortcut_tip: conflict.shortcut_tip ?? '',
-      why_correct: conflict.why_correct ?? '',
-      why_wrong_a: conflict.why_wrong_a ?? '',
-      why_wrong_b: conflict.why_wrong_b ?? '',
-      why_wrong_c: conflict.why_wrong_c ?? '',
-      why_wrong_d: conflict.why_wrong_d ?? '',
-    });
+    // The 409 body is the detail serializer; the list row fills the gaps.
+    const next = formFromQuestion({ ...question, ...conflict });
+    setForm(next);
+    baselineRef.current = next;
     setUpdatedAt(conflict.updated_at);
     setConflict(null);
   }
 
   async function generateAIExplanation() {
+    // The AI is told this letter is correct (and Save stores it as the
+    // answer), so it must be an explicit choice; the endpoint 400s without it.
+    if (!isValidAnswerLetter(form.correct_answer)) {
+      setAiError('Select the correct answer first: the explanation is written for that answer.');
+      return;
+    }
+    const correctAnswer = form.correct_answer;
+    // A dry run: the endpoint only returns the generated fields. They go into
+    // the form as unsaved edits; Save stores them with the chosen answer and
+    // Cancel discards them. (Generation never marks the question verified.)
+    // The overwrite question is therefore asked here, before the 15-30 s run.
+    const current = formRef.current as Record<string, unknown>;
+    const hasExisting = EXISTING_EXPLANATION_FIELDS.some((field) => String(current[field] ?? '').trim() !== '');
+    if (hasExisting && !window.confirm(
+      'This question already has an explanation. Replace the explanation fields in this form with AI-generated content? Nothing is saved until you click Save.',
+    )) {
+      return;
+    }
     setAiGenerating(true);
     setAiError(null);
     setAiSuccess(null);
     setAiGeneratedFields([]);
+    // update_correct_answer only matters to a server that ignores dry_run and saves.
+    const requestGeneration = (regenerate: boolean) => questionsAPI.generateExplanation(question.id, {
+      correct_answer: correctAnswer,
+      regenerate_if_exists: regenerate,
+      update_correct_answer: true,
+      dry_run: true,
+    });
     try {
-      const res = await questionsAPI.generateExplanation(question.id, {
-        correct_answer: form.correct_answer,
-        regenerate_if_exists: false,
-        update_correct_answer: true,
-      });
-      if (res.data?.detail?.includes('already') || res.status === 409) {
-        if (window.confirm(
-          'This question already has an explanation. Overwrite with AI-generated content?'
-        )) {
-          const retry = await questionsAPI.generateExplanation(question.id, {
-            correct_answer: form.correct_answer,
-            regenerate_if_exists: true,
-            update_correct_answer: true,
-          });
-          applyGeneratedFields(retry.data);
+      let res;
+      try {
+        res = await requestGeneration(hasExisting);
+      } catch (e: any) {
+        // Only a server that ignores dry_run answers 409 (an explanation
+        // exists); axios rejects it, so it is handled here.
+        if (e?.response?.status !== 409) throw e;
+        if (!window.confirm('This question already has an explanation. Overwrite with AI-generated content?')) {
+          return;
         }
-        setAiGenerating(false);
-        return;
+        res = await requestGeneration(true);
       }
-      applyGeneratedFields(res.data);
+      applyGeneratedFields(res?.data, correctAnswer);
     } catch (e: any) {
       setAiError(e?.response?.data?.detail || e?.response?.data?.error || e?.message || 'AI generation failed.');
     } finally {
@@ -625,25 +643,43 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     }
   }
 
-  function applyGeneratedFields(data: any) {
-    const generated = data?.generated_fields || {};
-    const updated: any = { ...form };
-    for (const [key, value] of Object.entries(generated)) {
-      if (key in updated) {
-        (updated as any)[key] = value;
-      }
+  function applyGeneratedFields(data: any, correctAnswer: string) {
+    // formRef: generation takes 15-30 s; keep edits made meanwhile. `saved`
+    // is false for a dry run (the output stays an unsaved edit, outside the
+    // baseline) and true only if the server stored it (mergeGeneratedFields).
+    const { form: updated, baseline: nextBaseline, applied, saved } =
+      mergeGeneratedFields(formRef.current, baselineRef.current, data, correctAnswer);
+    if (saved) {
+      baselineRef.current = nextBaseline;
+      // The row changed: the next Save must carry its new updated_at, or it
+      // is rejected as "edited by another user".
+      setUpdatedAt(data?.question?.updated_at ?? '');
     }
+    aiUnsavedRef.current = !saved && applied.length > 0;
     setForm(updated);
-    setAiGeneratedFields(Object.keys(generated));
-    setAiSuccess(`Generated ${Object.keys(generated).length} fields. Review and Save.`);
+    setAiGeneratedFields(applied);
+    if (!saved) {
+      setAiSuccess(`Generated ${applied.length} fields into the form. Nothing is saved yet: review them, then Save (Cancel discards them).`);
+      return;
+    }
+    setAiSuccess(
+      question.is_verified_by_admin
+        ? `Generated ${applied.length} fields. They are already saved to the question, which keeps its earlier "verified" mark; review them and Save your edits.`
+        : `Generated ${applied.length} fields. They are already saved to the question (not marked verified); review them and Save your edits.`,
+    );
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Edit Question #{question.id}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100">×</button>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">
+            Edit Question #{question.id}
+            {loadingDetail && (
+              <span className="ml-3 text-xs font-normal text-gray-500 dark:text-slate-400 animate-pulse">Loading full question…</span>
+            )}
+          </h2>
+          <button onClick={requestClose} className="text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100">×</button>
         </div>
 
         {error && <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 p-3 rounded">{error}</div>}
@@ -704,6 +740,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             value={form.correct_answer}
             onChange={(e) => setForm({ ...form, correct_answer: e.target.value })}
           >
+            {!isValidAnswerLetter(form.correct_answer) && <option value="">— Not set —</option>}
             {['A', 'B', 'C', 'D'].map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </label>
@@ -946,7 +983,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             )}
             <button
               onClick={generateAIExplanation}
-              disabled={aiGenerating || saving}
+              disabled={aiGenerating || saving || loadingDetail}
               title="Use Medical AI to generate explanation based on the selected correct answer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
@@ -958,12 +995,12 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
-            <button onClick={() => save(false)} disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
+            <button onClick={requestClose} className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900">Cancel</button>
+            <button onClick={() => save(false)} disabled={saving || loadingDetail} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
               {saving ? 'Saving…' : 'Save'}
             </button>
             {onSaveAndNext && (
-              <button onClick={() => saveAndNext()} disabled={saving || aiGenerating} className="bg-indigo-600 text-white px-4 py-2 rounded disabled:opacity-50 flex items-center gap-1">
+              <button onClick={() => saveAndNext()} disabled={saving || aiGenerating || loadingDetail} className="bg-indigo-600 text-white px-4 py-2 rounded disabled:opacity-50 flex items-center gap-1">
                 Save &amp; Next <span className="text-xs opacity-75">&rarr;</span>
               </button>
             )}

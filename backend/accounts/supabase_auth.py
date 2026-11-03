@@ -81,31 +81,46 @@ def _request_admin_json(*, method: str, path: str, payload: dict[str, Any] | Non
         return None
 
 
-def list_supabase_auth_users(*, per_page: int = 200) -> list[dict[str, Any]]:
-    """Return all Supabase Auth users using the admin API."""
+def list_supabase_auth_users(*, per_page: int = 200, strict: bool = False, max_pages: int = 1000) -> list[dict[str, Any]]:
+    """Return all Supabase Auth users using the admin API.
+
+    By default a failed request ends the listing early (callers get what was
+    fetched so far). ``strict=True`` raises RuntimeError instead, for callers
+    that must not mistake a failed request for "no such user"
+    (manage.py link_supabase_identity).
+    """
     if not _is_configured():
+        if strict:
+            raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not set.")
         return []
 
     users: list[dict[str, Any]] = []
     page = 1
 
-    while True:
+    while page <= max_pages:
         payload = _request_admin_json(
             method="GET",
             path="/auth/v1/admin/users",
             query={"page": page, "per_page": per_page},
         )
         if not payload:
+            if strict:
+                raise RuntimeError(f"The Supabase admin API request for page {page} failed.")
             break
 
         page_users = payload.get("users") or []
         if not isinstance(page_users, list):
+            if strict:
+                raise RuntimeError(f"Unexpected Supabase admin API response for page {page}.")
             break
 
         users.extend([user for user in page_users if isinstance(user, dict)])
         if len(page_users) < per_page:
             break
         page += 1
+    else:
+        if strict:
+            raise RuntimeError(f"More than {max_pages} pages of Supabase users; listing stopped.")
 
     return users
 

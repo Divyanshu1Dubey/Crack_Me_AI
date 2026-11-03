@@ -2,7 +2,7 @@
 
 import { Calendar, Flame, Target, Trophy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import type { MePayload } from '../types';
+import { formatAccuracy, type MePayload } from '../types';
 
 interface Props {
     me: MePayload;
@@ -29,8 +29,8 @@ export default function WeeklyStatsRow({ me }: Props) {
         {
             icon: <Target className="w-4 h-4 text-emerald-500" />,
             label: 'Accuracy',
-            value: `${me.accuracy.toFixed(1)}%`,
-            sub: `${me.tests_completed} tests completed`,
+            value: formatAccuracy(me.accuracy),
+            sub: me.accuracy === null ? 'Complete a test to see it' : `${me.tests_completed} tests completed`,
         },
     ];
 

@@ -36,20 +36,20 @@
 
 ## 2. Tools exposed
 
-Each tool maps to a DRF endpoint under `/api/kb/`. All tools accept `bearer_token` (Supabase access token or Django JWT) in their `meta.auth` envelope; service tokens bypass per-user rate limits.
+Each tool maps to a DRF endpoint under `/api/knowledge/`. All tools accept `bearer_token` (Supabase access token or Django JWT) in their `meta.auth` envelope; service tokens bypass per-user rate limits.
 
 | Tool | Method/Path | Description |
 |---|---|---|
-| `kb_ask` | POST /api/kb/ask/ | Ask Monica a medical question; returns grounded answer + citations |
-| `kb_search` | POST /api/kb/search/ | Hybrid retrieval over chunks (BM25 + dense + KG + RRF) |
-| `kb_stats` | GET /api/kb/stats/ | Counts of sources, documents, chunks, entities, relations |
-| `kb_sources` | GET /api/kb/sources/ | Whitelisted source catalog with permission flags |
-| `kb_upload` | POST /api/kb/upload/ | Upload a user document (PDF/MD/TXT) — attested non-copyrighted |
-| `kb_ingest` | POST /api/kb/ingest/ | Trigger ingestion for a named source (admin/service only) |
-| `kb_index` | POST /api/kb/index/ | Rebuild embeddings for chunks missing them |
-| `kb_extract_kg` | POST /api/kb/extract-kg/ | Extract entities + relations from chunks (service only) |
-| `kb_eval` | POST /api/kb/eval/ | Run retrieval evaluation harness (service only) |
-| `kb_health` | GET /api/kb/health/ | Liveness + last-ingest timestamp |
+| `kb_ask` | POST /api/knowledge/ask/ | Ask Monica a medical question; returns grounded answer + citations |
+| `kb_search` | POST /api/knowledge/search/ | Hybrid retrieval over chunks (BM25 + dense + KG + RRF) |
+| `kb_stats` | GET /api/knowledge/stats/ | Counts of sources, documents, chunks, entities, relations |
+| `kb_sources` | GET /api/knowledge/sources/ | Whitelisted source catalog with permission flags |
+| `kb_upload` | POST /api/knowledge/upload/ | Upload a user document (PDF/MD/TXT) — attested non-copyrighted |
+| `kb_ingest` | POST /api/knowledge/ingest/ | Trigger ingestion for a named source (admin/service only) |
+| `kb_index` | POST /api/knowledge/index/ | Rebuild embeddings for chunks missing them |
+| `kb_extract_kg` | POST /api/knowledge/extract-kg/ | Extract entities + relations from chunks (service only) |
+| `kb_eval` | POST /api/knowledge/eval/ | Run retrieval evaluation harness (service only) |
+| `kb_health` | GET /api/knowledge/health/ | Liveness + last-ingest timestamp |
 
 ### 2.1 `kb_ask` — input schema
 
@@ -217,10 +217,10 @@ Monica will retrieve top-K chunks from whitelisted sources, prompt the AI provid
 
 ```bash
 # Backend must be running locally
-curl -s http://localhost:8000/api/kb/health/ | jq .
+curl -s http://localhost:8000/api/knowledge/health/ | jq .
 
 # Ask a question
-curl -s -X POST http://localhost:8000/api/kb/ask/ \
+curl -s -X POST http://localhost:8000/api/knowledge/ask/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "treatment of DKA", "subject": "Medicine"}' | jq .
@@ -246,4 +246,4 @@ Refused: Harrison's Principles of Internal Medicine, Bailey & Love, Marrow, Prep
 - `docs/knowledge-base/SETUP.md` — operator setup guide
 - `docs/PROJECT_OVERVIEW.md` — product context
 - `docs/ARCHITECTURE.md` — system architecture
-- `llms-full.txt` — full platform reference
+- `docs/API_REFERENCE.md` — endpoint reference (`frontend/public/llms-full.txt` is only a public product summary; it does not document internal APIs, admin tools or infrastructure)

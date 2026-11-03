@@ -11,10 +11,10 @@ CrackCMS exposes **three parallel admin surfaces**:
 | Surface | Audience | URL | Auth |
 |---|---|---|---|
 | **Django Admin** | Superusers | `/admin/` | `is_staff=True` |
-| **In-app admin page** | Admins & superusers | `/admin` (Next.js) | `role='admin' or is_superuser` |
-| **REST admin APIs** | Scripts + admin SPA | `/api/auth/admin/*`, `/api/analytics/admin/*` | `is_superuser` (most endpoints) |
+| **In-app admin page** | Admins & superusers | `/admin` (Next.js) | `role='admin' or is_superuser`, read from the backend profile (`/api/auth/profile/`) |
+| **REST admin APIs** | Scripts + admin SPA | `/api/auth/admin/*`, `/api/auth/tokens/admin/*`, `/api/analytics/admin/*`, `/api/imports/*`, `/api/ingestion/*` | `IsControlTowerAdmin`: `role='admin'` or `is_superuser` |
 
-The Next.js `/admin` page consumes the REST admin APIs and renders user/token/payment tables. Django Admin is the canonical place for content moderation (questions, subjects, topics, flashcards).
+The Next.js `/admin` page consumes the REST admin APIs and renders user/token/payment tables. The Next.js middleware only requires a signed-in user for `/admin`; each admin page sends non-admins to `/dashboard` based on the backend profile's `role` / `is_admin` (Supabase `user_metadata` is never trusted), and every admin API checks the role again. Django Admin is the canonical place for content moderation (questions, subjects, topics, flashcards).
 
 ---
 
@@ -23,17 +23,15 @@ The Next.js `/admin` page consumes the REST admin APIs and renders user/token/pa
 ```
 Superuser (is_superuser=True)
   ├── Django Admin: all models, all actions
-  ├── REST admin: every endpoint
-  ├── All admin token operations
-  ├── All system reset operations
-  └── All user lifecycle operations
+  └── Everything an Admin can do
 
-Admin (role='admin', is_staff optional)
-  ├── In-app /admin page (read-only views)
-  ├── Admin dashboard stats
-  ├── Read AdminAuditLog (own actions)
-  ├── Run RAG knowledge scan
-  └── Send campaigns
+Admin (role='admin'; is_staff is set on sign-in for admins)
+  ├── In-app /admin pages
+  ├── REST admin: every IsControlTowerAdmin endpoint
+  │     (token grant/transfer, user lifecycle, system operations,
+  │      backup/restore, campaigns, weak-area control, imports, ingestion)
+  ├── Read AdminAuditLog (all actions)
+  └── Run RAG knowledge scan / Import Center (IsAdminUser: is_staff)
 
 Staff (is_staff=True)
   └── Django Admin (limited to models with `has_module_permission`)
@@ -42,13 +40,13 @@ User (role='student')
   └── No admin access
 ```
 
-**Key distinction**: Django admin allows **Django-permission-based** granularity (per-model add/change/delete), while REST admin uses a coarser `is_superuser` check.
+**Key distinction**: Django admin allows **Django-permission-based** granularity (per-model add/change/delete), while REST admin uses a coarser `IsControlTowerAdmin` check (`role='admin'` or `is_superuser`).
 
 ---
 
 ## 3. Admin REST API Map
 
-All endpoints under `/api/auth/` and `/api/analytics/admin/`. Authentication via Bearer token + `is_superuser` permission.
+All endpoints under `/api/auth/` and `/api/analytics/admin/`. Authentication via Bearer token + `IsControlTowerAdmin` permission (throttle scope `admin_control_tower`, 180/min).
 
 ### 3.1 User Lifecycle (`/api/auth/admin/`)
 
@@ -75,11 +73,13 @@ All endpoints under `/api/auth/` and `/api/analytics/admin/`. Authentication via
 
 | Method | Path | Body | Effect |
 |---|---|---|---|
-| POST | `/reset-attempts/` | `{ "scope": "all" }` or `{ "scope": "user", "user_id": 42 }` | Bulk-reset `QuestionAttempt` rows |
+| POST | `/reset-attempts/` | `{ "scope": "user", "user_id": 42 }` or `{ "scope": "all", "confirm": "RESET ALL" }` | Bulk-reset test attempts |
 | POST | `/clear-analytics/` | same shape | Wipes `UserTopicPerformance`, `DailyActivity` |
-| POST | `/rerun-evaluation/` | (none) | Recompute score predictions |
-| POST | `/backup-data/` | (none) | Triggers DB dump, returns download URL |
-| POST | `/restore-data/` | `{ "backup_id": "..." }` | Restores from backup |
+| POST | `/rerun-evaluation/` | same shape | Rebuilds `UserTopicPerformance` (subject-level and per-topic rows) from test answers and question-bank answers; `results` adds `subject_rows_created` and `processed_qbank_answers` (`processed_responses` counts answered responses only) |
+| POST | `/backup-data/` | (none) | Writes the core configuration data to the JSON fixture at `CORE_DATA_BACKUP_PATH` |
+| POST | `/restore-data/` | (none) | Loads that same file |
+
+`scope` is required (`400` when missing or misspelled); `scope=all` without `confirm: "RESET ALL"` is `400 {code: "confirmation_required"}`. Backup / restore answer `503 {code: "backup_not_configured"}` in production until `CORE_DATA_BACKUP_PATH` points at a persistent volume (`manage.py backup_core_data --output PATH` / `restore_core_data --input PATH` work regardless).
 
 ### 3.4 Analytics Admin (`/api/analytics/admin/`)
 
@@ -87,8 +87,8 @@ All endpoints under `/api/auth/` and `/api/analytics/admin/`. Authentication via
 |---|---|---|
 | GET | `/admin-dashboard/` | Cross-user aggregate: total users, active today, total attempts, total tokens sold |
 | POST | `/weak-area-control/` | `{ "topic_id": 5, "threshold": 0.6 }` — adjust weak-topic detection threshold |
-| GET / POST | `/campaigns/` | List / create push/email campaigns |
-| POST | `/campaigns/<id>/send-now/` | Manually trigger a campaign send |
+| GET / POST | `/campaigns/` | List / create in-app campaigns (announcements); a future `scheduled_for` makes it `scheduled`, else `draft` |
+| POST | `/campaigns/<id>/send-now/` | Publish in-app now: dashboard feed and notification bell (no email or push). `delivery_count` = audience size; a future `scheduled_for` is moved to now. `400 {code: "expired"}` when `expires_at` has passed (set a later expiry first). |
 
 ### 3.5 AI Knowledge Admin (`/api/ai/`)
 
@@ -137,12 +137,14 @@ flowchart TD
     I --> J[Validate via validate_questions.py]
     J --> K{Issues?}
     K -- Yes --> L[Fix + re-export fixture]
-    K -- No --> M[Export questions_fixture.json]
+    K -- No --> M[Export fixture - historical, see note below]
     L --> M
     M --> N[Commit + push → Render deploys]
 ```
 
 See [`guides/QUESTION_MANAGEMENT.md`](./guides/QUESTION_MANAGEMENT.md) for the canonical workflow.
+
+Current state: `_review_and_fix_answers.py`, `validate_questions.py` and `questions_fixture.json` no longer exist, and a deploy does not load a fixture over a live bank (`build.sh` runs `seed_question_bank`, which loads `backend/fixtures/cms_fixture.json` only into an empty bank). Question edits in the admin editor / REST API are the live data. AI-generated explanations (`POST /api/questions/<id>/generate-explanation/`) are never marked "Verified by Admin"; verification is the separate `verify` action.
 
 ---
 
@@ -156,7 +158,7 @@ sequenceDiagram
     participant T as Target User
 
     A->>API: POST /api/auth/tokens/admin/grant/ {user_id, amount, note}
-    API->>API: Permission check: is_superuser
+    API->>API: Permission check: IsControlTowerAdmin
     API->>DB: BEGIN TRANSACTION
     API->>DB: TokenBalance.add_purchased_tokens(amount)
     API->>DB: INSERT TokenTransaction(type='admin_grant')
@@ -181,11 +183,11 @@ Admins can:
 
 | Operation | API | Use case |
 |---|---|---|
-| Reset attempts globally | `POST /api/auth/admin/system/reset-attempts/ {"scope":"all"}` | New test cycle |
-| Clear analytics globally | `POST /api/auth/admin/system/clear-analytics/ {"scope":"all"}` | New academic year |
-| Re-run score predictions | `POST /api/auth/admin/system/rerun-evaluation/` | After model update |
-| Backup data | `POST /api/auth/admin/system/backup-data/` | Pre-deploy safety |
-| Restore from backup | `POST /api/auth/admin/system/restore-data/ {"backup_id":"..."}` | Disaster recovery |
+| Reset attempts globally | `POST /api/auth/admin/system/reset-attempts/ {"scope":"all","confirm":"RESET ALL"}` | New test cycle |
+| Clear analytics globally | `POST /api/auth/admin/system/clear-analytics/ {"scope":"all","confirm":"RESET ALL"}` | New academic year |
+| Rebuild topic performance | `POST /api/auth/admin/system/rerun-evaluation/ {"scope":"all","confirm":"RESET ALL"}` | After a scoring fix |
+| Backup data | `POST /api/auth/admin/system/backup-data/` | Pre-deploy safety (needs `CORE_DATA_BACKUP_PATH`) |
+| Restore from backup | `POST /api/auth/admin/system/restore-data/` | Disaster recovery (reads `CORE_DATA_BACKUP_PATH`) |
 
 All bulk operations write `AdminAuditLog` with `action`=`system_*`.
 
@@ -225,7 +227,8 @@ Django Admin (`/admin/`) is the canonical content-moderation surface. Most usefu
 
 ## 11. Security Considerations
 
-- **All admin endpoints require `is_superuser`** (or `IsAdminUser` for some read-only views).
+- **All REST admin endpoints require `IsControlTowerAdmin`** (`role='admin'` or `is_superuser`); the knowledge-base and Import Center endpoints use `IsAdminUser` (`is_staff`).
+- **Admin accounts and Supabase**: an admin / staff row links to a Supabase identity automatically only for a trusted admin identity or the identity it was created from; others get `401 account_link_required` until an operator runs `manage.py link_supabase_identity` (see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.1). Admins are exempt from the device limit.
 - **Every mutation writes `AdminAuditLog`** — there is no silent admin path.
 - **Superuser creation**: `python manage.py createsuperuser` (CLI only; not exposed via API).
 - **No API for promoting a user to superuser** — must go through Django shell or admin.

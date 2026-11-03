@@ -46,7 +46,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
     let alive = true;
     (async () => {
       try {
-        const r = await api.get(`/api/questions/${questionId}/images/`);
+        const r = await api.get(`/questions/${questionId}/images/`);
         if (alive) setImages(r.data || []);
       } catch (e: any) {
         if (alive) setError(e?.message || "Failed to load images");
@@ -57,7 +57,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
 
   if (error) {
     return (
-      <div className="rounded border border-rose-700/40 bg-rose-900/20 p-3 text-sm text-rose-200">
+      <div className="rounded border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">
         Image gallery unavailable: {error}
       </div>
     );
@@ -67,7 +67,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
     return (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="h-48 animate-pulse rounded-lg bg-slate-800/60" />
+          <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
         ))}
       </div>
     );
@@ -75,7 +75,7 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
 
   if (images.length === 0 && !fallbackImage) {
     return (
-      <div className="rounded border border-slate-700/40 bg-slate-900/40 p-3 text-sm text-slate-400">
+      <div className="rounded border border-border bg-card p-3 text-sm text-muted-foreground">
         No images for this question.
       </div>
     );
@@ -84,9 +84,9 @@ export default function ImageGallery({ questionId, fallbackImage, fallbackCaptio
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {images.filter((img) => img.role !== 'explanation').map((img) => (
-        <div key={img.id} className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-2">
+        <div key={img.id} className="rounded-lg border border-border bg-card p-2">
           <QuestionImageZoom src={img} alt={`Image ${img.image_index_in_page ?? ""}`} />
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>page {img.page_number ?? "?"}{img.image_index_in_page != null ? ` · #${img.image_index_in_page}` : ""}</span>
             {img.modality ? <span className="rounded bg-emerald-600/70 px-1.5 py-0.5 text-white">{img.modality}</span> : null}
           </div>

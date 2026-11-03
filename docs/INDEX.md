@@ -70,6 +70,7 @@ For hands-on work:
 | **[MATERIAL_IMPORTER_AUDIT.md](./MATERIAL_IMPORTER_AUDIT.md)** | Deep dive on the new DOCX/PDF/PPTX ingestion app + bug list |
 | **[STRUCTURAL_AUDIT_2026_07_28.md](./STRUCTURAL_AUDIT_2026_07_28.md)** | Per-question-text shape taxonomy + remaining migration roadmap (0031–0035) |
 | **[COMPREHENSIVE_AUDIT_2026_07_30.md](./audit/COMPREHENSIVE_AUDIT_2026_07_30.md)** | 12-phase hardening (subscription UX, security throttles, CSP, magic-bytes, third-party setup, repo cleanup, accessibility, SEO additions) |
+| **[FULL_STACK_AUDIT_2026_10_31.md](./audit/FULL_STACK_AUDIT_2026_10_31.md)** | Full-stack audit & repair: permission holes, payments/tokens/quests integrity, missing migrations, broken routes, frontend contract/UX/a11y fixes |
 | **[HIGH_PRIORITY_FIXES.md](./HIGH_PRIORITY_FIXES.md)** | Top 10 ranked fixes ready to ship |
 | **[LOW_PRIORITY_FIXES.md](./LOW_PRIORITY_FIXES.md)** | Backlog of low-priority / future-work items |
 | **[NEXT_STEPS.md](../NEXT_STEPS.md)** | Session handoff for the next Claude |

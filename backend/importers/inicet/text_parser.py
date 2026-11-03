@@ -43,9 +43,15 @@ OPTION_PREFIX = re.compile(
     re.MULTILINE,
 )
 
+# Answer letters must be standalone tokens on the same line: the previous
+# pattern allowed `\s` (incl. newlines) as a separator and did not require a
+# word boundary, so "Ans: B\nExp: ..." parsed as B+E and "Answer all of
+# the following" parsed as A.
+_ANS_LETTER = r"\(?[A-F](?![A-Za-z])\)?"
 ANSWER_LINE = re.compile(
-    r"(?:Answer|Ans|Correct\s*answer|Key)\s*[:\-]?\s*"
-    r"([A-Fa-f](?:\s*[,/&+\s]\s*[A-Fa-f])*)",
+    r"(?:Answer|Ans|Correct\s*answer|Key)\s*[:\-]?[ \t]*"
+    r"(" + _ANS_LETTER + r"(?:[ \t]*[,/&+][ \t]*" + _ANS_LETTER
+    + r"|[ \t]+(?:and[ \t]+)?" + _ANS_LETTER + r")*)",
     re.IGNORECASE,
 )
 
@@ -127,7 +133,8 @@ def _extract_answer_labels(chunk: str) -> list[str]:
     if not m:
         return []
     raw = m.group(1)
-    return sorted({_normalise_option_label(c) for c in re.findall(r"[A-Fa-f]", raw)})
+    letters = re.findall(r"(?<![A-Za-z])[A-Fa-f](?![A-Za-z])", raw)
+    return sorted({_normalise_option_label(c) for c in letters})
 
 
 def _extract_explanation(chunk: str) -> Optional[str]:
@@ -250,7 +257,8 @@ def parse_page(
             answer_text=" ".join(ans) if ans else None,
             explanation=explanation,
             question_type=qtype,
-            is_image_based=bool(img_refs) and not options,
+            image_refs=[{"label": ref or ""} for ref in img_refs],
+            is_image_based=bool(img_refs),
             raw=chunk,
             extraction_confidence=parse_confidence,
             confidence_score=parse_confidence,

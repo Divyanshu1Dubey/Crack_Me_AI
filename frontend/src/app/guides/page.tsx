@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { jsonLdString } from '@/lib/metadata';
 
 export const metadata: Metadata = {
-    title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET | CrackCMS',
-    description: 'In-depth prep guides for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE, and Medical Officer exams. Written by practicing clinicians on CrackCMS.',
+    title: 'Medical Exam Preparation Guides — UPSC CMS, NEET PG, INI-CET',
+    description: 'In-depth prep guides for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE, and Medical Officer exams, from the CrackCMS editorial team.',
     alternates: { canonical: '/guides', languages: { 'en-IN': '/guides' } },
     openGraph: {
         type: 'website',
@@ -23,12 +23,12 @@ export const metadata: Metadata = {
 
 const guides = [
     { slug: 'upsc-cms-complete-guide', title: 'UPSC CMS Complete Guide 2026', desc: 'Everything you need to know about the Combined Medical Services exam — eligibility, syllabus, pattern, books, salary, and 6-month study plan.', tag: 'UPSC CMS', emoji: '🏛️', readTime: '12 min' },
-    { slug: 'neet-pg-complete-guide', title: 'NEET PG Complete Guide 2026', desc: 'How to prepare for NEET PG in 6 months — exam pattern, subject-wise strategy, topper tips, AIR prediction, and image-based questions.', tag: 'NEET PG', emoji: '🩺', readTime: '11 min' },
+    { slug: 'neet-pg-complete-guide', title: 'NEET PG Complete Guide 2026', desc: 'How to prepare for NEET PG in 6 months — exam pattern, subject-wise strategy, topper tips, and image-based questions.', tag: 'NEET PG', emoji: '🩺', readTime: '11 min' },
     { slug: 'ini-cet-complete-guide', title: 'INI-CET Complete Guide', desc: 'Crack INI-CET for AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST — eligibility, pattern, syllabus, and the image-based question drill.', tag: 'INI-CET', emoji: '🏥', readTime: '10 min' },
     { slug: 'fmge-complete-guide', title: 'FMGE Complete Guide', desc: 'Pass the MCI Screening Test on your first attempt — syllabus, books, strategy, and Indian-context clinical reasoning.', tag: 'FMGE', emoji: '🌍', readTime: '9 min' },
-    { slug: 'usmle-step-1-guide', title: 'USMLE Step 1 Guide for Indian MBBS Students', desc: 'A comprehensive Step 1 roadmap — First Aid, Pathoma, UWorld, study schedule, and IMG-specific advice.', tag: 'USMLE', emoji: '🇺🇸', readTime: '10 min' },
+    { slug: 'usmle-step-1-guide', title: 'USMLE Step 1 Guide for Indian MBBS Students', desc: 'A comprehensive Step 1 roadmap — First Aid, Pathoma, UWorld, study schedule, and IMG-specific advice.', tag: 'USMLE', emoji: '🗽', readTime: '10 min' },
     { slug: 'medical-officer-jobs', title: 'Government Medical Officer Jobs After MBBS', desc: 'Every central and state MBBS doctor post — UPSC CMS, AIIMS MO, state PSCs, NHM, ESIC, Railways, Defence.', tag: 'Careers', emoji: '🏛️', readTime: '8 min' },
-    { slug: 'ai-in-medical-education', title: 'How AI Is Transforming Medical Education', desc: 'A practising clinician&apos;s perspective on large-language-model tutors, adaptive MCQs, and the future of exam prep.', tag: 'EdTech', emoji: '🤖', readTime: '7 min' },
+    { slug: 'ai-in-medical-education', title: 'How AI Is Transforming Medical Education', desc: 'How large-language-model tutors, weak-topic practice and spaced repetition fit into medical exam prep — and where they fall short.', tag: 'EdTech', emoji: '🤖', readTime: '7 min' },
     { slug: 'study-plan-builder', title: 'Build a Personalised Study Plan', desc: 'A step-by-step framework to build a 6-month UPSC CMS or NEET PG study plan using PYQs, AI tutor, and spaced repetition.', tag: 'Strategy', emoji: '📅', readTime: '6 min' },
 ];
 
@@ -53,8 +53,7 @@ export default function GuidesIndexPage() {
 
     return (
         <>
-            <Script id="guides-hub-schema" type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background">
                 <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
@@ -69,7 +68,7 @@ export default function GuidesIndexPage() {
                             Medical exam preparation guides
                         </h1>
                         <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
-                            In-depth, clinician-reviewed guides covering every major medical entrance exam, government
+                            In-depth guides from the CrackCMS editorial team covering every major medical entrance exam, government
                             doctor jobs, and AI in medical education. Updated for 2026.
                         </p>
                     </div>

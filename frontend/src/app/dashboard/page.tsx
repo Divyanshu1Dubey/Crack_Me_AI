@@ -1,15 +1,15 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { analyticsAPI, questionsAPI, announcementsAPI } from '@/lib/api';
+import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle, Clock, FileText, Flame,
-    HeartPulse, Crown, Brain, Sparkles
+    HeartPulse, Brain, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import CustomIcon from '@/components/CustomIcon';
 import { LockedBadge } from '@/components/paywall/LockedBadge';
 import { usePaywall } from '@/lib/paywall/paywallContext';
+import { upcomingExamDates } from '@/lib/examPatterns';
 
 interface HeatmapDay {
     date: string;
@@ -33,104 +34,26 @@ interface HeatmapDay {
 // SWR fetchers with caching
 const dashboardFetcher = () => analyticsAPI.getBundle().then(r => r.data).catch(() => null);
 
-const BONUS_TOTAL_SECONDS = 3600; // 60-minute countdown
-const BONUS_END_KEY = 'crackcms_bonus_offer_end_ts';
-
-function getBonusEndTimestamp(): number {
-    if (typeof window === 'undefined') return Date.now() + BONUS_TOTAL_SECONDS * 1000;
-    const stored = window.localStorage.getItem(BONUS_END_KEY);
-    const now = Date.now();
-    if (stored) {
-        const parsed = Number(stored);
-        if (Number.isFinite(parsed) && parsed > now) return parsed;
-    }
-    const end = now + BONUS_TOTAL_SECONDS * 1000;
-    window.localStorage.setItem(BONUS_END_KEY, String(end));
-    return end;
+/** Local-time yyyy-mm-dd (matches the backend's IST activity dates). */
+function toLocalDateKey(d: Date): string {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
-const BonusTimerBanner = () => {
-    // Persist the deadline in localStorage so the countdown survives
-    // re-renders (SWR revalidations, route changes, tabs refocusing) and
-    // never resets to 1:00:00 mid-session.
-    //
-    // Lazy `useState` initializer reads the stored end-timestamp synchronously
-    // on mount so the FIRST render already shows the correct remaining time.
-    // Without this, the banner would briefly flash 60:00 every time the
-    // dashboard tree remounts (e.g., returning from another route, SWR
-    // focus revalidation, or page visibility change) — which is what was
-    // making the timer feel like it "starts again from 1 hour".
-    const [timeLeft, setTimeLeft] = useState<number>(() => {
-        const endTs = getBonusEndTimestamp();
-        return Math.max(0, Math.floor((endTs - Date.now()) / 1000));
-    });
-    useEffect(() => {
-        const endTs = getBonusEndTimestamp();
-        const tick = () => {
-            const remaining = Math.max(0, Math.floor((endTs - Date.now()) / 1000));
-            setTimeLeft(remaining);
-        };
-        tick();
-        const timer = setInterval(tick, 1000);
-        return () => clearInterval(timer);
-    }, []);
+/** "1 test", "3 tests". */
+function plural(n: number, word: string): string {
+    return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
 
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    const expired = timeLeft <= 0;
-
-    if (expired) {
-        return (
-            <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                        <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-amber-500" />
-                            Bonus offer ended
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                            The next bonus window opens in a few hours. Subscribe to lock in the early-bird price.
-                        </p>
-                    </div>
-                    <Link href="/subscription">
-                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                            View Offers
-                        </Button>
-                    </Link>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Card className="border-amber-500/40 bg-linear-to-r from-amber-500/15 via-yellow-500/10 to-transparent shadow-md relative overflow-hidden">
-            <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="space-y-1 flex-1">
-                    <h4 className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                        <Clock className="w-4 h-4 animate-pulse text-amber-500" /> 
-                        Limited Time Bonus Offer!
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                        Give an exam right now to claim your bonus subscription. You have <span className="font-bold text-amber-600 dark:text-amber-400">{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span> remaining!
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                    <Link href="/tests">
-                        <Button size="sm" className="font-semibold bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white shadow-lg shadow-amber-500/20 border-0">
-                            Give Exam Now
-                        </Button>
-                    </Link>
-                    <Link href="/subscription">
-                        <Button size="sm" variant="outline" className="font-semibold border-amber-300 hover:bg-amber-50 dark:border-amber-700 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                            View Offers
-                        </Button>
-                    </Link>
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
+/** "Sun, 2 Aug 2026" for an ISO exam day. */
+function formatExamDay(iso: string): string {
+    const day = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(day.getTime())
+        ? iso
+        : day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -160,17 +83,14 @@ export default function DashboardPage() {
     const heatmap = bundle?.heatmap || [];
     const streak = bundle?.streak;
     const announcements = bundle?.announcements || [];
-    const questionStats = bundle?.question_stats;
 
-    // Dynamic SWR keys based on selected exam source (lightweight — just counts)
+    // Question Bank Mastery needs the per-user progress (total_solved,
+    // by_difficulty/by_year/by_subject) that only /questions/stats/ returns;
+    // the bundle's question_stats is just {total, with_explanation}, so using
+    // it whenever the bundle was cached showed "0 solved" and empty breakdowns.
     const { data: stats } = useSWR(
         ready ? ['question-stats', selectedExam] : null,
-        () => {
-            if (questionStats) {
-                return selectedExam === 'NEET PG' ? questionStats.neet_pg : questionStats.cms;
-            }
-            return questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null);
-        },
+        () => questionsAPI.getStats({ exam_source: selectedExam }).then(r => r.data).catch(() => null),
         swrConfig
     );
 
@@ -180,13 +100,11 @@ export default function DashboardPage() {
         return new Map(heatmap.map((day: HeatmapDay) => [day.date, day]));
     }, [heatmap]);
 
-    const todayDateStr = useMemo(() => {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    }, []);
+    const todayDateStr = useMemo(() => toLocalDateKey(new Date()), []);
+
+    // Next UPSC CMS exam day from the shared exam calendar; concluded
+    // cycles drop out (the hero used to keep advertising a past exam).
+    const nextCmsExam = useMemo(() => upcomingExamDates().find(d => d.name.startsWith('UPSC CMS')), []);
 
     const todayActivity = useMemo<HeatmapDay>(() => {
         const found = heatmapByDate.get(todayDateStr);
@@ -218,20 +136,41 @@ export default function DashboardPage() {
 
     const overall = dashData?.overall || {
         total_tests: 0, avg_score: 0, total_questions: 0, total_correct: 0,
-        total_incorrect: 0, overall_accuracy: 0, total_time_hours: 0
+        total_incorrect: 0, overall_accuracy: 0, total_time_hours: 0, total_time_minutes: 0
     };
+    // Under an hour, show minutes ("0h" used to hide short sessions).
+    const totalStudyMinutes: number = typeof overall.total_time_minutes === 'number'
+        ? overall.total_time_minutes
+        : Math.round((overall.total_time_hours || 0) * 60);
+    const studyTimeLabel = totalStudyMinutes < 60 ? `${totalStudyMinutes}m` : `${overall.total_time_hours}h`;
+    const currentStreak: number = streak?.current_streak || 0;
 
     const topWeakSubjects = [...(dashData?.subject_performance || [])]
         .sort((a, b) => a.accuracy - b.accuracy)
         .slice(0, 3);
 
-    // Grid details for the last 16 weeks contribution calendar
+    // Mastery card rows for the selected exam only: real exam years (the API
+    // can list a null / 0 year first) and the subjects that have questions,
+    // most questions first. It used to show the first four Subject rows of
+    // the whole table (e.g. INI-CET subjects with 0/0 on the UPSC CMS tab).
+    const yearProgress: Array<{ year: number; count: number; solved: number }> =
+        (stats?.by_year || []).filter((y: { year: number | null }) => (y.year || 0) > 0).slice(0, 4);
+    const subjectProgress: Array<{ id: number; name: string; count: number; solved: number }> =
+        (stats?.by_subject || [])
+            .filter((s: { count: number }) => s.count > 0)
+            .sort((a: { count: number }, b: { count: number }) => b.count - a.count)
+            .slice(0, 4);
+
+    // Grid details for the last 16 weeks contribution calendar: 16 Sunday-
+    // first columns whose last column is the current week, so today is always
+    // drawn (it used to end before today and hide most of the current week).
     const contributionGrid = useMemo(() => {
         const weeks: Array<Array<{ date: string; isInRange: boolean; questions: number; tests: number; minutes: number; level: number; isToday: boolean }>> = [];
         const today = new Date();
         const startDay = new Date(today);
-        startDay.setDate(today.getDate() - (16 * 7) + 1);
+        startDay.setDate(today.getDate() - 15 * 7);
 
+        // Rewind to that week's Sunday: 15 weeks before this week's Sunday.
         const current = new Date(startDay);
         while (current.getDay() !== 0) {
             current.setDate(current.getDate() - 1);
@@ -243,7 +182,9 @@ export default function DashboardPage() {
         for (let w = 0; w < 16; w++) {
             const weekDays: Array<{ date: string; isInRange: boolean; questions: number; tests: number; minutes: number; level: number; isToday: boolean }> = [];
             for (let d = 0; d < 7; d++) {
-                const dateStr = current.toISOString().split('T')[0];
+                // Local date (toISOString() is UTC and shifted every cell by a
+                // day for IST users between 00:00 and 05:30).
+                const dateStr = toLocalDateKey(current);
                 const dayActivityData = heatmapByDate.get(dateStr);
                 const qs = dayActivityData?.questions_attempted || 0;
                 const ts = dayActivityData?.tests_completed || 0;
@@ -259,7 +200,8 @@ export default function DashboardPage() {
 
                 weekDays.push({
                     date: dateStr,
-                    isInRange: current >= startDay && current <= today,
+                    // Days after today (rest of this week) stay blank.
+                    isInRange: dateStr <= todayDateStr,
                     questions: qs,
                     tests: ts,
                     minutes: mins,
@@ -324,9 +266,6 @@ export default function DashboardPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container space-y-6 pb-8">
-                    {/* Premium Upgrade Banner */}
-                    <BonusTimerBanner />
-
                     {/* Announcements Feed */}
                     {announcements.length > 0 && (
                         <div className="space-y-3">
@@ -340,7 +279,7 @@ export default function DashboardPage() {
                                                     <h4 className="font-semibold text-indigo-900 dark:text-indigo-100">{ann.title}</h4>
                                                     <Badge variant="outline" className="text-[10px] bg-white dark:bg-slate-800">{new Date(ann.created_at).toLocaleDateString()}</Badge>
                                                 </div>
-                                                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-3">{ann.body}</p>
+                                                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 line-clamp-3">{ann.message ?? ann.body}</p>
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -371,13 +310,15 @@ export default function DashboardPage() {
                                     <p className="text-sky-50 text-sm md:text-base mb-6 max-w-xl">
                                         Your comprehensive preparation dashboard. Solve clinical case drills, review textbooks, and ask the AI Tutor for diagnostics guides.
                                     </p>
-                                    <div className="bg-white/15 border border-white/30 rounded-lg p-3 mb-6 max-w-xl flex items-start gap-3">
-                                        <Calendar className="w-5 h-5 text-white shrink-0 mt-0.5" />
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-white">UPSC CMS 2026 Cycle Dates</h4>
-                                            <p className="text-xs text-sky-50">Notification: Mar 11, 2026 | Exam: Aug 2, 2026</p>
+                                    {nextCmsExam && (
+                                        <div className="bg-white/15 border border-white/30 rounded-lg p-3 mb-6 max-w-xl flex items-start gap-3">
+                                            <Calendar className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-white">{nextCmsExam.name} Exam Date</h4>
+                                                <p className="text-xs text-sky-50">Exam day: {formatExamDay(nextCmsExam.date)}</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                     <div className="flex flex-wrap gap-3">
                                         <Button asChild variant="secondary" className="bg-white text-slate-900 hover:bg-slate-100">
                                             <Link href="/tests">
@@ -393,7 +334,7 @@ export default function DashboardPage() {
                                 <div className="p-6 md:p-8 bg-black/10 backdrop-blur-sm space-y-4">
                                     <div className="rounded-xl bg-white/15 p-4">
                                         <p className="text-xs text-sky-50 mb-1">Current Streak</p>
-                                        <p className="text-3xl font-bold text-white">{streak?.current_streak || 0} <span className="text-sm font-medium text-sky-50">days</span></p>
+                                        <p className="text-3xl font-bold text-white">{currentStreak} <span className="text-sm font-medium text-sky-50">{currentStreak === 1 ? 'day' : 'days'}</span></p>
                                     </div>
                                     <div className="rounded-xl bg-white/15 p-4">
                                         <p className="text-xs text-sky-50 mb-1">Today&apos;s Questions</p>
@@ -401,7 +342,8 @@ export default function DashboardPage() {
                                     </div>
                                     <div className="rounded-xl bg-white/15 p-4">
                                         <p className="text-xs text-sky-50 mb-1">Overall Accuracy</p>
-                                        <p className="text-3xl font-bold text-white">{overall.overall_accuracy}%</p>
+                                        {/* No answers yet: a dash, not a discouraging "0%". */}
+                                        <p className="text-3xl font-bold text-white">{overall.total_questions > 0 ? `${overall.overall_accuracy}%` : '—'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -422,8 +364,10 @@ export default function DashboardPage() {
                         if (isPremium) return null;
                         const lockedFeatures = [
                             {
-                                label: 'Adaptive Mock Tests',
-                                desc: 'AI-built personalized tests from your weak topics',
+                                // There is no adaptive-test UI yet, so the card
+                                // sells what premium actually unlocks today.
+                                label: 'Full Mock Tests',
+                                desc: 'Timed mock tests with negative marking and instant answer review',
                                 iconName: 'tests-check',
                                 feature: 'Mock Tests',
                             },
@@ -469,8 +413,9 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                         {[
                             { iconName: 'tests-check', value: overall.total_tests, label: 'Tests Completed', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-                            { iconName: 'question-bank-book', value: `${overall.total_questions}`, label: 'Questions Solved', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-                            { iconName: 'dashboard-layout', value: `${overall.total_time_hours}h`, label: 'Study Time', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            // Every answered question (tests + question bank), right or wrong.
+                            { iconName: 'question-bank-book', value: `${overall.total_questions}`, label: 'Questions Attempted', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+                            { iconName: 'dashboard-layout', value: studyTimeLabel, label: 'Study Time', bg: 'bg-blue-100 dark:bg-blue-900/40' },
                             { iconName: 'ai-questions-creativity', value: `${streak?.xp_points || 0}`, label: 'XP Points', bg: 'bg-blue-100 dark:bg-blue-900/40' },
                         ].map((metric, i) => (
                             <Card key={i} className="shadow-sm">
@@ -539,7 +484,10 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="grid lg:grid-cols-12 gap-6">
+                    {/* grid-cols-1 = minmax(0, 1fr): below lg the single column
+                        can never grow wider than the page (wide content used to
+                        stretch it and the cards were clipped on the right). */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Left Main Column (Occupies most width, balanced layout) */}
                         <div className="lg:col-span-8 space-y-6">
                             
@@ -588,7 +536,9 @@ export default function DashboardPage() {
                                         <div className="rounded-xl border border-border p-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-sm font-medium text-foreground">Today&apos;s Accuracy</p>
-                                                <p className="text-sm font-semibold text-sky-700 dark:text-sky-300">{todayAccuracy}%</p>
+                                                <p className="text-sm font-semibold text-sky-700 dark:text-sky-300">
+                                                    {todayActivity.questions_attempted > 0 ? `${todayAccuracy}%` : '—'}
+                                                </p>
                                             </div>
                                             <Progress value={todayAccuracy} className="h-2.5" />
                                             <p className="text-xs text-muted-foreground mt-2 font-semibold">
@@ -615,11 +565,11 @@ export default function DashboardPage() {
                                         <div className="flex items-center justify-between gap-4 flex-wrap">
                                             <div>
                                                 <p className="text-xs uppercase tracking-wide text-blue-400 font-bold">Today&apos;s Activity</p>
-                                                <p className="text-xl font-black text-foreground mt-1">{todayActivity.questions_attempted} questions, {todayActivity.tests_completed} tests</p>
-                                                <p className="text-xs text-muted-foreground mt-1">{todayActivity.time_spent_minutes} minutes of study today</p>
+                                                <p className="text-xl font-black text-foreground mt-1">{plural(todayActivity.questions_attempted, 'question')}, {plural(todayActivity.tests_completed, 'test')}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">{plural(todayActivity.time_spent_minutes, 'minute')} of study today</p>
                                             </div>
                                             <Badge className="bg-blue-600 hover:bg-blue-600 text-white font-bold">
-                                                {streak?.current_streak || 0} day streak
+                                                {currentStreak} day streak
                                             </Badge>
                                         </div>
                                     </div>
@@ -633,13 +583,16 @@ export default function DashboardPage() {
                                                 {hoveredDay.date} | Q: {hoveredDay.questions}, Tests: {hoveredDay.tests}, Time: {hoveredDay.minutes}m
                                             </div>
                                         )}
-                                        <div className="min-w-180">
+                                        {/* w-max: the 16-week grid is ~290px; a 720px minimum
+                                            only added blank space and widened the column. */}
+                                        <div className="w-max">
                                             <div className="relative h-5 mb-2 text-[10px] text-muted-foreground">
                                                 {contributionGrid.monthMarkers.map((marker) => (
                                                     <span
                                                         key={`${marker.month}-${marker.weekIndex}`}
                                                         className="absolute"
-                                                        style={{ left: `${marker.weekIndex * 15}px` }}
+                                                        // One column = w-3.5 + gap-1 = 1.125rem.
+                                                        style={{ left: `${marker.weekIndex * 1.125}rem` }}
                                                     >
                                                         {marker.month}
                                                     </span>
@@ -693,7 +646,7 @@ export default function DashboardPage() {
                                 </CardHeader>
                                 <CardContent>
                                     {topWeakSubjects.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">Complete a few mock tests to calculate weak subjects details.</p>
+                                        <p className="text-sm text-muted-foreground">Answer a few questions or take a mock test, and your weakest subjects will appear here.</p>
                                     ) : (
                                         <div className="space-y-4">
                                             {topWeakSubjects.map((subject: { subject: string; accuracy: number }, i: number) => (
@@ -718,20 +671,16 @@ export default function DashboardPage() {
                                         National Campus Momentum
                                     </CardTitle>
                                     <CardDescription>
-                                        Live streaks and questions solved by peers.
+                                        See your weekly rank and one real learner to chase.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
-                                    <p className="text-xs text-muted-foreground">
-                                        Real peer progress appears here once the leaderboard goes live. Until then, we don't show
-                                        invented names or aspirant counts — your privacy and trust matter more than a busy section.
-                                    </p>
-                                    <a
+                                    <Link
                                         href="/leaderboard"
                                         className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:underline"
                                     >
                                         Open the leaderboard →
-                                    </a>
+                                    </Link>
                                 </CardContent>
                             </Card>
                         </div>
@@ -777,7 +726,7 @@ export default function DashboardPage() {
                                     </p>
                                     {stats?.total && stats?.total > 0 ? (
                                         <div className="mt-3">
-                                            <Progress value={Math.round(((stats?.total_solved || 0) / (stats?.total || 1)) * 100)} className="h-1.5 bg-cyan-200/40" />
+                                            <Progress value={Math.round(((stats?.total_solved || 0) / (stats?.total || 1)) * 100)} className="h-1.5 bg-cyan-200/40 dark:bg-cyan-950/60" />
                                             <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 mt-1.5 block">
                                                 {Math.round(((stats?.total_solved || 0) / (stats?.total || 1)) * 100)}% Completed
                                             </span>
@@ -808,48 +757,54 @@ export default function DashboardPage() {
                                 {/* Progress by Year */}
                                 <div className="space-y-3">
                                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Year</p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        {(stats?.by_year || [])
-                                            .slice(0, 4)
-                                            .map((item: { year: number; count: number; solved: number }, idx: number) => {
-                                                const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
-                                                const isCompleted = item.solved === item.count && item.count > 0;
-                                                return (
-                                                    <div key={idx} className="p-2.5 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
-                                                        <div className="flex justify-between items-center mb-1">
-                                                            <span className="text-xs font-extrabold text-foreground">{item.year}</span>
-                                                            <span className="text-[10px] font-semibold text-muted-foreground">{item.solved}/{item.count}</span>
-                                                        </div>
-                                                        <Progress value={pct} className="h-1.5" />
-                                                        <div className="flex justify-between items-center mt-1">
-                                                            <span className="text-[9px] font-bold text-muted-foreground">{pct}%</span>
-                                                            {isCompleted && (
-                                                                <span className="text-[9px] text-emerald-500 font-extrabold">Done! 🎉</span>
-                                                            )}
-                                                        </div>
+                                    {/* This sits in half of the md:grid-cols-2 row, so four
+                                        tiles per row only from xl (they ran "2025" into "0/236"). */}
+                                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+                                        {yearProgress.map((item) => {
+                                            const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
+                                            const isCompleted = item.solved === item.count && item.count > 0;
+                                            return (
+                                                <div key={item.year} className="p-2.5 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+                                                    <div className="flex flex-wrap justify-between items-center gap-x-1 mb-1">
+                                                        <span className="text-xs font-extrabold text-foreground">{item.year}</span>
+                                                        <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">{item.solved}/{item.count}</span>
                                                     </div>
-                                                );
-                                            })}
+                                                    <Progress value={pct} className="h-1.5" />
+                                                    <div className="flex justify-between items-center mt-1">
+                                                        <span className="text-[9px] font-bold text-muted-foreground">{pct}%</span>
+                                                        {isCompleted && (
+                                                            <span className="text-[9px] text-emerald-500 font-extrabold">Done! 🎉</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                    {stats && yearProgress.length === 0 && (
+                                        <p className="text-xs text-muted-foreground">No dated {selectedExam} questions in the bank yet.</p>
+                                    )}
                                 </div>
 
                                 {/* Progress by Subject */}
                                 <div className="space-y-3">
                                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Progress by Subject</p>
                                     <div className="grid sm:grid-cols-2 gap-3">
-                                        {(stats?.by_subject || []).slice(0, 4).map((item: { name: string; count: number; solved: number }, idx: number) => {
+                                        {subjectProgress.map((item) => {
                                             const pct = item.count > 0 ? Math.round((item.solved / item.count) * 100) : 0;
                                             return (
-                                                <div key={idx} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2.5 rounded-xl border border-border/40">
-                                                    <div className="flex items-center justify-between text-xs">
-                                                        <span className="text-foreground font-semibold truncate max-w-35">{item.name}</span>
-                                                        <span className="text-muted-foreground text-[10px] shrink-0 font-bold">{item.solved}/{item.count} ({pct}%)</span>
+                                                <div key={item.id ?? item.name} className="space-y-1 bg-slate-50/30 dark:bg-slate-900/10 p-2.5 rounded-xl border border-border/40">
+                                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                                        <span className="text-foreground font-semibold truncate min-w-0">{item.name}</span>
+                                                        <span className="text-muted-foreground text-[10px] shrink-0 font-bold tabular-nums">{item.solved}/{item.count} ({pct}%)</span>
                                                     </div>
-                                                    <Progress value={pct} className="h-1.5 bg-slate-200/50" />
+                                                    <Progress value={pct} className="h-1.5 bg-slate-200/50 dark:bg-slate-800" />
                                                 </div>
                                             );
                                         })}
                                     </div>
+                                    {stats && subjectProgress.length === 0 && (
+                                        <p className="text-xs text-muted-foreground">No {selectedExam} subjects with questions yet.</p>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>
@@ -863,7 +818,7 @@ export default function DashboardPage() {
                                 <div>
                                     <p className="text-sm font-semibold text-foreground">Your Active Streak Stats</p>
                                     <p className="text-xs text-muted-foreground">
-                                        Longest: {streak?.longest_streak || 0} days • Total study days: {streak?.total_study_days || 0}
+                                        Longest: {plural(streak?.longest_streak || 0, 'day')} • Total study days: {streak?.total_study_days || 0}
                                     </p>
                                 </div>
                             </div>

@@ -11,7 +11,7 @@ const post: BlogPost = {
     tags: ['Reading Speed', 'Long Stems', 'UPSC CMS', 'NEET PG', 'Time Management'],
     difficulty: 'intermediate',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',
@@ -19,7 +19,8 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '7 min',
     wordCount: 2000,
-    primaryCta: { label: 'Practice Long Stems (free)', href: '/questions?mode=clinical' },
+    // /practice has a "Clinical cases" mode; /questions ignored ?mode=.
+    primaryCta: { label: 'Practice Long Stems (free)', href: '/practice?mode=clinical_cases' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'Why are UPSC CMS stems so long?', a: 'Long clinical vignettes test integrated knowledge — the ability to connect history, examination findings, and investigations to arrive at a diagnosis and management plan. This is what makes CMS and NEET PG different from simpler exams.' },

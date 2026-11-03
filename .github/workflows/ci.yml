@@ -14,8 +14,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -46,8 +46,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
@@ -63,105 +63,81 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api
 
+  frontend-unit:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      # node --test runs the TypeScript tests directly: Node >= 22.18 strips
+      # types natively (the build job stays on Node 20). check-latest makes
+      # setup-node resolve the newest 22.x instead of an older 22.x that may
+      # be cached on the runner image.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          check-latest: true
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit tests (tests/unit)
+        run: npm run test:unit
+
+  # Its own job: a finding fails this job only, so the Bandit SAST report and
+  # gate in `security` still run (as one step of that job, a failing scan
+  # skipped every later step).
+  secret-scan:
+    name: Secret and Personal-Data Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      # Blocking: credentials and personal-data dumps in any tracked file
+      # (the pre-commit hook is opt-in). Output shows labels and lengths only.
+      - name: Secret and personal-data scan
+        run: python scripts/scan_secrets.py --all-tracked
+
   security:
     name: Security Scanning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install security tools
         run: pip install bandit safety
-      - name: Bandit SAST scan
-        run: bandit -r backend/ -x backend/__pycache__,backend/migrations --skip B101 -f json -o bandit-report.json
+      # Full report (every severity and confidence) for review; never fails.
+      # `-x` takes glob patterns: the old `backend/migrations` matched nothing,
+      # because migrations live under backend/<app>/migrations/.
+      - name: Bandit SAST report
+        run: bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -f json -o bandit-report.json --exit-zero
+      # Gate: fail on high-severity, high-confidence findings. Previously any
+      # finding at all (even LOW) failed the job, so it was always red and the
+      # report was never uploaded. There is no baseline and no B324 skip:
+      # cache-key and fingerprint hashes pass usedforsecurity=False, so any
+      # new weak hash used without it fails the gate.
+      - name: Bandit gate (high severity, high confidence)
+        run: bandit -r backend/ -x '*/migrations/*,*/__pycache__/*' --skip B101 -lll -iii
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Safety dependency check
         run: safety check -r backend/requirements.txt || true
         continue-on-error: true
 
-  # Visual regression — runs the Playwright visual-snapshots suite against
-  # the production site (cracklabs.app) using a real student account.
-  # Baselines live under frontend/tests/e2e/visual-snapshots/ and are
-  # updated with --update-snapshots.
-  #
-  # First-run policy: WARNING-ONLY. Use the `strict-snapshots` workflow
-  # input to flip to a hard gate once baselines stabilise.
-  visual-snapshots:
-    name: Visual Snapshots (Playwright)
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/playwright-setup
-      - name: Run visual snapshots against cracklabs.app
-        env:
-          BASE_URL: https://cracklabs.app
-          PLAYWRIGHT_SKIP_WEBSERVER: '1'
-          # Auth secrets: set these in repo Settings → Secrets and variables
-          # → Actions so the gated private-page baselines can be taken.
-          LIVE_AUDIT_EMAIL: ${{ secrets.LIVE_AUDIT_EMAIL }}
-          LIVE_AUDIT_PASSWORD: ${{ secrets.LIVE_AUDIT_PASSWORD }}
-          QA_TEST_USER_EMAIL: ${{ secrets.QA_TEST_USER_EMAIL }}
-          QA_TEST_USER_PASSWORD: ${{ secrets.QA_TEST_USER_PASSWORD }}
-        # First-run policy (warning-only): don't block merge on first
-        # generation. Once baselines are stable and committed, flip
-        # the workflow_dispatch input or remove the `|| true` to gate.
-        # `continue-on-error` lets later steps always upload the report.
-        run: npx playwright test visual-snapshots.spec.ts --reporter=line,html || true
-        continue-on-error: true
-      - name: Upload HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-visual-report
-          path: frontend/playwright-report/
-          retention-days: 14
-
-  # Live audit — runs the production-incident suite from the 2026-07-26
-  # audit. Walks 30 questions each on /questions/neet-pg/practice and
-  # /questions/inicet/practice (15 desktop + 5 mobile each), records
-  # console errors, failed network requests, and missing UI affordances
-  # (option buttons, "Why correct" cards, next-question buttons) into
-  # frontend/tests/e2e/.audit/bug-report.json.
-  #
-  # The spec itself never throws on bugs — it just records them. We
-  # surface the report as a build artifact so a human can review.
-  # WARNING-ONLY on first run (|| true + continue-on-error). Flip the
-  # gate once the report's bug count is consistently zero.
-  live-audit:
-    name: Live Audit (Playwright)
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/playwright-setup
-      - name: Run live audit against cracklabs.app
-        env:
-          LIVE_AUDIT_BASE_URL: https://cracklabs.app
-          BASE_URL: https://cracklabs.app
-          PLAYWRIGHT_SKIP_WEBSERVER: '1'
-          LIVE_AUDIT_EMAIL: ${{ secrets.LIVE_AUDIT_EMAIL }}
-          LIVE_AUDIT_PASSWORD: ${{ secrets.LIVE_AUDIT_PASSWORD }}
-        run: npx playwright test live-audit.spec.ts --reporter=line,html --timeout=600000 || true
-        continue-on-error: true
-      - name: Upload audit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-audit-report
-          path: frontend/tests/e2e/.audit/bug-report.json
-          retention-days: 30
-      - name: Upload HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-audit-html
-          path: frontend/playwright-report/
-          retention-days: 14
-          if-no-files-found: ignore
+  # The Playwright visual-snapshot and live-audit jobs ran against the
+  # production site on every push and PR (production traffic and answer
+  # attempts on the audit account each time) and never tested the PR's own
+  # code. They now run on a schedule / on demand from
+  # .github/workflows/production-audit.yml.

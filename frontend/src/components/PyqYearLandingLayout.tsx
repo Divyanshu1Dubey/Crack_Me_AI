@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TrackedLink } from '@/components/TrackedLink';
-import Script from 'next/script';
 import { CheckCircle2, ArrowRight, BarChart3, BookOpen, Calendar, Target, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
+import { jsonLdString } from '@/lib/metadata';
 
 export interface PyqYearContent {
     examSlug: 'cms' | 'neet-pg' | 'ini-cet' | 'fmge' | 'usmle';
@@ -38,8 +38,8 @@ const ACCENT: Record<PyqYearContent['examSlug'], { from: string; to: string }> =
 
 export function buildPyqYearMetadata(c: PyqYearContent): Metadata {
     const path = `/${c.examSlug}/pyq/${c.year}`;
-    const title = `${c.examName} ${c.year} Previous Year Questions — PYQs, Cutoff, Toppers | CrackCMS`;
-    const description = `Practice ${c.totalQuestions}+ ${c.examName} ${c.year} previous-year questions. Subject-wise PYQs, ${c.year} cutoff, topper scores, and AI explanations grounded in standard textbooks.`;
+    const title = `${c.examName} ${c.year} Previous Year Questions — PYQs, Cutoff & Analysis`;
+    const description = `Practice ${c.totalQuestions}+ ${c.examName} ${c.year} previous-year questions. Subject-wise PYQs, ${c.year} cutoff context, and AI explanations grounded in standard textbooks.`;
     return {
         title,
         description,
@@ -50,7 +50,7 @@ export function buildPyqYearMetadata(c: PyqYearContent): Metadata {
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: title }],
+            images: [{ url: '/cms-circle-logo.png', width: 1254, height: 1254, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: {
@@ -76,7 +76,7 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
             {
                 '@type': 'Article',
                 headline: `${c.examName} ${c.year} Previous Year Questions`,
-                description: `Comprehensive ${c.examName} ${c.year} PYQ practice with subject-wise breakdown, ${c.year} cutoff, toppers, and AI explanations.`,
+                description: `Comprehensive ${c.examName} ${c.year} PYQ practice with subject-wise breakdown, ${c.year} cutoff context, and AI explanations.`,
                 inLanguage: 'en-IN',
                 datePublished: `${c.year}-08-01`,
                 dateModified: '2026-07-21',
@@ -106,8 +106,7 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
 
     return (
         <>
-            <Script id={`pyq-year-${c.examSlug}-${c.year}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
@@ -129,16 +128,12 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
                                 Harrison, Bailey & Love, Ghai, Park and other standard references.
                             </p>
                             <div className="mt-6 flex flex-wrap gap-3">
-                                <Link href="/register">
-                                    <Button size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
-                                        Start Practising <ArrowRight className="h-4 w-4" />
-                                    </Button>
-                                </Link>
-                                <Link href={`/questions?exam=${c.examSlug.toUpperCase()}&year=${c.year}`}>
-                                    <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
-                                        <BookOpen className="h-4 w-4" /> Open PYQ Bank
-                                    </Button>
-                                </Link>
+                                <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 font-bold gap-2 shadow-lg">
+                                    <Link href="/register">Start Practising <ArrowRight className="h-4 w-4" /></Link>
+                                </Button>
+                                <Button asChild size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm font-bold gap-2">
+                                    <Link href={questionBankHref(c.examSlug, { year: c.year })}><BookOpen className="h-4 w-4" /> Open PYQ Bank</Link>
+                                </Button>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 self-center">
@@ -268,16 +263,12 @@ export default function PyqYearLandingLayout(c: PyqYearContent) {
                             Join thousands of medical aspirants using CrackCMS to prepare smarter. Start free today.
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                            <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'pyq_landing' }}>
-                                <Button size="lg" className="gap-2 font-bold">
-                                    Create free account <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            </TrackedLink>
-                            <Link href={`/questions?exam=${c.examSlug.toUpperCase()}&year=${c.year}`}>
-                                <Button size="lg" variant="outline" className="gap-2 font-bold">
-                                    Open PYQ bank
-                                </Button>
-                            </Link>
+                            <Button asChild size="lg" className="gap-2 font-bold">
+                                <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'pyq_landing' }}>Create free account <ArrowRight className="h-4 w-4" /></TrackedLink>
+                            </Button>
+                            <Button asChild size="lg" variant="outline" className="gap-2 font-bold">
+                                <Link href={questionBankHref(c.examSlug, { year: c.year })}>Open PYQ bank</Link>
+                            </Button>
                         </div>
                     </div>
                 </section>

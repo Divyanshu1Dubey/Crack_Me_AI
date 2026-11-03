@@ -398,25 +398,13 @@ class Question(models.Model):
         self.ai_mnemonic = normalize_text(self.ai_mnemonic or "")
         self.ai_clinical_pearl = normalize_text(self.ai_clinical_pearl or "")
 
-        update_fields = kwargs.get('update_fields')
-        if update_fields is not None:
-            update_fields = set(update_fields)
-            update_fields.update([
-                'question_text',
-                'option_a',
-                'option_b',
-                'option_c',
-                'option_d',
-                'explanation',
-                'concept_explanation',
-                'mnemonic',
-                'reference_text',
-                'ai_explanation',
-                'ai_mnemonic',
-                'ai_clinical_pearl',
-            ])
-            kwargs['update_fields'] = update_fields
-
+        # A partial save (``update_fields=[...]``) writes ONLY the listed
+        # fields. It used to add all twelve text fields above, so a long task
+        # (video render, AI call) that saved e.g. ``video_url`` also wrote
+        # back its stale copy of the stem / options / explanation and
+        # silently reverted admin edits made in the meantime. The listed
+        # fields are still normalised (normalisation runs on the instance
+        # above); unlisted fields are not written, so they need none.
         return super().save(*args, **kwargs)
 
 
@@ -688,6 +676,11 @@ class Flashcard(models.Model):
     review_count = models.IntegerField(default=0)
     ease_factor = models.FloatField(default=2.5, help_text="SM-2 algorithm ease factor")
     interval_days = models.IntegerField(default=1)
+    # Lifetime counters for the analytics endpoint. ``review_count`` is the
+    # SM-2 repetition number and resets on every lapse, so it cannot give a
+    # retention rate.
+    total_reviews = models.PositiveIntegerField(default=0, help_text="Reviews submitted for this card (all time)")
+    lapses = models.PositiveIntegerField(default=0, help_text="Reviews graded below 3 (forgotten)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -701,18 +694,29 @@ class Flashcard(models.Model):
         """SM-2 spaced repetition algorithm. quality: 0-5"""
         from django.utils import timezone
         import datetime
+        try:
+            quality = max(0, min(5, int(quality)))
+        except (TypeError, ValueError):
+            quality = 0
+        # `review_count` is the SM-2 repetition number n (consecutive
+        # successful reviews). A lapse restarts the sequence at n=0 so the
+        # next success is scheduled 1 day out (previously the lapse left
+        # n=1 and the next success jumped straight to 6 days).
+        self.total_reviews = (self.total_reviews or 0) + 1
         if quality < 3:
             self.interval_days = 1
             self.review_count = 0
+            self.lapses = (self.lapses or 0) + 1
         else:
             if self.review_count == 0:
                 self.interval_days = 1
             elif self.review_count == 1:
                 self.interval_days = 6
             else:
-                self.interval_days = round(self.interval_days * self.ease_factor)
-            self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
-        self.review_count += 1
+                self.interval_days = max(1, round(self.interval_days * self.ease_factor))
+            self.review_count += 1
+        # SM-2 updates the ease factor on every review (lapses lower it).
+        self.ease_factor = max(1.3, self.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
         self.next_review = timezone.now() + datetime.timedelta(days=self.interval_days)
         self.save()
 
@@ -733,6 +737,26 @@ class QuestionAttempt(models.Model):
 
     def __str__(self):
         return f"{self.user.username} | Q{self.question.id} | {'Correct' if self.is_correct else 'Incorrect'}"
+
+
+class QuestionPracticeState(models.Model):
+    """Per-user, per-question practice-mode state (flag, confidence, time
+    spent, eliminated options). Kept separate from ``QuestionBookmark`` so
+    flagging a question never shows up in the user's bookmark list."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='practice_states')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='practice_states')
+    flagged = models.BooleanField(default=False)
+    confidence = models.PositiveSmallIntegerField(default=0, help_text='0 = not rated, otherwise 1..5')
+    time_spent_seconds = models.PositiveIntegerField(default=0)
+    eliminated_options = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'question']
+
+    def __str__(self):
+        return f"{self.user_id} | Q{self.question_id} | flag={self.flagged}"
+
 
 class Announcement(models.Model):
     """Admin Notes / Announcements targeted at specific exam tracks."""
@@ -1048,6 +1072,13 @@ class TopicNote(models.Model):
         help_text='True when this note covers the same topic across multiple exams.',
     )
     is_active = models.BooleanField(default=True, db_index=True)
+    # Fields used by the admin notes pipeline (serializers, views and the
+    # admin/topic-notes pages all read/write these).
+    content_preview = models.CharField(max_length=320, blank=True, default='')
+    source_question_ids = models.JSONField(default=list, blank=True)
+    source_question_count = models.PositiveIntegerField(default=0)
+    ai_generated = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='created_topic_notes',

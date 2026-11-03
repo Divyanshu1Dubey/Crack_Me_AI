@@ -19,7 +19,7 @@ records confirmations and gaps.
 * 8 GEO guides under `/guides`.
 * 8 legal/trust pages (`/about`, `/privacy-policy`, `/terms`, etc.).
 * `StructuredData` component + `Breadcrumbs` + `FAQSection`.
-* `ReviewerByline` (EEAT) on every long-form page.
+* ~~`ReviewerByline` (EEAT) on every long-form page.~~ Retired (2026-11): the component credited a fabricated reviewer and has been deleted. The only author profile is `crackcms-editorial` (`frontend/src/content/authors.ts`); `/blog/author/dr-aarav-mehta` 308-redirects to it.
 
 ## Metadata coverage (Phase 4 spot-check)
 

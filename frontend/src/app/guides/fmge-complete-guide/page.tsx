@@ -1,5 +1,6 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const title = 'FMGE Complete Guide 2026 — MCI Screening Test for Foreign MBBS';
 const description = 'Pass FMGE 2026 on your first attempt. Eligibility, syllabus, books, Indian-context preparation, and a 3-month study plan.';
@@ -21,7 +22,7 @@ export default function FMGEGuide() {
             slug={slug}
             heading="FMGE Complete Guide 2026"
             lede="Pass the MCI Screening Test on your first attempt. Eligibility, syllabus, Indian-context preparation strategy, and a 3-month study plan."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="9 min"
             faqs={faqs}
@@ -120,9 +121,12 @@ export default function FMGEGuide() {
 
             <h2>Why CrackCMS for FMGE?</h2>
             <ul>
-                <li>8,000+ FMGE-aligned MCQs covering all 19 subjects</li>
+                <li>
+                    Practice from our {NEET_PG_QUESTION_COUNT} question NEET PG bank, which covers the same 19 MBBS
+                    subjects (a dedicated FMGE bank is in development)
+                </li>
                 <li>AI tutor trained on Indian medical textbooks</li>
-                <li>Mock tests with the exact NBEMS CBT interface</li>
+                <li>Timed mock tests in a computer-based exam interface</li>
                 <li>Personalised analytics to identify weak topics</li>
             </ul>
         </GuideLayout>

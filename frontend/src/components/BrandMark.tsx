@@ -40,7 +40,7 @@ function BrandMarkContent({
           sizes={compact ? "40px" : "48px"}
         />
       </div>
-      <div className="min-w-0">
+      <div className="brandmark-text min-w-0">
         <p
           className={cn(
             "font-black leading-none tracking-[-0.04em]",

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { datadogRum } from '@datadog/browser-rum';
 
 export default function GlobalError({
   error,
@@ -13,18 +14,23 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report to Sentry / Datadog if available
+    // Report where we can. Datadog RUM only runs once the visitor allowed
+    // analytics (DatadogInit); addError is a no-op otherwise. Sentry is not
+    // bundled in this app, so only a page-provided window.Sentry is used.
+    try {
+      datadogRum.addError(error, { digest: error.digest });
+    } catch {
+      /* ignore */
+    }
     if (typeof window !== 'undefined') {
       const w = window as unknown as {
         Sentry?: { captureException: (e: Error) => void };
       };
-      if (w.Sentry?.captureException) {
-        w.Sentry.captureException(error);
-      }
+      w.Sentry?.captureException?.(error);
     }
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Global error caught:', error);
-    }
+    // Logged in production too: with analytics consent, Datadog forwards
+    // console errors.
+    console.error('Global error caught:', error);
   }, [error]);
 
   return (
@@ -42,8 +48,8 @@ export default function GlobalError({
         </h1>
 
         <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10 max-w-md mx-auto">
-          We&apos;ve been notified. You can try the action again, or head back to a
-          known-good page.
+          You can try the action again, or head back to a known-good page. If it
+          keeps happening, contact support and quote the error ID below.
         </p>
 
         {error.digest && (

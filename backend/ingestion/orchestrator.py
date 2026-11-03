@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +28,7 @@ from django.utils import timezone
 
 from .checkpoint import latest_checkpoint, save_checkpoint
 from .constants import (
+    EXAM_CHOICES,
     JOB_CANCELLED,
     JOB_COMPLETED,
     JOB_CRASHED,
@@ -95,14 +97,66 @@ def _transition(job: ImportJob, *, to_status: str, **fields) -> None:
     job.save(update_fields=update_fields)
 
 
-def _build_mce_context(material: MaterialAsset, artefact_root: Path):
+_EXAM_CODES = {code for code, _label in EXAM_CHOICES}
+# Spellings older tooling stored in MaterialAsset.exam_hint
+# (scripts/run_bulk_ingestion.py writes "inicet" / "neetpg").
+_EXAM_HINT_ALIASES = {
+    "inicet": "ini_cet",
+    "ini-cet": "ini_cet",
+    "neetpg": "neet_pg",
+    "neet-pg": "neet_pg",
+}
+
+
+def normalize_exam_hint(hint: Optional[str]) -> str:
+    """A MaterialAsset.exam_hint as an exam code (``ini_cet``…), or ''."""
+    value = (hint or "").strip().lower()
+    if value in _EXAM_CODES:
+        return value
+    return _EXAM_HINT_ALIASES.get(value, "")
+
+
+def exam_hint_spellings(exam: str) -> list[str]:
+    """Every exam_hint value that means ``exam`` (the code itself + aliases)."""
+    return sorted({exam} | {alias for alias, code in _EXAM_HINT_ALIASES.items() if code == exam})
+
+
+def effective_exam(job: ImportJob) -> str:
+    """The job's exam; for a job created without one, its material's exam hint."""
+    if job.parent_exam:
+        return job.parent_exam
+    material = getattr(job, "material_asset", None)
+    return normalize_exam_hint(getattr(material, "exam_hint", "")) if material else ""
+
+
+def _profile_for(material: MaterialAsset, exam: Optional[str]):
+    """The MCE exam profile for this job: the exam the admin chose.
+
+    A job created without an exam (the bulk-ingestion script) uses its
+    material's exam hint. Only when neither is known do we fall back to
+    guessing from the file name (which defaults to NEET PG). The chosen exam
+    used to be ignored, so an "INI-CET" upload was processed — and
+    imported — as whatever its file name suggested.
+    """
+    from mce.profiles import get_profile, get_profile_for_filename
+
+    exam = exam or normalize_exam_hint(getattr(material, "exam_hint", ""))
+    if exam:
+        try:
+            return get_profile(exam)
+        except KeyError:
+            LOG.warning("Unknown exam %r for material %s; guessing from file name",
+                        exam, material.sha256_short)
+    return get_profile_for_filename(material.original_filename)
+
+
+def _build_mce_context(material: MaterialAsset, artefact_root: Path, exam: Optional[str] = None):
     """Build the MCE MceContext for one material."""
-    from mce.profiles import get_profile_for_filename
     from mce.stages import MceContext
 
     pdf_path = Path(material.storage_path)
     full = material.sha256
-    profile = get_profile_for_filename(material.original_filename)
+    profile = _profile_for(material, exam)
     return MceContext(
         pdf_path=pdf_path,
         pdf_filename=material.original_filename,
@@ -128,6 +182,30 @@ def _infer_page_count(pdf_path: Path) -> int:
         return 0
 
 
+def stale_processing_after() -> timedelta:
+    """How long a ``processing`` job may go without an update before it is dead.
+
+    Longer than the django-q task timeout (``Q_CLUSTER['timeout']``, plus ten
+    minutes): django-q kills a task at that timeout, so a job nothing has
+    touched for longer has no live worker any more. The job row is updated
+    at every stage boundary. Override with the
+    ``INGESTION_STALE_PROCESSING_SECONDS`` setting.
+
+    Such jobs are recovered by the scheduled sweeper (``recover_stale_jobs``,
+    a django-q Schedule, see ``ingestion.schedules``), not by django-q's own
+    re-delivery: the ORM broker re-presents an unacknowledged task
+    ``Q_CLUSTER['retry']`` seconds (3660) after a worker took it, when the
+    job's last update is at most that old, i.e. still inside this window, so
+    that delivery finds a job that is not stale yet, is a no-op and is
+    acknowledged.
+    """
+    explicit = getattr(settings, "INGESTION_STALE_PROCESSING_SECONDS", None)
+    if explicit:
+        return timedelta(seconds=int(explicit))
+    q_timeout = int((getattr(settings, "Q_CLUSTER", None) or {}).get("timeout") or 3600)
+    return timedelta(seconds=q_timeout + 600)
+
+
 def run_full_pipeline_for_job(job_id: int) -> dict:
     """Top-level entry point. Called by ``tasks.run_import_job``.
 
@@ -137,17 +215,94 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     if job is None:
         return {"job_id": job_id, "error": "job not found"}
 
-    # Idempotency: if the job is already in a terminal state, no-op.
-    if job.status in (JOB_COMPLETED, JOB_CANCELLED):
+    # A job is claimed atomically (conditional UPDATE): two tasks for the
+    # same job (a re-dispatch, a duplicate catch-up run) must never process
+    # it concurrently.
+    #   * queued      → claimed and run (a job the sweeper re-queued after
+    #     its worker was lost resumes from its last checkpoint).
+    #   * processing  → a no-op while its worker may still be alive. If
+    #     nothing has touched it for longer than any live worker could run
+    #     (stale_processing_after), its worker died (timeout, OOM, deploy
+    #     restart) and this delivery takes it over and resumes from its last
+    #     checkpoint. With the shipped Q_CLUSTER settings django-q's own
+    #     re-delivery arrives before that (retry 3660 s < window 4200 s) and
+    #     is a no-op; the scheduled sweeper (recover_stale_jobs) is what
+    #     recovers such jobs: it marks them crashed and re-queues them.
+    #   * anything else → no-op; failed / crashed jobs are re-run through a
+    #     retry job (or re-queued by the sweeper) instead.
+    if job.status not in (JOB_QUEUED, JOB_PROCESSING):
         return {"job_id": job_id, "status": job.status, "noop": True}
+    now = timezone.now()
+    resumed = job.status == JOB_PROCESSING
+    if resumed:
+        claimed = ImportJob.objects.filter(
+            id=job.id, status=JOB_PROCESSING, updated_at__lt=now - stale_processing_after(),
+        ).update(updated_at=now)
+    else:
+        claimed = ImportJob.objects.filter(id=job.id, status=JOB_QUEUED).update(
+            status=JOB_PROCESSING, started_at=now, updated_at=now,
+        )
+    if not claimed:
+        job.refresh_from_db(fields=["status"])
+        return {"job_id": job_id, "status": job.status, "noop": True}
+    if resumed:
+        _close_interrupted_stages(job.id, "worker lost; the job was resumed")
+        _log(job, "WARNING",
+             f"Resuming job: no progress since {job.updated_at.isoformat()} (its worker was lost); "
+             "continuing from the last checkpoint.")
+    else:
+        job.status = JOB_PROCESSING
+        job.started_at = now
+    # A job created without an exam (the bulk-ingestion script) takes its
+    # material's exam hint, so the profile and the importer agree on it.
+    if not job.parent_exam:
+        exam = normalize_exam_hint(job.material_asset.exam_hint)
+        if exam:
+            job.parent_exam = exam
+            ImportJob.objects.filter(id=job.id, parent_exam="").update(parent_exam=exam)
+    _refresh_batch_counters(job.batch_run_id)
 
-    if job.status == JOB_QUEUED:
-        _transition(job, to_status=JOB_PROCESSING, started_at=timezone.now())
+    try:
+        return _run_claimed_job(job)
+    finally:
+        _refresh_batch_counters(job.batch_run_id)
 
+
+def _refresh_batch_counters(batch_id: Optional[int]) -> None:
+    """Recompute a BatchRun's counters and status from its jobs.
+
+    ``completed_jobs`` / ``failed_jobs`` were never updated, so batch pages
+    read "running · 0 completed · 0 failed" whatever happened.
+    """
+    if not batch_id:
+        return
+    from .constants import BATCH_CANCELLED, BATCH_DONE, BATCH_RUNNING
+    batch = BatchRun.objects.filter(id=batch_id).first()
+    if batch is None:
+        return
+    statuses = list(batch.jobs.values_list("status", flat=True))
+    completed = sum(1 for s in statuses if s == JOB_COMPLETED)
+    failed = sum(1 for s in statuses if s in (JOB_FAILED, JOB_CRASHED))
+    cancelled = sum(1 for s in statuses if s == JOB_CANCELLED)
+    terminal = completed + failed + cancelled
+    status = batch.status
+    if batch.status != BATCH_CANCELLED:
+        if statuses and terminal == len(statuses):
+            status = BATCH_CANCELLED if cancelled == len(statuses) else BATCH_DONE
+        elif statuses:
+            status = BATCH_RUNNING
+    BatchRun.objects.filter(id=batch_id).update(
+        completed_jobs=completed, failed_jobs=failed, status=status,
+        updated_at=timezone.now(),
+    )
+
+
+def _run_claimed_job(job: ImportJob) -> dict:
+    """Run the pipeline for a job this worker has claimed (status=processing)."""
     material = job.material_asset
     artefact_root = _artefact_root(material)
 
-    ctx = _build_mce_context(material, artefact_root)
+    ctx = _build_mce_context(material, artefact_root, exam=job.parent_exam)
     ck = latest_checkpoint(job)
     last_stage = ck.last_completed_stage if ck else ""
     resume_page = ck.last_processed_page if ck and ck.last_completed_stage == last_stage else None
@@ -259,9 +414,9 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
         summary["verdict"] = counts
         summary["summary_json"] = load_summary_json(artefact_root)
 
-        # Stage DB writer runs as part of the pipeline above (Stage
-        # ``db_writer``). After Stage 8 the QA verdict decides what
-        # actually lands in `questions.Question`. Mark complete.
+        # The ``db_writer`` stage above only emits artefacts; the gate is the
+        # only writer of `questions.Question` (QA V2 Production Ready rows,
+        # with the job's exam). Mark complete.
         _transition(job, to_status=JOB_COMPLETED, completed_at=timezone.now())
         _log(job, "INFO",
              f"Job completed PR={counts['pr']} NR={counts['nr']} EF={counts['ef']} "
@@ -273,9 +428,14 @@ def run_full_pipeline_for_job(job_id: int) -> dict:
     except Exception as e:
         LOG.exception("Unhandled error in orchestrator for job %s", job.id)
         _log(job, "ERROR", f"Orchestrator crashed: {e}", "")
-        _transition(job, to_status=JOB_CRASHED, completed_at=timezone.now(),
-                    error={"message": str(e)})
-        return {"job_id": job.id, "status": JOB_CRASHED, "error": str(e)}
+        job.refresh_from_db(fields=["status"])
+        try:
+            _transition(job, to_status=JOB_CRASHED, completed_at=timezone.now(),
+                        error={"message": str(e)})
+        except InvalidJobTransitionError:
+            # e.g. cancelled while the failing stage ran: keep that status.
+            pass
+        return {"job_id": job.id, "status": job.status, "error": str(e)}
 
 
 def create_job(
@@ -308,9 +468,156 @@ def cancel_job(job: ImportJob) -> bool:
             return False
         _transition(job, to_status=JOB_CANCELLED, completed_at=timezone.now())
         _log(job, "WARNING", "Job cancelled by operator", "")
+        _refresh_batch_counters(job.batch_run_id)
         return True
     except InvalidJobTransitionError:
         return False
+
+
+def sweep_stale_processing_jobs(*, older_than: Optional[timedelta] = None,
+                                dry_run: bool = False) -> list[int]:
+    """Mark ``processing`` jobs whose worker died as ``crashed``.
+
+    A worker that died mid-job (django-q timeout, OOM, deploy restart)
+    leaves its job ``processing`` for ever: only queued jobs are started,
+    and a re-delivered task only resumes a job once it is stale. Jobs
+    nothing has touched for ``older_than`` (default:
+    ``stale_processing_after()``) are moved to ``crashed`` with a log line,
+    so the dashboard shows them as crashed and the retry path (the Retry
+    button, ``ingestion_retry_failed``) applies. Each move is a conditional
+    UPDATE, so a job a worker resumed in the meantime is left alone.
+    ``recover_stale_jobs`` (the scheduled sweeper) then re-queues them.
+
+    Returns the ids of the jobs swept (or that would be, with ``dry_run``).
+    """
+    window = older_than or stale_processing_after()
+    cutoff = timezone.now() - window
+    stale = list(
+        ImportJob.objects.filter(status=JOB_PROCESSING, updated_at__lt=cutoff)
+        .only("id", "batch_run_id", "current_stage", "updated_at")
+    )
+    if dry_run:
+        return [j.id for j in stale]
+    swept: list[int] = []
+    for job in stale:
+        now = timezone.now()
+        message = (
+            f"No progress since {job.updated_at.isoformat()} (more than "
+            f"{int(window.total_seconds() // 60)} min): the worker was lost. Retry the job."
+        )
+        moved = ImportJob.objects.filter(
+            id=job.id, status=JOB_PROCESSING, updated_at__lt=cutoff,
+        ).update(
+            status=JOB_CRASHED, completed_at=now, updated_at=now,
+            error={"stage": job.current_stage or "", "message": message, "swept": True,
+                   "last_progress_at": job.updated_at.isoformat()},
+        )
+        if not moved:
+            continue
+        swept.append(job.id)
+        _close_interrupted_stages(job.id, "worker lost (stale-job sweeper)")
+        _log(job, "ERROR", f"Marked crashed by the stale-job sweeper. {message}", job.current_stage or "")
+        _refresh_batch_counters(job.batch_run_id)
+    return swept
+
+
+# A job that had not progressed for longer than this when it was swept (for
+# example one left "processing" long before the sweeper was scheduled) is
+# only marked crashed, never re-queued automatically: a person decides.
+AUTO_RESUME_MAX_IDLE = timedelta(hours=24)
+
+
+def max_auto_resumes() -> int:
+    """How often one job is re-queued automatically after losing its worker.
+
+    ``INGESTION_MAX_AUTO_RESUMES`` (default 2; 0 = never). The cap stops a
+    file that kills its worker every time (OOM, a run that cannot finish
+    within the django-q timeout) from looping for ever: once it is reached
+    the job stays crashed for a person to retry.
+    """
+    try:
+        return max(0, int(getattr(settings, "INGESTION_MAX_AUTO_RESUMES", 2)))
+    except (TypeError, ValueError):
+        return 2
+
+
+def resume_swept_job(job_id: int) -> bool:
+    """Re-queue a job the sweeper marked crashed, so it resumes (same job id).
+
+    The new task claims the queued job and skips every stage its checkpoint
+    records as done (the conservative gate is idempotent per job), so a job
+    the django-q timeout or a deploy restart interrupted continues where it
+    stopped instead of starting over as a retry job. Only for jobs the
+    sweeper crashed whose last progress is recent (``AUTO_RESUME_MAX_IDLE``),
+    at most ``max_auto_resumes()`` times per job. Returns True when the job
+    was re-queued and dispatched.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    job = ImportJob.objects.filter(id=job_id, status=JOB_CRASHED).first()
+    error = dict(job.error or {}) if job else {}
+    if job is None or not error.get("swept"):
+        return False
+    last_progress = parse_datetime(error.get("last_progress_at") or "")
+    if last_progress is None or timezone.now() - last_progress > AUTO_RESUME_MAX_IDLE:
+        return False
+    summary = dict(job.summary or {})
+    done = int(summary.get("auto_resumes") or 0)
+    limit = max_auto_resumes()
+    if done >= limit:
+        if limit:
+            _log(job, "WARNING",
+                 f"Not re-queued automatically: already resumed {done} time(s) after losing its "
+                 "worker. Retry the job once the cause is fixed.")
+        return False
+
+    queued_summary = {k: v for k, v in summary.items() if k != "q_task_id"}
+    queued_summary["auto_resumes"] = done + 1
+    now = timezone.now()
+    moved = ImportJob.objects.filter(id=job_id, status=JOB_CRASHED).update(
+        status=JOB_QUEUED, completed_at=None, error={}, summary=queued_summary, updated_at=now,
+    )
+    if not moved:
+        return False
+    ck = latest_checkpoint(job)
+    resume_point = f"after {ck.last_completed_stage}" if ck and ck.last_completed_stage else "from the start"
+    _log(job, "WARNING",
+         f"Re-queued automatically ({done + 1}/{limit}) after the worker was lost; "
+         f"it resumes {resume_point}.", error.get("stage") or "")
+    from .tasks import dispatch_job
+    try:
+        task_id = dispatch_job(job_id)
+    except Exception as exc:  # broker unavailable: leave it crashed for a person
+        LOG.exception("Could not dispatch resumed ingestion job %s", job_id)
+        ImportJob.objects.filter(id=job_id, status=JOB_QUEUED).update(
+            status=JOB_CRASHED, completed_at=timezone.now(), error=error, summary=summary,
+            updated_at=timezone.now(),
+        )
+        _log(job, "ERROR", f"Could not re-queue the job automatically ({exc}). Retry the job.")
+        return False
+    # Recorded so ingestion_run_pending does not dispatch it a second time.
+    ImportJob.objects.filter(id=job_id).update(summary={**queued_summary, "q_task_id": task_id})
+    _refresh_batch_counters(job.batch_run_id)
+    return True
+
+
+def recover_stale_jobs() -> dict:
+    """The scheduled recovery pass (django-q Schedule, every 10 min by default).
+
+    Marks processing jobs whose worker died as crashed
+    (``sweep_stale_processing_jobs``) and re-queues the ones it can resume
+    (``resume_swept_job``). ``ingestion_run_pending`` runs the same pass.
+    """
+    swept = sweep_stale_processing_jobs()
+    resumed = [job_id for job_id in swept if resume_swept_job(job_id)]
+    return {"swept": swept, "resumed": resumed}
+
+
+def _close_interrupted_stages(job_id: int, reason: str) -> int:
+    """Mark stage rows a dead worker left ``running`` as failed (timeline only)."""
+    return ImportJobStage.objects.filter(job_id=job_id, status="running").update(
+        status="failed", completed_at=timezone.now(), errors=[reason],
+    )
 
 
 def create_retry_job(original: ImportJob, *, created_by=None) -> ImportJob:
@@ -332,4 +639,12 @@ __all__ = [
     "create_job",
     "cancel_job",
     "create_retry_job",
+    "effective_exam",
+    "exam_hint_spellings",
+    "max_auto_resumes",
+    "normalize_exam_hint",
+    "recover_stale_jobs",
+    "resume_swept_job",
+    "stale_processing_after",
+    "sweep_stale_processing_jobs",
 ]

@@ -1,7 +1,8 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { questionBankHref } from '@/lib/seo';
+import { CMS_PYQ_COUNT, CMS_PYQ_PHRASE } from '@/lib/bankStats';
 
 const content: ExamLandingContent = {
     slug: 'medical-officer',
@@ -11,16 +12,16 @@ const content: ExamLandingContent = {
     description: 'Prepare for Medical Officer recruitment exams — state PSC, NHM, ESIC, Railways & Defence. Practice PYQs, mock tests and AI explanations on CrackCMS.',
     tagline: 'Crack Medical Officer recruitment exams — state PSCs, NHM, ESIC, Railways, Defence. AI-powered MCQs and mock tests.',
     heroBullets: [
-        '6,000+ Medical Officer PYQs across all state and central recruitments',
-        'State-specific exam coverage — UP, MP, Rajasthan, Bihar, TN, Maharashtra',
+        `${CMS_PYQ_PHRASE} — the central Medical Officer recruitment exam`,
+        'Core MO subjects covered: Medicine, PSM, Surgery, OBG, Paediatrics',
         'AI tutor explains every answer with public-health context',
-        'Mock tests with negative marking and 60-min countdowns',
+        'Mock tests with negative marking and countdown timers',
     ],
     stats: [
-        { number: '6,000+', label: 'MO PYQs' },
-        { number: '4.8/5', label: 'User rating' },
-        { number: '47k+', label: 'Active aspirants' },
-        { number: '28 states', label: 'Coverage' },
+        { number: CMS_PYQ_COUNT, label: 'UPSC CMS PYQs' },
+        { number: '5', label: 'Core clinical subjects' },
+        { number: 'Level 10', label: 'Central MO pay level' },
+        { number: 'AI', label: 'Tutor on every question' },
     ],
     pattern: [
         { label: 'Common pattern', value: '100-200 MCQs, 60-120 min, -0.25 or -0.33 negative marking' },
@@ -55,12 +56,13 @@ const content: ExamLandingContent = {
         { q: 'What is the salary of a Medical Officer?', a: 'Central government Medical Officers are paid as per Pay Level-10 (₹56,100 - ₹1,77,500) plus Non-Practising Allowance (NPA), rural allowance, and HRA. State salaries vary.' },
         { q: 'Which is the easiest MO exam?', a: 'State NHM and ESI Corporation recruitments typically have shorter syllabi and predictable MCQ patterns. UPSC CMS is the most prestigious central MO exam.' },
         { q: 'How to crack MO exam in 3 months?', a: 'Solve 3,000+ PYQs, focus on PSM and Medicine (highest weightage), take 6 full mocks, and use AI tutor for reasoning on tricky clinical MCQs.' },
-        { q: 'Does CrackCMS cover my state?', a: 'Yes — we have state-specific filters for UP, MP, Rajasthan, Bihar, Tamil Nadu, Maharashtra, Karnataka, West Bengal and more.' },
+        { q: 'Does CrackCMS cover my state?', a: 'Not with state-specific question sets yet. The UPSC CMS bank and the core subjects (Medicine, PSM, Surgery, OBG, Paediatrics) cover most of what state MO exams test; check your state PSC notification for its exact pattern.' },
     ],
     accentFrom: 'from-sky-600',
     accentTo: 'to-blue-700',
     emoji: '🩺',
-    pyqCount: '6,000+',
+    pyqCount: `${CMS_PYQ_COUNT} UPSC CMS`,
+    pyqHref: questionBankHref('cms'),
 };
 
 export const metadata = buildExamMetadata(content);
@@ -68,9 +70,6 @@ export const metadata = buildExamMetadata(content);
 export default function MedicalOfficerPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'Medical Officer', path: '/medical-officer' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Career Paths After Medical Officer Exam</h2>

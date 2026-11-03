@@ -72,8 +72,16 @@ class Command(BaseCommand):
             ))
             return
 
-        # Build queryset
-        qs = Question.objects.filter(is_active=True).exclude(admin_edited=True)
+        # Build queryset. Human decisions are never second-guessed: admin
+        # edits, locked answers (resolve-dispute / manual edits set
+        # lock_answer) and admin-verified questions are skipped, so an AI
+        # consensus run cannot flip them back.
+        qs = (
+            Question.objects.filter(is_active=True)
+            .exclude(admin_edited=True)
+            .exclude(lock_answer=True)
+            .exclude(is_verified_by_admin=True)
+        )
         if year:
             qs = qs.filter(year=year)
         qs = qs.order_by("year", "id")
@@ -149,7 +157,8 @@ class Command(BaseCommand):
                     # Clear cached AI explanation so it regenerates with correct answer
                     q.ai_explanation = ""
                     q.ai_generated_at = None
-                    q.save()
+                    q.save(update_fields=["correct_answer", "needs_review", "is_disputed",
+                                          "ai_explanation", "ai_generated_at", "updated_at"])
                     self.stdout.write(self.style.WARNING(
                         f"    → FIXED: Updated Q#{q.id} answer to {consensus}"
                     ))
@@ -157,10 +166,7 @@ class Command(BaseCommand):
                     # Just flag for review without changing
                     q.needs_review = True
                     q.is_disputed = True
-                    q.save(update_fields=["needs_review", "is_disputed", "updated_at",
-                                          "question_text", "option_a", "option_b",
-                                          "option_c", "option_d", "explanation",
-                                          "concept_explanation", "mnemonic", "reference_text"])
+                    q.save(update_fields=["needs_review", "is_disputed", "updated_at"])
                     self.stdout.write(self.style.WARNING(
                         f"    → FLAGGED Q#{q.id} for admin review"
                     ))

@@ -1,11 +1,24 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from django.db import DatabaseError
+from django.db import DatabaseError, IntegrityError, transaction
 from .models import AdminAuditLog, TokenBalance, TokenConfig, TokenTransaction
 from .supabase_auth import sync_user_to_supabase_auth
 
 User = get_user_model()
+
+
+def _is_unmetered_staff(user) -> bool:
+    """Admins, superusers and staff: AI use is never metered or capped.
+
+    Mirrors ai_engine.views._is_unmetered_staff (the enforcement), so the
+    token wallet's ``unlimited_ai`` and the profile's AI tutor cap tell staff
+    the same thing the AI endpoints do (tests_wave3b_auth pins the parity).
+    """
+    return bool(
+        getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)
+        or getattr(user, 'is_staff', False)
+    )
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -51,9 +64,18 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile — includes token balance info."""
+    # The public handle (discussions, leaderboard). The learner may change it
+    # (PATCH /api/auth/profile/); a new value must pass
+    # accounts.handles.handle_error. An unchanged value is accepted as is, so
+    # older usernames that predate those rules never block a profile save.
+    username = serializers.CharField(required=False, max_length=150)
     role = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
     token_info = serializers.SerializerMethodField()
+    # Whether an active plan (Subscription row) exists, not the raw column:
+    # the bare flag was set without payment by the removed /auth/subscribe/
+    # endpoint and grants nothing (accounts.utils.is_premium).
+    is_subscribed = serializers.SerializerMethodField()
     subscription_info = serializers.SerializerMethodField()
 
     is_online = serializers.SerializerMethodField()
@@ -75,7 +97,41 @@ class UserSerializer(serializers.ModelSerializer):
                   'subscription_info', 'last_seen', 'is_online',
                   'ai_tutor_used_today', 'ai_tutor_daily_cap',
                   'showcase_questions_remaining', 'is_premium']
-        read_only_fields = ['id', 'username', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
+        read_only_fields = ['id', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
+
+    def validate_username(self, value):
+        from .handles import handle_error
+
+        if self.instance is not None and value == self.instance.username:
+            return value
+        problem = handle_error(value, user=self.instance, User=User)
+        if problem:
+            raise serializers.ValidationError(problem)
+        return value
+
+    def update(self, instance, validated_data):
+        """Write only the fields this request edited.
+
+        ModelSerializer.update() calls instance.save() with no update_fields,
+        rewriting the whole row from the snapshot loaded at the start of the
+        request. A concurrent change (payment webhook flipping
+        is_subscribed, an admin block, the profile bonus flag) was silently
+        undone by any profile edit.
+        """
+        from .handles import HANDLE_TAKEN_MESSAGE
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if validated_data:
+            try:
+                with transaction.atomic():
+                    instance.save(update_fields=list(validated_data))
+            except IntegrityError:
+                # Another account took this username after validate_username ran.
+                if 'username' in validated_data:
+                    raise serializers.ValidationError({'username': [HANDLE_TAKEN_MESSAGE]})
+                raise
+        return instance
 
     def get_is_online(self, obj):
         from django.utils import timezone
@@ -90,10 +146,27 @@ class UserSerializer(serializers.ModelSerializer):
     def get_is_admin(self, obj):
         return obj.is_admin
 
-    def get_subscription_info(self, obj):
-        """Return current subscription details for the user."""
+    def _active_subscription(self, obj):
+        """Subscription.get_active_subscription(obj), once per user per serializer."""
         from .models import Subscription
-        sub = Subscription.get_active_subscription(obj)
+
+        cache = self.__dict__.setdefault('_active_subscription_cache', {})
+        if obj.pk not in cache:
+            cache[obj.pk] = Subscription.get_active_subscription(obj)
+        return cache[obj.pk]
+
+    def get_is_subscribed(self, obj):
+        return self._active_subscription(obj) is not None
+
+    def get_subscription_info(self, obj):
+        """Return current subscription details for the user.
+
+        From Subscription rows only: the bare ``is_subscribed`` flag (no row)
+        used to produce a "Legacy Early Bird (Lifetime)" stub, but the removed
+        unpaid /auth/subscribe/ endpoint set that flag for anyone. Accounts
+        that paid before the Subscription model got real rows (accounts.0026).
+        """
+        sub = self._active_subscription(obj)
         if sub:
             return {
                 'plan': sub.plan,
@@ -104,18 +177,6 @@ class UserSerializer(serializers.ModelSerializer):
                 'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
                 'days_remaining': sub.days_remaining,
                 'amount_paid': float(sub.amount_paid),
-            }
-        # Backward compat: grandfathered lifetime user
-        if obj.is_subscribed:
-            return {
-                'plan': 'legacy',
-                'plan_display_name': 'Legacy Early Bird (Lifetime)',
-                'status': 'active',
-                'is_active': True,
-                'starts_at': obj.created_at.isoformat() if obj.created_at else None,
-                'expires_at': None,
-                'days_remaining': -1,
-                'amount_paid': 0,
             }
         return None
 
@@ -166,12 +227,12 @@ class UserSerializer(serializers.ModelSerializer):
     def get_ai_tutor_used_today(self, obj):
         """Today's AI tutor message count for this user (0 if no row).
 
-        Premium and admin users always read as 0 so the soft banner's
+        Premium, admin and staff users always read as 0 so the soft banner's
         progress copy (`X/2`) is hidden — they are unlimited.
         """
         try:
             from ai_engine.models_usage import get_today_usage
-            if self.get_is_premium(obj):
+            if _is_unmetered_staff(obj) or self.get_is_premium(obj):
                 return 0
             return int(get_today_usage(obj))
         except Exception:
@@ -179,12 +240,17 @@ class UserSerializer(serializers.ModelSerializer):
             return 0
 
     def get_ai_tutor_daily_cap(self, obj):
-        """Daily AI tutor cap for this user. Premium and admin → None (unlimited)."""
+        """Daily AI tutor cap for this user. Premium, admin and staff → None (unlimited).
+
+        Same source as the enforcement (ai_engine.views._ai_tutor_cap, i.e.
+        TokenConfig.ai_tutor_daily_cap), so the usage banner shows the real cap.
+        Staff are exempt there too (ai_engine.views._is_unmetered_staff).
+        """
         try:
-            from ai_engine.views import AI_TUTOR_DAILY_FREE_CAP
-            if self.get_is_premium(obj):
+            from ai_engine.views import _ai_tutor_cap
+            if _is_unmetered_staff(obj) or self.get_is_premium(obj):
                 return None
-            return int(AI_TUTOR_DAILY_FREE_CAP)
+            return int(_ai_tutor_cap())
         except Exception:
             return 2
 
@@ -218,12 +284,16 @@ class TokenBalanceSerializer(serializers.ModelSerializer):
     weekly_limit = serializers.SerializerMethodField()
     token_price = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
+    # Same rule as the AI metering (ai_engine.views.consume_ai_token):
+    # admins, superusers and staff, and an active plan with unlimited AI
+    # (1 year / legacy / admin grant), are never charged tokens.
+    unlimited_ai = serializers.SerializerMethodField()
 
     class Meta:
         model = TokenBalance
         fields = ['available', 'purchased_tokens', 'feedback_credits',
                   'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
-                  'daily_limit', 'weekly_limit', 'token_price', 'is_admin']
+                  'daily_limit', 'weekly_limit', 'token_price', 'is_admin', 'unlimited_ai']
 
     def get_daily_limit(self, obj):
         return TokenConfig.get_config().free_daily_tokens
@@ -236,6 +306,17 @@ class TokenBalanceSerializer(serializers.ModelSerializer):
 
     def get_is_admin(self, obj):
         return obj.user.is_admin
+
+    def get_unlimited_ai(self, obj):
+        from .models import Subscription
+
+        if _is_unmetered_staff(obj.user):
+            return True
+        try:
+            sub = Subscription.get_active_subscription(obj.user)
+        except DatabaseError:
+            return False
+        return bool(sub and sub.is_active and sub.unlimited_ai)
 
 
 class TokenPurchaseSerializer(serializers.Serializer):
@@ -276,12 +357,21 @@ class AdminTokenGrantSerializer(serializers.Serializer):
 
 
 class AdminUserTokenSerializer(serializers.ModelSerializer):
-    """Shows a user's token info for the admin dashboard."""
+    """Shows a user's token info for the admin dashboard.
+
+    Pass ``context={'token_config': TokenConfig.get_config()}``: availability
+    is computed without per-row queries or writes (see
+    TokenBalance.available_tokens_readonly).
+    """
     user_id = serializers.IntegerField(source='user.id')
     username = serializers.CharField(source='user.username')
     email = serializers.CharField(source='user.email')
     is_admin = serializers.BooleanField(source='user.is_admin')
-    available = serializers.IntegerField(source='available_tokens', read_only=True)
+    available = serializers.SerializerMethodField()
+
+    def get_available(self, obj):
+        config = self.context.get('token_config') or TokenConfig.get_config()
+        return obj.available_tokens_readonly(config)
 
     class Meta:
         model = TokenBalance
@@ -309,8 +399,21 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
 
 
 class UserDeviceSerializer(serializers.ModelSerializer):
+    # True for the device the request comes from: context 'current_device_id'
+    # (the row the authenticator resolved from the Supabase session), else
+    # 'current_device_fingerprint' (the request's X-Session-ID); always false
+    # without that context (e.g. the admin view of another user's devices).
+    is_current = serializers.SerializerMethodField()
+
     class Meta:
         from .models import UserDevice
         model = UserDevice
-        fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at']
+        fields = ['id', 'device_name', 'browser', 'ip_address', 'last_login', 'is_active', 'created_at', 'is_current']
+
+    def get_is_current(self, obj):
+        current_id = self.context.get('current_device_id')
+        if current_id is not None:
+            return obj.pk == current_id
+        current = self.context.get('current_device_fingerprint') or ''
+        return bool(current) and obj.device_fingerprint == current
 

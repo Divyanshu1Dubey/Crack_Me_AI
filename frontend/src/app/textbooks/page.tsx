@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { textbooksAPI } from '@/lib/api';
-import { BookOpen, Upload, Search, ExternalLink, FileText, Loader2 } from 'lucide-react';
+import api, { textbooksAPI } from '@/lib/api';
+import { BookOpen, Upload, Search, Download, FileText, Loader2 } from 'lucide-react';
 
 interface Textbook {
     id: number;
@@ -23,8 +23,19 @@ interface PDFUpload {
     id: number;
     title: string;
     file: string;
+    download_url?: string;
     is_processed: boolean;
     uploaded_at: string;
+}
+
+function uploadErrorMessage(err: unknown): string {
+    const data = (err as { response?: { data?: unknown } })?.response?.data;
+    if (data && typeof data === 'object') {
+        const values = Object.values(data as Record<string, unknown>).flat();
+        const first = values.find((v) => typeof v === 'string');
+        if (typeof first === 'string') return first;
+    }
+    return 'Upload failed. Allowed: PDF, DOC, DOCX, TXT or MD up to 20 MB.';
 }
 
 export default function TextbooksPage() {
@@ -36,6 +47,7 @@ export default function TextbooksPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'library' | 'uploads'>('library');
     const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const [expandedBook, setExpandedBook] = useState<number | null>(null);
 
     useEffect(() => {
@@ -55,16 +67,36 @@ export default function TextbooksPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         setUploading(true);
+        setUploadError(null);
         try {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('title', file.name.replace(/\.[^.]+$/, ''));
             const res = await textbooksAPI.upload(formData);
             setUploads(prev => [res.data, ...prev]);
-        } catch {
-            // Error handled silently
+        } catch (err) {
+            setUploadError(uploadErrorMessage(err));
         } finally {
             setUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    // Files are served only through the authenticated download endpoint
+    // (the raw /media/ link is not served in production).
+    const openUpload = async (u: PDFUpload) => {
+        try {
+            const res = await api.get(`/textbooks/uploads/${u.id}/download/`, { responseType: 'blob' });
+            const url = URL.createObjectURL(res.data as Blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = u.file?.split('/').pop() || u.title;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        } catch {
+            setUploadError('Could not download this file.');
         }
     };
 
@@ -125,7 +157,7 @@ export default function TextbooksPage() {
                         <div className="relative mb-6">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
                             <input
-                                className="input-field pl-10 w-full"
+                                className="input-field pl-10! w-full"
                                 placeholder="Search textbooks..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
@@ -188,7 +220,9 @@ export default function TextbooksPage() {
                                                 <div>
                                                     <h3 className="font-bold text-sm leading-tight">{book.name}</h3>
                                                     <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{book.author}</p>
-                                                    <span className="badge text-xs mt-2" style={{ background: `${book.color}10`, color: book.color }}>
+                                                    {/* Text mixed halfway toward the foreground: the raw -400/-500 accent
+                                                        failed contrast on its own 6% tint (light mode; slate in dark). */}
+                                                    <span className="badge text-xs mt-2" style={{ background: `${book.color}10`, color: `color-mix(in srgb, ${book.color} 50%, var(--color-foreground))` }}>
                                                         {book.subject}
                                                     </span>
                                                 </div>
@@ -209,13 +243,17 @@ export default function TextbooksPage() {
                             <Upload className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--accent-primary)', opacity: 0.5 }} />
                             <p className="text-sm font-medium mb-2">Upload your study materials</p>
                             <p className="text-xs mb-4" style={{ color: 'var(--text-secondary)' }}>
-                                PDF notes, handwritten scans, or study guides
+                                PDF notes, handwritten scans, or study guides (PDF, DOC, DOCX, TXT or MD, up to 20 MB).
+                                Uploads are kept for your own reference; they are not added to the AI tutor.
                             </p>
                             <label className="btn-primary inline-flex cursor-pointer">
                                 <Upload className="w-4 h-4" />
                                 {uploading ? 'Uploading...' : 'Choose File'}
                                 <input type="file" accept=".pdf,.doc,.docx,.txt,.md" className="hidden" onChange={handleUpload} disabled={uploading} />
                             </label>
+                            {uploadError && (
+                                <p className="text-xs mt-3" role="alert" style={{ color: '#ef4444' }}>{uploadError}</p>
+                            )}
                         </div>
 
                         {uploads.length === 0 ? (
@@ -239,17 +277,18 @@ export default function TextbooksPage() {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className={`badge text-xs ${u.is_processed ? '' : ''}`} style={{
-                                                background: u.is_processed ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                                                color: u.is_processed ? '#10b981' : '#f59e0b',
+                                            <span className="badge text-xs" style={{
+                                                background: u.is_processed ? 'rgba(16,185,129,0.1)' : 'rgba(6,182,212,0.1)',
+                                                color: u.is_processed ? '#10b981' : 'var(--accent-primary)',
                                             }}>
-                                                {u.is_processed ? 'Indexed' : 'Pending'}
+                                                {u.is_processed ? 'Indexed' : 'Saved'}
                                             </span>
                                             {u.file && (
-                                                <a href={u.file} target="_blank" rel="noopener noreferrer"
+                                                <button type="button" onClick={() => openUpload(u)}
+                                                    aria-label={`Download ${u.title}`}
                                                     className="p-2 rounded-lg hover:bg-white/5">
-                                                    <ExternalLink className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
-                                                </a>
+                                                    <Download className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+                                                </button>
                                             )}
                                         </div>
                                     </div>

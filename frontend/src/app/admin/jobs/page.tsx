@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { jobsAPI, questionsAPI } from '@/lib/api';
+import { hasNextPage, listCount, listRows } from '../_lib/adminHelpers';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,9 @@ export default function AdminJobsPage() {
     const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
 
     const [jobs, setJobs] = useState<any[]>([]);
+    const [jobsTotal, setJobsTotal] = useState(0);
+    const [jobsNextPage, setJobsNextPage] = useState<number | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [tracks, setTracks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -55,31 +59,41 @@ export default function AdminJobsPage() {
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<JobForm>(EMPTY_FORM);
 
-    const fetchJobs = useCallback(async () => {
-        setLoading(true);
+    // The jobs list is paginated (20 per page): page 1 replaces the list,
+    // "Load more" appends the next page.
+    const fetchJobs = useCallback(async (page = 1) => {
+        if (page === 1) setLoading(true);
+        else setLoadingMore(true);
         setError(null);
         try {
-            const res = await jobsAPI.list();
-            const rows = res.data.results || res.data || [];
-            setJobs(Array.isArray(rows) ? rows : []);
-            // Use centralized api.ts so base URL failover (DigitalOcean primary
-            // + onrender.com blacklist) applies. Falls back silently if the
-            // exam-tracks endpoint is unavailable — jobs work fine without it.
-            try {
-                const trackRes = await questionsAPI.getExamTracks();
-                const trackData = trackRes.data?.results || trackRes.data || [];
-                setTracks(Array.isArray(trackData) ? trackData : []);
-            } catch {
-                setTracks([]);
-            }
+            const res = await jobsAPI.list({ page });
+            const rows = listRows<any>(res.data);
+            setJobs(prev => (page === 1 ? rows : [...prev, ...rows]));
+            setJobsTotal(listCount(res.data));
+            setJobsNextPage(hasNextPage(res.data) ? page + 1 : null);
         } catch (err) {
             console.error(err);
             setError('Could not load jobs. Check the API connection.');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     }, []);
 
+    // Exam tracks for the target-track picker. Use centralized api.ts so base
+    // URL failover (DigitalOcean primary + onrender.com blacklist) applies.
+    // Falls back silently if the endpoint is unavailable — jobs work without it.
+    const fetchTracks = useCallback(async () => {
+        try {
+            const trackRes = await questionsAPI.getExamTracks();
+            setTracks(listRows<any>(trackRes.data));
+        } catch {
+            setTracks([]);
+        }
+    }, []);
+
+    // Single load, after the admin gate. (A second unconditional effect used
+    // to fetch everything again on every mount, even for non-admins.)
     useEffect(() => {
         if (authLoading) return;
         if (!user) {
@@ -90,12 +104,9 @@ export default function AdminJobsPage() {
             router.replace('/dashboard');
             return;
         }
-        fetchJobs();
-    }, [authLoading, user, isAdmin, router, fetchJobs]);
-
-    useEffect(() => {
-        fetchJobs();
-    }, [fetchJobs]);
+        fetchJobs(1);
+        fetchTracks();
+    }, [authLoading, user, isAdmin, router, fetchJobs, fetchTracks]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -104,7 +115,7 @@ export default function AdminJobsPage() {
         try {
             await jobsAPI.create({ ...formData, admin_edited: true });
             setFormData(EMPTY_FORM);
-            await fetchJobs();
+            await fetchJobs(1);
         } catch (err) {
             console.error(err);
             setError('Error creating job. Verify all fields are valid.');
@@ -118,7 +129,9 @@ export default function AdminJobsPage() {
         setDeletingId(id);
         try {
             await jobsAPI.remove(id);
-            await fetchJobs();
+            // Drop it locally so rows already loaded with "Load more" stay.
+            setJobs(prev => prev.filter(job => job.id !== id));
+            setJobsTotal(total => Math.max(0, total - 1));
         } catch (err) {
             console.error(err);
             setError('Could not delete job.');
@@ -141,9 +154,10 @@ export default function AdminJobsPage() {
         return null;
     }
 
+    // Inside the AppShell layout, .page-container already pads the page.
     return (
-        <div className="p-6 max-w-5xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 [.page-container_&]:p-0 max-w-5xl mx-auto space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <Briefcase className="h-6 w-6" />
@@ -153,7 +167,7 @@ export default function AdminJobsPage() {
                         Manage medical job postings shown to candidates.
                     </p>
                 </div>
-                <Button variant="outline" onClick={fetchJobs} disabled={loading}>
+                <Button variant="outline" onClick={() => fetchJobs(1)} disabled={loading}>
                     {loading ? 'Refreshing…' : 'Refresh'}
                 </Button>
             </div>
@@ -171,9 +185,8 @@ export default function AdminJobsPage() {
                         Create New Job
                     </CardTitle>
                     <CardDescription>
-                        Posted jobs appear on the candidate jobs board immediately. Set{' '}
-                        <code>admin_edited=true</code> (set automatically) so the scraper
-                        never overwrites them.
+                        Posted jobs appear on the candidate jobs board immediately and are never
+                        overwritten by the job scraper.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -247,28 +260,43 @@ export default function AdminJobsPage() {
                                 placeholder="MBBS + MS/MD in Cardiology; MCI registration required"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">Target Exam Tracks</label>
-                            <select
-                                multiple
-                                value={formData.exam_tracks.map(String)}
-                                onChange={(e) => {
-                                    const selected = Array.from(
-                                        e.target.selectedOptions,
-                                        option => parseInt(option.value),
-                                    );
-                                    setFormData({ ...formData, exam_tracks: selected });
-                                }}
-                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-24 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                {tracks.map(t => (
-                                    <option key={t.id} value={t.id} className="p-1">{t.name}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-muted-foreground">
-                                Hold Ctrl/Cmd to select multiple.
-                            </p>
-                        </div>
+                        {/* One checkbox per track: a <select multiple> needed
+                            Ctrl/Cmd-click, which phones and the app don't have,
+                            and showed no clear selected state. */}
+                        <fieldset className="min-w-0 space-y-1">
+                            <legend className="text-sm font-medium">Target Exam Tracks</legend>
+                            {tracks.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No exam tracks available.</p>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                                    {tracks.map(t => {
+                                        const trackId = Number(t.id);
+                                        return (
+                                            <label
+                                                key={t.id}
+                                                className="flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 accent-primary"
+                                                    checked={formData.exam_tracks.includes(trackId)}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            exam_tracks: checked
+                                                                ? [...prev.exam_tracks.filter(id => id !== trackId), trackId]
+                                                                : prev.exam_tracks.filter(id => id !== trackId),
+                                                        }));
+                                                    }}
+                                                />
+                                                {t.name}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </fieldset>
                         <Button type="submit" disabled={submitting}>
                             {submitting ? 'Creating…' : 'Create Job'}
                         </Button>
@@ -278,9 +306,10 @@ export default function AdminJobsPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Existing Jobs ({jobs.length})</CardTitle>
+                    <CardTitle>Existing Jobs ({jobsTotal || jobs.length})</CardTitle>
                     <CardDescription>
                         Posted jobs visible on the candidate jobs board.
+                        {jobsTotal > jobs.length && ` Showing ${jobs.length} of ${jobsTotal}.`}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -342,6 +371,18 @@ export default function AdminJobsPage() {
                                     </Button>
                                 </div>
                             ))}
+                            {jobsNextPage !== null && (
+                                <div className="flex justify-center pt-1">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => fetchJobs(jobsNextPage)}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading…' : 'Load more'}
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>

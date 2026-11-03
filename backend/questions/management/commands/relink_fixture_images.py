@@ -27,6 +27,19 @@ Run:
     python manage.py relink_fixture_images               # dry-run, prints counts
     python manage.py relink_fixture_images --apply       # persist
     python manage.py relink_fixture_images --apply --fixture path/to/fixture.json
+    python manage.py relink_fixture_images --apply --mark-missing
+
+Safety (it runs with --apply on every deploy):
+    * A URL whose image file is not on disk is LEFT UNTOUCHED by default and
+      reported as unresolved — a fresh container has no fixture images, and
+      rewriting every URL there destroyed the references before the images
+      could be uploaded. ``--mark-missing`` replaces such a URL with the
+      reversible marker ``[image unavailable: <exam>/<path>]``; a later run
+      relinks the marker once the file exists.
+    * The fixture mirror writes only ``[[img:N]]`` ids of QuestionImage rows
+      created / found in THIS run for the same question (it used to invent
+      ids from 10,000,001 upwards). A relative ``--fixture`` path is looked
+      up in the current directory, then the backend dir, then the repo root.
 """
 from __future__ import annotations
 
@@ -49,6 +62,30 @@ logger = logging.getLogger(__name__)
 BARE_MEDIA_RE = re.compile(
     r"/media/fixtures/images/(?P<exam>[a-z0-9_]+)/(?P<path>[^\s)\]\"'>]+)"
 )
+
+# Reversible marker written by --mark-missing (keeps exam + path so a later
+# run can relink it). The old lossy "[image unavailable: <basename>]" marker
+# does not match (it has no exam/ prefix) and is left alone.
+MISSING_MARKER_RE = re.compile(
+    r"\[image unavailable: (?P<exam>[a-z0-9_]+)/(?P<path>[^\]\s]+)\]"
+)
+
+
+def _missing_marker(exam: str, rel_path: str) -> str:
+    return f"[image unavailable: {exam}/{rel_path}]"
+
+
+def _resolve_fixture_path(raw: str) -> Path:
+    """Find a relative fixture path from cwd, the backend dir, or the repo root."""
+    from django.conf import settings
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    base = Path(settings.BASE_DIR)
+    for candidate in (Path.cwd() / p, base / p, base.parent / p):
+        if candidate.exists():
+            return candidate
+    return Path.cwd() / p
 
 
 TEXT_FIELDS = (
@@ -139,6 +176,11 @@ class Command(BaseCommand):
             "--batch-size", type=int, default=200,
             help="DB save batch size.",
         )
+        parser.add_argument(
+            "--mark-missing", action="store_true",
+            help="Replace URLs whose file is missing with the reversible "
+                 "'[image unavailable: <exam>/<path>]' marker (default: leave them).",
+        )
 
     # ------------------------------------------------------------------
     # Entry
@@ -147,6 +189,11 @@ class Command(BaseCommand):
         apply = options["apply"]
         fixture = options["fixture"]
         batch_size = options["batch_size"]
+        self.mark_missing = bool(options.get("mark_missing"))
+        # (question pk, exam, rel_path) → QuestionImage pk resolved this run;
+        # the only ids the fixture mirror may write.
+        self.relinked: dict[tuple[int, str, str], int] = {}
+        self.unresolved = 0
 
         if not apply:
             self.stdout.write(self.style.WARNING(
@@ -170,7 +217,7 @@ class Command(BaseCommand):
                 original = getattr(q, field, None) or ""
                 if not original:
                     continue
-                if not BARE_MEDIA_RE.search(original):
+                if not (BARE_MEDIA_RE.search(original) or MISSING_MARKER_RE.search(original)):
                     continue
                 new_value, n_created = self._rewrite_field(
                     q, field, original, apply=apply,
@@ -198,14 +245,19 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"\n{'APPLIED' if apply else 'DRY-RUN'} "
             f"scanned={scanned} questions_touched={questions_touched} "
-            f"images_created={images_created}"
+            f"images_created={images_created} unresolved_missing_on_disk={self.unresolved}"
         ))
         for field, count in rewritten_fields.items():
             if count:
                 self.stdout.write(f"  {field}: {count} fields rewritten")
+        if self.unresolved and not self.mark_missing:
+            self.stdout.write(self.style.WARNING(
+                f"  {self.unresolved} URL(s) point at images that are not on disk; "
+                "left unchanged (upload the images, or re-run with --mark-missing)."
+            ))
 
         if fixture and apply:
-            self._rewrite_fixture_file(Path(fixture), rewritten_fields)
+            self._rewrite_fixture_file(_resolve_fixture_path(fixture), rewritten_fields)
         elif fixture and not apply:
             self.stdout.write(self.style.WARNING(
                 "Fixture path provided but --apply not set — fixture left untouched."
@@ -229,30 +281,28 @@ class Command(BaseCommand):
             nonlocal n_created
             exam = match.group("exam")
             rel_path = match.group("path").replace("\\", "/")
-            # If this is already `[[img:N]]`, leave it alone.
             img = self._resolve_or_create_image(question, exam, rel_path, apply=apply)
             if img is None:
-                # Bug 2026-07-28 — instead of leaving the bare
-                # `/media/...` URL in place (which 404s in
-                # production and renders as a broken-image icon for
-                # students), rewrite it to a visible "image
-                # unavailable" placeholder. The frontend's
-                # FormattedText components.img onError fallback
-                # renders an explanatory placeholder for any
-                # markdown image that 404s, but a bare URL that
-                # survives the markdown parse produces the same
-                # broken-image icon as before — so we replace it
-                # with an explicit text marker that:
-                #   1. Tells the student the image is missing
-                #      (instead of a silent broken icon).
-                #   2. Is greppable by admins / QA scripts to find
-                #      rows that still need a real image upload.
-                basename = rel_path.split("/")[-1] or "image"
-                return f"[image unavailable: {basename}]"
+                # The image is not on disk (or this is a dry run). Never
+                # destroy the reference: keep the URL / marker as it is,
+                # unless --mark-missing asks for the visible, reversible
+                # "[image unavailable: <exam>/<path>]" marker, which keeps
+                # the full path so a later run can relink it. (This used to
+                # write "[image unavailable: <basename>]" unconditionally on
+                # every deploy, losing the path for good.)
+                if apply and find_image_on_disk(exam, rel_path) is None:
+                    self.unresolved += 1
+                    if self.mark_missing:
+                        return _missing_marker(exam, rel_path)
+                return match.group(0)
             n_created += 1
+            self.relinked[(question.pk, exam, rel_path)] = img.id
             return f"[[img:{img.id}]]"
 
         new_value = BARE_MEDIA_RE.sub(repl, original)
+        new_value = MISSING_MARKER_RE.sub(repl, new_value)
+        if new_value == original:
+            return original, n_created
         new_value = normalize_text(new_value)
         return new_value, n_created
 
@@ -281,29 +331,15 @@ class Command(BaseCommand):
                 return img
 
         # 2. Look on disk — if the file is missing we can't create a
-        #    QuestionImage row that resolves to a real image, so we
-        #    fall back to leaving a visible "image unavailable"
-        #    marker in the text rather than the silent bare-URL
-        #    fallback that 404s in production. This is the
-        #    frontend's `onerror` placeholder's data source: the
-        #    admin can grep for these markers to find rows that
-        #    still need a real image uploaded.
+        #    QuestionImage row that resolves to a real image.
         on_disk = find_image_on_disk(exam, rel_path)
         if on_disk is None:
             logger.info(f"Missing on disk (no candidate found): "
                         f"<BASE_DIR or MEDIA_ROOT>/fixtures/images/"
                         f"{exam}/{rel_path}")
-            # Bug 2026-07-28 — even when the file is missing we
-            # rewrite the URL to a visible "image unavailable"
-            # placeholder. The frontend's components.img onError
-            # renders an explanatory placeholder for any
-            # `[[img:N]]` whose image_id row 404s, but a bare
-            # `/media/...` URL survives react-markdown unchanged
-            # because there's no QuestionImage to resolve it to.
-            # Emitting an explicit text marker here lets the
-            # admin/grep pipeline find broken rows, and the
-            # student sees a meaningful message instead of the
-            # legacy `/media/...` raw URL.
+            # The caller keeps the original text (or, with --mark-missing,
+            # writes the reversible "[image unavailable: <exam>/<path>]"
+            # marker) so the reference is never lost.
             return None
 
         # 3. Build the row (only if apply=True).
@@ -312,6 +348,14 @@ class Command(BaseCommand):
             return None
 
         rel_to_media = f"fixtures/images/{exam}/{rel_path}"
+        from django.conf import settings
+        media_copy = Path(settings.MEDIA_ROOT) / rel_to_media
+        if not media_copy.exists():
+            # Found only under BASE_DIR: the ImageField path is relative to
+            # MEDIA_ROOT, so copy the file there or the new row would 404.
+            import shutil
+            media_copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(on_disk, media_copy)
         img = QuestionImage.objects.create(
             question=question,
             page_number=0,
@@ -344,11 +388,10 @@ class Command(BaseCommand):
 
         rewritten = 0
 
-        # Build a basename → pk lookup so we don't double-create rows
-        # during a re-run. The fixture rewrite is best-effort: when the
-        # same fixture is loaded twice, the second pass is a no-op.
-        existing_pks: dict[tuple[int, str], int] = {}
-
+        # Only ids of QuestionImage rows created / found in this run for the
+        # same question are written; anything else keeps its original text.
+        # (This used to invent ids from 10,000,001 upwards — tokens that point
+        # at no image at all.)
         for entry in data:
             if entry.get("model") != "questions.question":
                 continue
@@ -358,29 +401,24 @@ class Command(BaseCommand):
                 if k not in fields or not isinstance(fields[k], str):
                     continue
                 original = fields[k]
-                if not BARE_MEDIA_RE.search(original):
+                if not (BARE_MEDIA_RE.search(original) or MISSING_MARKER_RE.search(original)):
                     continue
 
                 def repl(match: re.Match) -> str:
                     exam = match.group("exam")
                     rel_path = match.group("path").replace("\\", "/")
-                    basename = rel_path.split("/")[-1].lower()
-                    key = (q_pk or -1, basename)
-                    if key in existing_pks:
-                        return f"[[img:{existing_pks[key]}]]"
-                    # Pick a stable deterministic pk so the next loader
-                    # pass can detect re-runs and skip duplicates.
-                    new_pk = max(
-                        (existing_pks[v] for v in existing_pks),
-                        default=10_000_000,
-                    ) + 1
-                    existing_pks[key] = new_pk
-                    return f"[[img:{new_pk}]]"
+                    img_id = self.relinked.get((q_pk, exam, rel_path))
+                    return f"[[img:{img_id}]]" if img_id else match.group(0)
 
                 new_text = BARE_MEDIA_RE.sub(repl, original)
+                new_text = MISSING_MARKER_RE.sub(repl, new_text)
                 if new_text != original:
                     fields[k] = new_text
                     rewritten += 1
+
+        if not rewritten:
+            self.stdout.write("No fixture rows matched an image relinked in this run — fixture left as-is.")
+            return
 
         tmp = fixture_path.with_suffix(fixture_path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8", newline="\n") as f:

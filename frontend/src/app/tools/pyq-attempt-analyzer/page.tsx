@@ -8,7 +8,7 @@ const title = 'UPSC CMS PYQ Attempt Analyzer 2026 — Topic Mastery & Weak Areas
 const description = 'Analyze your UPSC CMS previous year question performance. Enter subject-wise attempt data to see topic mastery percentages, improvement areas, and accuracy trends.';
 const slug = 'pyq-attempt-analyzer';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

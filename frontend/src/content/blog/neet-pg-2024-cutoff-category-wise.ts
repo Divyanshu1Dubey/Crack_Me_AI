@@ -30,7 +30,7 @@ const post: BlogPost = {
     ],
     difficulty: 'beginner',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-08-03',
@@ -48,11 +48,11 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise NEET PG PYQs (free)',
-        href: '/questions?exam=NEET_PG',
+        href: '/questions?exam=neet-pg',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'neet-pg-2024-cutoff', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/neet-pg', '/simulator', '/blog/neet-pg-preparation-strategy'],
+    relatedExamPaths: ['/neet-pg', '/simulator', '/blog/neet-pg-preparation-strategy-study-plans'],
     references: [
         {
             label: 'NBE — NEET PG 2024 Final Result (official PDF)',
@@ -68,7 +68,7 @@ const post: BlogPost = {
         },
         {
             label: 'CrackCMS — NEET PG PYQ archive',
-            url: 'https://cracklabs.app/questions?exam=NEET_PG',
+            url: 'https://www.cracklabs.app/questions?exam=neet-pg',
         },
     ],
     revisionLog: [
@@ -190,7 +190,7 @@ A 70th-percentile score in NEET PG 2024 was ~370/800. A 90th-percentile score wa
 
 ### Step 3 — Plan your preparation
 
-See the [NEET PG 4-month + 8-month study plan](/blog/neet-pg-preparation-strategy) — it pairs with the rank targets above. The plan assumes you have at least 4 focused months.
+See the [NEET PG 4-month + 8-month study plan](/blog/neet-pg-preparation-strategy-study-plans) — it pairs with the rank targets above. The plan assumes you have at least 4 focused months.
 
 ---
 
@@ -231,7 +231,7 @@ Yes, by 2–5 percentile points year-on-year.
 1. NBE. *NEET PG 2024 Final Result (official PDF)*. [natboard.edu.in](https://natboard.edu.in/)
 2. MCC. *Medical Counselling Committee — closing ranks archive*. [mcc.nic.in](https://mcc.nic.in/)
 3. NMC. *National Medical Commission — seat matrix, gazette*. [nmc.org.in](https://www.nmc.org.in/)
-4. CrackCMS. *NEET PG PYQ archive*. [cracklabs.app/questions?exam=NEET_PG](https://cracklabs.app/questions?exam=NEET_PG)
+4. CrackCMS. *NEET PG PYQ archive*. [cracklabs.app/questions?exam=neet-pg](https://www.cracklabs.app/questions?exam=neet-pg)
 
 ---
 

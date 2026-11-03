@@ -70,8 +70,29 @@ class TestStartFreemiumGateTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.locked = Test.objects.create(title='Locked test', test_type='mixed')
+        from accounts.models_freemium import FreeShowcaseQuestion
+        from questions.models import Question, Subject
+        # Business rule (2026-08-04): only small practice tests (daily or
+        # <=20 questions) are free; the lock is decided by the *actual*
+        # number of attached questions. Wave 3: and only if every question
+        # is a free showcase question (scoring any other one reveals its
+        # answer -- tests_engine.entitlement).
+        subject = Subject.objects.create(name='Gate Subject')
+        questions = [
+            Question.objects.create(
+                question_text=f'Gate Q{i}', option_a='A', option_b='B', year=2024,
+                option_c='C', option_d='D', correct_answer='A', subject=subject,
+            )
+            for i in range(21)
+        ]
+        for position, question in enumerate(questions[:5]):
+            FreeShowcaseQuestion.objects.create(question=question, year=2024, position=position)
+        cls.locked = Test.objects.create(title='Locked test', test_type='mixed', num_questions=21)
+        cls.locked.questions.set(questions)
         cls.preview = Test.objects.create(title='Free preview test', test_type='mixed', is_free_preview=True)
+        cls.preview.questions.set(questions[:5])
+        cls.small_premium = Test.objects.create(title='Small premium test', test_type='mixed')
+        cls.small_premium.questions.set(questions[4:8])
 
     def _user(self, *, is_admin=False, is_premium=False, suffix=''):
         user = User.objects.create(
@@ -117,11 +138,21 @@ class TestStartFreemiumGateTests(TestCase):
         self.assertEqual(response.data.get('feature'), 'Mock Tests')
 
     def test_free_user_preview_test_passes(self):
-        """Free user + preview test → 200, attempt_id returned."""
+        """Free user + small test of free questions → 200, attempt_id returned."""
         free = self._user(suffix='preview')
         response = self._start(free, self.preview.id)
         self.assertEqual(response.status_code, 200)
         self.assertIn('attempt_id', response.data)
+
+    def test_free_user_small_test_with_premium_questions_returns_402(self):
+        """Free user + small test with a non-showcase question → 402, no attempt."""
+        free = self._user(suffix='small-premium')
+        response = self._start(free, self.small_premium.id)
+        self.assertEqual(response.status_code, 402)
+        self.assertEqual(response.data.get('code'), 'upgrade_required')
+        self.assertFalse(self.small_premium.attempts.filter(user=free).exists())
+        premium = self._user(is_premium=True, suffix='small-premium')
+        self.assertEqual(self._start(premium, self.small_premium.id).status_code, 200)
 
     def test_premium_user_locked_test_passes(self):
         """Premium user can start any test, including non-preview."""

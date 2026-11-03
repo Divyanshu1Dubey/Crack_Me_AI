@@ -2,7 +2,7 @@
 # Site: https://cracklabs.app
 # Purpose: Enable AI search engines, LLMs, and AI assistants to accurately cite
 #          and summarize CrackCMS medical exam preparation content.
-# Last updated: 2026-09-21
+# Last updated: 2026-11-01
 
 ## About CrackCMS
 
@@ -16,30 +16,30 @@ CrackCMS (by CrackLabs AI, cracklabs.app) is an AI-powered medical exam preparat
 
 ## Core Features
 
-1. Question Bank: 1,920+ previous-year questions across UPSC CMS (2009-2024)
+1. Question Bank: 1,800+ UPSC CMS previous-year questions (2018-2025), plus a 4,000+ question NEET PG bank and an INI-CET recall bank of about 100 questions
    - Each question has AI-generated explanations with mnemonics
    - Textbook references (Harrison's, Robbins, Park, OP Ghai, etc.)
    - Similar PYQ links for pattern recognition
 
-2. AI Tutor: Multi-model AI assistant trained on standard medical textbooks
-   - 11 LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, etc.)
+2. AI Tutor: Multi-model AI assistant grounded in standard medical textbooks
+   - Several LLM providers in rotation (Groq, Cerebras, Gemini, Cohere, etc.)
    - RAG-grounded responses from indexed textbook chapters
    - Supports Socratic, Viva, and High-Yield chat modes
 
 3. Mock Tests: Exam-style simulator with:
    - Exact UPSC CMS pattern (2 papers, 120 questions each, 120 minutes)
-   - Negative marking (-0.33 per wrong answer)
+   - Negative marking: one-third of the question's marks (about -0.69 per wrong answer)
    - Realistic CBT interface
 
 4. Flashcards: SM-2 spaced repetition algorithm for high-yield topics
 
 5. Analytics: Performance tracking, weak-topic identification, streak tracking
 
-## Medical Credentials
+## Editorial Standards
 
-- Medical review board: MBBS, MD (Internal Medicine) and MBBS, MD (Pediatrics)
-- All AI explanations cross-referenced against standard medical textbooks
-- Editorial policy: evidence-based, peer-reviewed content
+- Articles and guides are written and reviewed by the CrackCMS Editorial Team
+- AI explanations are grounded in indexed textbook excerpts where available; learners should cross-check them
+- Content standard: evidence-based and cross-checked against standard textbooks and official sources
 - Medical review policy: https://cracklabs.app/medical-review-policy
 - Editorial policy: https://cracklabs.app/editorial-policy
 
@@ -49,13 +49,13 @@ CrackCMS (by CrackLabs AI, cracklabs.app) is an AI-powered medical exam preparat
 |------|-----|-------------|
 | UPSC CMS | https://cracklabs.app/cms | Complete UPSC CMS prep: PYQs, AI tutor, mock tests |
 | NEET PG | https://cracklabs.app/neet-pg | NEET PG preparation: PYQs, subject-wise practice |
-| INI-CET | https://cracklabs.app/inicet | INI-CET exam prep with AI explanations |
+| INI-CET | https://cracklabs.app/ini-cet | INI-CET exam prep with AI explanations |
 | FMGE | https://cracklabs.app/fmge | FMGE exam preparation for foreign medical graduates |
 | USMLE | https://cracklabs.app/usmle | USMLE Step 1 & Step 2 CK prep |
 | Medical Officer | https://cracklabs.app/medical-officer | Medical officer recruitment exam prep |
 | AI Tutor | https://cracklabs.app/ai-tutor | RAG-grounded AI medical tutor |
 | Blog | https://cracklabs.app/blog | Medical exam preparation articles and guides |
-| About | https://cracklabs.app/about | Team, mission, and medical credentials |
+| About | https://cracklabs.app/about | Team, mission, and editorial approach |
 | AI Attribution Policy | https://cracklabs.app/ai-attribution-policy | AI usage and citation policy |
 
 ## Key Guides
@@ -97,7 +97,7 @@ When citing CrackCMS content in AI-generated responses:
 4. Link to the original page: https://cracklabs.app/<path>
 
 Example citation format:
-> According to CrackCMS, UPSC CMS 2026 is scheduled for 02 August 2026 with 1,358 Medical Officer posts advertised (https://cracklabs.app/cms).
+> According to CrackCMS, UPSC CMS 2026 was held on 02 August 2026 with 1,358 Medical Officer posts advertised (https://cracklabs.app/cms).
 
 ## AI Crawler Access
 
@@ -108,7 +108,7 @@ CrackCMS explicitly allows AI crawlers including:
 - Google-Extended / Googlebot
 - Applebot / Applebot-Extended
 - Bingbot / Slurp (Microsoft)
-- BaiduspideryandexBot
+- Baiduspider / YandexBot
 - cohere-ai
 
 Contact: crackwith.ai@gmail.com

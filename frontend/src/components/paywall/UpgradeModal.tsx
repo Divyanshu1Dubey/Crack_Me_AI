@@ -59,19 +59,23 @@ export function UpgradeModal() {
             </Dialog.Close>
           </div>
 
+          {/* Only what the plans really grant (accounts.models.PLAN_FEATURES,
+              /subscription): analytics is free for everyone, there is no
+              adaptive-test UI or PDF export, and unlimited AI is the 1-year
+              plan only (the others add AI credits). */}
           <Dialog.Description className="text-sm text-slate-300 mb-5 leading-relaxed">
             {state.remaining === 0 ? (
-              <>You&rsquo;ve reached today&rsquo;s free limit for <strong>{state.feature}</strong>. Subscribe for unlimited access.</>
+              <>You&rsquo;ve reached today&rsquo;s free limit for <strong>{state.feature}</strong>. Subscribe to remove the daily limit.</>
             ) : (
-              <>Get <strong>{state.feature}</strong> and the rest of the CrackCMS library — adaptive tests, deep analytics, all PYQ years, all mock tests.</>
+              <>Get <strong>{state.feature}</strong> and the rest of the CrackCMS library — all PYQ years with explanations and all mock tests.</>
             )}
           </Dialog.Description>
 
           <ul className="space-y-1.5 text-sm text-slate-200 mb-6">
-            <li className="flex items-center gap-2"><span className="text-amber-400">✓</span> Unlimited AI Tutor (11-provider rotation)</li>
-            <li className="flex items-center gap-2"><span className="text-amber-400">✓</span> All 100+ mock tests + adaptive engine</li>
-            <li className="flex items-center gap-2"><span className="text-amber-400">✓</span> Full PYQ bank with detailed explanations</li>
-            <li className="flex items-center gap-2"><span className="text-amber-400">✓</span> Per-topic mastery &amp; PDF export</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> AI Tutor credits on every plan, unlimited on the 1-year plan</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> All mock tests with negative marking</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Full PYQ bank with detailed explanations</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Textbook references and page screenshots</li>
           </ul>
 
           <div className="flex flex-col gap-2">
@@ -95,8 +99,8 @@ export function UpgradeModal() {
             </Dialog.Close>
           </div>
 
-          <p className="mt-4 text-center text-xs text-slate-500">
-            Cancel anytime · Used by 10,000+ UPSC CMS aspirants
+          <p className="mt-4 text-center text-xs text-slate-400">
+            One-time payment · No auto-renewal
           </p>
         </Dialog.Content>
       </Dialog.Portal>

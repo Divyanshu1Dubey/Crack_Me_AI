@@ -18,15 +18,15 @@
  * `examType`   → backend `exam_type` enum (filters `Question.exam_type`)
  * `examSource` → backend `exam_source` label (filters `Question.exam_source`)
  *                and is shown in the page title / sticky year banner.
- * `defaultYear`, `initialQueryId`, `initialBookmarkOnly` pre-seed the
- * initial filter state from URL params so links like
- * `/questions/neet-pg/practice?year=2025&q=12345` open the right
- * question immediately.
+ * `defaultYear`, `initialSubject`, `initialQueryId`, `initialBookmarkOnly`
+ * pre-seed the initial filter state from URL params so links like
+ * `/questions/neet-pg/practice?year=2025&q=12345` or
+ * `/questions?exam=cms&subject=medicine` open the right view immediately.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { questionsAPI, aiAPI, testsAPI, extractApiErrorMessage } from '@/lib/api';
@@ -53,6 +53,43 @@ import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import { analytics } from '@/lib/analytics';
+import {
+    aiFailureNotice, answerLetter, attemptVerdict, classifyAiFailure, collectPages, detailFailureKind, errorStatus,
+    fetchPageScreenshot, isPremiumUser, normaliseTextbookReferences, normaliseYears, pickExplanation, resolveSubjectParam,
+    retryAfterSeconds, summariseBankStats, upgradeRequiredFeature, type SubjectOption, type TextbookReference,
+} from '@/components/question/practiceData';
+
+/** Bank metadata loaded next to the list (filters + stats strip). */
+type MetaPart = 'subjects' | 'years' | 'stats';
+const META_PARTS: MetaPart[] = ['subjects', 'years', 'stats'];
+const NO_META_FAILED: Record<MetaPart, boolean> = { subjects: false, years: false, stats: false };
+
+// The global `.input-field` rule is unlayered CSS (10px vertical padding,
+// 14px font), so it beat these selects' Tailwind utilities and clipped
+// their text inside the 36px height. Same look, from theme tokens.
+const FILTER_SELECT_CLS =
+    'h-9 w-full min-w-0 rounded-[var(--radius)] border border-input bg-card px-3 text-[11px] text-foreground ' +
+    'transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20';
+
+/**
+ * Every subject row. The endpoint used to page at 20 rows (clipping
+ * 'Expert Curated', alphabetically last, into page 2), so follow `next`;
+ * a bare array (unpaginated) ends the loop after one request. The hard cap
+ * protects against a backend that returns an unbounded `next` pointer.
+ */
+async function fetchAllSubjects(): Promise<Subject[]> {
+    const collected: Subject[] = [];
+    let page = 1;
+    while (page <= 10) {
+        const res = await questionsAPI.getSubjects({ page, page_size: 100 });
+        const results = res.data?.results || res.data || [];
+        if (!Array.isArray(results) || results.length === 0) break;
+        collected.push(...results);
+        if (!res.data?.next) break;
+        page += 1;
+    }
+    return collected;
+}
 
 /** Color-swatch chip used inside the exam-mode palette legend. */
 function LegendChip({ color, label }: { color: string; label: string }) {
@@ -114,6 +151,12 @@ interface ExamQuestionBankProps {
     examSource: string;
     /** Optional year to pre-select from `?year=` URL param. */
     defaultYear?: string | null;
+    /**
+     * Optional subject to pre-select from `?subject=` — an id, name, code or
+     * public-page slug (`medicine`, `obg`, `General Medicine`); resolved
+     * against the subject list once it loads.
+     */
+    initialSubject?: string | null;
     /** Optional question id to auto-open from `?q=` URL param. */
     initialQueryId?: string | null;
     /** Optional bookmarked-only filter from `?bookmarked=1` URL param. */
@@ -126,6 +169,7 @@ export default function ExamQuestionBank({
     examType,
     examSource,
     defaultYear = null,
+    initialSubject = null,
     initialQueryId = null,
     initialBookmarkOnly = false,
 }: ExamQuestionBankProps) {
@@ -135,6 +179,7 @@ export default function ExamQuestionBank({
                 examType={examType}
                 examSource={examSource}
                 defaultYear={defaultYear}
+                initialSubject={initialSubject}
                 initialQueryId={initialQueryId}
                 initialBookmarkOnly={initialBookmarkOnly}
             />
@@ -146,6 +191,7 @@ function ExamQuestionBankInner({
     examType,
     examSource,
     defaultYear,
+    initialSubject,
     initialQueryId,
     initialBookmarkOnly,
 }: ExamQuestionBankProps) {
@@ -154,16 +200,15 @@ function ExamQuestionBankInner({
     const { setContextQuestionId } = useDock();
     const { show: showPaywall } = usePaywall();
     // Freemium: a user is "premium" if they have an active subscription OR
-    // are admin/staff — mirrors backend `accounts.utils.is_premium`.
-    const isPremium =
-        (user as { is_premium?: boolean } | null)?.is_premium === true ||
-        (user as { subscription_info?: { is_active?: boolean } } | null)?.subscription_info?.is_active === true ||
-        (user as { is_admin?: boolean } | null)?.is_admin === true;
+    // are admin/staff — mirrors backend `accounts.utils.is_premium` (the
+    // same helper the practice pages use).
+    const isPremium = isPremiumUser(user);
     // Broadcast whether a question is currently being solved so the
     // SidebarAutoHide controller can keep the sidebar collapsed for the
     // entire /questions session while a question is open.
     const { setQuestionFocused } = useQuestionFocus();
     const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
 
     // `examType` is the source of truth for which bank we're showing. We
@@ -171,6 +216,11 @@ function ExamQuestionBankInner({
     // is authoritative. (The standalone `/questions` page has its own
     // override behaviour; see `QuestionsBankSlim` below.)
     const [selectedExam, setSelectedExam] = useState<string>(examType);
+    // /questions?exam=… keeps this component mounted when only the query
+    // changes, so follow the prop instead of keeping the first exam.
+    if (examType !== selectedExam) {
+        setSelectedExam(examType);
+    }
 
     const [questions, setQuestions] = useState<Question[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -181,8 +231,30 @@ function ExamQuestionBankInner({
     const [selectedYear, setSelectedYear] = useState<string>(defaultYear ?? '');
     const [years, setYears] = useState<number[]>([]);
     const [qbankStats, setQbankStats] = useState<any>(null);
-    const [error, setError] = useState<string | null>(null);
+    // Metadata parts whose request failed for good (after the one automatic
+    // retry of a 429): the filter card offers a Retry for them.
+    const [metaFailed, setMetaFailed] = useState<Record<MetaPart, boolean>>(NO_META_FAILED);
+    // Years and stats belong to one exam: drop the previous exam's values
+    // when /questions?exam=… switches banks without remounting.
+    const metaScope = `${examType}|${examSource}`;
+    const [metaScopeShown, setMetaScopeShown] = useState(metaScope);
+    if (metaScope !== metaScopeShown) {
+        setMetaScopeShown(metaScope);
+        setYears([]);
+        setQbankStats(null);
+        setMetaFailed(NO_META_FAILED);
+    }
+    // The open question's detail request failed (premium question on the
+    // free plan, removed question, network): shown instead of a skeleton.
+    const [detailError, setDetailError] = useState<{ id: number; error: unknown } | null>(null);
+    // The server refused to grade this question on the free plan (402).
+    const [answerLockedId, setAnswerLockedId] = useState<number | null>(null);
     const [listError, setListError] = useState<string | null>(null);
+    // Shown over the list skeleton while a rate-limited (429) list request
+    // waits to retry.
+    const [listNotice, setListNotice] = useState<string | null>(null);
+    // 'failed' lets a `?subject=` link stop waiting for the subject list.
+    const [subjectsStatus, setSubjectsStatus] = useState<'loading' | 'ok' | 'failed'>('loading');
     const [selectedQuestion, setSelectedQuestion] = useState<number | null>(
         initialQueryId ? Number(initialQueryId) : null,
     );
@@ -190,14 +262,16 @@ function ExamQuestionBankInner({
     const [showAnswer, setShowAnswer] = useState(false);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [studyMode, setStudyMode] = useState<'practice' | 'exam'>('practice');
-    const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean; answeredAt: number }>>({});
+    // isCorrect null: the question has no answer key, so the pick is ungraded.
+    const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean | null; answeredAt: number }>>({});
     const [examPaletteOpen, setExamPaletteOpen] = useState(true);
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [aiExplanation, setAiExplanation] = useState<any>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [tokenError, setTokenError] = useState(false);
-    const [aiError, setAiError] = useState<string | null>(null);
+    // Short notice for a failed AI request (503 ai_unavailable, rate limit, …).
+    const [aiError, setAiError] = useState<{ title: string; message: string } | null>(null);
     const [flagOpen, setFlagOpen] = useState(false);
     const [flagCategory, setFlagCategory] = useState('wrong_answer');
     const [flagComment, setFlagComment] = useState('');
@@ -206,9 +280,76 @@ function ExamQuestionBankInner({
     const [flagError, setFlagError] = useState<string | null>(null);
     const [showAiDeepDive, setShowAiDeepDive] = useState(false);
     const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(initialBookmarkOnly ?? false);
+    // `?year=` / `?bookmarked=1` can change while this component stays
+    // mounted (a link to the same route with a new query). Re-seed the
+    // filters when the URL-derived props change; the user's own filter
+    // edits don't touch the URL, so they are left alone otherwise.
+    const [seededYear, setSeededYear] = useState(defaultYear ?? '');
+    if ((defaultYear ?? '') !== seededYear) {
+        setSeededYear(defaultYear ?? '');
+        setSelectedYear(defaultYear ?? '');
+    }
+    const [seededBookmarkOnly, setSeededBookmarkOnly] = useState(!!initialBookmarkOnly);
+    if (!!initialBookmarkOnly !== seededBookmarkOnly) {
+        setSeededBookmarkOnly(!!initialBookmarkOnly);
+        setBookmarkedOnly(!!initialBookmarkOnly);
+    }
+
+    // The subject filter's options. Three display-side improvements over
+    // the raw API payload:
+    //   1. The loader's "Expert Curated" Subject row exists in duplicate
+    //      (id=291 with 1285 questions, id=309 with 541 questions) because
+    //      the management command to merge them has not been run in
+    //      production. Collapse display duplicates by name, summing the
+    //      question_count so users see ONE "Expert Curated (1826)" entry.
+    //   2. Track-specific rows that own 0 questions are not useful as
+    //      filter chips — selecting them would always return an empty
+    //      result. Hide them.
+    //   3. The "(INI-CET)" / "(NEET PG)" / … suffixed rows would confuse a
+    //      CMS student, so they are hidden too — the dedicated INI-CET
+    //      player at /questions/inicet/practice renders its own subject
+    //      filter from the same source.
+    // Real medical subjects come first (alphabetical); "Expert Curated" is
+    // pinned last so the practice pool is clearly opt-in.
+    const subjectOptions = useMemo<SubjectOption[]>(() => {
+        const byName = new Map<string, SubjectOption>();
+        for (const s of subjects) {
+            const count = s.question_count || 0;
+            if (s.name.includes('(INI-CET)')) continue;
+            if (s.name.includes('(NEET PG)')) continue;
+            if (s.name.includes('(USMLE)')) continue;
+            if (s.name.includes('(FMGE)')) continue;
+            if (count <= 0) continue;
+            const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
+            const existing = byName.get(displayName);
+            if (!existing) {
+                byName.set(displayName, { id: s.id, name: displayName, code: s.code, count });
+            } else {
+                existing.count += count;
+            }
+        }
+        return Array.from(byName.values()).sort((a, b) => {
+            if (a.name === 'Expert Curated') return 1;
+            if (b.name === 'Expert Curated') return -1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [subjects]);
+
+    // `?subject=` (public pages link /questions?exam=<slug>&subject=<slug>)
+    // becomes the subject filter once the subject list is known, and again
+    // whenever the URL value changes. Until then the first list request
+    // waits, so the unfiltered bank doesn't flash first.
+    const subjectParam = (initialSubject ?? '').trim();
+    const [appliedSubjectParam, setAppliedSubjectParam] = useState('');
+    if (subjectParam !== appliedSubjectParam && (subjectsStatus !== 'loading' || !subjectParam)) {
+        setAppliedSubjectParam(subjectParam);
+        const subjectId = subjectParam ? resolveSubjectParam(subjectParam, subjectOptions) : null;
+        setSelectedSubject(subjectId ? String(subjectId) : '');
+    }
+    const subjectPending = subjectParam !== appliedSubjectParam;
     // Image viewer modal state — null when closed. Clicking a thumbnail
     // in the question image carousel opens ImageViewer at the right index,
-    // matching the standalone NEET-PG / INI-CET player UX.
+    // the same viewer the timed test player (/tests/[id]) uses.
     const [viewImageIdx, setViewImageIdx] = useState<number | null>(null);
 
     const [yearModalOpen, setYearModalOpen] = useState(false);
@@ -220,9 +361,28 @@ function ExamQuestionBankInner({
     const [examQuestions, setExamQuestions] = useState<Question[]>([]);
     const [examQuestionsLoading, setExamQuestionsLoading] = useState(false);
 
+    // `{references: TextbookReference[]}` after a lookup, `{error: true}` on failure.
     const [textbookRef, setTextbookRef] = useState<any>(null);
     const [textbookLoading, setTextbookLoading] = useState(false);
     const [textbookScreenshot, setTextbookScreenshot] = useState<string | null>(null);
+    // The page image is being fetched from /ai/screenshot/ (the question has
+    // no stored one, or the stored one failed to load).
+    const [textbookShotLoading, setTextbookShotLoading] = useState(false);
+    // Question id the in-flight textbook lookup belongs to; a response for
+    // a question the student has since left is dropped.
+    const textbookRequestFor = useRef<number | null>(null);
+    // The question /ai/screenshot/ was asked for (once per opened question),
+    // and a counter that lets only the newest screenshot request write.
+    const screenshotAskedFor = useRef<number | null>(null);
+    const screenshotSeq = useRef(0);
+    useEffect(() => {
+        const seq = screenshotSeq;
+        return () => { seq.current += 1; };
+    }, []);
+    // Same for the AI analysis request.
+    const aiRequestFor = useRef<number | null>(null);
+    // Same for the question detail: the open question's id.
+    const detailRequestFor = useRef<number | null>(null);
 
     const loadingMessages = useRef([
         '🧠 AI is crafting your personalised study notes...',
@@ -284,91 +444,168 @@ function ExamQuestionBankInner({
         return () => clearInterval(interval);
     }, [aiLoading]);
 
-    // Initial list + stats + subjects + years.
+    // Stats + subjects + years ("meta"). Each request settles on its own so
+    // a slow or failing /stats/ never blocks the filters or the list. A
+    // rate-limited (429) part is retried once after Retry-After, like the
+    // list; a part that still fails shows a "Retry" link in the filter card
+    // (a 429 used to leave the strip and the dropdowns empty, and a
+    // ?subject= link unfiltered, until a full reload).
+    // Subjects are NOT filtered by exam_type: the Question → Subject FK
+    // model uses the same medical subject names across CMS / NEET PG /
+    // INI-CET tracks, and the loader's "Imported" bucket is itself tagged
+    // exam_type='cms'. Filtering by exam_type=cms therefore hides every real
+    // medical subject (Anatomy, Surgery, etc.) and leaves only the two
+    // "Expert Curated" rows. Years ARE the bank's exam's (contract C11).
+    const metaSeq = useRef<Record<MetaPart, number>>({ subjects: 0, years: 0, stats: 0 });
+    const metaRetryTimers = useRef<Partial<Record<MetaPart, ReturnType<typeof setTimeout>>>>({});
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) {
-            setListError(null);
-            // Fetch every page of subjects — the DRF default page_size=20 caps the
-            // response at 20 rows, so a single fetch was clipping 'Expert Curated'
-            // (id=291 + id=309, alphabetically last) into page 2 and dropping it
-            // from the dropdown. Subject count is small (~40 rows total) so a
-            // short loop is cheap.
-            const fetchAllSubjects = async () => {
-                const collected: Subject[] = [];
-                let page = 1;
-                // Hard cap protects against a misconfigured backend that returns
-                // an unbounded `next` pointer; in practice there are < 50 subjects.
-                while (page <= 10) {
-                    const res = await questionsAPI.getSubjects({ page, page_size: 100 });
-                    const results = res.data?.results || res.data || [];
-                    if (!Array.isArray(results) || results.length === 0) break;
-                    collected.push(...results);
-                    if (!res.data?.next) break;
-                    page += 1;
-                }
-                return collected;
-            };
-            Promise.all([
-                questionsAPI.list({ page: 1, page_size: PAGE_SIZE, exam_type: selectedExam }),
-                // Subjects are NOT filtered by exam_type: the Question → Subject FK
-                // model uses the same medical subject names across CMS / NEET PG /
-                // INI-CET tracks, and the loader's "Imported" bucket is itself
-                // tagged exam_type='cms'. Filtering by exam_type=cms therefore
-                // hides every real medical subject (Anatomy, Surgery, etc.) and
-                // leaves only the two "Expert Curated" rows, which is what users
-                // were seeing before this fix.
-                fetchAllSubjects(),
-                questionsAPI.getYears(),
-                questionsAPI.getStats({ exam_source: examSource }),
-            ]).then(([qRes, allSubjects, yRes, statsRes]) => {
-                const qData = qRes.data;
-                setQuestions(qData.results || qData || []);
-                setTotalCount(qData.count || (qData.results || qData || []).length);
-                setSubjects(allSubjects);
-                setYears(yRes.data.results || yRes.data || []);
-                setQbankStats(statsRes.data);
-            }).catch((err: unknown) => {
-                const apiError = err as { response?: { data?: unknown } };
-                if (apiError.response?.data) {
-                    setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
+        const timers = metaRetryTimers.current;
+        return () => { Object.values(timers).forEach(t => { if (t) clearTimeout(t); }); };
+    }, []);
+    const loadMeta = useCallback((parts: MetaPart[] = META_PARTS) => {
+        const run = (part: MetaPart, isRetry: boolean) => {
+            const pendingRetry = metaRetryTimers.current[part];
+            if (pendingRetry) {
+                clearTimeout(pendingRetry);
+                delete metaRetryTimers.current[part];
+            }
+            // Only the newest request of a part may write it (an older
+            // exam's response, or a request a Retry replaced, is dropped).
+            const seq = ++metaSeq.current[part];
+            const isCurrent = () => seq === metaSeq.current[part];
+            setMetaFailed(prev => (prev[part] ? { ...prev, [part]: false } : prev));
+            let request: Promise<void>;
+            if (part === 'subjects') {
+                setSubjectsStatus(prev => (prev === 'ok' ? prev : 'loading'));
+                request = fetchAllSubjects().then(list => {
+                    if (!isCurrent()) return;
+                    setSubjects(list);
+                    setSubjectsStatus('ok');
+                });
+            } else if (part === 'years') {
+                // This exam's years only; the endpoint never lists year 0.
+                request = questionsAPI.getYears({ exam_type: examType }).then(res => {
+                    if (isCurrent()) setYears(normaliseYears(res.data));
+                });
+            } else {
+                request = questionsAPI.getStats({ exam_source: examSource }).then(res => {
+                    if (isCurrent()) setQbankStats(res.data);
+                });
+            }
+            request.catch((err: unknown) => {
+                if (!isCurrent()) return;
+                if (!isRetry && errorStatus(err) === 429) {
+                    // Usually the same burst that rate-limits the list; the
+                    // subjects stay 'loading' so a ?subject= link keeps waiting
+                    // (with the list's "busy" note over its skeleton).
+                    const wait = retryAfterSeconds(err);
+                    if (part === 'subjects') setListNotice(`The question bank is busy right now. Retrying in ${wait}s…`);
+                    metaRetryTimers.current[part] = setTimeout(() => {
+                        delete metaRetryTimers.current[part];
+                        run(part, true);
+                    }, wait * 1000);
                     return;
                 }
-                setListError('Unable to load questions right now. Please refresh and try again.');
-            }).finally(() => setLoading(false));
-        }
-    }, [authLoading, isAuthenticated, router, selectedExam]);
+                if (part === 'subjects') setSubjectsStatus(prev => (prev === 'ok' ? prev : 'failed'));
+                setMetaFailed(prev => ({ ...prev, [part]: true }));
+            });
+        };
+        parts.forEach(part => run(part, false));
+    }, [examSource, examType]);
 
-    // Honour `?q=ID` from the URL on first mount after questions load.
+    // The question list itself is loaded by the filter effect below so the
+    // first request already carries ?year= / ?bookmarked=1 — previously this
+    // effect fetched an unfiltered page that usually resolved last (it also
+    // waited for /stats/) and replaced the filtered list.
     useEffect(() => {
-        if (!initialQueryId) return;
+        if (!authLoading && !isAuthenticated) {
+            // Keep the deep link (path + query) so login returns here.
+            const query = searchParams.toString();
+            const next = `${pathname || '/questions'}${query ? `?${query}` : ''}`;
+            router.replace(`/login?next=${encodeURIComponent(next)}`);
+            return;
+        }
+        if (isAuthenticated) loadMeta();
+        // searchParams / pathname only shape the login redirect.
+    }, [authLoading, isAuthenticated, router, loadMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Honour `?q=ID` once per value: after the first list load, and again
+    // when a link changes it while the bank stays mounted. (A question whose
+    // detail failed — e.g. a premium one on the free plan — used to be
+    // re-requested on every list reload, and a new ?q= was ignored once any
+    // question had been open.)
+    const openedQueryId = useRef<string | null>(null);
+    useEffect(() => {
+        if (!initialQueryId || openedQueryId.current === initialQueryId) return;
         const id = Number(initialQueryId);
         if (!Number.isFinite(id) || id <= 0) return;
-        if (loading || !isAuthenticated || questionDetail) return;
+        if (loading || !isAuthenticated) return;
         if (questions.some(q => q.id === id) || page === 1) {
+            openedQueryId.current = initialQueryId;
             openQuestion(id);
         }
     }, [initialQueryId, loading, isAuthenticated, questions, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const fetchQuestions = (params: Record<string, string | number>) => {
+    // Only the newest list request may write the list: a slower response
+    // for an older filter set must not replace the current one.
+    const listRequestSeq = useRef(0);
+    // Pending automatic retry after a 429; any newer list request cancels it.
+    const listRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (listRetryTimer.current) clearTimeout(listRetryTimer.current);
+    }, []);
+    const fetchQuestions = (params: Record<string, string | number>, isRetry = false) => {
+        if (listRetryTimer.current) {
+            clearTimeout(listRetryTimer.current);
+            listRetryTimer.current = null;
+        }
+        const seq = ++listRequestSeq.current;
+        let retryScheduled = false;
         setLoading(true);
         setListError(null);
+        // A new filter / page request replaces a pending "busy, retrying" note.
+        if (!isRetry) setListNotice(null);
         questionsAPI.list(params).then(res => {
+            if (seq !== listRequestSeq.current) return;
             const d = res.data;
             setQuestions(d.results || d || []);
             setTotalCount(d.count || (d.results || d || []).length);
         }).catch((err: unknown) => {
+            if (seq !== listRequestSeq.current) return;
+            if (errorStatus(err) === 429) {
+                // The question-bank rate limiter: not the student's fault and
+                // usually gone in seconds, so wait and retry once.
+                if (!isRetry) {
+                    const wait = retryAfterSeconds(err);
+                    retryScheduled = true;
+                    setListNotice(`The question bank is busy right now. Retrying in ${wait}s…`);
+                    listRetryTimer.current = setTimeout(() => {
+                        listRetryTimer.current = null;
+                        fetchQuestions(params, true);
+                    }, wait * 1000);
+                    return;
+                }
+                setListError('The question bank is busy right now. Please wait a few seconds and try again.');
+                return;
+            }
             const apiError = err as { response?: { data?: unknown } };
             if (apiError.response?.data) {
                 setListError(extractApiErrorMessage(apiError.response.data, 'Unable to load questions right now.'));
                 return;
             }
             setListError('Unable to load questions right now. Please refresh and try again.');
-        }).finally(() => setLoading(false));
+        }).finally(() => {
+            if (seq !== listRequestSeq.current || retryScheduled) return;
+            setLoading(false);
+            setListNotice(null);
+        });
     };
 
+    // List load: runs once auth resolves (so ?year= / ?subject= /
+    // ?bookmarked=1 apply to the very first request) and again whenever a
+    // filter changes.
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || subjectPending) return;
         const params: Record<string, string | number> = { page: 1, page_size: PAGE_SIZE };
         if (selectedSubject) params.subject = selectedSubject;
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
@@ -379,7 +616,7 @@ function ExamQuestionBankInner({
         setPage(1);
         fetchQuestions(params);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
+    }, [isAuthenticated, subjectPending, selectedSubject, selectedDifficulty, selectedYear, selectedExam, searchQuery, bookmarkedOnly]);
 
     const handlePageChange = (newPage: number) => {
         setPage(newPage);
@@ -408,7 +645,7 @@ function ExamQuestionBankInner({
         }
         if (!isAuthenticated) return;
 
-        const params: Record<string, string | number> = { page: 1, page_size: 100 };
+        const params: Record<string, string | number> = { page_size: 100 };
         if (selectedYear) params.year = selectedYear;
         if (selectedSubject) params.subject = selectedSubject;
         if (selectedDifficulty) params.difficulty = selectedDifficulty;
@@ -417,36 +654,43 @@ function ExamQuestionBankInner({
         params.exam_type = selectedExam;
 
         setExamQuestionsLoading(true);
-        const collected: Question[] = [];
+        let cancelled = false;
         const HARD_CAP = 600;
         const MAX_PAGES = 30;
 
-        const fetchPage = (pageNum: number): Promise<void> => {
-            return questionsAPI.list({ ...params, page: pageNum })
-                .then(res => {
-                    const d = res.data;
-                    const items: Question[] = (d.results || d || []);
-                    collected.push(...items);
-                    const total = d.count || items.length;
-                    const reachedEnd = items.length < 100 || collected.length >= total || collected.length >= HARD_CAP;
-                    if (reachedEnd || pageNum >= MAX_PAGES) {
-                        setExamQuestions(collected);
-                        setExamQuestionsLoading(false);
-                        return;
-                    }
-                    return fetchPage(pageNum + 1);
-                })
-                .catch(() => {
-                    setExamQuestions(collected);
-                    setExamQuestionsLoading(false);
-                });
-        };
+        // Follow the API's `next` links instead of assuming the server used
+        // page_size=100 (it used to send 20 rows, which ended the old
+        // `items.length < 100` loop after the first page).
+        collectPages<Question>(
+            (pageNum) => questionsAPI.list({ ...params, page: pageNum }).then(res => res.data),
+            { maxItems: HARD_CAP, maxPages: MAX_PAGES, isCancelled: () => cancelled },
+        )
+            .then(({ items }) => {
+                if (cancelled) return;
+                setExamQuestions(items);
+                setExamQuestionsLoading(false);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setExamQuestions([]);
+                setExamQuestionsLoading(false);
+            });
 
-        fetchPage(1);
+        return () => { cancelled = true; };
     }, [studyMode, selectedYear, selectedSubject, selectedDifficulty, selectedExam, searchQuery, isAuthenticated, bookmarkedOnly]);
 
+    // When the open question was shown; answers report the time spent so
+    // the server can record per-subject study time.
+    const questionOpenedAt = useRef<number>(0);
+    const secondsOnQuestion = () =>
+        questionOpenedAt.current ? Math.max(0, Math.round((Date.now() - questionOpenedAt.current) / 1000)) : 0;
+
     const openQuestion = useCallback((id: number) => {
+        questionOpenedAt.current = Date.now();
+        detailRequestFor.current = id;
         setSelectedQuestion(id);
+        setDetailError(null);
+        setAnswerLockedId(null);
         setShowAnswer(false);
         setSelectedAnswer(null);
         setAiExplanation(null);
@@ -455,11 +699,20 @@ function ExamQuestionBankInner({
         setAiError(null);
         setTextbookRef(null);
         setTextbookScreenshot(null);
+        setTextbookShotLoading(false);
         setTextbookLoading(false);
+        textbookRequestFor.current = null;
+        screenshotAskedFor.current = null;
+        screenshotSeq.current += 1;
+        aiRequestFor.current = null;
+        // Responses for a question the student has since left are dropped
+        // (a slow one used to replace the newer question's detail).
+        const isCurrent = () => detailRequestFor.current === id;
         Promise.all([
             questionsAPI.get(id),
             questionsAPI.getSimilar(id),
         ]).then(([qRes, sRes]) => {
+            if (!isCurrent()) return;
             const detailData = qRes.data;
             detailData.similar = sRes.data;
             setQuestionDetail(detailData);
@@ -470,14 +723,19 @@ function ExamQuestionBankInner({
                 setSelectedAnswer(detailData.user_selected_answer);
             }
         }).catch(() => {
+            if (!isCurrent()) return;
             questionsAPI.get(id).then(res => {
+                if (!isCurrent()) return;
                 setQuestionDetail(res.data);
                 if (res.data.user_selected_answer) {
                     setSelectedAnswer(res.data.user_selected_answer);
                 }
-            }).catch(() => {
-                // Both detail endpoints failed — show a user-facing error
-                setError('Unable to load question details. Please try again.');
+            }).catch((err: unknown) => {
+                // A premium question on the free plan (the detail endpoint
+                // only serves the free showcase to free accounts), a removed
+                // question or a failed request: the pane says which (it
+                // used to show a loading skeleton forever).
+                if (isCurrent()) setDetailError({ id, error: err });
             });
         });
     }, []);
@@ -494,47 +752,86 @@ function ExamQuestionBankInner({
         setQuestionFocused(selectedQuestion !== null);
     }, [selectedQuestion, setQuestionFocused]);
 
+    // The attempt was refused on the free plan (402 upgrade_required): undo
+    // the pick and show the upgrade prompt instead of the reveal (C13).
+    const relockIfUpgradeRequired = (qId: number, err: unknown) => {
+        const feature = upgradeRequiredFeature(err);
+        if (!feature) return;
+        setExamAnswers(prev => {
+            if (!(qId in prev)) return prev;
+            const next = { ...prev };
+            delete next[qId];
+            return next;
+        });
+        if (detailRequestFor.current === qId) {
+            setShowAnswer(false);
+            setSelectedAnswer(null);
+            setAnswerLockedId(qId);
+        }
+        // The api.ts interceptor opens it too; showing it twice is a no-op.
+        showPaywall(feature);
+    };
+
     const handleSelectOption = (opt: string) => {
         if (!questionDetail) return;
+        // The previous question stays on screen until the next one's detail
+        // arrives: never record a pick against it.
+        if (questionDetail.id !== selectedQuestion) return;
         if (showAnswer) return;
+        if (answerLockedId === questionDetail.id) {
+            showPaywall('PYQ answers');
+            return;
+        }
         setSelectedAnswer(opt);
 
         if (studyMode === 'practice') {
             setShowAnswer(true);
             const qId = questionDetail.id;
-            const isCorrect = opt === questionDetail.correct_answer;
-            questionsAPI.attempt(qId, { selected_answer: opt }).then(res => {
-                const tokenEarned = res.data?.token_earned;
-                if (tokenEarned) {
-                    setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: isCorrect } : q));
-                }
-            }).catch(() => { });
+            questionsAPI.attempt(qId, { selected_answer: opt, time_spent_seconds: secondsOnQuestion() }).then((res) => {
+                // Mark the row answered in the list (previously only when a
+                // token was earned, so most answers never showed up there),
+                // with the server's verdict — null when the question has no
+                // answer key (nothing recorded; the row says "Attempted",
+                // it used to say "Incorrect").
+                const verdict = attemptVerdict(opt, res?.data);
+                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: opt, user_is_correct: verdict } : q));
+            }).catch((err: unknown) => relockIfUpgradeRequired(qId, err));
         }
     };
 
     const handleSubmitExamModeAnswer = () => {
         if (!questionDetail || !selectedAnswer || showAnswer) return;
+        if (questionDetail.id !== selectedQuestion) return;
         setShowAnswer(true);
         const qId = questionDetail.id;
-        const isCorrect = selectedAnswer === questionDetail.correct_answer;
-        questionsAPI.attempt(qId, { selected_answer: selectedAnswer }).then(res => {
-            const tokenEarned = res.data?.token_earned;
-            if (tokenEarned) {
-                setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: selectedAnswer, user_is_correct: isCorrect } : q));
-            }
-        }).catch(() => { });
-        setExamAnswers(prev => ({ ...prev, [qId]: { selected: selectedAnswer, isCorrect, answeredAt: Date.now() } }));
+        const picked = selectedAnswer;
+        // Graded against the detail's key until the server answers; without
+        // a key the pick is ungraded (null), not wrong.
+        const key = answerLetter(questionDetail.correct_answer);
+        const isCorrect = key ? picked === key : null;
+        questionsAPI.attempt(qId, { selected_answer: picked, time_spent_seconds: secondsOnQuestion() }).then((res) => {
+            const verdict = attemptVerdict(picked, res?.data);
+            setQuestions(prev => prev.map(q => q.id === qId ? { ...q, user_selected_answer: picked, user_is_correct: verdict } : q));
+            setExamAnswers(prev => (prev[qId] ? { ...prev, [qId]: { ...prev[qId], isCorrect: verdict } } : prev));
+        }).catch((err: unknown) => relockIfUpgradeRequired(qId, err));
+        setExamAnswers(prev => ({ ...prev, [qId]: { selected: picked, isCorrect, answeredAt: Date.now() } }));
     };
 
-    const fetchAiExplanation = (retryCount: number = 0) => {
+    const fetchAiExplanation = () => {
         if (!questionDetail || aiLoading) return;
         const d = questionDetail as any;
+        // Consent-gated (the button used to also call window.gtag directly,
+        // which fired before analytics consent).
         analytics.aiExplanationOpen(d.id, String(d.subject_name || ''));
         setAiLoading(true);
         setAiExplanation(null);
         setTokenError(false);
         setAiError(null);
-        aiAPI.explainAfterAnswer({
+        // `question_id` lets the server use the stored question (its answer
+        // key, stored explanation and the cached analysis) and check the
+        // student's entitlement; the text fields are a fallback only.
+        const payload: Parameters<typeof aiAPI.explainAfterAnswer>[0] = {
+            question_id: d.id,
             question_text: sanitizeQuestionText(d.question_text),
             options: {
                 A: sanitizeOptionText(d.option_a || d.option_A || ''),
@@ -542,25 +839,104 @@ function ExamQuestionBankInner({
                 C: sanitizeOptionText(d.option_c || d.option_C || ''),
                 D: sanitizeOptionText(d.option_d || d.option_D || ''),
             },
-            correct_answer: d.correct_answer || '',
+            correct_answer: answerLetter(d.correct_answer),
             selected_answer: selectedAnswer || '',
             subject: d.subject_name || '',
             topic: d.topic_name || '',
-        }).then(res => {
+        };
+        const reqId = d.id;
+        aiRequestFor.current = reqId;
+        aiAPI.explainAfterAnswer(payload).then(res => {
+            // The student opened another question meanwhile: drop it.
+            if (aiRequestFor.current !== reqId) return;
             setAiExplanation(res.data);
             setAiLoading(false);
         }).catch((err) => {
-            if (err?.response?.status === 429) {
+            if (aiRequestFor.current !== reqId) return;
+            setAiLoading(false);
+            const failure = classifyAiFailure(err);
+            if (failure === 'upgrade') {
+                // Free plan on a premium question: the paywall, not an AI
+                // outage (the api.ts interceptor opens it too; a no-op twice).
+                showPaywall(upgradeRequiredFeature(err) || 'PYQ answers');
+            } else if (failure === 'tokens') {
                 setTokenError(true);
-                setAiLoading(false);
-            } else if (retryCount < 1 && !err?.response?.status) {
-                setTimeout(() => fetchAiExplanation(retryCount + 1), 2000);
             } else {
-                setAiError(err?.response?.data?.error || 'AI service unavailable. Please try again.');
+                // 503 ai_unavailable → "AI is unavailable right now" (never
+                // charged); a throttle 429 is not an empty wallet. Never the
+                // server's raw error text. No silent automatic retry: an AI
+                // call can take up to the full timeout, and the card below
+                // offers a Retry button.
+                setAiError(aiFailureNotice(failure, err));
                 setAiExplanation(null);
-                setAiLoading(false);
             }
         });
+    };
+
+    // The textbook page image from /ai/screenshot/ (it renders the cited
+    // page on the server and answers {screenshot_url}; a 202 "rendering" is
+    // asked once more, a 404 means no image, a 402 opens the paywall through
+    // the api.ts interceptor). At most once per opened question, and only
+    // from the "Find in Textbook" click. False when it was already asked.
+    const requestTextbookScreenshot = (qid: number): boolean => {
+        if (screenshotAskedFor.current === qid) return false;
+        screenshotAskedFor.current = qid;
+        const seq = ++screenshotSeq.current;
+        const isCurrent = () => seq === screenshotSeq.current && textbookRequestFor.current === qid;
+        setTextbookShotLoading(true);
+        void fetchPageScreenshot(aiAPI.getScreenshot, qid, { isCurrent }).then(url => {
+            if (!isCurrent()) return;
+            setTextbookShotLoading(false);
+            setTextbookScreenshot(url);
+        });
+        return true;
+    };
+
+    // The page image failed to load (e.g. a stored file lost on a redeploy):
+    // ask /ai/screenshot/ once, which renders the page again; a second
+    // failure just hides the image.
+    const handleTextbookScreenshotError = () => {
+        setTextbookScreenshot(null);
+        const qid = (questionDetail as any)?.id;
+        if (typeof qid === 'number' && textbookRequestFor.current === qid) requestTextbookScreenshot(qid);
+    };
+
+    // "Find in Textbook": the book / chapter / page covering the question.
+    const lookupTextbook = () => {
+        const d = questionDetail as any;
+        if (!d) return;
+        const qid = d.id;
+        textbookRequestFor.current = qid;
+        setTextbookLoading(true);
+        setTextbookRef(null);
+        setTextbookScreenshot(null);
+        setTextbookShotLoading(false);
+        aiAPI.textbookReference({ question_text: d.question_text })
+            .then(res => {
+                if (textbookRequestFor.current !== qid) return;
+                // The endpoint returns {references: [{book, page, excerpt, …}]}.
+                setTextbookRef({ references: normaliseTextbookReferences(res.data) });
+                // The page screenshot stored on the question, else the one
+                // /ai/screenshot/ renders (it answers a URL now, not the
+                // server filesystem path it used to).
+                const storedShot = typeof d.page_screenshot === 'string' ? d.page_screenshot.trim() : '';
+                if (storedShot) setTextbookScreenshot(storedShot);
+                else requestTextbookScreenshot(qid);
+            })
+            .catch((err: unknown) => {
+                if (textbookRequestFor.current !== qid) return;
+                const feature = upgradeRequiredFeature(err);
+                if (feature) {
+                    // Premium question on the free plan: the paywall, and the
+                    // button again (not "no textbook mapping").
+                    showPaywall(feature);
+                    return;
+                }
+                setTextbookRef({ error: true });
+            })
+            .finally(() => {
+                if (textbookRequestFor.current === qid) setTextbookLoading(false);
+            });
     };
 
     const handleBookmark = (id: number, e: React.MouseEvent) => {
@@ -570,7 +946,7 @@ function ExamQuestionBankInner({
             if (questionDetail?.id === id) {
                 setQuestionDetail((prev: any) => prev ? { ...prev, is_bookmarked: !prev.is_bookmarked } : prev);
             }
-        });
+        }).catch(() => { /* toggle failed: the icon keeps its current state */ });
     };
 
     const handleSearch = () => {
@@ -584,6 +960,28 @@ function ExamQuestionBankInner({
         setPage(1);
         fetchQuestions(params);
     };
+
+    // Reload whatever bank metadata (subjects, years, stats strip) failed or
+    // is still missing.
+    const retryMeta = () => {
+        // A `?subject=` link whose subject list never loaded gets resolved again.
+        if (subjectsStatus === 'failed' && subjectParam) setAppliedSubjectParam('');
+        const missing: Record<MetaPart, boolean> = {
+            subjects: subjectsStatus === 'failed' || subjects.length === 0,
+            years: years.length === 0,
+            stats: !qbankStats,
+        };
+        const parts = META_PARTS.filter(part => metaFailed[part] || missing[part]);
+        if (parts.length > 0) loadMeta(parts);
+    };
+
+    // List error "Retry": the list plus the metadata that failed with it —
+    // the same burst that fails the list usually fails those too.
+    const retryListAndMeta = () => {
+        retryMeta();
+        handleSearch();
+    };
+    const metaRetryNeeded = metaFailed.subjects || metaFailed.years || metaFailed.stats;
 
     const handleFlagSubmit = () => {
         if (!questionDetail || !flagComment.trim()) return;
@@ -607,6 +1005,14 @@ function ExamQuestionBankInner({
         .finally(() => setFlagSubmitting(false));
     };
 
+    // Fullscreen year practice (/questions/practice) for the current exam.
+    const fullscreenPracticeHref = (year: string | null) => {
+        const params = new URLSearchParams();
+        if (year) params.set('year', year);
+        params.set('exam', selectedExam);
+        return `/questions/practice?${params.toString()}`;
+    };
+
     const diffBadge = (d: string) => {
         const cls = d === 'easy' ? 'badge-easy' : d === 'hard' ? 'badge-hard' : 'badge-medium';
         return <span className={`badge ${cls}`}>{d}</span>;
@@ -614,6 +1020,28 @@ function ExamQuestionBankInner({
 
     const detail = questionDetail as any;
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    // Curated explanation (an admin override first when the detail flags
+    // one), else the effective (AI) one.
+    const detailExplanation = detail ? (pickExplanation(detail) || '') : '';
+    // The open question's answer key ('' when it has none).
+    const detailKey = detail ? answerLetter(detail.correct_answer) : '';
+    // Why the selected question's detail could not be shown (or null).
+    const detailFailure = selectedQuestion && detailError?.id === selectedQuestion
+        ? detailFailureKind(detailError.error, isPremium)
+        : null;
+    // One PYQ definition (rows with a real year; year 0 is the Expert
+    // Curated sentinel) for the headline AND the progress bar.
+    const bankStats = summariseBankStats(qbankStats);
+    const pyqCount = bankStats.pyqTotal;
+    const pyqProgressPct = pyqCount > 0 ? Math.round((bankStats.pyqSolved / pyqCount) * 100) : 0;
+    // The year tiles: PYQ years only (no "0" tile for the undated pool).
+    const yearStatRows: any[] = Array.isArray(qbankStats?.by_year)
+        ? qbankStats.by_year.filter((b: any) => Number(b?.year) > 0)
+        : [];
+    // Stats that cover no question at all (e.g. an exam the stats endpoint
+    // does not map yet) would only claim "0 PYQs" next to a full list.
+    const showBankStats = !!qbankStats && bankStats.hasRows;
+    const filtersActive = !!(selectedSubject || selectedDifficulty || selectedYear || searchQuery || bookmarkedOnly);
 
     // ── Render ────────────────────────────────────────────
     // NOTE: do NOT add the shell's `main-content` class here. The page
@@ -667,12 +1095,11 @@ function ExamQuestionBankInner({
                                     type="button"
                                     onClick={() => {
                                         analytics.mockTestStart(selectedExam, selectedYear ? Number(selectedYear) : null, 'simulator');
-                                        const slug = String(selectedExam).replace('_', '-');
-                                        if (slug === 'neet-pg') {
-                                            router.push(`/questions/neet-pg/practice?year=${selectedYear}`);
-                                        } else {
-                                            router.push(`/questions/practice?year=${selectedYear}&exam=${selectedExam}`);
-                                        }
+                                        // Every exam opens the fullscreen one-question player. The
+                                        // NEET PG branch used to push /questions/neet-pg/practice —
+                                        // the bank route already on screen — so the button only
+                                        // changed the URL.
+                                        router.push(fullscreenPracticeHref(selectedYear));
                                     }}
                                     className="text-xs font-bold px-3 py-2 rounded-xl border bg-card text-foreground border-border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                                 >
@@ -695,7 +1122,7 @@ function ExamQuestionBankInner({
                 <Card className="border-border/80 bg-card/85 shadow-sm backdrop-blur-xs relative overflow-visible">
                     <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
                     <CardContent className="p-3 space-y-2.5">
-                        {qbankStats && (
+                        {showBankStats && (
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-border/40 pb-2">
                                 <div className="space-y-1 text-left">
                                     {/* Hero title — deliberately NOT a duplicate of the page heading
@@ -706,20 +1133,32 @@ function ExamQuestionBankInner({
                                             🎯 Your {examSource} Prep
                                         </h2>
                                     </div>
+                                    {/* The stats count PYQs by exam_source while the list
+                                        below (exam_type) also holds the Expert Curated pool, so
+                                        say which number is which instead of "2277 MCQs and
+                                        PYQs" above a 277-page list of curated cards. The
+                                        "incl. Expert Curated" note only when the stats do
+                                        have undated rows (it used to appear on banks with
+                                        none). */}
                                     <p className="text-xs text-muted-foreground">
-                                        {qbankStats.total} high-yield clinical MCQs and PYQs across every {examSource} subject.
+                                        {pyqCount.toLocaleString('en-IN')} {examSource} PYQs
+                                        {!filtersActive && bankStats.undatedTotal > 0 && totalCount > pyqCount
+                                            ? ` · ${totalCount.toLocaleString('en-IN')} questions incl. Expert Curated`
+                                            : ''}
                                     </p>
                                 </div>
 
                                 <div className="flex flex-1 max-w-md items-center gap-3">
                                     <div className="flex-1 space-y-0.5 min-w-0">
+                                        {/* Same PYQ count as the headline (it used to divide by
+                                            a total that also counted the undated rows). */}
                                         <div className="flex justify-between text-xs font-semibold gap-2">
-                                            <span className="truncate">Overall Progress</span>
+                                            <span className="truncate">PYQ Progress</span>
                                             <span className="text-primary font-bold shrink-0">
-                                                {qbankStats.total_solved} / {qbankStats.total} ({Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)}%)
+                                                {bankStats.pyqSolved.toLocaleString('en-IN')} / {pyqCount.toLocaleString('en-IN')} ({pyqProgressPct}%)
                                             </span>
                                         </div>
-                                        <Progress value={Math.round(qbankStats.total_solved / (qbankStats.total || 1) * 100)} className="h-1.5" />
+                                        <Progress value={pyqProgressPct} className="h-1.5" />
                                     </div>
                                     <button
                                         type="button"
@@ -734,7 +1173,7 @@ function ExamQuestionBankInner({
                             </div>
                         )}
 
-                        {qbankStats && showStatsDetail && (
+                        {showBankStats && showStatsDetail && (
                             <div
                                 id="year-stats-panel"
                                 className="pt-1 pb-3 border-b border-border/40 animate-fadeIn space-y-2"
@@ -744,11 +1183,11 @@ function ExamQuestionBankInner({
                                         Tap a year to filter · long-press / right-click for the Practice & Exam modal
                                     </p>
                                     <p className="text-[10px] text-muted-foreground">
-                                        {(qbankStats.by_year || []).length} years
+                                        {yearStatRows.length} years
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-65 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
-                                    {(qbankStats.by_year || []).map((item: any) => {
+                                    {yearStatRows.map((item: any) => {
                                         const solvedPct = Math.round(item.solved / (item.count || 1) * 100);
                                         const isSelected = selectedYear === String(item.year);
                                         const isComplete = item.count > 0 && item.solved >= item.count;
@@ -846,64 +1285,20 @@ function ExamQuestionBankInner({
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-2 items-center">
                                 <select
                                     aria-label="Filter by subject"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0 truncate"
+                                    className={`${FILTER_SELECT_CLS} truncate`}
                                     value={selectedSubject}
                                     onChange={e => setSelectedSubject(e.target.value)}
                                 >
                                     <option value="">All Subjects</option>
-                                    {(() => {
-                                        // Three display-side improvements over the raw API payload:
-                                        //   1. The loader's "Expert Curated" Subject row exists in
-                                        //      duplicate (id=291 with 1285 questions, id=309 with 541
-                                        //      questions) because the management command to merge
-                                        //      them has not been run in production. Collapse display
-                                        //      duplicates by name, summing the question_count so users
-                                        //      see ONE "Expert Curated (1826)" entry instead of two
-                                        //      redundant rows.
-                                        //   2. INI-CET rows that own 0 questions are not useful as
-                                        //      filter chips for the CMS bank — selecting them would
-                                        //      always return an empty result. Hide them.
-                                        //   3. The "(INI-CET)" suffix on rows that actually own
-                                        //      questions would confuse a CMS student, so we hide them
-                                        //      too — the dedicated INI-CET player at
-                                        //      /questions/inicet/practice renders its own subject
-                                        //      filter from the same source.
-                                        const byName = new Map<string, { id: number; name: string; count: number }>();
-                                        for (const s of subjects) {
-                                            const count = s.question_count || 0;
-                                            // Skip non-CMS tracks entirely on the CMS bank.
-                                            if (s.name.includes('(INI-CET)')) continue;
-                                            if (s.name.includes('(NEET PG)')) continue;
-                                            if (s.name.includes('(USMLE)')) continue;
-                                            if (s.name.includes('(FMGE)')) continue;
-                                            if (count <= 0) continue;
-                                            const displayName = s.name === 'Imported' ? 'Expert Curated' : s.name;
-                                            const existing = byName.get(displayName);
-                                            if (!existing) {
-                                                byName.set(displayName, { id: s.id, name: displayName, count });
-                                            } else {
-                                                existing.count += count;
-                                            }
-                                        }
-                                        // Stable sort: real medical subjects first (alphabetical),
-                                        // "Expert Curated" pinned last so the brand-new / practice pool
-                                        // is clearly opt-in.
-                                        return Array.from(byName.values())
-                                            .sort((a, b) => {
-                                                if (a.name === 'Expert Curated') return 1;
-                                                if (b.name === 'Expert Curated') return -1;
-                                                return a.name.localeCompare(b.name);
-                                            })
-                                            .map(s => (
-                                                <option key={s.id} value={s.id}>
-                                                    {s.name} ({s.count})
-                                                </option>
-                                            ));
-                                    })()}
+                                    {subjectOptions.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name} ({s.count.toLocaleString('en-IN')})
+                                        </option>
+                                    ))}
                                 </select>
                                 <select
                                     aria-label="Filter by difficulty"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
+                                    className={FILTER_SELECT_CLS}
                                     value={selectedDifficulty}
                                     onChange={e => setSelectedDifficulty(e.target.value)}
                                 >
@@ -914,13 +1309,14 @@ function ExamQuestionBankInner({
                                 </select>
                                 <select
                                     aria-label="Filter by year"
-                                    className="input-field h-9 text-[11px] px-3 w-full min-w-0"
+                                    className={FILTER_SELECT_CLS}
                                     value={selectedYear}
                                     onChange={e => setSelectedYear(e.target.value)}
                                 >
                                     <option value="">Year</option>
+                                    {/* This exam's PYQ years (the endpoint never lists year 0). */}
                                     {years.map(y => (
-                                        <option key={y} value={y}>{y === 0 ? 'Expert Curated' : y}</option>
+                                        <option key={y} value={y}>{y}</option>
                                     ))}
                                 </select>
                                 <Button
@@ -932,6 +1328,22 @@ function ExamQuestionBankInner({
                                     <Filter className="w-3.5 h-3.5 mr-1 group-hover:rotate-12 transition-transform" /> Filter
                                 </Button>
                             </div>
+                            {metaRetryNeeded && (
+                                <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                    <span>
+                                        {metaFailed.subjects || metaFailed.years
+                                            ? "Some filters couldn't load."
+                                            : "Your progress stats couldn't load."}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={retryMeta}
+                                        className="font-semibold text-primary hover:underline underline-offset-2"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -942,13 +1354,19 @@ function ExamQuestionBankInner({
                         <div className="space-y-3 px-1 py-0.5">
                             {loading ? (
                                 <div className="space-y-3">
+                                    {listNotice && (
+                                        <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> {listNotice}
+                                        </p>
+                                    )}
                                     {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                                 </div>
                             ) : listError ? (
                                 <Card className="p-8 text-center">
                                     <p className="text-destructive text-sm mb-3">{listError}</p>
                                     <button
-                                      onClick={() => handleSearch()}
+                                      type="button"
+                                      onClick={retryListAndMeta}
                                       className="text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg transition-colors"
                                     >
                                       Retry
@@ -991,15 +1409,24 @@ function ExamQuestionBankInner({
                                                     )}
                                                 </Badge>
                                                 <div className="flex items-center gap-2">
-                                                    {q.user_selected_answer && (
+                                                    {q.user_selected_answer && (q.user_is_correct == null ? (
+                                                        // Picked, but ungraded (the question has no answer key).
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                                                            Attempted
+                                                        </span>
+                                                    ) : (
                                                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${q.user_is_correct ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
                                                             {q.user_is_correct ? '✓ Solved' : '✗ Incorrect'}
                                                         </span>
-                                                    )}
+                                                    ))}
                                                     {diffBadge(q.difficulty)}
+                                                    {/* p-2 -m-2: a 32px tap target (the bare 16px icon
+                                                        sat inside a clickable card, so near misses
+                                                        opened the question) without shifting layout. */}
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => handleBookmark(q.id, e)}
-                                                        className="hover:scale-110 transition-transform"
+                                                        className="p-2 -m-2 rounded-full hover:scale-110 transition-transform"
                                                         aria-label={q.is_bookmarked ? `Remove bookmark for question ${q.id}` : `Add bookmark for question ${q.id}`}
                                                         aria-pressed={q.is_bookmarked}
                                                     >
@@ -1063,14 +1490,14 @@ function ExamQuestionBankInner({
                                     })}
                                     {totalPages > 1 && (
                                         <div className="flex items-center justify-center gap-2 pt-4">
-                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
-                                                <ChevronLeft className="w-4 h-4" />
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1} aria-label="Previous page">
+                                                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                                             </Button>
                                             <span className="text-sm px-3 text-muted-foreground">
                                                 Page {page} of {totalPages}
                                             </span>
-                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>
-                                                <ChevronRight className="w-4 h-4" />
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages} aria-label="Next page">
+                                                <ChevronRight className="w-4 h-4" aria-hidden="true" />
                                             </Button>
                                         </div>
                                     )}
@@ -1113,11 +1540,13 @@ function ExamQuestionBankInner({
                                             const ans = examAnswers[q.id];
                                             const isCurrent = q.id === selectedQuestion;
                                             const status = ans
-                                                ? ans.isCorrect ? 'correct' : 'wrong'
+                                                ? ans.isCorrect === null ? 'answered' : ans.isCorrect ? 'correct' : 'wrong'
                                                 : isCurrent ? 'current' : 'unseen';
                                             const statusClass = {
                                                 correct: 'bg-emerald-500 text-white border-emerald-500',
                                                 wrong: 'bg-red-500 text-white border-red-500',
+                                                // Picked, but the question has no answer key.
+                                                answered: 'bg-primary/15 text-primary border-primary/40',
                                                 current: 'bg-amber-400 text-amber-950 border-amber-400 ring-2 ring-amber-400/40',
                                                 unseen: 'bg-muted text-muted-foreground border-border hover:bg-muted/80',
                                             }[status];
@@ -1125,7 +1554,15 @@ function ExamQuestionBankInner({
                                                 <button
                                                     key={q.id}
                                                     type="button"
-                                                    onClick={() => openQuestion(q.id)}
+                                                    onClick={() => {
+                                                        // Same rule as the list cards: a premium row on the
+                                                        // free plan opens the paywall, not a detail request.
+                                                        if (!isPremium && !q.is_showcase) {
+                                                            showPaywall('PYQ answers');
+                                                            return;
+                                                        }
+                                                        openQuestion(q.id);
+                                                    }}
                                                     className={`aspect-square rounded-lg border text-[11px] font-bold flex items-center justify-center transition-colors ${statusClass}`}
                                                     aria-label={`Question ${idx + 1}, ${status}`}
                                                 >
@@ -1140,7 +1577,31 @@ function ExamQuestionBankInner({
                     )}
 
                     <div className="qbank-detail lg:overflow-y-auto lg:overscroll-contain lg:pr-2" style={{ scrollbarWidth: 'thin' }}>
-                        {selectedQuestion && !detail ? (
+                        {selectedQuestion && detailFailure === 'locked' ? (
+                            // Premium question on the free plan (a ?q= link, the
+                            // exam palette, N / P, a similar-PYQ link).
+                            <Card className="p-6 md:p-10 text-center border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 animate-fadeIn">
+                                <Lock className="w-10 h-10 mx-auto mb-3 text-amber-600 dark:text-amber-400" />
+                                <p className="text-base font-semibold text-foreground mb-1">This is a premium question</p>
+                                <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+                                    Upgrade to practise it and see its answer and explanation.
+                                </p>
+                                <Button size="sm" onClick={() => showPaywall('PYQ answers')}>Upgrade</Button>
+                            </Card>
+                        ) : selectedQuestion && detailFailure ? (
+                            <Card role="alert" className="p-6 md:p-10 text-center animate-fadeIn">
+                                <p className="text-sm text-foreground mb-3">
+                                    {detailFailure === 'missing'
+                                        ? 'This question is no longer available.'
+                                        : 'Unable to load question details. Please try again.'}
+                                </p>
+                                {detailFailure === 'error' && (
+                                    <Button size="sm" variant="outline" onClick={() => openQuestion(selectedQuestion)}>
+                                        Retry
+                                    </Button>
+                                )}
+                            </Card>
+                        ) : selectedQuestion && !detail ? (
                             <div className="space-y-3 px-1 py-0.5 animate-fadeIn" aria-busy="true" aria-label="Loading question">
                                 <Skeleton className="h-8 w-2/3 rounded-md" />
                                 <Skeleton className="h-6 w-1/3 rounded-md" />
@@ -1190,7 +1651,7 @@ function ExamQuestionBankInner({
                                             Replaces the previous behaviour of silently flipping showAnswer=true
                                             on open, which was leaking the admin's explanation image (and the
                                             correct-answer card) before the student even read the stem. */}
-                                        {detail.user_selected_answer && !showAnswer && (
+                                        {detail.user_selected_answer && !showAnswer && answerLockedId !== detail.id && (
                                             <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
                                                 <span>
                                                     You answered{' '}
@@ -1295,9 +1756,10 @@ function ExamQuestionBankInner({
                                                 const rawOption = detail[key] || detail[`option_${opt}`];
                                                 const optionText = sanitizeOptionText(rawOption);
                                                 if (!optionText) return null;
-                                                const isCorrect = detail.correct_answer === opt;
+                                                const isCorrect = detailKey === opt;
                                                 const isSelected = selectedAnswer === opt;
-                                                const isWrong = isSelected && !isCorrect && showAnswer;
+                                                // Without an answer key a pick can't be marked wrong.
+                                                const isWrong = !!detailKey && isSelected && !isCorrect && showAnswer;
 
                                                 return (
                                                     <div key={opt}
@@ -1322,11 +1784,22 @@ function ExamQuestionBankInner({
                                             })}
                                         </div>
 
-                                        {!showAnswer && !selectedAnswer && studyMode === 'practice' && (
+                                        {/* The server refused to grade it on the free plan (402). */}
+                                        {answerLockedId === detail.id && (
+                                            <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/60 p-3">
+                                                <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                                <p className="flex-1 text-sm text-amber-900 dark:text-amber-200">
+                                                    This is a premium question. Upgrade to see its answer and explanation.
+                                                </p>
+                                                <Button size="sm" onClick={() => showPaywall('PYQ answers')}>Upgrade</Button>
+                                            </div>
+                                        )}
+
+                                        {!showAnswer && !selectedAnswer && studyMode === 'practice' && answerLockedId !== detail.id && (
                                             <p className="text-xs text-center py-2 text-muted-foreground">👆 Select an option to reveal the answer & detailed analysis</p>
                                         )}
 
-                                        {!showAnswer && studyMode === 'exam' && (
+                                        {!showAnswer && studyMode === 'exam' && answerLockedId !== detail.id && (
                                             <div className="mt-6 flex justify-end">
                                                 <Button
                                                     variant="neon"
@@ -1343,14 +1816,25 @@ function ExamQuestionBankInner({
 
                                 {showAnswer && (
                                     <div className="space-y-3 animate-fadeInUp">
-                                        <Card className="border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60">
+                                        <Card className={detailKey
+                                            ? 'border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 dark:border-emerald-800/60'
+                                            : 'border-border bg-muted/40'}>
                                             <CardContent className="p-4 space-y-2">
-                                                <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                                                    <CheckCircle className="w-4 h-4" /> Correct Answer: {detail.correct_answer}
-                                                </h4>
-                                                {detail.explanation && (
+                                                {detailKey ? (
+                                                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                                                        <CheckCircle className="w-4 h-4" /> Correct Answer: {detailKey}
+                                                    </h4>
+                                                ) : (
+                                                    // No key in the bank (it used to read "Correct Answer:" and nothing).
+                                                    <h4 className="text-sm font-bold text-foreground">
+                                                        Answer key not available for this question. Use “Flag Issue” to let us know.
+                                                    </h4>
+                                                )}
+                                                {/* The curated explanation (or a flagged admin
+                                                    override), else the effective (AI) one. */}
+                                                {detailExplanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
-                                                        <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(detail.explanation)), detail.images)} />
+                                                        <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
                                                     </div>
                                                 )}
                                             </CardContent>
@@ -1411,11 +1895,10 @@ function ExamQuestionBankInner({
 
                                         {!aiExplanation && !aiLoading && !tokenError && (
                                             <button onClick={() => {
-                                                if (typeof window !== 'undefined' && (window as any).gtag) {
-                                                    (window as any).gtag('event', 'ai_explain_request', { exam_slug: selectedExam });
-                                                }
-                                                fetchAiExplanation();
-                                            }}
+                                                    // The GA4 "ai_explain_request" conversion (consent-gated).
+                                                    analytics.aiExplainRequest(detail.id, selectedExam, 'question_bank');
+                                                    fetchAiExplanation();
+                                                }}
                                                 className="w-full rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20 mt-1">
                                                 <Brain className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                                 <div className="text-left">
@@ -1457,9 +1940,8 @@ function ExamQuestionBankInner({
                                                         // Defence-in-depth: strip double-encoded UTF-8 mojibake
                                                         // (e.g. iÃ©iÃiÃ©) before rendering, and fall back to a
                                                         // generic "Question #N" placeholder when the text is
-                                                        // still unreadable after cleanup. Mirrors the
-                                                        // NeetPgPlayer guard (line ~977) so the same DB
-                                                        // content renders cleanly across both surfaces.
+                                                        // still unreadable after cleanup (the same guard the
+                                                        // list cards above use).
                                                         const cleaned = decodeMojiB(sq.question_text || '');
                                                         const garbled = isLikelyGarbled(cleaned);
                                                         return (
@@ -1513,9 +1995,9 @@ function ExamQuestionBankInner({
                                             <div className="glass-card p-4 mt-3" style={{ borderColor: 'rgba(239,68,68,0.3)' }}>
                                                 <div className="flex items-start gap-3">
                                                     <Brain className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
-                                                    <div>
-                                                        <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>AI Temporarily Unavailable</h5>
-                                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError}</p>
+                                                    <div role="status">
+                                                        <h5 className="text-sm font-bold" style={{ color: '#f59e0b' }}>{aiError.title}</h5>
+                                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{aiError.message}</p>
                                                         <button onClick={() => fetchAiExplanation()} className="text-xs mt-2 font-bold" style={{ color: 'var(--accent-primary)' }}>
                                                             Retry
                                                         </button>
@@ -1582,7 +2064,7 @@ function ExamQuestionBankInner({
                                                     {aiExplanation.why_correct && (
                                                         <div className="p-4">
                                                             <h5 className="text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: '#10b981' }}>
-                                                                <CheckCircle className="w-3.5 h-3.5" /> Why {detail.correct_answer} is Correct
+                                                                <CheckCircle className="w-3.5 h-3.5" /> {detailKey ? `Why ${detailKey} is Correct` : 'Why this is correct'}
                                                             </h5>
                                                             <FormattedText text={cleanAiText(aiExplanation.why_correct)} />
                                                         </div>
@@ -1737,24 +2219,7 @@ function ExamQuestionBankInner({
                                     <div className="space-y-2">
                                         {!textbookRef && !textbookLoading && (
                                             <button
-                                                onClick={() => {
-                                                    setTextbookLoading(true);
-                                                    setTextbookRef(null);
-                                                    setTextbookScreenshot(null);
-                                                    aiAPI.textbookReference({ question_text: detail.question_text })
-                                                        .then(res => {
-                                                            setTextbookRef(res.data);
-                                                            aiAPI.getScreenshot(detail.id)
-                                                                .then(sRes => {
-                                                                    if (sRes.data?.screenshot_url) setTextbookScreenshot(sRes.data.screenshot_url);
-                                                                })
-                                                                .catch(() => {});
-                                                        })
-                                                        .catch(() => {
-                                                            setTextbookRef({ error: true });
-                                                        })
-                                                        .finally(() => setTextbookLoading(false));
-                                                }}
+                                                onClick={lookupTextbook}
                                                 className="w-full rounded-2xl border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-800/50 p-4 flex items-center justify-center gap-3 cursor-pointer transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                                             >
                                                 <Bookmark className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -1770,20 +2235,25 @@ function ExamQuestionBankInner({
                                                 <span className="text-xs font-medium text-indigo-600">Looking up textbook references...</span>
                                             </div>
                                         )}
-                                        {textbookRef && !textbookRef.error && (
+                                        {textbookRef && !textbookRef.error && (textbookRef.references.length > 0 || textbookScreenshot || textbookShotLoading) && (
                                             <Card className="border-indigo-200 bg-indigo-50/30 dark:bg-indigo-950/10 dark:border-indigo-900/30">
                                                 <CardContent className="p-4 space-y-2">
                                                     <h5 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
                                                         <Bookmark className="w-3.5 h-3.5" /> 📖 Textbook Reference
                                                     </h5>
-                                                    {textbookRef.book_name && <p className="text-sm font-semibold">{textbookRef.book_name}</p>}
-                                                    {textbookRef.chapter && <p className="text-xs text-muted-foreground">Chapter: {textbookRef.chapter}</p>}
-                                                    {textbookRef.page_range && <p className="text-xs text-muted-foreground">Pages: {textbookRef.page_range}</p>}
-                                                    {textbookRef.excerpt && <p className="text-xs leading-relaxed mt-1 italic text-muted-foreground">&quot;{textbookRef.excerpt}&quot;</p>}
-                                                    {textbookRef.reference && typeof textbookRef.reference === 'string' && (
-                                                        <p className="text-xs leading-relaxed text-muted-foreground">{textbookRef.reference}</p>
-                                                    )}
-                                                    {textbookScreenshot && (
+                                                    {textbookRef.references.map((ref: TextbookReference, i: number) => (
+                                                        <div key={`${ref.book}-${ref.page}-${i}`} className={i > 0 ? 'pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40' : ''}>
+                                                            {ref.book && <p className="text-sm font-semibold">{ref.book}</p>}
+                                                            {ref.chapter && <p className="text-xs text-muted-foreground">Chapter: {ref.chapter}</p>}
+                                                            {ref.page && <p className="text-xs text-muted-foreground">Page: {ref.page}</p>}
+                                                            {ref.excerpt && (
+                                                                <p className="text-xs leading-relaxed mt-1 italic text-muted-foreground">
+                                                                    &quot;{ref.excerpt}{ref.excerpt.length >= 300 ? '…' : ''}&quot;
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {textbookScreenshot ? (
                                                         <div className="mt-2 rounded-lg overflow-hidden border border-border/40 bg-white">
                                                             <img
                                                                 src={textbookScreenshot}
@@ -1792,14 +2262,31 @@ function ExamQuestionBankInner({
                                                                 height={1000}
                                                                 loading="lazy"
                                                                 className="w-full h-auto"
+                                                                onError={handleTextbookScreenshotError}
                                                             />
                                                             <p className="text-[10px] text-center text-muted-foreground py-1 bg-muted/30">Screenshot from textbook page</p>
                                                         </div>
-                                                    )}
+                                                    ) : textbookShotLoading ? (
+                                                        <div role="status" className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            Loading the textbook page…
+                                                        </div>
+                                                    ) : null}
                                                 </CardContent>
                                             </Card>
                                         )}
-                                        {textbookRef?.error && (
+                                        {textbookRef && textbookRef.error && (
+                                            // A failed lookup is not "no mapping": offer a retry.
+                                            <Card className="border-border/60">
+                                                <CardContent className="p-3 text-center text-xs text-muted-foreground">
+                                                    Couldn&apos;t look up textbook references right now.{' '}
+                                                    <button type="button" onClick={lookupTextbook} className="font-semibold text-primary hover:underline underline-offset-2">
+                                                        Retry
+                                                    </button>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+                                        {textbookRef && !textbookRef.error && textbookRef.references.length === 0 && !textbookScreenshot && !textbookShotLoading && (
                                             <Card className="border-border/60">
                                                 <CardContent className="p-3 text-center text-xs text-muted-foreground">
                                                     No textbook mapping available for this question.
@@ -1863,14 +2350,12 @@ function ExamQuestionBankInner({
                             <div className="grid gap-3">
                                 <button
                                     onClick={() => {
-                                        const slug = String(selectedExam).replace('_', '-');
-                                        if (slug === 'neet-pg') {
-                                            router.push(`/questions/neet-pg/practice?year=${modalYear}`);
-                                        } else if (slug === 'ini-cet' || slug === 'ini_cet') {
-                                            router.push(`/questions/inicet/practice?year=${modalYear}`);
-                                        } else {
-                                            router.push(`/questions/practice?year=${modalYear}&exam=${selectedExam}`);
-                                        }
+                                        // Open the fullscreen player for every exam. The NEET PG /
+                                        // INI-CET branches pushed the bank route already on screen,
+                                        // so the click only changed the URL and left the modal open.
+                                        setYearModalOpen(false);
+                                        setSimulationError(null);
+                                        router.push(fullscreenPracticeHref(modalYear));
                                     }}
                                     className="w-full p-4 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/50 hover:border-primary/30 text-left transition-all group flex gap-3 cursor-pointer"
                                 >
@@ -1888,13 +2373,23 @@ function ExamQuestionBankInner({
                                         if (startingSimulation) return;
                                         setStartingSimulation(true);
                                         setSimulationError(null);
-                                        testsAPI.pyqSimulation({ year: Number(modalYear) })
+                                        // The backend defaults to a CMS paper; the NEET PG and
+                                        // INI-CET banks must ask for their own exam (C3).
+                                        testsAPI.pyqSimulation({ year: Number(modalYear), exam_type: selectedExam })
                                             .then(res => {
                                                 router.push(`/tests/${res.data.id}`);
                                             })
                                             .catch(err => {
-                                                setSimulationError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to generate simulation. Make sure there are enough questions in the database.'));
                                                 setStartingSimulation(false);
+                                                const feature = upgradeRequiredFeature(err);
+                                                if (feature) {
+                                                    // Free plan: the upgrade prompt, not a red error
+                                                    // under it in this modal.
+                                                    setYearModalOpen(false);
+                                                    showPaywall(feature);
+                                                    return;
+                                                }
+                                                setSimulationError(extractApiErrorMessage(err.response?.data || err.message, 'Failed to generate simulation. Make sure there are enough questions in the database.'));
                                             });
                                     }}
                                     disabled={startingSimulation}
@@ -1933,7 +2428,7 @@ function ExamQuestionBankInner({
 
             {/* Image viewer modal — opens when the user clicks a thumbnail
                 in the image carousel above. Reuses the same ImageViewer
-                component the standalone NEET-PG / INI-CET players use, so
+                component the timed test player (/tests/[id]) uses, so
                 pinch-zoom, side-by-side, and fullscreen all work. Previously
                 the carousel used <a target="_blank"> which would leak
                 potentially-short-lived presigned S3 URLs into a new tab. */}
@@ -1972,7 +2467,8 @@ interface Question {
     concept_tags: string[];
     is_bookmarked: boolean;
     user_selected_answer?: string;
-    user_is_correct?: boolean;
+    // null: no verdict (an ungraded pick, or hidden on a locked row).
+    user_is_correct?: boolean | null;
     video_url?: string;
     video_status?: string;
     video_thumbnail?: string;

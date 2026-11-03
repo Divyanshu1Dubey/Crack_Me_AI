@@ -1,3 +1,5 @@
+import logging
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -5,6 +7,8 @@ from django.utils import timezone
 # Re-export the new analytics-event model so it lives in this app
 # (kept in a separate module to keep this file readable).
 from .models_events import AnalyticsEvent  # noqa: F401  (re-exported for migrations / admin)
+
+logger = logging.getLogger(__name__)
 
 
 class UserTopicPerformance(models.Model):
@@ -22,6 +26,17 @@ class UserTopicPerformance(models.Model):
 
     class Meta:
         unique_together = ['user', 'subject', 'topic']
+        constraints = [
+            # unique_together cannot cover the subject-level row (topic=NULL):
+            # NULLs are distinct in unique indexes, so two concurrent first
+            # answers in a subject created duplicates and every later
+            # get_or_create(topic=None) raised MultipleObjectsReturned.
+            models.UniqueConstraint(
+                fields=['user', 'subject'],
+                condition=models.Q(topic__isnull=True),
+                name='uniq_subject_level_topic_performance',
+            ),
+        ]
 
     @property
     def accuracy(self):
@@ -90,6 +105,33 @@ class Feedback(models.Model):
         return f"{self.user.username}: {self.title} ({self.get_category_display()})"
 
 
+class ContactMessage(models.Model):
+    """A Contact Us submission (anonymous or signed in).
+
+    Stored before the admin email is attempted, so a message is never lost
+    when email delivery is slow, misconfigured or failing.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='contact_messages',
+    )
+    name = models.CharField(max_length=120, blank=True)
+    email = models.EmailField()
+    subject = models.CharField(max_length=200, blank=True)
+    message = models.TextField()
+    email_delivered = models.BooleanField(
+        default=False, help_text='The admin notification email was handed to a real mail backend.',
+    )
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.email}: {self.subject or '(no subject)'}"
+
+
 class Announcement(models.Model):
     """Platform-wide announcements displayed on student dashboard."""
     PRIORITY_CHOICES = [
@@ -149,7 +191,7 @@ class StudyStreak(models.Model):
     xp_points = models.IntegerField(default=0, db_index=True)
 
     def record_activity(self):
-        today = timezone.now().date()
+        today = timezone.localdate()
         if self.last_activity_date == today:
             return
         if self.last_activity_date and (today - self.last_activity_date).days == 1:
@@ -159,14 +201,47 @@ class StudyStreak(models.Model):
         self.longest_streak = max(self.longest_streak, self.current_streak)
         self.total_study_days += 1
         self.last_activity_date = today
-        self.save()
+        # Only the streak columns: a full save() wrote back the xp_points
+        # value loaded earlier and erased concurrent add_xp() increments.
+        self.save(update_fields=['current_streak', 'longest_streak', 'total_study_days', 'last_activity_date'])
 
     def add_xp(self, points):
-        self.xp_points += points
-        self.save(update_fields=['xp_points'])
+        # Atomic increment: concurrent submits (two tabs, retries) used to
+        # lose XP with the previous read-modify-write.
+        from django.db import DatabaseError, transaction
+        from django.db.models import F
+        points = int(points)
+        type(self).objects.filter(pk=self.pk).update(xp_points=F('xp_points') + points)
+        self.refresh_from_db(fields=['xp_points'])
+        if points:
+            # Dated ledger for weekly / monthly leaderboards. Best effort: a
+            # ledger failure must never undo or block the XP award itself.
+            try:
+                with transaction.atomic():
+                    XPEvent.objects.create(user_id=self.user_id, points=points)
+            except DatabaseError:
+                logger.exception('Could not record XP ledger row for user=%s', self.user_id)
 
     def __str__(self):
         return f"{self.user.username}: {self.current_streak} day streak, {self.xp_points} XP"
+
+
+class XPEvent(models.Model):
+    """Dated XP ledger: one row per StudyStreak.add_xp() award.
+
+    StudyStreak only keeps the all-time total; this lets the leaderboard rank
+    by XP earned this week / month without re-deriving it from award rules
+    that live in other apps.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='xp_events')
+    points = models.IntegerField()
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+    def __str__(self):
+        return f"{self.user_id}: {self.points:+d} XP @ {self.created_at:%Y-%m-%d %H:%M}"
 
 
 class Badge(models.Model):

@@ -49,4 +49,20 @@ def dispatch_job(job_id: int) -> str:
     return task_id
 
 
-__all__ = ["run_import_job", "cancel_import_job", "dispatch_job"]
+def recover_stale_jobs() -> dict:
+    """Entry point of the ``ingestion_recover_stale_jobs`` django-q Schedule.
+
+    Marks processing jobs whose worker died as crashed and re-queues the ones
+    that can resume from their checkpoint (``orchestrator.recover_stale_jobs``).
+    The schedule is created by ``ingestion.schedules.ensure_recovery_schedule``
+    after every ``migrate`` and runs while a ``qcluster`` worker is up.
+    """
+    from .orchestrator import recover_stale_jobs as _recover
+
+    result = _recover()
+    if result["swept"]:
+        LOG.warning("Stale ingestion jobs: crashed %s, re-queued %s", result["swept"], result["resumed"])
+    return result
+
+
+__all__ = ["run_import_job", "cancel_import_job", "dispatch_job", "recover_stale_jobs"]

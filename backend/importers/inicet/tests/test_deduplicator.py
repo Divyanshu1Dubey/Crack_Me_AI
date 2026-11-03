@@ -1,8 +1,8 @@
 """Deduplicator tests — sha + fuzzy + image-hash."""
 import unittest
 
-from backend.importers.neetpg import deduplicator
-from backend.importers.neetpg.models import ImageRecord, ParsedOption, ParsedQuestion
+from importers.neetpg import deduplicator
+from importers.neetpg.models import ImageRecord, ParsedOption, ParsedQuestion
 
 
 def _q(stem: str, sha16: str = "abc") -> ParsedQuestion:

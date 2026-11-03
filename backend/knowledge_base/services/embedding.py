@@ -10,22 +10,71 @@ Strategy:
     1. sentence-transformers local (HuggingFace) — best for cost
     2. OpenAI text-embedding-3-* — fallback
     3. Cohere embed-english-v3.0 — fallback
-    4. Deterministic hash-based pseudo-embedding — last-resort
-       fallback that still produces consistent vectors
 
-We never crash the API if embeddings are unavailable; retrieval falls
-back to BM25-only and logs a warning.
+When no provider is available ``embed()`` returns ``[]``: retrieval then
+runs BM25-only and the indexer stores nothing. The deterministic hash
+"embedding" (``_hash_embed``) carries no meaning — cosine between two hash
+vectors is noise — so it is only produced when a caller explicitly asks
+for it (``allow_hash_fallback=True``), never for search or indexing.
+
+SentenceTransformer models are loaded once per process and shared by every
+EmbeddingService instance (views build a new one per request); a failed
+load is remembered for a while instead of being retried on every query.
+With ``AI_OFFLINE_MODE`` on, models are only loaded from the local cache
+and the hosted embedding APIs are not called.
 """
 
 import hashlib
 import logging
 import math
 import os
+import threading
+import time
 from typing import Optional, Sequence, Union
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# Per-process model cache: repo id -> SentenceTransformer, and repo id ->
+# monotonic time of the last failed load (retried after _LOAD_RETRY_SECONDS).
+_ST_MODELS: dict = {}
+_ST_FAILED: dict = {}
+_ST_LOCK = threading.Lock()
+_LOAD_RETRY_SECONDS = 600
+
+
+def _offline() -> bool:
+    try:
+        from ai_engine.offline import ai_offline_mode
+        return ai_offline_mode()
+    except Exception:
+        return False
+
+
+def get_sentence_transformer(repo: str):
+    """The process-wide SentenceTransformer for ``repo``, or None."""
+    model = _ST_MODELS.get(repo)
+    if model is not None:
+        return model
+    failed_at = _ST_FAILED.get(repo)
+    if failed_at is not None and time.monotonic() - failed_at < _LOAD_RETRY_SECONDS:
+        return None
+    with _ST_LOCK:
+        model = _ST_MODELS.get(repo)
+        if model is not None:
+            return model
+        try:
+            from sentence_transformers import SentenceTransformer
+            kwargs = {'local_files_only': True} if _offline() else {}
+            model = SentenceTransformer(repo, **kwargs)
+        except Exception as e:
+            logger.info(f"sentence-transformers model {repo} unavailable ({e})")
+            _ST_FAILED[repo] = time.monotonic()
+            return None
+        _ST_MODELS[repo] = model
+        _ST_FAILED.pop(repo, None)
+        return model
 
 
 DEFAULT_MODEL = os.getenv("EMBEDDING_MODEL", "bge-small-en-v1.5")
@@ -45,18 +94,30 @@ _MODEL_DIMS = {
 class EmbeddingService:
     """Lazy embedding provider with graceful fallback."""
 
+    _REPO_MAP = {
+        "bge-small-en-v1.5": "BAAI/bge-small-en-v1.5",
+        "bge-base-en-v1.5": "BAAI/bge-base-en-v1.5",
+        "bge-large-en-v1.5": "BAAI/bge-large-en-v1.5",
+        "all-MiniLM-L6-v2": "sentence-transformers/all-MiniLM-L6-v2",
+        "pubmedbert-base-embed": "NeuML/pubmedbert-base-embeddings",
+    }
+
     def __init__(self, model: Optional[str] = None):
         self.model = model or DEFAULT_MODEL
         self.dim = _MODEL_DIMS.get(self.model, 384)
-        self._st_model = None
-        self._st_loaded = False
         self._openai_client = None
         self._cohere_client = None
 
     # ─── Public API ────────────────────────────────────────
 
-    def embed(self, text: Union[str, Sequence[str]]) -> list[list[float]]:
-        """Embed a single string or list of strings."""
+    def embed(self, text: Union[str, Sequence[str]],
+              allow_hash_fallback: bool = False) -> list[list[float]]:
+        """Embed a single string or list of strings.
+
+        Returns ``[]`` when no real embedding provider is available (unless
+        ``allow_hash_fallback``), so callers never compare meaningless
+        vectors.
+        """
         inputs = [text] if isinstance(text, str) else list(text)
         if not inputs:
             return []
@@ -66,44 +127,38 @@ class EmbeddingService:
             self._try_st(inputs)
             or self._try_openai(inputs)
             or self._try_cohere(inputs)
-            or [self._hash_embed(t) for t in inputs]
         )
+        if not vecs:
+            if not allow_hash_fallback:
+                return []
+            vecs = [self._hash_embed(t) for t in inputs]
 
         # Pad / trim to declared dim (defensive)
         return [self._fit_dim(v) for v in vecs]
 
+    def embed_query(self, query: str) -> Optional[list[float]]:
+        """One query vector from a real provider, or None."""
+        vecs = self.embed(query)
+        return vecs[0] if vecs else None
+
     # ─── Providers ─────────────────────────────────────────
 
     def _try_st(self, inputs: list[str]) -> Optional[list[list[float]]]:
-        if self._st_loaded and self._st_model is None:
-            return None  # already known missing
+        repo = self._REPO_MAP.get(self.model)
+        if not repo:
+            return None
+        model = get_sentence_transformer(repo)
+        if model is None:
+            return None
         try:
-            from sentence_transformers import SentenceTransformer
-            if self._st_model is None:
-                # Map our model names to HF repo ids
-                repo_map = {
-                    "bge-small-en-v1.5": "BAAI/bge-small-en-v1.5",
-                    "bge-base-en-v1.5": "BAAI/bge-base-en-v1.5",
-                    "bge-large-en-v1.5": "BAAI/bge-large-en-v1.5",
-                    "all-MiniLM-L6-v2": "sentence-transformers/all-MiniLM-L6-v2",
-                    "pubmedbert-base-embed": "NeuML/pubmedbert-base-embeddings",
-                }
-                repo = repo_map.get(self.model)
-                if not repo:
-                    return None
-                self._st_model = SentenceTransformer(repo)
-            vecs = self._st_model.encode(inputs, normalize_embeddings=True,
-                                         show_progress_bar=False)
-            self._st_loaded = True
+            vecs = model.encode(inputs, normalize_embeddings=True, show_progress_bar=False)
             return [list(map(float, v)) for v in vecs]
         except Exception as e:
-            logger.info(f"sentence-transformers unavailable ({e}); trying next provider")
-            self._st_model = None
-            self._st_loaded = True
+            logger.info(f"sentence-transformers encode failed ({e}); trying next provider")
             return None
 
     def _try_openai(self, inputs: list[str]) -> Optional[list[list[float]]]:
-        if not self.model.startswith("text-embedding"):
+        if not self.model.startswith("text-embedding") or _offline():
             return None
         api_key = getattr(settings, "OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
         if not api_key:
@@ -122,7 +177,7 @@ class EmbeddingService:
             return None
 
     def _try_cohere(self, inputs: list[str]) -> Optional[list[list[float]]]:
-        if "cohere" not in self.model:
+        if "cohere" not in self.model or _offline():
             return None
         api_key = getattr(settings, "COHERE_API_KEY", "") or os.getenv("COHERE_API_KEY", "")
         if not api_key:
@@ -139,8 +194,9 @@ class EmbeddingService:
             return None
 
     def _hash_embed(self, text: str) -> list[float]:
-        """Deterministic fallback embedding (still semantically useful for
-        exact/near-duplicate match via hamming-style cosine)."""
+        """Deterministic pseudo-embedding. NOT semantic: identical text gives
+        identical vectors, anything else gives noise. Only produced when a
+        caller passes ``allow_hash_fallback=True``."""
         # 384-dim vector seeded by SHA-256 repeated
         vec = [0.0] * self.dim
         seed = hashlib.sha256(text.encode("utf-8")).digest()

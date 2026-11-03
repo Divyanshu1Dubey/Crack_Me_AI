@@ -14,7 +14,6 @@ export const metadata: Metadata = buildPageMetadata({
     description:
         'High-yield exam strategy posts for UPSC CMS, NEET PG, INI-CET and FMGE.',
     path: '/blog',
-    image: '/cms-circle-logo.png',
 });
 
 export default function BlogLayout({ children }: { children: ReactNode }) {

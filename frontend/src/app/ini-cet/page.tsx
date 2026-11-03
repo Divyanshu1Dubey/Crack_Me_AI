@@ -1,26 +1,27 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { INI_CET_PATTERN } from '@/lib/examPatterns';
+import { INI_CET_BANK_HREF, INI_CET_QUESTION_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const content: ExamLandingContent = {
     slug: 'ini-cet',
     name: 'INI-CET',
     fullName: 'Institute of National Importance - Combined Entrance Test',
-    title: 'INI-CET Preparation 2026 — AIIMS, PGIMER, JIPMER, NIMHANS | CrackCMS',
-    description: 'Crack INI-CET 2026 for AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST. PYQs, mock tests, AI tutor, and All-India rank prediction.',
-    tagline: 'Crack INI-CET for AIIMS, PGIMER, JIPMER, NIMHANS and SCTIMST with AI tutor, 12,000+ PYQs, and All-India rank predictor.',
+    title: 'INI-CET Preparation 2026 — AIIMS, PGIMER, JIPMER, NIMHANS',
+    description: 'Prepare for INI-CET 2026 (AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST) with an AI tutor, INI-CET recall questions, NEET PG-syllabus practice and computer-based mock tests.',
+    tagline: 'Prepare for INI-CET (AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST) with an AI tutor, INI-CET recall questions, our NEET PG question bank (same 19-subject syllabus) and mock tests.',
     heroBullets: [
-        '12,000+ INI-CET PYQs spanning AIIMS, PGIMER, JIPMER, NIMHANS',
+        `An INI-CET recall bank (${INI_CET_QUESTION_COUNT} questions so far), plus our ${NEET_PG_QUESTION_COUNT} question NEET PG bank for the same 19 subjects`,
         'AI tutor that explains with mnemonics and clinical pearls',
-        'Mock tests with the exact CBT interface used by AIIMS',
-        'All-India rank prediction using historical AIIMS cutoffs',
+        'Timed mock tests in a computer-based exam interface',
+        'INI-CET 2024 closing ranks and cutoff analysis on our blog',
     ],
     stats: [
-        { number: '12,000+', label: 'INI-CET MCQs' },
-        { number: '4.8/5', label: 'User rating' },
-        { number: '47k+', label: 'Active aspirants' },
-        { number: 'AIIMS', label: 'Pattern accuracy' },
+        { number: String(INI_CET_PATTERN.totalQuestions), label: 'MCQs per paper' },
+        { number: `${INI_CET_PATTERN.durationMinutes} min`, label: 'Exam duration' },
+        { number: '−1/3', label: 'Per wrong answer' },
+        { number: '2×/year', label: 'January & July sessions' },
     ],
     pattern: [
         { label: 'Mode', value: 'Computer-Based Test (CBT) - online' },
@@ -57,33 +58,20 @@ const content: ExamLandingContent = {
         { q: 'Is INI-CET harder than NEET PG?', a: 'INI-CET questions test conceptual depth and image-based reasoning more than NEET PG. Cut-offs are typically higher relative to the candidate pool.' },
         { q: 'Can I appear for INI-CET while doing internship?', a: 'Yes, if your internship completes by the cutoff date mentioned in the January/July session information bulletin.' },
         { q: 'How should I prepare for INI-CET in 4 months?', a: 'Solve 5,000+ PYQs, take one full mock every Sunday, focus on image-based MCQs (radiology + histopath), and use AI tutor for clinical reasoning gaps.' },
-        { q: 'Does CrackCMS have AIIMS image-based questions?', a: 'Yes — our INI-CET bank has a dedicated image-based filter for radiology, dermatology, and pathology slides.' },
+        { q: 'Does CrackCMS have an INI-CET question bank?', a: `Yes, a small one: ${INI_CET_QUESTION_COUNT} INI-CET recall questions so far (AIIMS does not publish the papers, so these are memory-based recalls), and it is growing. For volume, practise with our ${NEET_PG_QUESTION_COUNT} question NEET PG bank, which covers the same 19-subject syllabus, and use the AI tutor for image-based and clinical-reasoning topics.` },
     ],
     accentFrom: 'from-pink-600',
     accentTo: 'to-rose-700',
     emoji: '🏥',
-    pyqCount: '12,000+',
+    // Rendered as the "INI-CET recall PYQs" card; the hero button opens the
+    // same INI-CET bank the sidebar links to.
+    pyqCount: 'INI-CET recall',
+    pyqHref: INI_CET_BANK_HREF,
     relatedBlogPosts: [
-        {
-            slug: 'ini-cet-complete-guide',
-            title: 'INI-CET Complete Guide 2026: AIIMS, PGIMER, JIPMER, NIMHANS',
-            excerpt: 'Everything about INI-CET — pattern, eligibility, syllabus, preparation strategy, and how to crack AIIMS MD/MS seats.',
-        },
-        {
-            slug: 'neet-pg-vs-ini-cet-comparison',
-            title: 'NEET PG vs INI-CET: Difficulty, Syllabus, Salary & Strategy',
-            excerpt: 'Honest side-by-side comparison — including how to attempt both without burning out.',
-        },
-        {
-            slug: 'ini-cet-study-plan',
-            title: 'INI-CET Study Plan: 4-Month Strategy to Crack AIIMS/PGI/JIPMER',
-            excerpt: 'Month-by-month INI-CET plan with subject triage, image-based MCQ focus, and mock test schedule.',
-        },
-        {
-            slug: 'upsc-cms-vs-neet-pg-comparison',
-            title: 'UPSC CMS vs NEET PG: Full Comparison — Pattern, Salary, Difficulty',
-            excerpt: 'Side-by-side on exam pattern, negative marking, total marks, salary, success rate, and which exam suits your career goals.',
-        },
+        { slug: 'ini-cet-2024-cutoff-closing-ranks', title: '', excerpt: '' },
+        { slug: 'neet-pg-vs-ini-cet', title: '', excerpt: '' },
+        { slug: 'cms-vs-neet-pg-vs-ini-cet', title: '', excerpt: '' },
+        { slug: 'neet-pg-preparation-strategy-study-plans', title: '', excerpt: '' },
     ],
 };
 
@@ -92,9 +80,6 @@ export const metadata = buildExamMetadata(content);
 export default function INICETPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'INI-CET', path: '/ini-cet' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">INI-CET Comparisons & Resources</h2>

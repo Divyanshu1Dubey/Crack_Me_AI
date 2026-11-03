@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { questsAPI } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,63 +15,74 @@ interface Quest {
     description: string;
     target_value: number;
     current_value: number;
-    reward_tokens: number;
-    reward_xp: number;
+    xp_reward: number;
+    progress_percent?: number;
     expires_at: string;
     is_completed: boolean;
-    icon: string;
 }
 
 interface StreakInfo {
     current_streak: number;
     longest_streak: number;
-    streak_freeze_available: boolean;
-    last_active_date: string;
+    streak_frozen: boolean;
+    last_quest_date: string | null;
 }
 
+// Keys match backend UserQuest.QUEST_TYPE_CHOICES.
 const QUEST_ICONS: Record<string, any> = {
-    'daily_practice': Target,
-    'daily_quiz': Zap,
-    'weekly_master': Star,
-    'streak_keep': Flame,
-    'special': Gift,
+    'solve_questions': Target,
+    'complete_tests': Zap,
+    'review_mistakes': Star,
+    'streak_maintain': Flame,
+    'speed_round': Zap,
+    'study_subject': Gift,
 };
 
 export default function QuestsPage() {
-    const { user } = useAuth();
+    // Member-only page: redirect logged-out visitors to /login?next=/quests.
+    const { ready } = useRequireAuth();
     const [quests, setQuests] = useState<Quest[]>([]);
     const [streak, setStreak] = useState<StreakInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!ready) return;
         Promise.all([
             questsAPI.list(),
             questsAPI.getStreak(),
         ]).then(([questsRes, streakRes]) => {
-            setQuests(questsRes.data as Quest[]);
+            const body: any = questsRes.data;
+            setQuests(Array.isArray(body) ? body : (body?.results || []));
             setStreak(streakRes.data as StreakInfo);
-            setLoading(false);
-        }).catch(() => setLoading(false));
-    }, []);
+        }).catch(() => {
+            setError('Could not load your quests. Please refresh to try again.');
+        }).finally(() => setLoading(false));
+    }, [ready]);
 
     const handleComplete = async (questId: number) => {
         setCompleting(questId);
+        setError(null);
         try {
-            await questsAPI.complete(questId);
+            const res = await questsAPI.complete(questId);
+            const updated = res.data as Quest;
             setQuests(prev => prev.map(q =>
-                q.id === questId ? { ...q, is_completed: true } : q
+                q.id === questId ? { ...q, ...updated, is_completed: true } : q
             ));
-        } catch (err) {
-            console.error('Complete quest failed:', err);
+            questsAPI.getStreak().then(r => setStreak(r.data as StreakInfo)).catch(() => {});
+        } catch (err: any) {
+            setError(err?.response?.data?.error || 'Could not claim this quest. Please try again.');
         } finally {
             setCompleting(null);
         }
     };
 
+    // The route layout puts this page inside the app shell (.page-container),
+    // which already pads the page; keep our own padding only outside it.
     if (loading) {
         return (
-            <div className="max-w-4xl mx-auto p-6 space-y-4">
+            <div className="max-w-4xl mx-auto p-6 [.page-container_&]:p-0 space-y-4">
                 <Skeleton className="h-8 w-48" />
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}
             </div>
@@ -82,7 +93,7 @@ export default function QuestsPage() {
     const completedQuests = quests.filter(q => q.is_completed);
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="max-w-4xl mx-auto p-4 md:p-6 [.page-container_&]:p-0 space-y-6">
             {/* Header */}
             <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
@@ -90,7 +101,7 @@ export default function QuestsPage() {
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold">Daily Quests</h1>
-                    <p className="text-sm text-muted-foreground">Complete quests to earn tokens and XP</p>
+                    <p className="text-sm text-muted-foreground">Complete today&apos;s quests to earn XP and keep your streak</p>
                 </div>
             </div>
 
@@ -102,20 +113,26 @@ export default function QuestsPage() {
                             <div className="text-4xl">🔥</div>
                             <div>
                                 <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                                    {streak.current_streak} days
+                                    {streak.current_streak} {streak.current_streak === 1 ? 'day' : 'days'}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                    Best: {streak.longest_streak} days
+                                    Best: {streak.longest_streak} {streak.longest_streak === 1 ? 'day' : 'days'}
                                 </div>
                             </div>
                         </div>
-                        {streak.streak_freeze_available && (
-                            <Badge variant="outline" className="border-blue-400 text-blue-600">
-                                Freeze Available
+                        {streak.streak_frozen && (
+                            <Badge variant="outline" className="border-blue-400 text-blue-600 dark:text-blue-300">
+                                Streak Freeze Active
                             </Badge>
                         )}
                     </CardContent>
                 </Card>
+            )}
+
+            {error && (
+                <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                </div>
             )}
 
             {/* Active Quests */}
@@ -124,15 +141,18 @@ export default function QuestsPage() {
                     <h2 className="text-lg font-semibold">Active Quests</h2>
                     {activeQuests.map(quest => {
                         const Icon = QUEST_ICONS[quest.quest_type] || Target;
-                        const progress = Math.min((quest.current_value / quest.target_value) * 100, 100);
+                        const progress = quest.target_value > 0
+                            ? Math.min((quest.current_value / quest.target_value) * 100, 100)
+                            : 0;
+                        const remaining = Math.max(0, quest.target_value - quest.current_value);
                         return (
                             <Card key={quest.id}>
                                 <CardContent className="p-4">
                                     <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-primary/10 rounded-lg">
+                                        <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                                             <Icon className="w-5 h-5 text-primary" />
                                         </div>
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <div className="font-medium">{quest.title}</div>
                                             <p className="text-sm text-muted-foreground">{quest.description}</p>
                                             <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
@@ -146,20 +166,26 @@ export default function QuestsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 mt-2">
                                                 <Badge variant="outline" className="text-xs">
-                                                    +{quest.reward_tokens} tokens
-                                                </Badge>
-                                                <Badge variant="outline" className="text-xs">
-                                                    +{quest.reward_xp} XP
+                                                    +{quest.xp_reward} XP
                                                 </Badge>
                                             </div>
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleComplete(quest.id)}
-                                            disabled={completing === quest.id || progress < 100}
-                                        >
-                                            {completing === quest.id ? '...' : 'Claim'}
-                                        </Button>
+                                        {/* Claim appears only once the quest is done; a disabled
+                                            primary button read as a broken action. */}
+                                        {progress >= 100 ? (
+                                            <Button
+                                                size="sm"
+                                                className="shrink-0"
+                                                onClick={() => handleComplete(quest.id)}
+                                                disabled={completing === quest.id}
+                                            >
+                                                {completing === quest.id ? 'Claiming…' : 'Claim'}
+                                            </Button>
+                                        ) : (
+                                            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground tabular-nums">
+                                                {remaining} to go
+                                            </span>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -180,7 +206,7 @@ export default function QuestsPage() {
                                     <div className="font-medium line-through">{quest.title}</div>
                                 </div>
                                 <Badge variant="secondary" className="text-xs">
-                                    +{quest.reward_tokens} tokens
+                                    +{quest.xp_reward} XP
                                 </Badge>
                             </CardContent>
                         </Card>

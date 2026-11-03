@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseBrowserClient } from '@/utils/supabase/client';
 import { getSupabaseConfig } from '@/utils/supabase/config';
+import { isLocalAuthMode } from './localAuth';
 
 let browserClient: SupabaseClient | null = null;
 
@@ -12,11 +13,13 @@ const INVALID_REFRESH_TOKEN_MARKERS = [
 
 export const isSupabaseConfigured = () => getSupabaseConfig().isConfigured;
 
+// In local dev auth mode (NEXT_PUBLIC_AUTH_MODE=local) Supabase is switched
+// off entirely, even if its keys are present in the environment.
 export const isSupabaseAuthEnabled = () =>
-  isSupabaseConfigured();
+  !isLocalAuthMode() && isSupabaseConfigured();
 
 export const getSupabaseBrowserClient = () => {
-  if (!isSupabaseConfigured()) return null;
+  if (isLocalAuthMode() || !isSupabaseConfigured()) return null;
 
   if (!browserClient) {
     browserClient = createSupabaseBrowserClient();

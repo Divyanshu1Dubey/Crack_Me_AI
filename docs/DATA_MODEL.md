@@ -27,16 +27,17 @@
 
 | Field | Type | Notes |
 |---|---|---|
-| `username` | `CharField` (inherited) | Unique |
+| `username` | `CharField` (inherited) | Unique. Public handle (discussions, leaderboard): the name chosen at sign-up when it passes the Settings rules, else a generated `learner_<8 hex>`, never the email's local part (`accounts/handles.py`); migration `accounts.0027` renamed the student usernames that showed the email ([`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.3) |
 | `email` | `EmailField` (inherited) | |
 | `password` | (inherited) | Hashed |
 | `role` | `CharField` | `student` / `admin` |
 | `phone` | `CharField(15)` | optional |
 | `college` | `CharField(200)` | optional |
-| `session_key` | `CharField(255)` | Single active session enforcement |
-| `current_session_id` | `CharField(255)` | mirrors active device session |
+| `supabase_uid` | `CharField(64)`, unique, nullable | Supabase Auth user id linked to this account; sign-ins are matched by it (migration `accounts.0023`, set on first sign-in or by `manage.py link_supabase_identity`) |
+| `session_key` | `CharField(255)` | Unused legacy field (devices are tracked in `UserDevice`) |
+| `current_session_id` | `CharField(255)` | Unused legacy field |
 | `profile_bonus_rewarded` | `BooleanField` | First-time profile completion flag |
-| `is_subscribed` | `BooleanField` | Mirror of latest active subscription |
+| `is_subscribed` | `BooleanField` | Mirror only. Premium (`accounts.utils.is_premium`) comes from `Subscription` rows; a flag without a row grants nothing |
 | `target_exam` | `CharField(50)` | Default `UPSC CMS` |
 | `active_exam_track` | `FK(ExamTrack, SET_NULL)` | User's selected track |
 | `target_year` | `IntegerField` | User's target exam year |
@@ -50,7 +51,8 @@
 **Properties**: `is_admin` → `role=='admin' or is_superuser` (used to bypass token checks).
 
 **Business rules**:
-- Single-active-session enforcement via `session_key` + `UserDevice`.
+- Device limit via `UserDevice`: 2 active devices on a free plan, 4 with an active `Subscription` row (admins exempt); `session_key` / `current_session_id` are not used.
+- A Supabase identity is linked by `supabase_uid`; admin / staff rows link automatically only for a trusted admin identity or the identity they were created from (see [`AUTHENTICATION.md`](./AUTHENTICATION.md) §4.1).
 - Admin/staff bypass token metering (`TokenBalance.consume_token` checks `user.is_admin`).
 - `active_exam_track` SET_NULL on ExamTrack delete (preserves user).
 
@@ -171,7 +173,9 @@
 
 **Class methods**:
 - `get_active_subscription(user)` — returns the latest active sub, auto-expires stale ones
-- `activate_from_payment(...)` — extends existing active sub or creates new one; updates `user.is_subscribed` mirror
+- `activate_from_payment(...)` — extends existing active sub or creates new one; updates `user.is_subscribed` mirror. A bare `is_subscribed` flag is no longer turned into a lifetime `legacy` row here.
+
+**Pre-`Subscription` accounts**: until `accounts.0011` premium was only `CustomUser.is_subscribed` (also set without payment by the removed `POST /api/auth/subscribe/`). Migration `accounts.0026_restore_paid_legacy_plans` gave each flagged account without rows the rows its signed Razorpay payments prove (`accounts/legacy_subscriptions.py`: the ₹199 Early Bird pass as a lifetime `legacy` row, a dated plan with the period it bought). Accounts without payment evidence keep an inert flag: review them with `python manage.py reconcile_legacy_subscriptions` (dry run; `build.sh` prints it on each deploy), then, after granting a plan to any that should keep premium, `--apply --clear-unproven` clears the rest.
 
 **Plan durations**:
 | Plan | Duration |
@@ -189,7 +193,8 @@
 | Field | Type | Notes |
 |---|---|---|
 | `user` | `FK(CustomUser, CASCADE)` | related_name=`devices` |
-| `device_fingerprint` | `CharField(255)` | |
+| `device_fingerprint` | `CharField(255)` | The browser's `X-Session-ID`, or `sid:<session>` for a device known only by its Supabase session |
+| `session_id` | `CharField(64)`, null, indexed | Supabase auth session (access-token `session_id` claim) bound to the device (migration `accounts.0025`); inactive `sid:<session>` rows record ended sessions and are never listed |
 | `device_name` | `CharField(255)` | |
 | `browser` | `CharField(255)` | |
 | `ip_address` | `GenericIPAddressField` | nullable |
@@ -636,13 +641,13 @@ Approx. 5,000 chunks (4972+ per existing reports).
    - Admins/staff bypass (`CustomUser.is_admin`).
    - Refund on AI failure (`TokenBalance.refund_token`).
 
-2. **Single-device session**:
-   - `CustomUser.session_key` + `UserDevice` enforce one active session.
-   - Backend can return `code: 'session_invalid'` to force logout on the older device.
+2. **Device limit**:
+   - `UserDevice` rows are devices bound to the Supabase session that uses them (`session_id`), not one row per `X-Session-ID`: a session without a usable header is a device of its own, and a new sign-in on a browser moves its row to the new session. The cap is 2 devices (free) / 4 (active `Subscription` row); a new device beyond it gets `401 device_limit_reached`, a logged-out or replaced session `401 device_inactive` ([`AUTHENTICATION.md`](./AUTHENTICATION.md) §6).
+   - `CustomUser.session_key` / `current_session_id` are unused; `session_invalid` is no longer emitted.
 
 3. **Subscription mirror**:
-   - `CustomUser.is_subscribed` is a denormalized mirror of `Subscription.status=='active'`.
-   - `Subscription.activate_from_payment` keeps them in sync.
+   - Premium (`accounts.utils.is_premium`, the profile's `is_subscribed` / `subscription_info`, the device cap) comes from `Subscription` rows only. `CustomUser.is_subscribed` is a mirror and grants nothing by itself.
+   - `Subscription.activate_from_payment` sets it; an expired plan clears it on the next read. Accounts flagged before `accounts.0011` got rows from migration `accounts.0026` where a signed payment is on record; review the rest with `manage.py reconcile_legacy_subscriptions` (see [`Subscription`](#subscription)).
 
 4. **AI provider rotation**:
    - `_call_counter` + `_counter_lock` (thread-safe).
@@ -663,11 +668,11 @@ Approx. 5,000 chunks (4972+ per existing reports).
 ```
 Source PDFs / MD / TXT
     │
-    ▼ (_train_all.py, KnowledgeUploadView)
-RAG store (SQLite TF-IDF)
+    ▼ (manage.py train_ai, KnowledgeUploadView)
+RAG store (SQLite chunk store)
     │
     ▼
-User query → cosine top-K → AI prompt → answer
+User query → BM25 top-K (in-memory index) → AI prompt → answer
     │
     ▼
 ChatSession → ChatMessage (immutable per turn)
@@ -675,9 +680,8 @@ ChatSession → ChatMessage (immutable per turn)
 Question lifecycle:
   Source → Import scripts → Django DB
     → AI Enrichment (correct_answer via 3-vote, explanation, mnemonic)
-    → validate_questions.py
-    → _export_fixture.py → questions_fixture.json
-    → build.sh → loaddata → production DB
+    → (fresh database only) fixtures/cms_fixture.json → build.sh seed_question_bank
+    → production DB (the source of truth once it has questions)
     → DRF API → student UI
     → QuestionAttempt per attempt
     → UserTopicPerformance aggregated
@@ -713,11 +717,11 @@ Question lifecycle:
 - **Fix**: cap conversation length per session (e.g. last 50 messages) or summarize old ones.
 
 ### 6. AI quota starvation
-- Single backend instance (`gunicorn --workers 1 --threads 4`) means **4 concurrent AI requests max**. Long AI calls block threads.
+- One backend instance (`gunicorn --workers 3 --threads 4`, `backend/Procfile`) serves **at most 12 concurrent requests**. Long AI calls (up to `AI_CALL_DEADLINE_SECONDS`, default 90 s) block threads.
 - **Fix**: scale to 2–4 instances behind a load balancer; or move AI calls to a queue (django-q2 already present).
 
 ### 7. Fixture churn
-- `questions_fixture.json` is 5+ MB and grows. Every `loaddata` is a full table overwrite.
+- `backend/fixtures/cms_fixture.json` is several MB and grows. `seed_question_bank` loads it only into an empty bank, but a manual `load_exam_fixture cms` over a live bank overwrites the rows it contains.
 - **Fix**: for >10k questions, switch to `manage.py loaddata --format=jsonl` or move to a proper migration seed.
 
 ### 8. Password reset token table growth
@@ -744,7 +748,7 @@ Question lifecycle:
 | `Subscription` | `/auth/subscribe/status/`, `/auth/admin/users/<id>/subscription/` | `/auth/subscribe/verify/`, `/auth/admin/users/<id>/subscription/` |
 | `UserDevice` | `/auth/devices/` | `/auth/devices/logout/`, `/auth/admin/users/<id>/devices/` |
 | `ExamTrack`, `Subject`, `Topic` | `/questions/exam-tracks/`, `/questions/subjects/`, `/questions/topics/` | (admin) |
-| `Question` | `/questions/`, `/questions/<id>/` | admin / `_export_fixture.py` |
+| `Question` | `/questions/`, `/questions/<id>/` | admin (REST API / Django admin), importers |
 | `QuestionBookmark` | `/questions/bookmarks/` | `/questions/<id>/bookmark/` |
 | `QuestionFeedback` | `/questions/feedback/` | `/questions/feedback/` |
 | `Discussion` | `/questions/discussions/` | `/questions/discussions/`, `/discussions/<id>/replies/`, `/discussions/<id>/vote/` |

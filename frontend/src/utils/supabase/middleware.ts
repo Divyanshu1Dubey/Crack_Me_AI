@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { assertSupabaseConfig } from './config';
+import { isLocalAuthBuild, LOCAL_ADMIN_COOKIE, LOCAL_SESSION_COOKIE } from '@/lib/localSession';
 
 const PROTECTED_ROUTE_PREFIXES = [
   '/admin',
@@ -21,10 +22,25 @@ const PROTECTED_ROUTE_PREFIXES = [
   '/textbooks',
   '/upload',
   '/trends',
+  // Personal pages: they also gate client-side (useRequireAuth); the
+  // redirect here avoids a flash of the page shell for signed-out visitors.
+  '/study-time',
+  '/quests',
+  '/mistake-notebook',
+  '/topic-notes',
 ];
 
 const isProtectedRoute = (pathname: string) =>
   PROTECTED_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+const isAdminPath = (pathname: string) => pathname === '/admin' || pathname.startsWith('/admin/');
+
+/** /login?next=<path + query>, so a deep link survives the sign-in. */
+const loginRedirect = (request: NextRequest) => {
+  const loginUrl = new URL('/login', request.url);
+  loginUrl.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return NextResponse.redirect(loginUrl);
+};
 
 const parseAdminEmailAllowlist = () => {
   const candidates = [
@@ -45,28 +61,51 @@ const parseAdminEmailAllowlist = () => {
 
 const ADMIN_EMAIL_ALLOWLIST = parseAdminEmailAllowlist();
 
+/**
+ * Best-effort "is this an admin?" from the Supabase user, used only to pick
+ * where an already signed-in visitor of /login lands. app_metadata can only
+ * be set with the service-role key; user_metadata is editable by the user
+ * (supabase.auth.updateUser) and is never trusted. Admins promoted in the app
+ * (Django role) are not visible here at all -- access to /admin is decided by
+ * the backend profile on the page, never by this function.
+ */
 const isAdminUser = (
   user: {
     email?: string;
     app_metadata?: Record<string, unknown>;
-    user_metadata?: Record<string, unknown>;
   } | null | undefined,
 ) => {
   if (!user) return false;
   const appMetadata = user.app_metadata || {};
-  const userMetadata = user.user_metadata || {};
   const email = String(user.email || '').trim().toLowerCase();
 
   const metadataAdmin =
     String(appMetadata.is_admin || '').toLowerCase() === 'true'
-    || String(appMetadata.role || '').toLowerCase() === 'admin'
-    || String(userMetadata.is_admin || '').toLowerCase() === 'true'
-    || String(userMetadata.role || '').toLowerCase() === 'admin';
+    || String(appMetadata.role || '').toLowerCase() === 'admin';
 
   return metadataAdmin || (email ? ADMIN_EMAIL_ALLOWLIST.has(email) : false);
 };
 
+// Local development (NEXT_PUBLIC_AUTH_MODE=local; the backend only accepts
+// local logins with DEBUG on): there is no Supabase session, so gate on the
+// presence cookies kept by lib/localAuth.ts. Like the Supabase cookie check
+// below, this is a navigation guard only; the Django API authenticates and
+// authorises every request. No Supabase call is made in this mode.
+const localSessionGate = (request: NextRequest) => {
+  const pathname = request.nextUrl.pathname;
+  const signedIn = request.cookies.get(LOCAL_SESSION_COOKIE)?.value === '1';
+  if (isProtectedRoute(pathname) && !signedIn) {
+    return loginRedirect(request);
+  }
+  if (isAdminPath(pathname) && request.cookies.get(LOCAL_ADMIN_COOKIE)?.value !== '1') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  return NextResponse.next();
+};
+
 export const updateSession = async (request: NextRequest) => {
+  if (isLocalAuthBuild()) return localSessionGate(request);
+
   const { supabaseUrl, supabaseKey } = assertSupabaseConfig('middleware');
   let response = NextResponse.next({
     request: {
@@ -125,31 +164,22 @@ export const updateSession = async (request: NextRequest) => {
   const isAuthenticated = !!authData?.user || hasSupabaseAuthCookie;
 
   if (isProtectedRoute(pathname) && !isAuthenticated) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('next', pathname);
-    return NextResponse.redirect(loginUrl);
+    return loginRedirect(request);
   }
 
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
-    // Admin routes MUST have a server-verified user — never let a
-    // "refresh-pending" request into /admin. If we can see cookies
-    // but the user object didn't materialise, send them to the login
-    // page to recover so they don't see a flash of admin content.
-    if (!authData?.user) {
-      if (!hasSupabaseAuthCookie) {
-        const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('next', pathname);
-        return NextResponse.redirect(loginUrl);
-      }
-      // Cookies present but getUser() failed — let the page render an
-      // admin gate client-side (useAuth in each admin page already
-      // handles this with a "Checking admin access…" loader).
-    } else if (!isAdminUser(authData.user as Parameters<typeof isAdminUser>[0])) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
+  // /admin: any signed-in user gets the page; the admin role is checked by
+  // the page itself against the BACKEND profile (role / is_admin; every
+  // admin page and layout redirects non-admins to /dashboard) and by every
+  // admin API. The old gate here trusted Supabase user_metadata, which a
+  // student can set with supabase.auth.updateUser, and it bounced admins
+  // who were promoted in the app (Django role, no Supabase flag).
+  // (Signed-out visitors were already sent to /login above: /admin is a
+  // protected prefix.)
 
-  if (isAuthenticated && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password')) {
+  // Signed-in users skip the sign-in pages. /reset-password is NOT one of
+  // them: the recovery link signs the user in on /auth/callback and sends
+  // them there to set the new password (updateUser needs that session).
+  if (isAuthenticated && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password')) {
     const redirectPath = authData?.user ? (isAdminUser(authData.user as Parameters<typeof isAdminUser>[0]) ? '/admin' : '/dashboard') : '/dashboard';
     return NextResponse.redirect(new URL(redirectPath, request.url));
   }

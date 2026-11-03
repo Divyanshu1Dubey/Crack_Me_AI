@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import { TrackedLink } from '@/components/TrackedLink';
-import { buildPageMetadata } from '@/lib/metadata';
-import { getAllPosts } from '@/lib/blog';
+import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
+import { getAllCategories, getAllPosts } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
+import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 import Breadcrumbs from '@/components/Breadcrumbs';
 
 export const metadata: Metadata = buildPageMetadata({
@@ -14,7 +14,6 @@ export const metadata: Metadata = buildPageMetadata({
     description:
         'High-yield exam strategies, last-day revision plans, mock-test scoring tactics and answer-writing guides for UPSC CMS, NEET PG, INI-CET and FMGE aspirants.',
     path: '/blog',
-    image: '/cms-circle-logo.png',
     type: 'website',
     keywords: [
         'UPSC CMS blog',
@@ -29,9 +28,19 @@ export const metadata: Metadata = buildPageMetadata({
     ],
 });
 
+// The hub shows the newest posts and links every category; the full list
+// lives on the category pages (it used to render all 130 posts in a sidebar,
+// a ~700 KB page).
+const LATEST_POSTS = 9;
+const JSON_LD_POSTS = 20;
+/** Posts shown beside the featured one; the rest go in the grid below. */
+const ASIDE_POSTS = 3;
+
 export default function BlogIndexPage() {
     const posts = getAllPosts();
-    const [featured, ...rest] = posts;
+    const [featured, ...others] = posts;
+    const rest = others.slice(0, LATEST_POSTS - 1);
+    const categories = getAllCategories();
 
     const jsonLd = {
         '@context': 'https://schema.org',
@@ -46,7 +55,7 @@ export default function BlogIndexPage() {
             url: siteUrl,
             logo: { '@type': 'ImageObject', url: `${siteUrl}/cms-circle-logo.png` },
         },
-        blogPost: posts.map((p) => ({
+        blogPost: posts.slice(0, JSON_LD_POSTS).map((p) => ({
             '@type': 'BlogPosting',
             headline: p.title,
             url: `${siteUrl}/blog/${p.slug}`,
@@ -62,12 +71,7 @@ export default function BlogIndexPage() {
 
     return (
         <>
-            <Script
-                id="blog-index-schema"
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
@@ -86,8 +90,8 @@ export default function BlogIndexPage() {
                         </h1>
                         <p className="mt-5 max-w-3xl text-lg text-muted-foreground">
                             What actually works in the last 5 days before UPSC CMS, NEET PG, INI-CET and FMGE.
-                            Written by the CrackCMS editorial team, reviewed by clinicians, grounded in{' '}
-                            <strong className="text-foreground">3,300+ PYQs</strong> and real candidate data.
+                            Written by the CrackCMS editorial team and grounded in{' '}
+                            <strong className="text-foreground">{CMS_PYQ_COUNT} UPSC CMS PYQs</strong> and the NEET PG question bank.
                         </p>
                         <div className="mt-7 flex flex-wrap items-center gap-2">
                             <TrackedLink
@@ -125,17 +129,50 @@ export default function BlogIndexPage() {
                     ) : null}
 
                     {featured ? (
-                        <div className="grid gap-6 lg:grid-cols-12">
-                            <div className="lg:col-span-8">
-                                <BlogCard post={featured} featured />
+                        <>
+                            {/* Featured post + the next few beside it. The aside is a
+                                grid so every card is its own block (space-y on inline
+                                card links let them run together). */}
+                            <div className="grid gap-6 lg:grid-cols-12">
+                                <div className="lg:col-span-8">
+                                    <BlogCard post={featured} featured />
+                                </div>
+                                <aside className="lg:col-span-4 grid content-start gap-4">
+                                    {rest.slice(0, ASIDE_POSTS).map((p) => (
+                                        <BlogCard key={p.slug} post={p} />
+                                    ))}
+                                </aside>
                             </div>
-                            <aside className="lg:col-span-4 space-y-4">
-                                {rest.map((p) => (
-                                    <BlogCard key={p.slug} post={p} />
-                                ))}
-                            </aside>
-                        </div>
+                            {/* Everything else uses the full width instead of one long
+                                narrow column next to an empty two-thirds of the page. */}
+                            {rest.length > ASIDE_POSTS && (
+                                <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                    {rest.slice(ASIDE_POSTS).map((p) => (
+                                        <BlogCard key={p.slug} post={p} />
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     ) : null}
+
+                    {categories.length > 0 && (
+                        <nav aria-label="Blog categories" className="mt-12">
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                                Browse all {posts.length} posts by category
+                            </h2>
+                            <div className="flex flex-wrap gap-2">
+                                {categories.map((c) => (
+                                    <Link
+                                        key={c.slug}
+                                        href={`/blog/category/${c.slug}`}
+                                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:border-primary hover:text-primary transition-colors"
+                                    >
+                                        {c.name} ({c.count})
+                                    </Link>
+                                ))}
+                            </div>
+                        </nav>
+                    )}
 
                     {posts.length === 0 && (
                         <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
@@ -147,7 +184,7 @@ export default function BlogIndexPage() {
                         <h3 className="text-lg font-bold">Practise the PYQs behind every strategy.</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
                             Every tactic in every post links back to the original previous-year question.
-                            Browse 3,300+ PYQs across UPSC CMS, NEET PG and INI-CET — free, no sign-up wall.
+                            Practise {CMS_PYQ_COUNT} UPSC CMS PYQs and the NEET PG bank with a free account.
                         </p>
                         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                             <Link
@@ -164,7 +201,7 @@ export default function BlogIndexPage() {
                             </Link>
                         </div>
                         <p className="mt-3 text-[11px] text-muted-foreground">
-                            Free to use. Optional account if you want your progress saved.
+                            Free account; premium plans unlock the full bank and mock tests.
                         </p>
                     </div>
                 </section>

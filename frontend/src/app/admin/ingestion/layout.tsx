@@ -1,4 +1,4 @@
-// /admin/ingestion/* layout — client-side admin role gate.
+// /admin/ingestion/* layout — client-side admin role gate + app shell.
 //
 // UPSC CMS's existing /admin/* routes continue to work unchanged; this
 // layout is OPT-IN for the new isolated NEET PG / INI-CET / FMGE /
@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth';
 
 export default function IngestionLayout({
@@ -23,16 +24,17 @@ export default function IngestionLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
 
   useEffect(() => {
     if (loading) return;
-    const isAdmin = !!user && (user.role === 'admin' || user.is_admin);
     if (!isAdmin) {
       router.replace(`/login?next=${encodeURIComponent(pathname || '/admin/ingestion')}`);
     }
-  }, [user, loading, router, pathname]);
+  }, [isAdmin, loading, router, pathname]);
 
-  if (loading || !user) {
+  // Non-admins never see the admin UI, not even while the redirect runs.
+  if (loading || !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] text-muted-foreground">
         Checking admin access…
@@ -40,5 +42,11 @@ export default function IngestionLayout({
     );
   }
 
-  return <div className="ingestion-admin">{children}</div>;
+  // The shared app shell (Sidebar + Header, contract C6), so every
+  // ingestion page has the app navigation and the mobile menu.
+  return (
+    <AppShell>
+      <div className="ingestion-admin">{children}</div>
+    </AppShell>
+  );
 }

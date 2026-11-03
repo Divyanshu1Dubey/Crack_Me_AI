@@ -2,10 +2,12 @@
 send_subscription_reminders.py
 Management command to send renewal reminder emails to subscribed users.
 
-Schedule via django-q2 cron, e.g.:
-    python manage.py qcluster    # in one process, then schedule below
+Scheduled daily through django-q2: every ``migrate`` (the release step) calls
+schedule_subscription_reminders() from accounts.signals, and the schedule runs
+while a ``python manage.py qcluster`` worker is up (Procfile ``worker``).
+Without a worker, run it from a plain cron / platform job instead:
 
-    python manage.py qcron --schedule daily  --command 'accounts.management.commands.send_subscription_reminders.Command' --name 'subscription_reminders'
+    python manage.py send_subscription_reminders --days 7,3,1
 
 Or run manually:
     python manage.py send_subscription_reminders                # default T-7
@@ -51,6 +53,20 @@ def _mark_reminded(sub_id: int, threshold: int) -> None:
     )
 
 
+def _outlasted_by_another_plan(sub) -> bool:
+    """True when the user holds another active plan that ends later (or never)."""
+    from django.db.models import Q
+
+    from accounts.models import Subscription
+
+    return (
+        Subscription.objects.filter(user_id=sub.user_id, status='active')
+        .exclude(pk=sub.pk)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=sub.expires_at))
+        .exists()
+    )
+
+
 def _send_reminder_email(user_email: str, user_name: str, plan_name: str, expires_at, days_left: int) -> None:
     """Render and send the renewal reminder email."""
     from django.core.mail import send_mail
@@ -61,7 +77,7 @@ def _send_reminder_email(user_email: str, user_name: str, plan_name: str, expire
         f'Hi {user_name or "there"},\n\n'
         f'Your CrackCMS premium subscription ({plan_name}) expires on {expiry_str} '
         f'- that\'s only {days_left} day{"s" if days_left != 1 else ""} away.\n\n'
-        f'Renew now to keep your unlimited AI tutor, mock tests, and study materials uninterrupted:\n'
+        f'Renew now to keep your premium question bank, AI tutor, mock tests, and study materials uninterrupted:\n'
         f'  https://www.cracklabs.app/subscription\n\n'
         f'Need help or want to switch plans? Reply to this email and we\'ll assist within 24 hours.\n\n'
         f'- The CrackCMS team\n'
@@ -118,6 +134,10 @@ class Command(BaseCommand):
             for sub in qs:
                 if _already_reminded(sub.id, threshold):
                     continue
+                if _outlasted_by_another_plan(sub):
+                    # Stacked purchases: a later (or lifetime) plan keeps the
+                    # user premium, so "your plan expires" would be wrong.
+                    continue
                 days_left = max(0, (sub.expires_at - now).days)
                 if dry_run:
                     self.stdout.write(
@@ -149,14 +169,31 @@ class Command(BaseCommand):
 #
 #     0 9 * * *  cd /app && python manage.py send_subscription_reminders --days 7,3,1
 #
+REMINDER_THRESHOLDS = '7,3,1'  # matches the promise on /subscription
+
+
+def run_subscription_reminders(days: str = REMINDER_THRESHOLDS) -> None:
+    """Callable entry point for schedulers (django-q, cron wrappers).
+
+    django-q calls the scheduled ``func`` path; pointing it at the Command
+    *class* only constructed a Command and never ran handle().
+    """
+    from django.core.management import call_command
+
+    call_command('send_subscription_reminders', days=days)
+
+
 def schedule_subscription_reminders(schedule_type='D'):
-    """Schedule this command via django-q2 if the broker is configured. No-op otherwise."""
+    """Schedule this command via django-q2 if the broker is configured. No-op otherwise.
+
+    The schedule only fires while a ``python manage.py qcluster`` worker runs.
+    """
     try:
         from django_q.models import Schedule
         Schedule.objects.update_or_create(
             name='subscription_renewal_reminders',
             defaults={
-                'func': 'accounts.management.commands.send_subscription_reminders.Command',
+                'func': 'accounts.management.commands.send_subscription_reminders.run_subscription_reminders',
                 'schedule_type': schedule_type,  # 'D' = daily
                 'repeats': -1,
             },

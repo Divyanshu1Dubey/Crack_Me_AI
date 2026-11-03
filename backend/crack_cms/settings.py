@@ -13,9 +13,44 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file (does not override existing system env vars)
+from crack_cms.client_ip import parse_num_proxies
+from crack_cms.db_config import server_side_cursors_unsupported, statement_timeout_option
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Env file selection. Local development points DJANGO_ENV_FILE at a separate
+# file (e.g. `.env.localdev`, see `.env.localdev.example`) so the production
+# `.env` -- live payment, SMTP and Sentry credentials -- is never loaded
+# implicitly on a developer machine. Without the variable the historical
+# behaviour (load `.env` from the working directory) is unchanged.
+_env_file = os.getenv('DJANGO_ENV_FILE', '').strip()
+if _env_file:
+    _env_path = Path(_env_file)
+    if not _env_path.is_absolute():
+        _env_path = BASE_DIR / _env_path
+    if not _env_path.exists():
+        raise ImproperlyConfigured(f'DJANGO_ENV_FILE points to a missing file: {_env_path}')
+    load_dotenv(_env_path, override=False)
+else:
+    load_dotenv()  # Load .env file (does not override existing system env vars)
+
+# ── Hermetic test runs ──────────────────────────────────────────────
+# `manage.py test` used to inherit live credentials from backend/.env: test
+# failures were reported to the production Sentry and AI tests made real
+# provider calls. Under the test runner every external-service secret is
+# blanked (tests mock what they need). Opt out explicitly with
+# ALLOW_EXTERNAL_SERVICES_IN_TESTS=1.
+_TEST_RUN = 'test' in sys.argv or 'pytest' in sys.modules
+if _TEST_RUN and os.getenv('ALLOW_EXTERNAL_SERVICES_IN_TESTS', '').strip().lower() not in ('1', 'true', 'yes'):
+    for _secret in (
+        'SENTRY_DSN', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY', 'COHERE_API_KEY',
+        'OPENROUTER_API_KEY', 'OPENROUTER_API_KEY2', 'TOGETHER_API_KEY', 'GITHUB_TOKEN',
+        'HUGGINGFACE_API_KEY', 'AIML_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_MISTRAL_API_KEY',
+        'DEEPSEEK_API_KEY', 'OMNIROUTE_API_KEY', 'OMNIROUTEAPI', 'OMNIROUTE_BASE_URL', 'NCBI_API_KEY',
+        'SUPABASE_SERVICE_ROLE_KEY', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET',
+        'EMAIL_HOST_PASSWORD', 'REDIS_URL',
+    ):
+        os.environ[_secret] = ''
 
 # ── Sentry Error Tracking ────────────────────────────────────────────
 # Production-safe default. Local development can opt in through backend/.env.
@@ -47,6 +82,11 @@ if SENTRY_DSN:
     )
 
 is_testing = 'test' in sys.argv or 'pytest' in sys.modules
+# Readable as settings.TESTING (Django only exposes upper-case names): the
+# production posture check in crack_cms/urls.py is skipped under the test
+# runner, which substitutes a test SECRET_KEY below.
+TESTING = is_testing
+# crack_cms/security.py resolves the key the same way; keep the two in sync.
 secret_key_from_env = (os.getenv('DJANGO_SECRET_KEY') or os.getenv('SECRET_KEY') or '').strip()
 if not secret_key_from_env and not DEBUG:
     if is_testing:
@@ -125,6 +165,7 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',
     'questions.middleware.RateLimitMiddleware',
     'crack_cms.cache_middleware.DisableApiCacheMiddleware',
+    'crack_cms.cross_origin.CrossOriginResourcePolicyMiddleware',
     'accounts.middleware.UpdateLastSeenMiddleware',
 ]
 
@@ -154,6 +195,20 @@ DATABASE_URL = (
     or os.getenv('SUPABASE_DATABASE_URL')
     or ''
 ).strip()
+# A test run creates (and drops) its own database next to DATABASE_URL, so it
+# must never point at a remote server -- backend/.env holds the production
+# pooler URL. Local hosts are fine; list others in TEST_DATABASE_HOSTS.
+if _TEST_RUN and DATABASE_URL:
+    _test_db_host = (urlparse(DATABASE_URL).hostname or '').strip().lower()
+    _allowed_test_hosts = {'localhost', '127.0.0.1', '::1', 'postgres', 'db'} | {
+        h.strip().lower() for h in os.getenv('TEST_DATABASE_HOSTS', '').split(',') if h.strip()
+    }
+    if _test_db_host and _test_db_host not in _allowed_test_hosts:
+        raise ImproperlyConfigured(
+            f'Refusing to run tests against the remote database host "{_test_db_host}". '
+            'Unset DATABASE_URL / SUPABASE_DATABASE_URL (tests then use SQLite) or add the host to TEST_DATABASE_HOSTS.'
+        )
+
 # Use in-memory SQLite for GitHub CI to avoid LFS pointer file issues
 IS_CI = os.getenv('GITHUB_ACTIONS') == 'true'
 IS_PRODUCTION_RUNTIME = not DEBUG and not IS_CI
@@ -229,6 +284,22 @@ if DATABASES['default'].get('ENGINE', '').endswith('postgresql'):
     if IS_PRODUCTION_RUNTIME:
         db_options.setdefault('sslmode', 'require')
 
+    # Supabase's transaction pooler (port 6543) may run each transaction on
+    # another server connection, so a server-side cursor (QuerySet.iterator())
+    # cannot be read past its transaction: Django's documented setting for
+    # transaction pooling. DB_DISABLE_SERVER_SIDE_CURSORS=true/false overrides
+    # the detection (crack_cms/db_config.py).
+    if server_side_cursors_unsupported(DATABASES['default'], os.getenv('DB_DISABLE_SERVER_SIDE_CURSORS')):
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
+    # Opt-in server-side statement timeout (DB_STATEMENT_TIMEOUT_MS, e.g.
+    # 15000 on the web service): without it a runaway query keeps its
+    # backend and the request thread busy until it finishes. Off by default
+    # (crack_cms/db_config.py says where to set it).
+    _statement_timeout = statement_timeout_option(os.getenv('DB_STATEMENT_TIMEOUT_MS'))
+    if _statement_timeout:
+        db_options['options'] = f"{db_options.get('options', '')} {_statement_timeout}".strip()
+
     force_ipv4_default = 'true' if IS_PRODUCTION_RUNTIME else 'false'
     force_ipv4 = os.getenv('DB_FORCE_IPV4', force_ipv4_default).lower() == 'true'
     if force_ipv4:
@@ -270,6 +341,58 @@ AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
 AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']  # Lock by username and IP
 AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
+# Client IP behind proxies. DRF's throttles key anonymous traffic on the
+# client IP; without NUM_PROXIES DRF uses the whole, client-controlled
+# X-Forwarded-For string, so a new prefix per request is a new throttle
+# bucket. Set NUM_PROXIES to the number of proxies in front of Django that
+# append to X-Forwarded-For (DRF then takes that entry from the right).
+# Unset keeps DRF's historical behaviour. The question-bank limiter
+# (questions/middleware.py, via crack_cms/client_ip.py) reads the same value
+# and falls back to REMOTE_ADDR while it is unset. TRUSTED_CLIENT_IP_HEADER
+# (e.g. "CF-Connecting-IP", "DO-Connecting-IP") is honoured by that limiter
+# only; set it only when every request reaches Django through that edge.
+#
+# Production (both default to unset; see backend/.env.example): behind the
+# DigitalOcean / Cloudflare edge REMOTE_ADDR is the proxy, shared by every
+# visitor, so until one of them is set the limiter counts all anonymous
+# traffic -- and the first request of every new or refreshed login token --
+# in that proxy's bucket (security_posture_check logs a warning).
+#   1. Look at what the edge sends: as an admin, GET /api/health/client-ip/
+#      echoes REMOTE_ADDR, X-Forwarded-For and the platform client-IP
+#      headers of your own request (crack_cms/diagnostics.py).
+#   2. TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP on DigitalOcean App
+#      Platform: DO's own edge sets it on every request. Do not use
+#      CF-Connecting-IP there -- the default *.ondigitalocean.app hostname
+#      stays reachable around Cloudflare, and a client can send that header
+#      itself. Verify before relying on it: send a forged
+#      CF-Connecting-IP / DO-Connecting-IP to /api/health/client-ip/ and
+#      check which value reaches Django.
+#   3. NUM_PROXIES=<n> where X-Forwarded-For ends with your address followed
+#      by n-1 proxy addresses (usually 1). DRF's throttles read only this
+#      one, so set it as well -- TRUSTED_CLIENT_IP_HEADER alone leaves DRF
+#      keying on the raw X-Forwarded-For (security_posture_check warns).
+NUM_PROXIES = parse_num_proxies(os.getenv('NUM_PROXIES'))
+TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
+# The one edge country header analytics ingest trusts
+# (analytics/views_internal.py), e.g. CF-IPCountry or X-Vercel-IP-Country;
+# 'none' stores no country. Unset: the country header of the edge
+# TRUSTED_CLIENT_IP_HEADER names, otherwise CF-IPCountry.
+ANALYTICS_COUNTRY_HEADER = os.getenv('ANALYTICS_COUNTRY_HEADER', '').strip()
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+# Question-bank limiter (questions/middleware.py): GETs under /api/questions/
+# per user (or per client IP when anonymous) per window. One student in rapid
+# revision issues about 12 GETs per question; 0 disables the limiter.
+QUESTION_BANK_RATE_LIMIT = _env_int('QUESTION_BANK_RATE_LIMIT', 300)
+QUESTION_BANK_RATE_WINDOW = _env_int('QUESTION_BANK_RATE_WINDOW', 60)
+
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -281,11 +404,14 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
+        # DRF's SearchFilter with a cap on the number / length of terms.
+        'crack_cms.filters.BoundedSearchFilter',
         'rest_framework.filters.OrderingFilter',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # Honours ?page_size= (max 100); default page size stays 20.
+    'DEFAULT_PAGINATION_CLASS': 'crack_cms.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
+    'NUM_PROXIES': NUM_PROXIES,
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
@@ -305,15 +431,53 @@ REST_FRAMEWORK = {
         # but blocks scripted loops. See accounts.views.SubscriptionStatusView.
         'subscription_status': os.getenv('DRF_THROTTLE_SUBSCRIPTION_STATUS', '60/min'),
         'contact_us': os.getenv('DRF_THROTTLE_CONTACT_US', '5/min'),
+        # Every `throttle_scope` used by a view MUST have a rate here --
+        # ScopedRateThrottle raises ImproperlyConfigured (HTTP 500) for an
+        # unknown scope on every request to that view.
+        'ai_heavy': os.getenv('DRF_THROTTLE_AI_HEAVY', '5/min'),
+        'analytics_ingest': os.getenv('DRF_THROTTLE_ANALYTICS_INGEST', '120/min'),
+        'local_auth': os.getenv('DRF_THROTTLE_LOCAL_AUTH', '60/min'),
+        # analytics/views.py FeedbackSubmitThrottle / ContactHourlyThrottle
+        # (same defaults as their built-in fallbacks; listed to be tunable).
+        'feedback_submit': os.getenv('DRF_THROTTLE_FEEDBACK_SUBMIT', '10/hour'),
+        'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
     },
 }
 
+# Dev-only local email/password auth (accounts/local_auth.py) for running the
+# stack without Supabase. Hard-disabled unless DEBUG is on, so a stray
+# LOCAL_DEV_AUTH=1 in a production environment has no effect.
+_local_dev_auth_requested = os.getenv('LOCAL_DEV_AUTH', '').strip().lower() in ('1', 'true', 'yes')
+LOCAL_DEV_AUTH = bool(DEBUG and _local_dev_auth_requested)
+if _local_dev_auth_requested and not DEBUG:
+    print('WARNING: LOCAL_DEV_AUTH ignored because DEBUG is off.', file=sys.stderr)
+# Local mock payment provider (accounts/payments_mock.py): no network, no
+# money. Like LOCAL_DEV_AUTH it is hard-disabled unless DEBUG is on.
+_payments_mock_requested = os.getenv('PAYMENTS_MODE', '').strip().lower() == 'mock'
+PAYMENTS_MOCK = bool(DEBUG and _payments_mock_requested)
+if _payments_mock_requested and not DEBUG:
+    print('WARNING: PAYMENTS_MODE=mock ignored because DEBUG is off.', file=sys.stderr)
+if LOCAL_DEV_AUTH:
+    REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = (
+        *REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'],
+        'accounts.local_auth_authentication.LocalDevJWTAuthentication',
+    )
+
 # SimpleJWT — refresh rotation + blacklist after rotation.
 # These apply to the DRF-issued JWT fallback only (Supabase users go through
-# SupabaseJWTAuthentication which has its own refresh handling).
+# SupabaseJWTAuthentication which has its own refresh handling). Today that
+# is only the dev-only local refresh endpoint (accounts/local_auth.py).
+# Blacklisting needs the 'rest_framework_simplejwt.token_blacklist' app (and
+# its tables); it is not installed, so SimpleJWT silently skipped the
+# blacklist and rotated refresh tokens stayed valid until expiry. The flag
+# now reflects that: it can only be on when the app is installed.
+_JWT_BLACKLIST_APP_INSTALLED = 'rest_framework_simplejwt.token_blacklist' in INSTALLED_APPS
 SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': os.getenv('JWT_ROTATE_REFRESH_TOKENS', 'true').lower() == 'true',
-    'BLACKLIST_AFTER_ROTATION': os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true',
+    'BLACKLIST_AFTER_ROTATION': (
+        _JWT_BLACKLIST_APP_INSTALLED
+        and os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true'
+    ),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MIN', '15'))),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7'))),
 }
@@ -394,7 +558,16 @@ CORS_ALLOW_CREDENTIALS = True
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-session-id",
+    # Optimistic locking: the admin question editor (and QuestionImage
+    # PATCH/DELETE) send If-Match: <updated_at>. Without it in the allow-list
+    # the cross-origin preflight fails and the save never reaches the API.
+    "if-match",
 ]
+# Response headers cross-origin JavaScript may read. The question-bank
+# limiter's 429 carries Retry-After, and the bank's automatic retry waits
+# that long; without exposing it the browser hides the header and the client
+# fell back to a fixed 5 s.
+CORS_EXPOSE_HEADERS = ["Retry-After"]
 CORS_MAX_AGE = 86400  # 24 hours — browsers cache preflight responses
 
 # CSRF trusted origins (needed for production)
@@ -427,7 +600,12 @@ STORAGES = {
     },
 }
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT').strip()) if os.getenv('MEDIA_ROOT', '').strip() else BASE_DIR / 'media'
+# Optional local mirror of the Supabase Storage buckets (an extracted
+# storage backup: <dir>/<bucket>/<path>). When set, question images whose
+# URL points at Supabase public storage are streamed from disk instead of
+# redirecting to Supabase. Unset in production.
+SUPABASE_STORAGE_MIRROR_DIR = os.getenv('SUPABASE_STORAGE_MIRROR_DIR', '').strip()
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -446,9 +624,18 @@ else:
     # Fallback to console output for development (passwords visible in console logs)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
+# Explicit override (local dev uses the file backend so mail is captured to
+# disk and never sent).
+if os.getenv('EMAIL_BACKEND', '').strip():
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND').strip()
+    EMAIL_FILE_PATH = os.getenv('EMAIL_FILE_PATH', str(BASE_DIR / 'tmp_mail'))
+
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'CrackCMS <{EMAIL_HOST_USER}>')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+# Recipient of feedback / contact-form notifications (analytics/views.py,
+# which falls back to its built-in address when this is empty).
+ADMIN_NOTIFICATION_EMAIL = os.getenv('ADMIN_NOTIFICATION_EMAIL', '').strip()
 
 # ── Leaderboard gating ──────────────────────────────────────────────
 # Number of real (non-admin) users with weekly activity before the global
@@ -523,6 +710,14 @@ except (TypeError, ValueError):
 REDIS_URL = os.getenv('REDIS_URL', '').strip()
 _redis_url_valid = REDIS_URL and REDIS_URL.startswith(('redis://', 'rediss://', 'unix://'))
 
+# 'rate_limit' holds the question-bank limiter's counters and token -> user
+# mappings (questions/middleware.py). On LocMemCache the 'default' alias keeps
+# Django's 300-entry cap and is shared with the question-list caches, so under
+# load culling evicted token mappings (students fell back to the shared IP
+# bucket) as well as cached data. Without Redis each process still counts on
+# its own (a per-worker budget).
+_RATE_LIMIT_CACHE_MAX_ENTRIES = _env_int('RATE_LIMIT_CACHE_MAX_ENTRIES', 50000)
+
 if _redis_url_valid:
     CACHES = {
         'default': {
@@ -545,6 +740,16 @@ if _redis_url_valid:
             },
             'TIMEOUT': 3600,
         },
+        'rate_limit': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'rl',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,   # limiter fails open
+            },
+            'TIMEOUT': 300,
+        },
     }
 else:
     if REDIS_URL:
@@ -563,7 +768,19 @@ else:
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'crackcms-kb',
         },
+        'rate_limit': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'crackcms-rate-limit',
+            'OPTIONS': {'MAX_ENTRIES': _RATE_LIMIT_CACHE_MAX_ENTRIES},
+        },
     }
+    if _TEST_RUN:
+        # Same in-process store as 'default' (separate alias, larger cap), so
+        # the cache.clear() calls in test setUp keep resetting limiter buckets
+        # as they did when the limiter used 'default'; otherwise every
+        # question-bank GET of the whole suite would count in one long-lived
+        # 127.0.0.1 bucket.
+        CACHES['rate_limit']['LOCATION'] = CACHES['default']['LOCATION']
 
 # ── Knowledge Base ──────────────────────────────────────────────────────
 KB_FALLBACK_THRESHOLD = int(os.getenv('KB_FALLBACK_THRESHOLD', '10'))
@@ -590,7 +807,13 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'true').lower() == 'true'
+    # Not inside the test runner: CI runs the suite with DEBUG=False and the
+    # test client speaks plain HTTP, so every API test got a 301 instead of
+    # its real response (the CI backend job could never pass).
+    SECURE_SSL_REDIRECT = (
+        not is_testing
+        and os.getenv('SECURE_SSL_REDIRECT', 'true').lower() == 'true'
+    )
     # Cloudflare + Railway terminate TLS at the edge; trust X-Forwarded-Proto
     # so SecurityMiddleware knows requests are already HTTPS and doesn't loop.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -609,6 +832,18 @@ Q_CLUSTER = {
     'queue_limit': 500,
     'cpu_affinity': 1,
     'label': 'Django Q',
-    'orm': 'default'
+    'orm': 'default',
+    # A task that raises or is killed at the timeout is never acknowledged
+    # (ack_failures is off), so the ORM broker re-presents it every 'retry'
+    # seconds; django-q2's default 0 means for ever. Ingestion and the recall
+    # importers treat a re-delivery as a no-op or mark the job failed; this
+    # bounds every other task (video_engine.tasks, questions.tasks).
+    'max_attempts': 3,
 }
+
+# Ingestion stale-job recovery (ingestion/schedules.py, orchestrator.py):
+# minutes between the scheduled recovery passes (0 removes the schedule) and
+# how often one job is re-queued automatically after losing its worker.
+INGESTION_RECOVERY_SCHEDULE_MINUTES = _env_int('INGESTION_RECOVERY_SCHEDULE_MINUTES', 10)
+INGESTION_MAX_AUTO_RESUMES = _env_int('INGESTION_MAX_AUTO_RESUMES', 2)
 

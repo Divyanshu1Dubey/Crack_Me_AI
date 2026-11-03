@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Subject, Topic, Question, QuestionBookmark
+from .models import Subject, Topic, Question, QuestionBookmark, Discussion
 
 
 
@@ -111,3 +111,13 @@ class QuestionBookmarkAdmin(admin.ModelAdmin):
 
     list_display = ['user', 'question', 'created_at']
 
+
+@admin.register(Discussion)
+class DiscussionAdmin(admin.ModelAdmin):
+    """Moderation of question discussion threads (pin / edit / delete)."""
+    list_display = ['id', 'question', 'user', 'parent', 'is_pinned', 'upvotes', 'downvotes', 'created_at']
+    list_filter = ['is_pinned', 'created_at']
+    search_fields = ['text', 'user__username', 'user__email']
+    raw_id_fields = ['question', 'user', 'parent']
+    list_select_related = ['user', 'question']
+    readonly_fields = ['upvotes', 'downvotes', 'created_at', 'updated_at']

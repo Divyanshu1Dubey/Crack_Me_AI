@@ -2,6 +2,8 @@
 
 > Google's quality rater guidelines (YMYL) for medical content require demonstrable **Experience, Expertise, Authoritativeness, and Trust**. The signals are derived from on-page content, schema.org markup, backlink profile, and third-party citations. Below is CrackCMS's EEAT posture across all sites of E-E-A-T and the actions taken (or pending) to reinforce each.
 
+> **Status (2026-11) — parts of this report are historical.** The named reviewer and topper examples below ("Dr. Ananya Reddy (AIR-1) 578/960", `/reviewers/dr-ananya-reddy`) were fabricated and have been removed from the site, together with the `ReviewerByline` component and the `dr-aarav-mehta` byline (`/blog/author/dr-aarav-mehta` now 308-redirects to `/blog/author/crackcms-editorial`). Today the only author profile is the CrackCMS Editorial Team (`frontend/src/content/authors.ts`); `/about` lists no named clinicians; `/medical-review-policy` states that no page carries a specialist's sign-off; year PYQ pages show no topper names or scores. Treat the team, reviewer and "Reviewed by" claims below as plans that need a real, consenting, verifiable person before they can be shown.
+
 ---
 
 ## 1. Experience
@@ -15,7 +17,7 @@
 - The `Job` data is sourced from official conducting-body recruitment PDFs.
 
 ### Improvements made
-- 🛠 EEAT year pages now show toppers with scores (e.g. `Dr. Ananya Reddy (AIR-1) 578/960`).
+- ~~EEAT year pages show toppers with scores~~ — retired: the example topper was fabricated; year pages refer readers to UPSC's official result notice (upsc.gov.in) and show no topper names or scores.
 - 🛠 Guides expose `author` + `dateModified` JSON-LD.
 
 ### Pending
@@ -40,7 +42,7 @@
 - 🛠 Every year PYQ page has authoritative cutoff + topper data sourced from official PDFs.
 
 ### Pending
-- Add **individual reviewer profile pages** (e.g. `/reviewers/dr-ananya-reddy`).
+- Add **individual reviewer profile pages** (`/reviewers/<slug>`) — only for real, consenting reviewers (the earlier `dr-ananya-reddy` example was fabricated and is not to be created).
 - Verify each reviewer's NMC / State registration publicly on the profile page.
 - Add **disclosure** of any consulting / advisory income.
 

@@ -22,7 +22,7 @@ export default function MedicalOfficerJobsGuide() {
             slug={slug}
             heading="Government Medical Officer Jobs After MBBS"
             lede="Every central and state MBBS doctor post in one place — UPSC CMS, AIIMS, PGIMER, state PSCs, NHM, ESIC, Railways, Defence. Salary breakdowns, eligibility, and how to apply."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="8 min"
             faqs={faqs}
@@ -42,7 +42,7 @@ export default function MedicalOfficerJobsGuide() {
             <ul>
                 <li><strong>Posts:</strong> GDMO (Central Health Service), ADMO (Railways), MO (MCD), Junior Scale (defence)</li>
                 <li><strong>Salary:</strong> Pay Level 10 (₹56,100 - ₹1,77,500) + 20% NPA + HRA</li>
-                <li><strong>Exam:</strong> 240 MCQs (2 papers), -0.33 negative marking, offline</li>
+                <li><strong>Exam:</strong> 240 MCQs (2 papers), one-third negative marking, computer-based test</li>
                 <li><strong>Apply:</strong> upsc.gov.in (April notification, July exam)</li>
                 <li><strong>Vacancies:</strong> 800-1,200 per year</li>
             </ul>

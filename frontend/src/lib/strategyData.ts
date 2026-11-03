@@ -1,11 +1,14 @@
 import type { StrategyContent } from '@/components/StrategyLayout';
 
-const REVIEWER = { name: 'Dr. Ananya Reddy', credentials: 'MBBS, AIIMS New Delhi (2018), UPSC CMS AIR-1 (2024)' };
+// Same reviewer as cutoffData.ts. The previous named reviewer and "AIR-1"
+// credential could not be verified, which is not acceptable on medical (YMYL)
+// pages; name a real, consenting reviewer here only with their credentials.
+const REVIEWER = { name: 'CrackCMS Editorial Team', credentials: 'Editorial team — CrackCMS' };
 
 export const CMS_STRATEGY_6M: StrategyContent = {
     examSlug: 'cms', examName: 'UPSC CMS', examLandingPath: '/cms',
-    strategySlug: '6-month', strategyTitle: '6-Month UPSC CMS Study Plan', strategySubtitle: 'Built by UPSC CMS AIR-1 (2024)',
-    description: 'A 26-week comprehensive plan for working doctors and final-year MBBS students. ~6 hours/day, 900+ study hours, 5,000+ PYQs covered.',
+    strategySlug: '6-month', strategyTitle: '6-Month UPSC CMS Study Plan', strategySubtitle: 'Month-by-month plan',
+    description: 'A 26-week comprehensive plan for working doctors and final-year MBBS students. ~6 hours/day, 900+ study hours, 5,000+ practice MCQs (UPSC CMS PYQs plus NEET PG).',
     totalHours: 900, durationLabel: '26 weeks',
     weeks: [
         { week: 1, focus: 'Foundation — General Medicine cardio + ECG interpretation', hoursPerDay: 5,

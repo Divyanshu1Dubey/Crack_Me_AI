@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
     const { slug } = await params;
     const data = getCmsBook(slug);
-    if (!data) return { title: 'UPSC CMS Book | CrackCMS', robots: { index: false } };
+    if (!data) return { title: 'UPSC CMS Book', robots: { index: false } };
     return buildBookDeepDiveMetadata(data, `/cms/books/${slug}`);
 }
 

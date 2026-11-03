@@ -55,7 +55,9 @@ class RecallSearchTestCase(TestCase):
         from questions.views import QuestionViewSet
         f = APIRequestFactory()
         req = f.get("/api/questions/recall_search/", params)
-        user = User.objects.create(username="t1")
+        # Admin: these tests exercise the recall filters, not the freemium
+        # showcase gate (covered by tests/test_recall_search_freemium.py).
+        user, _ = User.objects.get_or_create(username="t1", defaults={"role": "admin"})
         force_authenticate(req, user=user)
         return QuestionViewSet.as_view({"get": "recall_search"})(req)
 

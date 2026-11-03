@@ -29,7 +29,7 @@ const post: BlogPost = {
     ],
     difficulty: 'beginner',
     authorId: 'crackcms-editorial',
-    reviewedBy: 'dr-aarav-mehta',
+    reviewedBy: 'crackcms-editorial',
     author: 'CrackCMS Editorial Team',
     authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-08-06',
@@ -55,7 +55,7 @@ const post: BlogPost = {
         eventName: 'blog_practice_intent',
         eventParams: { source: 'best-pg-books', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet'],
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet'],
     references: [
         {
             label: 'UPSC — Previous Year Question Papers (2009–2024)',

@@ -9,7 +9,7 @@
 CrackLabs' flagship product is a vertically-integrated medical exam-preparation platform that fuses a curated UPSC CMS question bank with multi-provider AI tutoring. The platform's long-term vision is to become the **default AI co-pilot for Indian medical competitive exam aspirants** — replacing scattered PDF dumps, Telegram groups, and offline coaching with a single, intelligent, adaptive study environment that:
 
 - Grounds every AI response in **verified standard textbooks and prior-year questions (PYQs)** via Retrieval-Augmented Generation (RAG).
-- Spreads AI load across **11 cloud providers + a local Ollama fallback** so the platform never hard-stops on a single provider outage or quota exhaustion.
+- Spreads AI load across a **10-entry cloud provider rotation**, with extractive offline answers when no provider responds, so the platform never hard-stops on a single provider outage or quota exhaustion.
 - Persists user progress (attempts, streaks, bookmarks, flashcards) and converts it into actionable insights (weak-topic detection, score prediction, personalized study plans).
 - Operates on a **token economy** that aligns free-tier usage with viral growth while monetizing heavy users via Razorpay subscriptions and token purchases.
 
@@ -29,7 +29,7 @@ CrackLabs' flagship product is a vertically-integrated medical exam-preparation 
 
 ## 3. Business Goals
 
-1. **Minimize vendor lock-in & cost risk** — 11-provider AI rotation + Ollama local fallback means a single API outage cannot take the platform offline.
+1. **Minimize vendor lock-in & cost risk** — the 10-entry AI provider rotation (plus offline extractive answers) means a single API outage cannot take the platform offline.
 2. **Monetize via freemium** — Daily/weekly free tokens drive acquisition; Razorpay subscriptions + token purchases drive revenue.
 3. **Build a defensible moat** — The RAG store (TF-IDF over indexed textbooks and PYQs) is proprietary training data that becomes more valuable with every document ingested.
 4. **Operate at low infra cost** — SQLite + free-tier AI quotas + Render free + Vercel free keep monthly burn near zero at low traffic.
@@ -107,10 +107,11 @@ Four interlocking value layers:
 
 ---
 
-## 7. AI Integrations (11 providers + local fallback)
+## 7. AI Integrations (10 rotation entries)
 
 | # | Provider | Model | Quota | Cost |
 |---|---|---|---|---|
+| 0 | OmniRoute | (first rotation entry) | — | — |
 | 1 | Groq | Llama 3.3 70B | 30 RPM, 14,400 RPD | Free |
 | 2 | Cerebras | Llama 3.1 8B | 30 RPM, ~1M tok/day | Free |
 | 3 | Gemini | `gemini-2.0-flash`, `gemini-2.0-flash-lite` | 15 RPM, 1,500 RPD/model | Free |
@@ -120,11 +121,11 @@ Four interlocking value layers:
 | 7 | GitHub Models | GPT-4o Mini | 150 RPM, 15K RPD | Free (PAT) |
 | 8 | HuggingFace | Llama 3.3 70B | ~10 RPM | Free |
 | 9 | Mistral | `mistral-small` | ~30 RPM | Free |
-| 10 | NVIDIA Mistral | Mistral 7B (NVIDIA API) | TBD | Free |
-| 11 | DeepSeek | `deepseek-chat` | Pay-as-you-go | **Paid — tried LAST** |
-| fallback | **Ollama** | `llama3.2:3b` (default) | Local, unlimited | Free |
+| — | NVIDIA Mistral | Mistral 7B (NVIDIA API) | TBD | Initialised but **not** in the rotation |
 
-Implementation: `backend/ai_engine/services.py` — round-robin counter (`threading.Lock`), 120 s deadline per request, 15–20 s per provider.
+Rotation order in `AIService._call_ai`: OmniRoute, Groq, Cerebras, Gemini (2 models), Cohere, OpenRouter, GitHub Models, HuggingFace, Mistral, OpenRouter2. DeepSeek and Ollama are not implemented.
+
+Implementation: `backend/ai_engine/services.py` — round-robin counter (`threading.Lock`), `AI_CALL_DEADLINE_SECONDS` (default 90 s) per call. When every provider fails it raises `AIUnavailable` (refund + offline answer or `503 ai_unavailable`); `AI_OFFLINE_MODE=1` makes no external call.
 
 ---
 
@@ -155,7 +156,7 @@ crack_cms/
 │   ├── questions/              # MCQ bank, flashcards, discussions
 │   ├── tests_engine/           # Adaptive + PYQ tests
 │   ├── analytics/              # Stats, streaks, roadmap, feedback
-│   ├── ai_engine/              # 11-provider orchestrator + RAG
+│   ├── ai_engine/              # 10-entry provider rotation + RAG
 │   ├── textbooks/              # Indexed textbook library
 │   ├── resources/              # UPSC exam resource catalog
 │   ├── video_engine/           # edge-tts + moviepy slides
@@ -176,7 +177,7 @@ crack_cms/
 
 - **`backend/`** follows Django's app-per-bounded-context convention (`accounts`, `questions`, `ai_engine`, …). Each app owns its models, views, serializers, urls, admin, and migrations.
 - **`frontend/src/app/`** mirrors user-facing features as Next.js routes. Shared primitives live under `src/components/` and `src/lib/`.
-- **`backend/Medura_Train/`** is the ingestion source of truth for RAG — place new PDFs/MD/TXT in `textbooks/`, `PYQ/`, or `web_knowledge/` and run `_train_all.py`.
-- **`backend/chroma_db/`** holds the materialized TF-IDF index (committed via Git LFS) — the cache layer between source documents and the live AI calls.
-- **`backend/questions_fixture.json`** is the production seed; the deploy pipeline (`build.sh`) loads it after migrations. **All question edits must end with `_export_fixture.py`**.
+- **`backend/Medura_Train/`** is the ingestion source of truth for RAG — place new PDFs/MD/TXT in `textbooks/`, `PYQ/`, or `web_knowledge/` and run `python manage.py train_ai`.
+- **`backend/chroma_db/`** holds the chunk store (`rag_store.sqlite3`, committed via Git LFS); retrieval is BM25 over the whole store from an in-memory index (`ai_engine/lexical_index.py`).
+- **`backend/fixtures/<exam>_fixture.json`** seeds a **fresh** database: `build.sh` runs `seed_question_bank`, which loads `cms_fixture.json` only while the CMS bank is empty. A live bank is never overwritten by a deploy; re-sync on purpose with `python manage.py load_exam_fixture <exam>` (workflow: `backend/fixtures/README.md`).
 - **`docs/`** is the single documentation source — no parallel directories (no `.docs/`).

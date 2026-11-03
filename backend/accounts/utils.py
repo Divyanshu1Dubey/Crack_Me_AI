@@ -23,14 +23,18 @@ from .models import Subscription
 
 
 def _has_active_sub(user) -> bool:
-    """Tight read-only check: any active row exists? Does NOT mutate state."""
+    """Tight read-only check: any active row exists? Does NOT mutate state.
+
+    Premium comes from Subscription rows only. ``CustomUser.is_subscribed`` is
+    a mirror for old readers and grants nothing by itself: a flag without a
+    row used to count as a lifetime plan, but the removed unpaid
+    /auth/subscribe/ endpoint set that flag for any signed-in user. Accounts
+    that PAID before the Subscription model existed got their rows from
+    migration accounts.0026 (accounts.legacy_subscriptions).
+    """
     if not user or not getattr(user, 'is_authenticated', False):
         return False
     if getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False):
-        return True
-    # Backward-compat grandfather: legacy users with is_subscribed=True but
-    # no Subscription row (added before this model existed) still count.
-    if getattr(user, 'is_subscribed', False) and not Subscription.objects.filter(user=user).exists():
         return True
     return Subscription.has_active_sub(user)
 

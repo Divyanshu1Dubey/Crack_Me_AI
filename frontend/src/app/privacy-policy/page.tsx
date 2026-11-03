@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
         <LegalLayout
             title={title}
             description={description}
-            lastUpdated="July 21, 2026"
+            lastUpdated="November 1, 2026"
             effectiveDate="January 1, 2025"
             canonical={canonical}
             schemaType="PrivacyPolicy"
@@ -24,8 +24,8 @@ export default function PrivacyPolicyPage() {
                 visit our website, use the CrackCMS mobile or web app, or purchase a premium subscription.
                 CrackCMS is a free study desk for MBBS graduates preparing for UPSC CMS, NEET PG, INI-CET,
                 FMGE, USMLE and other medical entrance exams. We offer question banks, mock tests, AI tutor
-                explanations, flashcards and progress analytics — supported by an optional paid tier for
-                candidates who want unlimited AI tutoring.
+                explanations, flashcards and progress analytics — supported by optional paid plans that
+                add AI tutor credits (unlimited AI explanations on the yearly plan).
             </p>
             <p>
                 By accessing CrackCMS you agree to the practices described in this policy. If you do not
@@ -73,9 +73,9 @@ export default function PrivacyPolicyPage() {
             <h2>4. Sharing of Information</h2>
             <p>
                 We <strong>do not sell</strong> your personal data. We share data only with vetted vendors:
-                cloud hosting (Render, AWS, Supabase), analytics (Datadog, GA4), AI providers (Groq,
-                Cerebras, Gemini, OpenRouter, Cohere, HuggingFace, Mistral, DeepSeek, Together, AI/ML API),
-                and payment gateways. Each vendor is bound by confidentiality and data-processing
+                cloud hosting (Render, AWS, Supabase), analytics (Datadog, GA4), AI providers (an
+                OmniRoute AI gateway, Groq, Cerebras, Google Gemini, Cohere, OpenRouter, GitHub Models,
+                Hugging Face and Mistral), and payment gateways. Each vendor is bound by confidentiality and data-processing
                 agreements.
             </p>
 
@@ -127,8 +127,8 @@ export default function PrivacyPolicyPage() {
             <h2>11. Security</h2>
             <p>
                 We use TLS 1.3 encryption in transit, AES-256 at rest, hardware-backed key storage, JWT
-                authentication with short-lived tokens, brute-force protection via django-axes, single-
-                device session enforcement, and routine penetration testing.
+                authentication with short-lived tokens, brute-force protection via django-axes,
+                single-device session enforcement, and routine penetration testing.
             </p>
 
             <h2>12. Changes to This Policy</h2>

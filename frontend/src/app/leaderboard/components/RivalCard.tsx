@@ -2,21 +2,40 @@
 
 import { Flame, Target, Sparkles, Swords, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import type { RivalPayload } from '../types';
+import { formatAccuracy, learnerName, periodPhrase, type LeaderboardPeriod, type RivalPayload } from '../types';
 
 interface Props {
     rival: RivalPayload | null;
     meRank: number | null;
-    meXp: number;
+    meStreak: number;
+    period: LeaderboardPeriod;
 }
 
 /**
- * Rival card. Shows the top real learner as the user's chase target.
- * No fabricated personas are ever rendered here — when the user-base is
- * small and no rival exists, the celebratory variant is rendered instead.
+ * Rival card. Shows the top real learner of the period as the user's chase
+ * target. No fabricated personas are ever rendered here.
  */
-export default function RivalCard({ rival, meRank, meXp }: Props) {
+export default function RivalCard({ rival, meRank, meStreak, period }: Props) {
+    const phrase = periodPhrase(period);
+    // Nobody (including me) has earned XP in this period yet.
+    if (!rival && meRank === null) {
+        return (
+            <Card className="border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-card to-card relative overflow-hidden">
+                <CardContent className="p-5 flex items-start gap-3">
+                    <div className="shrink-0 w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-foreground">The board is open</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            No one has earned XP {phrase} yet. Answer a question to take the top spot.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
     // I'm already on top — celebratory variant.
     if (!rival || (meRank !== null && meRank <= 1)) {
         return (
@@ -26,13 +45,13 @@ export default function RivalCard({ rival, meRank, meXp }: Props) {
                         <Sparkles className="w-5 h-5 text-amber-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-foreground">You&apos;re #1 right now</h3>
+                        <h3 className="font-bold text-foreground">You&apos;re #1 {phrase}</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                            No one ahead of you. Keep showing up — your streak is the longest streak on the platform.
+                            No one ahead of you. Keep showing up to stay on top.
                         </p>
                         <div className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground">
                             <Flame className="w-3.5 h-3.5 text-orange-500" />
-                            <span>Your current streak: {meXp > 0 ? `🔥 ${Math.max(1, meXp)}` : '—'}</span>
+                            <span>Your current streak: {meStreak > 0 ? `${meStreak} day${meStreak === 1 ? '' : 's'}` : '—'}</span>
                         </div>
                     </div>
                 </CardContent>
@@ -42,6 +61,8 @@ export default function RivalCard({ rival, meRank, meXp }: Props) {
 
     const ahead = rival.xp_to_surpass;
     const questions = rival.questions_to_surpass;
+    // The rival is the period's top learner (I'm not #1 here).
+    const rivalTitle = learnerName(rival.username, 'the top learner');
 
     return (
         <Card
@@ -55,24 +76,19 @@ export default function RivalCard({ rival, meRank, meXp }: Props) {
             <CardContent className="p-5 relative space-y-3">
                 <div className="flex items-center gap-2">
                     <Swords className="w-5 h-5 text-rose-500" />
-                    <h3 className="font-bold text-foreground">Surpass @{rival.username}</h3>
-                    {rival.college && (
-                        <Badge variant="outline" className="text-[10px] truncate max-w-45">
-                            🎓 {rival.college}
-                        </Badge>
-                    )}
+                    <h3 className="font-bold text-foreground">Surpass {rivalTitle}</h3>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                    <Stat icon={<Zap className="w-3.5 h-3.5 text-yellow-500" />} label="Their XP" value={rival.xp_points.toLocaleString()} />
+                    <Stat icon={<Zap className="w-3.5 h-3.5 text-yellow-500" />} label={period === 'all' ? 'Their XP' : `XP ${phrase}`} value={rival.xp_points.toLocaleString()} />
                     <Stat icon={<Flame className="w-3.5 h-3.5 text-orange-500" />} label="Streak" value={`${rival.current_streak}d`} />
-                    <Stat icon={<Target className="w-3.5 h-3.5 text-emerald-500" />} label="Accuracy" value={`${rival.accuracy.toFixed(1)}%`} />
+                    <Stat icon={<Target className="w-3.5 h-3.5 text-emerald-500" />} label="Accuracy" value={formatAccuracy(rival.accuracy)} />
                 </div>
 
                 {ahead > 0 ? (
                     <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-sm">
                         <p className="font-semibold text-rose-600 dark:text-rose-300">
-                            Solve {questions.toLocaleString()} more question{questions === 1 ? '' : 's'} to surpass @{rival.username}.
+                            Solve {questions.toLocaleString()} more question{questions === 1 ? '' : 's'} to surpass {learnerName(rival.username, 'them')}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                             That&apos;s <span className="font-bold text-foreground">{ahead.toLocaleString()} XP</span> to climb past their rank.

@@ -1,9 +1,12 @@
 repos:
   - repo: local
     hooks:
+      # Blocks credentials and personal-data dumps. No `types: [text]` filter on
+      # purpose: pre-commit treats UTF-16 files (e.g. PowerShell `>` dumps) as
+      # binary, and the scanner skips real binaries itself. Full-repo scan:
+      #   python scripts/scan_secrets.py --all-tracked
       - id: secret-scan
         name: secret-scan
         entry: python scripts/scan_secrets.py
         language: system
-        types: [text]
         pass_filenames: true

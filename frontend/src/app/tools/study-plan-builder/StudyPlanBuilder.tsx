@@ -9,6 +9,10 @@ interface PlanDay {
     hours: number;
 }
 
+function daysUntilDate(dateStr: string): number {
+    return Math.max(1, Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+}
+
 export default function StudyPlanBuilder() {
     const [exam, setExam] = useState('neet-pg');
     const [examDate, setExamDate] = useState('');
@@ -32,7 +36,7 @@ export default function StudyPlanBuilder() {
         if (!examDate) return;
         const subjects = allSubjects[exam] || allSubjects['neet-pg'];
         const hrs = Number(dailyHours);
-        const daysUntil = Math.max(1, Math.ceil((new Date(examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        const daysUntil = daysUntilDate(examDate);
         const totalDays = Math.min(daysUntil, 180);
         const generated: PlanDay[] = [];
 
@@ -102,28 +106,28 @@ export default function StudyPlanBuilder() {
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Target Exam</label>
-                    <select value={exam} onChange={(e) => { setExam(e.target.value); setWeakSubjects([]); }} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
+                    <label htmlFor="spb-target-exam" className="block text-sm font-semibold mb-1">Target Exam</label>
+                    <select id="spb-target-exam" value={exam} onChange={(e) => { setExam(e.target.value); setWeakSubjects([]); }} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm">
                         <option value="neet-pg">NEET PG</option>
                         <option value="cms">UPSC CMS</option>
                         <option value="ini-cet">INI-CET</option>
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Exam Date</label>
-                    <input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="spb-exam-date" className="block text-sm font-semibold mb-1">Exam Date</label>
+                    <input id="spb-exam-date" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold mb-1">Daily Study Hours</label>
-                    <input type="number" value={dailyHours} onChange={(e) => setDailyHours(e.target.value)} min="1" max="16" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
+                    <label htmlFor="spb-daily-study-hours" className="block text-sm font-semibold mb-1">Daily Study Hours</label>
+                    <input id="spb-daily-study-hours" type="number" value={dailyHours} onChange={(e) => setDailyHours(e.target.value)} min="1" max="16" className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm" />
                 </div>
             </div>
 
             <div className="mt-5">
-                <label className="block text-sm font-semibold mb-2">Weak Subjects (select all that apply)</label>
-                <div className="flex flex-wrap gap-2">
+                <p id="spb-weak-subjects" className="block text-sm font-semibold mb-2">Weak Subjects (select all that apply)</p>
+                <div role="group" aria-labelledby="spb-weak-subjects" className="flex flex-wrap gap-2">
                     {(allSubjects[exam] || allSubjects['neet-pg']).map((s) => (
-                        <button key={s} onClick={() => toggleSubject(s)} className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${weakSubjects.includes(s) ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'}`}>
+                        <button key={s} type="button" aria-pressed={weakSubjects.includes(s)} onClick={() => toggleSubject(s)} className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${weakSubjects.includes(s) ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'}`}>
                             {s}
                         </button>
                     ))}

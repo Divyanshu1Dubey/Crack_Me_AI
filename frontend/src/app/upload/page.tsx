@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import { aiAPI } from '@/lib/api';
 import { Upload, Brain, FolderSearch, Database, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -77,7 +78,9 @@ export default function UploadPage() {
         <>
             <Sidebar />
             <div className="main-content">
-                <main className="page-container p-8">
+                <Header />
+                {/* A div, not <main>: the root layout already renders <main id="main-content">. */}
+                <div className="page-container p-8">
                     <div className="max-w-4xl mx-auto">
                     {/* Header */}
                     <div className="flex items-center gap-3 mb-2">
@@ -237,7 +240,7 @@ python train_on_colab.py`}
                         </div>
                     </div>
                     </div>
-                </main>
+                </div>
             </div>
         </>
     );

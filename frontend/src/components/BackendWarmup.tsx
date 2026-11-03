@@ -1,34 +1,12 @@
 'use client';
 import { useEffect } from 'react';
+import { apiUrl } from '@/lib/apiBase';
 
-const DEFAULT_LOCAL_BACKEND_BASE = 'http://localhost:8000';
-const DEFAULT_PRODUCTION_BACKEND_BASE = 'https://api.cracklabs.app';
-const LEGACY_UNHEALTHY_API_HOSTS = [
-    'crackcms-backend.onrender.com',
-    '.onrender.com',
-    'crackcms-vsthc.ondigitalocean.app',
-    '.ondigitalocean.app',
-];
-
-const resolveBackendBase = () => {
-    if (process.env.NODE_ENV === 'production') {
-        return DEFAULT_PRODUCTION_BACKEND_BASE;
-    }
-
-    const configuredApi = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-    if (configuredApi) {
-        const normalized = configuredApi.replace(/\/+$/, '');
-        const configuredBase = normalized.replace(/\/api$/, '');
-        if (LEGACY_UNHEALTHY_API_HOSTS.some((host) => configuredBase.includes(host))) {
-            return DEFAULT_PRODUCTION_BACKEND_BASE;
-        }
-        return configuredBase;
-    }
-
-    return DEFAULT_LOCAL_BACKEND_BASE;
-};
-
-const BACKEND_BASE = resolveBackendBase();
+// Same base-URL resolution as the Axios client (NEXT_PUBLIC_API_URL, local
+// proxy, legacy-host blacklist). The previous copy hard-coded the production
+// host for every production build, so preview / staging / local production
+// builds kept pinging (and CORS-failing against) api.cracklabs.app.
+const HEALTH_URL = apiUrl('/health/');
 
 /**
  * Pings the backend on mount to wake it up after cold starts.
@@ -37,7 +15,7 @@ const BACKEND_BASE = resolveBackendBase();
 export default function BackendWarmup() {
     useEffect(() => {
         const ping = () => {
-            fetch(`${BACKEND_BASE}/api/health/`, { method: 'GET' }).catch(() => {});
+            fetch(HEALTH_URL, { method: 'GET' }).catch(() => {});
         };
         // Immediate ping on page load
         ping();

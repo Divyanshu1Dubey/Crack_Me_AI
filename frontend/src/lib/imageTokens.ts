@@ -1,10 +1,14 @@
 /**
  * Resolves `[[img:N]]` tokens inside question text into `<img>` tags.
  *
- * Used by the public practice pages and the admin editor preview. The
- * resolver is cached per `(questionId, imagesHash)` so re-renders are
- * cheap. Missing ids render an inline placeholder so the admin can
- * spot and re-upload them.
+ * Used by the public practice pages and the admin editor preview. Results
+ * are cached so re-renders are cheap. The cache key always includes a hash
+ * of the text and of the images, whatever `cacheKey` a caller passes (that
+ * is only a namespace): keys built from the question id alone kept serving
+ * the first text rendered for a question after it was edited. The cache is
+ * a small LRU, so a long editing session (the admin preview re-resolves on
+ * every typing pause) cannot grow it without bound. Missing ids render an
+ * inline placeholder so the admin can spot and re-upload them.
  *
  * Also resolves *bare* `/media/fixtures/images/<exam>/<file>` URLs left
  * behind by older fixture loaders. The canonical form is `[[img:N]]`
@@ -17,6 +21,8 @@
  * emit a fallback `<img>` whose `src` points at the (still broken)
  * `/media/...` path so the admin can spot it.
  */
+
+import { apiUrl } from './apiBase';
 
 export interface QuestionImageLike {
   id: number;
@@ -33,10 +39,38 @@ const TOKEN_RE = /\[\[img:(\d+)\]\]/g;
 // We accept either `/media/fixtures/...` or an absolute URL whose path
 // contains `/fixtures/images/` so QA can spot broken CDNs in tests.
 const BARE_MEDIA_RE = /(\/media\/fixtures\/images\/[^"\s)]+|https?:\/\/[^\s")]*\/fixtures\/images\/[^"\s)]+)/g;
+
+/** Resolved strings kept in memory; the least recently used is evicted first. */
+export const IMAGE_TOKEN_CACHE_LIMIT = 200;
 const cache = new Map<string, string>();
 
 export function imagesHash(images: QuestionImageLike[]): string {
   return images.map((i) => `${i.id}:${i.url ?? i.file ?? ''}`).join('|');
+}
+
+/** Every image field that changes the rendered markup. */
+function imagesSignature(images: QuestionImageLike[]): string {
+  return images
+    .map((i) => [i.id, i.url ?? '', i.file ?? '', i.caption ?? '', i.width ?? '', i.height ?? ''].join('\u0001'))
+    .join('\u0002');
+}
+
+/** cyrb53: a fast 53-bit string hash, so keys stay short whatever the text length. */
+function hashText(value: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function cacheKeyFor(html: string, images: QuestionImageLike[], namespace?: string): string {
+  return `${namespace ?? '__anon__'}|${html.length}:${hashText(html)}|${images.length}:${hashText(imagesSignature(images))}`;
 }
 
 export function resolveImageTokens(
@@ -44,9 +78,14 @@ export function resolveImageTokens(
   images: QuestionImageLike[],
   cacheKey?: string,
 ): string {
-  const key = cacheKey ?? `__anon__:${imagesHash(images)}`;
+  const key = cacheKeyFor(html, images, cacheKey);
   const cached = cache.get(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Refresh its LRU position.
+    cache.delete(key);
+    cache.set(key, cached);
+    return cached;
+  }
 
   // XSS defense: the raw `html` argument is admin-typed question text that
   // ultimately reaches `dangerouslySetInnerHTML` on both the admin preview
@@ -99,7 +138,7 @@ export function resolveImageTokens(
       // a fallback for environments where the proxy isn't wired up.
       const served =
         (found.url && found.url.length > 0 ? found.url : null) ||
-        `/api/questions/images/${found.id}/serve/`;
+        apiUrl(`/questions/images/${found.id}/serve/`);
       const alt = (found.caption || `Question image ${base}`).replace(/"/g, '&quot;');
       return `<img src="${escapeAttr(served)}" alt="${alt}" loading="lazy" class="question-inline-image" />`;
     }
@@ -111,6 +150,11 @@ export function resolveImageTokens(
   });
 
   cache.set(key, resolved);
+  while (cache.size > IMAGE_TOKEN_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
   return resolved;
 }
 
@@ -159,4 +203,9 @@ function _imgTag(img: QuestionImageLike, fallbackAlt: string): string {
 
 export function clearImageTokenCache(): void {
   cache.clear();
+}
+
+/** Number of cached entries (for tests). */
+export function imageTokenCacheSize(): number {
+  return cache.size;
 }

@@ -10,6 +10,10 @@ router.register(r'feedback', views.QuestionFeedbackViewSet)
 router.register(r'announcements', views.AnnouncementViewSet, basename='announcement')
 router.register(r'exam-tracks', views.ExamTrackViewSet, basename='examtrack')
 router.register(r'images', views.QuestionImageViewSet, basename='question-image')
+# Admin TopicNote CRUD. The legacy `notes` prefix is shadowed for list /
+# detail by the personal-notes paths below (only `notes/<pk>/generate/`
+# reached it), so the admin pages use `topic-notes/library/`.
+router.register(r'topic-notes/library', views.TopicNoteViewSet, basename='topic-note-library')
 router.register(r'notes', views.TopicNoteViewSet, basename='topic-note')
 router.register(r'', views.QuestionViewSet, basename='question')
 
@@ -35,6 +39,7 @@ urlpatterns = [
     # Discussions
     path('discussions/<int:pk>/vote/', views.DiscussionVoteView.as_view(), name='discussion-vote'),
     path('discussions/<int:pk>/replies/', views.DiscussionRepliesView.as_view(), name='discussion-replies'),
+    path('discussions/<int:pk>/', views.DiscussionDetailView.as_view(), name='discussion-detail'),
     path('discussions/', views.DiscussionListCreateView.as_view(), name='discussion-list'),
     # Chat AI Assistant
     path('chat/', views.ChatAssistantView.as_view(), name='chat-assistant'),
@@ -43,12 +48,13 @@ urlpatterns = [
     # render container doesn't ship the local PNGs in git. This view
     # streams the QuestionImage.file binary through Django instead.
     path('images/<int:image_id>/serve/', views.QuestionImageServeView.as_view(), name='question-image-serve'),
-    # Mistake Notebook
-    path('mistake-notebook/', views.MistakeNotebookStudentView.as_view(), name='mistake-notebook-list'),
-    path('mistake-notebook/due/', views.MistakeNotebookDueView.as_view(), name='mistake-notebook-due'),
-    path('mistake-notebook/stats/', views.MistakeStatsView.as_view(), name='mistake-notebook-stats'),
-    path('mistake-notebook/<int:pk>/', views.MistakeNotebookDetailView.as_view(), name='mistake-notebook-detail'),
-    path('mistake-notebook/<int:pk>/review/', views.MistakeNotebookReviewView.as_view(), name='mistake-notebook-review'),
+    # Public image facet counts. Without this explicit route the admin-only
+    # `images/` router prefix captured `facets` as an image pk (HTTP 403).
+    path('images/facets/', views.QuestionViewSet.as_view({'get': 'images_facets'}), name='question-image-facets'),
+    # Mistake Notebook: served only by /api/analytics/mistake-notebook/...
+    # (what the frontend uses). The duplicate routes that used to live here
+    # had a writable review state and a weaker add check, so they were
+    # removed rather than kept in sync.
     # Study Time
     path('study-time/', views.StudyTimeView.as_view(), name='study-time'),
     # Quests
@@ -57,6 +63,7 @@ urlpatterns = [
     path('quests/streak/', views.QuestStreakView.as_view(), name='quest-streak'),
     path('quests/streak/freeze/', views.QuestStreakFreezeView.as_view(), name='quest-streak-freeze'),
     # Topic Notes (manual + AI generation)
+    path('topic-notes/published/', views.PublishedTopicNoteListView.as_view(), name='topic-note-published'),
     path('topic-notes/', views.TopicNoteCreateView.as_view(), name='topic-note-create'),
     path('topic-notes/<int:pk>/generate/', views.AITopicNoteGenerationView.as_view(), name='topic-note-generate'),
 

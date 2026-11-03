@@ -1,3 +1,11 @@
+"""Export the key tables as JSON rows (one file per model).
+
+    python scripts/_export_tables.py --output-dir <directory outside the repository>
+
+The rows include user data (attempts, bookmarks, notes, flashcards,
+subscriptions, audit logs), so the directory must be outside the repository
+(scripts/_safe_paths.py); it used to be ../backup/db_dumps, inside the checkout.
+"""
 import os, sys, json
 from pathlib import Path
 
@@ -7,15 +15,18 @@ sys.stdout.reconfigure(encoding='utf-8')
 script_dir = Path(__file__).resolve().parent
 backend_dir = script_dir.parent
 sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(script_dir))
+
+from _safe_paths import output_dir_from_argv  # noqa: E402
+
+backup_dir = output_dir_from_argv(description=__doc__.splitlines()[0])
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
-import django
+import django  # noqa: E402
 django.setup()
 
-from django.apps import apps
+from django.apps import apps  # noqa: E402
 
-backup_dir = backend_dir.parent / 'backup' / 'db_dumps'
-backup_dir.mkdir(parents=True, exist_ok=True)
 print(f"Backup dir: {backup_dir}", flush=True)
 
 models = [

@@ -2,12 +2,14 @@
 /**
  * /recall/search — Phase-3 advanced search results page.
  * Pure client component: drives `RecallSearchBox` and shows results
- * inline.
+ * inline. Uses the theme tokens so it reads in light and dark themes.
  */
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import RecallSearchBox from "@/components/recall/RecallSearchBox";
 import RecallBadge from "@/components/recall/RecallBadge";
+import { stripMarkdown } from "@/components/FormattedText";
+import { sanitizeQuestionText } from "@/lib/textCleanup";
 
 interface Row {
   id: number;
@@ -20,35 +22,55 @@ interface Row {
   difficulty?: string;
 }
 
+/** One-paragraph preview: no markdown markers or image tokens (line-clamp adds the ellipsis). */
+function previewText(text: string | undefined): string {
+  return stripMarkdown(sanitizeQuestionText(text))
+    .replace(/\[\[img:\d+\]\]/g, " ")
+    .replace(/__/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function RecallSearchPage() {
   const [rows, setRows] = useState<Row[]>([]);
-  return (
-    <main className="mx-auto max-w-5xl px-4 py-6 text-slate-100">
-      <h1 className="mb-4 text-2xl font-semibold">Recall bank search</h1>
-      <RecallSearchBox onResults={(r) => setRows(r)} />
+  // 'loading' until the first search settles; 'error' after a failed one
+  // (the search box shows the message and a Retry button).
+  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  const onResults = useCallback((r: Row[]) => { setRows(r); setStatus("ok"); }, []);
+  const onError = useCallback(() => { setRows([]); setStatus("error"); }, []);
 
-      <section className="mt-6 space-y-3">
+  // The route layout wraps the page in AppShell, whose .page-container
+  // already pads it.
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-6 [.page-container_&]:p-0 text-foreground">
+      <h1 className="mb-4 text-2xl font-semibold">Recall bank search</h1>
+      <RecallSearchBox onResults={onResults} onError={onError} />
+
+      <section className="mt-6 space-y-3" aria-live="polite">
         {rows.map((r) => (
-          <article key={r.id} className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3">
+          <article key={r.id} className="rounded-lg border border-border bg-card p-3">
             <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
               <RecallBadge status={r.recall_status} />
-              {r.year ? <span className="rounded bg-slate-700/60 px-2 py-0.5">{r.year}</span> : null}
-              {r.subject_name ? <span className="rounded bg-slate-700/60 px-2 py-0.5">{r.subject_name}</span> : null}
-              {r.topic_name ? <span className="rounded bg-slate-700/40 px-2 py-0.5">{r.topic_name}</span> : null}
-              {r.difficulty ? <span className="rounded bg-amber-500/60 px-2 py-0.5 text-black">{r.difficulty}</span> : null}
+              {r.year ? <span className="rounded bg-muted px-2 py-0.5">{r.year}</span> : null}
+              {r.subject_name ? <span className="rounded bg-muted px-2 py-0.5">{r.subject_name}</span> : null}
+              {r.topic_name ? <span className="rounded bg-muted/60 px-2 py-0.5 text-muted-foreground">{r.topic_name}</span> : null}
+              {r.difficulty ? <span className="rounded bg-amber-500/20 px-2 py-0.5 capitalize text-amber-900 dark:text-amber-200">{r.difficulty}</span> : null}
               <span className="ml-auto">
-                <Link href={`/practice?id=${r.id}`} className="text-emerald-300 underline">
+                <Link href={`/practice?id=${r.id}`} className="text-emerald-700 underline dark:text-emerald-300">
                   Practice →
                 </Link>
               </span>
             </div>
-            <p className="line-clamp-2 text-sm">{(r.question_text || "").slice(0, 220)}…</p>
+            <p className="line-clamp-2 text-sm">{previewText(r.question_text)}</p>
           </article>
         ))}
-        {rows.length === 0 ? (
-          <p className="text-sm text-slate-500">No matches yet. Try a broader keyword.</p>
+        {status === "loading" && rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Searching…</p>
+        ) : null}
+        {status === "ok" && rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No matches. Try a broader keyword or clear a filter.</p>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

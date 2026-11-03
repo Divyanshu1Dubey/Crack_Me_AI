@@ -18,8 +18,7 @@
 | `.venv/`, `backend/.venv/`, `backend/venv/` | Python virtual environments |
 | `frontend/`, `backend/`, `mobile-app/` | The three deployable units |
 | `scripts/` | Root-level utility scripts |
-| `data_dump*.json`, `data_versions/` | Periodic DB dumps (versioning aid) |
-| `seed_jobs.py`, `fix_db.py`, `check_qs.py`, `split_dump.py` | One-off DB utilities |
+| `seed_jobs.py`, `fix_db.py`, `check_qs.py` | One-off DB utilities (`seed_jobs.py` seeds nothing now; `--delete-placeholders` removes the old placeholder job rows) |
 | `google_apps_script.js` | Sheet-driven content review scripts |
 | `supabase_rescue_plan.md` | Auth migration notes |
 
@@ -31,18 +30,18 @@
 backend/
 ├── manage.py
 ├── requirements.txt
-├── build.sh                       # Render deploy contract
-├── Procfile
+├── build.sh                       # Deploy contract (DigitalOcean / Render)
+├── Procfile                       # release (migrate), web (gunicorn), worker (qcluster)
 ├── .env / .env.example            # Environment templates
 ├── db.sqlite3                     # Committed via Git LFS
-├── questions_fixture.json         # Production seed
+├── fixtures/                      # cms_fixture.json, neet_pg_fixture.json, inicet_fixture.json + images (seed for an empty bank)
 │
 ├── crack_cms/                     # Django project root (settings, URLs, WSGI/ASGI)
 ├── accounts/                      # Users, JWT, tokens, devices
 ├── questions/                     # MCQ bank, flashcards, notes
 ├── tests_engine/                  # Adaptive + PYQ tests
 ├── analytics/                     # Stats, streaks, badges
-├── ai_engine/                     # 11-provider AI + RAG
+├── ai_engine/                     # 10-entry AI provider rotation + RAG
 ├── textbooks/                     # Indexed textbook library
 ├── resources/                     # UPSC resource catalog
 ├── video_engine/                  # TTS + moviepy slides
@@ -251,16 +250,16 @@ backend/
 | `PYQ/` | Prior-year UPSC CMS papers |
 | `web_knowledge/` | Web-scraped CMS articles (.md, .txt) |
 
-**Consumed by**: `_train_all.py`, `KnowledgeScanView`, `KnowledgeUploadView`, `auto_ingest.py`. PDFs >50 MB auto-skipped — use `.md` summaries.
+**Consumed by**: `python manage.py train_ai`, `KnowledgeScanView`, `KnowledgeUploadView`, `auto_ingest.py`. There is no automatic PDF size limit.
 
 ---
 
 ### `backend/scripts/` & `backend/management/`
 
 Custom Python utilities and Django management commands for one-shot operations:
-- `_train_all.py`, `enrich_turbo.py`, `_export_fixture.py`, `_review_and_fix_answers.py`
-- `validate_questions.py`, `check_db.py`, `load_chunks.py`, `split_dump.py`
-- `fetch_qs.py`, `fix_qs.py`, `seed_jobs.py`, `test_all.py`, `test_api_keys.py`
+- `backend/` root: `check_db.py`, `fetch_qs.py`, `fix_qs.py`, `test_all.py`; repo root: `seed_jobs.py`
+- `backend/scripts/`: backup / restore helpers (`_export_tables.py`, `_export_questions.py`, `_backup_export.py`, `_export_all_tables.py` need `--output-dir` outside the repository; `_import_to_railway.py --input-dir`; `restore_backup.py <backup path>`; see [`backup/MIGRATION_STATUS.md`](../backup/MIGRATION_STATUS.md)), plus one-off audit, migration and OCR scripts
+- RAG training: `python manage.py train_ai`
 
 ---
 

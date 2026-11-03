@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 
 interface Discussion {
     id: number;
-    user_name: string;
+    /** The author's chosen handle; null when the only name would come from their email address. */
+    username: string | null;
     text: string;
     upvotes: number;
     downvotes: number;
@@ -15,6 +16,26 @@ interface Discussion {
     user_vote: 'up' | 'down' | null;
     is_pinned: boolean;
     created_at: string;
+}
+
+/** Shown for an author without a public handle. */
+const ANONYMOUS_AUTHOR = 'Learner';
+
+/** The name shown on a post: the author's handle, else the neutral label. */
+function authorName(username: unknown): string {
+    return typeof username === 'string' && username.trim() ? username.trim() : ANONYMOUS_AUTHOR;
+}
+
+/**
+ * The viewer's vote after POST .../vote/. The response carries the new
+ * counts and a `status` (voted / vote_switched / already_voted /
+ * vote_removed), not `user_vote`.
+ */
+function voteAfter(data: unknown, voteType: 'up' | 'down', previous: 'up' | 'down' | null): 'up' | 'down' | null {
+    const status = data && typeof data === 'object' ? (data as { status?: unknown }).status : undefined;
+    if (status === 'vote_removed') return null;
+    if (status === 'voted' || status === 'vote_switched' || status === 'already_voted') return voteType;
+    return previous;
 }
 
 export default function DiscussionThread({ questionId }: { questionId: number }) {
@@ -78,7 +99,7 @@ export default function DiscussionThread({ questionId }: { questionId: number })
     const handleVote = async (id: number, voteType: 'up' | 'down') => {
         try {
             const res = await discussionsAPI.vote(id, voteType);
-            setDiscussions(discussions.map(d => d.id === id ? { ...d, upvotes: res.data.upvotes, downvotes: res.data.downvotes, user_vote: res.data.user_vote } : d));
+            setDiscussions(discussions.map(d => d.id === id ? { ...d, upvotes: res.data.upvotes, downvotes: res.data.downvotes, user_vote: voteAfter(res.data, voteType, d.user_vote) } : d));
         } catch { /* ignore */ }
     };
 
@@ -119,12 +140,13 @@ export default function DiscussionThread({ questionId }: { questionId: number })
                             type="text"
                             className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                             placeholder="Share your thoughts on this question..."
+                            aria-label="Write a comment"
                             value={newComment}
                             onChange={e => setNewComment(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handlePost()}
                         />
-                        <Button size="sm" onClick={handlePost} disabled={submitting || !newComment.trim()}>
-                            <Send className="w-4 h-4" />
+                        <Button size="sm" onClick={handlePost} disabled={submitting || !newComment.trim()} aria-label="Post comment">
+                            <Send className="w-4 h-4" aria-hidden="true" />
                         </Button>
                     </div>
 
@@ -137,10 +159,10 @@ export default function DiscussionThread({ questionId }: { questionId: number })
                             {discussions.map(d => (
                                 <div key={d.id} className={`rounded-lg border p-3 ${d.is_pinned ? 'border-primary/30 bg-primary/5' : ''}`}>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
-                                            {d.user_name?.charAt(0)?.toUpperCase() || '?'}
+                                        <div aria-hidden="true" className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                            {authorName(d.username).charAt(0).toUpperCase()}
                                         </div>
-                                        <span className="text-xs font-medium">{d.user_name}</span>
+                                        <span className="text-xs font-medium">{authorName(d.username)}</span>
                                         <span className="text-[10px] text-muted-foreground">{timeAgo(d.created_at)}</span>
                                         {d.is_pinned && <Badge variant="outline" className="text-[9px] px-1">Pinned</Badge>}
                                     </div>
@@ -176,7 +198,7 @@ export default function DiscussionThread({ questionId }: { questionId: number })
                                             {replies[d.id]?.map(r => (
                                                 <div key={r.id} className="rounded p-2 bg-muted/50">
                                                     <div className="flex items-center gap-1.5 mb-0.5">
-                                                        <span className="text-[11px] font-medium">{r.user_name}</span>
+                                                        <span className="text-[11px] font-medium">{authorName(r.username)}</span>
                                                         <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
                                                     </div>
                                                     <p className="text-xs leading-relaxed">{r.text}</p>

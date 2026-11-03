@@ -1,4 +1,5 @@
 """Freemium-related models: curated showcase questions for free users."""
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -10,6 +11,11 @@ class FreeShowcaseQuestion(models.Model):
     in Django admin via an inline ordered by `(year, position)`.
 
     Premium users are NOT affected; they see the full question bank.
+
+    Scholarship-challenge questions (``is_scholarship_eligible``) cannot be
+    showcase questions: they are never free (questions.views
+    .free_showcase_rows skips them), so ``clean()`` -- run by the Django admin
+    form -- refuses them.
     """
     question = models.OneToOneField(
         'questions.Question',
@@ -29,3 +35,14 @@ class FreeShowcaseQuestion(models.Model):
 
     def __str__(self):
         return f'Showcase {self.year} #{self.position}: Q{self.question_id}'
+
+    def clean(self):
+        super().clean()
+        question = self.question if self.question_id else None
+        if question is not None and getattr(question, 'is_scholarship_eligible', False):
+            raise ValidationError({
+                'question': (
+                    'This is a scholarship-challenge question; it is never shown as free content. '
+                    'Pick another question for the showcase.'
+                ),
+            })

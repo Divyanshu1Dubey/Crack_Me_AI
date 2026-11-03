@@ -1,21 +1,35 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
+import { CMS_NEGATIVE_MARKING_TEXT, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
+import { CMS_CUTOFFS } from '@/lib/cutoffData';
+import { CMS_PYQ_PHRASE } from '@/lib/bankStats';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 const title = 'UPSC CMS Complete Guide 2026 — Eligibility, Syllabus, Pattern, Books, Salary';
-const description = 'Everything about UPSC CMS 2026: eligibility (MBBS, age limit), exam pattern (240 MCQs, -0.33), subject-wise syllabus, topper-recommended books, salary, cutoff, and a 6-month study plan.';
+const description = 'Everything about UPSC CMS 2026: eligibility (MBBS, age limit), exam pattern (240 MCQs, one-third negative marking), subject-wise syllabus, recommended books, salary, cutoff, and a 6-month study plan.';
 const slug = 'upsc-cms-complete-guide';
 
 export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
 
+const [paper1, paper2] = UPSC_CMS_PATTERN.papers;
+
+// Same approximate figures as the /cms/cutoff/<year> pages (out of 500).
+const cutoffRows = Object.values(CMS_CUTOFFS)
+    .filter((y) => (y.cutoffs ?? []).length > 0)
+    .sort((a, b) => b.year - a.year)
+    .map((y) => {
+        const get = (cat: string) => y.cutoffs.find((r) => r.category === cat)?.cutoff ?? '—';
+        return { year: y.year, general: get('General'), obc: get('OBC'), sc: get('SC'), st: get('ST') };
+    });
+
 const faqs = [
     { q: 'What is the full form of UPSC CMS?', a: 'UPSC CMS stands for Union Public Service Commission Combined Medical Services Examination. It is conducted annually to recruit medical officers for central government services.' },
-    { q: 'How many papers are there in UPSC CMS?', a: 'UPSC CMS has two papers — Paper I (120 questions) and Paper II (120 questions). Both are offline pen-and-paper MCQ papers of 120 minutes each.' },
-    { q: 'What is the negative marking in UPSC CMS?', a: 'UPSC CMS has -0.33 negative marking for every wrong answer. Each correct answer carries 4 marks.' },
+    { q: 'How many papers are there in UPSC CMS?', a: 'UPSC CMS has two papers — Paper I (120 questions) and Paper II (120 questions), each of 120 minutes and 250 marks, taken as a Computer-Based Test.' },
+    { q: 'What is the negative marking in UPSC CMS?', a: 'One-third of the marks assigned to a question is deducted for each wrong answer. With 250 marks for 120 questions, a correct answer is worth about 2.08 marks and a wrong one costs about 0.69.' },
     { q: 'Can final-year MBBS students apply for UPSC CMS?', a: 'Yes, candidates appearing in the final year of MBBS can apply provisionally, provided they pass the exam before the personality test / document verification.' },
     { q: 'What is the salary of a UPSC CMS Medical Officer?', a: 'Central government Medical Officers appointed through UPSC CMS are paid Pay Level 10 (₹56,100 - ₹1,77,500) plus 20% NPA, HRA, and rural allowance.' },
-    { q: 'What is the UPSC CMS 2026 cutoff?', a: 'The UPSC CMS cutoff varies by category. In recent years the general-category cutoff has ranged between 340-400 out of 800. Check the official UPSC website for the latest cutoffs.' },
+    { q: 'What is the UPSC CMS 2026 cutoff?', a: 'The UPSC CMS cutoff varies by category. In recent years the General-category written cutoff has been roughly 280-310 out of 500. Check the official UPSC website for the latest cutoffs.' },
 ];
 
 export default function UPSCCMSGuide() {
@@ -26,18 +40,18 @@ export default function UPSCCMSGuide() {
             slug={slug}
             heading="UPSC CMS Complete Guide 2026"
             lede="Everything you need to crack the Combined Medical Services Examination — eligibility, syllabus, pattern, books, salary, cutoff, and a 6-month study plan. Updated for the 2026 cycle."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="12 min"
             faqs={faqs}
         >
             <h2>What is UPSC CMS?</h2>
             <p>
-                The <strong>Union Public Service Commission (UPSC) Combined Medical Services (CMS) Examination</strong>
+                The <strong>Union Public Service Commission (UPSC) Combined Medical Services (CMS) Examination</strong>{' '}
                 is one of India&apos;s most prestigious recruitment exams for MBBS graduates. Conducted annually by UPSC,
-                CMS recruits Medical Officers (GDMOs), Specialists, and Assistant Divisional Medical Officers for central
-                government services including the Central Health Service, Railways, Municipal Corporation of Delhi,
-                and Defence.
+                CMS recruits General Duty Medical Officers and Assistant Divisional Medical Officers for central
+                government services: the Central Health Service, Railways, the New Delhi Municipal Council and the
+                Municipal Corporation of Delhi.
             </p>
 
             <h3>Key facts</h3>
@@ -82,12 +96,12 @@ export default function UPSCCMSGuide() {
                     <tr><th>Component</th><th>Detail</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Paper I</td><td>120 MCQs, 120 minutes, 480 marks</td></tr>
-                    <tr><td>Paper II</td><td>120 MCQs, 120 minutes, 480 marks</td></tr>
-                    <tr><td>Total marks</td><td>960</td></tr>
-                    <tr><td>Negative marking</td><td>-0.33 per wrong answer</td></tr>
-                    <tr><td>Mode</td><td>Offline (pen-and-paper OMR)</td></tr>
-                    <tr><td>Subjects</td><td>Paper I — General Medicine &amp; Paediatrics; Paper II — Surgery, OBG, PSM, ENT, Ophthalmology, Anaesthesia, Orthopaedics</td></tr>
+                    <tr><td>Paper I</td><td>{paper1.questions} MCQs, {paper1.durationMinutes} minutes, {paper1.marks} marks</td></tr>
+                    <tr><td>Paper II</td><td>{paper2.questions} MCQs, {paper2.durationMinutes} minutes, {paper2.marks} marks</td></tr>
+                    <tr><td>Total marks</td><td>{UPSC_CMS_PATTERN.writtenMarks} written + {UPSC_CMS_PATTERN.personalityTestMarks} Personality Test = {UPSC_CMS_PATTERN.totalMarks}</td></tr>
+                    <tr><td>Negative marking</td><td>{CMS_NEGATIVE_MARKING_TEXT}</td></tr>
+                    <tr><td>Mode</td><td>{UPSC_CMS_PATTERN.mode}</td></tr>
+                    <tr><td>Subjects</td><td>Paper I — General Medicine (incl. Cardiology, Neurology, Dermatology, Psychiatry) &amp; Paediatrics; Paper II — Surgery (incl. ENT, Ophthalmology, Traumatology, Orthopaedics), Gynaecology &amp; Obstetrics, PSM</td></tr>
                 </tbody>
             </table>
 
@@ -158,15 +172,16 @@ export default function UPSCCMSGuide() {
             </ol>
 
             <h2>UPSC CMS Cutoff &amp; Salary</h2>
-            <h3>Recent cutoffs (out of 800)</h3>
+            <h3>Recent written cutoffs (approximate, out of {UPSC_CMS_PATTERN.writtenMarks})</h3>
             <table>
                 <thead><tr><th>Year</th><th>General</th><th>OBC</th><th>SC</th><th>ST</th></tr></thead>
                 <tbody>
-                    <tr><td>2024</td><td>378</td><td>343</td><td>296</td><td>275</td></tr>
-                    <tr><td>2023</td><td>385</td><td>355</td><td>295</td><td>282</td></tr>
-                    <tr><td>2022</td><td>357</td><td>316</td><td>265</td><td>252</td></tr>
+                    {cutoffRows.map((r) => (
+                        <tr key={r.year}><td>{r.year}</td><td>{r.general}</td><td>{r.obc}</td><td>{r.sc}</td><td>{r.st}</td></tr>
+                    ))}
                 </tbody>
             </table>
+            <p>Verify exact figures in the official UPSC press release on upsc.gov.in.</p>
 
             <h3>Salary structure</h3>
             <ul>
@@ -204,7 +219,7 @@ export default function UPSCCMSGuide() {
 
             <h2>Why CrackCMS for UPSC CMS?</h2>
             <ul>
-                <li>1,920+ previous-year UPSC CMS questions with AI explanations</li>
+                <li>{CMS_PYQ_PHRASE} with AI explanations</li>
                 <li>Real-exam simulator with negative marking and 120-min timer</li>
                 <li>AI tutor trained on Harrison, Bailey, Ghai, Park, Dutta</li>
                 <li>Spaced-repetition flashcards for high-yield mnemonics</li>

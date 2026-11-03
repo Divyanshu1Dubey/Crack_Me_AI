@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 
+// Defaults for the /exams/* microsites. No canonical here: /exams itself has
+// no page, and a layout canonical is inherited by every child that does not
+// set its own.
 export const metadata: Metadata = {
-    title: 'Medical Exams — UPSC CMS, NEET PG, INI-CET, FMGE, USMLE | CrackCMS',
+    title: 'Medical Exams — UPSC CMS, NEET PG, INI-CET, FMGE, USMLE',
     description:
         'Compare every medical entrance exam — UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and Medical Officer recruitment. Pick the exam track that fits your career goal.',
-    alternates: { canonical: '/exams', languages: { 'en-IN': '/exams' } },
     openGraph: {
         type: 'website',
-        url: '/exams',
         title: 'Medical Exams — UPSC CMS, NEET PG, INI-CET, FMGE, USMLE | CrackCMS',
         description:
             'Compare every medical entrance exam — UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and Medical Officer recruitment.',

@@ -8,23 +8,22 @@ import useSWR from 'swr';
 import { Zap, Bell, Search, CheckCheck, X, Clock, AlertTriangle, Info, Megaphone, Smartphone } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import SearchDialog from '@/components/SearchDialog';
 import BrandMark from '@/components/BrandMark';
 import ExamSwitcher from '@/components/ExamSwitcher';
 import { Button } from '@/components/ui/button';
 import { usePWA } from '@/components/PWAProvider';
+import { useSidebar } from '@/context/SidebarContext';
+import { getPageTitle } from '@/lib/appShellRoutes';
+import { isUnmeteredAi, type TokenWallet } from '@/hooks/useTokenWallet';
+import { UsageBanner } from '@/components/paywall/UsageBanner';
+import { isUsageBannerRoute } from '@/lib/paywall/usageBannerRoutes';
 
 const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
   ssr: false,
   loading: () => <div className="p-2 w-8 h-8" />,
 });
-
-interface TokenInfo {
-  available: number;
-  is_admin: boolean;
-}
 
 interface Announcement {
   id: number;
@@ -34,33 +33,17 @@ interface Announcement {
   created_at: string;
 }
 
-const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/questions': 'Question Bank',
-  '/tests': 'Tests',
-  '/ai-tutor': 'AI Tutor',
-  '/simulator': 'CMS Simulator',
-  '/generate': 'Question Generator',
-  '/roadmap': 'AI-Powered Study Plan',
-  '/resources': 'CMS Study Hub',
-  '/textbooks': 'Textbooks',
-  '/trends': 'Exam Trends',
-  '/upload': 'Upload & Train',
-  '/analytics': 'Analytics',
-  '/bookmarks': 'Bookmarks',
-  '/feedback': 'Feedback',
-  '/tokens': 'AI Tokens',
-  '/settings': 'Settings',
-  '/leaderboard': 'Leaderboard',
-  '/flashcards': 'Flashcards',
-  '/admin': 'Admin Panel',
-};
-
 export default function Header() {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  // With the desktop sidebar collapsed, the fixed sidebar toggle (left 18px,
+  // 38px wide, >=1025px only) sits over the header's left edge.
+  const { desktopOpen } = useSidebar();
   const { data: tokenRes } = useSWR(user ? '/auth/tokens/' : null, () => authAPI.getTokenBalance().then(r => r.data), { refreshInterval: 60000 });
-  const tokenInfo = tokenRes as TokenInfo | undefined;
+  const tokenInfo = tokenRes as TokenWallet | undefined;
+  // Admins/staff and unlimited-AI plans are never charged (contract C12):
+  // their pill says "Unlimited" instead of a balance that does not apply.
+  const unmeteredAi = isUnmeteredAi(tokenInfo, user);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState<Announcement[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -171,12 +154,6 @@ export default function Header() {
 
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length;
 
-  const getTitle = () => {
-    if (!pathname) return 'CrackCMS';
-    if (pathname.startsWith('/tests/')) return 'Test';
-    return pageTitles[pathname] || 'CrackCMS';
-  };
-
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'urgent':
@@ -219,31 +196,40 @@ export default function Header() {
   const settingsLabel = user?.first_name || user?.username
     ? `User settings for ${user.first_name || user.username}`
     : 'User settings';
+  const pageTitle = getPageTitle(pathname);
+  const showUsageBanner = isUsageBannerRoute(pathname);
 
+  // Breakpoints: the floating menu button (globals.css) shows up to 768px
+  // inclusive, so the 40px reserve and compact brand stay until 769px; the
+  // Tailwind `md` breakpoint starts at 768px and put the title under the
+  // button at exactly 768px. Wide labels wait for lg/xl so the title keeps
+  // room next to the 260px sidebar. Never pair a `min-[769px]:` class with
+  // an sm/md/lg/xl class on the same property: Tailwind emits the arbitrary
+  // px variant first, so the named breakpoint wins (hence max-[769px] /
+  // max-sm below).
+  // Phones (<640px) show no brand here: the round logo that sat after the
+  // menu button was half covered by the search button at 390px, and the
+  // menu drawer opens on the full BrandMark anyway.
   return (
-      <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl md:gap-3 md:px-6 min-h-16">
+    <>
+      <header className="sticky top-0 z-30 mb-4 flex h-16 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 shadow-sm backdrop-blur-xl min-[769px]:gap-3 min-[769px]:px-6 min-h-16">
       {/* Left: Page title */}
-      <div className="flex min-w-0 items-center gap-2 pl-12 md:gap-3 md:pl-0">
-        <div className="hidden sm:block md:hidden">
+      <div className={`flex min-w-0 items-center gap-2 pl-10 min-[769px]:gap-3 min-[769px]:pl-0 ${desktopOpen ? '' : 'min-[1025px]:pl-5'}`}>
+        <div className="hidden shrink-0 sm:max-[769px]:block">
           <BrandMark href="/dashboard" compact showTagline={false} />
         </div>
-        <div className="sm:hidden">
-          <Link href="/dashboard" aria-label="Home" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card/90 overflow-hidden shadow-sm">
-            <Image src="/cms-circle-logo.png" alt="CrackCMS logo" width={28} height={28} className="object-cover" />
-          </Link>
-        </div>
-        <div className="hidden h-9 w-1 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 md:block" />
-        <div className="hidden md:block">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-slate-300">Workspace</p>
-          <p className="text-base font-bold text-foreground md:text-lg" role="heading" aria-level={1}>{getTitle()}</p>
+        <div className="hidden h-9 w-1 shrink-0 rounded-full bg-linear-to-b from-cyan-500 to-teal-500 min-[769px]:block" />
+        <div className="hidden min-w-0 min-[769px]:block">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-slate-300">Workspace</p>
+          <p className="truncate text-base font-bold text-foreground lg:text-lg" role="heading" aria-level={1} title={pageTitle}>{pageTitle}</p>
         </div>
       </div>
 
       {/* Right: Actions */}
-      <div className="flex shrink-0 items-center gap-1.5 md:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 max-sm:gap-1 min-[769px]:gap-3">
         {/* Search shortcut */}
         <button onClick={() => setSearchOpen(true)}
-          className="hidden md:flex items-center gap-2 rounded-xl border border-border/80 bg-muted/70 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent">
+          className="hidden xl:flex items-center gap-2 rounded-xl border border-border/80 bg-muted/70 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent">
           <Search className="w-3.5 h-3.5" />
           <span>Search...</span>
           <kbd className="ml-2 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl+K</kbd>
@@ -251,24 +237,30 @@ export default function Header() {
 
         <button
           onClick={() => setSearchOpen(true)}
-          className="rounded-xl border border-border/80 bg-muted/70 p-2 text-muted-foreground transition-colors hover:bg-accent md:hidden"
+          className="shrink-0 rounded-xl border border-border/80 bg-muted/70 p-2 text-muted-foreground transition-colors hover:bg-accent xl:hidden"
           aria-label="Open search"
         >
           <Search className="h-4 w-4" />
         </button>
 
-        {/* Token balance */}
+        {/* Token balance ("Unlimited" for admins/staff and unlimited-AI plans) */}
         {tokenInfo && (
-          <Link href="/tokens" className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:border-amber-500/30 md:px-3">
-            <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span className="hidden text-sm font-semibold text-amber-700 dark:text-amber-400 md:inline">
-              {tokenInfo.is_admin ? 'Admin' : `${tokenInfo.available} Tokens`}
+          <Link
+            href="/tokens"
+            aria-label={unmeteredAi ? 'AI tokens: unlimited' : `${tokenInfo.available ?? 0} AI tokens`}
+            title={unmeteredAi ? 'Unlimited AI use' : undefined}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 transition-colors hover:border-amber-300 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:border-amber-500/30 lg:px-3"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <span className="hidden text-sm font-semibold text-amber-700 dark:text-amber-400 lg:inline">
+              {unmeteredAi ? 'Unlimited' : `${tokenInfo.available ?? 0} Tokens`}
             </span>
           </Link>
         )}
 
-        {/* Notifications */}
-        <div className="relative" ref={notifRef}>
+        {/* Notifications (announcements are only fetched for signed-in users) */}
+        {user && (
+        <div className="relative shrink-0" ref={notifRef}>
           <button onClick={() => setNotifOpen(!notifOpen)}
             className="relative rounded-xl border border-border/80 bg-muted/70 p-2 transition-colors hover:bg-accent"
             aria-label={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'Notifications'}>
@@ -363,12 +355,11 @@ export default function Header() {
             </div>
           )}
         </div>
+        )}
 
-        {/* Download App Button. Icon-only on small screens (so it stays
-            a single button without getting truncated to "U..." when the
-            header has too many items) and reveals the "Download App"
-            label only at lg+ when there's room. */}
-        <div className="hidden sm:block">
+        {/* Download App button: icon-only until xl, where the label fits
+            next to the page title and the sidebar. */}
+        <div className="hidden shrink-0 sm:block">
           <Button
             variant="outline"
             size="sm"
@@ -377,33 +368,56 @@ export default function Header() {
             aria-label="Download mobile app"
           >
             <Smartphone className="w-4 h-4" />
-            <span className="hidden lg:inline">Download App</span>
+            <span className="hidden xl:inline">Download App</span>
           </Button>
         </div>
 
-        {/* Exam Switcher — visible on mobile so users can switch CMS/NEET PG/INI-CET */}
-        <div className="block">
-          <ExamSwitcher compact />
-        </div>
-        {/* Theme */}
-        <ThemeToggle />
+        {/* Exam switcher: the exam name (UPSC CMS / NEET PG / INI-CET) from
+            380px, a short code on narrower phones. */}
+        <ExamSwitcher compact />
 
-        {/* User avatar */}
-        <div className="relative">
-          <Link href="/settings" aria-label={settingsLabel}>
-            <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border transition-all hover:ring-primary">
-              <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || '?'}
-              </AvatarFallback>
-            </Avatar>
-            {user?.is_online && (
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" title="Online"></span>
-            )}
+        {/* Theme. On phones the toggle lives in the menu drawer (Sidebar),
+            so search, tokens, bell, exam name and avatar fit at 380px. */}
+        <div className="hidden shrink-0 sm:block">
+          <ThemeToggle />
+        </div>
+
+        {user ? (
+          <div className="relative shrink-0">
+            <Link href="/settings" aria-label={settingsLabel}>
+              <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-border transition-all hover:ring-primary">
+                <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                  {user.first_name?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || '?'}
+                </AvatarFallback>
+              </Avatar>
+              {user.is_online && (
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" title="Online"></span>
+              )}
+            </Link>
+          </div>
+        ) : authLoading ? (
+          <div className="h-9 w-9 shrink-0 rounded-full bg-muted" aria-hidden="true" />
+        ) : (
+          // Public pages that use the app shell (/resources, /contact) are
+          // open to visitors: offer sign-in instead of a "?" avatar that
+          // linked to the login-only /settings.
+          <Link
+            href={`/login?next=${encodeURIComponent(pathname || '/dashboard')}`}
+            className="inline-flex h-9 shrink-0 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Log in
           </Link>
-        </div>
+        )}
       </div>
-
-      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
+      {/* Free-usage banner, directly under the header bar (the only place it
+          renders: PaywallRoot no longer does). It renders nothing for
+          premium, admin and logged-out users, or once dismissed. */}
+      {showUsageBanner ? <UsageBanner /> : null}
+      {/* Outside <header>: its backdrop-filter makes it the containing block
+          for fixed descendants, which squeezed the dialog's full-screen
+          overlay into the 64px header bar. */}
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }

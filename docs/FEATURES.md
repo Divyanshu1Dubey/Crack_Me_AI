@@ -10,7 +10,7 @@
 1. [User Authentication & Profile](#1-user-authentication--profile)
 2. [Subscription & Payments (Razorpay)](#2-subscription--payments-razorpay)
 3. [Password Reset](#3-password-reset)
-4. [Single-Device Session Management](#4-single-device-session-management)
+4. [Device Limit (2 free / 4 subscribed)](#4-device-limit-2-free--4-subscribed)
 5. [Token Economy](#5-token-economy)
 6. [Admin Token & User Lifecycle Management](#6-admin-token--user-lifecycle-management)
 7. [Question Bank](#7-question-bank)
@@ -122,41 +122,43 @@ Primary revenue stream. Razorpay supports Indian payment methods (UPI, cards, ne
 ## 3. Password Reset
 
 ### Files
-- Frontend: `app/forgot-password`, `app/reset-password`
-- Backend: `backend/accounts/views.py` (`PasswordResetRequestView`, `PasswordResetConfirmView`)
+- Frontend: `app/forgot-password`, `app/reset-password`, `lib/auth.tsx` (`resetPasswordForEmail`)
+- Backend: none. `PasswordResetRequestView` / `PasswordResetConfirmView` in `backend/accounts/views.py` are disabled and answer `410 Gone`.
 
 ### APIs
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/auth/password-reset/` | Request reset email |
-| POST | `/api/auth/password-reset/confirm/` | Confirm with token |
+| POST | `/api/auth/password-reset/` | Disabled: `410 {error: "endpoint_gone"}` |
+| POST | `/api/auth/password-reset/confirm/` | Disabled: `410 {error: "endpoint_gone"}` |
 
 ### Flow
-1. User submits email → backend generates one-time token, sends SMTP email with `FRONTEND_URL/reset-password?uid=…&token=…`.
-2. User opens link, enters new password, frontend → `POST /password-reset/confirm/`.
+1. User submits email on `/forgot-password` → `supabase.auth.resetPasswordForEmail(email, {redirectTo: /auth/callback})`; Supabase sends the recovery email.
+2. The link signs the user in on `/auth/callback`, which continues to `/reset-password`; the new password is set with `supabase.auth.updateUser({password})`.
 
 ### Dependencies
-- Gmail App Password (SMTP). See [`setup/EMAIL_SETUP.md`](./setup/EMAIL_SETUP.md).
+- Supabase Auth email (recovery template and SMTP are configured in the Supabase project).
 
 ---
 
-## 4. Single-Device Session Management
+## 4. Device Limit (2 free / 4 subscribed)
 
 ### Purpose
-Prevent account sharing on paid content.
+Prevent account sharing on paid content: up to 2 signed-in devices on a free plan, 4 with a subscription (admins exempt).
 
 ### Files
-- Backend: `backend/accounts/middleware.py`, `views.py` (`UserDeviceListView`, `UserDeviceLogoutView`)
-- Frontend: `frontend/src/lib/api.ts` — On `code: 'session_invalid'` → clears session, redirects
+- Backend: `backend/accounts/supabase_rest_auth.py` (`_enforce_device_limits`), `views.py` (`UserDeviceListView`, `UserDeviceLogoutView`)
+- Frontend: `frontend/src/lib/api.ts` + `deviceLimit.ts` — `device_limit_reached` opens `/settings?deviceLimit=1` (not from `/settings` or `/subscription`); `device_inactive` drops the device id and signs out (a request sent with an older session's token is first retried once with the current token). `/settings` shows "This device" on the row with `is_current: true`.
 
 ### Models
-- `accounts.UserDevice`
+- `accounts.UserDevice`: a browser (`X-Session-ID`) bound to the Supabase session that uses it (`session_id`, migration `accounts.0025`); a session without a usable header is a device of its own (`sid:<session>`). `CustomUser.session_key` / `current_session_id` are unused legacy fields.
 
 ### APIs
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/auth/devices/` | List devices |
-| POST | `/api/auth/devices/logout/` | Force-logout a device |
+| GET | `/api/auth/devices/` | List active devices; each row has `is_current` |
+| POST | `/api/auth/devices/logout/` | Log a device out (`{device_id}`) |
+
+See [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6 for the enrolment rules.
 
 ---
 
@@ -391,6 +393,8 @@ Rich post-answer explanations with structured JSON. The AI **independently verif
 }
 ```
 
+`category` is the subject label students see: the loader's `Imported` bucket reads `Expert Curated` (`ai_engine.offline.with_public_subject`, applied to fresh, cached and stored explanations and to the `context.subject` that explain-question stores). The same display rule applies to the knowledge-base citation and search `subject` (`/api/knowledge/ask/`, `/api/knowledge/search/`) and to the `/api/ai/high-yield/` headings (§15).
+
 ### Files
 - Backend: `backend/ai_engine/views.py::ExplainAfterAnswerView`, `services.py::explain_after_answer`
 
@@ -438,6 +442,8 @@ This protects students from being misled by wrong answer keys in old PYQs.
 | GET | `/api/analytics/weak-topics/` | User's weak areas |
 | GET | `/api/analytics/roadmap/` | Roadmap based on weak topics |
 
+The `## <subject>` headings of `/api/ai/high-yield/` show subject labels as students see them, cached lists included. In the question-bank fallback (offline or no provider answered) an `Imported` and an `Expert Curated` subject share one `## Expert Curated` section, its topics re-ranked by the number of years and questions.
+
 ---
 
 ## 16. AI Question Generator
@@ -457,7 +463,7 @@ This protects students from being misled by wrong answer keys in old PYQs.
 
 ### Files
 - Frontend: `app/textbooks`, `app/upload`
-- Backend: `backend/textbooks/views.py` (`TextbookViewSet`, `PDFUploadViewSet`), `backend/ai_engine/views.py` (`KnowledgeUploadView`, `KnowledgeScanView`, `KnowledgeStatsView`), `backend/ai_engine/rag_pipeline.py`, `sqlite_rag.py`, `document_processor.py`, `pyq_extractor.py`, `auto_ingest.py`, `upsc_cms_knowledge.py`, `similar_questions.py`, `backend/_train_all.py`
+- Backend: `backend/textbooks/views.py` (`TextbookViewSet`, `PDFUploadViewSet`), `backend/ai_engine/views.py` (`KnowledgeUploadView`, `KnowledgeScanView`, `KnowledgeStatsView`), `backend/ai_engine/rag_pipeline.py`, `sqlite_rag.py`, `document_processor.py`, `pyq_extractor.py`, `auto_ingest.py`, `upsc_cms_knowledge.py`, `similar_questions.py`, `ai_engine/management/commands/train_ai.py`
 
 ### APIs
 | Method | Path | Description |
@@ -469,12 +475,12 @@ This protects students from being misled by wrong answer keys in old PYQs.
 | GET | `/api/ai/knowledge/stats/` | KB stats |
 | POST | `/api/ai/rag-search/` | Top-K chunks |
 | POST | `/api/ai/rag-answer/` | RAG-grounded answer |
-| POST | `/api/ai/textbook-reference/` | Reference for a question |
-| GET | `/api/ai/screenshot/<qid>/` | Page screenshot |
+| POST | `/api/ai/textbook-reference/` | `{question_text}` → `{references}`; `402 upgrade_required` for the exact stem of a question the caller may not see |
+| GET | `/api/ai/screenshot/<qid>/` | JSON `{screenshot_url}` (`202 {status: "rendering"}` while another request renders, `402 upgrade_required` when the caller may not see the answer, `404` when no textbook page is available). The render is stored in `Question.page_screenshot` (a MEDIA file: production must serve `/media/`, see [`ARCHITECTURE.md`](./ARCHITECTURE.md) §7). |
 
 ### Ingestion Flow
 ```
-Medura_Train/{textbooks,PYQ,web_knowledge}/ → _train_all.py → chunk → rag_store.sqlite3
+Medura_Train/{textbooks,PYQ,web_knowledge}/ → manage.py train_ai → chunk → rag_store.sqlite3
 ```
 
 ---
@@ -609,7 +615,7 @@ See [`SEO.md`](./SEO.md) for the full SEO audit.
 | **Token metering** | `backend/accounts/models.py::TokenBalance` + service-layer checks |
 | **Auth (Supabase + JWT)** | `accounts/*` + `frontend/src/lib/{auth,supabase}.{tsx,ts}` |
 | **Brute-force protection** | `django-axes` |
-| **Single-device sessions** | `accounts/middleware.py` + `UserDevice` |
+| **Device limit (2 free / 4 subscribed)** | `accounts/supabase_rest_auth.py` + `UserDevice` |
 | **Structured logging** | `python-json-logger` |
 | **Error tracking** | Sentry (`sentry_sdk.init` gated on `SENTRY_DSN`) |
 | **Browser observability** | Datadog RUM + browser logs |

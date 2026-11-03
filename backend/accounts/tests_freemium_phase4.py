@@ -10,7 +10,7 @@ implementation:
 * `has_active_sub` lazy-expiry contract
 * `Subscription.get_active_subscription` filter-update idempotency
 * FreeShowcaseQuestion uniqueness across years
-* Free preview test auto-selection (signals) — admin override respected
+* Free preview tests are no longer auto-selected (AN-27)
 * Anonymous + non-premium user behavior across every endpoint
 """
 from datetime import date, timedelta
@@ -23,7 +23,6 @@ from django.utils import timezone
 from accounts.models import CustomUser, Subscription
 from accounts.models_freemium import FreeShowcaseQuestion
 from accounts.signals import (
-    ensure_free_preview_tests,
     ensure_freemium_seed,
     ensure_showcase_for_year,
 )
@@ -176,8 +175,28 @@ class ActivateFromPaymentConcurrencyTests(TestCase):
         lifetime = Subscription.activate_from_payment(u, 'legacy', 199)
         monthly = Subscription.activate_from_payment(u, '1_month', 129)
         active = Subscription.get_active_subscription(u)
-        # Most recent active sub wins; that's the monthly.
-        self.assertEqual(active.id, monthly.id)
+        # The lifetime (unlimited-AI) plan must keep winning: buying a
+        # monthly plan on top of it must not downgrade the user, and the
+        # monthly row stays active alongside it.
+        self.assertEqual(active.id, lifetime.id)
+        self.assertTrue(active.unlimited_ai)
+        monthly.refresh_from_db()
+        self.assertEqual(monthly.status, 'active')
+
+    def test_expired_newest_row_does_not_hide_live_lifetime(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        u = _make_user('mixed-expired')
+        lifetime = Subscription.activate_from_payment(u, 'legacy', 199)
+        monthly = Subscription.activate_from_payment(u, '1_month', 129)
+        Subscription.objects.filter(pk=monthly.pk).update(expires_at=timezone.now() - timedelta(days=1))
+        active = Subscription.get_active_subscription(u)
+        self.assertIsNotNone(active)
+        self.assertEqual(active.id, lifetime.id)
+        u.refresh_from_db()
+        self.assertTrue(u.is_subscribed)
+        monthly.refresh_from_db()
+        self.assertEqual(monthly.status, 'expired')
 
 
 class FreemiumSeedTests(TestCase):
@@ -246,81 +265,34 @@ class FreemiumSeedTests(TestCase):
         )
         self.assertEqual(admin_qids, set(admin_picks))
 
-    def test_ensure_free_preview_marks_two_newest(self):
+    def test_showcase_seed_skips_scholarship_questions(self):
+        """Scholarship-challenge questions are never free, so never seeded."""
+        for i in range(1, 6):
+            q = self._make_question(2022, 4000 + i)
+            if i <= 2:
+                type(q).objects.filter(pk=q.pk).update(is_scholarship_eligible=True)
+        created = ensure_showcase_for_year(2022, per_year=10)
+        self.assertEqual(created, 3)
+        self.assertFalse(
+            FreeShowcaseQuestion.objects.filter(year=2022, question__is_scholarship_eligible=True).exists()
+        )
+
+    def test_freemium_seed_no_longer_marks_free_preview_tests(self):
+        """AN-27: Test.is_free_preview is retired; the seed leaves tests alone."""
         from tests_engine.models import Test
-        from django.contrib.auth import get_user_model
         creator = get_user_model().objects.create_user(
             username='creator', email='c@x.com', password='x',
         )
-        # Create 5 tests with explicit created_at ordering.
-        for i in range(5):
-            t = Test.objects.create(
-                title=f'Test {i}',
-                test_type='mixed',
-                num_questions=5,
-                time_limit_minutes=10,
-                created_by=creator,
-                is_published=True,
-            )
-            Test.objects.filter(pk=t.pk).update(
-                created_at=timezone.now() - timedelta(hours=5 - i),
-            )
-        marked = ensure_free_preview_tests(target=2)
-        self.assertEqual(marked, 2)
-        # The two NEWEST tests should be marked.
-        newest_ids = list(
-            Test.objects
-            .filter(is_published=True)
-            .order_by('-created_at', '-id')
-            .values_list('id', flat=True)[:2]
-        )
-        marked_ids = list(
-            Test.objects.filter(is_free_preview=True).values_list('id', flat=True)
-        )
-        self.assertEqual(set(marked_ids), set(newest_ids))
-
-    def test_ensure_free_preview_respects_admin_override(self):
-        from tests_engine.models import Test
-        from django.contrib.auth import get_user_model
-        creator = get_user_model().objects.create_user(
-            username='creator2', email='c2@x.com', password='x',
-        )
-        # Admin manually picks Test A as preview.
-        admin_test = Test.objects.create(
-            title='Admin Picked',
-            test_type='mixed',
-            num_questions=5,
-            time_limit_minutes=10,
-            created_by=creator,
-            is_published=True,
-            is_free_preview=True,
-        )
-        Test.objects.filter(pk=admin_test.pk).update(
-            created_at=timezone.now() - timedelta(days=10),
-        )
-        # Plus 3 fresh tests.
         for i in range(3):
-            t = Test.objects.create(
-                title=f'Fresh {i}',
-                test_type='mixed',
-                num_questions=5,
-                time_limit_minutes=10,
-                created_by=creator,
-                is_published=True,
+            Test.objects.create(
+                title=f'Test {i}', test_type='mixed', num_questions=5,
+                time_limit_minutes=10, created_by=creator, is_published=True,
             )
-            Test.objects.filter(pk=t.pk).update(
-                created_at=timezone.now() - timedelta(hours=i),
-            )
-        marked = ensure_free_preview_tests(target=2)
-        # Already 1 picked by admin → only 1 more should be added.
-        self.assertEqual(marked, 1)
-        self.assertEqual(
-            Test.objects.filter(is_free_preview=True).count(), 2,
-        )
-        # Admin's old pick is preserved.
-        self.assertTrue(
-            Test.objects.filter(pk=admin_test.pk, is_free_preview=True).exists()
-        )
+        self._make_question(2021, 4100)
+        with mock.patch('accounts.signals._running_tests', return_value=False):
+            summary = ensure_freemium_seed()
+        self.assertNotIn('free_preview_marked', summary)
+        self.assertFalse(Test.objects.filter(is_free_preview=True).exists())
 
     def test_ensure_freemium_seed_idempotent(self):
         for i in range(1, 12):
@@ -411,16 +383,25 @@ class AnonymousAndFreeUserEndpointTests(TestCase):
     def test_free_user_403_on_non_free_preview_test_start(self):
         from rest_framework.test import APIClient
         from tests_engine.models import Test
-        creator = _make_user('creator-x')
+        from questions.models import Question, Subject
+        creator = _make_user('creator-x', role='admin')
         t = Test.objects.create(
             title='Premium-only Test',
             test_type='mixed',
-            num_questions=2,
+            num_questions=21,
             time_limit_minutes=5,
             created_by=creator,
             is_published=True,
             is_free_preview=False,
         )
+        subj = Subject.objects.create(name='Premium Gate Subject')
+        t.questions.set([
+            Question.objects.create(
+                question_text=f'PG{i}', option_a='A', option_b='B', option_c='C', year=2024,
+                option_d='D', correct_answer='A', subject=subj,
+            )
+            for i in range(21)
+        ])
         free = _make_user('free-x')
         c = APIClient()
         c.force_authenticate(user=free)
@@ -431,7 +412,7 @@ class AnonymousAndFreeUserEndpointTests(TestCase):
     def test_free_user_can_start_free_preview_test(self):
         from rest_framework.test import APIClient
         from tests_engine.models import Test
-        creator = _make_user('creator-y')
+        creator = _make_user('creator-y', role='admin')
         t = Test.objects.create(
             title='Free Preview Test',
             test_type='mixed',
@@ -457,30 +438,32 @@ class AIQuotaPayloadTests(TestCase):
         ExamTrack.objects.get_or_create(code='cms', defaults={'name': 'CMS'})
         Subject.objects.get_or_create(code='med', defaults={'name': 'Medicine'})
 
-    def test_402_payload_has_required_keys(self):
+    # No real LLM calls from the test suite: the AI service is replaced by a
+    # stub that answers, so each delivered answer uses one free slot (failed
+    # calls give their slot back, which made the old "provider down" branch
+    # of this test pass without ever reaching the 402).
+    @mock.patch.dict('os.environ', {'AI_OFFLINE_MODE': ''})
+    @mock.patch('ai_engine.views.AIService')
+    def test_402_payload_has_required_keys(self, service_cls):
         from rest_framework.test import APIClient
+        service_cls.return_value.ask_tutor.return_value = (
+            'Beta blockers reduce mortality after a myocardial infarction.'
+        )
         u = _make_user('payload-u')
         c = APIClient()
         c.force_authenticate(user=u)
-        r = c.post('/api/ai/tutor/', {'question': 'What is X?'}, format='json')
-        # Burn the free quota.
-        for _ in range(2):
-            c.post('/api/ai/tutor/', {'question': 'burn'}, format='json')
+        # Use the free quota (2/day).
+        for question in ('What is X?', 'And Y?'):
+            r = c.post('/api/ai/tutor/', {'question': question}, format='json')
+            self.assertEqual(r.status_code, 200, r.data)
         r = c.post('/api/ai/tutor/', {'question': 'over cap'}, format='json')
-        if r.status_code == 402:
-            for key in ('code', 'feature', 'message', 'remaining', 'cap'):
-                self.assertIn(key, r.data)
-            self.assertEqual(r.data['code'], 'upgrade_required')
-            self.assertEqual(r.data['feature'], 'AI Tutor')
-            self.assertEqual(r.data['remaining'], 0)
-        else:
-            # If AI service is unavailable in test env, the 402 path
-            # may have been short-circuited — but the cap check itself
-            # runs before the AI call. Verify via direct helper.
-            from ai_engine.models_usage import check_and_consume
-            check_and_consume(u, cap=2)  # already at 2 from above
-            allowed, _ = check_and_consume(u, cap=2)
-            self.assertFalse(allowed)
+        self.assertEqual(r.status_code, 402, r.data)
+        for key in ('code', 'feature', 'message', 'remaining', 'cap'):
+            self.assertIn(key, r.data)
+        self.assertEqual(r.data['code'], 'upgrade_required')
+        self.assertEqual(r.data['feature'], 'AI Tutor')
+        self.assertEqual(r.data['remaining'], 0)
+        self.assertEqual(service_cls.return_value.ask_tutor.call_count, 2)
 
 
 class TokenConfigDynamicCapTests(TestCase):

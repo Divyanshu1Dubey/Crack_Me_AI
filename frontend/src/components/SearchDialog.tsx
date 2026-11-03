@@ -117,8 +117,8 @@ export default function SearchDialog({ open, onClose }: { open: boolean; onClose
                         onKeyDown={handleKeyDown}
                     />
                     {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                    <button onClick={handleClose} className="p-1 rounded hover:bg-accent">
-                        <X className="w-4 h-4 text-muted-foreground" />
+                    <button onClick={handleClose} aria-label="Close search" className="p-1 rounded hover:bg-accent">
+                        <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                     </button>
                 </div>
 

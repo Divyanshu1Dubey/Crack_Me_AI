@@ -4,7 +4,9 @@ import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { authAPI, questionsAPI } from '@/lib/api';
+import { authAPI, getApiErrorCode, type ScholarshipChallengeQuestion } from '@/lib/api';
+import { PREMIUM_PLANS, SCHOLARSHIP_PRICE_INR, type PurchasablePlanId } from './plans';
+import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
 import {
     Crown, BookOpen, FileText, Clock,
     Sparkles, MessageSquare, ShieldCheck,
@@ -59,15 +61,36 @@ interface SubscriptionRow {
     created_at: string | null;
 }
 
-interface ScholarshipQuestion {
-    id: number;
-    question_text: string;
-    option_a: string;
-    option_b: string;
-    option_c: string;
-    option_d: string;
-    correct_answer?: string;
+// Served by POST /auth/scholarship/start/ -- never includes the answer.
+type ScholarshipQuestion = ScholarshipChallengeQuestion;
+
+// Scholarship price after a perfect score: Rs 79 on the first attempt, Rs 99
+// on the second (accounts.views.VerifyScholarshipView).
+const SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR = 99;
+
+// POST /auth/verify-scholarship/ -> {status, score: 5 | null, message}. A
+// failed attempt never says how many answers were right (score is null).
+type ScholarshipResult = { status: 'passed' | 'failed'; score: number | null; message: string };
+
+function readScholarshipResult(data: unknown): ScholarshipResult {
+    const d = (data && typeof data === 'object' ? data : {}) as { status?: unknown; score?: unknown; message?: unknown };
+    return {
+        status: d.status === 'passed' ? 'passed' : 'failed',
+        score: typeof d.score === 'number' && Number.isFinite(d.score) ? d.score : null,
+        message: typeof d.message === 'string' ? d.message : '',
+    };
 }
+
+// Every challenge question needs an A-D answer: the server refuses a blank
+// with 400 (without using up an attempt).
+const SCHOLARSHIP_ANSWER_LETTERS: readonly string[] = ['A', 'B', 'C', 'D'];
+
+function allScholarshipAnswered(questions: ReadonlyArray<{ id: number }>, answers: Record<number, string>): boolean {
+    return questions.length > 0 && questions.every(q => SCHOLARSHIP_ANSWER_LETTERS.includes(answers[q.id]));
+}
+
+// Plan order for the "Upgrade to" / "Add" label on stacked purchases.
+const PLAN_TIER: Record<string, number> = { scholarship_1_month: 1, '1_month': 1, '3_months': 2, '1_year': 3 };
 
 export default function SubscriptionPage() {
     const { user, refreshProfile, setUser } = useAuth();
@@ -103,14 +126,14 @@ export default function SubscriptionPage() {
     const [showTestModal, setShowTestModal] = useState(false);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [scholarshipQuestions, setScholarshipQuestions] = useState<ScholarshipQuestion[]>([]);
+    // Signed by the server for exactly these five questions; verify sends it back.
+    const [challengeToken, setChallengeToken] = useState<string | null>(null);
+    // Shown inside the modal (the page-level error banner sits behind it).
+    const [scholarshipError, setScholarshipError] = useState<string | null>(null);
     const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
     const [testSubmitting, setTestSubmitting] = useState(false);
-    const [testResult, setTestResult] = useState<{
-        status: 'passed' | 'failed';
-        score: number;
-        message: string;
-    } | null>(null);
+    const [testResult, setTestResult] = useState<ScholarshipResult | null>(null);
     const [aiAnalysis, setAiAnalysis] = useState<{
         correctCount: number;
         percentage: number;
@@ -234,22 +257,29 @@ export default function SubscriptionPage() {
         setAiAnalysis(null);
         setSelectedAnswers({});
         setCurrentQuestionIdx(0);
+        setScholarshipQuestions([]);
+        setChallengeToken(null);
+        setScholarshipError(null);
 
         try {
-            // Fetch eligible questions for scholarship test
-            const res = await questionsAPI.list({ is_scholarship_eligible: 'true', limit: 50 });
-            let allQuestions = res.data?.results || res.data || [];
-            
-            if (allQuestions.length === 0) {
-                console.warn("No scholarship eligible questions found. Please flag some in admin panel.");
-                allQuestions = []; 
-            }
-            
-            // Shuffle and pick 5
-            const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-            setScholarshipQuestions(shuffled.slice(0, 5));
+            // The server picks the five questions and signs that set; the
+            // submission must carry the token (it used to be chosen here from
+            // the question list, which the backend no longer accepts).
+            const res = await authAPI.startScholarship();
+            setScholarshipQuestions(res.data?.questions || []);
+            setChallengeToken(res.data?.challenge_token || null);
         } catch (err) {
-            logAxiosError('Failed to load scholarship questions:', err);
+            logAxiosError('Failed to start the scholarship challenge:', err);
+            const error = err as { response?: { status?: number; data?: { error?: string } } };
+            setScholarshipError(
+                getApiErrorCode(err) === 'device_limit_reached'
+                    ? 'This device is over your plan’s device limit. Remove a device in Settings, or buy a plan (4 devices) below.'
+                    : error.response?.status === 429
+                    ? 'The challenge was started too many times. Please wait a while and try again.'
+                    : error.response?.data?.error || 'Could not start the scholarship challenge. Please try again.'
+            );
+            // Attempts / passed state may have changed (e.g. locked): keep the banner in step.
+            void refreshProfile();
         } finally {
             setLoadingQuestions(false);
         }
@@ -263,9 +293,14 @@ export default function SubscriptionPage() {
     };
 
     const submitScholarshipTest = async () => {
+        if (!allScholarshipAnswered(scholarshipQuestions, selectedAnswers)) {
+            setScholarshipError(`Answer all ${scholarshipQuestions.length} questions before submitting.`);
+            return;
+        }
         setTestSubmitting(true);
         setSuccessMessage(null);
         setErrorMessage(null);
+        setScholarshipError(null);
 
         // Build answers dict (ID -> option letter)
         const submissionAnswers: Record<string, string> = {};
@@ -274,47 +309,52 @@ export default function SubscriptionPage() {
         });
 
         try {
-            // Call backend validation
-            const res = await authAPI.verifyScholarship(submissionAnswers);
-            const data = res.data;
-            setTestResult({
-                status: data.status,
-                score: data.score,
-                message: data.message
-            });
+            // Call backend validation (scores only the set the server issued)
+            const res = await authAPI.verifyScholarship(submissionAnswers, challengeToken);
+            const result = readScholarshipResult(res.data);
+            setTestResult(result);
 
             // Refresh user profile info to pull updated scholarship eligibility
             await refreshProfile();
 
-            // Generate AI analysis
-            generateAiTestAnalysis(data.score, submissionAnswers, data.message);
+            // Only a pass carries a score (5); a failed attempt shows the
+            // banner and the server's message without a breakdown.
+            if (result.score !== null) {
+                generateAiTestAnalysis(result.score, submissionAnswers, result.message);
+            } else {
+                setAiAnalysis(null);
+                setGeneratingAnalysis(false);
+            }
 
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
-            setErrorMessage(error.response?.data?.error || "Failed to submit scholarship test. Please try again.");
+            setScholarshipError(error.response?.data?.error || "Failed to submit scholarship test. Please try again.");
+            // Expired / already-submitted challenge: the next start issues a new one.
+            const code = getApiErrorCode(err);
+            if (code === 'scholarship_expired' || code === 'scholarship_not_started') setChallengeToken(null);
+            void refreshProfile();
         } finally {
             setTestSubmitting(false);
         }
     };
 
-    const generateAiTestAnalysis = (score: number, answers: Record<string, string>, testResultMsg: string) => {
-        setGeneratingAnalysis(true);
-        
-        // Simulate writing rich AI analysis report
-        setTimeout(() => {
-            const correctCount = score;
-            const incorrectCount = 5 - correctCount;
-            const points = (correctCount * 2.08) - (incorrectCount * 0.69);
-            const percentage = Math.round((correctCount / 5) * 100);
+    // Score breakdown (computed locally from the server's score with UPSC
+    // CMS-style marking). The server sends a score only for a pass, so this
+    // runs only then. It used to fake an "AI analysis" with a 1.5 s
+    // setTimeout; nothing here calls an AI model, so it is labelled honestly.
+    const generateAiTestAnalysis = (score: number, _answers: Record<string, string>, testResultMsg: string) => {
+        const correctCount = score;
+        const incorrectCount = 5 - correctCount;
+        const points = (correctCount * CMS_MARKS_PER_QUESTION) - (incorrectCount * CMS_PENALTY_PER_WRONG);
+        const percentage = Math.round((correctCount / 5) * 100);
 
-            setAiAnalysis({
-                correctCount,
-                percentage,
-                points,
-                testResultMsg
-            });
-            setGeneratingAnalysis(false);
-        }, 1500);
+        setAiAnalysis({
+            correctCount,
+            percentage,
+            points,
+            testResultMsg
+        });
+        setGeneratingAnalysis(false);
     };
 
     const handleSubscribe = async (plan: string) => {
@@ -330,7 +370,10 @@ export default function SubscriptionPage() {
         setErrorMessage(null);
         setRetryData(null);
 
-        const scriptLoaded = await new Promise((resolve) => {
+        // Local development: PAYMENTS_MODE=mock on the backend + this flag on
+        // the frontend replace Razorpay's checkout with a local simulation.
+        const mockPayments = (process.env.NEXT_PUBLIC_PAYMENTS_MODE || '').trim().toLowerCase() === 'mock';
+        const scriptLoaded = mockPayments ? true : await new Promise((resolve) => {
             const script = document.createElement('script');
             script.src = 'https://checkout.razorpay.com/v1/checkout.js';
             script.onload = () => resolve(true);
@@ -439,6 +482,11 @@ export default function SubscriptionPage() {
                 }
             };
 
+            if (mockPayments) {
+                const mockRes = await authAPI.subscribeMockCheckout(order_id);
+                await options.handler(mockRes.data);
+                return;
+            }
             const rzp = new (window as unknown as { Razorpay: new (options: unknown) => { open: () => void } }).Razorpay(options);
             rzp.open();
         } catch (err: unknown) {
@@ -499,6 +547,13 @@ export default function SubscriptionPage() {
 
     const isSubscribed = user?.is_subscribed;
 
+    // Monthly Pass price the scholarship unlocks: the granted price once
+    // passed, otherwise the price the next attempt would unlock.
+    const scholarshipAttempts = user?.scholarship_test_attempts || 0;
+    const scholarshipOfferPrice = user?.scholarship_test_passed
+        ? (user?.scholarship_granted_price || SCHOLARSHIP_PRICE_INR)
+        : scholarshipAttempts === 0 ? SCHOLARSHIP_PRICE_INR : SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR;
+
     // ── Plan-comparison helpers (B3 + B20) ────────────────────────────
     // 'legacy' and 'admin_grant' are lifetime subscriptions — they never
     // expire and the user should NEVER see a "Renew Now" button or a
@@ -536,85 +591,81 @@ export default function SubscriptionPage() {
         return Math.round((curPerMonth - targetPerMonth) * 12);
     };
 
-    const plans = [
-        {
-            id: '1_month',
-            name: '1 Month Pass',
-            price: 129,
-            originalPrice: 499,
-            period: 'month',
+    const planCopy: Record<PurchasablePlanId, {
+        description: string;
+        features: string[];
+        badge: string | null;
+        cta: string;
+        scholarshipPromo: boolean;
+    }> = {
+        '1_month': {
             description: 'Essential premium features for short-term quick revision.',
             features: [
                 'Complete Year-wise & Subject-wise CMS/NEET QBank',
-                'Basic AI explanations (Daily limits apply)',
+                '100 AI credits added on purchase (plus your free daily tokens)',
                 'SM-2 Active Spaced Flashcards',
                 'Community updates & discussion boards',
             ],
             badge: null,
             cta: 'Unlock Monthly Access',
-            action: () => handleSubscribe('1_month'),
-            scholarshipPromo: true
+            scholarshipPromo: true,
         },
-        {
-            id: '3_months',
-            name: '3 Months Pass',
-            price: 449,
-            originalPrice: 1499,
-            period: '3 months',
+        '3_months': {
             description: 'Highly recommended for final month revisions & mock prep.',
             features: [
                 'Everything in 1 Month Pass',
-                'Advanced AI explanations (300 monthly credits)',
+                '300 AI credits added on purchase (plus your free daily tokens)',
                 'Full mock simulator with negative marking',
                 'Access to standard textbook screenshots/mappings',
             ],
             badge: 'Popular',
             cta: 'Unlock 3 Months Access',
-            action: () => handleSubscribe('3_months'),
-            scholarshipPromo: false
+            scholarshipPromo: false,
         },
-        {
-            id: '1_year',
-            name: '1 Year Unlimited',
-            price: 1999,
-            originalPrice: 10000,
-            period: 'year',
+        '1_year': {
             description: 'Ultimate comprehensive bundle for NEET PG and UPSC CMS prep.',
             features: [
                 'Full Premium NEET PG QBank & CMS QBank',
-                'Demanded expert notes & topic summaries',
-                'Video lecture archives & doubt-solving board',
+                'Topic notes & summaries',
                 '100% UNLIMITED AI explanations (No tokens)',
+                'Discussion threads on every question',
                 'Personalized checklist roadmap & progress audit',
-                'Priority support & direct teacher consultations',
             ],
             badge: 'Best Value',
             cta: 'Claim Full VIP Pass',
-            action: () => handleSubscribe('1_year'),
-            scholarshipPromo: false
-        }
-    ];
+            scholarshipPromo: false,
+        },
+    };
+
+    const plans = PREMIUM_PLANS.map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        price: plan.priceInr,
+        period: plan.period,
+        ...planCopy[plan.id],
+        action: () => handleSubscribe(plan.id),
+    }));
 
     const premiumFeatures = [
         {
             icon: <Sparkles className="w-6 h-6 text-amber-500" />,
-            title: "Unlimited AI Tutor Usage",
-            desc: "Zero token limits. Ask unlimited medical questions. Access full clinical analyses, mnemonics, and study shortcuts instantly."
+            title: "AI Tutor",
+            desc: "AI credits on every plan and unlimited AI explanations on the 1-year plan. Clinical analyses, mnemonics and study shortcuts on demand."
         },
         {
             icon: <FileText className="w-6 h-6 text-cyan-400" />,
-            title: "Top-Teacher Curated Notes",
-            desc: "Access premium handwritten study material, cheat sheets, and subject summaries designed by top-ranked medical experts."
+            title: "Topic Notes & Summaries",
+            desc: "Subject and topic notes, cheat sheets and summaries to revise high-yield areas quickly."
         },
         {
             icon: <MessageSquare className="w-6 h-6 text-emerald-400" />,
-            title: "Direct Faculty Doubt Solving",
-            desc: "Get in touch with renowned instructors of UPSC CMS, State CMS, and NEET PG to resolve complex clinical doubts."
+            title: "Discussion Threads",
+            desc: "Discuss any question with other aspirants and compare reasoning on tricky clinical stems."
         },
         {
             icon: <BookOpen className="w-6 h-6 text-blue-400" />,
-            title: "All Textbooks & Reference Editions",
-            desc: "Unlock comprehensive libraries containing all standard medical textbooks and reference guides required for your prep."
+            title: "Textbook References",
+            desc: "Explanations linked to the standard textbook chapters and pages they draw on."
         },
         {
             icon: <Clock className="w-6 h-6 text-purple-400" />,
@@ -643,7 +694,7 @@ export default function SubscriptionPage() {
                             <p className="text-muted-foreground text-sm mt-1">Unlock expert guidance, textbooks, and interactive mock series.</p>
                         </div>
                         {isSubscribed && (
-                            <Badge className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/15 border border-amber-500/30 px-3 py-1 font-bold">
+                            <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 border border-amber-500/30 px-3 py-1 font-bold">
                                 ACTIVE MEMBER
                             </Badge>
                         )}
@@ -770,7 +821,7 @@ export default function SubscriptionPage() {
                                             : `⏰ Only ${subscriptionInfo.days_remaining} day${subscriptionInfo.days_remaining === 1 ? '' : 's'} left on your plan`}
                                     </p>
                                     <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-1">
-                                        Renew now to keep your unlimited AI tutor, mock tests, and study materials uninterrupted.
+                                        Renew now to keep your AI tutor credits, mock tests, and study materials uninterrupted.
                                     </p>
                                 </div>
                             </div>
@@ -874,14 +925,14 @@ export default function SubscriptionPage() {
                     {!isSubscribed && (
                         <div className="rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/10 via-yellow-500/5 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
                             <div className="text-left space-y-2">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                    <Sparkles className="w-3.5 h-3.5" /> 100% Scholarship Discount Offer
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                    <Sparkles className="w-3.5 h-3.5" /> Scholarship Offer · ₹{scholarshipOfferPrice} Monthly Pass
                                 </span>
                                 <h3 className="text-xl font-extrabold text-foreground">
-                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹79
+                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹{scholarshipOfferPrice}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+2.08</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-0.69</strong>) applies. Get free AI-powered test analysis. Score a perfect 5/5 to claim the ₹79/month scholarship price!
+                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Results are instant: score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price!
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (
@@ -934,17 +985,14 @@ export default function SubscriptionPage() {
                                                 <span className="text-sm line-through text-muted-foreground">₹{plan.price}</span>
                                             </>
                                         ) : (
-                                            <>
-                                                <span className="text-4xl font-black">₹{plan.price}</span>
-                                                <span className="text-sm line-through text-muted-foreground">₹{plan.originalPrice}</span>
-                                            </>
+                                            <span className="text-4xl font-black">₹{plan.price.toLocaleString('en-IN')}</span>
                                         )}
                                         <span className={`text-xs ${isRecommended ? 'text-slate-300' : 'text-muted-foreground'}`}>/ {plan.period}</span>
                                     </div>
 
                                     {/* B20 fix — show yearly savings vs current short-term plan */}
                                     {savings !== null && savings > 0 && (
-                                        <div className="mb-4 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                                        <div className={`mb-4 px-3 py-2 rounded-xl border text-xs font-bold ${isRecommended ? 'bg-emerald-400/15 border-emerald-400/40 text-emerald-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'}`}>
                                             💰 Save ₹{savings}/yr by switching from your current plan
                                         </div>
                                     )}
@@ -959,8 +1007,10 @@ export default function SubscriptionPage() {
                                     </ul>
 
                                     {isCurrentPlan ? (
-                                        /* B20 fix — distinguish "you already have this" from "buy now" */
-                                        <div className="w-full py-2.5 rounded-xl font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 text-sm">
+                                        /* B20 fix — distinguish "you already have this" from "buy now".
+                                           The recommended card is navy in both themes, so it needs the
+                                           light emerald text (emerald-700 on navy was ~2.5:1). */
+                                        <div className={`w-full py-2.5 rounded-xl font-bold border flex items-center justify-center gap-1.5 text-sm ${isRecommended ? 'bg-emerald-400/15 border-emerald-400/40 text-emerald-300' : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'}`}>
                                             <Check className="w-4 h-4" /> Your Active Plan
                                         </div>
                                     ) : isSubscribed && !isCurrentLifetime ? (
@@ -975,16 +1025,22 @@ export default function SubscriptionPage() {
                                                     <span className="flex items-center justify-center gap-2">
                                                         <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Payment...
                                                     </span>
-                                                ) : subscribing ? 'Opening Payment...' : `Switch to ${plan.name}`}
+                                                ) : subscribing ? 'Opening Payment...' : (
+                                                    // Purchases stack: a higher tier is an upgrade, anything
+                                                    // else adds time ("Switch to" read like a downgrade).
+                                                    (PLAN_TIER[plan.id] ?? 0) > (PLAN_TIER[currentPlanId ?? ''] ?? 0)
+                                                        ? `Upgrade to ${plan.name}`
+                                                        : `Add ${plan.name}`
+                                                )}
                                             </button>
-                                            <p className="text-center text-[11px] text-muted-foreground">
+                                            <p className={`text-center text-[11px] ${isRecommended ? 'text-slate-300' : 'text-muted-foreground'}`}>
                                                 Stacks on top of your remaining {subscriptionInfo?.days_remaining ?? 0} day{(subscriptionInfo?.days_remaining ?? 0) === 1 ? '' : 's'}
                                             </p>
                                         </div>
                                     ) : isSubscribed && isCurrentLifetime ? (
                                         /* Lifetime users: don't show "Active Member" on a plan they don't have.
                                            Show a disabled "Already Lifetime" message instead. */
-                                        <div className="w-full py-2.5 rounded-xl font-bold bg-amber-500/10 text-amber-500 border border-amber-500/25 flex items-center justify-center gap-1.5 text-sm">
+                                        <div className={`w-full py-2.5 rounded-xl font-bold bg-amber-500/10 border border-amber-500/25 flex items-center justify-center gap-1.5 text-sm ${isRecommended ? 'text-amber-400' : 'text-amber-700 dark:text-amber-400'}`}>
                                             <Crown className="w-4 h-4" /> Lifetime Member
                                         </div>
                                     ) : (
@@ -1002,7 +1058,7 @@ export default function SubscriptionPage() {
                                             </button>
                                             {plan.id === '1_month' && !hasScholarshipDiscount && ((user?.scholarship_test_attempts || 0) < 2) && (
                                                 <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">
-                                                    ✨ Get this at just ₹{(user?.scholarship_test_attempts || 0) === 0 ? 79 : 99} today!
+                                                    ✨ Get this at just ₹{scholarshipOfferPrice} today!
                                                 </p>
                                             )}
                                         </div>
@@ -1049,14 +1105,14 @@ export default function SubscriptionPage() {
                         <div className="mt-12 p-6 rounded-4xl border border-emerald-500/20 bg-emerald-950/5 flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="text-left space-y-1">
                                 <h4 className="text-base font-bold text-foreground">Your Premium account is active!</h4>
-                                <p className="text-xs text-muted-foreground">Start using your unlimited features and materials right now.</p>
+                                <p className="text-xs text-muted-foreground">Start using your premium features and materials right now.</p>
                             </div>
                             <div className="flex flex-wrap gap-3">
                                 <Button asChild className="rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs py-2.5 px-5">
                                     <Link href="/questions">Go to Question Bank</Link>
                                 </Button>
                                 <Button asChild variant="outline" className="rounded-xl text-xs py-2.5 px-5">
-                                    <Link href="/ai-tutor">Open Unlimited AI Tutor</Link>
+                                    <Link href="/ai-tutor">Open AI Tutor</Link>
                                 </Button>
                             </div>
                         </div>
@@ -1133,7 +1189,7 @@ export default function SubscriptionPage() {
                                         <div className="space-y-2">
                                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Switch</p>
                                             {plans
-                                                .filter(p => p.id !== subscriptionInfo.plan && p.id !== 'scholarship_1_month')
+                                                .filter(p => p.id !== subscriptionInfo.plan)
                                                 .map(p => (
                                                     <button
                                                         key={p.id}
@@ -1205,7 +1261,9 @@ export default function SubscriptionPage() {
                                             <Brain className="w-5 h-5 text-amber-500" />
                                             Clinical Scholarship Challenge
                                         </h3>
-                                        <p className="text-xs text-muted-foreground mt-1">Get 5/5 correct to unlock the ₹79 Monthly Pass</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Get 5/5 correct to unlock the ₹{scholarshipOfferPrice} Monthly Pass
+                                        </p>
                                     </div>
 
                                     {loadingQuestions ? (
@@ -1233,13 +1291,13 @@ export default function SubscriptionPage() {
                                             {generatingAnalysis ? (
                                                 <div className="py-6 flex flex-col items-center justify-center gap-3">
                                                     <RefreshCw className="w-6 h-6 text-primary animate-spin" />
-                                                    <p className="text-xs text-muted-foreground">AI is generating your detailed skill diagnostics...</p>
+                                                    <p className="text-xs text-muted-foreground">Preparing your score breakdown...</p>
                                                 </div>
                                             ) : aiAnalysis ? (
                                                 <div className="p-6 rounded-3xl border border-border bg-card shadow-sm space-y-6 text-sm leading-relaxed text-foreground overflow-y-auto max-h-100 custom-scrollbar">
                                                     <div className="flex items-center gap-3 border-b border-border pb-4">
                                                         <Brain className="w-6 h-6 text-purple-500" />
-                                                        <h3 className="text-lg font-bold text-foreground">AI Clinical Skill Diagnosis Report</h3>
+                                                        <h3 className="text-lg font-bold text-foreground">Clinical Skill Score Breakdown</h3>
                                                     </div>
                                                     
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1251,7 +1309,7 @@ export default function SubscriptionPage() {
                                                         <div className="p-4 rounded-2xl bg-muted/50 border border-border/50">
                                                             <div className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Scholarship Marking</div>
                                                             <div className={`text-2xl font-black ${aiAnalysis.points > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{aiAnalysis.points > 0 ? '+' : ''}{aiAnalysis.points.toFixed(2)} <span className="text-base font-medium text-muted-foreground">pts</span></div>
-                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">+2.08 for correct, -0.69 for incorrect</div>
+                                                            <div className="text-xs text-muted-foreground mt-1 font-medium">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)} for correct, -{round2(CMS_PENALTY_PER_WRONG).toFixed(2)} for incorrect</div>
                                                         </div>
                                                     </div>
 
@@ -1306,6 +1364,8 @@ export default function SubscriptionPage() {
                                                         )}
                                                     </div>
                                                 </div>
+                                            ) : testResult.score === null ? (
+                                                <p className="text-xs text-muted-foreground">A score breakdown is shown only for a perfect 5/5.</p>
                                             ) : null}
 
                                             <div className="flex gap-3 justify-end">
@@ -1317,23 +1377,35 @@ export default function SubscriptionPage() {
                                                         }}
                                                         className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm py-2.5 px-5 rounded-xl transition-all shadow-md active:scale-98"
                                                     >
-                                                        Claim ₹79 Offer Now
+                                                        Claim ₹{user?.scholarship_granted_price || SCHOLARSHIP_PRICE_INR} Offer Now
                                                     </button>
-                                                ) : (
+                                                ) : scholarshipAttempts < 2 ? (
                                                     <button
                                                         onClick={startScholarshipTest}
                                                         className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-sm py-2.5 px-5 rounded-xl transition-all shadow-md active:scale-98"
                                                     >
                                                         Try Challenge Again
                                                     </button>
-                                                )}
+                                                ) : null}
                                                 <Button variant="ghost" onClick={() => setShowTestModal(false)} className="rounded-xl text-xs px-5">Close</Button>
                                             </div>
                                         </div>
                                     ) : (
                                         /* Question-by-Question Flow */
                                         <div className="space-y-6 text-left">
-                                            {scholarshipQuestions.length === 0 ? (
+                                            {scholarshipQuestions.length === 0 && scholarshipError ? (
+                                                /* The challenge could not be started (rate limited, locked, network). */
+                                                <div role="alert" className="py-10 flex flex-col items-center justify-center gap-4 text-center">
+                                                    <AlertTriangle className="w-10 h-10 text-amber-500" />
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-sm font-bold text-foreground">The challenge could not be started</p>
+                                                        <p className="text-xs text-muted-foreground max-w-sm">{scholarshipError}</p>
+                                                    </div>
+                                                    <Button variant="outline" onClick={() => setShowTestModal(false)} className="rounded-xl text-xs px-5 mt-2">
+                                                        Close
+                                                    </Button>
+                                                </div>
+                                            ) : scholarshipQuestions.length === 0 ? (
                                                 /* Empty-state when no scholarship-eligible questions exist yet.
                                                    Without this branch the modal renders a blank body and the
                                                    user can't tell what happened (the API returns 0 because
@@ -1353,7 +1425,7 @@ export default function SubscriptionPage() {
                                             ) : (
                                                 <div className="space-y-6">
                                                     <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
-                                                        <span>QUESTION {currentQuestionIdx + 1} OF 5</span>
+                                                        <span>QUESTION {currentQuestionIdx + 1} OF {scholarshipQuestions.length}</span>
                                                         <Badge variant="outline" className="text-[10px] py-0.5 px-2">Negative marking active</Badge>
                                                     </div>
 
@@ -1383,6 +1455,21 @@ export default function SubscriptionPage() {
                                                         })}
                                                     </div>
 
+                                                    {scholarshipError && (
+                                                        <div role="alert" className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-xs font-medium flex flex-wrap items-center justify-between gap-2">
+                                                            <span>{scholarshipError}</span>
+                                                            {!challengeToken && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={startScholarshipTest}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold transition-all"
+                                                                >
+                                                                    <RefreshCw className="w-3.5 h-3.5" /> Start again
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
                                                     {/* Navigation buttons */}
                                                     <div className="flex justify-between items-center pt-4 border-t border-border">
                                                         <Button
@@ -1394,9 +1481,9 @@ export default function SubscriptionPage() {
                                                             Previous
                                                         </Button>
 
-                                                        {currentQuestionIdx < 4 ? (
+                                                        {currentQuestionIdx < scholarshipQuestions.length - 1 ? (
                                                             <button
-                                                                onClick={() => setCurrentQuestionIdx(prev => Math.min(4, prev + 1))}
+                                                                onClick={() => setCurrentQuestionIdx(prev => Math.min(scholarshipQuestions.length - 1, prev + 1))}
                                                                 disabled={!selectedAnswers[scholarshipQuestions[currentQuestionIdx].id]}
                                                                 className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs py-2 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50"
                                                             >
@@ -1405,7 +1492,7 @@ export default function SubscriptionPage() {
                                                         ) : (
                                                             <button
                                                                 onClick={submitScholarshipTest}
-                                                                disabled={testSubmitting || Object.keys(selectedAnswers).length < 5}
+                                                                disabled={testSubmitting || !challengeToken || !allScholarshipAnswered(scholarshipQuestions, selectedAnswers)}
                                                                 className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs py-2 px-5 rounded-xl transition-all shadow-md shrink-0 disabled:opacity-50"
                                                             >
                                                                 {testSubmitting ? 'Submitting...' : 'Submit Scholarship Test'}
@@ -1445,7 +1532,7 @@ function FAQ() {
         },
         {
             q: 'What happens to my data if my plan expires?',
-            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (unlimited AI tutor, full mock simulator, textbook screenshots) re-light automatically.',
+            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (AI tutor credits — unlimited on the 1-year plan — full mock simulator, textbook screenshots) re-light automatically.',
         },
         {
             q: 'Do you issue invoices?',

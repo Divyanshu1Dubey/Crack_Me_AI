@@ -22,17 +22,26 @@ logger = logging.getLogger(__name__)
 
 
 
+def ai_offline_mode() -> bool:
+    """AI_OFFLINE_MODE: never call an external LLM; answer extractively."""
+    return os.getenv('AI_OFFLINE_MODE', '').strip().lower() in ('1', 'true', 'yes')
+
+
 class RAGPipeline:
     """
     Full RAG pipeline:
     1. Ingest PDFs/MD/TXT → extract text → chunk → store in SQLite
-    2. Query → TF-IDF search → retrieve similar chunks → generate answer with citations
+    2. Query → BM25 over the whole store (ai_engine.lexical_index) → top chunks
+       → LLM answer with citations, or an extractive answer when no LLM is
+       available (AI_OFFLINE_MODE or every provider failed).
+
+    Constructing the pipeline is cheap and read-only: the SQLite write
+    connection (and schema creation) is opened only when indexing, and the
+    AI clients only when an answer has to be generated. (It used to switch
+    the git-tracked store to WAL and run DDL + COMMIT on every request.)
     """
 
     COLLECTION_NAME = "crackcms_textbooks"
-    # Max chunks to score per query (prevents OOM on low-memory hosts).
-    # Tunable per-deploy via the `RAG_MAX_SEARCH_CHUNKS` env var.
-    MAX_SEARCH_CHUNKS = int(getattr(settings, 'RAG_MAX_SEARCH_CHUNKS', 2000))
 
     def __init__(self):
         # Abort early on memory-constrained environments
@@ -40,45 +49,47 @@ class RAGPipeline:
             raise RuntimeError("RAG disabled via DISABLE_RAG env var")
         self._gemini = None
         self._groq = None
-        self._db_path = None
-        self._conn = None
-        self._init_db()
-        self._init_ai_clients()
-
-    def _init_db(self):
-        """Initialize SQLite-based vector store."""
-        db_dir = getattr(settings, 'CHROMA_DB_DIR',
-                         os.path.join(settings.BASE_DIR, 'chroma_db'))
-        os.makedirs(db_dir, exist_ok=True)
+        self._omniroute = None
+        self._clients_ready = False
+        self._write_conn = None
+        db_dir = getattr(settings, 'CHROMA_DB_DIR', os.path.join(settings.BASE_DIR, 'chroma_db'))
+        self._db_dir = db_dir
         self._db_path = os.path.join(db_dir, 'rag_store.sqlite3')
 
-        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS chunks (
-                id TEXT PRIMARY KEY,
-                document TEXT NOT NULL,
-                book TEXT NOT NULL,
-                page INTEGER DEFAULT 0,
-                chunk_index INTEGER DEFAULT 0,
-                source_file TEXT DEFAULT '',
-                tokens TEXT DEFAULT ''
-            )
-        """)
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS idf_cache (
-                term TEXT PRIMARY KEY,
-                idf REAL NOT NULL
-            )
-        """)
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_book ON chunks(book)")
-        self._conn.commit()
-
-        count = self._conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        logger.info(f"RAG SQLite store initialized: {count} existing chunks")
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        """Write connection (ingestion only); creates the schema on first use."""
+        if self._write_conn is None:
+            os.makedirs(self._db_dir, exist_ok=True)
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunks (
+                    id TEXT PRIMARY KEY,
+                    document TEXT NOT NULL,
+                    book TEXT NOT NULL,
+                    page INTEGER DEFAULT 0,
+                    chunk_index INTEGER DEFAULT 0,
+                    source_file TEXT DEFAULT '',
+                    tokens TEXT DEFAULT ''
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS idf_cache (
+                    term TEXT PRIMARY KEY,
+                    idf REAL NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_book ON chunks(book)")
+            conn.commit()
+            self._write_conn = conn
+        return self._write_conn
 
     def _init_ai_clients(self):
         """Initialize AI clients for answer generation (OmniRoute first, then fallbacks)."""
+        if self._clients_ready:
+            return
+        self._clients_ready = True
         # OmniRoute gateway — first-stop for all AI calls
         omniroute_key = getattr(settings, 'OMNIROUTE_API_KEY', '') or os.getenv('OMNIROUTE_API_KEY', '')
         omniroute_base = getattr(settings, 'OMNIROUTE_BASE_URL', '') or os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-production-9d6b.up.railway.app/v1')
@@ -234,6 +245,9 @@ class RAGPipeline:
         self._conn.commit()
         if total_chunks > 0 and not skip_idf_rebuild:
             self._rebuild_idf()
+        if total_chunks > 0:
+            from ai_engine.lexical_index import invalidate
+            invalidate(self._db_path)
         logger.info(f"Indexed {total_chunks} chunks from {book_name}")
         return total_chunks
 
@@ -254,54 +268,36 @@ class RAGPipeline:
 
     def search(self, query: str, n_results: int = 5,
                book_filter: Optional[str] = None) -> list[dict]:
-        """Search across indexed textbooks using TF-IDF similarity (memory-efficient)."""
-        query_tokens = self._tokenize(query)
-        if not query_tokens:
+        """BM25 search over the whole store (see ai_engine/lexical_index.py).
+
+        Results: dicts with text, book, page, score (BM25, unbounded) and
+        source_file, best first. Raw question-paper chunks are only returned
+        when ``book_filter`` names that book. Personal/administrative
+        documents are never returned.
+        """
+        from ai_engine.lexical_index import get_index
+
+        if not (query or '').strip():
             return []
-
-        if book_filter:
-            cursor = self._conn.execute(
-                "SELECT id, document, book, page, source_file, tokens FROM chunks WHERE book=?",
-                (book_filter,)
-            )
-        else:
-            cursor = self._conn.execute(
-                "SELECT id, document, book, page, source_file, tokens FROM chunks"
-            )
-
-        import heapq
-        top_results = []  # min-heap of (score, counter, dict) -- counter breaks ties
-        counter = 0
-        batch_size = 500
-        chunks_scanned = 0
-        while True:
-            rows = cursor.fetchmany(batch_size)
-            if not rows:
-                break
-            for row_id, doc, book, page, source_file, tokens_json in rows:
-                chunks_scanned += 1
-                if chunks_scanned > self.MAX_SEARCH_CHUNKS:
-                    break
-                score = self._tfidf_score(query_tokens, tokens_json)
-                if score > 0:
-                    result_dict = {
-                        "text": doc,
-                        "book": book,
-                        "page": page,
-                        "score": round(score, 4),
-                        "source_file": source_file,
-                    }
-                    item = (score, counter, result_dict)
-                    counter += 1
-                    if len(top_results) < n_results:
-                        heapq.heappush(top_results, item)
-                    elif score > top_results[0][0]:
-                        heapq.heapreplace(top_results, item)
-            if chunks_scanned > self.MAX_SEARCH_CHUNKS:
-                break
-
-        results = [item[2] for item in sorted(top_results, key=lambda x: -x[0])]
-        return results
+        try:
+            n = max(1, min(int(n_results), 50))
+        except (TypeError, ValueError):
+            n = 5
+        index, _stats = get_index(self._db_path)
+        if index is None:
+            return []
+        hits = index.search(query, n, book=book_filter or None,
+                            min_score=float(getattr(settings, 'RAG_MIN_SCORE', 0.0)))
+        ceiling = index.max_score(query) or 1.0
+        return [{
+            "text": doc.text,
+            "book": doc.book,
+            "page": doc.page,
+            "score": round(score, 4),
+            # Score as a share of the best possible score for this query (0..1).
+            "norm_score": round(min(1.0, score / ceiling), 4),
+            "source_file": doc.source_file,
+        } for score, doc in hits]
 
     # ─── RAG ANSWER ────────────────────────────────────────
 
@@ -330,7 +326,8 @@ class RAGPipeline:
                 "book": chunk["book"],
                 "page": chunk["page"],
                 "excerpt": chunk["text"][:200],
-                "relevance": chunk["score"],
+                # 0..1 (the UI shows it as a percentage); raw BM25 is unbounded.
+                "relevance": chunk.get("norm_score", 0.0),
             })
 
         prompt = f"""You are a UPSC CMS exam preparation expert. Answer the following question using ONLY the provided textbook context. Be precise, exam-focused, and cite specific textbook references.
@@ -348,11 +345,36 @@ Provide:
 
 Answer in a structured, student-friendly format."""
 
-        answer = self._generate_answer(prompt)
+        confidence = _confidence(context_chunks[0].get("norm_score", 0.0))
+        answer = None if ai_offline_mode() else self._generate_answer(prompt)
+        if answer:
+            return {
+                "answer": answer,
+                "citations": citations,
+                "confidence": confidence,
+                "generated": True,
+                "offline": False,
+            }
+        # No LLM (offline mode, or every provider failed): answer with the
+        # retrieved sentences themselves, cited. Callers should not charge
+        # for this (generated=False).
+        from ai_engine.lexical_index import extractive_answer
+        extract = extractive_answer(question, context_chunks)
+        if extract:
+            return {
+                "answer": "Offline answer from the textbook passages (no AI model was used):\n\n" + extract["answer"],
+                "citations": extract["citations"],
+                "confidence": "medium" if extract["coverage"] >= 0.5 else "low",
+                "generated": False,
+                "offline": True,
+            }
         return {
-            "answer": answer,
+            "answer": ("AI answers are unavailable right now and no textbook passage answers this "
+                       "directly. The closest passages are listed below."),
             "citations": citations,
-            "confidence": "high" if context_chunks[0]["score"] > 0.3 else "medium",
+            "confidence": "low",
+            "generated": False,
+            "offline": True,
         }
 
     def find_textbook_reference(self, question_text: str) -> list[dict]:
@@ -362,15 +384,22 @@ Answer in a structured, student-friendly format."""
             "book": r["book"],
             "page": r["page"],
             "excerpt": r["text"][:300],
-            "relevance_score": r["score"],
+            "relevance_score": r.get("norm_score", 0.0),
         } for r in results]
 
     # ─── HELPERS ────────────────────────────────────────
 
-    def _generate_answer(self, prompt: str) -> str:
-        """Generate answer using OmniRoute gateway first, then Gemini/Groq fallbacks."""
+    def _generate_answer(self, prompt: str) -> Optional[str]:
+        """Generate answer using OmniRoute gateway first, then Gemini/Groq fallbacks.
+
+        Returns None when no model produced text (the caller falls back to an
+        extractive answer instead of showing an operator message).
+        """
+        if ai_offline_mode():
+            return None
+        self._init_ai_clients()
         # Try OmniRoute first (tries multiple models via gateway)
-        if hasattr(self, '_omniroute') and self._omniroute:
+        if self._omniroute:
             for model_name in ["auto/fast", "auto/best-chat", "auto/best-reasoning", "openai/gpt-4o-mini"]:
                 try:
                     response = self._omniroute.chat.completions.create(
@@ -417,10 +446,10 @@ Answer in a structured, student-friendly format."""
             except Exception as e:
                 logger.warning(f"Groq generation failed: {e}")
 
-        return "AI answer generation is unavailable. Please configure API keys."
+        return None
 
     def _make_id(self, book_name: str, page_num: int) -> str:
-        return hashlib.md5(f"{book_name}:{page_num}".encode()).hexdigest()
+        return hashlib.md5(f"{book_name}:{page_num}".encode(), usedforsecurity=False).hexdigest()
 
     def _clean_book_name(self, filename: str) -> str:
         name = Path(filename).stem
@@ -429,21 +458,40 @@ Answer in a structured, student-friendly format."""
         return name.strip()
 
     def get_stats(self) -> dict:
-        count = self._conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        books = self._conn.execute("SELECT DISTINCT book FROM chunks").fetchall()
-        book_stats = {}
-        for (book,) in books:
-            bc = self._conn.execute("SELECT COUNT(*) FROM chunks WHERE book=?", (book,)).fetchone()[0]
-            book_stats[book] = bc
+        """Store statistics (read-only), plus what the search index serves."""
+        from ai_engine.lexical_index import get_index
+        if not os.path.exists(self._db_path):
+            return {"total_chunks": 0, "collection_name": self.COLLECTION_NAME, "books": {}}
+        conn = sqlite3.connect(f'file:{self._db_path}?mode=ro', uri=True, check_same_thread=False)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            book_stats = dict(conn.execute("SELECT book, COUNT(*) FROM chunks GROUP BY book").fetchall())
+        finally:
+            conn.close()
+        _index, stats = get_index(self._db_path)
         return {
             "total_chunks": count,
             "collection_name": self.COLLECTION_NAME,
             "books": book_stats,
+            "searchable_chunks": stats.docs_indexed if stats else 0,
         }
 
     def close(self):
-        if self._conn:
-            self._conn.close()
+        if self._write_conn is not None:
+            self._write_conn.close()
+            self._write_conn = None
+
+
+def _confidence(norm_score: float) -> str:
+    """Coarse retrieval-confidence label from the top hit's normalised score.
+
+    Calibrated on the benchmark's dev split (docs/audit/RAG_BENCHMARK.md):
+    raw BM25 scores did not predict relevance at all, the normalised score
+    does somewhat (>= 0.3: a relevant passage in the top 5 for 64% of dev
+    queries vs 51% overall), and no cut-off is reliable enough to say "high".
+    """
+    medium = float(getattr(settings, 'RAG_CONFIDENCE_MEDIUM_NORM', 0.3))
+    return "medium" if norm_score >= medium else "low"
 
 
 def generate_rag_response_sync(prompt: str) -> str:

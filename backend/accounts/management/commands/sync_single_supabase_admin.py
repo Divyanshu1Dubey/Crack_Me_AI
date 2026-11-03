@@ -1,6 +1,8 @@
 import os
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from accounts.supabase_auth import (
@@ -34,7 +36,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--username", default="deeksha", help="Admin username to keep")
         parser.add_argument("--email", default="meduraa.web@gmail.com", help="Admin email to keep")
-        parser.add_argument("--password", default="Kali2712@", help="Admin password to set")
+        parser.add_argument(
+            "--password",
+            default="",
+            help="Admin password to set (required; or set SUPABASE_ADMIN_PASSWORD). There is no default.",
+        )
         parser.add_argument(
             "--soft-delete",
             action="store_true",
@@ -44,13 +50,27 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         username = options["username"].strip() or "deeksha"
         email = options["email"].strip() or "meduraa.web@gmail.com"
-        password = options["password"]
+        password = options["password"] or os.getenv("SUPABASE_ADMIN_PASSWORD", "").strip()
         soft_delete = bool(options.get("soft_delete"))
 
         if not email or not password:
-            raise CommandError("Both --email and --password are required.")
+            raise CommandError(
+                "Refusing to run without an explicit admin password: pass --password "
+                "or set SUPABASE_ADMIN_PASSWORD (there is no default)."
+            )
+
+        # Fail before touching the local user when Supabase cannot be synced.
+        if not os.getenv("SUPABASE_URL", "").strip() or not os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip():
+            raise CommandError(
+                "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set to sync/delete Supabase Auth users."
+            )
 
         User = get_user_model()
+        try:
+            validate_password(password, user=User(username=username, email=email))
+        except ValidationError as exc:
+            raise CommandError("Admin password rejected by the password validators: " + " ".join(exc.messages)) from None
+
         _upsert_local_user(
             User,
             username=username,
@@ -60,11 +80,6 @@ class Command(BaseCommand):
             is_staff=True,
             is_superuser=True,
         )
-
-        if not os.getenv("SUPABASE_URL", "").strip() or not os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip():
-            raise CommandError(
-                "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set to sync/delete Supabase Auth users."
-            )
 
         upsert_ok = upsert_supabase_auth_user(
             email=email,

@@ -1,6 +1,15 @@
 import Link from 'next/link';
 import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
+import { PREMIUM_PLANS } from '@/app/subscription/plans';
+
+// 5.2 is generated from the plans actually sold: only the yearly plan is
+// unlimited; the shorter passes add a fixed number of AI credits.
+const creditPlans = PREMIUM_PLANS.filter((p) => !p.unlimitedAi);
+const unlimitedPlanNames = PREMIUM_PLANS.filter((p) => p.unlimitedAi).map((p) => p.name).join(' / ');
+const creditPlansText = creditPlans
+    .map((p) => `the ${p.name} adds ${p.aiCreditsAtPurchase} AI credits at purchase`)
+    .join('; ');
 
 const title = 'Terms & Conditions — CrackCMS by CrackLabs AI';
 const description = 'Terms governing your use of CrackCMS — the AI medical exam preparation platform. Covers acceptable use, subscriptions, refunds, and intellectual property.';
@@ -13,7 +22,7 @@ export default function TermsPage() {
         <LegalLayout
             title={title}
             description={description}
-            lastUpdated="July 21, 2026"
+            lastUpdated="November 1, 2026"
             effectiveDate="January 1, 2025"
             canonical={canonical}
             schemaType="TermsOfService"
@@ -59,21 +68,22 @@ export default function TermsPage() {
             </p>
             <h3>5.2 Premium plans</h3>
             <p>
-                Premium subscriptions unlock unlimited AI tutor sessions, advanced analytics, exam
-                simulations, and full textbook access. Pricing is displayed on the
+                Premium subscriptions unlock answers and explanations across the full question bank, exam
+                simulations, and full textbook access. AI tutor use depends on the plan: {creditPlansText}; only the {unlimitedPlanNames}{' '}
+                plan includes unlimited AI explanations. Pricing is displayed on the{' '}
                 <Link href="/subscription">/subscription</Link> page.
             </p>
             <h3>5.3 Refunds</h3>
             <p>
                 Within 7 days of purchase, if you have used fewer than 10 AI tokens, you are eligible for a
                 full refund. After 7 days or once you have consumed 10+ AI tokens, the purchase is
-                non-refundable except where required by law. See our full
+                non-refundable except where required by law. See our full{' '}
                 <Link href="/refund-policy">Refund Policy</Link>.
             </p>
 
             <h2>6. Content &amp; Intellectual Property</h2>
             <p>
-                CrackCMS content, including question banks curated by our medical team, UI designs, AI
+                CrackCMS content, including question banks curated by our editorial team, UI designs, AI
                 prompts, and brand assets, is owned by CrackLabs AI and protected under the Copyright
                 Act, 1957. You may use content for personal study only.
             </p>

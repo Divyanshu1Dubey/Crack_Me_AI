@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { datadogLogs } from '@datadog/browser-logs';
 import { datadogRum } from '@datadog/browser-rum';
 import { useAuth } from '@/lib/auth';
+import { consent, type ConsentState } from '@/lib/consent';
 
 type DatadogWindow = Window & {
   __CRACKCMS_DD_INIT__?: boolean;
@@ -15,9 +16,22 @@ const parseNumber = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/**
+ * Datadog RUM + browser logs.
+ *
+ * - Starts only after the visitor allows the `analytics` category (RUM and
+ *   session replay used to start for everyone before any choice). Revoking
+ *   consent later switches both SDKs to trackingConsent "not-granted".
+ * - No `allowedTracingUrls`: with tracing on, the SDK adds x-datadog-* and
+ *   traceparent headers to every API request, which the backend's
+ *   CORS_ALLOW_HEADERS does not allow, so every preflight would fail.
+ * - Only the opaque user id and role are attached to the session (no email
+ *   or name).
+ */
 export default function DatadogInit() {
   const { user } = useAuth();
   const hasInit = useRef(false);
+  const [analyticsAllowed, setAnalyticsAllowed] = useState(false);
 
   const config = useMemo(() => {
     const clientToken = process.env.NEXT_PUBLIC_DD_CLIENT_TOKEN || process.env.NEXT_PUBLIC_DATADOG_CLIENT_TOKEN || '';
@@ -29,7 +43,6 @@ export default function DatadogInit() {
     const sessionSampleRate = parseNumber(process.env.NEXT_PUBLIC_DD_SESSION_SAMPLE_RATE, 100);
     const sessionReplaySampleRate = parseNumber(process.env.NEXT_PUBLIC_DD_SESSION_REPLAY_SAMPLE_RATE, 20);
     const logSampleRate = parseNumber(process.env.NEXT_PUBLIC_DD_LOGS_SAMPLE_RATE, 100);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
     return {
       clientToken,
@@ -41,18 +54,37 @@ export default function DatadogInit() {
       sessionSampleRate,
       sessionReplaySampleRate,
       logSampleRate,
-      apiBase,
     };
   }, []);
 
+  const configured = Boolean(config.clientToken && config.applicationId);
+
+  // Track the visitor's analytics consent (stored decision + live changes).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!config.clientToken || !config.applicationId) return;
+    if (!configured) return;
+    const apply = (state: ConsentState) => setAnalyticsAllowed(state.analytics === true);
+    const off = consent.onChange(apply);
+    const current = consent.read();
+    if (current) apply(current);
+    return off;
+  }, [configured]);
 
+  // Init on first grant; flip tracking consent on later changes.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !configured) return;
     const win = window as DatadogWindow;
-    if (hasInit.current || win.__CRACKCMS_DD_INIT__) return;
 
-    const allowedTracingUrls = config.apiBase ? [new URL(config.apiBase).origin] : undefined;
+    if (hasInit.current || win.__CRACKCMS_DD_INIT__) {
+      const trackingConsent = analyticsAllowed ? 'granted' : 'not-granted';
+      try {
+        datadogRum.setTrackingConsent(trackingConsent);
+        datadogLogs.setTrackingConsent(trackingConsent);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (!analyticsAllowed) return;
 
     datadogRum.init({
       applicationId: config.applicationId,
@@ -67,7 +99,7 @@ export default function DatadogInit() {
       trackLongTasks: true,
       trackUserInteractions: true,
       defaultPrivacyLevel: 'mask-user-input',
-      allowedTracingUrls,
+      trackingConsent: 'granted',
     });
     datadogRum.startSessionReplayRecording();
 
@@ -80,16 +112,17 @@ export default function DatadogInit() {
       sessionSampleRate: config.logSampleRate,
       forwardErrorsToLogs: true,
       forwardConsoleLogs: ['error', 'warn'],
+      trackingConsent: 'granted',
     });
 
     hasInit.current = true;
     win.__CRACKCMS_DD_INIT__ = true;
-  }, [config]);
+  }, [config, configured, analyticsAllowed]);
 
   useEffect(() => {
     if (!hasInit.current) return;
 
-    if (!user) {
+    if (!user || !analyticsAllowed) {
       datadogRum.clearUser();
       datadogLogs.clearUser();
       return;
@@ -97,13 +130,11 @@ export default function DatadogInit() {
 
     const identity = {
       id: String(user.id),
-      name: user.username,
-      email: user.email,
       role: user.role,
     };
     datadogRum.setUser(identity);
     datadogLogs.setUser(identity);
-  }, [user]);
+  }, [user, analyticsAllowed]);
 
   return null;
 }

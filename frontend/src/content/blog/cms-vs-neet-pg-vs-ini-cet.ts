@@ -29,10 +29,10 @@ const post: BlogPost = {
         'PG Exam',
     ],
     difficulty: 'beginner',
-    authorId: 'dr-aarav-mehta',
+    authorId: 'crackcms-editorial',
     reviewedBy: 'crackcms-editorial',
-    author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
-    authorRole: 'Senior Editor — Medicine, CrackCMS',
+    author: 'CrackCMS Editorial Team',
+    authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-08-05',
     dateModified: '2026-08-05',
     updatedAt: '2026-08-05',
@@ -54,7 +54,7 @@ const post: BlogPost = {
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-vs-neet-pg-vs-ini-cet', surface: 'inline_cta' },
     },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet', '/simulator'],
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet', '/simulator'],
     references: [
         {
             label: 'UPSC — Combined Medical Services Examination 2026',

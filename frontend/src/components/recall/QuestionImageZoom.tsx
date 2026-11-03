@@ -55,7 +55,7 @@ export default function QuestionImageZoom({ src, alt = "Recall image", priority 
       <button
         type="button"
         onClick={() => { reset(); setOpen(true); }}
-        className="group block w-full overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/60"
+        className="group block w-full overflow-hidden rounded-lg border border-border bg-muted/40"
         aria-label="Open image fullscreen"
         data-annotate-target="image"
         data-modality={src.modality}
@@ -75,7 +75,7 @@ export default function QuestionImageZoom({ src, alt = "Recall image", priority 
           </span>
         ) : null}
         {src.caption ? (
-          <figcaption className="px-3 py-2 text-left text-sm text-slate-200">
+          <figcaption className="px-3 py-2 text-left text-sm text-foreground">
             {src.caption}
           </figcaption>
         ) : null}

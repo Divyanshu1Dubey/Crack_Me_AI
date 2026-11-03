@@ -37,25 +37,88 @@ _PARAM_FILTERS = {
     "topic": "topic_id",
 }
 
-# Phase 3 — clinical-axis keyword filters. These are dimension-agnostic:
-# they tokenize the question text + explanation + concept_tags + mnemonics
-# for the given dimension (diagnosis / drug / disease / investigation /
-# clinical_system / subtopic).  Cheaper than a clinical ontology and
-# matches what front-end Recalls demonstrate.
-_CLINICAL_TEXT_FIELDS = (
-    "question_text", "explanation", "ai_explanation",
-    "mnemonic", "ai_mnemonic", "ai_clinical_pearl",
+# Phase 3 — clinical-axis keyword filters. These are dimension-agnostic
+# keyword matches for the given dimension (diagnosis / drug / disease /
+# investigation / clinical_system / subtopic).  Cheaper than a clinical
+# ontology and matches what front-end Recalls demonstrate.
+#
+# Entitlement (questions.views.user_can_view_answer): the stem and the
+# options are public -- every list row shows them -- so a keyword matches
+# them on any question. The explanation, the mnemonics and the AI study text
+# name the correct option, so they are matched only on questions whose
+# answer the caller may read: matching them on a locked question was an
+# answer oracle (an anonymous ``?drug=<option>`` returned the question for
+# its correct option only).
+_PUBLIC_TEXT_FIELDS = ("question_text", "option_a", "option_b", "option_c", "option_d")
+_CLINICAL_ANSWER_FIELDS = (
+    "explanation", "ai_explanation", "mnemonic", "ai_mnemonic", "ai_clinical_pearl",
 )
+# Free-text ``q`` tokens: the stem, plus the same kind of answer-linked text.
+_Q_PUBLIC_FIELDS = ("question_text",)
+_Q_ANSWER_FIELDS = ("explanation", "mnemonic", "ai_explanation", "ai_clinical_pearl")
+# A ``[[img:N]]`` reference from these fields (and not from the stem) makes
+# an image an explanation figure (serializers.resolve_runtime_image_role).
+_IMAGE_EXPLANATION_REF_FIELDS = ("explanation", "concept_explanation", "mnemonic")
 
 
-def _apply_clinical_token(qs, param: str, raw: str):  # noqa: ARG001 — param kept for forward-compat
-    """Filter `qs` so any of the clinical text fields icontains `raw`."""
+def _text_match(raw: str, public_fields, answer_fields, answer_scope):
+    """Q: ``raw`` (icontains) in a public field of any question, or in an
+    answer-linked field of a question inside ``answer_scope``.
+
+    ``answer_scope`` is a Q selecting the questions whose answer the caller
+    may read, or None when the caller may read every answer.
+    """
+    public = Q()
+    for f in public_fields:
+        public |= Q(**{f"{f}__icontains": raw})
+    answer = Q()
+    for f in answer_fields:
+        answer |= Q(**{f"{f}__icontains": raw})
+    if answer_scope is not None:
+        answer &= answer_scope
+    return public | answer
+
+
+def _apply_clinical_token(qs, param: str, raw: str, *, answer_scope):  # noqa: ARG001 — param kept for forward-compat
+    """Filter `qs` to the questions matching the clinical keyword `raw`
+    (see ``_text_match`` for ``answer_scope``)."""
     if not raw:
         return qs
-    token_q = Q()
-    for f in _CLINICAL_TEXT_FIELDS:
-        token_q |= Q(**{f"{f}__icontains": raw})
-    return qs.filter(token_q).distinct()
+    return qs.filter(
+        _text_match(raw, _PUBLIC_TEXT_FIELDS, _CLINICAL_ANSWER_FIELDS, answer_scope)
+    ).distinct()
+
+
+def _visible_images(answer_question_ids):
+    """Active QuestionImage rows whose metadata (OCR text, modality, flags)
+    the caller may search on.
+
+    ``answer_question_ids``: the ids of the questions whose answer the
+    caller may read (a values() queryset), or None for every question.
+    Otherwise an explanation figure -- stored role 'explanation', or
+    referenced by ``[[img:N]]`` from the explanation text but not from the
+    stem -- counts only on those questions: it belongs to the explanation,
+    which the list rows hide on a locked question, and its OCR text can
+    name the answer.
+    """
+    from django.db.models import CharField, Value
+    from django.db.models.functions import Cast, Concat
+    from .models import QuestionImage
+
+    images = QuestionImage.objects.filter(is_active=True)
+    if answer_question_ids is None:
+        return images
+    token = Concat(
+        Value("[[img:"), Cast("id", output_field=CharField()), Value("]]"),
+        output_field=CharField(),
+    )
+    in_explanation = Q()
+    for f in _IMAGE_EXPLANATION_REF_FIELDS:
+        in_explanation |= Q(**{f"question__{f}__contains": token})
+    stem_figure = ~Q(role="explanation") & (
+        Q(question__question_text__contains=token) | ~in_explanation
+    )
+    return images.filter(stem_figure | Q(question_id__in=answer_question_ids))
 
 
 def _split_csv(raw: str | None) -> list[str]:
@@ -69,6 +132,83 @@ def _parse_bool(raw):
     if raw in (None, ""):
         return None
     return str(raw).strip().lower() in ("1", "true", "yes", "y")
+
+
+# Integer-valued filters: a malformed value used to reach the ORM and raise
+# ValueError (HTTP 500).
+_INT_PARAMS = ("year", "subject", "topic")
+
+# Free-text bounds. Each ``q`` token adds an OR of five ILIKEs per row and
+# the same WHERE runs about ten times per request (facets, count, page); the
+# token list was unbounded (~1,300 tokens fit in one request line). Only the
+# first MAX_Q_TOKENS distinct tokens are used, each cut to
+# MAX_Q_TOKEN_CHARS; the keyword filters are cut to MAX_KEYWORD_CHARS.
+MAX_Q_TOKENS = 8
+MAX_Q_TOKEN_CHARS = 40
+MAX_KEYWORD_CHARS = 100
+_CLINICAL_PARAMS = ("diagnosis", "drug", "disease", "investigation", "clinical_system", "subtopic")
+# Every query param recall_search reads: the cache key is built from these
+# (normalised), so an extra throwaway param no longer bypasses the cache.
+_CACHE_KEY_PARAMS = tuple(sorted(
+    set(_PARAM_FILTERS) | set(_CLINICAL_PARAMS) | {
+        "page", "page_size", "min_confidence", "modality", "image_ocr",
+        "has_image", "has_diagram", "has_table",
+    }
+))
+
+
+def _q_tokens(q_text: str) -> list[str]:
+    """The ``q`` tokens searched: whitespace-split, at least 2 characters,
+    de-duplicated case-insensitively, the first MAX_Q_TOKENS of them, each
+    cut to MAX_Q_TOKEN_CHARS."""
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for token in (q_text or "").split():
+        if len(token) < 2:
+            continue
+        token = token[:MAX_Q_TOKEN_CHARS]
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        tokens.append(token)
+        if len(tokens) >= MAX_Q_TOKENS:
+            break
+    return tokens
+
+
+def _keyword_param(request, name: str) -> str:
+    return (request.query_params.get(name) or "").strip()[:MAX_KEYWORD_CHARS]
+
+
+def _cache_key_params(request) -> str:
+    """Digest of the normalised query string the response depends on (a
+    fixed-length key: a raw ``q`` made keys of several KB)."""
+    import hashlib
+    from urllib.parse import urlencode
+
+    pairs = []
+    for name in _CACHE_KEY_PARAMS:
+        value = request.query_params.get(name)
+        if value not in (None, ""):
+            pairs.append((name, value))
+    return hashlib.sha256(urlencode(pairs).encode()).hexdigest()
+
+
+def _bad_request(message: str):
+    return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _int_param(request, name: str, default: int, *, minimum: int, maximum: int):
+    """Parse a bounded integer query param. Returns (value, error_response)."""
+    raw = request.query_params.get(name)
+    if raw in (None, ""):
+        return default, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, _bad_request(f"{name} must be an integer")
+    return max(minimum, min(value, maximum)), None
 
 
 def recall_search(self, request):
@@ -86,7 +226,7 @@ def recall_search(self, request):
     # the authenticated user id or "anon" — never by raw QUERY_STRING
     # alone, which is shared across users.
     from django.core.cache import cache
-    from .models import Question, QuestionImage
+    from .models import Question
     from .serializers import QuestionListSerializer
 
     # SECURITY (Fix #6): apply the freemium gate that views.py already
@@ -115,16 +255,55 @@ def recall_search(self, request):
         except Exception:
             is_premium = False
 
+    # Validate before touching the cache or the ORM -- malformed ints and an
+    # out-of-range page_size used to raise inside the query (HTTP 500).
+    for name in _INT_PARAMS:
+        raw = request.query_params.get(name)
+        if raw not in (None, ""):
+            try:
+                int(raw)
+            except (TypeError, ValueError):
+                return _bad_request(f"{name} must be an integer")
+    page_size, err = _int_param(request, "page_size", 25, minimum=1, maximum=100)
+    if err is not None:
+        return err
+    page, err = _int_param(request, "page", 1, minimum=1, maximum=100000)
+    if err is not None:
+        return err
+    min_conf_raw = request.query_params.get("min_confidence")
+    min_conf = None
+    if min_conf_raw not in (None, ""):
+        try:
+            min_conf = float(min_conf_raw)
+        except (TypeError, ValueError):
+            return _bad_request("min_confidence must be a number")
+        import math
+        if not math.isfinite(min_conf):
+            return _bad_request("min_confidence must be a finite number")
+
     cache_bucket = (
         f"u{request_user.id}" if is_authed else "anon"
     )
-    cache_key = (
-        f"recall_search:v3:{cache_bucket}:"
-        + (request.META.get("QUERY_STRING") or "")
-    )
+    # v5: keyed on the params the response depends on (normalised), not on
+    # the raw QUERY_STRING -- a throwaway param made every request a miss --
+    # and answer / explanation labels in locked rows' text are cut
+    # (questions.answer_leak). v6: text filters no longer match inside the
+    # cut-away part (questions.locked_text_search).
+    cache_key = f"recall_search:v6:{cache_bucket}:" + _cache_key_params(request)
     cached = cache.get(cache_key)
     if cached is not None:
         return Response(cached)
+
+    from .views import free_showcase_rows  # lazy: views imports this module
+
+    # Answer-linked text and explanation figures are searched only on the
+    # questions whose answer the caller may read: every question for
+    # premium / admin, the free showcase for everyone else -- anonymous
+    # visitors included, who see the whole bank (stem and options only).
+    entitled = is_admin or is_premium
+    answer_ids = None if entitled else free_showcase_rows().values("question_id")
+    answer_scope = None if entitled else Q(pk__in=answer_ids)
+    visible_images = _visible_images(answer_ids)
 
     qs = (Question.objects.filter(is_active=True)
           .select_related("subject", "topic"))
@@ -134,9 +313,8 @@ def recall_search(self, request):
     # requested year (or any year, if year is omitted) are visible to a
     # free authenticated user.
     if is_authed and not is_admin and not is_premium:
-        from accounts.models_freemium import FreeShowcaseQuestion  # local import
         from django.db.models import Exists, OuterRef
-        showcase_qs = FreeShowcaseQuestion.objects.filter(question_id=OuterRef("pk"))
+        showcase_qs = free_showcase_rows().filter(question_id=OuterRef("pk"))
         year_param = request.query_params.get("year")
         if year_param not in (None, ""):
             try:
@@ -160,35 +338,35 @@ def recall_search(self, request):
     q_text = request.query_params.get("q", "").strip()
     if q_text:
         # Phase 2 ships icontains + tokenized AND — FTS5 mirror is wired
-        # in build_fts_query() below for future use.
-        tokens = [t for t in q_text.split() if len(t) >= 2]
+        # in build_fts_query() below for future use. Bounded token list
+        # (see MAX_Q_TOKENS).
+        tokens = _q_tokens(q_text)
         if tokens:
             token_q = Q()
             for t in tokens:
-                token_q |= Q(question_text__icontains=t)
-                token_q |= Q(explanation__icontains=t)
-                token_q |= Q(mnemonic__icontains=t)
-                token_q |= Q(ai_explanation__icontains=t)
-                token_q |= Q(ai_clinical_pearl__icontains=t)
+                token_q |= _text_match(t, _Q_PUBLIC_FIELDS, _Q_ANSWER_FIELDS, answer_scope)
             qs = qs.filter(token_q).distinct()
 
+    # Image filters look at the images the caller may see (see
+    # ``_visible_images``).
     modality = request.query_params.get("modality")
     if modality:
-        qs = qs.filter(images__modality=modality, images__is_active=True).distinct()
+        qs = qs.filter(pk__in=visible_images.filter(modality=modality).values("question_id"))
 
-    image_ocr = request.query_params.get("image_ocr", "").strip()
+    image_ocr = _keyword_param(request, "image_ocr")
     if image_ocr:
-        qs = qs.filter(images__ocr_text__icontains=image_ocr, images__is_active=True).distinct()
+        qs = qs.filter(
+            pk__in=visible_images.filter(ocr_text__icontains=image_ocr).values("question_id")
+        )
 
     # Phase 3 — clinical-axis keyword filters (diagnosis/drug/disease/
     # investigation/clinical_system/subtopic).  These are simple icontains
     # over the canonical text fields, cheap, and consistent with the front
     # end search box.
-    for dim in ("diagnosis", "drug", "disease",
-                "investigation", "clinical_system", "subtopic"):
-        raw = request.query_params.get(dim, "").strip()
+    for dim in _CLINICAL_PARAMS:
+        raw = _keyword_param(request, dim)
         if raw:
-            qs = _apply_clinical_token(qs, dim, raw)
+            qs = _apply_clinical_token(qs, dim, raw, answer_scope=answer_scope)
 
     # Phase 3 — has_image / has_diagram / has_table filters.
     def _bool_param(name):
@@ -199,20 +377,26 @@ def recall_search(self, request):
 
     want_image = _bool_param("has_image")
     if want_image is True:
-        qs = qs.filter(images__is_active=True).distinct()
+        qs = qs.filter(pk__in=visible_images.values("question_id"))
     elif want_image is False:
-        qs = qs.exclude(images__is_active=True).distinct()
+        qs = qs.exclude(pk__in=visible_images.values("question_id"))
     for opt in ("has_diagram", "has_table"):
         val = _bool_param(opt)
         if val is True:
-            qs = qs.filter(**{f"images__{opt}": True, "images__is_active": True}).distinct()
+            qs = qs.filter(pk__in=visible_images.filter(**{opt: True}).values("question_id"))
 
-    min_conf = request.query_params.get("min_confidence")
-    if min_conf not in (None, ""):
-        try:
-            qs = qs.filter(confidence_score__gte=float(min_conf))
-        except ValueError:
-            pass
+    if min_conf is not None:
+        qs = qs.filter(confidence_score__gte=min_conf)
+
+    # A locked row whose public text carries an answer label / flag shows it
+    # cut (questions.answer_leak), but q / the keywords matched the raw text:
+    # ``?drug=Correct Answer: B`` returned exactly the rows labelled B. Such a
+    # row stays only when the terms occur in the text the caller sees.
+    keywords = [kw for kw in (_keyword_param(request, dim) for dim in _CLINICAL_PARAMS) if kw]
+    q_phrase = request.query_params.get("q") or ""  # as _PARAM_FILTERS applies it
+    if not entitled and (q_phrase or keywords):
+        from .locked_text_search import recall_terms_visible, without_hidden_matches
+        qs = without_hidden_matches(qs, recall_terms_visible(q_phrase, keywords))
 
     # Facets — include new dimensions so UI can build checkbox grids.
     facets = {
@@ -224,27 +408,19 @@ def recall_search(self, request):
         "question_type": dict(qs.values_list("question_type").annotate(c=Count("id"))),
         "difficulty": dict(qs.values_list("difficulty").annotate(c=Count("id"))),
     }
-    # Image-modality facet
+    # Image-modality facet (images the caller may see)
     facets["modality"] = dict(
-        QuestionImage.objects.filter(question__in=qs, is_active=True)
+        visible_images.filter(question__in=qs)
         .values_list("modality").annotate(c=Count("id"))
     )
 
-    # Paginate
-    try:
-        page_size = min(int(request.query_params.get("page_size", 25)), 100)
-    except ValueError:
-        page_size = 25
-    try:
-        page = max(int(request.query_params.get("page", 1)), 1)
-    except ValueError:
-        page = 1
-
+    # Paginate (page / page_size validated and clamped above)
     qs = qs.order_by("-year", "id")
     total = qs.count()
     start = (page - 1) * page_size
     end = start + page_size
-    page_qs = qs[start:end]
+    from .views import _question_list_related  # lazy: views imports this module
+    page_qs = _question_list_related(qs)[start:end]
 
     serializer = QuestionListSerializer(page_qs, many=True, context={"request": request})
     payload = {
@@ -264,24 +440,69 @@ def recall_search(self, request):
 
 
 def recall_question_images(self, request, pk=None):
-    """GET /api/questions/{id}/images/  — list QuestionImage rows for a question."""
+    """GET /api/questions/{id}/images/  — list QuestionImage rows for a question.
+
+    Goes through ``get_object()`` so removed / archived questions 404 for
+    non-admins. ``role`` is the runtime role (an image referenced only from
+    the explanation is 'explanation', which the stem gallery hides). Callers
+    who are not entitled to the answer get stem images only, without
+    captions (a caption can name the diagnosis); entitled callers get the
+    explanation figures with a signed ``file_url``.
+    """
     from .models import QuestionImage
     from .recall_serializers import QuestionImageSerializer  # type: ignore
-    images = QuestionImage.objects.filter(question_id=pk, is_active=True).order_by("page_number", "image_index_in_page")
-    try:
-        page_size = min(int(request.query_params.get("page_size", 50)), 200)
-    except ValueError:
-        page_size = 50
-    images = images[:page_size]
-    return Response(QuestionImageSerializer(images, many=True, context={"request": request}).data)
+    from .serializers import resolve_runtime_image_role
+
+    question = self.get_object()
+    images = QuestionImage.objects.filter(question_id=question.pk, is_active=True).order_by("page_number", "image_index_in_page")
+    page_size, err = _int_param(request, "page_size", 50, minimum=1, maximum=200)
+    if err is not None:
+        return err
+    images = list(images[:page_size])
+    memo: dict = {}
+    roles = {img.id: resolve_runtime_image_role(question, img, memo) for img in images}
+    data = QuestionImageSerializer(images, many=True, context={"request": request}).data
+    for row in data:
+        row["role"] = roles.get(row["id"], row.get("role"))
+    if not self._can_view_answer(question):
+        data = [row for row in data if row.get("role") != "explanation"]
+        for row in data:
+            row["caption"] = ""
+    else:
+        # The serve endpoint returns explanation figures only with a signed
+        # token (questions.image_access), issued to entitled callers.
+        from .image_access import with_image_token
+        for row in data:
+            if row.get("role") == "explanation" and row.get("file_url"):
+                row["file_url"] = with_image_token(row["file_url"], row["id"])
+    return Response(data)
 
 
 def recall_question_sources(self, request, pk=None):
-    """GET /api/questions/{id}/sources/  — list QuestionSource rows for a question."""
+    """GET /api/questions/{id}/sources/  — list QuestionSource rows for a question.
+
+    Provenance metadata only (file name, page, confidences). The stored
+    ``original_text`` / ``extracted_text`` are the whole parsed block --
+    stem, answer key and explanation -- so they are returned to admins only.
+    Removed / archived questions 404 for non-admins (``get_object()``).
+    """
     from .models import QuestionSource
     from .recall_serializers import QuestionSourceSerializer  # type: ignore
-    rows = QuestionSource.objects.filter(question_id=pk).select_related("recall_source").order_by("imported_at")
-    return Response(QuestionSourceSerializer(rows, many=True, context={"request": request}).data)
+
+    question = self.get_object()
+    rows = QuestionSource.objects.filter(question_id=question.pk).select_related("recall_source").order_by("imported_at")
+    data = QuestionSourceSerializer(rows, many=True, context={"request": request}).data
+    user = getattr(request, "user", None)
+    is_admin = bool(
+        user is not None and getattr(user, "is_authenticated", False)
+        and (getattr(user, "is_admin", False) or getattr(user, "is_superuser", False)
+             or getattr(user, "is_staff", False))
+    )
+    if not is_admin:
+        for row in data:
+            row.pop("original_text", None)
+            row.pop("extracted_text", None)
+    return Response(data)
 
 
 def build_fts_query(raw: str) -> str:

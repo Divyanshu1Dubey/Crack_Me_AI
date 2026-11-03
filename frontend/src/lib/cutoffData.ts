@@ -14,9 +14,9 @@ const REVIEWER = { name: 'CrackCMS Editorial Team', credentials: 'Editorial team
  * https://upsc.gov.in/examinations/combined-medical-services-examination
  * before applying.
  *
- * Note: UPSC CMS 2026 has not yet been held at the time of last editorial
- * review (the exam is scheduled for 02 August 2026). The cycle is included
- * for navigation, with no cutoff data.
+ * Note: the UPSC CMS 2026 written exam was scheduled for (and held on)
+ * 02 August 2026; its cutoff is published with the final result. The cycle
+ * is included for navigation, with no cutoff data until then.
  */
 
 export const CMS_CUTOFFS: Record<number, CutoffContent> = {
@@ -27,12 +27,12 @@ export const CMS_CUTOFFS: Record<number, CutoffContent> = {
         trend: [],
         faqs: [
             {
-                q: 'When is UPSC CMS 2026?',
-                a: 'UPSC CMS 2026 is scheduled for 02 August 2026 (CBT, single day). The official notification was released on 11 March 2026, and the application window closed on 31 March 2026.',
+                q: 'When was UPSC CMS 2026?',
+                a: 'The UPSC CMS 2026 written exam was scheduled for 02 August 2026 (CBT, single day). The official notification was released on 11 March 2026, and the application window closed on 31 March 2026.',
             },
             {
                 q: 'What is the UPSC CMS 2026 cutoff?',
-                a: 'The UPSC CMS 2026 cutoff is not yet published — the exam is scheduled for 02 August 2026. After the result is announced, UPSC publishes the qualifying cutoff on upsc.gov.in. We will add the verified numbers here as soon as they are announced.',
+                a: 'The UPSC CMS 2026 written exam was held on 02 August 2026; the cutoff is published with the final result. UPSC posts the qualifying cutoff on upsc.gov.in, and we will add the verified numbers here once they are announced.',
             },
             {
                 q: 'How many vacancies are in UPSC CMS 2026?',

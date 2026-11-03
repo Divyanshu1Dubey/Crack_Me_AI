@@ -21,8 +21,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -30,17 +33,71 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from crack_cms.client_ip import header_to_meta_key
+
 from .models import AnalyticsEvent
 
 logger = logging.getLogger(__name__)
 
+# Client event names are snake_case (frontend/src/lib/analytics.ts).
+_EVENT_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{0,63}$')
 
-def _client_ip(request) -> str | None:
-    """Best-effort client IP behind Vercel/Render proxies."""
-    fwd = request.META.get('HTTP_X_FORWARDED_FOR')
-    if fwd:
-        return fwd.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
+# The country header each edge sets, keyed by the client-IP header the same
+# edge sets (settings.TRUSTED_CLIENT_IP_HEADER, see crack_cms/client_ip.py).
+_EDGE_COUNTRY_HEADERS = {
+    'HTTP_CF_CONNECTING_IP': 'HTTP_CF_IPCOUNTRY',
+    'HTTP_X_VERCEL_FORWARDED_FOR': 'HTTP_X_VERCEL_IP_COUNTRY',
+    'HTTP_CLOUDFRONT_VIEWER_ADDRESS': 'HTTP_CLOUDFRONT_VIEWER_COUNTRY',
+}
+# Default: Cloudflare's header (the DigitalOcean App Platform edge in front of
+# the API is Cloudflare, which overwrites CF-IPCountry on what it forwards).
+# Set ANALYTICS_COUNTRY_HEADER when the deployment sits behind another edge.
+_DEFAULT_COUNTRY_HEADER = 'HTTP_CF_IPCOUNTRY'
+_DISABLED = ('none', 'off', '-')
+
+
+def _country_meta_key() -> str:
+    """META key of the one country header this deployment trusts ('' = none).
+
+    Any client can send any header, so only the header of the edge actually
+    in front of the API is read -- never a list of every CDN's header, where
+    a forged ``X-Vercel-IP-Country`` outranked the real ``CF-IPCountry``:
+      1. ``ANALYTICS_COUNTRY_HEADER`` (setting or env), e.g. ``CF-IPCountry``
+         or ``X-Vercel-IP-Country``; ``none`` stores no country;
+      2. otherwise the country header of the edge that
+         ``TRUSTED_CLIENT_IP_HEADER`` names (the client-IP trust setting),
+         e.g. ``X-Vercel-Forwarded-For`` -> ``X-Vercel-IP-Country``;
+      3. otherwise ``CF-IPCountry``.
+    So ``X-Vercel-IP-Country`` counts only when the deployment says requests
+    reach the API through Vercel.
+    """
+    explicit = getattr(settings, 'ANALYTICS_COUNTRY_HEADER', None)
+    if explicit is None:
+        explicit = os.getenv('ANALYTICS_COUNTRY_HEADER', '')
+    explicit = str(explicit or '').strip()
+    if explicit:
+        return '' if explicit.lower() in _DISABLED else header_to_meta_key(explicit)
+    edge = header_to_meta_key(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', ''))
+    return _EDGE_COUNTRY_HEADERS.get(edge, _DEFAULT_COUNTRY_HEADER)
+
+
+def _client_country(request) -> str | None:
+    """ISO 3166-1 alpha-2 country from the trusted edge header ('XX' = unknown)."""
+    header = _country_meta_key()
+    if not header:
+        return None
+    code = str(request.META.get(header) or '').strip().upper()
+    if len(code) == 2 and code.isascii() and code.isalpha() and code != 'XX':
+        return code
+    return None
+
+
+def _text(data, key, limit) -> str | None:
+    """A trimmed string field of the payload (non-strings are ignored)."""
+    value = data.get(key)
+    if not isinstance(value, str):
+        return None
+    return value.strip()[:limit] or None
 
 
 class AnalyticsIngestView(APIView):
@@ -71,17 +128,23 @@ class AnalyticsIngestView(APIView):
     throttle_scope = 'analytics_ingest'
 
     def post(self, request):
-        data = request.data or {}
-        event_name = (data.get('event_name') or '').strip()
-        if not event_name or len(event_name) > 64:
+        from .views import SERVER_ONLY_EVENTS
+
+        data = request.data if hasattr(request.data, 'get') else {}
+        event_name = _text(data, 'event_name', 65) or ''
+        # snake_case only, and never a name the server writes itself (e.g.
+        # the quest-freeze and XP-ledger rows other features read back).
+        if not _EVENT_NAME_RE.match(event_name) or event_name in SERVER_ONLY_EVENTS:
             return Response(
-                {'ok': False, 'error': 'event_name required (<=64 chars)'},
+                {'ok': False, 'error': 'event_name required (snake_case, <=64 chars)'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Cap properties size — anything over 8KB gets discarded so a
         # bot can't blow up the row.
         props = data.get('properties') or {}
+        if not isinstance(props, dict):
+            props = {}
         try:
             blob = json.dumps(props)
             if len(blob) > 8192:
@@ -93,21 +156,23 @@ class AnalyticsIngestView(APIView):
             ev = AnalyticsEvent.objects.create(
                 event_name=event_name,
                 user_id=request.user.id if request.user.is_authenticated else None,
-                visitor_id=(data.get('visitor_id') or '')[:64] or None,
-                session_id=(data.get('session_id') or '')[:64] or None,
-                path=(data.get('path') or '')[:512] or None,
-                page_type=(data.get('page_type') or '')[:64] or None,
-                page_group=(data.get('page_group') or '')[:64] or None,
-                utm_source=(data.get('utm_source') or '')[:128] or None,
-                utm_medium=(data.get('utm_medium') or '')[:128] or None,
-                utm_campaign=(data.get('utm_campaign') or '')[:128] or None,
-                utm_term=(data.get('utm_term') or '')[:128] or None,
-                utm_content=(data.get('utm_content') or '')[:128] or None,
-                device_type=(data.get('device_type') or '')[:32] or None,
-                browser=(data.get('browser') or '')[:32] or None,
-                os=(data.get('os') or '')[:32] or None,
-                language=(data.get('language') or '')[:8] or None,
-                referrer=(data.get('referrer') or '')[:512] or None,
+                visitor_id=_text(data, 'visitor_id', 64),
+                session_id=_text(data, 'session_id', 64),
+                path=_text(data, 'path', 512),
+                page_type=_text(data, 'page_type', 64),
+                page_group=_text(data, 'page_group', 64),
+                utm_source=_text(data, 'utm_source', 128),
+                utm_medium=_text(data, 'utm_medium', 128),
+                utm_campaign=_text(data, 'utm_campaign', 128),
+                utm_term=_text(data, 'utm_term', 128),
+                utm_content=_text(data, 'utm_content', 128),
+                device_type=_text(data, 'device_type', 32),
+                browser=_text(data, 'browser', 32),
+                os=_text(data, 'os', 32),
+                language=_text(data, 'language', 8),
+                # From the edge (Vercel / Cloudflare), never from the body.
+                country=_client_country(request),
+                referrer=_text(data, 'referrer', 512),
                 properties=props,
             )
         except Exception as exc:  # pragma: no cover - defensive
@@ -146,12 +211,17 @@ class AnalyticsDashboardDataView(APIView):
 
     def get(self, request):
         now = timezone.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Local (IST) midnight -- `now` is UTC, so replacing hours on it put
+        # "today" 5h30m off.
+        today_start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=7)
         month_start = today_start - timedelta(days=30)
         last_5min = now - timedelta(minutes=5)
 
-        base = AnalyticsEvent.objects.all()
+        # Server-written ledger rows (quest streak freezes, the XP-ledger
+        # marker) are not visitor traffic.
+        from .views import SERVER_ONLY_EVENTS
+        base = AnalyticsEvent.objects.exclude(event_name__in=SERVER_ONLY_EVENTS)
 
         # Realtime — unique visitors in the last 5 minutes
         active_visitors = (
@@ -166,16 +236,20 @@ class AnalyticsDashboardDataView(APIView):
 
         def _kpis(start):
             qs = period_window(start)
-            users = qs.values('visitor_id').distinct().count()
+            users = qs.filter(visitor_id__isnull=False).values('visitor_id').distinct().count()
             page_views = qs.filter(event_name=AnalyticsEvent.EVENT_PAGE_VIEW).count()
-            sign_ups = qs.filter(event_name=AnalyticsEvent.EVENT_SIGN_UP).count()
-            payments = qs.filter(event_name=AnalyticsEvent.EVENT_PAYMENT_SUCCESS)
-            revenue = 0
-            for p in payments.values_list('properties', flat=True):
-                if isinstance(p, dict):
-                    amt = p.get('amount')
-                    if isinstance(amt, (int, float)):
-                        revenue += float(amt)
+            # Sign-ups and revenue come from authoritative tables: the
+            # event-ingest endpoint is public, so client-posted
+            # `sign_up` / `payment_success` events could be forged to
+            # inflate these KPIs.
+            from django.contrib.auth import get_user_model
+            from django.db.models import Sum
+            from accounts.models import PaymentAttempt
+            sign_ups = get_user_model().objects.filter(date_joined__gte=start).count()
+            revenue = float(
+                PaymentAttempt.objects.filter(status='successful', updated_at__gte=start)
+                .aggregate(total=Sum('amount'))['total'] or 0
+            )
             return {
                 'users': users,
                 'page_views': page_views,
@@ -265,16 +339,30 @@ class AnalyticsDashboardDataView(APIView):
             .order_by('-users')[:15]
         )
 
-        # Funnel — coarse stage counts from key events
+        # Funnel — coarse stage counts. Behavioural stages come from client
+        # events; sign-up / checkout / payment come from the authoritative
+        # tables, because the public ingest endpoint lets anyone post
+        # `sign_up` or `payment_success` events and inflate those bars.
+        from django.contrib.auth import get_user_model
+        from accounts.models import PaymentAttempt
+        month_signups = get_user_model().objects.filter(date_joined__gte=month_start).count()
+        month_checkouts = (
+            PaymentAttempt.objects.filter(created_at__gte=month_start)
+            .values('user_id').distinct().count()
+        )
+        month_payers = (
+            PaymentAttempt.objects.filter(status='successful', updated_at__gte=month_start)
+            .values('user_id').distinct().count()
+        )
         funnel = [
             {'stage': 'landing', 'users': base.filter(event_name='page_view', page_type='home', created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'blog_view', 'users': base.filter(event_name=AnalyticsEvent.EVENT_BLOG_VIEW, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'question_solve', 'users': base.filter(event_name=AnalyticsEvent.EVENT_QUESTION_SOLVE, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'ai_tutor', 'users': base.filter(event_name=AnalyticsEvent.EVENT_AI_TUTOR_MESSAGE, created_at__gte=month_start).values('visitor_id').distinct().count()},
             {'stage': 'register_intent', 'users': base.filter(event_name='register_intent', created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'sign_up', 'users': base.filter(event_name=AnalyticsEvent.EVENT_SIGN_UP, created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'checkout_start', 'users': base.filter(event_name=AnalyticsEvent.EVENT_CHECKOUT_START, created_at__gte=month_start).values('visitor_id').distinct().count()},
-            {'stage': 'payment_success', 'users': base.filter(event_name=AnalyticsEvent.EVENT_PAYMENT_SUCCESS, created_at__gte=month_start).values('visitor_id').distinct().count()},
+            {'stage': 'sign_up', 'users': month_signups},
+            {'stage': 'checkout_start', 'users': month_checkouts},
+            {'stage': 'payment_success', 'users': month_payers},
         ]
 
         # Daily active users + event volume (last 30 days)

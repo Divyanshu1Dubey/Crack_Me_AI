@@ -1,0 +1,130 @@
+{
+ "trusted_questions": 3372,
+ "trusted_unique_stems_used": 3369,
+ "classes": [
+  "ANA",
+  "ANS",
+  "BCH",
+  "DER",
+  "ENT",
+  "FMT",
+  "MED",
+  "MIC",
+  "OBG",
+  "OPH",
+  "ORT",
+  "PED",
+  "PHM",
+  "PHY",
+  "PSM"
+ ],
+ "current_tag_agrees_with_source_label": 1679,
+ "current_tag_agreement_rate": 0.4979,
+ "cv_accuracy": 0.6308,
+ "cv_macro_f1": 0.6025,
+ "per_class_f1": {
+  "ANA": 0.708,
+  "ANS": 0.358,
+  "BCH": 0.683,
+  "DER": 0.599,
+  "ENT": 0.49,
+  "FMT": 0.632,
+  "MED": 0.556,
+  "MIC": 0.631,
+  "OBG": 0.746,
+  "OPH": 0.677,
+  "ORT": 0.595,
+  "PED": 0.454,
+  "PHM": 0.656,
+  "PHY": 0.558,
+  "PSM": 0.696
+ },
+ "suggestions_by_method": {
+  "source_file": 1693,
+  "classifier": 2079
+ },
+ "classifier_confidence_buckets": {
+  "<0.7": 1769,
+  "0.7-0.9": 239,
+  ">=0.9": 71
+ },
+ "top_source_file_corrections": [
+  [
+   "Anaesthesia",
+   "Community Medicine",
+   159
+  ],
+  [
+   "ENT",
+   "Obstetrics & Gynaecology",
+   96
+  ],
+  [
+   "ENT",
+   "General Medicine",
+   95
+  ],
+  [
+   "Radiodiagnosis",
+   "General Medicine",
+   57
+  ],
+  [
+   "Radiodiagnosis",
+   "Biochemistry",
+   50
+  ],
+  [
+   "Radiodiagnosis",
+   "Microbiology",
+   50
+  ],
+  [
+   "Radiodiagnosis",
+   "Community Medicine",
+   48
+  ],
+  [
+   "Radiodiagnosis",
+   "Anatomy",
+   44
+  ],
+  [
+   "Radiodiagnosis",
+   "Physiology",
+   39
+  ],
+  [
+   "ENT",
+   "Microbiology",
+   36
+  ],
+  [
+   "Radiodiagnosis",
+   "Obstetrics & Gynaecology",
+   34
+  ],
+  [
+   "Radiodiagnosis",
+   "Pharmacology",
+   33
+  ],
+  [
+   "ENT",
+   "Orthopaedics",
+   31
+  ],
+  [
+   "ENT",
+   "Paediatrics",
+   27
+  ],
+  [
+   "Microbiology",
+   "Community Medicine",
+   26
+  ]
+ ],
+ "csv": "C:/Users/DIVYANSHU/crack_local/data_quality/subject_suggestions.csv",
+ "applied_locally_source_file_corrections": 1693
+}

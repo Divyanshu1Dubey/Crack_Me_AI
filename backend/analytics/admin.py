@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
+from .models import (UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge,
+                     ContactMessage)
 
 @admin.register(UserTopicPerformance)
 class UserTopicPerformanceAdmin(admin.ModelAdmin):
@@ -17,6 +18,13 @@ class FeedbackAdmin(admin.ModelAdmin):
     list_filter = ['category', 'is_read', 'rating']
     search_fields = ['title', 'message', 'user__username']
     readonly_fields = ['user', 'category', 'rating', 'title', 'message', 'created_at']
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = ['email', 'name', 'subject', 'email_delivered', 'is_resolved', 'created_at']
+    list_filter = ['is_resolved', 'email_delivered']
+    search_fields = ['email', 'name', 'subject', 'message']
+    readonly_fields = ['user', 'name', 'email', 'subject', 'message', 'email_delivered', 'created_at']
 
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):

@@ -8,7 +8,8 @@ metadata:
   related:
     - docs/knowledge-base/SETUP.md
     - docs/mcp/README.md
-    - llms-full.txt
+    - docs/ARCHITECTURE.md
+    - docs/API_REFERENCE.md
 argument-hint: 'Optional: target topic or file path, e.g. "DKA chapter notes" or "Medura_Train/textbooks/nephrotic_syndrome.md"'
 ---
 
@@ -174,7 +175,7 @@ python manage.py ingest_source internal-notes --prune-missing
 
 ## 8. Phase 6 — Sample queries
 
-Hit `/api/kb/ask/` with five real user-style questions covering the new topic:
+Hit `/api/knowledge/ask/` with five real user-style questions covering the new topic:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login/ \
@@ -182,7 +183,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login/ \
   -d '{"email":"you@example.com","password":"…"}' | jq -r .access)
 
 for q in "DKA initial management" "DKA diagnostic criteria" "DKA potassium replacement threshold" "DKA pediatric vs adult" "DKA cerebral edema risk"; do
-  curl -s -X POST http://localhost:8000/api/kb/ask/ \
+  curl -s -X POST http://localhost:8000/api/knowledge/ask/ \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"query\":\"$q\",\"subject\":\"Medicine\"}" \
@@ -237,7 +238,7 @@ To add new entity types or relations:
 1. Edit `backend/knowledge_base/ontology/data.py` — add the entity label and any relations under a section comment.
 2. Run `python manage.py load_ontology --reset` to replace the ontology (only do this if you intend to fully overwrite).
 3. For additive-only changes, run without `--reset` — `update_or_create` will refresh existing rows.
-4. Re-run `python manage.py extract_kg` (or call `/api/kb/extract-kg/`) to populate new entity mentions from existing chunks.
+4. Re-run `python manage.py extract_kg` (or call `/api/knowledge/extract-kg/`) to populate new entity mentions from existing chunks.
 
 ---
 
@@ -259,8 +260,8 @@ To add new entity types or relations:
 python manage.py check
 python manage.py migrate --check
 python manage.py test knowledge_base
-curl -fsS http://localhost:8000/api/kb/health/ | jq .status
-curl -fsS http://localhost:8000/api/kb/stats/ | jq '.chunks > 0'
+curl -fsS http://localhost:8000/api/knowledge/health/ | jq .status
+curl -fsS http://localhost:8000/api/knowledge/stats/ | jq '.chunks > 0'
 ```
 
 ---
@@ -269,5 +270,5 @@ curl -fsS http://localhost:8000/api/kb/stats/ | jq '.chunks > 0'
 
 - `docs/knowledge-base/SETUP.md` — operator setup
 - `docs/mcp/README.md` — knowledge_base MCP server card
-- `llms-full.txt` §5 — full KB reference
+- `docs/ARCHITECTURE.md` and `docs/API_REFERENCE.md` — platform architecture and endpoint reference (`frontend/public/llms-full.txt` is only a public product summary for AI assistants; it does not document internal APIs, admin tools or infrastructure)
 - `.github/skills/acquire-codebase-knowledge/` — codebase onboarding

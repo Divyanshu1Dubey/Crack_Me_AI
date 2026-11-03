@@ -123,8 +123,14 @@ export interface UseGenerateApi {
   errorBanner: string | null;
   /** Run a new generation; resets prior answers + explanations. */
   generate: (payload: { subject: string; topic?: string; difficulty: Difficulty; count: number }) => Promise<void>;
-  /** Lock an answer (no-op if already locked) and fire the AI explanation fetch. */
+  /** Lock an answer (no-op if already locked). Does NOT call the AI. */
   pickAnswer: (qIdx: number, option: string) => void;
+  /**
+   * Fetch the deep AI explanation for an answered question — only when the
+   * user asks for it (it costs EXPLANATION_TOKEN_COST tokens; it used to fire
+   * automatically on every pick and silently drain 10 tokens per answer).
+   */
+  requestExplanation: (qIdx: number) => void;
   /** Drop the error banner and return to the idle composer. */
   clearError: () => void;
   /** Wipe everything back to a clean slate. */
@@ -171,15 +177,29 @@ export function useGenerate(): UseGenerateApi {
       const res = await aiAPI.generateQuestions(payload);
       const rows = (res.data?.questions ?? []) as GeneratedQuestion[];
       const clean = rows.filter((q) => !q.error);
+      if (clean.length === 0) {
+        // The backend refunds when nothing valid comes back; say so instead
+        // of showing an empty "success".
+        dispatch({
+          type: 'GENERATE_FAIL',
+          banner: 'The AI returned no usable questions. You were not charged — please try again.',
+        });
+        return;
+      }
       dispatch({ type: 'GENERATE_SUCCESS', questions: clean });
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
-      const e = err as { response?: { status?: number; data?: { error?: string } }; message?: string };
+      const e = err as {
+        response?: { status?: number; data?: { error?: string; message?: string; code?: string } };
+        message?: string;
+      };
       let banner: string;
       if (e?.response?.status === 429) {
         banner =
           'AI tokens exhausted — your daily/weekly free quota is used up. ' +
           'Visit /subscription or /tokens to top up.';
+      } else if (e?.response?.data?.code === 'ai_unavailable' && e.response.data.message) {
+        banner = e.response.data.message;
       } else {
         const msg = e?.response?.data?.error || e?.message || 'AI service unavailable';
         banner = `${msg}. Please try again.`;
@@ -197,8 +217,14 @@ export function useGenerate(): UseGenerateApi {
   const pickAnswerImpl = useCallback<UseGenerateApi['pickAnswer']>((qIdx, option) => {
     if (stateRef.current.selectedAnswers[qIdx]) return;
     dispatch({ type: 'SELECT_ANSWER', qIdx, option });
-    const q = stateRef.current.questions[qIdx];
-    if (!q) return;
+  }, []);
+
+  const requestExplanationImpl = useCallback<UseGenerateApi['requestExplanation']>((qIdx) => {
+    const current = stateRef.current;
+    const q = current.questions[qIdx];
+    const option = current.selectedAnswers[qIdx];
+    if (!q || !option || current.aiLoadingIdx !== null) return;
+    if (current.aiExplanations[qIdx] && !current.aiExplanations[qIdx].error) return;
     dispatch({ type: 'SET_AI_LOADING', idx: qIdx });
     aiAPI
       .explainAfterAnswer({
@@ -217,7 +243,10 @@ export function useGenerate(): UseGenerateApi {
           type: 'SET_AI_EXPLANATION',
           idx: qIdx,
           explanation: {
-            why_correct: err?.response?.data?.error || 'AI unavailable',
+            why_correct:
+              err?.response?.status === 429
+                ? 'Not enough tokens for an AI explanation. Top up on the Tokens page.'
+                : err?.response?.data?.message || err?.response?.data?.error || 'AI unavailable',
             error: true,
           },
         }),
@@ -239,6 +268,7 @@ export function useGenerate(): UseGenerateApi {
     errorBanner: state.errorBanner,
     generate,
     pickAnswer: pickAnswerImpl,
+    requestExplanation: requestExplanationImpl,
     clearError,
     reset,
   };

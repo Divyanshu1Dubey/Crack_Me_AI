@@ -8,9 +8,11 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, XCircle, Loader2, Brain } from 'lucide-react';
 import type { GeneratedQuestion, AIExplanation } from './types';
 import { ExplanationPanel } from './ExplanationPanel';
+import { EXPLANATION_TOKEN_COST } from './constants';
 
 interface QuestionCardProps {
   index: number;
@@ -19,7 +21,11 @@ interface QuestionCardProps {
   showExplanation: boolean;
   aiExplanation?: AIExplanation;
   aiLoading: boolean;
+  /** Another card's explanation is loading (one request at a time). */
+  aiBusy?: boolean;
   onPickAnswer: (qIdx: number, option: string) => void;
+  /** Ask for the optional AI deep explanation (costs tokens). */
+  onRequestExplanation?: (qIdx: number) => void;
 }
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'] as const;
@@ -31,7 +37,9 @@ export function QuestionCard({
   showExplanation,
   aiExplanation,
   aiLoading,
+  aiBusy = false,
   onPickAnswer,
+  onRequestExplanation,
 }: QuestionCardProps) {
   const correct = question.correct_answer;
 
@@ -104,6 +112,23 @@ export function QuestionCard({
             <p className="text-sm leading-relaxed text-muted-foreground">
               {question.explanation}
             </p>
+          </div>
+        )}
+
+        {selectedAnswer && onRequestExplanation && !aiLoading && (!aiExplanation || aiExplanation.error) && (
+          <div className="ml-0 md:ml-12">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={aiBusy}
+              onClick={() => onRequestExplanation(index)}
+            >
+              <Brain className="h-3.5 w-3.5" />
+              {aiExplanation?.error ? 'Retry AI deep explanation' : 'Get AI deep explanation'}
+              <span className="text-muted-foreground">· {EXPLANATION_TOKEN_COST} tokens</span>
+            </Button>
           </div>
         )}
 

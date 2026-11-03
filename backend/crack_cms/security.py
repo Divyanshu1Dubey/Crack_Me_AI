@@ -7,20 +7,34 @@ insecure default.
 Holds no new product features; only enforces invariants a Staff
 Engineer would expect for a launch-ready deploy:
 
-* DEBUG=False + DJANGO_SECRET_KEY set
+* DEBUG=False + DJANGO_SECRET_KEY (or SECRET_KEY) set
 * DATABASE_URL present for production runtime
 * CSRF_TRUSTED_ORIGINS / CORS_ALLOWED_ORIGINS include the frontend origin
 * AI keys are not required but warn if all-round-robin keys are absent
 * ALLOWED_HOSTS doesn't include the localhost-only default
+* warn when neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set (the
+  rate limiters then see only the proxy's address), and when NUM_PROXIES
+  alone is missing (DRF's throttles read only that one)
 
-Called from `crack_cms/urls.py`; never raises in dev.
+Called from `crack_cms/urls.py` (not under the test runner); never raises
+in dev.
 """
 from __future__ import annotations
 
 import logging
 import os
 
+from crack_cms.client_ip import parse_num_proxies
+
 LOG = logging.getLogger(__name__)
+
+
+def configured_secret_key() -> str:
+    """The secret key exactly as settings.py resolves it: DJANGO_SECRET_KEY,
+    else SECRET_KEY. ``os.getenv("DJANGO_SECRET_KEY", fallback)`` returned
+    ``""`` for a set-but-empty DJANGO_SECRET_KEY, so a deploy that settings
+    accepted (SECRET_KEY set) failed this check on every request."""
+    return (os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
 
 
 def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
@@ -34,7 +48,7 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
 
     from django.core.exceptions import ImproperlyConfigured
 
-    secret_key = os.getenv("DJANGO_SECRET_KEY", os.getenv("SECRET_KEY", "")).strip()
+    secret_key = configured_secret_key()
     if secret_key in ("", "django-insecure-local-dev-only"):
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY must be set to a strong value in production."
@@ -48,7 +62,8 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
     frontend = os.getenv("FRONTEND_URL", "").strip()
     if not frontend:
         LOG.warning(
-            "FRONTEND_URL is unset — password-reset links will fall back to localhost."
+            "FRONTEND_URL is unset — the default CORS/CSRF trusted origins, invite links and "
+            "the robots.txt sitemap URL fall back to localhost."
         )
 
     cors = os.getenv("CORS_ALLOWED_ORIGINS", "")
@@ -61,6 +76,22 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
     if "localhost" in os.getenv("ALLOWED_HOSTS", ""):
         LOG.warning(
             "ALLOWED_HOSTS contains localhost in production — strip it for prod."
+        )
+
+    num_proxies_unset = parse_num_proxies(os.getenv("NUM_PROXIES")) is None
+    if num_proxies_unset and not os.getenv("TRUSTED_CLIENT_IP_HEADER", "").strip():
+        LOG.warning(
+            "Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: behind the platform proxy "
+            "the question-bank limiter counts every anonymous visitor in the proxy's bucket and "
+            "DRF's anon throttles key on the client-supplied X-Forwarded-For. See the client-IP "
+            "notes in crack_cms/settings.py and backend/.env.example."
+        )
+    elif num_proxies_unset:
+        # TRUSTED_CLIENT_IP_HEADER feeds the question-bank limiter only; DRF's
+        # anon / user / scoped throttles (auth, AI, local auth) read NUM_PROXIES.
+        LOG.warning(
+            "NUM_PROXIES is not set: DRF throttles key on the raw, client-controlled "
+            "X-Forwarded-For (TRUSTED_CLIENT_IP_HEADER covers the question-bank limiter only)."
         )
 
     has_any_ai_key = any(
@@ -77,4 +108,4 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
         )
 
 
-__all__ = ["security_posture_check"]
+__all__ = ["configured_secret_key", "security_posture_check"]

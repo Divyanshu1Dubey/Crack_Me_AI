@@ -12,7 +12,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
     const { year } = await params;
     const data = getCmsCutoff(Number(year));
-    if (!data) return { title: 'UPSC CMS Cutoff | CrackCMS', robots: { index: false } };
+    if (!data) return { title: 'UPSC CMS Cutoff', robots: { index: false } };
     return buildCutoffMetadata(data, `/cms/cutoff/${year}`);
 }
 

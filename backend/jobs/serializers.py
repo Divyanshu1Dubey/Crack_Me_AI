@@ -19,6 +19,11 @@ class JobSerializer(serializers.ModelSerializer):
         ]
 
     def get_is_bookmarked(self, obj):
+        # The list/retrieve queryset annotates this with Exists(), so no
+        # per-row query; fall back to a lookup for other call sites.
+        annotated = getattr(obj, '_is_bookmarked', None)
+        if annotated is not None:
+            return bool(annotated)
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return JobBookmark.objects.filter(user=request.user, job=obj).exists()

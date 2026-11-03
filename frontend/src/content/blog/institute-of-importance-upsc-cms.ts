@@ -20,7 +20,7 @@ const post: BlogPost = {
     readingTime: '11 min',
     wordCount: 3400,
     primaryCta: { label: 'Check CMS Salary Calculator', href: '/tools/upsc-cms-salary-calculator' },
-    relatedExamPaths: ['/cms', '/neet-pg', '/inicet'],
+    relatedExamPaths: ['/cms', '/neet-pg', '/ini-cet'],
     faqs: [
         { q: 'How are INI hospitals different from state government hospitals?', a: 'INI hospitals (AIIMS, PGI, JIPMER, NIMHANS) are autonomous central government institutions with higher pay scales, better infrastructure, research opportunities, and international collaborations compared to most state hospitals.' },
         { q: 'Can I join AIIMS through UPSC CMS?', a: 'Yes — UPSC CMS recruits Medical Officers for AIIMS (New Delhi and branch campuses), PGIMER Chandigarh, JIPMER Puducherry, and NIMHANS Bangalore. These are highly sought-after postings.' },

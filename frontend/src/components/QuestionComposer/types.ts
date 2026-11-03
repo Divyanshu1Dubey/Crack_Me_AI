@@ -20,6 +20,9 @@ export interface AIExplanation {
   pyq_frequency?: string;
   similar_pyq?: string;
   error?: boolean;
+  /** True when assembled from stored data / textbooks without an AI model. */
+  offline?: boolean;
+  offline_notice?: string;
 }
 
 export interface GeneratedQuestion {

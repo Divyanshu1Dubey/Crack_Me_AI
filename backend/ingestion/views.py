@@ -10,8 +10,9 @@ Endpoints
   GET    /materials/                        list materials
   POST   /materials/upload/                upload a PDF
   GET    /materials/<sha16>/               material detail + linked jobs
-  GET    /jobs/                            list jobs
+  GET    /jobs/                            list jobs (the 200 newest)
   POST   /jobs/                            create + dispatch an import job
+  GET    /jobs/counts/                     jobs per status, over every job
   GET    /jobs/<id>/                       detail + stages + checkpoints
   POST   /jobs/<id>/retry/                 create a retry job
   POST   /jobs/<id>/cancel/                mark a job cancelled
@@ -30,11 +31,15 @@ import logging
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Count, Q
 from django.http import Http404
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from accounts.upload_validation import validate_uploaded_file
 
 from .constants import STRATEGY_AUTO_PR_ONLY
 from .exceptions import InvalidJobTransitionError, MaterialNotFoundError
@@ -66,6 +71,9 @@ from .serializers import (
 from .utils import audit
 
 LOG = logging.getLogger("ingestion.views")
+
+# Same per-file cap as the Import Center upload.
+MAX_MATERIAL_UPLOAD_BYTES = 200 * 1024 * 1024
 
 
 # ------------------------------------------------------------ material helpers
@@ -114,6 +122,20 @@ class MaterialAssetUploadView(APIView):
         s.is_valid(raise_exception=True)
         f = s.validated_data["file"]
         exam_hint = s.validated_data.get("exam_hint") or ""
+
+        # The pipeline only reads PDFs: check the bytes (magic number), not
+        # the name, before anything is written to disk.
+        try:
+            detected = validate_uploaded_file(
+                f, allowed_types={"document"}, max_bytes=MAX_MATERIAL_UPLOAD_BYTES,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": " ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        if detected != "application/pdf":
+            return Response(
+                {"detail": "Only PDF files can be ingested (this file is not a PDF)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Persist to MEDIA_ROOT/ingestion_uploads/<sha16>/
         media_root = Path(settings.MEDIA_ROOT)
@@ -173,6 +195,7 @@ class MaterialAssetDetailView(generics.RetrieveAPIView):
     permission_classes = [IsIngestionAdmin]
     serializer_class = MaterialAssetSerializer
     lookup_field = "sha256_short"
+    lookup_url_kwarg = "sha16"  # urls.py: materials/<str:sha16>/
 
     def get_queryset(self):
         return MaterialAsset.objects.all().prefetch_related("jobs")
@@ -186,10 +209,19 @@ class ImportJobListView(APIView):
 
     def get(self, request, *args, **kwargs):
         qs = ImportJob.objects.all().select_related("material_asset", "batch_run").order_by("-created_at")
-        for q in ("status", "parent_exam", "batch_run"):
+        for q in ("status", "batch_run"):
             v = request.query_params.get(q)
             if v:
                 qs = qs.filter(**{q: v})
+        exam = request.query_params.get("parent_exam")
+        if exam:
+            # Jobs created without an exam (bulk-ingestion script) match on
+            # their material's exam hint, in any of its spellings.
+            from .orchestrator import exam_hint_spellings
+            qs = qs.filter(
+                Q(parent_exam=exam)
+                | Q(parent_exam="", material_asset__exam_hint__in=exam_hint_spellings(exam))
+            )
         sha = request.query_params.get("material_sha16")
         if sha:
             qs = qs.filter(material_asset__sha256_short=sha)
@@ -239,9 +271,29 @@ class ImportJobListView(APIView):
         )
 
 
+class ImportJobCountsView(APIView):
+    """Jobs per status over every job — the ingestion hub's tiles.
+
+    The hub used to count the job list, which holds only the 200 newest jobs,
+    so the tiles undercounted once there were more.
+    """
+    permission_classes = [IsIngestionAdmin]
+
+    def get(self, request, *args, **kwargs):
+        from .constants import JOB_STATUS_CHOICES
+
+        counts = {code: 0 for code, _label in JOB_STATUS_CHOICES}
+        for row in ImportJob.objects.order_by().values("status").annotate(n=Count("id")):
+            counts[row["status"]] = row["n"]
+        return Response({"counts": counts, "total": sum(counts.values())})
+
+
 class ImportJobDetailView(generics.RetrieveAPIView):
     permission_classes = [IsIngestionAdmin]
     serializer_class = ImportJobSerializer
+    # urls.py names the id ``job_id``; without this DRF looked for ``pk``
+    # and every job detail request failed with a 500.
+    lookup_url_kwarg = "job_id"
     queryset = ImportJob.objects.all().select_related(
         "material_asset", "batch_run", "retry_of",
     ).prefetch_related("stages", "checkpoints")
@@ -353,7 +405,14 @@ class BatchRunListView(APIView):
     permission_classes = [IsIngestionAdmin]
 
     def get(self, request, *args, **kwargs):
-        qs = BatchRun.objects.all().order_by("-created_at")
+        # Live job counts (the stored counters were never kept up to date);
+        # BatchRunListSerializer derives the status from them.
+        qs = BatchRun.objects.annotate(
+            n_total=Count("jobs"),
+            n_completed=Count("jobs", filter=Q(jobs__status="completed")),
+            n_failed=Count("jobs", filter=Q(jobs__status__in=["failed", "crashed"])),
+            n_cancelled=Count("jobs", filter=Q(jobs__status="cancelled")),
+        ).order_by("-created_at")
         return Response(BatchRunListSerializer(qs[:200], many=True).data)
 
     def post(self, request, *args, **kwargs):
@@ -384,7 +443,10 @@ class BatchRunListView(APIView):
                 batch=batch,
                 config={"strategy": strategy, "force": False},
             )
-            dispatch_job(job.id)
+            task_id = dispatch_job(job.id)
+            # Recorded so ingestion_run_pending does not dispatch it twice.
+            job.summary = {"q_task_id": task_id}
+            job.save(update_fields=["summary"])
 
         audit(
             actor=request.user,
@@ -402,4 +464,5 @@ class BatchRunListView(APIView):
 class BatchRunDetailView(generics.RetrieveAPIView):
     permission_classes = [IsIngestionAdmin]
     serializer_class = BatchRunSerializer
-    queryset = BatchRun.objects.all().prefetch_related("jobs")
+    lookup_url_kwarg = "batch_id"  # urls.py: batches/<int:batch_id>/ (was a 500)
+    queryset = BatchRun.objects.all().prefetch_related("jobs__material_asset")

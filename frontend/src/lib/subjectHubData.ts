@@ -17,7 +17,10 @@ import type { SubjectHubContent } from '@/components/SubjectHubLayout';
 
 type CmsSubject = Omit<SubjectHubContent, 'examSlug' | 'examName' | 'examLandingPath'>;
 
-const REVIEWER = { name: 'Dr. Ananya Reddy', credentials: 'MBBS, AIIMS New Delhi (2018), UPSC CMS AIR-1 (2024)' };
+// Same reviewer as cutoffData.ts. SubjectHubLayout shows this as "Reviewed
+// by" and in reviewedBy JSON-LD, so it must be a verifiable reviewer; the
+// previous named "AIR-1" reviewer could not be verified.
+const REVIEWER = { name: 'CrackCMS Editorial Team', credentials: 'Editorial team — CrackCMS' };
 
 const cmsSubjects: Record<string, CmsSubject> = {
     medicine: {

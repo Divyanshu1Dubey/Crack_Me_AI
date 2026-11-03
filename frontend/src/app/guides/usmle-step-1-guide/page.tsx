@@ -22,7 +22,7 @@ export default function USMLEGuide() {
             slug={slug}
             heading="USMLE Step 1 Guide for Indian MBBS Students"
             lede="A comprehensive Step 1 roadmap — eligibility, ECFMG registration, study materials (First Aid, Pathoma, UWorld, Sketchy), 6-9 month study plan, and IMG-specific advice."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="10 min"
             faqs={faqs}
@@ -114,15 +114,18 @@ export default function USMLEGuide() {
 
             <h2>Why CrackCMS for USMLE?</h2>
             <ul>
-                <li>10,000+ USMLE Step 1 MCQs aligned with First Aid 2025</li>
-                <li>AI tutor that explains with First Aid + Pathoma + UWorld style rationales</li>
-                <li>NBME-style practice blocks (40 questions, 60-min timed)</li>
-                <li>High-yield flashcards auto-generated from your weak areas</li>
+                <li>
+                    A USMLE Step 1 question bank is in development —{' '}
+                    <Link href="/contact?subject=usmle-waitlist">join the waitlist</Link> for early access
+                </li>
+                <li>AI tutor for concept gaps, with First Aid- and Pathoma-style rationales</li>
+                <li>NBME-style timed blocks (40 questions, 60 min) are planned for the question-bank launch</li>
+                <li>Spaced-repetition (SM-2) flashcards for high-yield facts</li>
             </ul>
 
             <h2>For Indian MBBS Graduates: USMLE vs Alternatives</h2>
             <p>
-                If you are an Indian MBBS graduate weighing USMLE against Indian PG exams, see our detailed
+                If you are an Indian MBBS graduate weighing USMLE against Indian PG exams, see our detailed{' '}
                 <Link href="/neet-pg/vs-usmle" className="text-primary underline">NEET PG vs USMLE</Link> comparison
                 for costs, timelines, career outcomes, and which route suits your goals.
             </p>

@@ -17,9 +17,9 @@ import type { BlogPost } from '@/lib/blog';
  */
 const post: BlogPost = {
     slug: 'upsc-cms-last-5-days-strategy',
-    title: 'UPSC CMS Last 5 Days: A Senior Internist’s Revision Plan',
+    title: 'UPSC CMS Last 5 Days: A Day-by-Day Revision Plan',
     description:
-        'A clinician’s day-by-day UPSC CMS revision plan for the final 5 days — high-yield triage, mock-test scoring, MCQ-solving patterns, sleep and exam-day checklist. Source-cited.',
+        'A day-by-day UPSC CMS revision plan for the final 5 days — high-yield triage, mock-test scoring, MCQ-solving patterns, sleep and exam-day checklist. Source-cited.',
     excerpt:
         'Five days is not enough to learn — but it is enough to un-forget. Here is the exact triage-revision plan used by UPSC CMS rankers, the one we built after watching hundreds of candidates either panic-crash or quietly add 30–50 marks in the final week.',
     coverImage: '/blog/og/upsc-cms-last-5-days-cover.png',
@@ -27,13 +27,13 @@ const post: BlogPost = {
     subcategory: 'Last-Week Strategy',
     tags: ['UPSC CMS', 'Last 5 Days', 'Revision Plan', 'Mock Tests', 'High-Yield Topics'],
     difficulty: 'intermediate',
-    authorId: 'dr-aarav-mehta',
+    authorId: 'crackcms-editorial',
     reviewedBy: 'crackcms-editorial',
-    author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
-    authorRole: 'Senior Editor — Medicine, CrackCMS',
+    author: 'CrackCMS Editorial Team',
+    authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-07-28',
-    dateModified: '2026-07-29',
-    updatedAt: '2026-07-29',
+    dateModified: '2026-11-01',
+    updatedAt: '2026-11-01',
     readingTime: '16 min',
     toc: [
         { id: 'what-toppers-do-differently', label: 'What toppers do differently' },
@@ -50,7 +50,7 @@ const post: BlogPost = {
     ],
     primaryCta: {
         label: 'Practise 50 CMS PYQs matched to this plan',
-        href: '/questions?exam=CMS&topic=last-week-revision',
+        href: '/questions?exam=cms',
         eventName: 'blog_practice_intent',
         eventParams: { source: 'cms-last-5-days', surface: 'inline_cta' },
     },
@@ -92,7 +92,8 @@ const post: BlogPost = {
     ],
     revisionLog: [
         { date: '2026-07-28', note: 'Initial publication' },
-        { date: '2026-07-29', note: 'Added UPSC notification reference, AHA ACLS citation, NFHS-5 reference; clarified OMR transfer-step timing; replaced placeholder FAQ with clinician-reviewed answers.' },
+        { date: '2026-07-29', note: 'Added UPSC notification reference, AHA ACLS citation, NFHS-5 reference; clarified OMR transfer-step timing; replaced placeholder FAQ with full answers.' },
+        { date: '2026-11-01', note: 'UPSC CMS is a computer-based test: replaced the OMR transfer, pencil and erasure advice with on-screen review tactics; corrected the per-wrong-answer penalty and the section weights; credited the CrackCMS Editorial Team.' },
     ],
     faqs: [
         {
@@ -105,7 +106,7 @@ const post: BlogPost = {
         },
         {
             q: 'Which subjects should I drop in the last 5 days?',
-            a: 'Drop the lowest-yield 10–15% of your syllabus — typically Anatomy micro-details, Dental, Psychiatry pharmacology specifics and ENT surgical anatomy. Spend that time doubling down on Medicine (50–55 marks), Surgery (35–40 marks) and PSM (15–20 marks). The mark distribution is in the official UPSC CMS scheme document linked in our references.',
+            a: 'Drop the lowest-yield 10–15% of your syllabus — typically rare eponyms, niche psychiatric-drug specifics and fine surgical-anatomy detail. Spend that time doubling down on the heaviest sections: General Medicine (96 of the 120 questions in Paper I), then Surgery, Gynaecology & Obstetrics and PSM (40 questions each in Paper II). The split is in the official UPSC CMS scheme document linked in our references.',
         },
         {
             q: 'How many PYQs should I solve per day in the last week?',
@@ -113,7 +114,7 @@ const post: BlogPost = {
         },
         {
             q: 'What is the realistic cutoff and target score for UPSC CMS?',
-            a: 'Recent published UPSC CMS qualifying cutoffs (out of 500 written marks) have typically ranged: General ~270–310, OBC ~235–280, SC ~200–245, ST ~185–220. Always verify the exact current-year cutoff on the official UPSC press release on upsc.gov.in. Aim for 300+ to be safe in General. With 120 questions per paper and negative marking (~-0.33 per wrong), a net-correct target of 70/120 (≈58%) is typically around the qualifying margin.',
+            a: 'Recent published UPSC CMS qualifying cutoffs (out of 500 written marks) have typically ranged: General ~270–310, OBC ~235–280, SC ~200–245, ST ~185–220. Always verify the exact current-year cutoff on the official UPSC press release on upsc.gov.in. Aim for 300+ to be safe in General. With 120 questions per paper and negative marking (one-third of the question’s marks, about −0.69 per wrong answer), a net-correct target of 70/120 (≈58%) is typically around the qualifying margin.',
         },
         {
             q: 'Should I read standard textbooks in the last 5 days?',
@@ -126,7 +127,7 @@ const post: BlogPost = {
     ],
     body: `If you are reading this five days before the UPSC CMS exam, you are in good company — and in good danger. The good news is that the vast majority of rankers do not study more in the last week. They study less, but they triage harder. The bad news is that many candidates panic-crash at this exact point and burn two days doing nothing productive.
 
-This plan is what we recommend at CrackCMS for the final-week routine. It is not glamorous. There is no secret source. It is a structured schedule, a sleep contract, and a list of MCQ patterns drawn from analysis of [UPSC CMS previous-year papers](/questions?exam=CMS).
+This plan is what we recommend at CrackCMS for the final-week routine. It is not glamorous. There is no secret source. It is a structured schedule, a sleep contract, and a list of MCQ patterns drawn from analysis of [UPSC CMS previous-year papers](/questions?exam=cms).
 
 > **The single rule of the last 5 days:** every hour is *high-yield recall*, *mock-test scoring*, or *body-clock tuning*. Nothing else.
 
@@ -146,7 +147,7 @@ You will notice three things:
 
 ## The rule of five days
 
-A common mistake is to treat 5 days as 5 days of study. It is not. Realistically, by Day-5 you have **30–35 hours** of *awake, useful* study time across the 5 days — once you subtract sleep, meals, two 30-minute walks per day, the mock-test transfer-time, and one evening of rest on Day-1. That is the budget. Spend it like an ICU registrar triages — never on what is interesting, always on what yields marks.
+A common mistake is to treat 5 days as 5 days of study. It is not. Realistically, by Day-5 you have **30–35 hours** of *awake, useful* study time across the 5 days — once you subtract sleep, meals, two 30-minute walks per day, the mock-test review time, and one evening of rest on Day-1. That is the budget. Spend it like an ICU registrar triages — never on what is interesting, always on what yields marks.
 
 ---
 
@@ -160,7 +161,7 @@ Sit a full-length, timed, exam-condition mock. Use the [CMS simulator](/simulato
 
 - 120 Qs in 120 minutes.
 - No looking up anything between questions. *Flag = skip.*
-- Practice OMR transfer: budget the last 10 minutes for the transfer sheet, exactly as you will on exam day. UPSC continues to use a pen-and-paper OMR — do not skip this transfer-step practice. Most candidates lose 3–6 marks every year to misaligned bubbles.
+- Practise the CBT review flow: keep the last 10 minutes to check the question palette for unanswered or marked-for-review questions, exactly as you will on exam day. UPSC CMS is a computer-based test, so there is no answer sheet to transfer to.
 
 ### Lunch (12:00 – 1:00 PM)
 
@@ -230,7 +231,7 @@ This is the most counter-intuitive day. **Rest is revision now.**
 
 ## 7 MCQ-solving patterns to internalise
 
-These seven patterns cover ~70% of CMS stems. Practise them via [PYQs](/questions?exam=CMS) in filter mode.
+These seven patterns cover ~70% of CMS stems. Practise them via [PYQs](/questions?exam=cms) in filter mode.
 
 ### 1. The most-common-answer rule
 In any "all of the following except" or "most likely cause" stem, **the textbook-classic presentation is the answer ~80% of the time.** If you recognise the pattern from standard teaching, pick it; do not second-guess.
@@ -251,7 +252,7 @@ If the question requires two clinical steps (e.g. "investigation → diagnosis")
 Unless it is an emergency, the answer is **investigation first, treatment second**. The trap is to jump to definitive therapy.
 
 ### 7. The "I have not seen this before" rule
-For the ~5–8% of Qs you genuinely cannot reason out, **mark and move in 30 seconds**. Come back at the end. Un-attempted hurts less than mis-attempted (–0.33 per wrong). Three mis-attempts cost more than one skip.
+For the ~5–8% of Qs you genuinely cannot reason out, **mark and move in 30 seconds**. Come back at the end. Un-attempted hurts less than mis-attempted: a wrong answer costs one-third of the question’s marks (about 0.69), a skip costs nothing.
 
 > Want these patterns practised on real exam stems? The [CMS AI tutor](/ai-tutor) will drill you on any topic using questions selected by these exact patterns.
 
@@ -283,11 +284,11 @@ A landmark 2008 Sleep journal study (Walker et al.) showed memory consolidation 
 ## Exam-day checklist (print this)
 
 - [ ] Admit card + 2 photo IDs in a transparent folder (kept separately, not in bag).
-- [ ] 2 black ballpoint pens (one backup, sealed). One pencil + eraser for the OMR sheet.
+- [ ] 2 black ballpoint pens (one backup, sealed).
 - [ ] Watch (no smart-watch). Transparent water bottle (≤ 500 ml).
-- [ ] 2 plain glucose biscuits + a banana for the 10-minute break.
+- [ ] 2 plain glucose biscuits + a banana for the break between Paper I and Paper II.
 - [ ] Reach centre **75 minutes** before reporting time. Late = disqualification.
-- [ ] Read every option once before ticking. **Tick = commit.** No erasures on OMR if avoidable (erasures invalidate the sheet on many machines).
+- [ ] Read every option once before you click. **Click = commit:** change an answer only for a concrete reason (a misread stem, a missed "NOT"), never on a vague doubt.
 - [ ] When you sit down and panic hits: **box-breathe 4 times, sip water, recall the 7 patterns.** You are ready.
 
 ---
@@ -340,9 +341,9 @@ Every clinical claim and statistical figure in this article is anchored to a pri
 
 ### About the author
 
-**Dr. Aarav Mehta, MBBS, MD (Internal Medicine)** — AIIMS-trained internist who runs the CrackCMS UPSC CMS medicine module. Interests include ECG teaching, acid-base interpretation, and making recall stick. See the [CrackCMS editorial team](/about) for the full review panel and our [medical review policy](/medical-review-policy).
+**CrackCMS Editorial Team** — the team that writes and reviews CrackCMS study material. See [about CrackCMS](/about), our [editorial policy](/editorial-policy) and our [medical review policy](/medical-review-policy).
 
-*This article was independently reviewed by the CrackCMS clinical editorial panel. It is for educational purposes and does not replace your textbook or your judgement. Always cross-check drug doses, treatment guidelines and cutoff statistics against the latest official sources before your exam day.*`,
+*This article is for educational purposes and does not replace your textbook or your judgement. Always cross-check drug doses, treatment guidelines and cutoff statistics against the latest official sources before your exam day.*`,
 };
 
 export default post;

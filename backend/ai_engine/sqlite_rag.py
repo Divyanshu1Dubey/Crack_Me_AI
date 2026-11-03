@@ -390,7 +390,8 @@ Be precise and exam-focused."""
 
     def _hash_file(self, file_path: str) -> str:
         """Create hash of file for deduplication."""
-        hasher = hashlib.md5()
+        # A dedup fingerprint, not a security hash (same digest as before).
+        hasher = hashlib.md5(usedforsecurity=False)
         with open(file_path, 'rb') as f:
             buf = f.read(65536)
             while buf:

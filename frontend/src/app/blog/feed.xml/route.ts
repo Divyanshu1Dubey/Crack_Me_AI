@@ -1,4 +1,4 @@
-import { getAllPosts } from '@/lib/blog';
+import { getAllPosts, postSocialImagePath } from '@/lib/blog';
 import { siteName, siteUrl, defaultOgImage } from '@/lib/seo';
 
 /**
@@ -22,9 +22,7 @@ export async function GET() {
     const items = posts
         .map((post) => {
             const url = `${siteUrl}/blog/${post.slug}`;
-            const cover = post.coverImage
-                ? `${siteUrl}${post.coverImage}`
-                : `${siteUrl}${defaultOgImage}`;
+            const cover = `${siteUrl}${postSocialImagePath(post)}`;
             return `
     <item>
       <title>${escapeXml(post.title)}</title>

@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import Link from 'next/link';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { analyticsAPI } from '@/lib/api';
-import { BarChart3, Target, TrendingDown, TrendingUp, Lightbulb, Activity, Brain, Calendar } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, BarChart3, Target, TrendingDown, TrendingUp, Lightbulb, Activity, Brain, Calendar } from 'lucide-react';
 import {
     AreaChart, Area, PieChart, Pie, Cell,
     Bar, ComposedChart, Line,
@@ -36,14 +38,18 @@ interface SubjectPrediction {
     subject: string;
     code: string;
     accuracy: number;
-    predicted_correct: number;
+    /** Questions this subject has in the real CMS paper; null if not a paper subject. */
+    out_of: number | null;
+    predicted_correct: number | null;
     strength: string;
 }
 
+// Mirrors backend DailyActivitySerializer.
 interface HeatmapDay {
     date: string;
-    questions_practiced: number;
-    tests_taken: number;
+    questions_attempted: number;
+    correct_answers: number;
+    tests_completed: number;
     time_spent_minutes: number;
 }
 
@@ -62,8 +68,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function AnalyticsPage() {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const router = useRouter();
+    // Member page: logged-out visitors go to /login?next=/analytics.
+    const { ready } = useRequireAuth();
     const [weakTopics, setWeakTopics] = useState<TopicPerf[]>([]);
     const [strongTopics, setStrongTopics] = useState<TopicPerf[]>([]);
     const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -74,25 +80,23 @@ export default function AnalyticsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
-        if (isAuthenticated) {
-            Promise.all([
-                analyticsAPI.getWeakTopics().catch(() => ({ data: { weak_topics: [], strong_topics: [], suggestions: [] } })),
-                analyticsAPI.getTopicPerformance().catch(() => ({ data: [] })),
-                analyticsAPI.getPerformanceTrend().catch(() => ({ data: { trend: [] } })),
-                analyticsAPI.getScorePrediction().catch(() => ({ data: null })),
-                analyticsAPI.getHeatmap().catch(() => ({ data: [] })),
-            ]).then(([weakRes, perfRes, trendRes, predRes, heatRes]) => {
-                setWeakTopics(weakRes.data.weak_topics || []);
-                setStrongTopics(weakRes.data.strong_topics || []);
-                setSuggestions(weakRes.data.suggestions || []);
-                setAllPerf(perfRes.data || []);
-                setTrend(trendRes.data.trend || trendRes.data || []);
-                setPrediction(predRes.data);
-                setHeatmap(heatRes.data || []);
-            }).finally(() => setLoading(false));
-        }
-    }, [authLoading, isAuthenticated, router]);
+        if (!ready) return;
+        Promise.all([
+            analyticsAPI.getWeakTopics().catch(() => ({ data: { weak_topics: [], strong_topics: [], suggestions: [] } })),
+            analyticsAPI.getTopicPerformance().catch(() => ({ data: [] })),
+            analyticsAPI.getPerformanceTrend().catch(() => ({ data: { trend: [] } })),
+            analyticsAPI.getScorePrediction().catch(() => ({ data: null })),
+            analyticsAPI.getHeatmap().catch(() => ({ data: [] })),
+        ]).then(([weakRes, perfRes, trendRes, predRes, heatRes]) => {
+            setWeakTopics(weakRes.data.weak_topics || []);
+            setStrongTopics(weakRes.data.strong_topics || []);
+            setSuggestions(weakRes.data.suggestions || []);
+            setAllPerf(perfRes.data || []);
+            setTrend(trendRes.data.trend || trendRes.data || []);
+            setPrediction(predRes.data);
+            setHeatmap(heatRes.data || []);
+        }).finally(() => setLoading(false));
+    }, [ready]);
 
     // Aggregate subject data for pie chart
     const subjectData = allPerf.reduce((acc: Record<string, { subject: string; total: number; correct: number }>, p) => {
@@ -106,6 +110,11 @@ export default function AnalyticsPage() {
         value: s.total,
         accuracy: s.total > 0 ? Math.round(s.correct / s.total * 100) : 0,
     })).filter(s => s.value > 0);
+
+    const hasPrediction = Boolean(prediction && prediction.predicted_score !== null);
+    // Nothing to chart yet: one clear next step instead of five empty cards.
+    const noData = !hasPrediction && suggestions.length === 0 && trend.length === 0 && pieData.length === 0
+        && heatmap.length === 0 && weakTopics.length === 0 && strongTopics.length === 0 && allPerf.length === 0;
 
     return (
         <div className="min-h-screen bg-background">
@@ -121,10 +130,34 @@ export default function AnalyticsPage() {
 
                 {loading ? (
                     <div className="glass-card p-8 text-center"><div className="animate-pulse gradient-text">Loading analytics...</div></div>
+                ) : noData ? (
+                    <Card className="border-primary/30 bg-linear-to-br from-primary/10 via-card to-card">
+                        <CardContent className="p-8 md:p-10 text-center flex flex-col items-center gap-3">
+                            <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center">
+                                <BarChart3 className="w-7 h-7 text-primary" />
+                            </div>
+                            <h2 className="text-xl font-bold text-foreground">No analytics yet</h2>
+                            <p className="text-sm text-muted-foreground max-w-md">
+                                Finish a test or practise a few questions to unlock your accuracy trend,
+                                subject breakdown and weak topics.
+                            </p>
+                            <div className="mt-2 flex flex-wrap justify-center gap-2">
+                                <Button asChild>
+                                    <Link href="/tests">
+                                        Take a test
+                                        <ArrowRight className="w-4 h-4" />
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline">
+                                    <Link href="/questions">Practice questions</Link>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 ) : (
                     <>
                         {/* Score Prediction Card */}
-                        {prediction && prediction.predicted_score !== null && (
+                        {hasPrediction && (
                             <div className="glass-card p-6 mb-6" style={{ borderColor: 'rgba(6, 182, 212, 0.3)' }}>
                                 <div className="flex flex-wrap items-center justify-between gap-4">
                                     <div>
@@ -151,7 +184,9 @@ export default function AnalyticsPage() {
                                                 <div className="text-lg font-bold" style={{ color: sp.strength === 'strong' ? '#10b981' : sp.strength === 'weak' ? '#ef4444' : '#f59e0b' }}>
                                                     {sp.accuracy}%
                                                 </div>
-                                                <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sp.predicted_correct}/24 Qs</div>
+                                                {sp.out_of ? (
+                                                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{sp.predicted_correct ?? 0}/{sp.out_of} Qs</div>
+                                                ) : null}
                                             </div>
                                         ))}
                                     </div>
@@ -260,7 +295,7 @@ export default function AnalyticsPage() {
                                 </h3>
                                 <div className="flex flex-wrap gap-1">
                                     {heatmap.slice(-90).map((d, i) => {
-                                        const intensity = d.questions_practiced + (d.tests_taken * 10);
+                                        const intensity = (d.questions_attempted || 0) + ((d.tests_completed || 0) * 10);
                                         let bg = 'rgba(16,185,129,0.06)';
                                         let border = 'rgba(16,185,129,0.18)';
                                         if (intensity > 50) { bg = '#10b981'; border = '#10b981'; }
@@ -269,7 +304,7 @@ export default function AnalyticsPage() {
                                         else if (intensity > 0)  { bg = 'rgba(16,185,129,0.15)'; border = 'rgba(16,185,129,0.2)'; }
                                         return (
                                             <div key={i} className="w-3 h-3 rounded-sm border" style={{ background: bg, borderColor: border }}
-                                                title={`${d.date}: ${d.questions_practiced} Qs, ${d.tests_taken} tests`} />
+                                                title={`${d.date}: ${d.questions_attempted || 0} Qs, ${d.tests_completed || 0} tests`} />
                                         );
                                     })}
                                 </div>
@@ -349,7 +384,8 @@ export default function AnalyticsPage() {
                             </h3>
                             {allPerf.length === 0 ? (
                                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                    Take some tests to see detailed topic-wise analytics here!
+                                    Take some tests to see detailed topic-wise analytics here.{' '}
+                                    <Link href="/tests" className="font-medium text-primary underline-offset-2 hover:underline">Take a test</Link>
                                 </p>
                             ) : (
                                 <div className="overflow-x-auto">
@@ -374,7 +410,8 @@ export default function AnalyticsPage() {
                                                             {p.accuracy}%
                                                         </span>
                                                     </td>
-                                                    <td className="py-2 text-center" style={{ color: 'var(--text-secondary)' }}>{p.avg_time_per_question}s</td>
+                                                    {/* Per-topic time is not recorded yet for every answer; show a dash, not a fake 0s. */}
+                                                    <td className="py-2 text-center" style={{ color: 'var(--text-secondary)' }}>{p.avg_time_per_question > 0 ? `${p.avg_time_per_question}s` : '—'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

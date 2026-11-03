@@ -14,7 +14,8 @@ import {
     BookOpen,
     ChevronDown, ChevronUp
 } from 'lucide-react';
-import { questionsAPI } from '@/lib/api';
+import api from '@/lib/api';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 
@@ -32,10 +33,12 @@ interface SubjectStat {
     color?: string;
 }
 
+// GET /api/analytics/pyq-trends/ — real year x subject counts of the PYQ bank.
 interface StatsData {
     total: number;
+    years: number[];
     trends: TrendItem[];
-    by_subject: SubjectStat[];
+    subjects: SubjectStat[];
 }
 
 // High-yield PYQ topics with star ratings
@@ -99,21 +102,29 @@ const HIGH_YIELD_TOPICS = [
 ];
 
 export default function TrendsPage() {
+    // Member page (like the endpoint): wait for auth, then load. The request
+    // used to fire before the session was ready and render only dashes.
+    const { ready } = useRequireAuth();
     const [stats, setStats] = useState<StatsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [expandedSubject, setExpandedSubject] = useState<number | null>(0);
 
     useEffect(() => {
-        questionsAPI.getStats().then(res => {
+        if (!ready) return;
+        api.get('/analytics/pyq-trends/', { params: { exam_source: 'UPSC CMS' } }).then(res => {
             setStats(res.data);
             setLoading(false);
         }).catch(() => setLoading(false));
-    }, []);
+    }, [ready]);
 
     // Process trends data
     const trends: TrendItem[] = stats?.trends || [];
-    const years = Array.from(new Set(trends.map(t => t.year))).sort((a, b) => b - a);
-    const subjects = stats?.by_subject || [];
+    const years = stats?.years?.length ? stats.years : Array.from(new Set(trends.map(t => t.year))).sort((a, b) => b - a);
+    const subjects = stats?.subjects || [];
+    const countFor = (year: number, code: string) =>
+        trends.find(t => t.year === year && t.subject__code === code)?.count || 0;
+    const yearRange = years.length ? `${years[years.length - 1]}–${years[0]}` : '';
+    const maxCell = Math.max(1, ...trends.map(t => t.count));
 
     return (
         <div className="min-h-screen bg-background">
@@ -140,7 +151,7 @@ export default function TrendsPage() {
                         </div>
                         <div className="pr-4">
                             <div className="text-xs font-bold uppercase" style={{ color: 'var(--text-secondary)' }}>Latest Data</div>
-                            <div className="text-lg font-black">{years[0] || '2025'} Examination</div>
+                            <div className="text-lg font-black">{years[0] ? `${years[0]} Examination` : '—'}</div>
                         </div>
                     </div>
                 </div>
@@ -152,11 +163,13 @@ export default function TrendsPage() {
                             <div className="p-2 bg-cyan-500/10 rounded-xl text-cyan-400">
                                 <Brain className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-bold text-cyan-400 bg-cyan-400/10 px-2 py-1 rounded-full">+12.5% YoY</span>
+                            {years.length > 0 && (
+                                <span className="text-xs font-bold text-cyan-400 bg-cyan-400/10 px-2 py-1 rounded-full">{years.length} exam years</span>
+                            )}
                         </div>
                         <h3 className="font-bold mb-1">Total Questions</h3>
-                        <p className="text-2xl font-black gradient-text mb-1">{stats?.total || 1920}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>1,920 PYQs + AI-curated important questions in our database.</p>
+                        <p className="text-2xl font-black gradient-text mb-1">{stats ? stats.total.toLocaleString() : '—'}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>UPSC CMS questions in our question bank{yearRange ? ` (${yearRange})` : ''}.</p>
                     </div>
 
                     <div className="glass-card p-5 border-l-4 border-l-[var(--accent-secondary)] group hover:scale-[1.02] transition-transform cursor-default">
@@ -167,8 +180,8 @@ export default function TrendsPage() {
                             <span className="text-xs font-bold text-purple-400 bg-purple-400/10 px-2 py-1 rounded-full">High Influence</span>
                         </div>
                         <h3 className="font-bold mb-1">Core Subjects</h3>
-                        <p className="text-2xl font-black gradient-text mb-1">{subjects.length || 5}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>5 major clinical sections as per latest UPSC CMS guidelines.</p>
+                        <p className="text-2xl font-black gradient-text mb-1">{stats ? subjects.length : '—'}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Subjects with dated PYQs in our bank (the exam has 5 major clinical sections).</p>
                     </div>
 
                     <div className="glass-card p-5 border-l-4 border-l-pink-500 group hover:scale-[1.02] transition-transform cursor-default">
@@ -179,8 +192,10 @@ export default function TrendsPage() {
                             <span className="text-xs font-bold text-pink-400 bg-pink-400/10 px-2 py-1 rounded-full">Most Frequent</span>
                         </div>
                         <h3 className="font-bold mb-1">Top Subject</h3>
-                        <p className="text-2xl font-black gradient-text mb-1">{subjects[0]?.name || 'Medicine'}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>General Medicine holds maximum weightage in Paper 1.</p>
+                        <p className="text-2xl font-black gradient-text mb-1">{subjects[0]?.name || '—'}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            {subjects[0] ? `${subjects[0].count.toLocaleString()} dated PYQs — the most of any subject in our bank.` : 'No dated PYQs yet.'}
+                        </p>
                     </div>
                 </div>
 
@@ -193,6 +208,11 @@ export default function TrendsPage() {
                         </div>
                     </div>
 
+                    {years.length === 0 ? (
+                        <p className="p-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                            {stats ? 'No dated UPSC CMS questions in the bank yet.' : 'Could not load exam trends. Please refresh the page.'}
+                        </p>
+                    ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -214,23 +234,28 @@ export default function TrendsPage() {
                                                 <div className="w-3 h-12 rounded-full" style={{ background: sub.color || 'var(--accent-primary)' }}></div>
                                                 <div>
                                                     <div className="font-black text-lg group-hover:text-[var(--accent-primary)] transition-colors">{sub.name}</div>
-                                                    <div className="text-xs text-[var(--text-secondary)] font-bold tracking-widest uppercase">{sub.code} Section</div>
+                                                    {/* The "Imported" bucket is shown as "Expert Curated"; its code is internal. */}
+                                                    {sub.code && sub.code.toUpperCase() !== 'IMPORTED' && (
+                                                        <div className="text-xs text-[var(--text-secondary)] font-bold tracking-widest uppercase">{sub.code} Section</div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
-                                        {years.map(year => {
-                                            const item = trends.find(t => t.year === year && t.subject__code === sub.code);
-                                            const count = item?.count || 0;
-                                            const trendDirection = Math.random() > 0.5 ? 'up' : 'down'; // Mocked trend for UI
+                                        {years.map((year, yi) => {
+                                            const count = countFor(year, sub.code);
+                                            // Real change vs the previous exam year in the bank (columns are newest first).
+                                            const previousYear = years[yi + 1];
+                                            const previous = previousYear !== undefined ? countFor(previousYear, sub.code) : null;
+                                            const trendDirection = previous === null || previous === count ? null : (count > previous ? 'up' : 'down');
 
                                             return (
                                                 <td key={year} className="p-6 text-center">
                                                     <div className="relative inline-block">
                                                         <span className="text-2xl font-black">{count}</span>
-                                                        {count > 0 && (
-                                                            <div className="absolute -right-6 top-1">
+                                                        {count > 0 && trendDirection && (
+                                                            <div className="absolute -right-6 top-1" title={`${previous} in ${previousYear}`}>
                                                                 {trendDirection === 'up' ? (
-                                                                    <ArrowUpRight className="w-4 h-4 text-emerald-500 animate-bounce" />
+                                                                    <ArrowUpRight className="w-4 h-4 text-emerald-500" />
                                                                 ) : (
                                                                     <ArrowDownRight className="w-4 h-4 text-rose-500 opacity-50" />
                                                                 )}
@@ -242,7 +267,7 @@ export default function TrendsPage() {
                                                             <div
                                                                 className="h-full rounded-full transition-all duration-1000"
                                                                 style={{
-                                                                    width: `${Math.min(100, (count / 40) * 100)}%`,
+                                                                    width: `${Math.min(100, (count / maxCell) * 100)}%`,
                                                                     background: sub.color || 'var(--accent-primary)'
                                                                 }}
                                                             ></div>
@@ -256,17 +281,18 @@ export default function TrendsPage() {
                             </tbody>
                         </table>
                     </div>
+                    )}
                 </div>
 
-                {/* AI-Analyzed PYQ High-Yield Topics */}
+                {/* Curated PYQ High-Yield Topics (editorial list, not computed) */}
                 <div className="glass-card overflow-hidden">
                     <div className="p-5 border-b border-[var(--glass-border)] flex items-center gap-3" style={{ background: 'linear-gradient(to right, rgba(139,92,246,0.08), transparent)' }}>
                         <div className="p-2 rounded-xl text-white" style={{ background: 'var(--accent-primary)' }}>
                             <Star className="w-5 h-5" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-black">AI-Analyzed PYQ Trends (2018–2024)</h2>
-                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>High-yield topics to predict for upcoming exams · ★★★ = Guaranteed · ★★ = Important · ★ = Watch</p>
+                            <h2 className="text-lg font-black">Curated High-Yield PYQ Topics</h2>
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Editorial picks from past papers · ★★★ = Must do · ★★ = Important · ★ = Watch</p>
                         </div>
                     </div>
                     <div className="divide-y divide-[var(--glass-border)]">
@@ -322,15 +348,15 @@ export default function TrendsPage() {
                     </div>
                 </div>
 
-                {/* Pattern Change Alert */}
+                {/* How to read this page (replaces an invented "AI trend detection" claim) */}
                 <div className="p-5 rounded-2xl border border-dashed border-cyan-500/30 bg-cyan-500/5 flex flex-col md:flex-row items-center gap-4">
                     <div className="p-3 rounded-xl text-white shrink-0" style={{ background: '#06b6d4' }}>
                         <AlertCircle className="w-6 h-6" />
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                        <h4 className="font-black text-cyan-400 mb-1">AI Trend Detection: Shifting Pattern</h4>
+                        <h4 className="font-black text-cyan-400 mb-1">How to read these trends</h4>
                         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                            Our AI analysis indicates a <strong>15% increase</strong> in clinical case-based questions in the 2024–2025 cycle. High-yield topics are shifting towards <strong>Community Medicine (PSM) and Pediatrics</strong> integration in Paper 2.
+                            Counts are the dated UPSC CMS previous-year questions in our question bank, by exam year. Arrows compare a subject with the previous exam year in the bank. Pair the table with the curated topic list above to plan your revision.
                         </p>
                     </div>
                 </div>

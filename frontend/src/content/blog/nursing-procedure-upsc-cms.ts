@@ -19,7 +19,7 @@ const post: BlogPost = {
     updatedAt: '2026-09-19',
     readingTime: '7 min',
     wordCount: 2200,
-    primaryCta: { label: 'Practice Clinical Skills PYQs (free)', href: '/questions?topic=clinical-skills' },
+    primaryCta: { label: 'Practice Clinical Skills PYQs (free)', href: '/questions' },
     relatedExamPaths: ['/cms', '/medical-officer'],
     faqs: [
         { q: 'Why do I need to know nursing procedures for UPSC CMS?', a: 'As a Medical Officer in government hospitals, you will supervise and perform basic procedures. UPSC CMS tests these through image-based and clinical vignette questions to assess practical knowledge.' },

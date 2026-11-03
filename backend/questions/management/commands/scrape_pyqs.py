@@ -66,11 +66,21 @@ SUBJECT_MAP = {
 }
 
 
+def _keyword_pattern(keyword):
+    # Match at a word start; short abbreviations (ENT, OBG, PSM) must be whole
+    # words, otherwise "patient" / "present" / "treatment" read as ENT.
+    suffix = r'\b' if len(keyword) <= 3 else ''
+    return re.compile(r'\b' + re.escape(keyword) + suffix)
+
+
+_SUBJECT_PATTERNS = [(_keyword_pattern(k), v) for k, v in SUBJECT_MAP.items()]
+
+
 def infer_subject_topic(section_header, question_text):
     """Infer subject code and topic name from section header and question text."""
-    combined = f"{section_header} {question_text}".lower()
-    for keyword, (subj_code, topic_name) in SUBJECT_MAP.items():
-        if keyword in combined:
+    combined = f"{section_header or ''} {question_text or ''}".lower()
+    for pattern, (subj_code, topic_name) in _SUBJECT_PATTERNS:
+        if pattern.search(combined):
             return subj_code, topic_name
     return 'MED', 'Cardiology'
 

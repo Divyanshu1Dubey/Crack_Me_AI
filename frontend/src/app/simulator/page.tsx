@@ -8,14 +8,23 @@ import { testsAPI, questionsAPI } from '@/lib/api';
 import { extractApiErrorMessage } from '@/lib/api';
 import { GraduationCap, Play, Clock, FileText, Target, AlertTriangle, Calendar } from 'lucide-react';
 
-interface Subject { id: number; name: string; code: string; }
+// This page simulates UPSC CMS only; the backend scopes the questions with it.
+const SIMULATOR_EXAM = 'cms';
+
+// Years that have UPSC CMS questions. Prefers the per-exam stats; falls back
+// to /questions/years/ for this exam (contract C11), without non-years.
+function cmsYears(stats: unknown, allYears: unknown): number[] {
+    const byYear = (stats as { by_year?: { year?: unknown; count?: unknown }[] } | null)?.by_year;
+    const source = Array.isArray(byYear)
+        ? byYear.filter(row => Number(row?.count) > 0).map(row => Number(row?.year))
+        : (Array.isArray(allYears) ? allYears.map(Number) : []);
+    return Array.from(new Set(source.filter(y => Number.isInteger(y) && y >= 1900))).sort((a, b) => b - a);
+}
 
 export default function SimulatorPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
-    const [, setSubjects] = useState<Subject[]>([]);
     const [years, setYears] = useState<number[]>([]);
-    const [, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pyqYear, setPyqYear] = useState<number | null>(null);
@@ -24,13 +33,14 @@ export default function SimulatorPage() {
     useEffect(() => {
         if (!authLoading && !isAuthenticated) { router.push('/login'); return; }
         if (isAuthenticated) {
+            // Only the PYQ years are needed (an unused subjects request in the
+            // same Promise.all used to blank the year list when it failed).
             Promise.all([
-                questionsAPI.getSubjects(),
-                questionsAPI.getYears(),
-            ]).then(([sRes, yRes]) => {
-                setSubjects(sRes.data.results || sRes.data || []);
-                setYears(yRes.data.results || yRes.data || []);
-            }).catch(() => { }).finally(() => setLoading(false));
+                questionsAPI.getYears({ exam_type: SIMULATOR_EXAM }).catch(() => null),
+                questionsAPI.getStats({ exam_source: 'UPSC CMS' }).catch(() => null),
+            ]).then(([yRes, statsRes]) => {
+                setYears(cmsYears(statsRes?.data ?? null, yRes?.data?.results || yRes?.data || []));
+            });
         }
     }, [authLoading, isAuthenticated, router]);
 
@@ -38,7 +48,7 @@ export default function SimulatorPage() {
         setGenerating(true);
         setError(null);
         try {
-            const res = await testsAPI.generate({ test_type: paper, num_questions: 120 });
+            const res = await testsAPI.generate({ test_type: paper, num_questions: 120, exam_type: SIMULATOR_EXAM });
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
             const msg = err && typeof err === 'object' && 'response' in err
@@ -55,7 +65,10 @@ export default function SimulatorPage() {
         setGenerating(true);
         setError(null);
         try {
-            const res = await testsAPI.pyqSimulation({ year: pyqYear });
+            // exam_type keeps NEET PG / INI-CET questions of the same year out
+            // of a "UPSC CMS {year}" paper (the backend also defaults to CMS).
+            const payload = { year: pyqYear, exam_type: SIMULATOR_EXAM };
+            const res = await testsAPI.pyqSimulation(payload);
             router.push(`/tests/${res.data.id}`);
         } catch (err: unknown) {
             const msg = err && typeof err === 'object' && 'response' in err
@@ -167,7 +180,7 @@ export default function SimulatorPage() {
                         <div className="mb-6">
                             <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--text-secondary)' }}>Select Year</label>
                             <div className="flex flex-wrap gap-2">
-                                {years.sort((a, b) => b - a).map(y => (
+                                {years.map(y => (
                                     <button key={y} onClick={() => setPyqYear(y)}
                                         className="px-4 py-2 rounded-lg text-sm font-bold transition-all"
                                         style={{

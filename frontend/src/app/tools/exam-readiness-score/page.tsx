@@ -8,7 +8,7 @@ const title = 'UPSC CMS Exam Readiness Score 2026 — How Prepared Are You?';
 const description = 'Calculate your UPSC CMS 2026 exam readiness with our interactive tool. Assess syllabus completion, mock test performance, revision cycles, and study hours to get a personalised readiness score.';
 const slug = 'exam-readiness-score';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -55,16 +55,16 @@ export default function ExamReadinessScorePage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'ExamReadinessScore', path: '/tools/exam-readiness-score' }]} />
+                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'Exam Readiness Score', path: '/tools/exam-readiness-score' }]} />
                 </div>
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
                     <h1 className="text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
-                        ExamReadinessScore 2026
+                        Exam Readiness Score 2026
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
                         Assess your UPSC CMS preparation with a personalised readiness score.
                         Track syllabus completion, mock test performance, revision cycles, and daily study hours
-                        to understand where you stand and what to improve before <strong>02 August 2026</strong>.
+                        to understand where you stand and what to improve before <strong>exam day</strong>.
                     </p>
                 </section>
 

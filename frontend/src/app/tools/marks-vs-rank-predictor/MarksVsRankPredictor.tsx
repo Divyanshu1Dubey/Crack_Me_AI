@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { UPSC_CMS_PATTERN } from '@/lib/examPatterns';
 
 type Category = 'general' | 'obc' | 'sc' | 'st';
 
@@ -15,11 +16,17 @@ interface RankResult {
   advice: string;
 }
 
-const TOTAL_MARKS = 1800;
+// Official UPSC CMS totals (lib/examPatterns): Paper I 250 + Paper II 250
+// written marks + 100-mark Personality Test = 600. (This used to assume
+// 500 + 500 + an 800-mark interview = 1800.)
+const PAPER1_MAX = UPSC_CMS_PATTERN.papers[0].marks;
+const PAPER2_MAX = UPSC_CMS_PATTERN.papers[1].marks;
+const INTERVIEW_MAX = UPSC_CMS_PATTERN.personalityTestMarks;
+const TOTAL_MARKS = UPSC_CMS_PATTERN.totalMarks;
 const PAPERS = [
-  { name: 'Paper I – General Medicine', max: 500 },
-  { name: 'Paper II – Allied Subjects', max: 500 },
-  { name: 'Personality Test', max: 800 },
+  { name: 'Paper I – General Medicine & Paediatrics', max: PAPER1_MAX },
+  { name: 'Paper II – Surgery, Gynaecology & Obstetrics, PSM', max: PAPER2_MAX },
+  { name: 'Personality Test', max: INTERVIEW_MAX },
 ];
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -29,12 +36,9 @@ const CATEGORY_LABELS: Record<Category, string> = {
   st: 'ST',
 };
 
-// Rough normalisation factors so that candidates scoring 90% in papers
-// and 65% in interview land in a sensible percentile range. These are
-// intentionally soft — they produce a realistic-looking curve without
-// claiming to be UPSC's actual model.
-const PAPER_WEIGHT = 0.35;
-const INTERVIEW_WEIGHT = 0.25;
+// A rough illustration, NOT UPSC's model: overall percentage is placed on a
+// normal curve with an assumed mean / spread, and the percentile is applied
+// to an assumed category pool. UPSC does not publish score distributions.
 const COMPETITORS = {
   general: 45000,
   obc: 35000,
@@ -70,19 +74,9 @@ function computeResult(
   const totalPossible = TOTAL_MARKS;
   const overallPct = totalScored / totalPossible;
 
-  // Weighted score: papers 35% each, interview 30%
-  const paper1Pct = paper1 / 500;
-  const paper2Pct = paper2 / 500;
-  const intPct = interview / 800;
-  const weightedScore =
-    paper1Pct * PAPER_WEIGHT +
-    paper2Pct * PAPER_WEIGHT +
-    intPct * INTERVIEW_WEIGHT;
-
-  // Approximate mean / std for overall percentage from past data
+  // Assumed mean / spread of the overall percentage (illustrative only)
   const meanPct = 0.48;
   const stdPct = 0.1;
-  const overallZ = (overallPct - meanPct) / stdPct;
   const overallPercentile = normalCdf(overallPct, meanPct, stdPct);
 
   // Category-specific percentile (relative to only category candidates)
@@ -146,9 +140,9 @@ export default function MarksVsRankPredictor() {
 
     setResult(
       computeResult(
-        Math.min(500, Math.max(0, p1)),
-        Math.min(500, Math.max(0, p2)),
-        Math.min(800, Math.max(0, intv)),
+        Math.min(PAPER1_MAX, Math.max(0, p1)),
+        Math.min(PAPER2_MAX, Math.max(0, p2)),
+        Math.min(INTERVIEW_MAX, Math.max(0, intv)),
         category,
       ),
     );
@@ -167,39 +161,42 @@ export default function MarksVsRankPredictor() {
     <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
       <h3 className="text-xl font-bold">Marks Vs Rank Predictor 2026</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        Enter your expected marks in each paper to estimate your category-wise rank and percentile. Based on
-        historical UPSC CMS score distributions.
+        Enter your expected marks in each paper ({PAPER1_MAX} + {PAPER2_MAX} written, {INTERVIEW_MAX} Personality Test,{' '}
+        {TOTAL_MARKS} in all) for a rough, illustrative estimate of your category-wise rank and percentile. UPSC does not
+        publish score distributions, so treat the result as a ballpark only.
       </p>
 
       <div className="mt-6 space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold mb-1">
-              Paper I — General Medicine
-              <span className="ml-2 text-xs text-muted-foreground">/ 500</span>
+            <label htmlFor="mvr-paper1" className="block text-sm font-semibold mb-1">
+              Paper I — General Medicine &amp; Paediatrics
+              <span className="ml-2 text-xs text-muted-foreground">/ {PAPER1_MAX}</span>
             </label>
             <input
+              id="mvr-paper1"
               type="number"
               value={paper1}
               onChange={(e) => setPaper1(e.target.value)}
-              placeholder="0 - 500"
+              placeholder={`0 - ${PAPER1_MAX}`}
               min="0"
-              max="500"
+              max={PAPER1_MAX}
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-1">
-              Paper II — Allied Subjects
-              <span className="ml-2 text-xs text-muted-foreground">/ 500</span>
+            <label htmlFor="mvr-paper2" className="block text-sm font-semibold mb-1">
+              Paper II — Surgery, OBG &amp; PSM
+              <span className="ml-2 text-xs text-muted-foreground">/ {PAPER2_MAX}</span>
             </label>
             <input
+              id="mvr-paper2"
               type="number"
               value={paper2}
               onChange={(e) => setPaper2(e.target.value)}
-              placeholder="0 - 500"
+              placeholder={`0 - ${PAPER2_MAX}`}
               min="0"
-              max="500"
+              max={PAPER2_MAX}
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
             />
           </div>
@@ -207,23 +204,25 @@ export default function MarksVsRankPredictor() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold mb-1">
+            <label htmlFor="mvr-interview" className="block text-sm font-semibold mb-1">
               Personality Test
-              <span className="ml-2 text-xs text-muted-foreground">/ 800</span>
+              <span className="ml-2 text-xs text-muted-foreground">/ {INTERVIEW_MAX}</span>
             </label>
             <input
+              id="mvr-interview"
               type="number"
               value={interview}
               onChange={(e) => setInterview(e.target.value)}
-              placeholder="0 - 800"
+              placeholder={`0 - ${INTERVIEW_MAX}`}
               min="0"
-              max="800"
+              max={INTERVIEW_MAX}
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-1">Category</label>
+            <label htmlFor="mvr-category" className="block text-sm font-semibold mb-1">Category</label>
             <select
+              id="mvr-category"
               value={category}
               onChange={(e) => setCategory(e.target.value as Category)}
               className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm"
@@ -354,10 +353,10 @@ export default function MarksVsRankPredictor() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          * This predictor uses a statistical model based on publicly available
-          UPSC CMS score distributions. It is indicative only — actual ranks
-          depend on UPSC's final merit list. Always verify with the official
-          result on upsc.gov.in.
+          * This predictor is a rough illustration on an assumed score curve and
+          assumed category pools — not UPSC data. Actual ranks depend on UPSC's
+          final merit list. Always verify with the official result on
+          upsc.gov.in.
         </p>
       </div>
     </div>

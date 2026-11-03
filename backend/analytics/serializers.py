@@ -1,11 +1,17 @@
 from rest_framework import serializers
 from .models import UserTopicPerformance, DailyActivity, Feedback, Announcement, StudyStreak, Badge, UserBadge
 from questions.models import StudyTimeBreakdown, UserQuest, QuestStreak, MistakeNotebook
+# Every subject name below is the one students see: the loader's "Imported"
+# bucket reads "Expert Curated" (the question serializers' display rule).
+from questions.serializers import PublicSubjectNameField
+# The text redaction of a locked test-review row, so a locked notebook row
+# and a locked /review/ row of the same question show the same text.
+from tests_engine.entitlement import _redact_locked_text as redact_locked_text
 
 
 class TopicPerformanceSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True, default='')
-    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True)
     accuracy = serializers.ReadOnlyField()
     avg_time_per_question = serializers.ReadOnlyField()
 
@@ -32,6 +38,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'category', 'rating', 'title', 'message',
                   'is_read', 'admin_reply', 'created_at']
         read_only_fields = ['id', 'username', 'is_read', 'admin_reply', 'created_at']
+        extra_kwargs = {'message': {'max_length': 5000}}
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -50,6 +57,17 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             'id', 'created_by', 'created_by_name', 'created_at',
             'sent_at', 'delivery_status', 'delivery_count', 'failure_report',
         ]
+
+
+class StudentAnnouncementSerializer(serializers.ModelSerializer):
+    """What students see: no targeting rules, delivery stats or author ids."""
+    is_expired = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Announcement
+        fields = ['id', 'title', 'message', 'image_url', 'deep_link', 'priority',
+                  'is_expired', 'expires_at', 'created_at']
+        read_only_fields = fields
 
 
 class StudyStreakSerializer(serializers.ModelSerializer):
@@ -88,7 +106,7 @@ class LeaderboardEntrySerializer(serializers.Serializer):
 
 
 class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
     subject_code = serializers.CharField(source='subject.code', read_only=True, default='')
     subject_color = serializers.CharField(source='subject.color', read_only=True, default='')
 
@@ -101,7 +119,7 @@ class StudyTimeBreakdownSerializer(serializers.ModelSerializer):
 
 class UserQuestSerializer(serializers.ModelSerializer):
     progress_percent = serializers.IntegerField(read_only=True)
-    subject_name = serializers.CharField(source='subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='subject.name', read_only=True, default='')
 
     class Meta:
         model = UserQuest
@@ -109,7 +127,20 @@ class UserQuestSerializer(serializers.ModelSerializer):
                   'target_value', 'current_value', 'xp_reward', 'is_completed', 'is_claimed',
                   'progress_percent', 'subject_name', 'quest_date', 'expires_at',
                   'completed_at', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        # Everything is server-controlled: students can only *claim* a
+        # quest via the detail endpoint (see questions.quest_service).
+        read_only_fields = fields
+
+
+class UserQuestAdminSerializer(serializers.ModelSerializer):
+    """Admin-only quest creation (can target any user)."""
+
+    class Meta:
+        model = UserQuest
+        fields = ['id', 'user', 'quest_type', 'difficulty', 'title', 'description',
+                  'target_value', 'xp_reward', 'quest_date', 'expires_at']
+        read_only_fields = ['id']
+        extra_kwargs = {'user': {'required': False}}
 
 
 class QuestStreakSerializer(serializers.ModelSerializer):
@@ -128,7 +159,7 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
     option_d = serializers.CharField(source='question.option_d', read_only=True, default='')
     correct_answer = serializers.CharField(source='question.correct_answer', read_only=True, default='')
     explanation = serializers.CharField(source='question.explanation', read_only=True, default='')
-    subject_name = serializers.CharField(source='question.subject.name', read_only=True, default='')
+    subject_name = PublicSubjectNameField(source='question.subject.name', read_only=True, default='')
     topic_name = serializers.CharField(source='question.topic.name', read_only=True, default='')
     exam_type = serializers.CharField(source='question.exam_type', read_only=True, default='')
 
@@ -138,7 +169,51 @@ class MistakeNotebookSerializer(serializers.ModelSerializer):
                   'selected_answer', 'correct_answer', 'is_correct', 'review_status',
                   'review_count', 'last_reviewed_at', 'next_review_at', 'is_flagged',
                   'user_note', 'explanation', 'subject_name', 'topic_name', 'exam_type', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        # Students may edit only their note and the flag. The question, the
+        # answers and the review schedule are server-controlled (review state
+        # changes only through the /review/ action): a writable `question`
+        # turned PATCH into an answer oracle for any question id, and writable
+        # review fields let clients forge the review_mistakes quest.
+        read_only_fields = ['id', 'user', 'question', 'selected_answer', 'is_correct', 'review_status',
+                            'review_count', 'last_reviewed_at', 'next_review_at', 'created_at']
+        extra_kwargs = {'user_note': {'max_length': 5000}}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Rows come from analytics.views._notebook_queryset(), which annotates
+        # whether the user may see this question's answer (premium / staff,
+        # or a free showcase question). Every other row keeps the stem, the
+        # options and the student's own wrong pick, but not the key;
+        # answer_locked tells the client to offer the upgrade instead.
+        visible = mistake_answer_visible(instance)
+        if not visible:
+            data['correct_answer'] = ''
+            data['explanation'] = ''
+            # Some imports left the key or the explanation inside the stem or
+            # an option ("... Correct Answer: B. ...", "Explanation: ..."), or
+            # flagged an option ("Adrenaline (correct)", "[Correct answer]",
+            # "(wrong)", a tick): the stem and the options are cut at their
+            # first label (questions.answer_leak) and the options lose those
+            # flags -- the redaction of a locked /review/ row.
+            redact_locked_text(data)
+        data['answer_locked'] = not visible
+        return data
+
+
+def mistake_answer_visible(instance) -> bool:
+    """True when the annotated notebook row may expose its answer key.
+
+    Same rule as questions.views.user_can_view_answer: premium / admin /
+    staff rows (``answer_visible``), otherwise only free showcase questions
+    (``is_showcase``) -- and never a scholarship-challenge question, even
+    one an admin also showcased. Unannotated rows stay locked.
+    """
+    if getattr(instance, 'answer_visible', False):
+        return True
+    if not getattr(instance, 'is_showcase', False):
+        return False
+    question = getattr(instance, 'question', None)
+    return not getattr(question, 'is_scholarship_eligible', False)
 
 
 class TopicNoteListSerializer(serializers.Serializer):

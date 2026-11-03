@@ -10,6 +10,8 @@ class CustomUserAdmin(UserAdmin):
     list_filter = ['role', 'target_exam', 'is_subscribed', 'scholarship_test_passed', 'is_active']
     fieldsets = UserAdmin.fieldsets + (
         ('CMS Profile', {'fields': ('role', 'phone', 'target_exam', 'target_year', 'avatar_url')}),
+        # Linked Supabase Auth identity (see accounts.supabase_rest_auth).
+        ('Supabase identity', {'fields': ('supabase_uid',)}),
     )
 
 
@@ -21,9 +23,17 @@ class TokenBalanceAdmin(admin.ModelAdmin):
     list_filter = ['last_daily_reset']
     search_fields = ['user__username', 'user__email']
     readonly_fields = ['total_tokens_used', 'created_at', 'updated_at']
+    list_select_related = ['user']
+
+    def changelist_view(self, request, extra_context=None):
+        # One TokenConfig lookup per page instead of one (plus a possible
+        # counter-reset UPDATE) per row; see available_tokens_readonly.
+        self._token_config = TokenConfig.get_config()
+        return super().changelist_view(request, extra_context=extra_context)
 
     def available_tokens_display(self, obj):
-        return obj.available_tokens
+        config = getattr(self, '_token_config', None) or TokenConfig.get_config()
+        return obj.available_tokens_readonly(config)
     available_tokens_display.short_description = 'Available Tokens'
 
 

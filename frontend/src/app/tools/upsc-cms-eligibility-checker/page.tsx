@@ -9,7 +9,7 @@ const title = 'UPSC CMS Eligibility Checker 2026 — MBBS, Age Limit, Attempts';
 const description = 'Check if you are eligible for UPSC CMS 2026. Interactive eligibility checker for MBBS graduates: age limit, educational qualification, nationality, number of attempts, and medical fitness requirements.';
 const slug = 'upsc-cms-eligibility-checker';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -35,7 +35,7 @@ export default function UPSCCMSEligibilityCheckerPage() {
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
                         Use our interactive eligibility checker to find out if you meet the age, education, and nationality
-                        requirements for <strong>UPSC CMS 2026</strong>. The exam is scheduled for <strong>02 August 2026</strong>.
+                        requirements for the next <strong>UPSC CMS</strong> exam. Age is checked as on 1 August of the exam year, as in the UPSC CMS notice.
                     </p>
                 </section>
 

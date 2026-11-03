@@ -7,7 +7,18 @@
  * - Three buttons: Accept all / Reject all / Manage.
  * - Granular preferences (toggle analytics / marketing) inline.
  * - Persists decision to localStorage and fires `crackcms:consent` event.
+ * - Can be reopened from anywhere (e.g. the cookie policy's "Manage cookie
+ *   preferences" button) by dispatching `crackcms:open-consent`.
+ *
+ * Categories match lib/consent.ts exactly: `analytics` (GA4, Clarity,
+ * Datadog RUM) and `marketing` (PostHog product analytics, Google AdSense
+ * when enabled). The old banner showed a separate "Product analytics"
+ * checkbox that was never saved, while the "Advertising" box silently
+ * switched PostHog on as well.
  */
+
+/** Event name other components dispatch to reopen the preferences panel. */
+export const OPEN_CONSENT_EVENT = 'crackcms:open-consent';
 
 import { useEffect, useState } from 'react';
 import { consent, type ConsentState } from '@/lib/consent';
@@ -19,20 +30,29 @@ export default function ConsentBanner() {
     const [mounted, setMounted] = useState(false);
     const [visible, setVisible] = useState(false);
     const [showManage, setShowManage] = useState(false);
-    const [draft, setDraft] = useState<{ analytics: boolean; marketing: boolean; advertising: boolean }>({
+    const [draft, setDraft] = useState<{ analytics: boolean; marketing: boolean }>({
         analytics: false,
         marketing: false,
-        advertising: false,
     });
 
     useEffect(() => {
         setMounted(true);
+        const reopen = () => {
+            const current = consent.read();
+            setDraft({ analytics: current?.analytics === true, marketing: current?.marketing === true });
+            setShowManage(true);
+            setVisible(true);
+        };
+        window.addEventListener(OPEN_CONSENT_EVENT, reopen);
+        let t: ReturnType<typeof setTimeout> | undefined;
         if (!consent.hasDecision()) {
             // Slight delay so the banner doesn't fight LCP
-            const t = setTimeout(() => setVisible(true), 800);
-            return () => clearTimeout(t);
+            t = setTimeout(() => setVisible(true), 800);
         }
-        return undefined;
+        return () => {
+            window.removeEventListener(OPEN_CONSENT_EVENT, reopen);
+            if (t) clearTimeout(t);
+        };
     }, []);
 
     if (!mounted || !visible) return null;
@@ -48,17 +68,14 @@ export default function ConsentBanner() {
         analytics.event('consent_update', { decision: 'reject_all', ...next });
     };
     const saveManage = () => {
-        consent.update('analytics', draft.analytics);
-        // Advertising consent maps to the 'marketing' category so gtag
-        // receives ad_storage=granted. Product analytics (PostHog) is
-        // bundled here to reduce banner complexity.
-        consent.update('marketing', draft.advertising);
+        // One write with both categories, exactly as ticked.
         const next: ConsentState = {
             essential: true,
             analytics: draft.analytics,
-            marketing: draft.advertising,
+            marketing: draft.marketing,
             updated_at: new Date().toISOString(),
         };
+        consent.write(next);
         setVisible(false);
         analytics.event('consent_update', { decision: 'granular', ...next });
     };
@@ -87,9 +104,12 @@ export default function ConsentBanner() {
                         </button>
                     </div>
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        We use cookies to keep you signed in, remember your
-                        preferences, and — only with your permission — measure
-                        traffic and serve relevant ads from Google AdSense.
+                        We use cookies to keep you signed in and remember your
+                        preferences, and we count page views in aggregate
+                        without cookies or personal data (Simple Analytics).
+                        Only with your permission do we use analytics tools to
+                        measure traffic and performance, record anonymised
+                        sessions to fix bugs, or (if ads are enabled) show ads.
                         You can change your choice any time in the{' '}
                         <Link href="/cookie-policy" className="text-primary underline">
                             cookie policy
@@ -126,8 +146,9 @@ export default function ConsentBanner() {
                                 <span>
                                     <strong className="text-foreground">Analytics</strong>
                                     <span className="block text-muted-foreground">
-                                        GA4, Microsoft Clarity — page views, scroll depth,
-                                        performance.
+                                        Google Analytics 4, Microsoft Clarity, Datadog RUM —
+                                        page views, scroll depth, performance and masked
+                                        session replay.
                                     </span>
                                 </span>
                             </label>
@@ -141,26 +162,10 @@ export default function ConsentBanner() {
                                     className="mt-0.5 h-3.5 w-3.5"
                                 />
                                 <span>
-                                    <strong className="text-foreground">Product analytics</strong>
+                                    <strong className="text-foreground">Product analytics &amp; advertising</strong>
                                     <span className="block text-muted-foreground">
-                                        PostHog funnels, retention cohorts, session
-                                        replay (for staff debugging).
-                                    </span>
-                                </span>
-                            </label>
-                            <label className="flex items-start gap-2 text-xs">
-                                <input
-                                    type="checkbox"
-                                    checked={draft.advertising}
-                                    onChange={(e) =>
-                                        setDraft((d) => ({ ...d, advertising: e.target.checked }))
-                                    }
-                                    className="mt-0.5 h-3.5 w-3.5"
-                                />
-                                <span>
-                                    <strong className="text-foreground">Advertising</strong>
-                                    <span className="block text-muted-foreground">
-                                        Google AdSense — relevant ads help keep CrackCMS free.
+                                        PostHog funnels and retention cohorts; Google AdSense
+                                        ads if we enable them.
                                     </span>
                                 </span>
                             </label>

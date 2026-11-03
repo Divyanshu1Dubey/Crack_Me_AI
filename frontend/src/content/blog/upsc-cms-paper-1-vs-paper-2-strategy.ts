@@ -10,21 +10,21 @@ const post: BlogPost = {
     subcategory: 'Paper Strategy',
     tags: ['Paper 1', 'Paper 2', 'UPSC CMS', 'Strategy', 'Time Allocation'],
     difficulty: 'intermediate',
-    authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
-    author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
-    authorRole: 'Senior Editor — Medicine, CrackCMS',
+    authorId: 'crackcms-editorial',
+    reviewedBy: 'crackcms-editorial',
+    author: 'CrackCMS Editorial Team',
+    authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',
-    dateModified: '2026-09-19',
-    updatedAt: '2026-09-19',
+    dateModified: '2026-11-01',
+    updatedAt: '2026-11-01',
     readingTime: '8 min',
     wordCount: 2400,
-    primaryCta: { label: 'Practice Both Papers (free)', href: '/simulator' },
+    primaryCta: { label: 'Practice Both Papers', href: '/simulator' },
     relatedExamPaths: ['/cms'],
     faqs: [
-        { q: 'What is the difference between UPSC CMS Paper 1 and Paper 2?', a: 'Paper I focuses on: General Medicine (100Q) + General Surgery (100Q) = 200Q. Paper II covers: OBG, Paediatrics, PSM, ENT, Ophthalmology, Orthopaedics, Dermatology, Anaesthesia, Psychiatry, FSM, Radiology = 200Q.' },
-        { q: 'Which paper is harder?', a: 'Paper I is generally considered harder due to longer clinical vignettes and deeper Medicine/Surgery questions. Paper II has more image-based and direct-knowledge questions.' },
-        { q: 'How should I divide my study time between the papers?', a: '60% on Paper I (Medicine + Surgery), 40% on Paper II (all other subjects). Medicine and Surgery alone carry 50% of the total marks.' },
+        { q: 'What is the difference between UPSC CMS Paper 1 and Paper 2?', a: 'Each paper has 120 questions, carries 250 marks and lasts two hours. Paper I covers General Medicine (96 questions, including Cardiology, Neurology, Dermatology and Psychiatry) and Paediatrics (24). Paper II covers Surgery (40, including ENT, Ophthalmology, Traumatology and Orthopaedics), Gynaecology & Obstetrics (40) and Preventive & Social Medicine (40).' },
+        { q: 'Which paper is harder?', a: 'Paper I is generally considered harder: General Medicine alone is 96 of its 120 questions, with long clinical vignettes. Paper II, split evenly between Surgery, OBG and PSM, has more image-based and direct-knowledge questions.' },
+        { q: 'How should I divide my study time between the papers?', a: 'Both papers carry 250 marks, so divide your time by subject weight rather than by paper: General Medicine is 96 of the 240 questions (40%), Surgery, OBG and PSM are 40 each (about 17% each) and Paediatrics is 24 (10%).' },
     ],
     toc: [
         { id: 'paper1-composition', label: 'Paper I: Composition and Strategy' },
@@ -35,36 +35,38 @@ const post: BlogPost = {
     references: [
         { label: 'UPSC CMS Official Notification — Pattern', url: 'https://upsc.gov.in/examinations/combined-medical-services-examination' },
     ],
-    revisionLog: [{ date: '2026-09-19', note: 'Initial publication' }],
+    revisionLog: [
+        { date: '2026-09-19', note: 'Initial publication' },
+        { date: '2026-11-01', note: 'Corrected the paper pattern (120 questions and 250 marks per paper; Paper I is General Medicine and Paediatrics, Paper II is Surgery, OBG and PSM) and the study-time split that relied on it.' },
+    ],
     body: `## Paper I: Composition and Strategy
 
-- General Medicine: 100 questions
-- General Surgery: 100 questions
-- Total: 200 questions, 120 minutes
+- General Medicine: 96 questions (including Cardiology, Neurology, Dermatology and Psychiatry)
+- Paediatrics: 24 questions
+- Total: 120 questions, 250 marks, 120 minutes
 - Style: Long clinical vignettes, integration-heavy
 
 ## Paper II: Composition and Strategy
 
-- OBG: ~25 questions
-- Paediatrics: ~25 questions
-- PSM: ~20 questions
-- ENT, Ophthalmology: ~20 each
-- Orthopaedics, Dermatology, Anaesthesia, Psychiatry, FSM, Radiology: remaining
-- Total: 200 questions, 120 minutes
+- Surgery: 40 questions (including ENT, Ophthalmology, Traumatology and Orthopaedics)
+- Gynaecology & Obstetrics: 40 questions
+- Preventive & Social Medicine: 40 questions
+- Total: 120 questions, 250 marks, 120 minutes
 - Style: Mix of image-based and direct knowledge
 
 ## Study Time Allocation
 
-- Medicine: 35% (highest weightage, longest vignettes)
-- Surgery: 25%
-- OBG + Paediatrics: 15%
-- PSM: 8%
-- ENT + Ophthalmology: 7%
-- Others: 10%
+Both papers carry the same marks, so allocate time by subject weight:
+
+- General Medicine: 40% (96 questions, the longest vignettes)
+- Surgery, with ENT, Ophthalmology and Orthopaedics: 20% (40 questions across several specialties)
+- Gynaecology & Obstetrics: 15% (40 questions)
+- Preventive & Social Medicine: 15% (40 questions)
+- Paediatrics: 10% (24 questions)
 
 ## Exam Day Tactics
 
-Start with Paper I when your concentration is highest. Use Paper II break to mentally reset. Avoid discussing Paper I during the break.`,
+Paper I is the morning session and Paper II the afternoon one, so go in fresh for Paper I. Use the break before Paper II to mentally reset. Avoid discussing Paper I during the break.`,
     prelude: undefined,
     outro: undefined,
     pinned: false,

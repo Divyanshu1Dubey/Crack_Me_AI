@@ -13,9 +13,9 @@ description: Checkout, install npm deps, install Playwright chromium. Idempotent
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v7
       with:
         node-version: '20'
         cache: 'npm'

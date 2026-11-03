@@ -4,11 +4,11 @@ import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import CategoryRankFilter from './CategoryRankFilter';
 
-const title = 'CategoryRankFilter 2026 — Compare UPSC CMS Rank Across General, OBC, SC, ST, PwBD';
+const title = 'Category Rank Filter 2026 — Compare UPSC CMS Rank Across General, OBC, SC, ST, PwBD';
 const description = 'Compare your UPSC CMS rank across reservation categories. See how General, OBC, SC, ST, and PwBD reservation affects cutoffs and selection chances.';
 const slug = 'category-rank-filter';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -28,11 +28,11 @@ export default function CategoryRankFilterPage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'CategoryRankFilter', path: '/tools/category-rank-filter' }]} />
+                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'Category Rank Filter', path: '/tools/category-rank-filter' }]} />
                 </div>
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
                     <h1 className="text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
-                        CategoryRankFilter 2026
+                        Category Rank Filter 2026
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
                         Compare how your UPSC CMS rank translates across General, OBC, SC, ST, and PwBD

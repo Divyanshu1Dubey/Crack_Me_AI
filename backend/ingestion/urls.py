@@ -18,6 +18,7 @@ urlpatterns = [
 
     # Jobs
     path("jobs/", views.ImportJobListView.as_view(), name="jobs-list"),
+    path("jobs/counts/", views.ImportJobCountsView.as_view(), name="jobs-counts"),
     path("jobs/<int:job_id>/", views.ImportJobDetailView.as_view(), name="jobs-detail"),
     path("jobs/<int:job_id>/retry/", views.ImportJobRetryView.as_view(), name="jobs-retry"),
     path("jobs/<int:job_id>/cancel/", views.ImportJobCancelView.as_view(), name="jobs-cancel"),

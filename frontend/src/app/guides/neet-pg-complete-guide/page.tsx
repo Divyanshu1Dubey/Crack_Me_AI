@@ -1,9 +1,10 @@
 import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
-const title = 'NEET PG Complete Guide 2026 — Pattern, Syllabus, Books, AIR Prediction, Strategy';
-const description = 'Complete NEET PG 2026 guide — exam pattern (200 MCQs, -1 negative marking), subject-wise syllabus, topper-recommended books, AIR prediction, image-based questions, and a 6-month study plan.';
+const title = 'NEET PG Complete Guide 2026 — Pattern, Syllabus, Books, Strategy';
+const description = 'Complete NEET PG 2026 guide — exam pattern (200 MCQs, -1 negative marking), subject-wise syllabus, topper-recommended books, image-based questions, and a 6-month study plan.';
 const slug = 'neet-pg-complete-guide';
 
 export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
@@ -23,8 +24,8 @@ export default function NEETPGGuide() {
             description={description}
             slug={slug}
             heading="NEET PG Complete Guide 2026"
-            lede="Crack NEET PG in 6 months — exam pattern, subject-wise syllabus, topper books, AIR prediction, image-based MCQs, and a week-by-week study plan."
-            author="Dr. CrackCMS Editorial Team"
+            lede="Crack NEET PG in 6 months — exam pattern, subject-wise syllabus, topper books, image-based MCQs, and a week-by-week study plan."
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="11 min"
             faqs={faqs}
@@ -173,24 +174,23 @@ export default function NEETPGGuide() {
             <p>
                 <strong>INI-CET</strong> (for AIIMS, PGIMER, JIPMER, NIMHANS, SCTIMST) is considered more
                 conceptual and image-heavy, with a faster pace (200 questions in 180 minutes vs 210 for NEET PG).
-                NEET PG has a slightly higher negative marking penalty (-1 vs -1/3). Most toppers attempt both.
+                Both have negative marking: NEET PG deducts 1 of a question&apos;s 4 marks (25%), INI-CET one-third of its 1 mark (33%). Most serious candidates attempt both.
                 See our detailed <Link href="/neet-pg/vs-ini-cet" className="text-primary underline">NEET PG vs INI-CET</Link> comparison.
             </p>
 
             <h2>NEET PG vs UPSC CMS — Which is better?</h2>
             <p>
-                <strong>NEET PG</strong> leads to MD/MS clinical specialisation (private practice, faculty, superspecialty).
+                <strong>NEET PG</strong> leads to MD/MS clinical specialisation (private practice, faculty, superspecialty).{' '}
                 <strong>UPSC CMS</strong> leads to a central government Medical Officer post with stable salary and job security.
-                The two exams overlap ~70% in syllabus. See <Link href="/neet-pg/vs-upsc-cms" className="text-primary underline">NEET PG vs UPSC CMS</Link> for a detailed side-by-side comparison.
+                The two exams overlap ~70% in syllabus. See <Link href="/cms/vs-neet-pg" className="text-primary underline">UPSC CMS vs NEET PG</Link> for a detailed side-by-side comparison.
             </p>
 
             <h2>Why CrackCMS for NEET PG?</h2>
             <ul>
-                <li>18,000+ NEET PG MCQs across all 19 subjects</li>
+                <li>{NEET_PG_QUESTION_COUNT} NEET PG questions (mostly exam recalls) across the 19 subjects</li>
                 <li>AI tutor trained on Harrison, Robbins, Bailey, Ghai, Park, Dutta</li>
-                <li>All-India rank prediction after every mock test</li>
                 <li>Spaced-repetition flashcards adapted to your weak areas</li>
-                <li>Image-based MCQ drill with 1,000+ curated images</li>
+                <li>Image-based recall questions (radiology, histopathology, ECG) in a zoomable viewer</li>
             </ul>
         </GuideLayout>
     );

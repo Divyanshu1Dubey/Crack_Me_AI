@@ -22,10 +22,32 @@ from django.utils import timezone
 from knowledge_base.connectors.base import ConnectorBase
 from knowledge_base.models import (
     KnowledgeChunk, KnowledgeSource, IngestionJob,
-    PROHIBITED_LICENSE_MARKERS, LICENSE_CHOICES,
+    PROHIBITED_LICENSE_MARKERS,
+    LICENSE_CC_BY, LICENSE_CC_BY_SA, LICENSE_GOVT_INDIA, LICENSE_OWN_INTERNAL,
+    LICENSE_PUBLIC_DOMAIN,
 )
 
 logger = logging.getLogger(__name__)
+
+# Licences whose chunks may be auto-approved: commercial use allowed. By
+# name, not by position in LICENSE_CHOICES — index 3 is CC BY-NC-SA
+# (non-commercial), which the old positional list auto-approved while CC BY-SA
+# went to review. Non-commercial and user-attested content always waits for
+# an admin.
+AUTO_APPROVE_LICENSES = frozenset({
+    LICENSE_PUBLIC_DOMAIN,
+    LICENSE_CC_BY,
+    LICENSE_CC_BY_SA,
+    LICENSE_GOVT_INDIA,
+    LICENSE_OWN_INTERNAL,
+})
+
+# Fields an ingestion run may refresh on an existing chunk. Approval state,
+# approval time and the reviewer's decision belong to the moderators.
+_REFRESHABLE_FIELDS = (
+    "source_url", "locator", "subject", "topic", "subtopic", "tags",
+    "license", "attribution", "quality_score",
+)
 
 
 @dataclass
@@ -65,7 +87,7 @@ class IngestionService:
             started_at=started,
             triggered_by=self.triggered_by,
         )
-        added = updated = rejected = 0
+        added = updated = rejected = unchanged = 0
         error = ""
 
         try:
@@ -77,12 +99,15 @@ class IngestionService:
                     added += 1
                 elif outcome == "updated":
                     updated += 1
+                elif outcome == "unchanged":
+                    unchanged += 1
                 else:
                     rejected += 1
             self._job.chunks_added = added
             self._job.chunks_updated = updated
             self._job.chunks_rejected = rejected
-            self._job.status = "success" if (added or updated) else "partial"
+            # A re-run that finds everything already up to date succeeded.
+            self._job.status = "success" if (added or updated or unchanged) else "partial"
             self._job.finished_at = timezone.now()
             self._job.save()
 
@@ -116,7 +141,13 @@ class IngestionService:
 
     @transaction.atomic
     def _write_chunk(self, raw) -> str:
-        """Write or update one chunk. Returns 'added' | 'updated' | 'rejected'."""
+        """Write or update one chunk.
+
+        Returns 'added' | 'updated' | 'unchanged' | 'rejected'. An existing
+        chunk keeps its approval state (an admin's approve/reject survives
+        every re-ingest, e.g. the one build.sh runs on each deploy) and its
+        version only moves when a stored field actually changed.
+        """
         # Final license guard — word-boundary matching so legitimate
         # medical prose that happens to mention a textbook name (e.g.
         # "Park's Preventive Medicine summary") is correctly refused,
@@ -140,18 +171,11 @@ class IngestionService:
 
         approval = (
             KnowledgeChunk.APPROVAL_AUTO
-            if self.auto_approve_trusted and self.source.license in {
-                LICENSE_CHOICES[0][0],  # public domain
-                LICENSE_CHOICES[1][0],  # cc_by
-                LICENSE_CHOICES[3][0],  # cc_by_sa
-                LICENSE_CHOICES[4][0],  # govt_india
-                LICENSE_CHOICES[5][0],  # internal
-            }
+            if self.auto_approve_trusted and license_code in AUTO_APPROVE_LICENSES
             else KnowledgeChunk.APPROVAL_PENDING
         )
 
-        defaults = {
-            "text": text,
+        values = {
             "source_url": raw.source_url or self.source.source_url,
             "locator": raw.locator or "",
             "subject": raw.subject or "",
@@ -160,20 +184,30 @@ class IngestionService:
             "tags": raw.tags or [],
             "license": license_code,
             "attribution": attribution,
-            "approval_state": approval,
-            "approved_at": timezone.now() if approval == KnowledgeChunk.APPROVAL_AUTO else None,
             "quality_score": raw.quality_score,
         }
-        chunk, created = KnowledgeChunk.objects.update_or_create(
-            source=self.source,
-            text_hash=text_hash,
-            defaults=defaults,
+        chunk = (
+            KnowledgeChunk.objects.select_for_update()
+            .filter(source=self.source, text_hash=text_hash)
+            .first()
         )
-        if created:
-            chunk.version = 1
-            chunk.save(update_fields=["version"])
+        if chunk is None:
+            KnowledgeChunk.objects.create(
+                source=self.source,
+                text_hash=text_hash,
+                text=text,
+                approval_state=approval,
+                approved_at=timezone.now() if approval == KnowledgeChunk.APPROVAL_AUTO else None,
+                version=1,
+                **values,
+            )
             return "added"
-        # Bump version
+
+        changed = [name for name in _REFRESHABLE_FIELDS if getattr(chunk, name) != values[name]]
+        if not changed:
+            return "unchanged"
+        for name in changed:
+            setattr(chunk, name, values[name])
         chunk.version = (chunk.version or 1) + 1
-        chunk.save(update_fields=["version", "updated_at"])
+        chunk.save(update_fields=changed + ["version", "updated_at"])
         return "updated"

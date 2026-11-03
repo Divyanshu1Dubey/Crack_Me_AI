@@ -5,6 +5,12 @@ Two-stage check:
   1. Exact content-hash match (cheap, catches direct re-imports)
   2. 6-gram shingle match on normalized text (catches minor edits)
 
+Both stages key on the question STEM PLUS ITS OPTIONS (options sorted, so
+a re-shuffled copy still matches). Keying on the stem alone collapsed
+every question sharing a generic stem — "Which of the following is not
+true?", "Identify the lesion" — into its first occurrence, across files
+and exams.
+
 The shingle stage uses an **inverted index** (shingle → set of doc hashes),
 so per-question similarity is O(matching_docs) rather than O(all_docs).
 For an 8,000-question corpus this is dramatically faster than the naive
@@ -43,6 +49,21 @@ def _normalize(text: str) -> str:
     return cleaned
 
 
+def _clean_options(options: Iterable[str]) -> list[str]:
+    return sorted(o.strip() for o in (options or []) if (o or "").strip())
+
+
+def question_dedup_hash(stem: str, options: Iterable[str] = ()) -> str:
+    """Exact-match key: stem + sorted non-empty options."""
+    return content_hash(stem or "", *_clean_options(options))
+
+
+def question_dedup_text(stem: str, options: Iterable[str] = ()) -> str:
+    """Normalized stem + sorted options, the text the shingle stage compares."""
+    parts = [_normalize(stem or "")] + sorted(_normalize(o) for o in _clean_options(options))
+    return " ".join(p for p in parts if p).strip()
+
+
 def _shingles(text: str, k: int = 6) -> set[str]:
     words = text.split()
     if len(words) < k:
@@ -78,13 +99,14 @@ class DuplicateDetector:
                 self._index[s].add(h)
 
     def check(self, q: ParsedQuestion) -> DuplicateResult:
-        h = content_hash(q.question_text or "")
+        options = [q.option_a, q.option_b, q.option_c, q.option_d]
+        h = question_dedup_hash(q.question_text or "", options)
         if h in self._seen_hashes:
             return DuplicateResult(content_hash=h, is_duplicate=True,
                                     duplicate_of_hash=h, similarity_score=1.0,
                                     reason="exact content hash match")
 
-        norm = _normalize(q.question_text)
+        norm = question_dedup_text(q.question_text or "", options)
         shingles = _shingles(norm)
         if not shingles:
             return DuplicateResult(content_hash=h, is_duplicate=False)

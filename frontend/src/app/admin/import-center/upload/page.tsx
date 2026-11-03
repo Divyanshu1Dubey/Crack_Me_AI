@@ -74,7 +74,12 @@ export default function UploadPage() {
       // Redirect to the batch detail after a brief pause.
       setTimeout(() => router.push(`/admin/import-center/batches/${d.batch_id}`), 1500);
     } catch (e: any) {
-      setError(e?.response?.data?.error || e?.message || 'Upload failed');
+      const data = e?.response?.data;
+      // The API lists why each file was refused (wrong type, content does
+      // not match the extension, too big…).
+      const reasons: string[] = [...(data?.rejected || []), ...(data?.too_big || [])];
+      const base = data?.error || e?.message || 'Upload failed';
+      setError(reasons.length ? `${base} ${reasons.join('; ')}` : base);
     } finally {
       setUploading(false);
     }
@@ -99,7 +104,7 @@ export default function UploadPage() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`rounded border-2 border-dashed p-8 text-center transition ${
-          dragOver ? 'border-primary bg-primary/5' : 'border-border bg-card'
+          dragOver ? 'border-primary! bg-primary/5' : 'border-border bg-card'
         }`}
       >
         <div className="text-4xl">📤</div>
@@ -159,7 +164,12 @@ export default function UploadPage() {
                 <span className="truncate">{f.name}</span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span>{(f.size / 1024 / 1024).toFixed(2)} MB</span>
-                  <button type="button" onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700">
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    aria-label={`Remove ${f.name}`}
+                    className="text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                  >
                     ✕
                   </button>
                 </span>
@@ -197,7 +207,9 @@ export default function UploadPage() {
       </section>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+          {error}
+        </div>
       )}
 
       {uploading && (
@@ -213,10 +225,13 @@ export default function UploadPage() {
       )}
 
       {success && (
-        <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+        <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
           Batch #{success.batch_id} created.{' '}
-          {success.rejected.length > 0 && (
-            <span>{success.rejected.length} file(s) rejected. </span>
+          {success.rejected.length + success.too_big.length > 0 && (
+            <span>
+              {success.rejected.length + success.too_big.length} file(s) rejected:{' '}
+              {[...success.rejected, ...success.too_big].slice(0, 10).join('; ')}.{' '}
+            </span>
           )}
           Redirecting to detail page…
           <div className="mt-2">
@@ -234,7 +249,7 @@ export default function UploadPage() {
           disabled={!files.length || uploading}
           className="rounded bg-primary px-6 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          {uploading ? 'Uploading…' : 'Upload &amp; Parse'}
+          {uploading ? 'Uploading…' : 'Upload & Parse'}
         </button>
       </div>
     </div>

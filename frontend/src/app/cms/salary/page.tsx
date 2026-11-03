@@ -8,7 +8,7 @@ const title = 'UPSC CMS Salary 2026 — Pay, Allowances, Career Growth & Promoti
 const description = 'Complete UPSC CMS salary structure for 2026: basic pay, NPA, HRA, DA, promotion hierarchy (MO → ADMO → CMO → DGHS), and in-hand salary breakdown for General Duty Medical Officers.';
 const slug = 'cms-salary';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: '/cms/salary' });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -45,7 +45,7 @@ export default function CMSSalaryPage() {
                         UPSC CMS Salary 2026 — Complete Pay, Allowances &amp; Career Growth
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
-                        UPSC CMS recruits Medical Officers, Specialists, and Assistant Divisional Medical Officers
+                        UPSC CMS recruits General Duty Medical Officers and Assistant Divisional Medical Officers
                         under the 7th Pay Commission. Here is the complete salary breakdown, allowance structure,
                         promotion hierarchy, and in-hand pay for 2026.
                     </p>

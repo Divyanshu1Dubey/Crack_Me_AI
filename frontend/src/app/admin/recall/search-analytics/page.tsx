@@ -6,7 +6,10 @@
  * dashboard.
  */
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
+import { loadErrorMessage } from "../../_lib/adminHelpers";
 
 interface Row {
   top_queries: { query: string; count: number }[];
@@ -14,47 +17,77 @@ interface Row {
 }
 
 export default function SearchAnalyticsPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  // Client-side admin gate, same as the other admin pages.
+  const isAdmin = !!user && (user.role === "admin" || user.is_admin);
   const [d, setD] = useState<Row | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login?next=" + encodeURIComponent("/admin/recall/search-analytics"));
+      return;
+    }
+    if (!isAdmin) {
+      router.replace("/dashboard");
+      return;
+    }
     let alive = true;
     (async () => {
       try {
         const r = await api.get("/analytics/search_analytics/");
         if (alive) setD(r.data);
-      } catch (e: any) {
-        if (alive) setErr(e?.message || "Failed");
+      } catch (e: unknown) {
+        if (alive) setErr(loadErrorMessage(e, "search analytics"));
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [authLoading, user, isAdmin, router]);
 
-  if (err) return <p className="p-6 text-rose-300">{err}</p>;
-  if (!d) return <p className="p-6 text-slate-400">Loading…</p>;
+  // Plain divs, no second landmark: the AppShell layout (from /admin/recall)
+  // sits inside the root layout's main landmark, and its .page-container
+  // already pads the page.
+  if (authLoading || !user) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Checking admin access…</p>;
+  if (!isAdmin) return null;
+  if (err) {
+    return (
+      <div className="mx-auto max-w-4xl p-4 sm:p-6 [.page-container_&]:p-0">
+        <div role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {err}
+        </div>
+      </div>
+    );
+  }
+  if (!d) return <p className="p-6 [.page-container_&]:px-0 text-muted-foreground">Loading…</p>;
+
+  const topQueries = Array.isArray(d.top_queries) ? d.top_queries : [];
+  const daily = Array.isArray(d.daily) ? d.daily : [];
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 px-4 py-6 text-slate-100">
+    <div className="mx-auto max-w-4xl space-y-4 p-4 text-foreground sm:p-6 [.page-container_&]:p-0">
       <h1 className="text-2xl font-semibold">Search analytics</h1>
-      <p className="text-sm text-slate-500">
-        Phase-3 placeholder. Wire client search box → <code>/api/analytics/search_log/</code> in Phase 4.
+      <p className="text-sm text-muted-foreground">
+        Top search terms and daily search volume. Search logging isn&apos;t switched on yet, so this page stays
+        empty until it is.
       </p>
-      <section className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-sm">
-        <h2 className="mb-1 text-xs uppercase tracking-wider text-slate-400">Top queries</h2>
-        {d.top_queries.length === 0 ? (
-          <p className="text-slate-500">No data.</p>
+      <section className="rounded-lg border border-border bg-card p-3 text-sm">
+        <h2 className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Top queries</h2>
+        {topQueries.length === 0 ? (
+          <p className="text-muted-foreground">No searches recorded yet.</p>
         ) : (
-          <ul>{d.top_queries.map((q) => <li key={q.query}>{q.query} — {q.count}</li>)}</ul>
+          <ul>{topQueries.map((q) => <li key={q.query}>{q.query} — {q.count}</li>)}</ul>
         )}
       </section>
-      <section className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-3 text-sm">
-        <h2 className="mb-1 text-xs uppercase tracking-wider text-slate-400">Daily volume</h2>
-        {d.daily.length === 0 ? (
-          <p className="text-slate-500">No data.</p>
+      <section className="rounded-lg border border-border bg-card p-3 text-sm">
+        <h2 className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Daily volume</h2>
+        {daily.length === 0 ? (
+          <p className="text-muted-foreground">No searches recorded yet.</p>
         ) : (
-          <ul>{d.daily.map((d) => <li key={d.date}>{d.date}: {d.n}</li>)}</ul>
+          <ul>{daily.map((row) => <li key={row.date}>{row.date}: {row.n}</li>)}</ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }

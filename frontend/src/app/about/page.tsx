@@ -1,35 +1,34 @@
 import { LegalLayout, buildLegalMetadata } from '@/components/LegalLayout';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { Brain, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { siteName, siteUrl } from '@/lib/seo';
+import { CMS_PYQ_COUNT, CMS_PYQ_YEARS, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
-const title = 'About CrackCMS — Built by Doctors, Powered by AI';
-const description = 'CrackCMS (by CrackLabs AI) is the highest-rated AI medical exam preparation platform for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE and medical officer exams. Meet our team, mission, and story.';
+const title = 'About CrackCMS — AI-Assisted Medical Exam Preparation';
+const description = 'CrackCMS (by CrackLabs AI) is an AI-assisted preparation platform for UPSC CMS and NEET PG, with guides for INI-CET, FMGE, USMLE and medical officer exams. Our mission, team, and story.';
 const canonical = '/about';
 
 export const metadata: Metadata = buildLegalMetadata({ title, description, canonical });
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { jsonLdString } from '@/lib/metadata';
 
 const team = [
     { role: 'Founder & CEO', name: 'Divyanshu Dubey', bio: 'Engineer & AI researcher focused on healthcare education. Built CrackCMS after seeing first-hand how scattered medical-prep resources are.' },
-    { role: 'Chief Medical Officer', name: 'MBBS, MD (Internal Medicine)', bio: 'Practising clinician with 10+ years of teaching experience; oversees medical-review board.' },
-    { role: 'Head of Content', name: 'MBBS, MD (Pediatrics)', bio: 'Curates question banks and ensures every explanation meets editorial standards.' },
-    { role: 'Lead AI Engineer', name: 'MS (Computer Science)', bio: 'Designs the multi-provider AI pipeline that powers the AI tutor.' },
+    { role: 'Editorial & content', name: 'CrackCMS Editorial Team', bio: 'Curates the question banks and explanations against standard textbooks, following our editorial and medical-review policies.' },
 ];
 
+// Bank sizes come from lib/bankStats.ts (one figure for the whole site).
 const stats = [
-    { number: '1.92 lakh+', label: 'PYQs & curated MCQs' },
-    { number: '47,000+', label: 'Active medical aspirants' },
-    { number: '11+', label: 'AI providers in rotation' },
-    { number: '4.8 / 5', label: 'Average user rating' },
+    { number: CMS_PYQ_COUNT, label: `UPSC CMS PYQs (${CMS_PYQ_YEARS})` },
+    { number: NEET_PG_QUESTION_COUNT, label: 'NEET PG questions' },
+    { number: '5', label: 'Core CMS subjects covered' },
+    { number: 'Multi-model', label: 'AI tutor with provider fallback' },
 ];
 
 const values = [
     { icon: Heart, title: 'Patient-first thinking', body: 'Every feature is designed with the ultimate bedside reality in mind. We teach concepts that will actually save lives.' },
-    { icon: Brain, title: 'AI + human review', body: 'Large language models draft explanations at scale; clinicians verify them. The result: depth of a textbook, speed of AI.' },
-    { icon: ShieldCheck, title: 'Evidence over opinion', body: 'Every claim cites a Tier-1 source. Outdated teaching is rejected, even if it appears in popular MCQ books.' },
+    { icon: Brain, title: 'AI + human review', body: 'Large language models draft explanations at scale; the editorial team checks them against standard textbooks and fixes what learners report. The result: depth of a textbook, speed of AI.' },
+    { icon: ShieldCheck, title: 'Evidence over opinion', body: 'Explanations cite standard textbooks and official sources. Outdated teaching is rejected, even if it appears in popular MCQ books.' },
     { icon: Sparkles, title: 'Modern learner-first design', body: 'Mobile-first, dark-mode-friendly, keyboard-shortcut-powered. Studying should feel like a flow state, not a chore.' },
 ];
 
@@ -37,7 +36,7 @@ export default function AboutPage() {
     const orgSchema = {
         '@context': 'https://schema.org',
         '@type': 'AboutPage',
-        url: canonical,
+        url: `${siteUrl}${canonical}`,
         name: title,
         description,
         mainEntity: {
@@ -46,7 +45,7 @@ export default function AboutPage() {
             url: siteUrl,
             foundingDate: '2024',
             founders: [{ '@type': 'Person', name: 'Divyanshu Dubey' }],
-            numberOfEmployees: '10-50',
+            // No numberOfEmployees: the page itself says "a small team".
             areaServed: 'Worldwide',
             knowsAbout: [
                 'UPSC CMS', 'NEET PG', 'INI-CET', 'FMGE', 'USMLE', 'Medical Officer Exams',
@@ -57,26 +56,32 @@ export default function AboutPage() {
 
     return (
         <>
-            <Script id="about-schema" type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(orgSchema) }} />
 
-            <LegalLayout title={title} description={description} lastUpdated="July 21, 2026" canonical={canonical} schemaType="AboutPage">
+            <LegalLayout
+                title={title}
+                description={description}
+                lastUpdated="November 1, 2026"
+                canonical={canonical}
+                schemaType="AboutPage"
+                badge="Our story"
+                after={<AboutCta />}
+            >
                 <h2>Our mission</h2>
                 <p>
                     CrackCMS exists to give every medical aspirant in India and around the world a fair
                     shot at cracking competitive exams — regardless of which medical college they attend
-                    or how much they can afford to spend on coaching. We combine clinical-grade content
+                    or how much they can afford to spend on coaching. We combine textbook-based content
                     with the latest advances in generative AI to deliver a study experience that&apos;s
                     faster, deeper, and more personal than any printed book or offline class.
                 </p>
 
                 <h2>What we&apos;ve built</h2>
                 <p>
-                    <strong>1,920+ previous-year questions</strong> across UPSC CMS, NEET PG, INI-CET and
-                    FMGE, paired with AI-generated explanations, mnemonics, clinical pearls, textbook
-                    references, and similar-PYQ links. Eleven large-language-model providers rotate behind
-                    the scenes so the AI tutor is always available, never rate-limited, and always cites
-                    its sources.
+                    <strong>{CMS_PYQ_COUNT} UPSC CMS previous-year questions</strong> ({CMS_PYQ_YEARS}) and a {NEET_PG_QUESTION_COUNT} question
+                    NEET PG bank, paired with AI-generated explanations, mnemonics, clinical pearls, textbook
+                    references, and similar-PYQ links. Several large-language-model providers rotate behind
+                    the scenes so the AI tutor stays available when one provider is slow or down.
                 </p>
 
                 <h2>By the numbers</h2>
@@ -104,7 +109,9 @@ export default function AboutPage() {
 
                 <h2>Meet the team</h2>
                 <p>
-                    CrackCMS is built by a small team of doctors, AI engineers, and medical educators.
+                    CrackCMS is built by a small team. Medical content follows our{' '}
+                    <Link href="/editorial-policy" className="text-primary underline">editorial</Link> and{' '}
+                    <Link href="/medical-review-policy" className="text-primary underline">medical-review</Link> policies.
                     We&apos;re proudly independent, bootstrapped, and focused on long-term learner
                     outcomes — not short-term engagement metrics.
                 </p>
@@ -112,7 +119,8 @@ export default function AboutPage() {
                     {team.map(member => (
                         <div key={member.role} className="rounded-2xl border border-border bg-card p-5">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-linear-to-br from-primary to-teal-500 text-base font-black text-white">
-                                {member.name.split(' ').map(s => s[0]).slice(0, 2).join('')}
+                                {/* Initials from words that start with a letter ("MS (Computer Science)" gave "M("). */}
+                                {member.name.split(' ').filter((w) => /^[A-Za-z]/.test(w)).map((w) => w[0]).slice(0, 2).join('')}
                             </div>
                             <p className="mt-3 text-sm font-bold text-foreground">{member.name}</p>
                             <p className="text-xs font-semibold uppercase tracking-wider text-primary">{member.role}</p>
@@ -137,20 +145,29 @@ export default function AboutPage() {
                     Questions, partnerships, or press inquiries: <a href="mailto:crackwith.ai@gmail.com">crackwith.ai@gmail.com</a>.
                     For learner support, see our <Link href="/contact" className="text-primary underline">Contact page</Link>.
                 </p>
-
-                <div className="not-prose mt-10 rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-lg font-bold text-foreground">Ready to start studying?</p>
-                            <p className="text-sm text-muted-foreground">Create a free account in 30 seconds.</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Link href="/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create account</Link>
-                            <Link href="/subscription" className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-bold text-foreground hover:bg-muted">See premium</Link>
-                        </div>
-                    </div>
-                </div>
             </LegalLayout>
         </>
+    );
+}
+
+/**
+ * Closing CTA, rendered by LegalLayout outside `.legal-content`: inside it,
+ * the unlayered `.legal-content a` rule (primary colour + underline) beat the
+ * buttons' utilities and hid the "Create account" label on its primary fill.
+ */
+function AboutCta() {
+    return (
+        <div className="mt-10 rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="text-lg font-bold text-foreground">Ready to start studying?</p>
+                    <p className="text-sm text-muted-foreground">Create a free account in 30 seconds.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Link href="/register" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create account</Link>
+                    <Link href="/subscription" className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-bold text-foreground hover:bg-muted">See premium</Link>
+                </div>
+            </div>
+        </div>
     );
 }

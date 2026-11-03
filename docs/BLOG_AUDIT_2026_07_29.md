@@ -30,6 +30,11 @@ asks. All paths are repo-relative.
 - `frontend/src/content/authors.ts` — author profile registry
   (crackcms-editorial, dr-aarav-mehta) with `knowsAbout[]`,
   `sameAs[]`, bios.
+  (2026-11: historical. The `dr-aarav-mehta` byline could not be verified as
+  a real, consenting clinician and was retired: its posts are credited to
+  `crackcms-editorial`, the only remaining profile, and
+  `/blog/author/dr-aarav-mehta` 308-redirects there. The site map and checks
+  below that mention that archive describe the July 2026 state.)
 - `frontend/src/content/blog/upsc-cms-last-5-days-strategy.ts` —
   rewritten V2 with author, reviewer, TOC, 10 references,
   revision log, ~3000 words, cutoff table 2018–2024.

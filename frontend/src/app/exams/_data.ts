@@ -2,9 +2,20 @@
  * exams/_data.ts — Shared exam microsite config.
  *
  * Each exam gets its own theme, color tokens, hero copy, subject list,
- * high-yield topics, and CTAs. The /exams/[slug]/page.tsx dispatcher
- * routes by slug to a per-exam page renderer (see /exams/_renders/*.tsx).
+ * high-yield topics, and CTAs. /exams/cms, /exams/neet-pg and /exams/usmle
+ * render it through components/exams/ExamMicrosite.tsx.
  */
+import { questionBankHref } from '@/lib/seo';
+import { CMS_MARKS_PER_QUESTION, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
+import { CMS_PYQ_COUNT, CMS_PYQ_YEAR_COUNT, CMS_PYQ_YEARS, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
+
+/** "96 Qs · ≈200 marks" from the official UPSC CMS split. */
+function cmsWeightage(subjectName: string): string {
+  const subject = UPSC_CMS_PATTERN.papers.flatMap((p) => p.subjects).find((s) => s.name === subjectName);
+  if (!subject) return '';
+  return `${subject.questions} Qs · ≈${Math.round(subject.questions * CMS_MARKS_PER_QUESTION)} marks`;
+}
+
 export type ExamTheme = {
   /** Tailwind gradient classes for the hero background. */
   heroGradient: string;
@@ -66,6 +77,8 @@ export type ExamConfig = {
   highYield: ExamHighYield[];
   /** Recent PYQ year list (shown in the year grid). */
   pyqYears: number[];
+  /** Line under the year-grid heading (defaults to the full-paper wording). */
+  pyqYearsNote?: string;
   /** Stats row shown in the hero. */
   stats: Array<{ value: string; label: string }>;
 };
@@ -75,11 +88,12 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     slug: 'cms',
     shortName: 'UPSC CMS',
     fullName: 'UPSC Combined Medical Services',
-    tagline: 'Crack the UPSC CMS exam with 2,000+ PYQs, mock tests & AI tutoring.',
+    tagline: `Crack the UPSC CMS exam with ${CMS_PYQ_COUNT} PYQs, mock tests & AI tutoring.`,
     description:
-      'UPSC CMS is the gateway to Central Govt medical officer posts — Railways, CGHS, Ordnance Factories. CrackCMS gives you every PYQ from 2018-2025, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.',
-    tags: ['Govt Job', 'Permanent', 'Class-I Officer', 'UPSC'],
-    primaryCta: { label: 'Start Year-wise PYQ', href: '/questions?exam_type=cms' },
+      `UPSC CMS is the gateway to central government medical officer posts — the Central Health Service, Railways, NDMC and MCD. CrackCMS gives you ${CMS_PYQ_COUNT} PYQs from ${CMS_PYQ_YEARS}, full mock papers, and an AI tutor trained on Harrison, Bailey & Love, and Park.`,
+    // theme.badgeText ('UPSC') is rendered first, so it is not repeated here.
+    tags: ['Govt Job', 'Permanent', 'Class-I Officer'],
+    primaryCta: { label: 'Start Year-wise PYQ', href: questionBankHref('cms') },
     secondaryCta: { label: 'Take Mock Test', href: '/tests' },
     theme: {
       heroGradient: 'from-cyan-600 via-sky-600 to-blue-700',
@@ -100,11 +114,11 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
       { label: 'Nationality', value: 'Citizen of India / specified subjects / refugees.' },
     ],
     subjects: [
-      { code: 'MED', name: 'General Medicine', weightage: '96 Qs · 192 marks', blurb: 'Cardiology, Resp, GI, Endo, Neuro, Infectious Disease.' },
-      { code: 'PED', name: 'Paediatrics', weightage: '24 Qs · 48 marks', blurb: 'Neonatology, growth, immunization, common paediatric emergencies.' },
-      { code: 'SUR', name: 'Surgery', weightage: '40 Qs · 80 marks', blurb: 'General surgery, orthopaedics, anaesthesia, radiology basics.' },
-      { code: 'OBG', name: 'Obstetrics & Gynaecology', weightage: '40 Qs · 80 marks', blurb: 'Antenatal care, labour, gynae oncology, contraception.' },
-      { code: 'PSM', name: 'Preventive & Social Medicine', weightage: '40 Qs · 80 marks', blurb: 'Epidemiology, biostatistics, NHM, national health programmes.' },
+      { code: 'MED', name: 'General Medicine', weightage: cmsWeightage('General Medicine'), blurb: 'Cardiology, Resp, GI, Endo, Neuro, Dermatology, Psychiatry, Infectious Disease.' },
+      { code: 'PED', name: 'Paediatrics', weightage: cmsWeightage('Paediatrics'), blurb: 'Neonatology, growth, immunization, common paediatric emergencies.' },
+      { code: 'SUR', name: 'Surgery', weightage: cmsWeightage('Surgery'), blurb: 'General surgery incl. ENT, ophthalmology, traumatology and orthopaedics.' },
+      { code: 'OBG', name: 'Obstetrics & Gynaecology', weightage: cmsWeightage('Gynaecology & Obstetrics'), blurb: 'Antenatal care, labour, gynae oncology, contraception.' },
+      { code: 'PSM', name: 'Preventive & Social Medicine', weightage: cmsWeightage('Preventive & Social Medicine'), blurb: 'Epidemiology, biostatistics, NHM, national health programmes.' },
     ],
     highYield: [
       { topic: 'ECG / Cardiology emergencies', reason: 'Asked 3-4 times every paper since 2018.', code: 'MED' },
@@ -115,8 +129,8 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     ],
     pyqYears: [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018],
     stats: [
-      { value: '2,000+', label: 'Verified PYQs' },
-      { value: '8 yrs', label: 'Coverage 2018-25' },
+      { value: CMS_PYQ_COUNT, label: 'Verified PYQs' },
+      { value: `${CMS_PYQ_YEAR_COUNT} yrs`, label: `Coverage ${CMS_PYQ_YEARS}` },
       { value: '500', label: 'Max Marks' },
     ],
   },
@@ -125,11 +139,12 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     slug: 'neet-pg',
     shortName: 'NEET PG',
     fullName: 'NEET PG (National Eligibility cum Entrance Test — Postgraduate)',
-    tagline: 'Crack NEET PG with 1,200+ PYQs, full mocks & AI explanations — designed for PG aspirants.',
+    tagline: `Crack NEET PG with ${NEET_PG_QUESTION_COUNT} questions, full mocks & AI explanations — designed for PG aspirants.`,
     description:
-      'NEET PG is the single window for MD / MS / PG Diploma admissions across India. CrackCMS brings you the last 5 years of NEET PG PYQs (2020-2025), 19-subject high-yield maps, and an AI tutor trained on standard PG reference books.',
-    tags: ['Postgraduate', 'NBE', 'All India 50% Quota', 'NEET PG'],
-    primaryCta: { label: 'Start NEET PG PYQ', href: '/questions?exam_type=neet-pg' },
+      `NEET PG is the single window for MD / MS / PG Diploma admissions across India. CrackCMS brings you ${NEET_PG_QUESTION_COUNT} NEET PG questions (mostly exam recalls), 19-subject high-yield maps, and an AI tutor trained on standard PG reference books.`,
+    // theme.badgeText ('NEET PG') is rendered first, so it is not repeated here.
+    tags: ['Postgraduate', 'NBE', 'All India 50% Quota'],
+    primaryCta: { label: 'Start NEET PG PYQ', href: questionBankHref('neet-pg') },
     secondaryCta: { label: 'Browse NEET PG Subjects', href: '/exams/neet-pg#subjects' },
     theme: {
       heroGradient: 'from-emerald-600 via-teal-600 to-cyan-700',
@@ -177,9 +192,14 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
       { topic: 'Biostatistics / Research methodology', reason: 'High-scoring, predictable pattern.', code: 'PSM' },
       { topic: 'Embryology dates & genes', reason: 'High-yield, exact-match recall.', code: 'ANA' },
     ],
-    pyqYears: [2025, 2024, 2023, 2022, 2021, 2020],
+    // Years with a paper's worth (50+) of NEET PG recall questions in the
+    // bank (Nov 2026 review; 2022–2024 hold only a handful each). /neet-pg
+    // derives its tiles from live stats; this unlinked page (canonical:
+    // /neet-pg) lists the same years.
+    pyqYears: [2025, 2021, 2020, 2018],
+    pyqYearsNote: "Click a year to practise that year's NEET PG recall questions.",
     stats: [
-      { value: '1,200+', label: 'NEET PG PYQs' },
+      { value: NEET_PG_QUESTION_COUNT, label: 'NEET PG questions' },
       { value: '19', label: 'PG Subjects' },
       { value: '800', label: 'Max Marks' },
     ],
@@ -237,14 +257,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
     stats: [
       { value: 'Beta', label: 'Access' },
       { value: 'Step 1+2', label: 'CK Coverage' },
-      { value: '∞', label: 'Free Trial' },
+      { value: 'Waitlist', label: 'Early Access' },
     ],
   },
 };
-
-export function getExamConfig(slug: string): ExamConfig | null {
-  if (slug === 'upsc-cms' || slug === 'cms') return EXAM_CONFIGS.cms;
-  if (slug === 'neet-pg' || slug === 'neetpg') return EXAM_CONFIGS['neet-pg'];
-  if (slug === 'usmle') return EXAM_CONFIGS.usmle;
-  return null;
-}

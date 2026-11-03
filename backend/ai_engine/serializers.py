@@ -28,11 +28,19 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    # The list view annotates both values in its one query; the fallbacks
+    # keep the serializer usable on a plain instance (e.g. after create).
     def get_message_count(self, obj):
+        annotated = getattr(obj, 'message_count_value', None)
+        if annotated is not None:
+            return annotated
         return obj.messages.count()
 
     def get_last_message_preview(self, obj):
-        last_msg = obj.messages.last()
+        if hasattr(obj, 'last_message_content'):
+            content = obj.last_message_content
+            return content[:100] if content else None
+        last_msg = obj.messages.order_by('created_at', 'id').last()
         if last_msg:
             return last_msg.content[:100]
         return None

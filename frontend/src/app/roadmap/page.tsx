@@ -159,6 +159,24 @@ function PriorityStars({ count, max = 4 }: { count: number; max?: number }) {
     );
 }
 
+/** Student-facing message for a failed AI request (never developer setup hints). */
+function aiErrorMessage(err: unknown, action: string): string {
+    const e = err as { response?: { status?: number; data?: { error?: string; code?: string; message?: string; required?: number } } };
+    const status = e?.response?.status;
+    const data = e?.response?.data || {};
+    if (data.error === 'insufficient_tokens') {
+        return data.message || `You don't have enough AI tokens to ${action}${data.required ? ` (it costs ${data.required} tokens)` : ''}. Tokens refill daily, or you can top up or subscribe.`;
+    }
+    if (status === 402 || data.code === 'upgrade_required') {
+        return data.message || `This AI feature needs a subscription. Upgrade to ${action}.`;
+    }
+    if (status === 429) return 'Too many AI requests in a short time. Please wait a minute and try again.';
+    if (status === 401 || status === 403) return 'Your session has expired. Please log in again.';
+    if (status === 503) return data.error || 'The AI service is temporarily unavailable. Please try again in a few minutes.';
+    if (!e?.response) return 'Could not reach the server. Check your connection and try again.';
+    return `Could not ${action} right now. Please try again in a few minutes.`;
+}
+
 const sectionColors: Record<string, { bg: string; border: string; text: string; light: string }> = {
     medicine: { bg: 'bg-blue-500', border: 'border-blue-200 dark:border-blue-500/30', text: 'text-blue-600 dark:text-blue-400', light: 'bg-blue-50 dark:bg-blue-500/10' },
     surgery: { bg: 'bg-rose-500', border: 'border-rose-200 dark:border-rose-500/30', text: 'text-rose-600 dark:text-rose-400', light: 'bg-rose-50 dark:bg-rose-500/10' },
@@ -172,6 +190,8 @@ export default function RoadmapPage() {
     const { ready } = useRequireAuth();
     const [studyPlan, setStudyPlan] = useState('');
     const [highYield, setHighYield] = useState('');
+    const [planError, setPlanError] = useState<string | null>(null);
+    const [highYieldError, setHighYieldError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'plan' | 'highyield'>('plan');
     const [daysRemaining, setDaysRemaining] = useState(60);
@@ -192,25 +212,28 @@ export default function RoadmapPage() {
 
     const generatePlan = async () => {
         setLoading(true);
+        setPlanError(null);
         try {
             const res = await aiAPI.getStudyPlan({
                 weak_topics: weakTopics,
                 days_remaining: daysRemaining,
             });
             setStudyPlan(res.data.study_plan);
-        } catch {
-            setStudyPlan('Failed to generate study plan. Please configure AI API keys in backend/.env');
+        } catch (err) {
+            // Shown as an error, never parsed or rendered as if it were the plan.
+            setPlanError(aiErrorMessage(err, 'generate a study plan'));
         }
         setLoading(false);
     };
 
     const fetchHighYield = async () => {
         setLoading(true);
+        setHighYieldError(null);
         try {
             const res = await aiAPI.getHighYieldTopics();
             setHighYield(res.data.predictions);
-        } catch {
-            setHighYield('Failed to fetch predictions. Please configure AI API keys.');
+        } catch (err) {
+            setHighYieldError(aiErrorMessage(err, 'analyze PYQ trends'));
         }
         setLoading(false);
     };
@@ -390,23 +413,28 @@ export default function RoadmapPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Tab Buttons */}
-                    <div className="flex gap-3">
+                    {/* Tab Buttons: two equal halves with short labels on
+                        phones (the second tab used to run off the screen). */}
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
                         <Button
                             variant={activeTab === 'plan' ? 'default' : 'outline'}
                             onClick={() => setActiveTab('plan')}
-                            className="gap-2"
+                            className="gap-2 min-w-0"
+                            aria-pressed={activeTab === 'plan'}
                         >
                             <Brain className="w-4 h-4" />
-                            Personalized Study Plan
+                            <span className="sm:hidden">Study Plan</span>
+                            <span className="hidden sm:inline">Personalized Study Plan</span>
                         </Button>
                         <Button
                             variant={activeTab === 'highyield' ? 'default' : 'outline'}
                             onClick={() => setActiveTab('highyield')}
-                            className="gap-2"
+                            className="gap-2 min-w-0"
+                            aria-pressed={activeTab === 'highyield'}
                         >
                             <TrendingUp className="w-4 h-4" />
-                            High Yield Topics
+                            <span className="sm:hidden">High Yield</span>
+                            <span className="hidden sm:inline">High Yield Topics</span>
                         </Button>
                     </div>
 
@@ -446,6 +474,12 @@ export default function RoadmapPage() {
                                             {loading ? 'Generating...' : 'Generate AI Study Plan'}
                                         </Button>
                                     </div>
+                                    {planError && (
+                                        <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+                                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {planError}
+                                        </p>
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -532,6 +566,12 @@ export default function RoadmapPage() {
                                         <TrendingUp className="w-4 h-4" />
                                         {loading ? 'Analyzing...' : 'Analyze PYQ Trends'}
                                     </Button>
+                                    {highYieldError && (
+                                        <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+                                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                            {highYieldError}
+                                        </p>
+                                    )}
                                 </CardContent>
                             </Card>
 

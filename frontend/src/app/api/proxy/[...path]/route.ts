@@ -1,40 +1,10 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { resolveBackendApiBaseUrls } from '../upstream';
 
-const DEFAULT_BACKEND_API_URL = 'https://api.cracklabs.app/api';
 const DEFAULT_TIMEOUT_MS = Number(process.env.PROXY_UPSTREAM_TIMEOUT_MS || 15000);
-const LEGACY_UNHEALTHY_API_HOSTS = [
-  'crackcms-backend.onrender.com',
-  '.onrender.com',
-  'crackcms-vsthc.ondigitalocean.app',
-  '.ondigitalocean.app',
-];
-
-const normalizeApiBaseUrl = (url: string) => {
-  const normalized = url.replace(/\/+$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-};
-
-const isKnownUnhealthyApiHost = (url: string) =>
-  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
-
-const resolveBackendApiBaseUrl = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return DEFAULT_BACKEND_API_URL;
-  }
-
-  const configured = (process.env.BACKEND_API_URL || '').trim();
-  if (!configured) return DEFAULT_BACKEND_API_URL;
-
-  const normalized = normalizeApiBaseUrl(configured);
-  if (isKnownUnhealthyApiHost(normalized)) {
-    return DEFAULT_BACKEND_API_URL;
-  }
-
-  return normalized;
-};
-
-const PRIMARY_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl();
-const FALLBACK_BACKEND_API_BASE_URL = normalizeApiBaseUrl(DEFAULT_BACKEND_API_URL);
+// Only these are replayed against the fallback after a failure: a POST or
+// PATCH that hit a 5xx may already have been applied.
+const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -135,11 +105,19 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     cache: 'no-store',
   };
 
+  // Local / LAN hosts and dev servers use the local backend (see upstream.ts).
+  const { primary, fallback } = resolveBackendApiBaseUrls(request.nextUrl.hostname, {
+    NODE_ENV: process.env.NODE_ENV,
+    BACKEND_API_URL: process.env.BACKEND_API_URL,
+    BACKEND_API_FALLBACK_URL: process.env.BACKEND_API_FALLBACK_URL,
+  });
+  const canUseFallback = Boolean(fallback) && RETRYABLE_METHODS.has(request.method.toUpperCase());
+
   let primaryUrl: string;
   let fallbackUrl: string;
   try {
-    primaryUrl = buildTargetUrl(PRIMARY_BACKEND_API_BASE_URL, request, pathParts);
-    fallbackUrl = buildTargetUrl(FALLBACK_BACKEND_API_BASE_URL, request, pathParts);
+    primaryUrl = buildTargetUrl(primary, request, pathParts);
+    fallbackUrl = canUseFallback ? buildTargetUrl(fallback, request, pathParts) : primaryUrl;
   } catch {
     return buildErrorResponse(400, 'Invalid proxy path.');
   }
@@ -149,7 +127,7 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     upstreamResponse = await fetchWithTimeout(primaryUrl, requestInit);
   } catch (error: unknown) {
     console.error('Proxy upstream fetch failed for primary backend', error);
-    if (PRIMARY_BACKEND_API_BASE_URL === FALLBACK_BACKEND_API_BASE_URL) {
+    if (!canUseFallback) {
       const name = (error as { name?: string })?.name;
       if (name === 'AbortError') {
         return buildErrorResponse(504, 'Upstream request timed out.');
@@ -169,10 +147,7 @@ const forwardRequest = async (request: NextRequest, { params }: RouteContext) =>
     }
   }
 
-  if (
-    upstreamResponse.status >= 500 &&
-    PRIMARY_BACKEND_API_BASE_URL !== FALLBACK_BACKEND_API_BASE_URL
-  ) {
+  if (upstreamResponse.status >= 500 && canUseFallback) {
     try {
       upstreamResponse = await fetchWithTimeout(fallbackUrl, requestInit);
     } catch (error: unknown) {

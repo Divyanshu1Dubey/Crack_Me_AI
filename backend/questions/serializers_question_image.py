@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from .image_access import with_image_token
 from .models import QuestionImage
 
 
@@ -45,13 +46,22 @@ class QuestionImageSerializer(serializers.ModelSerializer):
         #      disk (works in production where /media/ is DEBUG-only).
         #   3. Fallback to whatever's in `url` so older rows with a
         #      manually-set public URL still render.
+        #   The proxy URL carries a signed token (questions.image_access):
+        #   the serve endpoint refuses explanation figures without one, and
+        #   this serializer only backs the admin-only QuestionImageViewSet
+        #   (a request from anyone but staff gets no token).
         request = self.context.get("request") if hasattr(self, "context") else None
         if getattr(obj, "uploaded_by_admin", False) and (obj.url or ""):
             return obj.url
         path = f"/api/questions/images/{obj.id}/serve/"
+        url = path
         if request is not None:
             try:
-                return request.build_absolute_uri(path)
+                url = request.build_absolute_uri(path)
             except Exception:  # noqa: BLE001
-                return path
-        return path
+                url = path
+        user = getattr(request, "user", None)
+        is_staff = any(getattr(user, flag, False) for flag in ("is_staff", "is_superuser", "is_admin"))
+        if request is None or is_staff:
+            url = with_image_token(url, obj.id)
+        return url

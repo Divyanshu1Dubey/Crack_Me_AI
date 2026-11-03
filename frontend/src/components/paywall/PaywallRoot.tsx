@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * PaywallRoot — single client-side mount point for the freemium UI
- * (UpgradeModal + UsageBanner).
+ * PaywallRoot — single client-side mount point for the upgrade modal
+ * (UpgradeModal).
  *
  * The <PaywallProvider> itself is wired at the layout root
  * (app/layout.tsx) so that any client component anywhere in the tree —
@@ -11,28 +11,12 @@
  * crashes with "usePaywall must be used within <PaywallProvider>" because
  * Sidebar renders before PaywallRoot gets a chance to mount.
  *
- * This file just renders the modal and (optionally) the per-route banner.
+ * This file just renders the modal. The free-usage banner (UsageBanner) is
+ * rendered by <Header>, directly under the header bar, on the routes in
+ * lib/paywall/usageBannerRoutes.ts; mounted here it sat after the footer.
  */
-import { usePathname } from 'next/navigation';
-
 import { UpgradeModal } from './UpgradeModal';
-import { UsageBanner } from './UsageBanner';
-
-const PAYWALL_BANNER_PATHS = [
-  '/questions',
-  '/tests',
-  '/simulator',
-  '/ai-tutor',
-];
 
 export function PaywallRoot() {
-  const pathname = usePathname() || '';
-  const showBanner = PAYWALL_BANNER_PATHS.some((p) => pathname.startsWith(p));
-
-  return (
-    <>
-      {showBanner ? <UsageBanner /> : null}
-      <UpgradeModal />
-    </>
-  );
+  return <UpgradeModal />;
 }

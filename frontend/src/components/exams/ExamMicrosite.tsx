@@ -18,13 +18,15 @@ import {
   Users,
 } from 'lucide-react';
 import type { ExamConfig } from '@/app/exams/_data';
+import { questionBankHref } from '@/lib/seo';
 
 interface Props { cfg: ExamConfig }
 
 export function ExamMicrosite({ cfg }: Props) {
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+    <div className="min-h-screen bg-background">
+      {/* Same container as the hero, so the crumb lines up with it. */}
+      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
         <Breadcrumbs items={[{ name: cfg.shortName, path: `/exams/${cfg.slug}` }]} />
       </div>
       {/* ── HERO ───────────────────────────────────────────── */}
@@ -136,7 +138,7 @@ export function ExamMicrosite({ cfg }: Props) {
       </section>
 
       {/* ── SUBJECTS ─────────────────────────────────────── */}
-      <section id="subjects" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 lg:pb-16">
+      <section id="subjects" className="scroll-mt-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 lg:pb-16">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
@@ -147,14 +149,14 @@ export function ExamMicrosite({ cfg }: Props) {
             </p>
           </div>
           <Button asChild variant="outline" size="sm">
-            <Link href={`/questions?exam_type=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}`}>
+            <Link href={questionBankHref(cfg.slug)}>
               Open QBank <ChevronRight className="w-4 h-4 ml-1" />
             </Link>
           </Button>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cfg.subjects.map((s) => (
-            <Link key={s.code} href={`/questions?exam_type=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}&subject=${encodeURIComponent(s.name)}`}>
+            <Link key={s.code} href={questionBankHref(cfg.slug, { subject: s.name })}>
               <Card className="h-full border-border/60 hover:border-primary/40 hover:shadow-md transition-all group cursor-pointer">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-2">
@@ -180,7 +182,7 @@ export function ExamMicrosite({ cfg }: Props) {
       </section>
 
       {/* ── HIGH-YIELD ───────────────────────────────────── */}
-      <section id="high-yield" className={`${cfg.theme.tint} border-y border-border/40`}>
+      <section id="high-yield" className={`scroll-mt-20 ${cfg.theme.tint} border-y border-border/40`}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
           <div className="flex items-center gap-3 mb-6">
             <Sparkles className={`w-6 h-6 ${cfg.theme.primary}`} />
@@ -213,7 +215,7 @@ export function ExamMicrosite({ cfg }: Props) {
                 <Calendar className={`w-6 h-6 ${cfg.theme.primary}`} /> PYQ year-wise practice
               </h2>
               <p className="text-sm md:text-base text-muted-foreground mt-1.5">
-                Click a year to attempt the full paper in Practice or Exam mode.
+                {cfg.pyqYearsNote ?? 'Click a year to attempt the full paper in Practice or Exam mode.'}
               </p>
             </div>
             <Badge variant="secondary" className="text-xs">
@@ -223,7 +225,7 @@ export function ExamMicrosite({ cfg }: Props) {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
             {cfg.pyqYears.map((y) => (
               <Link key={y}
-                href={`/questions/practice?year=${y}&exam=${cfg.slug === 'neet-pg' ? 'neet-pg' : cfg.slug === 'cms' ? 'cms' : 'usmle'}`}
+                href={questionBankHref(cfg.slug, { year: y })}
                 className="group">
                 <div className={`aspect-square rounded-2xl border border-border/60 bg-card/80 hover:border-primary/50 hover:bg-card transition-all flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md`}>
                   <div className="text-2xl font-extrabold text-foreground group-hover:text-primary transition-colors">
@@ -280,26 +282,17 @@ export function ExamMicrosite({ cfg }: Props) {
               {cfg.primaryCta.label} <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </Button>
+          {/* Anonymous visitors have no dashboard, so the second CTA is the
+              exam's own secondary action (e.g. "Take Mock Test"). */}
           <Button asChild size="lg" variant="outline">
-            <Link href="/dashboard">Back to Dashboard</Link>
+            <Link href={cfg.secondaryCta.href}>{cfg.secondaryCta.label}</Link>
           </Button>
         </div>
       </section>
 
-      {/* footer-light */}
-      <footer className="border-t border-border/40 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} CrackCMS · {cfg.shortName} microsite</span>
-          <span className="flex items-center gap-3">
-            <Link href="/exams/cms" className="hover:text-primary">UPSC CMS</Link>
-            <span>·</span>
-            <Link href="/exams/neet-pg" className="hover:text-primary">NEET PG</Link>
-            <span>·</span>
-            <Link href="/exams/usmle" className="hover:text-primary">USMLE</Link>
-          </span>
-        </div>
-      </footer>
-    </main>
+      {/* No microsite footer strip: the global Footer (root layout) already
+          links every exam, and the page ended with two footers. */}
+    </div>
   );
 }
 

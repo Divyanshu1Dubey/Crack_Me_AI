@@ -1,7 +1,7 @@
 """Classifier module tests."""
 import unittest
 
-from backend.importers.neetpg import classifier as cls
+from importers.neetpg import classifier as cls
 
 
 class GarbledRatioTests(unittest.TestCase):
@@ -18,7 +18,8 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(cls.classify(f), "blank")
 
     def test_digital(self):
-        text = "Q.1 A 23-year-old male presents with chest pain radiating to the left arm."
+        # Must reach HYBRID_TEXT_CHARS (250) to be accepted as digital.
+        text = "Q.1 A 23-year-old male presents with chest pain radiating to the left arm. " * 4
         f = cls.features_for(1, text, 0)
         self.assertEqual(cls.classify(f), "digital")
 
@@ -27,7 +28,7 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(cls.classify(f), "scanned")
 
     def test_hybrid_short_text(self):
-        f = cls.features_for(1, "Q1. stem", 1)
+        f = cls.features_for(1, "Q1. " + "stem text " * 10, 1)
         # text under HYBRID threshold (250) but >= 50 and image present
         self.assertEqual(cls.classify(f), "hybrid")
 

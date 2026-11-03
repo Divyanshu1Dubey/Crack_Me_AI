@@ -15,6 +15,7 @@ urlpatterns = [
     path('recent-attempts/', views.RecentAttemptsView.as_view(), name='recent-attempts'),
     path('score-prediction/', views.ScorePredictionView.as_view(), name='score-prediction'),
     path('performance-trend/', views.PerformanceTrendView.as_view(), name='performance-trend'),
+    path('pyq-trends/', views.PYQTrendsView.as_view(), name='pyq-trends'),
     # Feedback & Contact Us
     path('feedback/', views.FeedbackListCreateView.as_view(), name='feedback-list'),
     path('feedback/<int:pk>/', views.FeedbackDetailView.as_view(), name='feedback-detail'),

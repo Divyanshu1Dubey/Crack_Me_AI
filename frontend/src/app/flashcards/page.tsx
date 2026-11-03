@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { flashcardsAPI, aiAPI } from '@/lib/api';
+import api, { flashcardsAPI, aiAPI } from '@/lib/api';
 import {
     Layers, Plus, RotateCcw, CheckCircle, Clock,
     ChevronLeft, ChevronRight, Brain, Trash2, X,
     Sparkles, Edit3, Save, BookOpen, Lightbulb, StickyNote,
-    Wand2, Loader2
+    Wand2, Loader2, AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,49 @@ const difficultyColors: Record<string, string> = {
     hard: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
 };
 
+/**
+ * GET /questions/flashcards/analytics/ -- computed over ALL of the user's
+ * cards on the server (the list endpoint is paginated, so counting the
+ * loaded page undercounted). retention_rate is a 0-1 fraction from the real
+ * review history, null before the first review.
+ */
+interface FlashcardStats {
+    total_cards: number;
+    due_today?: number;
+    /** Older API name of due_today. */
+    cards_due_today?: number;
+    reviewed_cards?: number;
+    retention_rate?: number | null;
+    avg_ease_factor?: number;
+    avg_interval?: number;
+    interval_distribution?: Record<string, number>;
+}
+
+const LIST_PAGE_SIZE = 100;
+const MAX_LIST_PAGES = 20;
+
+/** Every card of the (paginated) flashcard list, following DRF's `next` links. */
+async function fetchAllCards(params: Record<string, string> = {}): Promise<Flashcard[]> {
+    const rows: Flashcard[] = [];
+    let res = await api.get('/questions/flashcards/', { params: { ...params, page_size: LIST_PAGE_SIZE } });
+    for (let page = 1; page <= MAX_LIST_PAGES; page++) {
+        const body = res.data;
+        if (Array.isArray(body)) return [...rows, ...body];
+        rows.push(...(body?.results || []));
+        const next: string | null = body?.next || null;
+        if (!next || page === MAX_LIST_PAGES) break;
+        // `next` is absolute; keep the path + query relative to the API base (/api).
+        res = await api.get(next.replace(/^.*?\/api(?=\/)/, ''));
+    }
+    return rows;
+}
+
+/** "84%" from a 0-1 retention fraction (a 0-100 value is taken as-is). */
+function formatRetention(rate: number | null | undefined): string {
+    if (typeof rate !== 'number' || Number.isNaN(rate)) return '—';
+    return `${Math.round(rate <= 1 ? rate * 100 : rate)}%`;
+}
+
 const qualityLabels = [
     { q: 0, label: 'Blackout', color: 'bg-red-500 hover:bg-red-600', desc: 'No idea' },
     { q: 1, label: 'Wrong', color: 'bg-red-400 hover:bg-red-500', desc: 'Incorrect' },
@@ -51,6 +94,8 @@ export default function FlashcardsPage() {
     const [cards, setCards] = useState<Flashcard[]>([]);
     const [dueCards, setDueCards] = useState<Flashcard[]>([]);
     const [loading, setLoading] = useState(true);
+    // The card list could not be loaded: show Retry, not "No flashcards yet".
+    const [loadError, setLoadError] = useState(false);
     const [mode, setMode] = useState<'browse' | 'review' | 'create' | 'study'>('browse');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [flipped, setFlipped] = useState(false);
@@ -63,24 +108,29 @@ export default function FlashcardsPage() {
     const [noteText, setNoteText] = useState('');
     const [generatingMnemonic, setGeneratingMnemonic] = useState(false);
     const [showStudyTools, setShowStudyTools] = useState(false);
-    const [analytics, setAnalytics] = useState<{
-        total_cards: number; cards_due_today: number; retention_rate: number;
-        avg_ease_factor: number; avg_interval: number;
-        interval_distribution: Record<string, number>;
-    } | null>(null);
+    const [analytics, setAnalytics] = useState<FlashcardStats | null>(null);
+
+    const refreshAnalytics = useCallback(() => {
+        flashcardsAPI.analytics()
+            .then(res => { if (res.data) setAnalytics(res.data as FlashcardStats); })
+            .catch(() => { /* keep the last numbers */ });
+    }, []);
 
     const fetchCards = useCallback(() => {
         setLoading(true);
+        setLoadError(false);
         Promise.all([
-            flashcardsAPI.list().catch(() => ({ data: [] })),
-            flashcardsAPI.list({ due: 'true' }).catch(() => ({ data: [] })),
+            fetchAllCards(),
+            fetchAllCards({ due: 'true' }),
+            // The stats are optional: the cards still work without them.
             flashcardsAPI.analytics().catch(() => ({ data: null })),
-        ]).then(([allRes, dueRes, analyticsRes]) => {
-            const all = Array.isArray(allRes.data) ? allRes.data : allRes.data?.results || [];
-            const due = Array.isArray(dueRes.data) ? dueRes.data : dueRes.data?.results || [];
+        ]).then(([all, due, analyticsRes]) => {
             setCards(all);
             setDueCards(due);
-            if (analyticsRes.data) setAnalytics(analyticsRes.data);
+            if (analyticsRes.data) setAnalytics(analyticsRes.data as FlashcardStats);
+        }).catch(() => {
+            setLoadError(true);
+        }).finally(() => {
             setLoading(false);
         });
     }, []);
@@ -96,7 +146,9 @@ export default function FlashcardsPage() {
         setCreateError(null);
         setCreateSuccess(false);
         try {
-            const response = await flashcardsAPI.create({ front: form.front, back: form.back, difficulty: form.difficulty });
+            // personal_note is accepted by the serializer; it used to be dropped here.
+            const payload = { front: form.front, back: form.back, difficulty: form.difficulty, personal_note: form.note.trim() };
+            await flashcardsAPI.create(payload);
             setForm({ front: '', back: '', difficulty: 'medium', note: '' });
             setCreateSuccess(true);
             setTimeout(() => {
@@ -125,6 +177,7 @@ export default function FlashcardsPage() {
                 setCurrentIndex(updated.length - 1);
             }
             if (updated.length === 0) setMode('browse');
+            refreshAnalytics();
         } catch { /* ignore */ }
     };
 
@@ -133,6 +186,7 @@ export default function FlashcardsPage() {
             await flashcardsAPI.delete(id);
             setCards(cards.filter(c => c.id !== id));
             setDueCards(dueCards.filter(c => c.id !== id));
+            refreshAnalytics();
         } catch { /* ignore */ }
     };
 
@@ -145,13 +199,23 @@ export default function FlashcardsPage() {
         } catch { /* ignore */ }
     };
 
-    const generateMnemonic = async (topic: string) => {
+    /** A mnemonic, or the reason there is none (null = the generic retry message). */
+    const generateMnemonic = async (topic: string): Promise<{ mnemonic: string | null; error: string | null }> => {
         setGeneratingMnemonic(true);
         try {
             const res = await aiAPI.generateMnemonic({ topic });
-            return res.data.mnemonic;
-        } catch {
-            return null;
+            // An offline / outage reply is not a mnemonic; never save it into a card.
+            const text = res.data?.offline ? '' : res.data?.mnemonic;
+            return { mnemonic: typeof text === 'string' && text.trim() ? text : null, error: null };
+        } catch (err: any) {
+            const data = err?.response?.data;
+            // 503 ai_unavailable: no model answered and nothing was charged.
+            if (data?.code === 'ai_unavailable') {
+                return { mnemonic: null, error: 'AI is unavailable right now. Nothing was charged; please try again in a few minutes.' };
+            }
+            // e.g. out of AI tokens: the server's own message says what to do.
+            const message = typeof data?.message === 'string' ? data.message.trim() : '';
+            return { mnemonic: null, error: message ? message.slice(0, 240) : null };
         } finally {
             setGeneratingMnemonic(false);
         }
@@ -159,9 +223,12 @@ export default function FlashcardsPage() {
 
     const handleGenerateMnemonicForCard = async () => {
         if (!form.front.trim()) return;
-        const mnemonic = await generateMnemonic(form.front);
+        setCreateError(null);
+        const { mnemonic, error } = await generateMnemonic(form.front);
         if (mnemonic) {
             setForm({ ...form, back: form.back ? `${form.back}\n\n🧠 Mnemonic: ${mnemonic}` : `🧠 Mnemonic: ${mnemonic}` });
+        } else {
+            setCreateError(error || 'Could not generate a mnemonic right now. Please try again in a moment.');
         }
     };
 
@@ -175,6 +242,12 @@ export default function FlashcardsPage() {
     if (authLoading) return null;
 
     const currentCard = dueCards[currentIndex];
+    // Stats come from the server over all cards and the real review history
+    // (counting the loaded cards' review_count hid every lapsed card, since a
+    // lapse resets it, and only ever saw the first page).
+    const totalCards = analytics?.total_cards ?? cards.length;
+    const dueToday = analytics?.due_today ?? analytics?.cards_due_today ?? dueCards.length;
+    const reviewedCards = analytics?.reviewed_cards;
 
     return (
         <>
@@ -191,7 +264,7 @@ export default function FlashcardsPage() {
                                 <p className="text-sm text-muted-foreground">Spaced repetition with personal notes & AI mnemonics</p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             {mode === 'review' ? (
                                 <Button variant="outline" onClick={() => { setMode('browse'); setFlipped(false); }}>
                                     <X className="w-4 h-4 mr-1" /> Exit Review
@@ -242,40 +315,42 @@ export default function FlashcardsPage() {
                                         <BookOpen className="w-6 h-6 text-emerald-500 mb-2" />
                                         <h4 className="font-semibold text-sm mb-1">Smart Review</h4>
                                         <p className="text-xs text-muted-foreground mb-3">SM-2 algorithm optimizes your review schedule</p>
-                                        <Badge variant="outline" className="text-xs">{cards.length} cards tracked</Badge>
+                                        <Badge variant="outline" className="text-xs">{totalCards} {totalCards === 1 ? 'card' : 'cards'} tracked</Badge>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* Stats */}
-                    {mode !== 'review' && (
-                        <div className="grid grid-cols-3 gap-4">
+                    {/* Stats (hidden while the cards could not be loaded) */}
+                    {mode !== 'review' && !loadError && (
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <Layers className="w-8 h-8 text-blue-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <Layers className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-blue-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{cards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Total Cards</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{totalCards}</p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Total Cards</p>
                                     </div>
                                 </CardContent>
                             </Card>
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <Clock className="w-8 h-8 text-amber-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-amber-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{dueCards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Due for Review</p>
+                                        <p className="text-xl sm:text-2xl font-bold">{dueToday}</p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Due for Review</p>
                                     </div>
                                 </CardContent>
                             </Card>
                             <Card>
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <CheckCircle className="w-8 h-8 text-emerald-500" />
+                                <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                                    <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-emerald-500" />
                                     <div>
-                                        <p className="text-2xl font-bold">{cards.length - dueCards.length}</p>
-                                        <p className="text-xs text-muted-foreground">Reviewed</p>
+                                        <p className="text-xl sm:text-2xl font-bold" title="Cards you have graded at least once">
+                                            {typeof reviewedCards === 'number' ? reviewedCards : '—'}
+                                        </p>
+                                        <p className="text-[11px] sm:text-xs leading-tight text-muted-foreground">Reviewed</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -283,7 +358,7 @@ export default function FlashcardsPage() {
                     )}
 
                     {/* SR Analytics */}
-                    {mode !== 'review' && analytics && analytics.total_cards > 0 && (
+                    {mode !== 'review' && !loadError && analytics && analytics.total_cards > 0 && (
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-primary" /> Spaced Repetition Analytics</CardTitle>
@@ -291,19 +366,22 @@ export default function FlashcardsPage() {
                             <CardContent className="pb-4">
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-emerald-600">{Math.round(analytics.retention_rate * 100)}%</p>
+                                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400" title="Share of your reviews you recalled (not forgotten)">
+                                            {/* Older APIs (no reviewed_cards) sent an ease-based number, not retention. */}
+                                            {typeof reviewedCards === 'number' ? formatRetention(analytics.retention_rate) : '—'}
+                                        </p>
                                         <p className="text-[10px] text-muted-foreground">Retention Rate</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-blue-600">{analytics.avg_ease_factor}</p>
+                                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{analytics.avg_ease_factor ?? '—'}</p>
                                         <p className="text-[10px] text-muted-foreground">Avg Ease Factor</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-amber-600">{analytics.avg_interval}d</p>
+                                        <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{typeof analytics.avg_interval === 'number' ? `${analytics.avg_interval}d` : '—'}</p>
                                         <p className="text-[10px] text-muted-foreground">Avg Interval</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-muted/50">
-                                        <p className="text-lg font-bold text-purple-600">{analytics.cards_due_today}</p>
+                                        <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{dueToday}</p>
                                         <p className="text-[10px] text-muted-foreground">Due Today</p>
                                     </div>
                                 </div>
@@ -315,7 +393,7 @@ export default function FlashcardsPage() {
                                             { key: '8_30_days', color: 'bg-emerald-400', label: '8-30d' },
                                             { key: '30_plus_days', color: 'bg-blue-400', label: '30d+' },
                                         ].map(({ key, color }) => {
-                                            const count = analytics.interval_distribution[key] || 0;
+                                            const count = analytics.interval_distribution?.[key] || 0;
                                             const pct = analytics.total_cards > 0 ? (count / analytics.total_cards) * 100 : 0;
                                             return pct > 0 ? <div key={key} className={`${color} rounded-full`} style={{ width: `${pct}%` }} title={`${key}: ${count} cards`} /> : null;
                                         })}
@@ -518,7 +596,19 @@ export default function FlashcardsPage() {
                     {/* Browse Mode — card list */}
                     {mode !== 'review' && !loading && (
                         <>
-                            {cards.length === 0 ? (
+                            {loadError ? (
+                                <Card className="border-destructive/30">
+                                    <CardContent className="p-8 sm:p-12 text-center space-y-4">
+                                        <AlertCircle className="w-10 h-10 mx-auto text-destructive" aria-hidden="true" />
+                                        <p className="text-muted-foreground" role="alert">
+                                            Could not load your flashcards. Check your connection and try again.
+                                        </p>
+                                        <Button variant="outline" onClick={fetchCards}>
+                                            <RotateCcw className="w-4 h-4 mr-1" /> Retry
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ) : cards.length === 0 ? (
                                 <Card>
                                     <CardContent className="p-12 text-center">
                                         <Layers className="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" />
@@ -543,21 +633,24 @@ export default function FlashcardsPage() {
                                                         <div className="flex gap-1">
                                                             <Button
                                                                 variant="ghost" size="icon"
-                                                                className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                                                                className="h-7 w-7 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100"
                                                                 onClick={() => {
                                                                     setEditingNote(card.id);
                                                                     setNoteText(card.personal_note || '');
                                                                 }}
                                                                 title="Add/Edit Note"
+                                                                aria-label="Add or edit note"
                                                             >
                                                                 <Edit3 className="w-3.5 h-3.5 text-blue-500" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost" size="icon"
-                                                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                                                                className="h-7 w-7 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 text-destructive"
                                                                 onClick={() => handleDelete(card.id)}
+                                                                aria-label="Delete flashcard"
+                                                                title="Delete flashcard"
                                                             >
-                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                                             </Button>
                                                         </div>
                                                     </div>

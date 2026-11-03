@@ -1,13 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ChevronLeft, GraduationCap, User } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
-import { buildPageMetadata, personSchema } from '@/lib/metadata';
+import { buildPageMetadata, personSchema, jsonLdString } from '@/lib/metadata';
 import { getAllPosts } from '@/lib/blog';
-import { getAuthor } from '@/content/authors';
+import { getAuthor, RETIRED_AUTHOR_SLUGS } from '@/content/authors';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
@@ -45,6 +44,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogAuthorPage({ params }: PageProps) {
     const { slug } = await params;
+    // A retired byline's archive (indexed earlier) points to the profile now
+    // credited with its posts.
+    const successor = RETIRED_AUTHOR_SLUGS[slug];
+    if (successor) permanentRedirect(`/blog/author/${successor}`);
     const author = getAuthor(slug);
     // Bail if the slug isn't a registered author at all (defensive — the
     // fallback `getAuthor` returns the editorial team for unknown slugs).
@@ -79,12 +82,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
 
     return (
         <>
-            <Script
-                id={`author-schema-${author.slug}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">
@@ -125,7 +123,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 {author.expertise.map((e) => (
-                                    <span key={e} className="blog-tag-chip">
+                                    <span key={e} className="inline-flex items-center rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
                                         {e}
                                     </span>
                                 ))}
@@ -155,7 +153,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
                         <div className="mt-12">
                             <h2 className="text-xl font-bold flex items-center gap-2 mb-5">
                                 <User className="h-5 w-5 text-primary" />
-                                Medically reviewed by {author.name} ({reviewed.length})
+                                Reviewed by {author.name} ({reviewed.length})
                             </h2>
                             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                                 {reviewed.map((p) => (

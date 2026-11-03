@@ -1,8 +1,8 @@
 """Text parser tests — question / option / answer / explanation extraction."""
 import unittest
 
-from backend.importers.neetpg import text_parser
-from backend.importers.neetpg.models import ParsedQuestion
+from importers.neetpg import text_parser
+from importers.neetpg.models import ParsedQuestion
 
 
 SIMPLE_PAGE = """Q.1 A 23-year-old male presents with chest pain. ECG shows ST elevation.

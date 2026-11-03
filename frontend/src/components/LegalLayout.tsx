@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Script from 'next/script';
 import { siteName, siteUrl } from '@/lib/seo';
+import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import { ArrowLeft, CalendarDays, FileText, ShieldCheck } from 'lucide-react';
 
@@ -14,7 +14,19 @@ interface LegalLayoutProps {
     children: React.ReactNode;
     /** Schema.org @type — e.g. PrivacyPolicy, TermsOfService, MedicalWebPage */
     schemaType?: string;
+    /** Hero pill text. Defaults to "Legal & Policy"; /about passes its own. */
+    badge?: string;
+    /** Rendered after the prose body, outside `.legal-content`, so buttons
+     *  and cards there are not restyled by the prose link rules. */
+    after?: React.ReactNode;
 }
+
+const RELATED_LINKS = [
+    { href: '/about', label: 'About CrackCMS →' },
+    { href: '/contact', label: 'Contact support →' },
+    { href: '/subscription', label: 'Premium plans →' },
+    { href: '/register', label: 'Create a free account →' },
+];
 
 /**
  * Shared layout for legal/policy pages. Renders an SEO-optimised article
@@ -27,14 +39,13 @@ export function buildLegalMetadata({
     canonical,
 }: Pick<LegalLayoutProps, 'title' | 'description' | 'canonical'>): Metadata {
     return {
-        title,
+        // The root template appends " | CrackCMS"; drop the page's own suffix.
+        title: stripBrandSuffix(title),
         description,
         alternates: {
             canonical,
             languages: {
                 'en-IN': canonical,
-                'en-US': canonical,
-                'en-GB': canonical,
                 'x-default': canonical,
             },
         },
@@ -66,13 +77,15 @@ export function LegalLayout({
     canonical,
     children,
     schemaType = 'WebPage',
+    badge = 'Legal & Policy',
+    after,
 }: LegalLayoutProps) {
     const articleSchema = {
         '@context': 'https://schema.org',
         '@type': schemaType,
         headline: title,
         description,
-        url: canonical,
+        url: `${siteUrl}${canonical}`,
         inLanguage: 'en-IN',
         datePublished: effectiveDate || lastUpdated,
         dateModified: lastUpdated,
@@ -83,12 +96,12 @@ export function LegalLayout({
             url: siteUrl,
             logo: { '@type': 'ImageObject', url: `${siteUrl}/cms-circle-logo.png` },
         },
-        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': `${siteUrl}${canonical}` },
         breadcrumb: {
             '@type': 'BreadcrumbList',
             itemListElement: [
                 { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl },
-                { '@type': 'ListItem', position: 2, name: title, item: canonical },
+                { '@type': 'ListItem', position: 2, name: title, item: `${siteUrl}${canonical}` },
             ],
         },
     };
@@ -96,29 +109,26 @@ export function LegalLayout({
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
+                {/* Breadcrumbs adds the "Home" crumb itself. */}
                 <Breadcrumbs items={[
-                    { name: 'Home', path: '/' },
                     { name: title.replace(/ — .*/, ''), path: canonical },
                 ]} />
             </div>
-            <Script
-                id={`legal-schema-${canonical.split('/').pop()}`}
-                type="application/ld+json"
-                strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleSchema) }} />
 
             {/* Hero */}
             <section className="border-b border-border bg-linear-to-br from-primary/8 via-background to-accent/10">
                 <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
+                    {/* flex + w-fit (not inline-flex) so the pill drops to its own
+                        line and mb-6 actually separates them. */}
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground mb-6"
+                        className="flex w-fit items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground mb-6"
                     >
                         <ArrowLeft className="h-3.5 w-3.5" /> Back to home
                     </Link>
                     <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                        <ShieldCheck className="h-3.5 w-3.5" /> Legal & Policy
+                        <ShieldCheck className="h-3.5 w-3.5" /> {badge}
                     </div>
                     <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
                         {title}
@@ -145,17 +155,20 @@ export function LegalLayout({
                     {children}
                 </div>
 
-                {/* Related links — internal linking for SEO */}
+                {after}
+
+                {/* Related links — internal linking for SEO (never the page itself) */}
                 <aside className="mt-16 rounded-2xl border border-border bg-card p-6 sm:p-8">
                     <h2 className="text-lg font-bold">Related resources</h2>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        Continue exploring CrackCMS — a free study desk built by clinicians for MBBS graduates sitting UPSC CMS, NEET PG and similar exams.
+                        Continue exploring CrackCMS — a free study desk for MBBS graduates sitting UPSC CMS, NEET PG and similar exams.
                     </p>
                     <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-                        <li><Link href="/about" className="text-sm font-semibold text-primary hover:underline">About CrackCMS →</Link></li>
-                        <li><Link href="/contact" className="text-sm font-semibold text-primary hover:underline">Contact support →</Link></li>
-                        <li><Link href="/subscription" className="text-sm font-semibold text-primary hover:underline">Premium plans →</Link></li>
-                        <li><Link href="/register" className="text-sm font-semibold text-primary hover:underline">Create a free account →</Link></li>
+                        {RELATED_LINKS.filter((l) => l.href !== canonical).map((l) => (
+                            <li key={l.href}>
+                                <Link href={l.href} className="text-sm font-semibold text-primary hover:underline">{l.label}</Link>
+                            </li>
+                        ))}
                     </ul>
                 </aside>
             </article>

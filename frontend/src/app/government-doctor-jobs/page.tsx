@@ -1,29 +1,31 @@
 import { ExamLandingLayout, buildExamMetadata, type ExamLandingContent } from '@/components/ExamLandingLayout';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import Breadcrumbs from '@/components/Breadcrumbs';
+import { CMS_PYQ_COUNT, CMS_PYQ_PHRASE } from '@/lib/bankStats';
 
 const content: ExamLandingContent = {
     slug: 'government-doctor-jobs',
     name: 'Government Doctor Jobs',
     fullName: 'Central & State Government MBBS Doctor Posts',
-    title: 'Government Doctor Jobs 2026 — Medical Officer, Specialist, GDMO Posts | CrackCMS',
+    title: 'Government Doctor Jobs 2026 — Medical Officer, Specialist, GDMO Posts',
     description: 'Latest 2026 government doctor jobs guide for MBBS — UPSC CMS, state PSCs, AIIMS, ESIC, Railways & Defence. Salary, eligibility, and PYQs.',
-    tagline: 'Find every central and state government MBBS doctor vacancy in one place — UPSC CMS, AIIMS, PSCs, NHM, ESIC, Defence, Railways.',
+    tagline: 'Find central and state government MBBS doctor vacancies in one place — UPSC CMS, AIIMS, PSCs, NHM, ESIC, Defence, Railways.',
     heroBullets: [
-        'Every central & state MBBS doctor post in one searchable catalog',
-        'Live application deadlines, eligibility, and salary breakdowns',
-        'PYQ preparation tailored to each recruitment body',
+        'A vacancy list of central & state MBBS doctor posts (free account)',
+        'Deadlines, eligibility and salary (where published) for each listed post',
+        `${CMS_PYQ_PHRASE} for the central Medical Officer exam`,
         'AI tutor that explains selection-pattern differences',
     ],
+    // Pay facts the FAQ below already states; the old tiles (500+ vacancies,
+    // 28 states, weekly updates) had no data behind them.
     stats: [
-        { number: '500+', label: 'Active vacancies' },
-        { number: '28 states', label: 'Coverage' },
-        { number: '₹56k-2L', label: 'Salary range' },
-        { number: 'Weekly', label: 'Updates' },
+        { number: 'Level 10', label: 'Entry pay level (7th CPC)' },
+        { number: '₹56,100', label: 'Starting basic pay' },
+        { number: '20%', label: 'Non-practising allowance' },
+        { number: CMS_PYQ_COUNT, label: 'UPSC CMS PYQs' },
     ],
     pattern: [
-        { label: 'UPSC CMS', value: '240 MCQs, 2 papers, -0.33 negative marking' },
+        { label: 'UPSC CMS', value: '240 MCQs, 2 papers, one-third negative marking (CBT)' },
         { label: 'State PSC MO', value: '100-200 MCQs, 60-120 min, varies by state' },
         { label: 'AIIMS / PGIMER MO', value: 'CBT 100 MCQs, 90 min' },
         { label: 'ESIC IMO Gr-II', value: 'CBT 100 MCQs, 60 min' },
@@ -56,12 +58,14 @@ const content: ExamLandingContent = {
         { q: 'What is the salary of a government doctor?', a: 'Entry-level Medical Officers earn ₹56,100-₹1,77,500 (Pay Level 10) plus NPA 20%, rural allowance, and HRA. Specialists earn up to Pay Level 11 (₹67,700-2,08,700).' },
         { q: 'How to apply for government doctor jobs?', a: 'Apply via UPSC (for CMS), state PSCs, AIIMS/PGIMER portals, ESIC recruitment portal, NHM state websites, or Railway Recruitment Board (RRB) portals.' },
         { q: 'Which government doctor job has the easiest exam?', a: 'NHM and ESIC recruitments typically have shorter, more predictable papers. State PSC MO posts add GK which makes them more competitive.' },
-        { q: 'Does CrackCMS track live government doctor vacancies?', a: 'Yes — our /jobs page is updated weekly with central and state MBBS doctor vacancies, including application deadlines and direct apply links.' },
+        { q: 'Does CrackCMS track live government doctor vacancies?', a: 'Yes — sign in (it is free) and open the Jobs page for central and state MBBS doctor vacancies, with deadlines, eligibility and apply links.' },
     ],
     accentFrom: 'from-slate-700',
     accentTo: 'to-zinc-900',
     emoji: '🏛️',
-    pyqCount: '500+',
+    // The bank that prepares for the central MO exam is UPSC CMS.
+    pyqCount: `${CMS_PYQ_COUNT} UPSC CMS`,
+    secondaryCta: { label: 'Browse vacancies', href: '/jobs' },
 };
 
 export const metadata = buildExamMetadata(content);
@@ -69,9 +73,6 @@ export const metadata = buildExamMetadata(content);
 export default function GovDoctorJobsPage() {
     return (
         <>
-            <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                <Breadcrumbs items={[{ name: 'Government Doctor Jobs', path: '/government-doctor-jobs' }]} />
-            </div>
             <ExamLandingLayout content={content}>
                 <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
                     <h2 className="text-2xl font-bold mb-6">Popular Government Doctor Career Paths</h2>
@@ -84,7 +85,7 @@ export default function GovDoctorJobsPage() {
                         <Link href="/medical-officer" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">MO Exam Prep</p>
                             <p className="mt-1 font-semibold group-hover:underline">Medical Officer Exam Prep <ArrowRight className="inline ml-1 h-3 w-3" /></p>
-                            <p className="mt-1 text-xs text-muted-foreground">6,000+ PYQs, state-specific mocks, AI tutor</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{CMS_PYQ_COUNT} UPSC CMS PYQs, core MO subjects, AI tutor</p>
                         </Link>
                         <Link href="/cms" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
                             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">UPSC CMS</p>

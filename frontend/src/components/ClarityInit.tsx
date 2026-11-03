@@ -3,14 +3,18 @@
 /**
  * ClarityInit.tsx — Microsoft Clarity loader.
  *
- * - Lazily injected after consent for `analytics`.
- * - Idempotent: re-injection is a no-op via `__CRACKCMS_CLARITY_INIT__`.
- * - Respects consent in real-time (off when analytics is revoked).
+ * - Injected ONLY after the visitor allows the `analytics` category (the
+ *   loader used to render unconditionally, so every visitor was recorded
+ *   before choosing and even after "Reject all").
+ * - Idempotent: next/script dedupes by id and `__CRACKCMS_CLARITY_INIT__`
+ *   marks the first load.
+ * - Respects consent changes at runtime: revoking calls
+ *   `clarity('consent', false)`, which stops cookie-based tracking.
  * - Falls back silently if NEXT_PUBLIC_CLARITY_PROJECT_ID is unset.
  */
 
 import Script from 'next/script';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { consent, type ConsentState } from '@/lib/consent';
 
 declare global {
@@ -27,38 +31,40 @@ export default function ClarityInit() {
         Boolean(CLARITY_ID) &&
         (process.env.NODE_ENV === 'production' ||
             process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === 'true');
+    const [allowed, setAllowed] = useState(false);
 
     useEffect(() => {
         if (!enabled) return;
         const apply = (state: ConsentState) => {
-            if (state.analytics && typeof window.clarity === 'function') {
+            const granted = state.analytics === true;
+            setAllowed(granted);
+            if (typeof window.clarity === 'function') {
                 try {
-                    window.clarity('consent');
+                    window.clarity('consent', granted);
                 } catch {
                     /* ignore */
                 }
             }
         };
         const off = consent.onChange(apply);
-        // Initial state
         const current = consent.read();
         if (current) apply(current);
         return off;
     }, [enabled]);
 
-    if (!enabled || !CLARITY_ID) return null;
+    if (!enabled || !allowed) return null;
 
     return (
         <Script
             id="ms-clarity-loader"
             strategy="afterInteractive"
-            // Inline so we can delay-load based on consent
             dangerouslySetInnerHTML={{
                 __html: `(function(c,l,a,r,i,t,y){
                     c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
                     t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
                     y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-                })(window, document, "clarity", "script", "${CLARITY_ID}");
+                })(window, document, "clarity", "script", ${JSON.stringify(CLARITY_ID)});
+                window.clarity("consent");
                 window.__CRACKCMS_CLARITY_INIT__ = true;`,
             }}
         />

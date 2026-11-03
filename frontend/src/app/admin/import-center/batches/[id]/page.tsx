@@ -4,6 +4,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { importCenterAPI } from '@/lib/api';
@@ -25,10 +26,11 @@ type Batch = {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
-  summary: Record<string, unknown>;
+  summary: Record<string, unknown> & { publish?: PublishState; rebuild?: PublishState };
   error_report: Array<Record<string, unknown>>;
   materials_count: number;
   needs_review_count: number;
+  is_stale?: boolean;
   recent_audit_logs?: Array<{
     id: number;
     level: string;
@@ -37,6 +39,35 @@ type Batch = {
     created_at: string;
   }>;
 };
+
+// Background publish progress, stored by the API in batch.summary.publish;
+// a running test rebuild (Republish Tests) is batch.summary.rebuild
+// (kind 'republish'; older API versions wrote it into summary.publish).
+type PublishState = {
+  state: 'running' | 'done' | 'failed';
+  kind?: 'republish';
+  started_at?: string;
+  finished_at?: string;
+  heartbeat_at?: string;
+  published?: number;
+  tests_built?: number;
+  rows_done?: number;
+  error?: string;
+};
+
+// Same rules as the API: a background publish that has not reported for 30
+// minutes has died with its process; a rebuild runs inside its request, so
+// one older than 5 minutes died with it.
+const PUBLISH_STALE_MS = 30 * 60 * 1000;
+const REBUILD_STALE_MS = 5 * 60 * 1000;
+
+function isLive(state?: PublishState): boolean {
+  if (state?.state !== 'running') return false;
+  const lastBeat = state.heartbeat_at || state.started_at;
+  if (!lastBeat) return true;
+  const limit = state.kind === 'republish' ? REBUILD_STALE_MS : PUBLISH_STALE_MS;
+  return Date.now() - new Date(lastBeat).getTime() <= limit;
+}
 
 type Material = {
   id: number;
@@ -59,12 +90,24 @@ type Material = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: 'bg-yellow-100 text-yellow-800',
-  processing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  partial: 'bg-orange-100 text-orange-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  queued: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  partial: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  // material parse_status values
+  parsed: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  skipped: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+};
+
+// Alert boxes, light + dark.
+const ALERT = {
+  error: 'border-red-300 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300',
+  warn: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300',
+  info: 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300',
+  ok: 'border-green-300 bg-green-50 text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300',
 };
 
 export default function BatchDetailPage() {
@@ -97,9 +140,15 @@ export default function BatchDetailPage() {
     if (!id) return;
     load();
     pollRef.current = setInterval(() => {
-      // Only poll while processing
+      // Only poll while parsing or while a publish / test rebuild runs.
       setBatch((prev) => {
-        if (!prev || prev.status === 'processing' || prev.status === 'queued') {
+        if (
+          !prev ||
+          prev.status === 'processing' ||
+          prev.status === 'queued' ||
+          prev.summary?.publish?.state === 'running' ||
+          prev.summary?.rebuild?.state === 'running'
+        ) {
           load();
         }
         return prev;
@@ -144,6 +193,22 @@ export default function BatchDetailPage() {
   }
 
   const live = batch.status === 'processing' || batch.status === 'queued';
+  const rawPublish = batch.summary?.publish;
+  // An in-slot rebuild state (older API) is shown as a rebuild, not a publish.
+  const legacyRebuild = rawPublish?.kind === 'republish' ? rawPublish : undefined;
+  const publishState = legacyRebuild ? undefined : rawPublish;
+  const rebuilding = isLive(batch.summary?.rebuild) || isLive(legacyRebuild);
+  const publishStale = publishState?.state === 'running' && !isLive(publishState);
+  const publishing = isLive(publishState);
+  const busy = publishing || rebuilding;
+  // A cancelled batch can still publish what it staged before the cancel;
+  // a rolled-back one has nothing left (the API answers 409 for both cases
+  // when there is nothing to publish).
+  const rolledBack = Boolean(batch.summary?.rollback);
+  const canPublish =
+    batch.status === 'completed' ||
+    batch.status === 'partial' ||
+    (batch.status === 'cancelled' && !rolledBack && batch.materials_count > 0);
 
   return (
     <div className="space-y-6">
@@ -156,37 +221,38 @@ export default function BatchDetailPage() {
           <span className={`rounded px-3 py-1 text-xs font-medium ${STATUS_COLORS[batch.status]}`}>{batch.status}</span>
           <button
             type="button"
-            disabled={live || actionPending === 'cancel'}
+            disabled={!live || actionPending === 'cancel'}
             onClick={() => doAction('cancel')}
+            title={live ? 'Stop parsing after the current file' : 'Only a queued or processing batch can be cancelled'}
             className="rounded border border-border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50"
           >
             {actionPending === 'cancel' ? 'Cancelling…' : 'Cancel'}
           </button>
           <button
             type="button"
-            disabled={batch.status !== 'completed' && batch.status !== 'partial' || actionPending === 'publish'}
+            disabled={!canPublish || busy || actionPending === 'publish'}
             onClick={() => doAction('publish')}
             className="rounded bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {actionPending === 'publish' ? 'Publishing…' : 'Publish &amp; Build Tests'}
+            {actionPending === 'publish' || publishing ? 'Publishing…' : 'Publish & Build Tests'}
           </button>
           <button
             type="button"
-            disabled={live || actionPending === 'republish'}
+            disabled={live || busy || actionPending === 'republish'}
             onClick={() => doAction('republish')}
             className="rounded border border-border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50"
           >
-            {actionPending === 'republish' ? 'Republishing…' : 'Republish Tests'}
+            {actionPending === 'republish' || rebuilding ? 'Rebuilding tests…' : 'Republish Tests'}
           </button>
           <button
             type="button"
-            disabled={live || actionPending === 'rollback'}
+            disabled={live || busy || actionPending === 'rollback'}
             onClick={() => {
               if (confirm('Rollback will delete ALL materials, staging rows, and auto-generated tests for this batch. Continue?')) {
                 doAction('rollback', { delete_published: false });
               }
             }}
-            className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
           >
             {actionPending === 'rollback' ? 'Rolling back…' : 'Rollback'}
           </button>
@@ -194,7 +260,50 @@ export default function BatchDetailPage() {
       </header>
 
       {actionError && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{actionError}</div>
+        <div className={`rounded border p-3 text-sm ${ALERT.error}`}>{actionError}</div>
+      )}
+
+      {live && batch.is_stale && (
+        <div className={`rounded border p-3 text-sm ${ALERT.warn}`}>
+          No progress for over 30 minutes — the background parse has probably stopped (for example after a
+          server restart). Cancel this batch and upload the files again.
+        </div>
+      )}
+
+      {rebuilding && actionPending !== 'republish' && (
+        <div className={`rounded border p-3 text-sm ${ALERT.info}`} role="status">
+          Rebuilding this batch&apos;s tests… Publish and rollback are available again once it finishes.
+        </div>
+      )}
+
+      {publishState && (
+        <div
+          className={`rounded border p-3 text-sm ${
+            publishState.state === 'failed' || publishStale ? ALERT.error : publishing ? ALERT.info : ALERT.ok
+          }`}
+        >
+          {publishing && (
+            <>
+              Publishing in the background
+              {publishState.rows_done ? ` (${publishState.rows_done} rows processed)` : ''}… this page updates
+              automatically.
+            </>
+          )}
+          {publishStale && (
+            <>
+              The last publish stopped reporting progress (probably a server restart). Publishing is safe to
+              repeat — already-published questions are skipped — so you can start it again.
+            </>
+          )}
+          {publishState.state === 'done' && (
+            <>
+              Last publish: {publishState.published ?? 0} question(s) published, {publishState.tests_built ?? 0}{' '}
+              test(s) built
+              {publishState.finished_at ? ` (${new Date(publishState.finished_at).toLocaleString()})` : ''}.
+            </>
+          )}
+          {publishState.state === 'failed' && <>Last publish failed: {publishState.error || 'unknown error'}</>}
+        </div>
       )}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
@@ -231,7 +340,7 @@ export default function BatchDetailPage() {
           <div className="text-sm text-muted-foreground">No materials recorded yet.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3">
               <thead>
                 <tr className="border-b text-left">
                   <th className="py-2">Filename</th>
@@ -316,9 +425,9 @@ export default function BatchDetailPage() {
       </section>
 
       {batch.error_report && batch.error_report.length > 0 && (
-        <section className="rounded border border-red-300 bg-red-50 p-4">
-          <h3 className="mb-2 font-semibold text-red-700">Errors ({batch.error_report.length})</h3>
-          <ul className="space-y-1 text-xs text-red-800">
+        <section className={`rounded border p-4 ${ALERT.error}`}>
+          <h3 className="mb-2 font-semibold">Errors ({batch.error_report.length})</h3>
+          <ul className="space-y-1 text-xs">
             {batch.error_report.slice(0, 20).map((e: any, i: number) => (
               <li key={i}>
                 <code>{e.file}</code>: {e.error}
@@ -374,13 +483,16 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
     }
   };
 
-  return (
+  // Portal to <body>: the fixed overlay stays relative to the viewport
+  // whatever the app shell's wrappers do (a transform, filter or layout
+  // containment on an ancestor would make it the containing block).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded border border-border bg-card p-6">
         <h3 className="mb-4 text-lg font-semibold">Generate Mock Test</h3>
         {result ? (
           <div className="space-y-3">
-            <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+            <div className={`rounded border p-3 text-sm ${ALERT.ok}`}>
               Created <strong>{result.test_title}</strong> with {result.question_count} questions.
             </div>
             <div className="flex justify-end gap-2">
@@ -426,7 +538,7 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
                 <option value="hard">Hard</option>
               </select>
             </label>
-            {err && <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{err}</div>}
+            {err && <div className={`rounded border p-2 text-sm ${ALERT.error}`}>{err}</div>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="rounded border border-border px-4 py-1.5 text-sm">
                 Cancel
@@ -438,6 +550,7 @@ function MockModal({ batchId, onClose, onSuccess }: { batchId: number; onClose: 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

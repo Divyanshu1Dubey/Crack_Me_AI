@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { gsap } from 'gsap';
+import { CMS_PYQ_COUNT, CMS_PYQ_YEARS } from '@/lib/bankStats';
 import './MagicBento.css';
 
 export interface BentoCardProps {
@@ -42,7 +43,7 @@ const defaultCardData: BentoCardProps[] = [
   {
     color: '#120F17',
     title: 'UPSC CMS Question Bank',
-    description: '3,300+ authentic previous year questions with AI-grounded explanations.',
+    description: `${CMS_PYQ_COUNT} authentic previous year questions (${CMS_PYQ_YEARS}) with AI-grounded explanations.`,
     label: 'UPSC CMS'
   },
   {
@@ -59,8 +60,8 @@ const defaultCardData: BentoCardProps[] = [
   },
   {
     color: '#120F17',
-    title: 'Adaptive Mock Tests',
-    description: 'Timed exam engine simulating exact NBE and UPSC test environments.',
+    title: 'Timed Mock Tests',
+    description: 'Timed exam engine that follows the UPSC CMS and NEET PG paper pattern and marking.',
     label: 'Mock Test'
   },
   {
@@ -72,7 +73,7 @@ const defaultCardData: BentoCardProps[] = [
   {
     color: '#120F17',
     title: 'Performance Analytics',
-    description: 'Granular weak-area identification and real-time rank predictions.',
+    description: 'Weak-area identification by subject and topic, plus a predicted paper score from your recent accuracy.',
     label: 'Analytics'
   }
 ];

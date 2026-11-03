@@ -48,19 +48,22 @@ class RagOptOutTests(TestCase):
         self.assertFalse(_RAG_DISABLED, "RAG must be enabled by default in production")
 
     def test_rag_disabled_when_env_var_is_set(self):
-        """`DISABLE_RAG=1` still works for memory-constrained hosts."""
-        with patch.dict("os.environ", {"DISABLE_RAG": "1"}):
-            # Re-evaluate the module-level constant via importlib
-            import importlib
-            import ai_engine.services as svc_mod
-            importlib.reload(svc_mod)
-            try:
-                self.assertTrue(svc_mod._RAG_DISABLED)
-                service = svc_mod.AIService()
-                self.assertIsNone(service.rag, "RAG property must respect DISABLE_RAG=1")
-            finally:
-                # Restore the original (enabled) module state for other tests.
-                importlib.reload(svc_mod)
+        """`DISABLE_RAG=1` still works for memory-constrained hosts.
+
+        Checked at call time. (This test used to importlib.reload() the
+        services module: that swapped in new class objects — so
+        `except AIUnavailable` in already-imported modules stopped matching —
+        and the "restore" reload ran while DISABLE_RAG was still patched,
+        leaving RAG disabled for every later test in the run.)
+        """
+        import ai_engine.services as svc_mod
+        with patch.dict("os.environ", {"DISABLE_RAG": "1"}), \
+                patch.object(svc_mod.AIService, "_init_clients", lambda self: None):
+            self.assertTrue(svc_mod.rag_disabled())
+            service = svc_mod.AIService()
+            self.assertIsNone(service.rag, "RAG property must respect DISABLE_RAG=1")
+        with patch.dict("os.environ", {"DISABLE_RAG_IN_PRODUCTION": "true"}):
+            self.assertTrue(svc_mod.rag_disabled())
 
 
 class RagSearchTests(TestCase):
@@ -95,10 +98,20 @@ class RagAnswerFriendlyFallbackTests(TestCase):
         """`rag_answer` must not return the legacy `python manage.py train_ai`
         operator-only string. Either return real content or a friendly fallback.
         """
+        from ai_engine.services import AIUnavailable
+
         service = AIService()
         if service.rag is None:
             self.skipTest("RAG pipeline unavailable in this environment")
-        result = service.rag_answer("xyzzy-no-match-for-this-query-12345")
+        # Never reach the real provider rotation from a test: generation is
+        # simulated as down. rag_answer then raises the typed AIUnavailable
+        # signal (the view turns it into an offline answer / 503) — it must
+        # not hand back any operator text.
+        with patch.object(AIService, "_call_ai", side_effect=AIUnavailable("providers down")):
+            try:
+                result = service.rag_answer("xyzzy-no-match-for-this-query-12345")
+            except AIUnavailable:
+                return
         self.assertIsInstance(result, dict)
         answer = result.get("answer", "") if isinstance(result, dict) else ""
         self.assertNotIn("python manage.py train_ai", answer)
@@ -131,7 +144,8 @@ class RagApiEndpointTests(TestCase):
             {"query": "test"},
             format="json",
         )
-        user, _ = User.objects.get_or_create(username="rag-search-503-test")
+        # rag-search returns raw passages, so it is admin-only (2026-11).
+        user, _ = User.objects.get_or_create(username="rag-search-503-test", defaults={"role": "admin"})
         force_authenticate(request, user=user)
 
         with patch("ai_engine.services.AIService.rag_search") as mock_search:

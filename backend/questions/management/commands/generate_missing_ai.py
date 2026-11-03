@@ -1,8 +1,7 @@
-import json
 import logging
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from questions.models import Question
+from questions.tasks import apply_explain_result
 from ai_engine.services import AIService
 
 logger = logging.getLogger(__name__)
@@ -84,28 +83,22 @@ class Command(BaseCommand):
                     correct_answer=question.correct_answer,
                     selected_answer=question.correct_answer, # Treat correct answer as selected to get proper 'why_correct' context
                     subject=question.subject.name if question.subject else '',
-                    topic=question.topic.name if question.topic else ''
+                    topic=question.topic.name if question.topic else '',
+                    question_id=question.id,
                 )
                 
-                question.ai_explanation = json.dumps(result)
-                question.ai_answer = result.get('why_correct', '')
-                question.ai_mnemonic = result.get('mnemonic', '')
-                question.ai_clinical_pearl = result.get('clinical_pearl', '')
-                question.learning_technique = result.get('exam_tip', '')
-                
-                textbook_ref = result.get('textbook_reference', {})
-                if textbook_ref:
-                    question.ai_references = [textbook_ref]
-                    
-                around_concepts = result.get('around_concepts', [])
-                if around_concepts:
-                    question.concept_keywords = around_concepts
-                    
-                question.ai_generated_at = timezone.now()
-                question.ai_model = 'RoundRobin-11'
-                question.ai_version = 'v1'
-                question.save()
-                
+                # Same rule as the AI cache task / backfill: an outage result
+                # changes nothing, locks are honoured, and curated fields
+                # (learning_technique, concept_keywords) are only filled
+                # while empty. This used to overwrite every field with
+                # whatever came back -- including the outage sentence.
+                fields = apply_explain_result(question, result, service)
+                if not fields:
+                    failed += 1
+                    self.stdout.write(self.style.WARNING("  -> No usable AI output (or fields locked); nothing saved"))
+                    continue
+                question.save(update_fields=fields)
+
                 success += 1
                 self.stdout.write(self.style.SUCCESS(f"  -> Success"))
             except Exception as e:

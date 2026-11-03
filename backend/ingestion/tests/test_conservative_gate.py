@@ -89,14 +89,20 @@ class TestGatePRWritesQuestion(TestCase):
             questions_updated = 0
 
         class _FakeWriter:
-            def __init__(self, import_job=None):
+            def __init__(self, import_job=None, **kwargs):
                 self.stats = _FakeStats()
+                self.stats.images_created = 0
+                self.stats.images_linked = 0
                 self._rs = MagicMock()
             def upsert_recall_source(self, *a, **kw):
                 return self._rs
-            def write_question(self, pq, rs):
+            def _subject_row_for(self, name):
+                return MagicMock(pk=1)
+            def write_question(self, pq, rs, subject=None):
                 self.stats.questions_created += 1
                 return MagicMock(pk=12345)
+            def write_image(self, *a, **kw):
+                return None
 
         with patch("ingestion.conservative_gate._authorise_writer",
                    return_value=_FakeWriter):

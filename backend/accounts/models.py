@@ -74,6 +74,19 @@ PLAN_PRICES = {
     'legacy': 19900,
 }
 
+# Cached GET /auth/subscribe/status/ payload (accounts.views.SubscriptionStatusView).
+SUBSCRIPTION_STATUS_CACHE_KEY = 'sub_status:{user_id}'
+
+
+def invalidate_subscription_status_cache(user_id) -> None:
+    """Drop the cached subscription status after any subscription change."""
+    from django.core.cache import cache
+
+    try:
+        cache.delete(SUBSCRIPTION_STATUS_CACHE_KEY.format(user_id=user_id))
+    except Exception:  # pragma: no cover - cache outages must not break payments
+        pass
+
 
 class CustomUser(AbstractUser):
     """Extended user model for CMS aspirants."""
@@ -82,18 +95,40 @@ class CustomUser(AbstractUser):
         ('admin', 'Admin'),
     ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
+    # Supabase Auth user id (the token's `sub` / `id` from /auth/v1/user).
+    # Once stored, sign-ins are matched by this id, never by email again; see
+    # accounts.supabase_rest_auth.SupabaseJWTAuthentication._upsert_local_user.
+    supabase_uid = models.CharField(
+        max_length=64, unique=True, null=True, blank=True, default=None,
+        help_text='Supabase Auth user id linked to this account (set on first sign-in).',
+    )
     phone = models.CharField(max_length=15, blank=True)
     college = models.CharField(max_length=200, blank=True, default='')
-    session_key = models.CharField(max_length=255, blank=True, null=True, help_text="Used to enforce single active session")
+    session_key = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text='Unused legacy field. Sessions are not limited to one device; '
+                  'devices are tracked in UserDevice (2 free / 4 subscribed).',
+    )
     profile_bonus_rewarded = models.BooleanField(default=False)
     is_subscribed = models.BooleanField(default=False)
     target_exam = models.CharField(max_length=50, default='UPSC CMS')
     active_exam_track = models.ForeignKey(ExamTrack, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     target_year = models.IntegerField(null=True, blank=True)
     avatar_url = models.URLField(blank=True)
-    current_session_id = models.CharField(max_length=255, blank=True, default='')
+    current_session_id = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Unused legacy field (see session_key); devices live in UserDevice.',
+    )
     scholarship_test_passed = models.BooleanField(default=False)
     scholarship_test_attempts = models.IntegerField(default=0)
+    # Question set issued for the current scholarship attempt,
+    # {"n": <attempt number>, "q": [<question ids>]}: every start of that
+    # attempt re-issues the same set (accounts.views.ScholarshipStartView);
+    # cleared when the attempt is submitted.
+    scholarship_challenge = models.JSONField(
+        null=True, blank=True, default=None,
+        help_text='Question set issued for the current scholarship attempt (kept until it is submitted).',
+    )
     last_seen = models.DateTimeField(null=True, blank=True)
     scholarship_granted_price = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -155,7 +190,7 @@ class TokenBalance(models.Model):
 
     def _reset_if_needed(self):
         """Reset daily/weekly counters if the period has elapsed."""
-        today = timezone.now().date()
+        today = timezone.localdate()
         changed = False
         last_daily_reset = self.last_daily_reset.date() if hasattr(self.last_daily_reset, 'date') else self.last_daily_reset
         last_weekly_reset = self.last_weekly_reset.date() if hasattr(self.last_weekly_reset, 'date') else self.last_weekly_reset
@@ -188,6 +223,29 @@ class TokenBalance(models.Model):
         free_tokens = min(free_daily_remaining, free_weekly_remaining)
         return free_tokens + self.purchased_tokens + self.feedback_credits
 
+    def available_tokens_readonly(self, config, today=None):
+        """Same value as ``available_tokens`` without any query or write.
+
+        For list views (admin overview, admin user list, Django admin): the
+        property runs ``TokenConfig.get_config()`` and may ``save()`` a
+        counter reset for every row. Here a counter whose reset date is in a
+        past period simply counts as 0 used, which is exactly what the reset
+        would have written.
+        """
+        today = today or timezone.localdate()
+
+        def _as_date(value):
+            return value.date() if hasattr(value, 'date') else value
+
+        week_start = today - timedelta(days=today.weekday())
+        daily_used = self.daily_tokens_used if _as_date(self.last_daily_reset) >= today else 0
+        weekly_used = self.weekly_tokens_used if _as_date(self.last_weekly_reset) >= week_start else 0
+        free_tokens = min(
+            max(0, config.free_daily_tokens - daily_used),
+            max(0, config.free_weekly_tokens - weekly_used),
+        )
+        return free_tokens + self.purchased_tokens + self.feedback_credits
+
     def consume_token(self, amount=1):
         """
         Use `amount` AI tokens. Returns True if successful, False if insufficient.
@@ -210,6 +268,8 @@ class TokenBalance(models.Model):
 
             config = TokenConfig.get_config()
             tokens_to_deduct = amount
+            deduct_from_feedback = 0
+            deduct_from_purchased = 0
 
             # 1. Deduct from free daily/weekly
             free_daily_remaining = max(0, config.free_daily_tokens - locked.daily_tokens_used)
@@ -237,6 +297,14 @@ class TokenBalance(models.Model):
             locked.total_tokens_used += amount
             locked.save(update_fields=['daily_tokens_used', 'weekly_tokens_used', 'feedback_credits', 'purchased_tokens', 'total_tokens_used'])
 
+            # Exact pools this call drew from, so a refund can reverse it
+            # precisely (see refund_token / ai_engine.views.refund_ai_token).
+            self._last_consumption = {
+                'free': deduct_from_free,
+                'feedback': deduct_from_feedback,
+                'purchased': deduct_from_purchased,
+            }
+
             # Sync in-memory state so subsequent property reads in this request see new values
             self.daily_tokens_used = locked.daily_tokens_used
             self.weekly_tokens_used = locked.weekly_tokens_used
@@ -263,7 +331,7 @@ class TokenBalance(models.Model):
             self.purchased_tokens = locked.purchased_tokens
             self.purchased_tokens_max = locked.purchased_tokens_max
 
-    def refund_token(self, amount=1):
+    def refund_token(self, amount=1, breakdown=None):
         """Refund tokens (used when AI call fails after token was consumed).
 
         Refund priority mirrors consume in REVERSE: restore `purchased_tokens`
@@ -296,6 +364,27 @@ class TokenBalance(models.Model):
             if locked is None:
                 return
 
+            if breakdown is not None:
+                # Exact reversal of a recorded consume_token() call.
+                free = max(0, int(breakdown.get('free', 0) or 0))
+                feedback = max(0, int(breakdown.get('feedback', 0) or 0))
+                purchased = max(0, int(breakdown.get('purchased', 0) or 0))
+                locked.purchased_tokens += purchased
+                locked.feedback_credits += feedback
+                locked.daily_tokens_used = max(0, locked.daily_tokens_used - free)
+                locked.weekly_tokens_used = max(0, locked.weekly_tokens_used - free)
+                locked.total_tokens_used = max(0, locked.total_tokens_used - (free + feedback + purchased))
+                locked.save(update_fields=[
+                    'daily_tokens_used', 'weekly_tokens_used', 'total_tokens_used',
+                    'purchased_tokens', 'feedback_credits',
+                ])
+                self.daily_tokens_used = locked.daily_tokens_used
+                self.weekly_tokens_used = locked.weekly_tokens_used
+                self.total_tokens_used = locked.total_tokens_used
+                self.purchased_tokens = locked.purchased_tokens
+                self.feedback_credits = locked.feedback_credits
+                return
+
             remaining = amount
 
             # 1. Restore purchased tokens first (highest-value refund).
@@ -308,21 +397,16 @@ class TokenBalance(models.Model):
                 restore_from_purchased = min(remaining, max(0, (locked.purchased_tokens_max or 0) - locked.purchased_tokens))
                 if restore_from_purchased > 0:
                     locked.purchased_tokens += restore_from_purchased
-                    locked.purchased_tokens_max = (locked.purchased_tokens_max or 0) + restore_from_purchased
                     remaining -= restore_from_purchased
-            elif remaining > 0:
-                # No high-water mark — refund up to `amount` into purchased
-                # if total_tokens_used shows we used that many.
-                if locked.total_tokens_used >= amount:
-                    locked.purchased_tokens += remaining
-                    remaining = 0
+            # (No high-water mark: we cannot know purchased tokens were
+            # spent, so the refund falls through to the free counters
+            # below instead of minting purchased tokens.)
 
             # 2. Restore feedback credits next.
             if remaining > 0 and locked.feedback_credits_max is not None:
                 restore_from_feedback = min(remaining, max(0, (locked.feedback_credits_max or 0) - locked.feedback_credits))
                 if restore_from_feedback > 0:
                     locked.feedback_credits += restore_from_feedback
-                    locked.feedback_credits_max = (locked.feedback_credits_max or 0) + restore_from_feedback
                     remaining -= restore_from_feedback
 
             # 3. Decrement daily/weekly counters symmetrically with consume:
@@ -517,8 +601,11 @@ class Subscription(models.Model):
     """
     Tracks a user's premium subscription with plan type, dates, and status.
 
-    Existing users who already had is_subscribed=True before this model was added
-    are grandfathered as 'lifetime' plans and never expire.
+    Premium is derived from these rows only (accounts.utils.is_premium);
+    ``CustomUser.is_subscribed`` is a mirror. Accounts that paid before this
+    model was added got the rows their payments prove from migration
+    accounts.0026 (accounts.legacy_subscriptions); a flag without payment
+    evidence grants nothing.
     """
     PLAN_CHOICES = [
         ('1_month', '1 Month Pass'),
@@ -661,27 +748,46 @@ class Subscription(models.Model):
         from django.db import transaction
 
         with transaction.atomic():
-            active = (
+            rows = list(
                 cls.objects.select_for_update()
                 .filter(user=user, status='active')
                 .order_by('-created_at')
-                .first()
             )
-
-            if active is None:
+            if not rows:
                 return None
 
-            if not active.is_active:
-                # Lazy-expire this row. Use a filter+update to be idempotent
-                # under concurrent flips: if another worker already flipped
-                # it, this becomes a no-op rather than a 0-row save error.
-                cls.objects.filter(pk=active.pk, status='active').update(
-                    status='expired'
-                )
+            # Evaluate EVERY active row, not just the newest: a user can hold
+            # several (e.g. lifetime + a later monthly, or 1-year + a stacked
+            # monthly). Previously an expired newest row flipped the user to
+            # unsubscribed even though an older lifetime row was still live,
+            # and a stacked non-unlimited row hid the 1-year plan's
+            # unlimited AI.
+            live = [r for r in rows if r.is_active]
+            expired_ids = [r.pk for r in rows if not r.is_active]
+            if expired_ids:
+                # Idempotent under concurrent flips.
+                cls.objects.filter(pk__in=expired_ids, status='active').update(status='expired')
+                transaction.on_commit(lambda: invalidate_subscription_status_cache(user.pk))
+            if not live:
                 CustomUser.objects.filter(pk=user.pk).update(is_subscribed=False)
+                # Keep the caller's instance in step: code that reads
+                # user.is_subscribed later in the same request must not see
+                # the stale True.
+                if hasattr(user, 'is_subscribed'):
+                    user.is_subscribed = False
                 return None
 
-            return active
+            far_future = timezone.now() + timedelta(days=365 * 100)
+            live.sort(
+                key=lambda r: (
+                    bool(r.unlimited_ai),
+                    r.expires_at is None,
+                    r.expires_at or far_future,
+                    r.created_at,
+                ),
+                reverse=True,
+            )
+            return live[0]
 
     @classmethod
     def activate_from_payment(cls, user, plan, amount_paid, razorpay_order_id='', razorpay_payment_id=''):
@@ -689,11 +795,21 @@ class Subscription(models.Model):
 
         Behavior:
           1. Determine expiry using PLAN_FEATURES (or NONE for lifetime plans).
-          2. If user already has an ACTIVE paid sub, EXTEND from
-             existing.expires_at (stacking behavior is intentional).
+             Unknown plan codes raise ``ValueError`` (they used to become a
+             never-expiring subscription with an invalid plan code).
+          2. Dated plans EXTEND from the latest expiry among the user's live
+             dated rows (stacking is intentional). The old code extended from
+             get_active_subscription()'s "best" row, which can expire before
+             a stacked one, so a purchase could add no time at all.
           3. Flip user.is_subscribed=True via filter-update (no User lock).
           4. For plans with ``monthly_tokens``, credit those tokens via
              ``add_purchased_tokens`` + a TokenTransaction.
+
+        A bare ``is_subscribed`` flag (no Subscription row) is NOT turned into
+        a lifetime 'legacy' row here any more: the removed unpaid
+        /auth/subscribe/ endpoint set that flag for anyone, so a ₹129 month
+        bought lifetime unlimited AI. Accounts that paid before the
+        Subscription model existed got their rows from accounts.0026.
 
         Concurrency:
             The entire read-existing + create-new + flip-is_subscribed +
@@ -703,27 +819,31 @@ class Subscription(models.Model):
             the same user.
         """
         from django.db import transaction
+        from django.db.models import Max
         from .models import TokenBalance, TokenTransaction  # local import to avoid cycle
 
-        plan_features = PLAN_FEATURES.get(plan, {})
+        if plan not in PLAN_FEATURES:
+            raise ValueError(f'Unknown subscription plan: {plan!r}')
+        plan_features = PLAN_FEATURES[plan]
         duration = plan_features.get('duration')
         monthly_grant = plan_features.get('monthly_tokens')
 
         now = timezone.now()
 
         with transaction.atomic():
-            # Re-acquire the existing active sub inside this transaction so
-            # the read is consistent with the upcoming write. If the user
-            # already paid in another tab between request entry and here,
-            # we'll stack onto that sub rather than creating a duplicate.
-            existing = cls.get_active_subscription(user)
-            if existing is not None and duration:
-                base_date = existing.expires_at if existing.expires_at else now
-                if base_date < now:
-                    base_date = now
+            # Re-acquire the active subs inside this transaction (row locks +
+            # lazy expiry) so the read is consistent with the upcoming write.
+            # If the user already paid in another tab between request entry
+            # and here, we stack onto that sub rather than overlapping it.
+            cls.get_active_subscription(user)
+            if duration:
+                latest_expiry = (
+                    cls.objects
+                    .filter(user=user, status='active', expires_at__gt=now)
+                    .aggregate(latest=Max('expires_at'))['latest']
+                )
+                base_date = latest_expiry if latest_expiry and latest_expiry > now else now
                 expires_at = base_date + duration
-            elif duration:
-                expires_at = now + duration
             else:
                 expires_at = None  # lifetime
 
@@ -759,13 +879,28 @@ class Subscription(models.Model):
                     note=f'Subscription grant: {display_name} (+{monthly_grant} tokens)',
                 )
 
+            # The status endpoint caches its answer for 2 minutes.
+            transaction.on_commit(lambda: invalidate_subscription_status_cache(user.pk))
+
+        if hasattr(user, 'is_subscribed'):
+            user.is_subscribed = True
         return sub
 
 
 class UserDevice(models.Model):
-    """Tracks devices a user has logged in from to enforce simultaneous device limits."""
+    """Tracks devices a user has logged in from to enforce simultaneous device limits.
+
+    ``device_fingerprint`` is the browser's X-Session-ID, or ``sid:<session>``
+    for a device known only by its Supabase session. ``session_id`` is the
+    Supabase auth session bound to the device (accounts.supabase_rest_auth).
+    Inactive ``sid:`` rows record ended sessions and are never listed.
+    """
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='devices')
     device_fingerprint = models.CharField(max_length=255)
+    session_id = models.CharField(
+        max_length=64, null=True, blank=True, default=None, db_index=True,
+        help_text='Supabase auth session (access-token session_id claim) bound to this device.',
+    )
     device_name = models.CharField(max_length=255, blank=True)
     browser = models.CharField(max_length=255, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)

@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TrackedLink } from '@/components/TrackedLink';
-import Script from 'next/script';
 import { ArrowLeft, CalendarDays, Clock, User, BookOpen, GraduationCap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { siteName, siteUrl } from '@/lib/seo';
+import { defaultOgImage, defaultOgImageSize, siteName, siteUrl } from '@/lib/seo';
+import { jsonLdString, stripBrandSuffix } from '@/lib/metadata';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 
 interface GuideLayoutProps {
     /** SEO title */
@@ -15,6 +16,12 @@ interface GuideLayoutProps {
     description: string;
     /** URL slug, e.g. 'upsc-cms-guide' */
     slug: string;
+    /**
+     * The page's own path when it does not live under /guides (tools use
+     * '/tools/<slug>', the CMS salary page '/cms/salary', ...). Defaults to
+     * '/guides/<slug>'. Used for the canonical, og:url and JSON-LD URLs.
+     */
+    path?: string;
     /** Display title in hero */
     heading: string;
     /** Lede / subheading */
@@ -32,14 +39,23 @@ interface GuideLayoutProps {
     children: React.ReactNode;
 }
 
+/** Canonical path for a guide-style page. */
+export function guidePath(slug: string, path?: string): string {
+    return path || `/guides/${slug}`;
+}
+
 export function buildGuideMetadata({
     title,
     description,
     slug,
-}: Pick<GuideLayoutProps, 'title' | 'description' | 'slug'>): Metadata {
-    const canonical = `/guides/${slug}`;
+    path,
+}: Pick<GuideLayoutProps, 'title' | 'description' | 'slug' | 'path'>): Metadata {
+    // Tools and /cms/* pages pass their own path; canonicals used to point at
+    // /guides/<slug>, which does not exist for them.
+    const canonical = guidePath(slug, path);
     return {
-        title,
+        // The root template appends " | CrackCMS"; drop any own suffix.
+        title: stripBrandSuffix(title),
         description,
         keywords: [title, 'medical exam', 'UPSC CMS', 'NEET PG', 'crack CMS', 'crack NEET PG'],
         alternates: { canonical, languages: { 'en-IN': canonical } },
@@ -49,7 +65,7 @@ export function buildGuideMetadata({
             title,
             description,
             siteName,
-            images: [{ url: '/cms-circle-logo.png', width: 1200, height: 630, alt: title }],
+            images: [{ url: defaultOgImage, ...defaultOgImageSize, alt: title }],
         },
         twitter: { card: 'summary_large_image', title, description },
         robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large' } },
@@ -60,6 +76,7 @@ export function GuideLayout({
     title,
     description,
     slug,
+    path,
     heading,
     lede,
     author,
@@ -69,7 +86,7 @@ export function GuideLayout({
     articleType = 'Article',
     children,
 }: GuideLayoutProps) {
-    const canonical = `/guides/${slug}`;
+    const canonical = guidePath(slug, path);
     const jsonLd = {
         '@context': 'https://schema.org',
         '@graph': [
@@ -77,7 +94,7 @@ export function GuideLayout({
                 '@type': articleType,
                 headline: heading,
                 description,
-                url: canonical,
+                url: `${siteUrl}${canonical}`,
                 datePublished: lastUpdated,
                 dateModified: lastUpdated,
                 inLanguage: 'en-IN',
@@ -88,7 +105,7 @@ export function GuideLayout({
                     url: siteUrl,
                     logo: { '@type': 'ImageObject', url: `${siteUrl}/cms-circle-logo.png` },
                 },
-                mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+                mainEntityOfPage: { '@type': 'WebPage', '@id': `${siteUrl}${canonical}` },
             },
             ...(faqs.length > 0 ? [{
                 '@type': 'FAQPage',
@@ -111,14 +128,13 @@ export function GuideLayout({
 
     return (
         <>
-            <Script id={`guide-schema-${slug}`} type="application/ld+json" strategy="beforeInteractive"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }} />
 
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
                     <Breadcrumbs items={[
                         { name: 'Guides', path: '/guides' },
-                        { name: heading, path: `/guides/${slug}` },
+                        { name: heading, path: canonical },
                     ]} />
                 </div>
                 {/* Hero */}
@@ -175,7 +191,7 @@ export function GuideLayout({
                         <CardContent className="p-6 sm:p-8 text-center">
                             <h3 className="text-lg font-bold">Ready to start practising?</h3>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                CrackCMS combines AI tutoring with 1,920+ PYQs and a full mock-test simulator.
+                                CrackCMS combines AI tutoring with {CMS_PYQ_COUNT} UPSC CMS PYQs and a full mock-test simulator.
                             </p>
                             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                                 <TrackedLink href="/register" eventName="register_intent" eventParams={{ source: 'guide_layout' }} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-95">Create free account</TrackedLink>

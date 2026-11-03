@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
+import { rehypeAllowlist } from '@/lib/markdownSanitize';
 import { decodeMojiB } from '@/lib/textCleanup';
+import { apiUrl } from '@/lib/apiBase';
 
 interface FormattedTextProps {
     text: string;
@@ -55,7 +57,9 @@ function ImgWithFallback({ src, alt, ...rest }: any) {
  *   `[[u]]foo[[/u]]`      → `<span style="text-decoration:underline">foo</span>`
  * `rehype-raw` lets the inline `<span style="…">` survive into the DOM so
  * the colour / underline actually renders (react-markdown v10 strips raw
- * HTML by default).
+ * HTML by default). `rehypeAllowlist` then removes everything that is not
+ * formatting (scripts, iframes, forms, styles, event handlers, unsafe URLs),
+ * because the content includes AI-generated and imported text.
  */
 export function FormattedText({ text, className = '', images }: FormattedTextProps & { images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }> }) {
     if (!text) return null;
@@ -71,7 +75,7 @@ export function FormattedText({ text, className = '', images }: FormattedTextPro
         <div className={`formatted-text ${className}`}>
             <ReactMarkdown
                 remarkPlugins={[remarkBreaks]}
-                rehypePlugins={[rehypeRaw]}
+                rehypePlugins={[rehypeRaw, rehypeAllowlist]}
                 components={{
                     // Bug 2026-07-28: wire an `onError` on every `<img>`
                     // emitted by react-markdown so a missing/broken
@@ -210,7 +214,7 @@ export function resolveImageTokensForMarkdown(
             const found = byBasename.get(base.toLowerCase());
             const served = found
                 ? ((found.url && found.url.length > 0 ? found.url : null) ||
-                   `/api/questions/images/${found.id}/serve/`)
+                   apiUrl(`/questions/images/${found.id}/serve/`))
                 : rawUrl;
             const alt = (found?.caption || `Question image ${base}`).replace(/[\[\]"]/g, '');
             return `![${alt}](${served.replace(/"/g, '%22')})`;
@@ -345,7 +349,7 @@ export function FormattedOptionText({
             const found = byBasename.get(base);
             if (found) {
                 const served = (found.url && found.url.length > 0 ? found.url : null) ||
-                               `/api/questions/images/${found.id}/serve/`;
+                               apiUrl(`/questions/images/${found.id}/serve/`);
                 pushImg(served, found.caption || `Question image ${base}`);
             } else {
                 pushImg(

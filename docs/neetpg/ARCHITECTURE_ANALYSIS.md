@@ -101,7 +101,7 @@ This is the single largest model in the project and already carries nearly every
 - `QuestionImportJob` (questions/models.py:299-330) — already tracks `pdf`, `csv`, `json`, `word` jobs with `summary`, `error_report`, `created_by`, status, etc. **Reuse for PDF recall import observability.**
 - `QuestionExtractionItem` (questions/models.py:333-367) — staging row that links to `Question` via `published_question`. The importer in Phase 1 can write through this table for staged approvals.
 - Management commands:
-  - `seed_data` — populates `Subject`/`Topic`
+  - `seed_data` — populates `Subject`/`Topic` (a manual command; it is not a release / deploy step. `build.sh` now runs `seed_question_bank`, which loads `fixtures/cms_fixture.json` only into an empty bank, and the Procfile `release` step only runs `migrate`)
   - `analyze_questions`, `check_api_filters` — admin diagnostics
 
 The `extraction_upload`, `extraction_jobs`, `extraction_items`, `extraction_item_approve`, `extraction_item_reject`, `extraction_item_publish`, `extraction_item_autotag` actions in `QuestionViewSet` (questions/views.py:287) are admin-only and already wired. **Phase 2 will route the recall pipeline output through this existing scaffolding.**
@@ -218,11 +218,12 @@ api/ai/                                     ai_engine
 api/knowledge/                              knowledge_base
 api/textbooks/                              textbooks
 api/resources/                              resources
-api/video/                                  video_engine
 api/jobs/                                   jobs
                                             + NEW: api/imports/         (Phase 2)
                                             + NEW: api/recall/          (Phase 2, optional read-only)
 ```
+
+(2026-11 update: the empty `api/video/` mount was removed — video generation is the questions endpoint + `video_engine.tasks`. The import APIs are mounted as `api/imports/neetpg/` and `api/imports/inicet/`, both admin-only; see [`../API_REFERENCE.md`](../API_REFERENCE.md#import-endpoints-admin-only).)
 
 ---
 

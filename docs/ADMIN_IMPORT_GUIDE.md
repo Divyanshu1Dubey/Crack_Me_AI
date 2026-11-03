@@ -61,6 +61,12 @@ A persistent tab bar shows where you are inside the Import Center.
 - 200 MB per file
 - 200 files per upload
 - Only the extensions above are accepted; everything else is rejected.
+- Files are checked by their **content**, not just the extension: PDF / DOCX /
+  PPTX by their magic bytes, ZIPs by the ZIP signature, TXT / MD must be text.
+  A renamed file (e.g. an `.exe` saved as `.pdf`) is rejected.
+- Inside a ZIP, every member gets the same check; members with the wrong
+  content, an unsupported extension or an unsafe path are skipped. A ZIP may
+  hold at most 500 files and expand to at most 1 GiB.
 
 ### Drag & drop
 
@@ -83,7 +89,7 @@ select an entire directory at once (Chromium / Edge / Opera only).
 ### What happens after you click *Upload &amp; Parse*
 
 1. Files are streamed to the backend over `multipart/form-data`.
-2. Each file is validated for size + extension.
+2. Each file is validated for size, extension and content (magic bytes).
 3. A new `ImportBatch` row is created in `queued` state and the upload is
    accepted (HTTP 201).
 4. A background thread on the backend parses every file:
@@ -100,9 +106,10 @@ select an entire directory at once (Chromium / Edge / Opera only).
 
 ### Cancel / retry / resume
 
-- **Cancel** — only effective while `queued` or `processing`. Stops the
-  background work; the batch is marked `cancelled` and its staging rows are
-  preserved so a partial result is still inspectable.
+- **Cancel** — only effective while `queued` or `processing`. Parsing stops
+  after the current file; the batch is marked `cancelled` and its staging rows
+  are preserved. A cancelled batch can still **publish** the questions it
+  staged before the cancel (a rolled-back batch cannot).
 - **Retry** — for failed uploads, just upload the file again. Each upload
   creates a *new* batch; failed batches can also be left in place for
   audit purposes.
@@ -166,6 +173,41 @@ Every batch run is automatically validated. The system flags:
 - **Table issues** — flagged as parser warnings.
 - **Reference issues** — when a question references an image filename that
   doesn't exist in the source file.
+
+### Answer text in the stem or options (holds)
+
+The stem and the options are public text: every list row, test and search
+result shows them. A question whose stem or options carry an answer label
+(`Correct Answer: B`, `Ans: (b)`, an answer-key table), an explanation label
+(`Explanation: …`) or a correctness flag (a tick or cross, `(correct)`,
+`[wrong]`) is therefore never published automatically. The hold codes
+(`questions.answer_leak.label_hold_reasons`) are
+`answer_label_in_public_text`, `explanation_label_in_public_text`,
+`answer_flag_in_option` and `answer_flag_in_stem`.
+
+- **Import Center** (this guide): **Publish** puts such a row back to
+  `needs_review` with the review note `Not published: answer / explanation
+  label in the stem or options (<codes>).` A row without a valid A–D answer
+  is held the same way (`Not published: no valid correct answer (A-D) was
+  extracted.`). Clean the text in Django admin before approving the row
+  again; see [`REVIEW_QUEUE.md`](./REVIEW_QUEUE.md#rows-held-at-publish).
+- **Ingestion platform** (`/api/ingestion/`, `ingestion/conservative_gate.py`):
+  a Production Ready question is staged as Needs Review (`StagedQuestion`)
+  instead of imported, with the codes in `failing_axes`, next to the gate's other reasons
+  (`answer_not_single_a_to_d`, `option_beyond_d`, `subject_unresolved`,
+  `image_file_missing`).
+- **Recall importers** (`importers.neetpg.db_writer.DjangoWriter`: the
+  recall-import API `/api/imports/neetpg/` and `/api/imports/inicet/`,
+  `manage.py neetpg_import` / `neetpg_import_run` / `neetpg_import_all` and
+  `import_ini_cet`): a NEW question with such text goes to the extraction
+  review queue (`QuestionExtractionItem`, `pending`) with the note `answer /
+  explanation label in the stem or options (<codes>) — admin review`. A
+  re-import never fills an empty option of an existing question with such
+  text. (`manage.py import_neet_pg`, the separate NEET PG 2025 / 2020 paper
+  command, does not use this writer.)
+
+`python manage.py fix_answer_label_leaks` (dry run; `--apply`) repairs or
+deactivates questions already in the bank that carry such text.
 
 ---
 
@@ -311,10 +353,10 @@ back to the parent batch.
 | Action | Endpoint | Effect |
 |---|---|---|
 | **View** | `GET /api/admin/import/batches/{id}/` | Detail view. |
-| **Cancel** | `POST /api/admin/import/batches/{id}/cancel/` | Stops parsing; preserves staging rows. |
-| **Publish** | `POST /api/admin/import/batches/{id}/publish/` | Promotes approved rows to live `Question`, then auto-builds mock tests. |
-| **Republish** | `POST /api/admin/import/batches/{id}/republish/` | Rebuilds mock tests without touching live Question rows. |
-| **Rollback** | `POST /api/admin/import/batches/{id}/rollback/` | Cascade-deletes the batch's `ImportMaterial`, `ExtractedQuestion`, `ExtractedTheory`, `ImportedImage`, and the auto-generated `Test` rows. Pass `delete_published=true` to also delete the published `Question` rows. |
+| **Cancel** | `POST /api/admin/import/batches/{id}/cancel/` | Stops parsing; preserves staging rows (they can still be published). |
+| **Publish** | `POST /api/admin/import/batches/{id}/publish/` | Promotes approved rows to live `Question`, then auto-builds mock tests. Runs in the background (`202`); the batch page polls `summary["publish"]`. `409` while a publish or test rebuild is running. |
+| **Republish** | `POST /api/admin/import/batches/{id}/republish/` | Rebuilds mock tests without touching live Question rows. `409` while a publish or another rebuild runs (the rebuild's lock goes stale after 5 minutes if its request dies). |
+| **Rollback** | `POST /api/admin/import/batches/{id}/rollback/` | Deletes the batch's `ImportMaterial`, `ExtractedQuestion`, `ExtractedTheory` and `ImportedImage` rows and retires its auto-generated tests (deleted when nobody attempted them, otherwise unpublished). Published `Question` rows stay live unless `delete_published=true`, which removes them from the bank like "Remove from bank" (soft delete + tombstone). `409` while parsing, publishing or rebuilding. |
 | **Generate Mock** | `POST /api/admin/import/batches/{id}/generate-mock/` | Build one extra mock test using a chosen strategy. |
 | **Download Report** | `GET /api/admin/import/batches/{id}/report/` | JSON snapshot — pipe it into a CSV / PDF converter of your choice. |
 | **View Audit** | `GET /api/admin/import/batches/{id}/audit/` | Paginated audit log. |
@@ -326,7 +368,8 @@ back to the parent batch.
 
 - All endpoints are gated by `IsAdminUser`. Non-staff users get a 403 even
   with a valid token.
-- File extensions and MIME types are validated server-side.
+- File extensions and file content (magic bytes, ZIP members included) are
+  validated server-side.
 - Upload size and per-batch file counts are hard-capped.
 - Every state-changing action (cancel, publish, rollback, approve, reject,
   classify) emits an `ImportAuditLog` row including the acting username.
@@ -354,4 +397,7 @@ back to the parent batch.
 | High *Rejected* count | Missing answer markers in source file. | Check `needs_review` filter and use the Preview Drawer to fix manually. |
 | Images missing from preview | Source file used a non-image MIME we don't store. | Inspect `parse_warnings` for `image_format_unsupported`. |
 | Test build returns 0 | No `approved` rows yet. | Approve some questions first. |
-| Rollback deletes published questions unexpectedly | Caller passed `delete_published=true`. | Re-upload the source files into a new batch. |
+| Approved rows are back in `needs_review` after Publish | The publish held them: no valid A–D answer, or an answer / explanation label or correctness flag in the stem or options (the review note names the codes). | Fix the answer or clean the text in Django admin (`ExtractedQuestion`), then approve again; re-approving unedited text holds it again ([§6](#answer-text-in-the-stem-or-options-holds)). |
+| Publish / Republish / Rollback answers 409 | A publish or test rebuild is still running for the batch. | Wait for it to finish (a dead rebuild frees the batch after 5 minutes, a dead publish after 30). |
+| Rollback removed published questions | Caller passed `delete_published=true`. | They are soft-deleted with a `RemovedQuestion` tombstone, not destroyed; restore them from the question editor, or re-upload the source files into a new batch. |
+| Re-import with `import_docx_fidelity --rollback` left old questions live | Expected: `--rollback` keeps published questions. | Add `--remove-published` to take them out of the bank. |

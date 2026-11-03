@@ -2,6 +2,7 @@ import { GuideLayout, buildGuideMetadata } from '@/components/GuideLayout';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { INI_CET_BANK_HREF, INI_CET_QUESTION_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
 const title = 'INI-CET Complete Guide 2026 — AIIMS, PGI, JIPMER, NIMHANS Strategy';
 const description = 'Complete INI-CET 2026 preparation guide for AIIMS, PIMER, JIPMER, NIMHANS, SCTIMST. Syllabus, exam pattern, books, cutoff, preparation strategy, and 4-month study plan for INI-CET January and July sessions.';
@@ -26,7 +27,7 @@ export default function INICETGuide() {
             slug={slug}
             heading="INI-CET Complete Guide 2026"
             lede="Crack INI-CET for AIIMS, PGIMER, JIPMER, and NIMHANS. Exam pattern, subject-wise strategy, cutoffs, and 4-month preparation plan."
-            author="Dr. CrackCMS Editorial Team"
+            author="CrackCMS Editorial Team"
             lastUpdated="July 21, 2026"
             readingTime="10 min"
             faqs={faqs}
@@ -59,7 +60,10 @@ export default function INICETGuide() {
                 <li><strong>AIIMS PG solved papers</strong> — last 10 years of AIIMS papers with explanations.</li>
                 <li><strong>Self Assessment &amp; Review of NEET/AIIMS Pattern (Arora)</strong> — single-volume MCQ book for revision.</li>
                 <li><strong>PGI Chandigarh solved papers</strong> — pattern-setter for INI-CET.</li>
-                <li><strong>CrackCMS INI-CET QBank</strong> — 12,000+ PYQs with AI explanations, image-based filters, and CBT mocks.</li>
+                <li>
+                    <strong><Link href={INI_CET_BANK_HREF}>CrackCMS INI-CET recall bank</Link></strong> — {INI_CET_QUESTION_COUNT} INI-CET
+                    recall questions with AI explanations so far, plus our {NEET_PG_QUESTION_COUNT} question NEET PG bank for volume.
+                </li>
             </ol>
 
             <h2>INI-CET preparation strategy (4-month plan)</h2>
@@ -103,7 +107,7 @@ export default function INICETGuide() {
             <div className="grid gap-4 sm:grid-cols-2">
                 <Link href="/ini-cet" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
                     <p className="text-sm font-bold group-hover:underline">INI-CET Preparation <ArrowRight className="inline ml-1 h-4 w-4" /></p>
-                    <p className="mt-1 text-sm text-muted-foreground">12,000+ PYQs, AI tutor, CBT mocks, rank predictor for AIIMS, PGI, JIPMER.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">INI-CET recall questions, the NEET PG bank, AI tutor and timed mock tests.</p>
                 </Link>
                 <Link href="/neet-pg/vs-ini-cet" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
                     <p className="text-sm font-bold group-hover:underline">NEET PG vs INI-CET <ArrowRight className="inline ml-1 h-4 w-4" /></p>
@@ -113,11 +117,12 @@ export default function INICETGuide() {
 
             <h2>Why CrackCMS for INI-CET?</h2>
             <ul>
-                <li>12,000+ INI-CET MCQs with image-based filters for radiology, pathology, dermatology</li>
-                <li>AI tutor trained on AIIMS-pattern clinical reasoning</li>
-                <li>CBT mocks that simulate the exact AIIMS interface</li>
-                <li>All-India rank prediction using historical AIIMS cutoffs</li>
-                <li>Image-based MCQ drill with 1,000+ curated slides and X-rays</li>
+                <li>
+                    An INI-CET recall bank ({INI_CET_QUESTION_COUNT} questions so far) and our {NEET_PG_QUESTION_COUNT} question
+                    NEET PG bank on the same 19-subject syllabus
+                </li>
+                <li>AI tutor for clinical-reasoning and image-based topics</li>
+                <li>Timed mock tests in a computer-based exam interface</li>
             </ul>
         </GuideLayout>
     );

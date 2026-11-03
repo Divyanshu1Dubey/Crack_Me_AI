@@ -15,6 +15,8 @@ import { Coins, ChevronDown, Loader2, Sparkles, Target } from 'lucide-react';
 import {
   COUNT_OPTIONS,
   DIFFICULTY_OPTIONS,
+  EXPLANATION_TOKEN_COST,
+  GENERATION_TOKEN_COST,
 } from './constants';
 import type { Difficulty } from './types';
 
@@ -99,9 +101,10 @@ export function GenerateControls({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Coins className="h-3.5 w-3.5 text-amber-500" />
             <span>
-              Estimated cost:&nbsp;
-              <span className="font-semibold text-foreground">{count}</span>
-              &nbsp;token{count > 1 ? 's' : ''} (1 per question + 1 per AI explanation)
+              Cost:&nbsp;
+              <span className="font-semibold text-foreground">{GENERATION_TOKEN_COST} tokens</span>
+              &nbsp;per quiz (any number of questions). AI deep explanations are optional:{' '}
+              {EXPLANATION_TOKEN_COST} tokens each, only when you ask. Unlimited plans pay nothing.
             </span>
           </div>
           <Button onClick={onGenerate} disabled={generating} size="lg" className="gap-2">

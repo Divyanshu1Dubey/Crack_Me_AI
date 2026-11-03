@@ -15,17 +15,23 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, Sparkles, ChevronRight, BarChart3 } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, BarChart3, Lock, FileUp, Layers, type LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
 import { useExamTrack } from '@/components/ExamTrackProvider';
 import { decodeMojiB } from '@/lib/textCleanup';
 import { useSidebar } from '@/context/SidebarContext';
-import { LockedBadge } from '@/components/paywall/LockedBadge';
 import { usePaywall } from '@/lib/paywall/paywallContext';
+
+// Same lazy, client-only toggle as the Header (it reads the resolved theme).
+const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
+    ssr: false,
+    loading: () => <div className="h-[34px] w-[34px]" aria-hidden="true" />,
+});
 
 interface NavItem {
     href: string;
@@ -34,9 +40,9 @@ interface NavItem {
     badge?: string;
     adminOnly?: boolean;
     requireTrack?: string[];
-    /** Freemium gate (Task 10): if true, free users see a <LockedBadge /> next
-     *  to the label, and clicking opens the UpgradeModal. Premium + admin
-     *  users see no badge and the link is fully clickable. */
+    /** Freemium gate (Task 10): if true, free users see a lock icon next to
+     *  the label, and clicking opens the UpgradeModal. Premium + admin
+     *  users see no lock and the link is fully clickable. */
     premium?: boolean;
     /** Display label used in the upgrade modal trigger — defaults to `label`. */
     premiumFeature?: string;
@@ -68,7 +74,8 @@ const navSections: NavSection[] = [
         items: [
             { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
             { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
-            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'AI Study Plan', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
+            // Same name as the page heading and the Header title.
+            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'Study Roadmap', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
         ]
     },
     {
@@ -84,10 +91,10 @@ const navSections: NavSection[] = [
     {
         title: 'Account',
         items: [
-            // Analytics: free users get the basic dashboard at /dashboard; the
-            // deep per-topic mastery tab inside /analytics is gated by
-            // Deep Analytics in Task 11 — sidebar keeps the link visible.
-            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics', premium: true, premiumFeature: 'Deep Analytics' },
+            // Analytics is open to every signed-in user: no Deep Analytics
+            // gate was ever built (no 402, no locked state on /analytics), so
+            // a lock here only opened the upgrade modal on a free page (AN-08).
+            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics' },
             { href: '/leaderboard', iconName: 'leaderboard-trophy', label: 'Leaderboard' },
             { href: '/bookmarks', iconName: 'bookmarks-ribbon', label: 'Bookmarks' },
             { href: '/subscription', iconName: 'subscription-gold', label: 'Subscription' },
@@ -114,9 +121,23 @@ const EXAM_TRACK_PLAYER_HREF: Record<string, string> = {
     ini_cet: '/questions/inicet/practice',
 };
 
+/** Admin tools. A link is active on its own route and its sub-routes
+ *  (except the /admin dashboard, which would otherwise match every tool). */
+const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon; exact?: boolean }[] = [
+    { href: '/admin', label: 'Admin Dashboard', icon: ShieldAlert, exact: true },
+    { href: '/admin/analytics-dashboard', label: 'Analytics Dashboard', icon: BarChart3 },
+    { href: '/admin/questions-editor', label: 'Questions Editor', icon: FileQuestion },
+    { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+    { href: '/admin/jobs', label: 'Manage Jobs', icon: Briefcase },
+    { href: '/admin/ingestion', label: 'Ingestion', icon: FileQuestion },
+    // Import Center and Recall had no link anywhere in the app.
+    { href: '/admin/import-center', label: 'Import Center', icon: FileUp },
+    { href: '/admin/recall', label: 'Recall Admin', icon: Layers },
+];
+
 export default function Sidebar() {
     const pathname = usePathname();
-    const { user, logout } = useAuth();
+    const { user, logout, loading: authLoading } = useAuth();
     const { activeTrack, hydrated } = useExamTrack();
     const { show: showPaywall } = usePaywall();
     const router = useRouter();
@@ -156,6 +177,17 @@ export default function Sidebar() {
             const top = Number(saved);
             if (!Number.isNaN(top)) nav.scrollTop = top;
         }
+        // Keep the current page's link visible: on a 900px-tall screen the
+        // Account and Admin groups sit below the fold, so on /trends or
+        // /admin nothing highlighted was in view. Adjusts only the nav's own
+        // scroll (scrollIntoView could also scroll the page).
+        const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+        if (active) {
+            const navBox = nav.getBoundingClientRect();
+            const linkBox = active.getBoundingClientRect();
+            if (linkBox.bottom > navBox.bottom) nav.scrollTop += linkBox.bottom - navBox.bottom + 12;
+            else if (linkBox.top < navBox.top) nav.scrollTop -= navBox.top - linkBox.top + 12;
+        }
         // Close drawer on route change so it doesn't stay open.
         setOpen(false);
     }, [pathname]);
@@ -167,9 +199,14 @@ export default function Sidebar() {
         window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(nav.scrollTop));
     };
 
-    const handleLogout = () => {
-        logout();
-        router.push('/');
+    // Wait for the sign-out to finish: navigating first let the next route
+    // still see the session and bounce the user back in (AUTH-08).
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } finally {
+            router.push('/');
+        }
     };
 
     const isAdmin = user?.role === 'admin' || user?.is_admin;
@@ -237,19 +274,23 @@ export default function Sidebar() {
                     <div className="flex items-center gap-2 min-w-0">
                         <BrandMark href="/dashboard" compact className="min-w-0" />
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setOpen(false)}
-                        aria-label="Close menu"
-                        className="flex items-center justify-center w-9 h-9 rounded-xl border border-border bg-background text-foreground hover:bg-muted transition-colors"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        {/* The phone header has no room for the theme toggle. */}
+                        <ThemeToggle />
+                        <button
+                            type="button"
+                            onClick={() => setOpen(false)}
+                            aria-label="Close menu"
+                            className="flex items-center justify-center w-9 h-9 rounded-xl border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Desktop logo block */}
-                <div className="hidden md:block px-4 pt-4 pb-3">
-                    <div className="rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
+                <div className="sidebar-brand hidden md:block px-4 pt-4 pb-3">
+                    <div className="sidebar-brand-card rounded-2xl border border-border bg-linear-to-br from-primary/10 via-sky-500/10 to-teal-500/10 p-3">
                         <BrandMark href="/dashboard" className="min-w-0" />
                         <div className="sidebar-label mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground dark:text-slate-300">
                             <CustomIcon name="medical-stethoscope" label="Medical" className="w-3 h-3" variant="subtle" />
@@ -310,6 +351,9 @@ export default function Sidebar() {
                                                     prefetch={false}
                                                     className={`sidebar-link ${isActive ? 'active' : ''}`}
                                                     aria-current={isActive ? 'page' : undefined}
+                                                    // Tooltip for the icon-only tablet rail and the lock icon.
+                                                    title={showLock ? `${item.label} (Premium)` : item.label}
+                                                    aria-label={showLock ? `${item.label} (Premium)` : undefined}
                                                 >
                                                     <CustomIcon
                                                         name={item.iconName}
@@ -319,13 +363,25 @@ export default function Sidebar() {
                                                         variant={isActive ? 'active' : 'default'}
                                                     />
                                                     <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
-                                                    {showLock && <LockedBadge size="sm" />}
+                                                    {showLock && (
+                                                        <>
+                                                            {/* A lock icon (the PREMIUM pill truncated labels to
+                                                                "Question Ba..."); a dot in the 72px tablet rail. */}
+                                                            <span className="sidebar-label shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true">
+                                                                <Lock className="h-3.5 w-3.5" />
+                                                            </span>
+                                                            <span className="sidebar-rail-lock" aria-hidden="true" />
+                                                        </>
+                                                    )}
                                                     {item.badge && !showLock && (
                                                         <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
                                                             {item.badge}
                                                         </span>
                                                     )}
-                                                    {isActive && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
+                                                    {/* No chevron next to the lock or the AI badge: either
+                                                        one plus the chevron clipped "Question Generator"
+                                                        to "Question Genera..." on its own page. */}
+                                                    {isActive && !showLock && !item.badge && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
                                                 </Link>
                                             );
                                         })}
@@ -341,30 +397,22 @@ export default function Sidebar() {
                                     Admin
                                 </div>
                                 <div className="space-y-0.5">
-                                    <Link href="/admin" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin' ? 'active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}>
-                                        <ShieldAlert className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Admin Dashboard</span>
-                                    </Link>
-                                    <Link href="/admin/analytics-dashboard" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/analytics-dashboard' ? 'active' : ''}`}>
-                                        <BarChart3 className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Analytics Dashboard</span>
-                                    </Link>
-                                    <Link href="/admin/questions-editor" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/questions-editor' ? 'active' : ''}`}>
-                                        <FileQuestion className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Questions Editor</span>
-                                    </Link>
-                                    <Link href="/admin/announcements" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/announcements' ? 'active' : ''}`}>
-                                        <Megaphone className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Announcements</span>
-                                    </Link>
-                                    <Link href="/admin/jobs" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/jobs' ? 'active' : ''}`}>
-                                        <Briefcase className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Manage Jobs</span>
-                                    </Link>
-                                    <Link href="/admin/ingestion" onClick={() => { saveSidebarScroll(); setOpen(false); }} className={`sidebar-link ${pathname === '/admin/ingestion' ? 'active' : ''}`}>
-                                        <FileQuestion className="w-5 h-5 shrink-0" />
-                                        <span className="sidebar-label text-sm">Ingestion</span>
-                                    </Link>
+                                    {ADMIN_LINKS.map(({ href, label, icon: Icon, exact }) => {
+                                        const isActive = pathname === href || (!exact && !!pathname?.startsWith(`${href}/`));
+                                        return (
+                                            <Link
+                                                key={href}
+                                                href={href}
+                                                onClick={() => { saveSidebarScroll(); setOpen(false); }}
+                                                className={`sidebar-link ${isActive ? 'active' : ''}`}
+                                                aria-current={isActive ? 'page' : undefined}
+                                                title={label}
+                                            >
+                                                <Icon className="w-5 h-5 shrink-0" />
+                                                <span className="sidebar-label text-sm">{label}</span>
+                                            </Link>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -374,7 +422,9 @@ export default function Sidebar() {
                 {/* Footer — pinned to bottom */}
                 <div className="mt-auto px-2 pb-3 pt-2">
                     <Separator className="mb-3" />
-                    <div className="sidebar-label mx-2 mb-2 rounded-xl border border-border bg-muted/50 px-3 py-2">
+                    {/* Hidden on short screens (<=900px tall) so the nav keeps
+                        room for more links above the fold. */}
+                    <div className="sidebar-label mx-2 mb-2 rounded-xl border border-border bg-muted/50 px-3 py-2 [@media(max-height:900px)]:hidden">
                         <p className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
                             <Sparkles className="w-3 h-3 text-amber-500" /> Quick Tip
                         </p>
@@ -382,13 +432,32 @@ export default function Sidebar() {
                             Take one timed test daily and review your top 3 weak tags.
                         </p>
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                        <LogOut className="w-5 h-5 shrink-0" />
-                        <span className="sidebar-label text-sm">Sign Out</span>
-                    </button>
+                    {!authLoading && !user ? (
+                        // Visitors on public app-shell pages (/resources, /contact)
+                        // were offered "Sign Out" although they were not signed in.
+                        <Link
+                            href={`/login?next=${encodeURIComponent(pathname || '/dashboard')}`}
+                            onClick={() => setOpen(false)}
+                            title="Sign in"
+                            className="sidebar-link w-full"
+                        >
+                            <LogIn className="w-5 h-5 shrink-0" />
+                            <span className="sidebar-label text-sm">Sign In</span>
+                        </Link>
+                    ) : (
+                        // Red text/hover from the utilities: .sidebar-link sits in
+                        // @layer components (globals.css), so they now apply; the
+                        // unlayered rule used to turn Sign Out grey.
+                        <button
+                            onClick={handleLogout}
+                            aria-label="Sign out"
+                            title="Sign out"
+                            className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/25"
+                        >
+                            <LogOut className="w-5 h-5 shrink-0" />
+                            <span className="sidebar-label text-sm">Sign Out</span>
+                        </button>
+                    )}
                 </div>
             </aside>
         </>

@@ -4,11 +4,11 @@ import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import MockTestAnalyzer from './MockTestAnalyzer';
 
-const title = 'MockTestAnalyzer 2026 — Subject-wise UPSC CMS Mock Test Performance Tool';
+const title = 'Mock Test Analyzer 2026 — Subject-wise UPSC CMS Mock Test Performance Tool';
 const description = 'Analyze your UPSC CMS mock test performance subject-wise. Identify weak areas, track improvement trends, and get personalised study recommendations for Combined Medical Services 2026.';
 const slug = 'mock-test-analyzer';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -19,7 +19,7 @@ const jsonLd = {
             name: 'How should I use mock test analysis for UPSC CMS preparation?',
             acceptedAnswer: {
                 '@type': 'Answer',
-                text: 'After each mock test, enter your subject-wise percentage scores into MockTestAnalyzer. Review the weakest subjects and time spent, build a focused revision plan for those topics, and retake a targeted mock after 7-10 days to confirm improvement.',
+                text: 'After each mock test, enter your subject-wise percentage scores into the Mock Test Analyzer. Review the weakest subjects and time spent, build a focused revision plan for those topics, and retake a targeted mock after 7-10 days to confirm improvement.',
             },
         },
         {
@@ -47,11 +47,11 @@ export default function MockTestAnalyzerPage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'MockTestAnalyzer', path: '/tools/mock-test-analyzer' }]} />
+                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'Mock Test Analyzer', path: '/tools/mock-test-analyzer' }]} />
                 </div>
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
                     <h1 className="text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
-                        MockTestAnalyzer 2026
+                        Mock Test Analyzer 2026
                     </h1>
                     <p className="mt-4 max-w-3xl text-lg text-muted-foreground">
                         Track your UPSC CMS mock test performance subject-wise, spot weak areas fast, and
@@ -89,7 +89,7 @@ export default function MockTestAnalyzerPage() {
                         {[
                             {
                                 q: 'How should I use mock test analysis for UPSC CMS preparation?',
-                                a: 'After each mock test, enter your subject-wise percentage scores into MockTestAnalyzer. Review the weakest subjects and time spent, build a focused revision plan for those topics, and retake a targeted mock after 7-10 days to confirm improvement.',
+                                a: 'After each mock test, enter your subject-wise percentage scores into the Mock Test Analyzer. Review the weakest subjects and time spent, build a focused revision plan for those topics, and retake a targeted mock after 7-10 days to confirm improvement.',
                             },
                             {
                                 q: 'What is a good mock test score for UPSC CMS?',

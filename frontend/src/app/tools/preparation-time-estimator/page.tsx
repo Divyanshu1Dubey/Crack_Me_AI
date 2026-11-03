@@ -8,7 +8,7 @@ const title = 'UPSC CMS Preparation Time Estimator 2026 — How Many Months Do Y
 const description = 'Estimate how many months you need to prepare for UPSC CMS 2026. Based on current level, target rank, daily study hours, and weak subjects.';
 const slug = 'preparation-time-estimator';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

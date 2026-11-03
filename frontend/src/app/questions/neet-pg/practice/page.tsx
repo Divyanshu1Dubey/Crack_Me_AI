@@ -8,8 +8,10 @@
  * two tracks share filters, AI panels, image rendering, discussion
  * thread, year modal, and keyboard shortcuts.
  *
- * The standalone `NeetPgPlayer` is still used by `/tests/[id]` for the
- * immersive timed test player — that page is unchanged.
+ * The standalone `NeetPgPlayer` was no longer imported anywhere (the timed
+ * test player at `/tests/[id]` has its own UI) and has been removed. The
+ * one-question fullscreen view is `/questions/practice?year=…&exam=neet_pg`,
+ * opened from the bank's "Practice Fullscreen" / year-modal buttons.
  *
  * URL contract (backwards-compatible):
  *   /questions/neet-pg/practice                       — full bank, NEET PG
@@ -63,6 +65,7 @@ function NeetPgPracticeInner() {
             examType="neet_pg"
             examSource="NEET PG"
             defaultYear={searchParams.get('year')}
+            initialSubject={searchParams.get('subject')}
             initialQueryId={searchParams.get('q')}
             initialBookmarkOnly={searchParams.get('bookmarked') === '1'}
         />

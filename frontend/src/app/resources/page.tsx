@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { resourcesAPI } from '@/lib/api';
+import { CMS_MARKING_LABEL, UPSC_CMS_PATTERN } from '@/lib/examPatterns';
 import {
     FileText, Download, BookOpen, GraduationCap, HelpCircle,
     Clock, Target, DollarSign, Users, ChevronDown, ChevronUp,
@@ -33,15 +34,24 @@ export default function ResourcesPage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'documents' | 'guide' | 'faq' | 'books'>('guide');
     const [openFaq, setOpenFaq] = useState<number | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
 
-    useEffect(() => {
+    const loadResources = () => {
+        setLoading(true);
+        setLoadFailed(false);
+        let failed = false;
         Promise.all([
-            resourcesAPI.getCatalog().catch(() => ({ data: {} })),
-            resourcesAPI.getExamGuide().catch(() => ({ data: null })),
+            resourcesAPI.getCatalog().catch(() => { failed = true; return { data: {} }; }),
+            resourcesAPI.getExamGuide().catch(() => { failed = true; return { data: null }; }),
         ]).then(([catRes, guideRes]) => {
             setCatalog(catRes.data || {});
             setGuide(guideRes.data);
+            setLoadFailed(failed);
         }).finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        loadResources();
     }, []);
 
     const downloadResource = async (id: string) => {
@@ -85,12 +95,14 @@ export default function ResourcesPage() {
             <div className="main-content">
                 <Header />
                 <div className="page-container">
+                <h1 className="text-2xl font-bold mb-2">UPSC CMS Resources</h1>
                 <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
                     Complete one-stop resource for UPSC CMS — official forms, exam guide, FAQ, and study material
                 </p>
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {/* Tabs — wrap instead of scrolling sideways, so "FAQ" and
+                    "Recommended Books" are visible at 390px too. */}
+                <div className="flex flex-wrap gap-2 mb-6">
                     {tabs.map(t => (
                         <button key={t.key} onClick={() => setActiveTab(t.key)}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
@@ -109,6 +121,45 @@ export default function ResourcesPage() {
                     <div className="glass-card p-8 text-center"><div className="animate-pulse gradient-text">Loading resources...</div></div>
                 ) : (
                     <>
+                        {loadFailed && (
+                            <div role="status" className="glass-card p-4 mb-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                    Some resources could not be loaded right now (the server may be waking up).
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={loadResources}
+                                    className="px-4 py-2 rounded-xl text-sm font-medium"
+                                    style={{ background: 'var(--accent-primary)', color: '#fff' }}
+                                >
+                                    Try again
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Static exam-pattern summary when the guide API is unavailable */}
+                        {activeTab === 'guide' && !guide && (
+                            <div className="glass-card p-6 space-y-3">
+                                <h2 className="text-lg font-bold flex items-center gap-2">
+                                    <Stethoscope className="w-5 h-5" style={{ color: '#06b6d4' }} />
+                                    {UPSC_CMS_PATTERN.fullName}
+                                </h2>
+                                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                                    {UPSC_CMS_PATTERN.mode} · {UPSC_CMS_PATTERN.totalQuestions} questions in two papers ·{' '}
+                                    {UPSC_CMS_PATTERN.writtenMarks} written marks + {UPSC_CMS_PATTERN.personalityTestMarks}-mark Personality Test ·{' '}
+                                    {CMS_MARKING_LABEL} per question.
+                                </p>
+                                <ul className="text-sm space-y-1">
+                                    {UPSC_CMS_PATTERN.papers.map((paper) => (
+                                        <li key={paper.name}>
+                                            <strong>{paper.name}</strong> ({paper.questions} Qs, {paper.marks} marks, {paper.durationMinutes} min):{' '}
+                                            {paper.subjects.map((subject) => `${subject.name} ${subject.questions}`).join(', ')}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         {/* ===== CMS EXAM GUIDE ===== */}
                         {activeTab === 'guide' && guide && (
                             <div className="space-y-6">
@@ -166,11 +217,11 @@ export default function ResourcesPage() {
                                     </h3>
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                                            <div className="text-lg font-bold" style={{ color: '#10b981' }}>+2.08</div>
+                                            <div className="text-lg font-bold" style={{ color: '#10b981' }}>{CMS_MARKING_LABEL.split(' / ')[0]}</div>
                                             <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Correct Answer</div>
                                         </div>
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                            <div className="text-lg font-bold" style={{ color: '#ef4444' }}>−0.69</div>
+                                            <div className="text-lg font-bold" style={{ color: '#ef4444' }}>{CMS_MARKING_LABEL.split(' / ')[1]}</div>
                                             <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Wrong Answer (1/3 negative)</div>
                                         </div>
                                         <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(139, 149, 168, 0.08)', border: '1px solid rgba(139, 149, 168, 0.2)' }}>
@@ -195,22 +246,23 @@ export default function ResourcesPage() {
                                             <h4 className="text-sm font-bold mb-2">Age Limits</h4>
                                             <div className="space-y-2">
                                                 {Object.entries(guide.eligibility.age_limit).map(([cat, age]) => (
-                                                    <div key={cat} className="flex justify-between text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
-                                                        <span className="uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
-                                                        <span>{age as string}</span>
+                                                    <div key={cat} className="flex justify-between gap-3 text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
+                                                        <span className="shrink-0 uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
+                                                        <span className="text-right">{age as string}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
                                         <div>
                                             <h4 className="text-sm font-bold mb-2">Attempt Limits</h4>
+                                            {/* From the shared exam facts, like the marking scheme above:
+                                                UPSC CMS has no attempt cap (the API row used to carry the
+                                                Civil Services 6 / 9 / unlimited rule). */}
                                             <div className="space-y-2">
-                                                {Object.entries(guide.eligibility.attempts).map(([cat, attempts]) => (
-                                                    <div key={cat} className="flex justify-between text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
-                                                        <span className="uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', '/')}</span>
-                                                        <span>{attempts as string}</span>
-                                                    </div>
-                                                ))}
+                                                <div className="flex justify-between gap-3 text-sm p-2 rounded" style={{ background: 'rgba(139, 149, 168, 0.05)' }}>
+                                                    <span className="shrink-0 uppercase text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>All categories</span>
+                                                    <span className="text-right">{UPSC_CMS_PATTERN.attemptsRule}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -305,7 +357,13 @@ export default function ResourcesPage() {
                                         Common doubts answered with verified information from official UPSC sources
                                     </p>
                                 </div>
-                                {guide.faq.map((faq: FAQ, i: number) => (
+                                {guide.faq.map((apiFaq: FAQ, i: number) => {
+                                    // The API's attempts answer carried the Civil Services
+                                    // rule; UPSC CMS has no attempt cap (see examPatterns).
+                                    const faq = /how many attempts/i.test(apiFaq.q)
+                                        ? { ...apiFaq, a: UPSC_CMS_PATTERN.attemptsFaq }
+                                        : apiFaq;
+                                    return (
                                     <div key={i} className="glass-card overflow-hidden">
                                         <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
                                             className="w-full flex items-start gap-3 p-5 text-left">
@@ -328,7 +386,8 @@ export default function ResourcesPage() {
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 

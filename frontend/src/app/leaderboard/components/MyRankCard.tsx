@@ -1,15 +1,18 @@
 'use client';
 
+import Link from 'next/link';
 import { Flame, Target, Trophy, TrendingUp, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { MePayload } from '../types';
+import { boardIdentity, formatAccuracy, periodPhrase, type LeaderboardPeriod, type MePayload } from '../types';
 
 interface Props {
     me: MePayload;
+    period: LeaderboardPeriod;
 }
 
-export default function MyRankCard({ me }: Props) {
+export default function MyRankCard({ me, period }: Props) {
+    const phrase = periodPhrase(period);
     const rankLabel = me.rank
         ? `#${me.rank}`
         : me.out_of > 0
@@ -17,15 +20,16 @@ export default function MyRankCard({ me }: Props) {
             : 'New';
 
     const rankSubtitle = me.rank
-        ? `of ${me.out_of} active learners`
+        ? `of ${me.out_of} active learners ${phrase}${period === 'all' ? '' : ` · ${(me.period_xp ?? 0).toLocaleString()} XP`}`
         : me.out_of > 0
-            ? `${me.out_of} learners ahead — start studying to enter the board`
+            ? `${me.out_of} learners ahead ${phrase} — earn XP to enter the board`
             : 'Answer 1 question to enter the board';
 
     const goalPct = Math.min(
         100,
         Math.round((me.weekly_xp / Math.max(1, me.weekly_goal_xp)) * 100),
     );
+    const identity = boardIdentity(me.public_username);
 
     return (
         <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
@@ -44,13 +48,23 @@ export default function MyRankCard({ me }: Props) {
                             )}
                         </div>
                         <p className="text-xs md:text-sm text-muted-foreground truncate">{rankSubtitle}</p>
+                        {identity && (
+                            // Wraps (not truncated) so the link stays visible on a phone.
+                            <p className="text-xs text-muted-foreground break-words">
+                                {identity.label}
+                                {' · '}
+                                <Link href="/settings" className="font-semibold text-primary hover:underline whitespace-nowrap">
+                                    {identity.action}
+                                </Link>
+                            </p>
+                        )}
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <Stat icon={<Zap className="w-4 h-4 text-yellow-500" />} label="Total XP" value={me.xp_points.toLocaleString()} />
                     <Stat icon={<Flame className="w-4 h-4 text-orange-500" />} label="Streak" value={`${me.current_streak}d`} />
-                    <Stat icon={<Target className="w-4 h-4 text-emerald-500" />} label="Accuracy" value={`${me.accuracy.toFixed(1)}%`} />
+                    <Stat icon={<Target className="w-4 h-4 text-emerald-500" />} label="Accuracy" value={formatAccuracy(me.accuracy)} />
                     <Stat icon={<TrendingUp className="w-4 h-4 text-blue-500" />} label="Tests" value={String(me.tests_completed)} />
                 </div>
 

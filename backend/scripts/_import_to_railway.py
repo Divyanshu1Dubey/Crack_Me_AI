@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Import backup JSON files into Railway Postgres, skipping FK violations."""
+"""Import backup JSON files into Railway Postgres, skipping FK violations.
+
+    python scripts/_import_to_railway.py --input-dir <the --output-dir of _export_tables.py>
+
+The dumps hold user data and live outside the repository (scripts/_safe_paths.py).
+"""
+import argparse
 import os, sys, json
 from pathlib import Path
 
@@ -7,15 +13,22 @@ sys.stdout.reconfigure(encoding='utf-8')
 script_dir = Path(__file__).resolve().parent
 backend_dir = script_dir.parent
 sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(script_dir))
+
+from _safe_paths import external_path  # noqa: E402
+
+_parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+_parser.add_argument('--input-dir', required=True,
+                     help='Directory holding the <app>.<model>.json dumps (outside the repository).')
+backup_dir = external_path(_parser.parse_args().input_dir, what='--input-dir')
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
 
-import django
+import django  # noqa: E402
 django.setup()
 
-from django.apps import apps
-from django.db import transaction
-
-backup_dir = backend_dir.parent / 'backup' / 'db_dumps'
+from django.apps import apps  # noqa: E402
+from django.db import transaction  # noqa: E402
 
 # Load order: parents before children
 import_plan = [

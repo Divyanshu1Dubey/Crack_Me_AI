@@ -6,8 +6,8 @@ is the unit of:
 
 - **State tracking** (queued → processing → completed/partial/failed/cancelled)
 - **Reporting** (totals, error_report, audit log)
-- **Rollback** (cascade-delete everything inside the batch)
-- **Publishing** (promote all approved rows to live `Question` rows)
+- **Rollback** (delete the staging rows, retire the auto-tests; published questions stay live unless `delete_published`)
+- **Publishing** (promote all approved rows to live `Question` rows, in the background)
 - **Mock test generation** (auto-build per-subject / per-topic / mixed / PYQ-year tests)
 
 This document explains the lifecycle, the data model, and the operations
@@ -30,15 +30,18 @@ you can run on a batch.
    │  write ImportAuditLog per step        │
    └────────┬──────────────────────────────┘
             ▼
-   POST /batches/{id}/publish/              (status = completed | partial)
+   POST /batches/{id}/publish/              (status = completed | partial,
+            │                                 or cancelled with staged rows)
+            │  202: background thread, progress in summary["publish"]
             │  (publishes approved rows → live Question)
             │  (builds auto-tests)
             ▼
    (ready for Review Queue)
 ```
 
-A batch stays queryable in `partial` or `failed` state — admin can decide
-whether to roll back, republish, or just inspect.
+A batch stays queryable in `partial`, `failed` or `cancelled` state — admin
+can decide whether to roll back, publish what was staged, republish, or just
+inspect.
 
 ## Data model
 
@@ -103,8 +106,10 @@ The report contains:
 
 ### Cancel
 
-Only effective while `queued` or `processing`. Sets `status=cancelled`.
-Staging rows are preserved so a partial result is still inspectable.
+Only effective while `queued` or `processing` (`409` otherwise). Sets
+`status=cancelled`; parsing stops after the current file. Staging rows are
+preserved, and a cancelled (not rolled-back) batch can still **publish** the
+questions it staged before the cancel.
 
 ### Publish
 
@@ -114,26 +119,51 @@ Staging rows are preserved so a partial result is still inspectable.
 { "max_per_test": 100, "build_tests": true, "only_publish": false }
 ```
 
+Runs in a background thread and answers `202` at once; the state is
+`summary["publish"]` (`running` with a heartbeat → `done` / `failed`). A run
+that stops heartbeating for 30 minutes is reported as stale and can be
+started again. `409` while another publish or a test rebuild runs, for a
+batch still parsing, and for a rolled-back batch.
+
 Effects:
 
 - For each `ExtractedQuestion.status='approved'`, the publish pipeline
   creates a `Question` row (via
   `material_importer.publishing.publish_extracted_question`).
+- Two kinds of row are not published. They go back to `needs_review` with a
+  review note (added once):
+  - no valid A–D answer: `Not published: no valid correct answer (A-D) was
+    extracted.`
+  - an answer / explanation label or a correctness flag in the stem or the
+    options (`questions.answer_leak.label_hold_reasons`; the stem and the
+    options are public text): `Not published: answer / explanation label in
+    the stem or options (<codes>).`, where the codes are
+    `answer_label_in_public_text`, `explanation_label_in_public_text`,
+    `answer_flag_in_option` and / or `answer_flag_in_stem`. The text is not
+    repaired automatically: clean it first ([`REVIEW_QUEUE.md`](./REVIEW_QUEUE.md#rows-held-at-publish)).
 - Then `mock_test_builder.build_for_batch()` rebuilds auto-tests:
   - One per `(subject)` → kind=`subject`.
   - One per `(subject, topic)` → kind=`topic`.
   - One `mixed` omnibus test.
   - One per `PYQ <year>` filename match → kind=`pyq_year`.
-- Idempotent: re-running replaces the same auto-tests rather than creating
-  duplicates (the builder pre-deletes any prior tests whose title contains
-  `batch <id>`).
+- Idempotent: re-running replaces the question sets of the same auto-tests
+  rather than creating duplicates. A batch's tests are found by the ids
+  recorded in `summary` (`auto_test_ids` / `mock_test_ids`) plus the exact
+  title shape `Auto • … • batch <id>` (never batch 10 for batch 1). A test
+  that students have attempted is never deleted by the importer: it is
+  unpublished instead, so attempt history survives.
 
 ### Republish
 
 `POST /api/admin/import/batches/{id}/republish/`
 
-Same effect as `Publish` with `only_publish=true`, but useful when the
-auto-tests are stale.
+Rebuilds only the batch's auto-tests (no writes to `Question`),
+synchronously, and returns `{batch_id, tests_built}`. Publish and rebuild
+exclude each other (both build the batch's tests): the rebuild holds
+`summary["rebuild"]` while it runs, and a publish or another rebuild gets
+`409`. If the request dies (gunicorn's 120 s timeout, a worker restart) the
+`rebuild` slot goes stale after 5 minutes. `summary["publish"]` (the last
+publish result) is never touched.
 
 ### Rollback
 
@@ -143,18 +173,30 @@ auto-tests are stale.
 { "delete_published": false, "confirm": true }
 ```
 
+Refused with `409` while the batch is still parsing (cancel it first) or
+while a publish or test rebuild runs.
+
 Default behaviour:
 
 - Cascade-delete every `ImportMaterial` in the batch.
 - Cascade-delete every `ExtractedQuestion`, `ExtractedTheory`,
   `ImportedImage` via FK.
-- Delete every `tests_engine.Test` whose title contains `batch <id>`.
+- Retire the batch's auto-tests (exact ownership, as above): tests nobody
+  attempted are deleted, tests with attempts are unpublished and kept.
+- Leave the live `Question` rows published.
 
-With `delete_published=true`, the live `Question` rows created by
-`publish_batch()` are also deleted (the publish-side link is nullified
-first so re-uploads don't trip the unique constraint).
+With `delete_published=true`, the batch's published `Question` rows are also
+removed from the bank the way the admin "Remove from bank" action does
+(`is_active=False`, `is_dropped=True`, `admin_edited=True` and a
+`RemovedQuestion` tombstone); a hard delete would destroy user history.
+Either way the published question ids are returned and kept in
+`summary["rollback"]`, and the batch is set to `cancelled`.
 
 **Always** requires `confirm: true` server-side.
+
+The CLI `manage.py import_docx_fidelity <path> --rollback` rolls back every
+earlier batch that imported the same file (by sha256) before re-importing;
+their published questions stay live unless `--remove-published` is passed.
 
 ### Generate Mock (one-off)
 
@@ -174,6 +216,41 @@ same `Test.id` (the `_ensure_test` helper upserts).
 `DELETE /api/admin/import/batches/{id}/` is exposed via the viewset but the
 viewset is currently `ReadOnlyModelViewSet`. Use the **Rollback** action
 explicitly so the operation is auditable.
+
+---
+
+## Ingestion platform jobs
+
+The Production Content Ingestion Platform (`backend/ingestion/`,
+`/api/ingestion/`) has its own `BatchRun` → `ImportJob` model, separate from
+the Import Center's `ImportBatch`. Its jobs run on the django-q worker
+(`python manage.py qcluster`; on DigitalOcean a separate Worker component).
+
+- **Batch status and counts are computed from the jobs.** `status`,
+  `total_jobs`, `completed_jobs` and `failed_jobs` in the batch API are
+  derived from the batch's jobs (a cancelled batch stays cancelled; all jobs
+  finished → `done`, or `cancelled` if every job was cancelled; otherwise
+  `running`). The stored counters were never kept up to date.
+- **Job rows** carry `exam` (the job's exam, or its material's exam hint),
+  `exam_label` and `material_filename`. `GET /api/ingestion/jobs/` returns
+  the newest 200; `GET /api/ingestion/jobs/counts/` counts every job per
+  status (`queued`, `processing`, `completed`, `failed`, `cancelled`,
+  `crashed`) plus `total`.
+- **Stale-job recovery.** A worker that dies mid-job (django-q timeout, OOM,
+  deploy restart) leaves its job `processing`. The django-q Schedule
+  `ingestion_recover_stale_jobs` (created after every `migrate`; every
+  `INGESTION_RECOVERY_SCHEDULE_MINUTES`, default 10, 0 removes it) runs on
+  the `qcluster` worker. It marks processing jobs idle for longer than the
+  django-q task timeout + 10 minutes as `crashed`, and re-queues the ones that
+  stalled recently (within 24 h) to resume from their checkpoint, at most
+  `INGESTION_MAX_AUTO_RESUMES` (default 2) times per job; the rest stay
+  `crashed` for a person to retry.
+- **Commands.** `ingestion_run_pending` runs the same recovery pass
+  (`--no-sweep` skips it), then dispatches queued jobs that have no django-q
+  task (`--redispatch` also re-dispatches those that have one).
+  `ingestion_sweep_stale [--dry-run] [--older-than-minutes N]` only marks
+  stale jobs `crashed`. `ingestion_retry_failed` bulk-retries failed /
+  crashed / cancelled jobs (like the per-job Retry endpoint).
 
 ---
 
@@ -217,15 +294,21 @@ The batch detail page shows the most recent 25 entries; the dedicated
 ```bash
 # 1) Ingest a folder
 python manage.py ingest_cms_material \
-    --dir cms_exclusive_material/ \
-    --source-label "Q3 docs"
+    --path cms_exclusive_material/ \
+    --label "Q3 docs"
 
-# 2) Bulk approve all needs_review rows
-python manage.py enrich_pending_questions --status needs_review --action approve
+# 2) Approve the reviewed rows. There is no CLI for this: use the review
+#    queue (bulk Approve) or Django admin -> ExtractedQuestion -> "Mark
+#    selected as approved". (enrich_pending_questions --batch N runs AI
+#    enrichment on staged rows; it does not approve them.)
 
 # 3) Publish + build tests
 python manage.py publish_batch --all-pending --max-per-test 100
 ```
+
+Approved rows still go through the publish holds above: a row whose stem or
+options carry an answer / explanation label or a correctness flag is put back
+to `needs_review` on the next publish until its text is cleaned.
 
 ## Example: full lifecycle via the UI
 
@@ -234,5 +317,7 @@ python manage.py publish_batch --all-pending --max-per-test 100
    progress.
 3. Click **Publish &amp; Build Tests**.
 4. `/admin/import-center/review` — bulk approve the `needs_review` rows
-   that were auto-flagged.
+   that were auto-flagged. Rows held for an answer / explanation label or a
+   correctness flag in their text are held again on the next publish until
+   that text is cleaned (Django admin → `ExtractedQuestion`).
 5. Click **Publish &amp; Build Tests** again.

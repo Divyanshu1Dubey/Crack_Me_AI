@@ -2,15 +2,399 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import logging
 import os
 import re
+import threading
+import time
+from datetime import timedelta, timezone as dt_timezone
+from http.client import HTTPException
 from urllib import error, request
 
 from django.contrib.auth import get_user_model
-from rest_framework import authentication
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from rest_framework import authentication, exceptions
 
 from .models import TokenBalance
+
+logger = logging.getLogger(__name__)
+
+# ── Token verification limits ────────────────────────────────────────────
+# DRF authenticates before its throttles run, so every bearer value reaches
+# _fetch_supabase_user, whose GoTrue call (/auth/v1/user) blocks a worker
+# thread. These keep a flood of made-up tokens from tying up the workers.
+# Each value can be overridden by a Django setting or environment variable
+# of the same name.
+_MAX_TOKEN_LENGTH = 16384
+# A token counts as expired locally only this long after its ``exp`` (clock
+# skew): until then GoTrue decides.
+_EXP_LEEWAY_SECONDS = 10
+_DEFAULT_VERIFY_TIMEOUT_SECONDS = 3.0        # SUPABASE_AUTH_TIMEOUT_SECONDS (was 8 s)
+_DEFAULT_TOKEN_CACHE_SECONDS = 300           # SUPABASE_TOKEN_CACHE_SECONDS, never beyond the token's exp
+_REFUSED_TOKEN_CACHE_SECONDS = 60            # a token GoTrue refused is not re-checked for this long
+_DEFAULT_MAX_CONCURRENT_VERIFICATIONS = 2    # SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS, per process; 0 = no cap
+_DEFAULT_VERIFY_RATE_PER_IP = 240            # SUPABASE_AUTH_VERIFY_RATE_PER_IP, GoTrue calls per minute; 0 = off
+_VERIFY_RATE_WINDOW_SECONDS = 60
+_AUTH_CACHE_ALIAS = "rate_limit"             # large LocMem cap / Redis (settings.CACHES); else 'default'
+_VERIFIED_PREFIX = "supabase_jwt:"
+_REFUSED_PREFIX = "supabase_jwt_refused:"
+_BUDGET_PREFIX = "supabase_verify_ip:"
+_SESSION_REVOKED_PREFIX = "supabase_session_revoked:"
+
+# Device cap (docs/AUTHENTICATION.md §6).
+FREE_DEVICE_LIMIT = 2
+SUBSCRIBED_DEVICE_LIMIT = 4
+# UserDevice.device_fingerprint of a device known only by its Supabase
+# session (no usable X-Session-ID). ':' never matches _SESSION_ID_PATTERN, so
+# a client cannot address these rows through the header.
+_SESSION_FINGERPRINT_PREFIX = "sid:"
+# Supabase access tokens carry the auth session's id (a UUID) as ``session_id``.
+_SESSION_CLAIM_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+_NIL_UUID = "00000000-0000-0000-0000-000000000000"
+
+# Requests an over-the-limit device may still make, so the user can open
+# Settings and free a slot (list / log out devices, load the profile) or buy
+# the 4-device plan from this device (/auth/subscribe/...).
+_DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/', '/auth/subscribe/')
+# Read-only requests every signed-in page makes in the background (Header
+# token pill, announcements). Without them the over-limit device could not
+# stay on /subscription long enough to buy the 4-device plan. Exact paths
+# (any /api prefix allowed), safe methods only; they never enrol the device.
+_DEVICE_LIMIT_EXEMPT_READS = ('/auth/tokens/', '/analytics/announcements/')
+_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
+# A device's last_login is refreshed at most this often (one write per
+# request per user was the old behaviour).
+_DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
+# Devices unseen for this long no longer hold a slot for a NEW device (the
+# cap was never enforced before, so many accounts carry long-dead rows, e.g.
+# one per old incognito session). They stay listed in Settings.
+_DEVICE_STALE_AFTER = timedelta(days=30)
+# Clock skew allowed between Supabase's user ``created_at`` and our
+# ``date_joined`` when deciding that a row was created from an identity.
+ORIGINAL_IDENTITY_CLOCK_TOLERANCE = timedelta(minutes=5)
+
+# Keys that may be sent as ``apikey`` when verifying an access token, in
+# order. All are public (anon / publishable) keys or an explicit override.
+_PUBLIC_VERIFY_KEY_ENV_VARS = (
+    "SUPABASE_AUTH_VERIFY_KEY",
+    "SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+)
+_service_role_fallback_logged = False
+
+
+def _auth_failed(code: str, detail: str) -> exceptions.AuthenticationFailed:
+    """AuthenticationFailed with a machine-readable ``code`` the frontend acts on."""
+    return exceptions.AuthenticationFailed({"detail": detail, "code": code})
+
+
+def _verification_busy() -> exceptions.Throttled:
+    """429 for a request whose token cannot be checked right now (limits above)."""
+    exc = exceptions.Throttled(detail={
+        "detail": "Too many sign-in checks right now. Please retry in a moment.",
+        "code": "auth_verification_busy",
+    })
+    exc.wait = 1  # Retry-After
+    return exc
+
+
+def public_verify_key() -> str:
+    """The first configured public key for token verification ('' if none)."""
+    return next((v for v in (os.getenv(n, "").strip() for n in _PUBLIC_VERIFY_KEY_ENV_VARS) if v), "")
+
+
+def _supabase_url() -> str:
+    return (
+        os.getenv("SUPABASE_URL", "").strip()
+        or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
+        or ""
+    ).rstrip("/")
+
+
+def _config_value(name: str):
+    """Django setting ``name`` if defined, else the environment variable (None if neither / blank)."""
+    from django.conf import settings
+
+    value = getattr(settings, name, None)
+    if value is None:
+        value = os.getenv(name)
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    return value
+
+
+def _config_number(name: str, default, *, minimum=0, maximum=None, cast=int):
+    value = _config_value(name)
+    if value is None:
+        return default
+    try:
+        number = cast(value)
+    except (TypeError, ValueError):
+        return default
+    number = max(minimum, number)
+    return min(maximum, number) if maximum is not None else number
+
+
+def _verify_timeout() -> float:
+    return _config_number(
+        "SUPABASE_AUTH_TIMEOUT_SECONDS", _DEFAULT_VERIFY_TIMEOUT_SECONDS, minimum=0.5, maximum=10.0, cast=float,
+    )
+
+
+def _token_cache_seconds() -> int:
+    return _config_number("SUPABASE_TOKEN_CACHE_SECONDS", _DEFAULT_TOKEN_CACHE_SECONDS, minimum=0, maximum=3600)
+
+
+def _auth_cache():
+    """Cache for token checks and their counters ('rate_limit' alias, else 'default')."""
+    from django.conf import settings
+    from django.core.cache import caches
+
+    alias = _AUTH_CACHE_ALIAS if _AUTH_CACHE_ALIAS in getattr(settings, "CACHES", {}) else "default"
+    return caches[alias]
+
+
+def _cache_get(store, key):
+    try:
+        return store.get(key)
+    except Exception:  # noqa: BLE001 - a cache outage must not break sign-in
+        return None
+
+
+def _cache_set(store, key, value, timeout):
+    try:
+        store.set(key, value, timeout)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _b64url_json_object(segment: str):
+    try:
+        raw = base64.urlsafe_b64decode((segment + "=" * (-len(segment) % 4)).encode("ascii"))
+        value = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError):  # binascii.Error and JSONDecodeError are ValueErrors
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def unverified_jwt_parts(token: str):
+    """(header, payload) of a JWT-shaped ``token``, or None. NOT verified.
+
+    Only for values GoTrue has accepted, or to refuse values that cannot be
+    access tokens at all.
+    """
+    if not isinstance(token, str) or not token or len(token) > _MAX_TOKEN_LENGTH:
+        return None
+    parts = token.split(".")
+    if len(parts) != 3 or not all(parts):
+        return None
+    header = _b64url_json_object(parts[0])
+    payload = _b64url_json_object(parts[1])
+    if header is None or payload is None:
+        return None
+    return header, payload
+
+
+def plausible_access_token_claims(token: str, now: float | None = None):
+    """The payload of ``token`` if it can be a live Supabase access token, else None.
+
+    A local, network-free check (no signature check): a JWT with an ``alg``
+    other than "none", a ``sub`` and an ``exp`` that has not passed (give or
+    take _EXP_LEEWAY_SECONDS). Every access token GoTrue issues passes it;
+    anything that fails it would be refused by GoTrue as well.
+    """
+    parts = unverified_jwt_parts(token)
+    if parts is None:
+        return None
+    header, payload = parts
+    alg = header.get("alg")
+    if not isinstance(alg, str) or not alg.strip() or alg.strip().lower() == "none":
+        return None
+    sub = payload.get("sub")
+    if not isinstance(sub, str) or not sub.strip():
+        return None
+    exp = payload.get("exp")
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        return None
+    if exp <= (time.time() if now is None else now) - _EXP_LEEWAY_SECONDS:
+        return None
+    return payload
+
+
+def session_id_from_claims(claims) -> str | None:
+    """The Supabase auth session id (``session_id`` claim) of an access token, if any."""
+    if not isinstance(claims, dict):
+        return None
+    value = claims.get("session_id")
+    if not isinstance(value, str) or not _SESSION_CLAIM_PATTERN.match(value) or value == _NIL_UUID:
+        return None
+    return value.lower()
+
+
+def _verification_rate_per_ip() -> int:
+    """GoTrue calls allowed per client IP per minute (0 = no limit).
+
+    Off by default while the client address is unknown: without
+    TRUSTED_CLIENT_IP_HEADER / NUM_PROXIES every request carries the proxy's
+    address, so the budget would be one bucket for the whole site.
+    """
+    configured = _config_value("SUPABASE_AUTH_VERIFY_RATE_PER_IP")
+    if configured is not None:
+        try:
+            return max(0, int(configured))
+        except (TypeError, ValueError):
+            pass
+    from django.conf import settings
+    from rest_framework.settings import api_settings
+
+    from crack_cms.client_ip import parse_num_proxies
+
+    trusted_ip = bool(str(getattr(settings, "TRUSTED_CLIENT_IP_HEADER", "") or "").strip())
+    trusted_ip = trusted_ip or parse_num_proxies(api_settings.NUM_PROXIES) is not None
+    return _DEFAULT_VERIFY_RATE_PER_IP if trusted_ip else 0
+
+
+def _within_verification_budget(ip: str, store) -> bool:
+    """Count one GoTrue call for ``ip``; False once the per-minute budget is spent."""
+    limit = _verification_rate_per_ip()
+    if limit <= 0 or not ip:
+        return True
+    window = _VERIFY_RATE_WINDOW_SECONDS
+    key = f"{_BUDGET_PREFIX}{ip}:{int(time.time() // window)}"
+    try:
+        count = 1 if store.add(key, 1, timeout=window + 5) else store.incr(key)
+    except ValueError:  # expired between add() and incr()
+        _cache_set(store, key, 1, window + 5)
+        count = 1
+    except Exception:  # noqa: BLE001 - cache outage: fail open
+        return True
+    return count <= limit
+
+
+_SLOTS_LOCK = threading.Lock()
+_SLOTS: dict[int, threading.BoundedSemaphore] = {}
+
+
+def _verification_slots():
+    """Per-process cap on concurrent GoTrue calls (None = no cap)."""
+    size = _config_number(
+        "SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS", _DEFAULT_MAX_CONCURRENT_VERIFICATIONS, minimum=0, maximum=64,
+    )
+    if size <= 0:
+        return None
+    with _SLOTS_LOCK:
+        slots = _SLOTS.get(size)
+        if slots is None:
+            slots = _SLOTS[size] = threading.BoundedSemaphore(size)
+        return slots
+
+
+class _PendingVerification:
+    """One in-flight GoTrue call that concurrent requests with the same token share."""
+
+    __slots__ = ("done", "result", "busy")
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.result = None
+        self.busy = False
+
+
+_INFLIGHT_LOCK = threading.Lock()
+_INFLIGHT: dict[str, _PendingVerification] = {}
+
+
+def _device_limit_for(user) -> int:
+    """4 devices with an active plan, else 2.
+
+    Same rule as every other entitlement (accounts.utils.is_premium:
+    Subscription rows). The bare ``is_subscribed`` flag used to decide it,
+    which the removed unpaid /auth/subscribe/ endpoint had set for anyone.
+    """
+    from .utils import is_premium
+
+    return SUBSCRIBED_DEVICE_LIMIT if is_premium(user) else FREE_DEVICE_LIMIT
+
+
+def _is_device_management_request(request_obj) -> bool:
+    """Requests an over-the-limit device may make without taking a slot."""
+    path = request_obj.path
+    if any(p in path for p in _DEVICE_MANAGEMENT_PATHS):
+        return True
+    return request_obj.method in _SAFE_METHODS and any(path.endswith(p) for p in _DEVICE_LIMIT_EXEMPT_READS)
+
+
+def _supabase_email_confirmed(supabase_user: dict) -> bool:
+    """True when Supabase has verified that this identity owns its email.
+
+    ``email_confirmed_at`` is the field current GoTrue builds return. Older
+    builds only expose ``confirmed_at``, which can also be set by a *phone*
+    confirmation, so it only counts when no phone was confirmed.
+    """
+    if supabase_user.get("email_confirmed_at"):
+        return True
+    return bool(supabase_user.get("confirmed_at")) and not supabase_user.get("phone_confirmed_at")
+
+
+def supabase_created_at(supabase_user: dict):
+    """GoTrue's ``created_at`` for this identity as an aware datetime, or None."""
+    raw = supabase_user.get("created_at")
+    if not raw:
+        return None
+    try:
+        value = parse_datetime(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    if value is not None and timezone.is_naive(value):
+        value = timezone.make_aware(value, dt_timezone.utc)
+    return value
+
+
+def is_original_identity(supabase_user: dict, row) -> bool:
+    """True when ``row`` was created from this Supabase identity.
+
+    A row created on an identity's first sign-in is younger than the
+    identity: GoTrue's ``created_at`` is not later than ``row.date_joined``
+    (give or take ORIGINAL_IDENTITY_CLOCK_TOLERANCE). A sign-up made after the
+    row existed -- a takeover attempt while "Confirm email" is off, or a
+    deleted and re-created identity -- cannot satisfy this. The email must be
+    confirmed too. Missing or unparseable dates never count.
+    """
+    if not _supabase_email_confirmed(supabase_user):
+        return False
+    created = supabase_created_at(supabase_user)
+    joined = getattr(row, "date_joined", None)
+    if created is None or joined is None:
+        return False
+    return created <= joined + ORIGINAL_IDENTITY_CLOCK_TOLERANCE
+
+
+def _name_parts_from_metadata(metadata: dict) -> tuple[str, str]:
+    """first/last name from Supabase user_metadata (OAuth providers only send full_name/name)."""
+    first = str(metadata.get("first_name") or "").strip()
+    last = str(metadata.get("last_name") or "").strip()
+    if not first and not last:
+        full = str(metadata.get("full_name") or metadata.get("name") or "").strip()
+        if full:
+            first, _, last = full.partition(" ")
+    return first[:150], last.strip()[:150]
+
+
+def _avatar_from_metadata(metadata: dict) -> str:
+    url = str(metadata.get("avatar_url") or metadata.get("picture") or "").strip()
+    # CustomUser.avatar_url is a URLField(max_length=200).
+    if url.startswith(("https://", "http://")) and len(url) <= 200:
+        return url
+    return ""
 
 # SECURITY (Fix #3): The X-Session-ID header is trusted by this backend as a
 # device fingerprint. Without validation, any attacker can rotate the header
@@ -49,8 +433,26 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
     Flow:
     1) Read Authorization: Bearer <supabase_access_token>
     2) Validate token by calling Supabase `/auth/v1/user`
-    3) Upsert local Django user by email and return it as request.user
+    3) Find the local Django user by the Supabase user id (CustomUser.supabase_uid;
+       the first sign-in links a row by its confirmed email, see
+       _link_existing_row_by_email) or create one, and return it as request.user
+    4) Reject blocked accounts (``is_active=False``) and enforce the device cap
+
+    Failures that the frontend must act on raise AuthenticationFailed with a
+    ``code``: ``account_blocked``, ``email_not_confirmed``, ``email_required``,
+    ``account_link_required``, ``device_inactive`` and ``device_limit_reached``.
+
+    The Supabase project must have "Confirm email" and "Secure email change"
+    enabled: a confirmed email is what links a row on first sign-in and what
+    the admin email allowlist trusts (system check accounts.W001).
     """
+
+    def authenticate_header(self, request_obj):
+        # DRF only answers 401 (instead of 403) for NotAuthenticated /
+        # AuthenticationFailed when the FIRST authenticator returns a
+        # WWW-Authenticate value. Without it, expired or unverifiable tokens
+        # came back as 403 and the frontend's refresh-on-401 never ran.
+        return 'Bearer realm="api"'
 
     def authenticate(self, request_obj):
         auth_header = authentication.get_authorization_header(request_obj).split()
@@ -63,102 +465,304 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         if not token:
             return None
 
+        # For the per-IP budget of _fetch_supabase_user (DRF creates one
+        # authenticator per request).
+        self._current_request = request_obj
         supabase_user = self._fetch_supabase_user(token)
         if not supabase_user:
             return None
 
+        # GoTrue accepted this exact token, so its claims are genuine. The
+        # session id keys the device (_enforce_device_limits). Tokens that are
+        # not JWTs only occur with a patched verifier (tests).
+        parts = unverified_jwt_parts(token)
+        claims = parts[1] if parts else None
+        if claims is not None:
+            token_sub = str(claims.get("sub") or "")
+            verified_id = str(supabase_user.get("id") or "")
+            if token_sub and verified_id and token_sub != verified_id:
+                logger.error("Supabase token subject does not match the verified user; refusing the request.")
+                return None
+        session_id = session_id_from_claims(claims)
+
         user = self._upsert_local_user(supabase_user)
 
-        # ── Device Management & Limits ──
-        incoming_session_id = request_obj.META.get('HTTP_X_SESSION_ID')
+        # Admin "Block user" sets is_active=False. DRF's IsAuthenticated only
+        # looks at is_authenticated (True for inactive users), so without this
+        # check a blocked user kept full API access.
+        if not user.is_active:
+            raise _auth_failed(
+                "account_blocked",
+                "This account has been blocked. Contact support if you think this is a mistake.",
+            )
 
-        # Premium student exception: ensure they never get locked out due to device limits/race conditions
+        # Admins are exempt from device tracking and limits.
         if user.role == 'admin':
             return (user, None)
 
-        # SECURITY (Fix #3): reject any X-Session-ID that doesn't match a
-        # known device-token shape. Without this, an attacker can enumerate
-        # X-Session-ID: 1, 2, 3, ... and spawn unlimited parallel sessions,
-        # bypassing the per-user device limit.
-        if incoming_session_id and not _is_valid_session_id(incoming_session_id):
-            # Drop the spoofed header; behave as if no device tracker was
-            # attached for this request. We don't fail authentication — the
-            # user is still legitimately authenticated via Supabase — but
-            # we won't enroll this fingerprint as a "device", so any later
-            # attempt with a valid-looking session will be the one that
-            # counts toward the limit.
-            incoming_session_id = None
-
-        if incoming_session_id:
-            from .models import UserDevice
-
-            # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
-            # bookkeeping. X-Forwarded-For is attacker-controlled when the
-            # client can reach the backend directly, so honoring it lets
-            # anyone spoof their IP for rate-limit / geo / device bookkeeping.
-            # Render sits behind a known proxy; we still capture the raw
-            # socket address.
-            ip = request_obj.META.get('REMOTE_ADDR', '').strip()
-
-            user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
-
-            device, created = UserDevice.objects.get_or_create(
-                user=user,
-                device_fingerprint=incoming_session_id,
-                defaults={
-                    'device_name': user_agent,
-                    'ip_address': ip,
-                    'is_active': True
-                }
-            )
-
-            if not created:
-                # Update last login
-                device.device_name = user_agent
-                device.ip_address = ip
-                device.save(update_fields=['device_name', 'ip_address', 'last_login'])
-
-            if not device.is_active:
-                from rest_framework import exceptions
-                raise exceptions.AuthenticationFailed({
-                    "detail": "This device has been logged out or blocked.",
-                    "code": "device_inactive"
-                })
-
-            # Enforce limits if it's a new device or checking limits
-            limit = 4 if getattr(user, 'is_subscribed', False) else 2
-
-            active_devices = UserDevice.objects.filter(user=user, is_active=True).order_by('-last_login')
-            if active_devices.count() > limit:
-                # If this device isn't in the allowed top N devices, reject
-                allowed_ids = list(active_devices.values_list('id', flat=True)[:limit])
-                if device.id not in allowed_ids:
-                    allowed_paths = ['/auth/profile/', '/auth/devices/', '/auth/logout/']
-                    if not any(p in request_obj.path for p in allowed_paths):
-                        from rest_framework import exceptions
-                        raise exceptions.AuthenticationFailed({
-                            "detail": f"Maximum device limit reached ({limit} devices). Please manage devices in Settings.",
-                            "code": "device_limit_reached"
-                        })
-
+        self._enforce_device_limits(request_obj, user, session_id=session_id, token=token)
         return (user, token)
 
+    def _enforce_device_limits(self, request_obj, user, session_id=None, token=None):
+        """Track the user's devices and enforce the 2 (free) / 4 (premium) cap.
+
+        A device is a browser (its X-Session-ID, ``crack_device_id``) bound to
+        the Supabase auth session that uses it: the ``session_id`` claim of the
+        verified access token, which the client can neither omit nor forge
+        (UserDevice.session_id). The binding is looked up first, so:
+
+        * a session whose device was logged out (Settings / admin) or replaced
+          gets ``device_inactive`` whatever header it sends or omits, and its
+          Supabase session is ended as well (_end_supabase_session);
+        * a session without a usable header still counts: it is enrolled as a
+          device of its own (fingerprint ``sid:<session id>``) and needs a slot;
+        * a new sign-in on a browser takes over that browser's device row (no
+          new slot); the session it replaces is retired and refused from then
+          on, so one device id shared between people gives one seat at a time.
+
+        A NEW device is enrolled only while the user has fewer active devices
+        (seen in the last 30 days) than the cap; otherwise
+        ``device_limit_reached`` (except on the device-management paths, so
+        Settings can free a slot). Existing devices beyond the cap (e.g. after
+        a 4 -> 2 downgrade): the ones used most recently win, judged on
+        last_login values from BEFORE this request.
+
+        Tokens without a ``session_id`` claim (GoTrue always sets it; only
+        tokens minted outside Supabase sign-in lack it) fall back to the old
+        header-only rule.
+        """
+        from .models import UserDevice
+
+        # SECURITY (Fix #3): only device-token shapes are accepted as
+        # X-Session-ID, so enumerating 1, 2, 3, ... cannot multiply devices.
+        header_value = request_obj.META.get('HTTP_X_SESSION_ID')
+        fingerprint = header_value if header_value and _is_valid_session_id(header_value) else None
+        if not session_id and not fingerprint:
+            return  # nothing identifies the device (token without a session id)
+
+        # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
+        # bookkeeping. X-Forwarded-For is attacker-controlled when the
+        # client can reach the backend directly.
+        ip = request_obj.META.get('REMOTE_ADDR', '').strip() or None
+        user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
+        management_request = _is_device_management_request(request_obj)
+        now = timezone.now()
+        limit_cache = []
+
+        def device_limit():
+            if not limit_cache:  # one Subscription query, only when it matters
+                limit_cache.append(_device_limit_for(user))
+            return limit_cache[0]
+
+        def at_limit(count):
+            return count >= FREE_DEVICE_LIMIT and count >= device_limit()
+
+        def limit_reached():
+            return _auth_failed(
+                "device_limit_reached",
+                f"Maximum device limit reached ({device_limit()} devices). Please manage devices in Settings.",
+            )
+
+        def device_inactive():
+            self._end_supabase_session(token, session_id)
+            return _auth_failed("device_inactive", "This device has been logged out or blocked.")
+
+        device = None
+        if session_id:
+            # Inactive rows sort first: any logged-out or replaced binding ends the session.
+            bound = list(UserDevice.objects.filter(user=user, session_id=session_id).order_by('is_active', '-pk')[:2])
+            if bound:
+                if not bound[0].is_active:
+                    raise device_inactive()
+                device = bound[0]
+
+        if device is None:
+            row = UserDevice.objects.filter(user=user, device_fingerprint=fingerprint).first() if fingerprint else None
+            if row is not None and row.is_active:
+                if session_id and row.session_id != session_id:
+                    # A new sign-in on this browser: the slot moves to it.
+                    self._bind_device_to_session(row, session_id)
+                device = row
+            elif row is not None and (not session_id or not row.session_id):
+                # Logged out before its session was recorded (or a token
+                # without a session id): the browser must sign in again with a
+                # fresh device id, as before.
+                raise device_inactive()
+            else:
+                # A device this user has not used yet, or a fresh sign-in on a
+                # browser whose (recorded) session was logged out.
+                slots_taken = UserDevice.objects.filter(
+                    user=user, is_active=True, last_login__gte=now - _DEVICE_STALE_AFTER,
+                ).count()
+                if at_limit(slots_taken):
+                    if management_request:
+                        return  # let it reach Settings without taking a slot
+                    raise limit_reached()
+                if row is not None:
+                    device = self._reenrol_device(row, session_id, user_agent, ip, now)
+                else:
+                    device, _created = UserDevice.objects.get_or_create(
+                        user=user,
+                        device_fingerprint=fingerprint or _SESSION_FINGERPRINT_PREFIX + session_id,
+                        defaults={
+                            'device_name': user_agent, 'ip_address': ip, 'is_active': True,
+                            'session_id': session_id,
+                        },
+                    )
+                request_obj.auth_device_id = device.pk
+                return
+
+        request_obj.auth_device_id = device.pk
+        more_recent = (
+            UserDevice.objects
+            .filter(user=user, is_active=True, last_login__gt=device.last_login)
+            .exclude(pk=device.pk)
+            .count()
+        )
+        if at_limit(more_recent):
+            if management_request:
+                return  # do not refresh last_login, or it would win its slot back
+            raise limit_reached()
+
+        if (
+            device.last_login is None
+            or now - device.last_login >= _DEVICE_TOUCH_INTERVAL
+            or device.device_name != user_agent
+            or (device.ip_address or None) != ip
+        ):
+            UserDevice.objects.filter(pk=device.pk).update(
+                device_name=user_agent, ip_address=ip, last_login=now,
+            )
+
+    @staticmethod
+    def _retire_session(user_id, session_id):
+        """Record ``session_id`` as ended: its requests get ``device_inactive`` from now on.
+
+        Kept as an inactive UserDevice row (``sid:<session id>``), never listed.
+        """
+        from .models import UserDevice
+
+        if not session_id:
+            return
+        retired, created = UserDevice.objects.get_or_create(
+            user_id=user_id,
+            device_fingerprint=_SESSION_FINGERPRINT_PREFIX + session_id,
+            defaults={'session_id': session_id, 'is_active': False, 'device_name': 'Ended session'},
+        )
+        if not created and (retired.is_active or retired.session_id != session_id):
+            UserDevice.objects.filter(pk=retired.pk).update(is_active=False, session_id=session_id)
+
+    def _bind_device_to_session(self, row, session_id):
+        """Move an active device row to a new Supabase session, retiring the old one."""
+        from .models import UserDevice
+
+        with transaction.atomic():
+            if row.session_id and row.session_id != session_id:
+                self._retire_session(row.user_id, row.session_id)
+            UserDevice.objects.filter(pk=row.pk).update(session_id=session_id)
+        row.session_id = session_id
+
+    def _reenrol_device(self, row, session_id, user_agent, ip, now):
+        """A fresh sign-in on a logged-out device row: enrol it again for the new session."""
+        from .models import UserDevice
+
+        with transaction.atomic():
+            if row.session_id and row.session_id != session_id:
+                self._retire_session(row.user_id, row.session_id)
+            UserDevice.objects.filter(pk=row.pk).update(
+                is_active=True, session_id=session_id, device_name=user_agent, ip_address=ip, last_login=now,
+            )
+        row.is_active, row.session_id, row.last_login = True, session_id, now
+        return row
+
+    def _end_supabase_session(self, token, session_id):
+        """Best effort: sign the logged-out device's Supabase session out (GoTrue /logout).
+
+        Our refusal already stops this session on every API call; ending it
+        upstream also stops its refresh token. Once per session.
+        """
+        if not token or not session_id:
+            return
+        supabase_url, verify_key = _supabase_url(), self._verify_key()
+        if not supabase_url or not verify_key:
+            return
+        store = _auth_cache()
+        try:
+            if not store.add(_SESSION_REVOKED_PREFIX + session_id, 1, timeout=86400):
+                return  # done already
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            store.delete(_VERIFIED_PREFIX + hashlib.sha256(token.encode("utf-8")).hexdigest())
+        except Exception:  # noqa: BLE001
+            pass
+        req = request.Request(
+            url=f"{supabase_url}/auth/v1/logout?scope=local",
+            data=b"",
+            headers={"Authorization": f"Bearer {token}", "apikey": verify_key},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=_verify_timeout()):
+                pass
+        except (OSError, HTTPException, ValueError) as exc:
+            logger.info("Could not end Supabase session %s upstream: %s", session_id, exc.__class__.__name__)
+
+    @staticmethod
+    def _verify_key() -> str:
+        """The key sent as ``apikey`` to GoTrue ('' if none; see _fetch_supabase_user)."""
+        global _service_role_fallback_logged
+        verify_key = public_verify_key()
+        if not verify_key:
+            verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+            if verify_key and not _service_role_fallback_logged:
+                _service_role_fallback_logged = True
+                logger.warning(
+                    "SupabaseJWTAuthentication is verifying tokens with the "
+                    "SUPABASE_SERVICE_ROLE_KEY fallback. Set SUPABASE_ANON_KEY "
+                    "(or SUPABASE_PUBLISHABLE_KEY / SUPABASE_AUTH_VERIFY_KEY) in "
+                    "the backend environment (principle of least privilege)."
+                )
+        return verify_key
+
     def _fetch_supabase_user(self, token: str):
-        # Cache Supabase JWT validation for the token's remaining lifetime
-        # (Supabase access tokens last ~1h). Avoids a 100–300 ms outbound
-        # HTTP call on every authenticated request.
-        from django.core.cache import cache
-        cache_key = f"supabase_jwt:{token[:64]}"
-        cached = cache.get(cache_key)
+        """GoTrue's user for ``token`` (GET /auth/v1/user, cached), or None.
+
+        DRF runs authentication BEFORE its throttles, so every bearer value of
+        every request reaches this method; it used to call Supabase (8 s
+        timeout, failures never remembered) for any string at all. Now:
+
+        * a value that cannot be a live access token (not a JWT, alg "none",
+          no ``sub``, ``exp`` passed) is refused locally, without a call;
+        * a token GoTrue refused (4xx) is not checked again for 60 s;
+        * a valid answer is cached per SHA-256 digest of the whole token for
+          SUPABASE_TOKEN_CACHE_SECONDS (300) and never beyond its ``exp``;
+        * requests carrying the same token share one call (a page fires
+          several at once), calls are capped per process
+          (SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS, so unknown tokens cannot
+          occupy every worker thread) and per client IP
+          (SUPABASE_AUTH_VERIFY_RATE_PER_IP per minute, once the client IP is
+          trusted); over a limit the request is answered 429
+          ``auth_verification_busy`` without a call;
+        * the call times out after SUPABASE_AUTH_TIMEOUT_SECONDS (3 s).
+        """
+        claims = plausible_access_token_claims(token)
+        if claims is None:
+            return None
+        # SECURITY: key on a digest of the WHOLE token. The previous key used
+        # token[:64], which for Supabase JWTs is just the (shared) header --
+        # every user's token mapped to the same cache entry, so a request
+        # within 5 minutes of another user's was authenticated as that user.
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        store = _auth_cache()
+        cached = _cache_get(store, _VERIFIED_PREFIX + digest)
         if cached is not None:
             return cached
+        if _cache_get(store, _REFUSED_PREFIX + digest):
+            return None
 
-        supabase_url = (
-            os.getenv("SUPABASE_URL", "").strip()
-            or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").strip()
-            or ""
-        ).rstrip("/")
-        # Token verification key resolution — order matters:
+        supabase_url = _supabase_url()
+        # Token verification key resolution (_verify_key) — order matters:
         #   1. SUPABASE_AUTH_VERIFY_KEY   (explicit override — recommended)
         #   2. SUPABASE_ANON_KEY          (anon / publishable key — safe)
         #   3. NEXT_PUBLIC_SUPABASE_ANON_KEY (frontend anon, safe)
@@ -178,77 +782,115 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         # The SERVICE_ROLE_KEY fallback exists for operational continuity
         # when those keys are missing (e.g. during the rollout of Fix #4
         # which previously broke production by removing this fallback).
-        # We log a WARNING whenever the fallback fires so operators know
-        # to add the proper key.
-        anon_keys = [
-            os.getenv("SUPABASE_AUTH_VERIFY_KEY", "").strip(),
-            os.getenv("SUPABASE_ANON_KEY", "").strip(),
-            os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "").strip(),
-        ]
-        verify_key = next((k for k in anon_keys if k), "")
-
-        used_service_role_fallback = False
-        if not verify_key:
-            verify_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            used_service_role_fallback = bool(verify_key)
-
-        if used_service_role_fallback:
-            import logging
-            logging.getLogger(__name__).warning(
-                "SupabaseJWTAuthentication is verifying tokens with the "
-                "SUPABASE_SERVICE_ROLE_KEY fallback. This is operationally "
-                "safe (Supabase keys token verification to the bearer JWT, "
-                "not the apikey) but should be replaced with "
-                "SUPABASE_AUTH_VERIFY_KEY or SUPABASE_ANON_KEY for "
-                "principle-of-least-privilege. Add the proper key to "
-                "production env to silence this warning."
-            )
-
+        # It is reported by `manage.py check --deploy` (accounts.W002) and
+        # logged once per process; remove it once every deployment sets
+        # a public key (new-style publishable keys are as safe as anon).
+        verify_key = self._verify_key()
         if not supabase_url or not verify_key:
             return None
+        return self._verify_with_gotrue(token, digest, claims, supabase_url, verify_key, store)
 
-        req = request.Request(
-            url=f"{supabase_url}/auth/v1/user",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "apikey": verify_key,
-            },
-            method="GET",
-        )
-
+    def _verify_with_gotrue(self, token, digest, claims, supabase_url, verify_key, store):
+        """One GoTrue check per token at a time in this process; the others wait for it."""
+        with _INFLIGHT_LOCK:
+            pending = _INFLIGHT.get(digest)
+            leader = pending is None
+            if leader:
+                pending = _INFLIGHT[digest] = _PendingVerification()
+        if not leader:
+            if not pending.done.wait(_verify_timeout() + 1.0) or pending.busy:
+                raise _verification_busy()
+            return pending.result
         try:
-            with request.urlopen(req, timeout=8) as resp:
-                if int(getattr(resp, "status", 0) or 0) != 200:
-                    return None
-                payload = resp.read().decode("utf-8", errors="ignore")
-                result = json.loads(payload)
-                # Cache valid token for 5 minutes (well within the 1h JWT lifetime)
+            pending.result = self._call_gotrue(token, digest, claims, supabase_url, verify_key, store)
+            return pending.result
+        except exceptions.Throttled:
+            pending.busy = True
+            raise
+        finally:
+            with _INFLIGHT_LOCK:
+                if _INFLIGHT.get(digest) is pending:
+                    del _INFLIGHT[digest]
+            pending.done.set()
+
+    def _client_ip_for_budget(self) -> str:
+        request_obj = getattr(self, "_current_request", None)
+        if request_obj is None:
+            return ""
+        try:
+            from crack_cms.client_ip import get_client_ip
+
+            return get_client_ip(request_obj) or ""
+        except Exception:  # noqa: BLE001 - no address: no per-IP budget
+            return ""
+
+    def _call_gotrue(self, token, digest, claims, supabase_url, verify_key, store):
+        if not _within_verification_budget(self._client_ip_for_budget(), store):
+            raise _verification_busy()
+        slots = _verification_slots()
+        if slots is not None and not slots.acquire(blocking=False):
+            raise _verification_busy()
+        try:
+            req = request.Request(
+                url=f"{supabase_url}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": verify_key,
+                },
+                method="GET",
+            )
+            try:
+                with request.urlopen(req, timeout=_verify_timeout()) as resp:
+                    if int(getattr(resp, "status", 0) or 0) != 200:
+                        return None
+                    result = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            except error.HTTPError as exc:
+                # GoTrue refused the token itself (expired, revoked, signed out,
+                # unknown user): do not ask again for a minute. 408 / 429 / 5xx
+                # say nothing about the token.
+                code = exc.code if isinstance(exc.code, int) else 0
+                if 400 <= code < 500 and code not in (408, 429):
+                    _cache_set(store, _REFUSED_PREFIX + digest, 1, _REFUSED_TOKEN_CACHE_SECONDS)
                 try:
-                    cache.set(cache_key, result, 300)
-                except Exception:
+                    exc.close()
+                except Exception:  # noqa: BLE001
                     pass
-                return result
-        except (error.HTTPError, error.URLError, TimeoutError, json.JSONDecodeError):
+                return None
+            except (OSError, HTTPException, ValueError):  # network, timeout, bad JSON
+                return None
+        finally:
+            if slots is not None:
+                slots.release()
+        if not isinstance(result, dict):
             return None
+        # Never serve a cached answer past the token's own expiry.
+        ttl = min(_token_cache_seconds(), int(float(claims["exp"]) - time.time()))
+        if ttl > 0:
+            _cache_set(store, _VERIFIED_PREFIX + digest, result, ttl)
+        return result
 
     def _upsert_local_user(self, supabase_user: dict):
         User = get_user_model()
 
         email = (supabase_user.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            # Phone-only / anonymous Supabase identities have no email. Linking
+            # them "by email" would map all of them onto one local row (the
+            # one with email='', e.g. a createsuperuser account).
+            raise _auth_failed("email_required", "Sign in with an email address to use CrackLabs.")
+        if not _supabase_email_confirmed(supabase_user):
+            # SECURITY: a row is linked by email the first time. Without a
+            # verified email anyone could sign up in Supabase with an address
+            # that only exists locally (bootstrap admin, legacy users, an
+            # allowlisted admin email) and be signed in as that account.
+            raise _auth_failed("email_not_confirmed", "Please confirm your email address, then sign in again.")
+
+        # The Supabase user id. GoTrue always returns it; once stored on a row
+        # (CustomUser.supabase_uid) sign-ins are matched by it, not by email.
+        supabase_uid = str(supabase_user.get("id") or "").strip()[:64] or None
+
         metadata = supabase_user.get("user_metadata") or {}
         app_metadata = supabase_user.get("app_metadata") or {}
-        username = (metadata.get("username") or "").strip()
-
-        if not username:
-            username = (email.split("@")[0] if "@" in email else "supabase_user").strip() or "supabase_user"
-
-        # Ensure unique username for local user table.
-        base_username = username[:140]
-        username_candidate = base_username
-        suffix = 1
-        while User.objects.filter(username=username_candidate).exclude(email=email).exists():
-            suffix += 1
-            username_candidate = f"{base_username[:130]}_{suffix}"
 
         def _is_true(value):
             return str(value).strip().lower() == "true"
@@ -271,108 +913,272 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             return configured
 
         # ── Fix P1 (2026-09-23): admin-role loss bug ─────────────────────
-        # `is_admin_user` is the authoritative privilege level for THIS login
-        # from trusted sources (Supabase app_metadata or env allowlist).
+        # `trusted_admin` is the privilege level for THIS login from trusted
+        # sources: Supabase app_metadata (only settable with the service-role
+        # key) or the env allowlist. The email is confirmed at this point
+        # (checked above), so an allowlisted address can't be claimed by an
+        # unverified sign-up -- provided the Supabase project has "Confirm
+        # email" on (accounts.W001). user_metadata is user-editable and never
+        # counts.
         admin_allowlist = _admin_email_allowlist()
         is_admin_from_metadata = _is_admin_from_metadata(app_metadata)
         is_admin_from_allowlist = email in admin_allowlist
-        is_admin_user = is_admin_from_metadata or is_admin_from_allowlist
+        trusted_admin = is_admin_from_metadata or is_admin_from_allowlist
 
-        # NOTE: we cannot check the DB yet because `get_or_create` happens
-        # below.  For new users, `is_admin_user` is the sole authority.
-        # For existing users, the `else` branch preserves admin if the DB
-        # already has it — never demote, regardless of metadata/allowlist.
+        first_name, last_name = _name_parts_from_metadata(metadata)
+        avatar_url = _avatar_from_metadata(metadata)
 
-        desired_role = "admin" if is_admin_user else "student"
-
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={
-                "username": username_candidate,
-                "first_name": str(metadata.get("first_name") or ""),
-                "last_name": str(metadata.get("last_name") or ""),
-                "target_exam": str(metadata.get("target_exam") or "UPSC CMS"),
-                "is_active": True,
-                "role": "admin" if is_admin_user else "student",
-                "is_superuser": is_admin_user,
-                "is_staff": is_admin_user,
-            },
+        user = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
+        linked_by_uid = user is not None
+        # SECURITY (ACC-05): a linked identity whose email just changed to an
+        # allowlisted admin address is not promoted, and its local email does
+        # not follow. With "Confirm email" / "Secure email change" off, GoTrue
+        # applies updateUser({email}) without any confirmation, so the new
+        # address proves nothing. Grant admin in the admin panel (or with
+        # Supabase app_metadata) instead.
+        allowlist_email_change = bool(
+            linked_by_uid
+            and is_admin_from_allowlist
+            and not is_admin_from_metadata
+            and (user.email or "").strip().lower() != email
+            and not (user.role == "admin" or user.is_superuser)
         )
+        if allowlist_email_change:
+            logger.warning(
+                "Supabase identity %s changed its email to an admin-allowlisted address; "
+                "account id=%s is not promoted and keeps its email.",
+                supabase_uid, user.pk,
+            )
+            trusted_admin = False
+        if user is None:
+            user = self._link_existing_row_by_email(User, email, supabase_uid, trusted_admin, supabase_user)
+        created = False
+        if user is None:
+            user, created = self._create_local_user(
+                User,
+                email=email,
+                supabase_uid=supabase_uid,
+                metadata=metadata,
+                defaults={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "target_exam": str(metadata.get("target_exam") or "UPSC CMS")[:50],
+                    "avatar_url": avatar_url,
+                    "is_active": True,
+                    "role": "admin" if trusted_admin else "student",
+                    "is_superuser": trusted_admin,
+                    "is_staff": trusted_admin,
+                },
+            )
 
         if created:
-            user.set_unusable_password()
-            user.save(update_fields=["password"])
-            
-            # Send personalized welcome email
-            try:
-                from django.core.mail import send_mail
-                from django.conf import settings
-                subject = f"Welcome to CrackLabs, Dr. {user.first_name or user.username}! 🩺"
-                message = (
-                    f"Dear Dr. {user.first_name or user.username},\n\n"
-                    f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
-                    f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
-                    f"Here is what you get access to:\n"
-                    f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
-                    f"- Spaced Repetition flashcards based on SM-2\n"
-                    f"- Unlimited AI Tutor to break down complex medical guidelines\n"
-                    f"- Dynamic leaderboard to compete with medical peers across the country\n\n"
-                    f"Let's start your prep today! Head over to your dashboard and complete your first clinical drill.\n\n"
-                    f"Best regards,\n"
-                    f"The CrackLabs Team\n"
-                    f"https://www.cracklabs.app"
-                )
-                send_mail(
-                    subject=subject,
-                    message=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                pass
+            self._send_welcome_email(user)
         else:
-            # Never demote an existing admin.  If the DB already has admin
-            # privileges, keep them regardless of metadata/allowlist state
-            # for this particular login.
-            db_is_admin = bool(user.is_admin or user.is_superuser)
-            if db_is_admin:
-                is_admin_user = True
+            if trusted_admin:
+                desired = {"role": "admin", "is_superuser": True, "is_staff": True}
+            elif user.role == "admin" or user.is_superuser:
+                # Never demote an existing admin here (revocation is done in
+                # the admin panel), but don't mint a superuser either: an admin
+                # granted in the DB (in-app role toggle) keeps API admin rights
+                # and is_staff, and only trusted sources grant is_superuser.
+                desired = {"role": "admin", "is_staff": True}
+            else:
+                desired = {"role": "student", "is_superuser": False, "is_staff": False}
 
-            desired_role = "admin" if is_admin_user else "student"
-            updates: list[str] = []
+            # Profile fields are filled from Supabase metadata only when the
+            # local value is empty. They used to be overwritten on EVERY
+            # request, which reverted name / avatar edits made in Settings and
+            # forced every target_exam back to "UPSC CMS" (target_exam is now
+            # only set when the account is created).
+            if first_name and not user.first_name:
+                desired["first_name"] = first_name
+            if last_name and not user.last_name:
+                desired["last_name"] = last_name
+            if avatar_url and not user.avatar_url:
+                desired["avatar_url"] = avatar_url
+            # The linked identity changed its (confirmed) email in Supabase:
+            # follow it, unless another account already uses that address
+            # (or it is an admin-allowlisted address, see above).
+            if (
+                linked_by_uid
+                and not allowlist_email_change
+                and (user.email or "").lower() != email
+                and not User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
+            ):
+                desired["email"] = email
 
-            if user.role != desired_role:
-                user.role = desired_role
-                updates.append("role")
-            if user.is_superuser != is_admin_user:
-                user.is_superuser = is_admin_user
-                updates.append("is_superuser")
-            if user.is_staff != is_admin_user:
-                user.is_staff = is_admin_user
-                updates.append("is_staff")
-            if user.first_name != str(metadata.get("first_name") or ""):
-                user.first_name = str(metadata.get("first_name") or "")
-                updates.append("first_name")
-            if user.last_name != str(metadata.get("last_name") or ""):
-                user.last_name = str(metadata.get("last_name") or "")
-                updates.append("last_name")
-            target_exam = str(metadata.get("target_exam") or "UPSC CMS")
-            if user.target_exam != target_exam:
-                user.target_exam = target_exam
-                updates.append("target_exam")
-            avatar_url = str(metadata.get("avatar_url") or "")
-            if hasattr(user, "avatar_url") and user.avatar_url != avatar_url:
-                user.avatar_url = avatar_url
-                updates.append("avatar_url")
-
+            updates = [field for field, value in desired.items() if getattr(user, field) != value]
+            for field in updates:
+                setattr(user, field, desired[field])
             if updates:
-                if "is_staff" not in updates and "is_superuser" not in updates and "role" in updates:
-                    updates.extend([field for field in ["is_superuser", "is_staff"] if field not in updates])
-                user.role = "admin" if is_admin_user else "student"
-                user.is_superuser = is_admin_user
-                user.is_staff = is_admin_user
-                user.save(update_fields=sorted(set(updates)))
+                user.save(update_fields=updates)
 
         TokenBalance.objects.get_or_create(user=user)
         return user
+
+    @staticmethod
+    def _is_privileged(user) -> bool:
+        return user.role == "admin" or user.is_superuser or user.is_staff
+
+    def _link_existing_row_by_email(self, User, email, supabase_uid, trusted_admin, supabase_user=None):
+        """First sign-in of a Supabase identity: link the local row with its email.
+
+        Returns the linked row, or None when no row has this email (the caller
+        creates one). The email is confirmed by Supabase at this point.
+
+        SECURITY (ACC-05): with "Confirm email" off, GoTrue marks every new
+        sign-up as confirmed, so a confirmed email alone does not prove the
+        person owns the local account. An admin / staff / superuser row is
+        therefore linked automatically only when
+          * the identity is a trusted admin (Supabase app_metadata, which needs
+            the service-role key, or the env admin allowlist -- both would
+            grant admin anyway), or
+          * the row was created from this identity (is_original_identity: the
+            identity's created_at is not later than the row's date_joined).
+            That is every admin promoted in the app after signing up, whose
+            row migration 0023 left without a supabase_uid.
+        Any other identity is refused (code ``account_link_required``) until
+        an operator links it with ``manage.py link_supabase_identity`` (or
+        sets supabase_uid in Django admin). Once linked, the row is only ever
+        matched by supabase_uid, so a row already linked to another identity
+        is never re-linked by email.
+        """
+        row = User.objects.filter(email=email).order_by("id").first()
+        if row is None:
+            return None
+        if not row.is_active:
+            # Never link a blocked account.
+            raise _auth_failed(
+                "account_blocked",
+                "This account has been blocked. Contact support if you think this is a mistake.",
+            )
+        privileged = self._is_privileged(row)
+        original_identity = bool(privileged and supabase_user and is_original_identity(supabase_user, row))
+        if row.supabase_uid and row.supabase_uid != supabase_uid:
+            # Linked to another Supabase identity, which has since lost this
+            # email (deleted and re-created account, email change, project
+            # migration). Re-linking by email would reopen the takeover.
+            reason = "linked to another Supabase identity"
+        elif privileged and not trusted_admin and not original_identity:
+            reason = "an admin/staff account that was not created from this Supabase identity"
+        else:
+            reason = ""
+        if reason:
+            logger.warning(
+                "Refusing to link Supabase identity %s to account id=%s (%s); link it explicitly "
+                "with `manage.py link_supabase_identity --email <email> --apply`.",
+                supabase_uid or "<no id>", row.pk, reason,
+            )
+            raise _auth_failed(
+                "account_link_required",
+                "This account must be verified by an administrator before it can sign in. Please contact support.",
+            )
+        if not supabase_uid or row.supabase_uid == supabase_uid:
+            return row
+        try:
+            with transaction.atomic():
+                claimed = (
+                    User.objects.filter(pk=row.pk, supabase_uid__isnull=True)
+                    .update(supabase_uid=supabase_uid)
+                )
+        except IntegrityError:
+            claimed = 0
+        if claimed:
+            row.supabase_uid = supabase_uid
+            if privileged:
+                self._log_privileged_link(row, supabase_uid, supabase_user or {}, trusted_admin)
+            return row
+        # A concurrent request for the same identity linked it first.
+        winner = User.objects.filter(supabase_uid=supabase_uid).first()
+        if winner is not None:
+            return winner
+        raise _auth_failed(
+            "account_link_required",
+            "This account must be verified by an administrator before it can sign in. Please contact support.",
+        )
+
+    @staticmethod
+    def _log_privileged_link(row, supabase_uid, supabase_user, trusted_admin):
+        """Log + audit-log the automatic link of an admin / staff row (best effort)."""
+        basis = "trusted admin identity" if trusted_admin else "identity predates the account"
+        created = supabase_created_at(supabase_user)
+        logger.warning(
+            "Linked Supabase identity %s to privileged account id=%s on first sign-in (%s; identity "
+            "created %s, account joined %s).",
+            supabase_uid, row.pk, basis, created.isoformat() if created else "unknown",
+            row.date_joined.isoformat() if row.date_joined else "unknown",
+        )
+        from .views import create_admin_audit_log
+
+        create_admin_audit_log(
+            actor=None,
+            action="user_role_update",
+            resource_type="user",
+            resource_id=row.pk,
+            detail=f"Linked {row.username} to Supabase identity {supabase_uid} on first sign-in ({basis})",
+            metadata={"supabase_uid": supabase_uid, "basis": basis, "source": "sign_in"},
+        )
+
+    @staticmethod
+    def _create_local_user(User, *, email, supabase_uid, metadata, defaults):
+        """Create the local row for a new Supabase identity. Returns (user, created).
+
+        The username is public (discussions, leaderboard): the one chosen at
+        sign-up (user_metadata.username) when it follows the Settings rules,
+        made unique, else -- Google sign-ups have none, or it would show the
+        email address, break the format rules or pass for the CrackLabs team
+        ("admin", "CrackLabs_Official") -- a generated ``learner_<hex>``
+        handle (accounts.handles). Only a trusted admin identity may keep a
+        team name. It used to be the email's local part, which for a Gmail
+        user is the address itself.
+        """
+        from .handles import username_for_new_account
+
+        username_candidate = username_for_new_account(
+            User, metadata.get("username"), email,
+            team_member=defaults.get("role") == "admin",
+        )
+
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username_candidate,
+                    email=email,
+                    password=None,  # unusable: sign-in is Supabase only
+                    supabase_uid=supabase_uid,
+                    **defaults,
+                )
+            return user, True
+        except IntegrityError:
+            # A concurrent first request for the same identity created it.
+            existing = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
+            if existing is None:
+                existing = User.objects.filter(email=email).order_by("id").first()
+            if existing is None:
+                raise
+            return existing, False
+
+    @staticmethod
+    def _send_welcome_email(user):
+        """Welcome mail for a first sign-in, sent off the request path."""
+        from .emails import send_mail_in_background
+
+        name = user.first_name or user.username
+        send_mail_in_background(
+            subject=f"Welcome to CrackLabs, Dr. {name}! 🩺",
+            message=(
+                f"Dear Dr. {name},\n\n"
+                f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
+                f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
+                f"Here is what you get access to:\n"
+                f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
+                f"- Spaced Repetition flashcards based on SM-2\n"
+                f"- An AI Tutor to break down complex medical guidelines\n"
+                f"- Dynamic leaderboard to compete with medical peers across the country\n\n"
+                f"Let's start your prep today! Head over to your dashboard and complete your first clinical drill.\n\n"
+                f"Best regards,\n"
+                f"The CrackLabs Team\n"
+                f"https://www.cracklabs.app"
+            ),
+            recipient_list=[user.email],
+        )

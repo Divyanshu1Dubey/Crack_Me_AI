@@ -1,33 +1,77 @@
 """
 Enhanced AI Service Layer for UPSC CMS Platform.
-Orchestrates 11 AI providers with round-robin load balancing
-and RAG-backed textbook grounding. Distributes calls across providers
-to minimize quota exhaustion on any single API.
+Orchestrates a round-robin over 10 provider entries with RAG-backed textbook
+grounding. Distributes calls across providers to minimize quota exhaustion on
+any single API.
 
-Providers (all free-tier capable unless noted):
-  0. OmniRoute          — OpenAI-compatible gateway (routes to all providers, first-stop)
-  1. Groq              — Llama 3.3 70B   (30 RPM, 14,400 RPD)
-  2. Cerebras          — Llama 3.1 8B    (30 RPM, ~1M tokens/day)
-  3. Gemini            — Flash 2.0       (15 RPM, 1,500 RPD per model)
-  4. Cohere            — Command-A       (20 RPM, 1,000 req/month)
-  5. OpenRouter        — free models     (20 RPM on free tier)
-  6. OpenRouter2       — free models     (20 RPM, second key)
-  7. GitHub            — Models API      (150 RPM, 15K RPD free with PAT)
-  8. HuggingFace       — Llama 3.3 70B   (~10 RPM free)
-  9. Mistral           — mistral-small   (~30 RPM free)
- 10. NVIDIA Mistral    — Mistral 7B      (via NVIDIA API platform)
- 11. DeepSeek          — pay-as-you-go   (LAST — paid, needs balance)
+Rotation (``AIService._call_ai``; all free-tier capable; a missing key = skip):
+  1. OmniRoute     — OpenAI-compatible gateway (several models)
+  2. Groq          — Llama 3.3 70B   (30 RPM, 14,400 RPD)
+  3. Cerebras      — Llama 3.1 8B / Gemma (30 RPM, ~1M tokens/day)
+  4. Gemini        — 2.0 Flash + Flash-Lite (15 RPM, 1,500 RPD per model)
+  5. Cohere        — Command-A       (20 RPM, 1,000 req/month)
+  6. OpenRouter    — free models     (20 RPM on free tier)
+  7. GitHub        — Models API      (150 RPM, 15K RPD free with PAT)
+  8. HuggingFace   — Llama 3.3 70B   (~10 RPM free)
+  9. Mistral       — mistral-small   (~30 RPM free)
+ 10. OpenRouter2   — free models     (20 RPM, second key)
+
+``_call_nvidia_mistral`` is implemented but not in the rotation.
+
+Failure contract: when no provider produces usable text (all failed, the call
+deadline passed, or ``AI_OFFLINE_MODE`` is on) ``_call_ai`` raises
+``AIUnavailable``. It never returns an outage sentence. Callers refund what
+they charged and fall back to ``ai_engine.offline`` (grounded extractive
+answers) or a 503 ``{code: 'ai_unavailable'}``.
 """
+import hashlib
 import json
 import logging
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+import time
 from typing import Optional
 
 from django.conf import settings
 
+from .offline import ai_offline_mode, is_unusable_text, public_subject, with_public_subject
+
 logger = logging.getLogger(__name__)
+
+
+class AIUnavailable(RuntimeError):
+    """No usable model output: every provider failed, the call deadline
+    passed, or ``AI_OFFLINE_MODE`` forbids external calls.
+
+    ``passages`` carries the textbook passages the caller already retrieved
+    (if any) so the offline composer does not have to search again.
+    """
+
+    code = 'ai_unavailable'
+
+    def __init__(self, message: str = 'All AI providers failed', *, offline: bool = False,
+                 passages: Optional[list] = None):
+        super().__init__(message)
+        self.offline = offline
+        self.passages = passages
+
+
+class AIOutputUnusable(AIUnavailable):
+    """A provider answered, but not in a form the caller can use (e.g. the
+    structured JSON did not parse). Treated like an outage: refund, never
+    persist, never cache."""
+
+
+class _CallBudgetExhausted(Exception):
+    """Internal: the per-call deadline or attempt cap is used up."""
+
+
+# Wall-clock budget for one ``_call_ai`` (all providers together). Kept below
+# the frontend's 120 s AI timeout so the user gets the refund/fallback answer
+# instead of a browser timeout while the backend keeps working (and billing).
+AI_CALL_DEADLINE_SECONDS = float(os.getenv('AI_CALL_DEADLINE_SECONDS', '90'))
+# Upper bound on model attempts per ``_call_ai`` across all providers.
+AI_CALL_MAX_ATTEMPTS = int(os.getenv('AI_CALL_MAX_ATTEMPTS', '12'))
 
 # RAG opt-out: RAG is *enabled by default*. Operators can turn it off via:
 #   - DISABLE_RAG=1 (env var) — kills RAG entirely (e.g. low-memory host).
@@ -39,10 +83,17 @@ logger = logging.getLogger(__name__)
 #     preparation. Disabling by default in production caused every
 #     textbook-search query to surface "RAG pipeline not initialized"
 #     to paying users — see 2026-07-29 live-audit fix.
-_RAG_DISABLED = (
-    os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes') or
-    os.getenv('DISABLE_RAG_IN_PRODUCTION', '').lower() in ('1', 'true', 'yes')
-)
+def rag_disabled() -> bool:
+    """True when an operator opted out of RAG (read at call time, so the
+    switch works without re-importing this module)."""
+    return (
+        os.getenv('DISABLE_RAG', '').lower() in ('1', 'true', 'yes') or
+        os.getenv('DISABLE_RAG_IN_PRODUCTION', '').lower() in ('1', 'true', 'yes')
+    )
+
+
+# Value at import time (kept for callers that read the constant).
+_RAG_DISABLED = rag_disabled()
 
 # ─── LOAD BALANCING CONFIG ──────────────────────────────
 #
@@ -137,8 +188,10 @@ When answering:
 
 class AIService:
     """
-    Enhanced AI service with round-robin load balancing across 6 providers
-    (Groq, Cerebras, Gemini, Cohere, OpenRouter, DeepSeek) and RAG pipeline integration.
+    Enhanced AI service with round-robin load balancing across the provider
+    rotation listed in the module docstring, plus RAG pipeline integration.
+    Every generation method raises ``AIUnavailable`` instead of returning an
+    outage sentence.
     """
 
     def __init__(self):
@@ -154,7 +207,17 @@ class AIService:
         self.nvidia_mistral = None
         self.omniroute = None
         self._rag = None
-        self._init_clients()
+        # Per-call budget (set by _call_ai; None = no deadline for direct calls).
+        self._deadline: Optional[float] = None
+        self._attempts = 0
+        # Name of the provider that produced the last successful answer.
+        self.last_provider: Optional[str] = None
+        if ai_offline_mode():
+            # No external LLM call anywhere: do not even build the clients
+            # (the Cerebras SDK opens a connection when constructed).
+            logger.info("AI_OFFLINE_MODE is on: AI provider clients not initialised")
+        else:
+            self._init_clients()
 
     def _init_clients(self):
         """Initialize all available AI provider clients."""
@@ -186,7 +249,15 @@ class AIService:
         if cerebras_key:
             try:
                 from cerebras.cloud.sdk import Cerebras
-                self.cerebras = Cerebras(api_key=cerebras_key)
+                # warm_tcp_connection=False: the SDK default makes a blocking
+                # network request inside the constructor, i.e. on every
+                # AIService() (once per AI request), even for cache hits.
+                self.cerebras = Cerebras(
+                    api_key=cerebras_key,
+                    max_retries=0,
+                    timeout=15.0,
+                    warm_tcp_connection=False,
+                )
                 logger.info("✅ Cerebras AI initialized")
             except Exception as e:
                 logger.warning(f"Cerebras init failed: {e}")
@@ -194,7 +265,7 @@ class AIService:
         if cohere_key:
             try:
                 import cohere
-                self.cohere = cohere.ClientV2(api_key=cohere_key)
+                self.cohere = cohere.ClientV2(api_key=cohere_key, timeout=15)
                 logger.info("✅ Cohere AI initialized")
             except Exception as e:
                 logger.warning(f"Cohere init failed: {e}")
@@ -319,7 +390,7 @@ class AIService:
         process lifetime, and falls back to None on init failure so
         the rest of the AI service stays usable for non-RAG endpoints.
         """
-        if _RAG_DISABLED:
+        if rag_disabled():
             return None
         if self._rag is None:
             try:
@@ -328,6 +399,24 @@ class AIService:
             except Exception as e:
                 logger.warning(f"RAG init failed: {e}")
         return self._rag
+
+    # ─── CALL BUDGET ───────────────────────────────────────
+
+    def _attempt_timeout(self, default: float) -> float:
+        """Timeout for the next model attempt, bounded by what is left of the
+        current ``_call_ai`` deadline; counts the attempt against the cap.
+
+        Raises ``_CallBudgetExhausted`` (outside the providers' own ``try``
+        blocks, so it reaches ``_call_ai``) when the budget is used up.
+        Direct provider calls outside ``_call_ai`` have no deadline.
+        """
+        if self._deadline is None:
+            return default
+        remaining = self._deadline - time.monotonic()
+        if remaining < 1.0 or self._attempts >= AI_CALL_MAX_ATTEMPTS:
+            raise _CallBudgetExhausted()
+        self._attempts += 1
+        return max(1.0, min(default, remaining))
 
     # ─── PROVIDER CALL METHODS ─────────────────────────────
 
@@ -339,6 +428,7 @@ class AIService:
         import requests
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         for model_name in GEMINI_MODELS:
+            timeout = self._attempt_timeout(15.0)
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
                 headers = {
@@ -352,7 +442,7 @@ class AIService:
                         "maxOutputTokens": max_tokens
                     }
                 }
-                response = requests.post(url, headers=headers, json=payload, timeout=15)
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
                 if response.status_code == 200:
                     data = response.json()
                     try:
@@ -378,6 +468,7 @@ class AIService:
         """Call Groq (LLama 3.3 70B)."""
         if not self.groq:
             return None
+        timeout = self._attempt_timeout(15.0)
         try:
             messages = []
             if system:
@@ -388,7 +479,7 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=15.0
+                timeout=timeout,
             )
             text = response.choices[0].message.content
             if text:
@@ -424,23 +515,21 @@ class AIService:
         candidate_models = ("llama-3.1-8b", "llama3.1-8b", "gemma-4-31b")
         last_err = None
         for model_id in candidate_models:
+            # SDK-level timeout (the old ThreadPoolExecutor wrapper could not
+            # stop the call: leaving the `with` block waited for it anyway).
+            timeout = self._attempt_timeout(15.0)
             try:
                 messages = []
                 if system:
                     messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-
-                def _cerebras_call(mid=model_id):
-                    return self.cerebras.chat.completions.create(
-                        model=mid,
-                        messages=messages,
-                        temperature=temperature,
-                        max_completion_tokens=max_tokens,
-                    )
-
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_cerebras_call)
-                    response = future.result(timeout=15)
+                response = self.cerebras.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    temperature=temperature,
+                    max_completion_tokens=max_tokens,
+                    timeout=timeout,
+                )
 
                 text = response.choices[0].message.content
                 if text:
@@ -448,12 +537,12 @@ class AIService:
                     return text
                 # Empty body — try next candidate.
                 continue
-            except FuturesTimeout:
-                logger.warning("Cerebras timed out (15s)")
-                return None
             except Exception as e:
                 err = str(e)
                 last_err = e
+                if 'timed out' in err.lower() or 'timeout' in type(e).__name__.lower():
+                    logger.warning(f"Cerebras timed out ({timeout:.0f}s)")
+                    return None
                 # Auth errors are fatal — kill the provider, don't waste
                 # the rest of the candidate list.
                 if '401' in err or 'invalid_api_key' in err:
@@ -482,34 +571,32 @@ class AIService:
         Free tier: 20 RPM, 1,000 req/month."""
         if not self.cohere:
             return None
+        timeout = self._attempt_timeout(15.0)
         try:
             messages = []
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-
-            def _cohere_call():
-                return self.cohere.chat(
-                    model="command-a-03-2025",
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_cohere_call)
-                response = future.result(timeout=15)
+            # Per-request timeout + no SDK retries (the default is 2 retries,
+            # i.e. up to three full timeouts per call).
+            response = self.cohere.chat(
+                model="command-a-03-2025",
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                request_options={"timeout_in_seconds": max(1, int(timeout)), "max_retries": 0},
+            )
 
             text = response.message.content[0].text
             if text:
                 logger.info("Cohere OK")
                 return text
-        except FuturesTimeout:
-            logger.warning("Cohere timed out (15s) — skipping cohere for this session")
-            self.cohere = None
         except Exception as e:
             err = str(e)
-            if '401' in err or 'invalid_api_key' in err:
+            if 'timed out' in err.lower() or 'timeout' in type(e).__name__.lower():
+                logger.warning("Cohere timed out — skipping cohere for this session")
+                self.cohere = None
+            elif '401' in err or 'invalid_api_key' in err:
                 logger.warning("Cohere API key invalid — skipping")
                 self.cohere = None
             elif '429' in err:
@@ -531,6 +618,7 @@ class AIService:
             'mistralai/mistral-7b-instruct:free',
         ]
         for model_name in free_models:
+            timeout = self._attempt_timeout(20.0)
             try:
                 messages = []
                 if system:
@@ -541,7 +629,7 @@ class AIService:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    timeout=20.0,
+                    timeout=timeout,
                 )
                 text = response.choices[0].message.content
                 if text:
@@ -568,6 +656,7 @@ class AIService:
         Free tier: 150 RPM, 15,000 RPD."""
         if not self.github_models:
             return None
+        timeout = self._attempt_timeout(15.0)
         try:
             messages = []
             if system:
@@ -578,7 +667,7 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=15.0,
+                timeout=timeout,
             )
             text = response.choices[0].message.content
             if text:
@@ -600,6 +689,7 @@ class AIService:
         Free tier: generous limits, Llama 3.3 70B."""
         if not self.huggingface:
             return None
+        timeout = self._attempt_timeout(20.0)
         try:
             messages = []
             if system:
@@ -610,7 +700,7 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=20.0,
+                timeout=timeout,
             )
             text = response.choices[0].message.content
             if text:
@@ -632,6 +722,7 @@ class AIService:
         Free tier: 1 RPM / 500K tokens/month on mistral-small-latest."""
         if not self.mistral:
             return None
+        timeout = self._attempt_timeout(15.0)
         try:
             messages = []
             if system:
@@ -642,7 +733,7 @@ class AIService:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=15.0,
+                timeout=timeout,
             )
             text = response.choices[0].message.content
             if text:
@@ -665,6 +756,7 @@ class AIService:
         Model: mistralai/mistral-7b-instruct-v0.2"""
         if not self.nvidia_mistral:
             return None
+        timeout = self._attempt_timeout(15.0)
         try:
             messages = []
             if system:
@@ -676,7 +768,7 @@ class AIService:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 top_p=1,
-                timeout=15.0,
+                timeout=timeout,
             )
             text = response.choices[0].message.content
             if text:
@@ -702,6 +794,7 @@ class AIService:
             "microsoft/phi-3-medium-128k-instruct:free",
         ]
         for model_name in free_models:
+            timeout = self._attempt_timeout(20.0)
             try:
                 messages = []
                 if system:
@@ -712,7 +805,7 @@ class AIService:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    timeout=20.0,
+                    timeout=timeout,
                 )
                 text = response.choices[0].message.content
                 if text:
@@ -753,6 +846,7 @@ class AIService:
         ]
 
         for model_name in models:
+            timeout = self._attempt_timeout(20.0)
             try:
                 messages = []
                 if system:
@@ -764,7 +858,7 @@ class AIService:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    timeout=20.0,
+                    timeout=timeout,
                 )
                 text = response.choices[0].message.content
                 if text:
@@ -799,13 +893,20 @@ class AIService:
     def _call_ai(self, prompt: str, system: str = CMS_SYSTEM_PROMPT,
                  temperature: float = 0.3, max_tokens: int = 2048) -> str:
         """
-        Call AI with round-robin load balancing across 10 providers.
-        Order: Groq → Cerebras → Gemini → Cohere → OpenRouter → GitHub →
-               HuggingFace → Mistral → OpenRouter2.
-        Total capped at 120s.
+        Call AI with round-robin load balancing across the 10 rotation entries
+        (see module docstring), starting at the next provider in turn and
+        falling through on any error, empty body or provider-error payload.
+
+        The whole call is bounded by ``AI_CALL_DEADLINE_SECONDS`` and
+        ``AI_CALL_MAX_ATTEMPTS``; each attempt's SDK timeout is cut to what is
+        left of the deadline.
+
+        Returns non-empty model text. Raises ``AIUnavailable`` when no
+        provider produced usable text or ``AI_OFFLINE_MODE`` is on.
         """
-        import time
         global _call_counter
+        if ai_offline_mode():
+            raise AIUnavailable('AI_OFFLINE_MODE is on: external LLM calls are disabled', offline=True)
         providers = [
             ('omniroute', self._call_omniroute),
             ('groq', self._call_groq),
@@ -823,39 +924,55 @@ class AIService:
             start = _call_counter % len(providers)
             _call_counter += 1
 
-        deadline = time.time() + 120
-
-        for i in range(len(providers)):
-            if time.time() >= deadline:
-                logger.warning("AI call hit 120s deadline, aborting remaining providers")
-                break
-            idx = (start + i) % len(providers)
-            name, call_fn = providers[idx]
-            remaining = deadline - time.time()
-            logger.info(f"Trying {name} (slot {_call_counter}, {remaining:.0f}s left)")
-            try:
-                result = call_fn(prompt, system, temperature, max_tokens)
-                if result:
-                    if self._looks_like_provider_error_response(result):
+        self._deadline = time.monotonic() + AI_CALL_DEADLINE_SECONDS
+        self._attempts = 0
+        self.last_provider = None
+        try:
+            for i in range(len(providers)):
+                idx = (start + i) % len(providers)
+                name, call_fn = providers[idx]
+                remaining = self._deadline - time.monotonic()
+                if remaining < 1.0:
+                    logger.warning("AI call hit its %.0fs deadline, aborting remaining providers",
+                                   AI_CALL_DEADLINE_SECONDS)
+                    break
+                logger.info(f"Trying {name} (slot {_call_counter}, {remaining:.0f}s left)")
+                try:
+                    result = call_fn(prompt, system, temperature, max_tokens)
+                except _CallBudgetExhausted:
+                    logger.warning("AI call budget used up (%d attempts), aborting remaining providers",
+                                   self._attempts)
+                    break
+                except Exception as e:
+                    logger.warning(f"{name} unexpected error: {e}")
+                    continue
+                if result and isinstance(result, str) and result.strip():
+                    if self._looks_like_provider_error_response(result) or is_unusable_text(result):
                         logger.warning(f"{name} returned provider error payload, trying next provider")
                         continue
+                    self.last_provider = name
                     return result
-            except Exception as e:
-                logger.warning(f"{name} unexpected error: {e}")
-                continue
+        finally:
+            self._deadline = None
 
-        return "All AI services are temporarily unavailable. Please try again in a moment."
+        raise AIUnavailable('All AI providers failed or timed out')
 
     # ─── CORE AI ENDPOINTS ───────────────────────────────
 
     def ask_tutor(self, question: str, context: str = "") -> str:
-        """RAG-enhanced AI tutor — answers grounded in textbook content."""
+        """RAG-enhanced AI tutor — answers grounded in textbook content.
+
+        Raises ``AIUnavailable`` (with the retrieved passages attached) when
+        no provider answers; the references footer is only added to a real
+        answer.
+        """
         # Try RAG first for textbook-grounded answers
         rag_context = ""
         citations = []
+        results = []
         if self.rag:
             try:
-                results = self.rag.search(question, n_results=3)
+                results = self.rag.search(question, n_results=3) or []
                 if results:
                     rag_context = "\n\nRELEVANT TEXTBOOK CONTENT:\n"
                     for r in results:
@@ -876,7 +993,12 @@ Provide a comprehensive, exam-focused answer. Include:
 4. Any helpful mnemonic
 5. Mention if this is a repeat topic using [PYQ YYYY] if applicable"""
 
-        answer = self._call_ai(prompt)
+        try:
+            answer = self._call_ai(prompt)
+        except AIUnavailable as exc:
+            if exc.passages is None:
+                exc.passages = results
+            raise
 
         if citations:
             answer += f"\n\n📚 **References**: {', '.join(citations)}"
@@ -886,9 +1008,10 @@ Provide a comprehensive, exam-focused answer. Include:
     def generate_mnemonic(self, topic: str, concept: str = "") -> str:
         """Generate exam-focused mnemonics with textbook grounding."""
         rag_context = ""
+        results = []
         if self.rag:
             try:
-                results = self.rag.search(f"{topic} {concept}", n_results=2)
+                results = self.rag.search(f"{topic} {concept}", n_results=2) or []
                 if results:
                     rag_context = "\nTextbook context:\n" + results[0]["text"][:500]
             except Exception:
@@ -919,14 +1042,20 @@ One powerful clinical correlation
 
 Tag important points with **[High Yield]** and past question references with **[PYQ YYYY]**"""
 
-        return self._call_ai(prompt)
+        try:
+            return self._call_ai(prompt)
+        except AIUnavailable as exc:
+            if exc.passages is None:
+                exc.passages = results
+            raise
 
     def explain_concept(self, concept: str, level: str = "basic") -> str:
         """Explain a medical concept from basics, grounded in textbooks."""
         rag_context = ""
+        results = []
         if self.rag:
             try:
-                results = self.rag.search(concept, n_results=3)
+                results = self.rag.search(concept, n_results=3) or []
                 if results:
                     rag_context = "\nTextbook references:\n"
                     for r in results:
@@ -948,7 +1077,12 @@ Structure your explanation as:
 6. **Mnemonic** (If applicable)
 7. **Textbook Reference: [Book Name, Chapter/Page]** (Must use this exact formatting)"""
 
-        return self._call_ai(prompt, max_tokens=3000)
+        try:
+            return self._call_ai(prompt, max_tokens=3000)
+        except AIUnavailable as exc:
+            if exc.passages is None:
+                exc.passages = results
+            raise
 
     def analyze_question(self, question_text: str, options: dict = None,
                          correct_answer: str = "", user_prompt: str = "") -> str:
@@ -1002,18 +1136,92 @@ Provide:
             logger.warning(f"RAG search failed: {e}")
             return {"results": [], "error": "RAG search failed"}
 
-    def rag_answer(self, question: str) -> dict:
-        """Get a RAG-grounded answer with citations."""
+    TEXTBOOK_UNAVAILABLE = {
+        "answer": (
+            "Textbook search is temporarily unavailable right now. "
+            "Please switch to AI Tutor mode for a general answer, "
+            "or try again in a few minutes."
+        ),
+        "citations": [],
+        "error": "textbook_search_unavailable",
+    }
+
+    def rag_answer(self, question: str, n_context: int = 5) -> dict:
+        """Get a RAG-grounded answer with citations.
+
+        Retrieval uses the RAG store; generation goes through ``_call_ai`` so a
+        provider outage (or ``AI_OFFLINE_MODE``) surfaces as ``AIUnavailable``
+        carrying the retrieved passages, never as an outage sentence.
+
+        Returns:
+          * ``{answer, citations, confidence}`` for a generated answer;
+          * ``{..., "no_match": True}`` when no passage matches (not charged);
+          * ``{..., "error": "textbook_search_unavailable"}`` when the store
+            cannot be searched.
+        """
         if not self.rag:
-            return {
-                "answer": "RAG pipeline not initialized. Run: python manage.py index_textbooks",
-                "citations": [],
-            }
+            return dict(self.TEXTBOOK_UNAVAILABLE)
         try:
-            return self.rag.rag_answer(question)
+            context_chunks = self.rag.search(question, n_results=n_context) or []
         except Exception as e:
-            logger.warning(f"RAG answer failed: {e}")
-            return {"answer": "RAG search temporarily unavailable.", "citations": []}
+            logger.warning(f"RAG search failed: {e}")
+            return dict(self.TEXTBOOK_UNAVAILABLE)
+        if not context_chunks:
+            return {
+                "answer": (
+                    "No matching textbook content was found for this query. "
+                    "Please try a different search term, or use AI Tutor mode "
+                    "for a general answer."
+                ),
+                "citations": [],
+                "confidence": "low",
+                "no_match": True,
+            }
+
+        context_str = ""
+        citations = []
+        for i, chunk in enumerate(context_chunks):
+            context_str += f"\n[Source {i+1}: {chunk['book']} p.{chunk['page']}]\n{chunk['text']}\n"
+            citations.append({
+                "book": chunk["book"],
+                "page": chunk["page"],
+                "excerpt": chunk["text"][:200],
+                # 0..1 (the UI shows it as "% match"); raw BM25 is unbounded.
+                "relevance": chunk.get("norm_score", chunk.get("score", 0)),
+            })
+
+        prompt = f"""You are a UPSC CMS exam preparation expert. Answer the following question using ONLY the provided textbook context. Be precise, exam-focused, and cite specific textbook references.
+
+QUESTION: {question}
+
+TEXTBOOK CONTEXT:
+{context_str}
+
+Provide:
+1. A clear, concise answer (2-3 paragraphs)
+2. Key points for exam revision (bullet points)
+3. Any helpful mnemonic if applicable
+4. Reference the specific textbook and page number
+
+Answer in a structured, student-friendly format."""
+
+        try:
+            answer = self._call_ai(prompt, system="You are a UPSC CMS medical exam expert.",
+                                   temperature=0.2, max_tokens=2048)
+        except AIUnavailable as exc:
+            exc.passages = context_chunks
+            raise
+        top = context_chunks[0]
+        try:
+            from ai_engine.rag_pipeline import _confidence
+            confidence = _confidence(top.get("norm_score", 0.0) or 0.0)
+        except Exception:
+            confidence = "medium" if (top.get("norm_score", 0.0) or 0.0) >= 0.3 else "low"
+        return {
+            "answer": answer,
+            "citations": citations,
+            "confidence": confidence,
+        }
 
     def find_textbook_reference(self, question_text: str) -> list:
         """Find where a topic is discussed in standard textbooks."""
@@ -1103,6 +1311,7 @@ Rules:
         raw = self._call_ai(prompt, max_tokens=4000, temperature=0.5)
 
         # Parse JSON from response
+        questions = None
         try:
             # Strip markdown code fences if present
             text = raw.strip()
@@ -1114,16 +1323,48 @@ Rules:
             if text.startswith('json'):
                 text = text[4:].strip()
             questions = json.loads(text)
-            if isinstance(questions, list):
-                return questions[:count]
         except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Failed to parse generated questions: {e}")
+            # Second pass: the array is often wrapped in prose.
+            start, end = raw.find('['), raw.rfind(']')
+            if start != -1 and end > start:
+                try:
+                    questions = json.loads(raw[start:end + 1])
+                except (json.JSONDecodeError, ValueError):
+                    questions = None
+            if questions is None:
+                logger.warning(f"Failed to parse generated questions: {e}")
 
-        return [{"error": "Failed to generate questions. Try again.", "raw": raw[:500]}]
+        valid = [q for q in (questions if isinstance(questions, list) else [])
+                 if self._is_valid_generated_question(q)]
+        if not valid:
+            # Nothing usable: the caller refunds. Raw model output is logged
+            # length-only and never sent to the client.
+            logger.warning("Question generator returned no valid MCQ (%d chars of output)", len(raw or ''))
+            raise AIOutputUnusable('The AI returned no valid questions')
+        for q in valid:
+            q['correct_answer'] = str(q['correct_answer']).strip().upper()[:1]
+        return valid[:count]
 
-    def predict_high_yield_topics(self) -> str:
-        """Predict high-yield topics for next CMS exam based on PYQ trends."""
-        prompt = """Based on UPSC CMS PYQ trends (2018-2024), predict the most likely topics for the next exam.
+    @staticmethod
+    def _is_valid_generated_question(q) -> bool:
+        if not isinstance(q, dict):
+            return False
+        fields = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d')
+        if not all(isinstance(q.get(f), str) and q.get(f).strip() for f in fields):
+            return False
+        return str(q.get('correct_answer') or '').strip().upper()[:1] in ('A', 'B', 'C', 'D')
+
+    def predict_high_yield_topics(self, subject: str = "") -> str:
+        """Predict high-yield topics for next CMS exam based on PYQ trends.
+
+        The prompt does not depend on the user, so callers cache the result
+        (see ``HighYieldTopicsView``)."""
+        scope = (
+            f"For the subject {subject}:"
+            if subject else
+            "For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):"
+        )
+        prompt = f"""Based on UPSC CMS PYQ trends (2018-2024), predict the most likely topics for the next exam.
 
 Analyze:
 1. Topics that appear almost every year (guaranteed questions)
@@ -1131,7 +1372,7 @@ Analyze:
 3. Topics due for a repeat (asked 2-3 years ago but not recently)
 4. New important topics (COVID, updated WHO guidelines, etc.)
 
-For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
+{scope}
 - List top 10 high-yield topics
 - Assign priority (★★★ = must study, ★★ = important, ★ = good to know)
 - Mention standard textbook chapter to study"""
@@ -1140,20 +1381,99 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
 
     # ─── POST-ANSWER DEEP EXPLANATION ────────────────────
 
+    # Keys an explain-after-answer result must carry to count as an
+    # explanation (one non-empty is enough; why_correct is the main body).
+    EXPLANATION_CORE_KEYS = ('why_correct', 'core_concept', 'topic_deep_dive')
+
+    @classmethod
+    def is_valid_explanation(cls, data) -> bool:
+        """True for a parsed, non-failed explain-after-answer dict whose body
+        is real text (not an outage sentence or provider error).
+
+        Legacy unparsed-fallback rows are rejected: they carry
+        ``raw_response`` and hold raw prose or truncated JSON in
+        ``why_correct`` (a fenced block or text starting with ``{``), so they
+        are regenerated instead of being served to every student."""
+        if not isinstance(data, dict) or data.get('_failed') or 'raw_response' in data:
+            return False
+        if 'analysis' in data and not any(data.get(k) for k in cls.EXPLANATION_CORE_KEYS):
+            return False  # ExplainQuestionView's markdown shape, not the rich one
+        bodies = [data.get(k) for k in cls.EXPLANATION_CORE_KEYS]
+        if not any(isinstance(b, str) and b.strip() for b in bodies):
+            return False
+        why = data.get('why_correct')
+        if isinstance(why, str) and why.strip():
+            stripped = why.strip()
+            if stripped.startswith(('```', '{')) or is_unusable_text(stripped):
+                return False
+        return True
+
+    # Cache namespace of explain-after-answer calls for questions that are not
+    # in the bank (ExplainAfterAnswerView's ad-hoc path). Batch jobs cache
+    # bank questions under question_id=None as well, so without a namespace a
+    # re-typed bank question read (and wrote) the bank's cached explanation.
+    ADHOC_CACHE_SCOPE = 'adhoc'
+
+    @staticmethod
+    def explanation_cache_key(question_text: str, options: Optional[dict] = None,
+                              correct_answer: str = "", question_id=None,
+                              cache_scope: str = "") -> str:
+        """Cache key for an explanation: the question id (when known), the full
+        stem, every option and the answer key. The old key used only the first
+        200 characters of the stem plus the key, so duplicates with shuffled
+        options shared one explanation. A non-empty ``cache_scope`` (e.g.
+        ADHOC_CACHE_SCOPE) gives a separate key space; without one the key
+        is unchanged."""
+        opts = options if isinstance(options, dict) else {}
+        data = {
+            'id': question_id,
+            'q': (question_text or '').strip(),
+            'o': {str(k): str(opts.get(k) or '').strip() for k in sorted(opts, key=str)},
+            'a': (correct_answer or '').strip().upper(),
+        }
+        if cache_scope:
+            data['scope'] = str(cache_scope)
+        payload = json.dumps(data, sort_keys=True, ensure_ascii=False)
+        return 'ai_explain_v2_' + hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+    @classmethod
+    def get_cached_explanation(cls, question_text: str, options: Optional[dict] = None,
+                               correct_answer: str = "", question_id=None,
+                               cache_scope: str = "") -> Optional[dict]:
+        """The cached explanation for this exact question, or None. Lets
+        callers serve a cache hit before charging for a generation. Its
+        ``category`` is the label students see (an entry cached before the
+        display rule can still say "Imported")."""
+        from django.core.cache import cache
+        try:
+            cached = cache.get(cls.explanation_cache_key(
+                question_text, options, correct_answer, question_id, cache_scope))
+        except Exception:
+            return None
+        if cls.is_valid_explanation(cached):
+            return with_public_subject(dict(cached))
+        return None
+
     def explain_after_answer(self, question_text: str, options: dict = None,
                              correct_answer: str = "", selected_answer: str = "",
-                             subject: str = "", topic: str = "") -> dict:
+                             subject: str = "", topic: str = "", question_id=None,
+                             cache_scope: str = "") -> dict:
         """Generate a rich AI explanation after the user answers a question.
         Returns textbook location, mnemonic, around-concepts, and deep explanation.
-        Results are cached by question+answer for 24 hours."""
+        Results are cached by question (id, stem, options, key; plus
+        ``cache_scope`` when given) for 24 hours.
+
+        Raises ``AIUnavailable`` when no provider answers (with the retrieved
+        passages attached) and ``AIOutputUnusable`` when the answer is not the
+        requested JSON, so nothing unparsed is ever returned as an explanation
+        (callers used to persist ``raw[:500]`` as ``why_correct``)."""
         from django.core.cache import cache
-        import hashlib
 
         # Cache key based on question content + correct answer (not user-specific)
-        cache_key = "ai_explain_" + hashlib.md5(
-            f"{question_text[:200]}_{correct_answer}".encode()
-        ).hexdigest()
-        cached = cache.get(cache_key)
+        cache_key = self.explanation_cache_key(question_text, options, correct_answer,
+                                               question_id, cache_scope)
+        cached = self.get_cached_explanation(question_text, options, correct_answer,
+                                             question_id, cache_scope)
         if cached:
             # Update is_correct for this specific user's answer
             cached['is_correct'] = (selected_answer == correct_answer)
@@ -1161,10 +1481,11 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
 
         rag_context = ""
         citations = []
+        results = []
         if self.rag:
             try:
                 search_query = f"{subject} {topic} {question_text}" if subject else question_text
-                results = self.rag.search(search_query, n_results=3)
+                results = self.rag.search(search_query, n_results=3) or []
                 if results:
                     rag_context = "\n\nRELEVANT TEXTBOOK CONTENT:\n"
                     for r in results:
@@ -1177,6 +1498,11 @@ For each subject (Medicine, Pediatrics, Surgery, OBG, PSM):
         options_str = ""
         if options:
             options_str = "\n".join([f"  {k}: {v}" for k, v in options.items()])
+        # The model echoes the subject back as "category", which students
+        # see, so the prompt carries the student-facing label: the loader's
+        # "Imported" bucket is "Expert Curated" (the search above keeps the
+        # stored name). Batch callers pass the raw Subject.name.
+        subject_label = public_subject(subject or '')
 
         prompt = f"""A UPSC CMS aspirant just answered a question. Your job is to provide an ACCURATE, POWERFUL explanation.
 
@@ -1187,7 +1513,7 @@ Options:
 {options_str}
 Official Answer Key says: {correct_answer}
 Student Selected: {selected_answer} ({'CORRECT ✅' if is_correct else 'WRONG ❌'} according to answer key)
-{f'Subject: {subject}' if subject else ''}
+{f'Subject: {subject_label}' if subject_label else ''}
 {f'Topic: {topic}' if topic else ''}
 {rag_context}
 
@@ -1215,7 +1541,7 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
   "key_differentiators": [
     "5-7 one-line comparisons that help differentiate commonly confused conditions/drugs/values in this topic. Format: 'X vs Y — key difference'. These should be HIGH YIELD comparisons."
   ],
-  "category": "{subject or 'General'}",
+  "category": "{subject_label or 'General'}",
   "sub_category": "{topic or 'General'}",
   "question_type": "One of: Factual Recall / Clinical Scenario / Calculation / Image-based / Conceptual / Pharmacology / Differential Diagnosis",
   "around_concepts": [
@@ -1231,103 +1557,89 @@ You MUST respond in this EXACT JSON format (no markdown fences, just raw JSON):
   "similar_pyq": "Describe 1-2 similar questions from UPSC CMS PYQs with year and brief description (e.g., 'CMS 2022 Paper 1: Asked about the initial investigation for Cushing syndrome'). If none known, say 'Similar concepts tested in CMS 2020-2024'."
 }}"""
 
-        raw = self._call_ai(prompt, max_tokens=3000, temperature=0.3)
-
         try:
-            text = raw.strip()
-            # Robust markdown fence stripping — handles ```json, ``` json, ```JSON etc.
-            if text.startswith('```'):
-                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
-            if text.lower().startswith('json'):
-                text = text[4:].strip()
-            # Sometimes AI wraps in extra quotes or has trailing commas
-            text = text.rstrip(',')
-            result = json.loads(text)
-            result['citations'] = citations
-            result['is_correct'] = is_correct
-            # Ensure new fields have defaults
-            result.setdefault('category', subject or '')
-            result.setdefault('sub_category', topic or '')
-            result.setdefault('question_type', '')
-            result.setdefault('similar_pyq', '')
-            result.setdefault('topic_deep_dive', '')
-            result.setdefault('key_differentiators', [])
-            result.setdefault('quick_revision', '')
-            # Cache the result for 24 hours (keyed by question, not user)
+            raw = self._call_ai(prompt, max_tokens=3000, temperature=0.3)
+        except AIUnavailable as exc:
+            if exc.passages is None:
+                exc.passages = results
+            raise
+
+        result = self._parse_explanation_json(raw)
+        if result is None:
+            # The model answered in prose or truncated JSON. Returning it as
+            # `why_correct` let views and batch jobs store it as the shared
+            # explanation; it is a failed generation instead.
+            logger.warning("explain_after_answer: unparseable model output (%d chars)", len(raw or ''))
+            raise AIOutputUnusable('The AI explanation could not be parsed', passages=results)
+
+        result['citations'] = citations
+        result['is_correct'] = is_correct
+        for key, default in (
+            ('why_correct', ''), ('why_wrong', {}), ('mnemonic', ''), ('core_concept', ''),
+            ('category', subject_label or ''), ('sub_category', topic or ''), ('question_type', ''),
+            ('around_concepts', []), ('high_yield_points', []), ('clinical_pearl', ''),
+            ('exam_tip', ''), ('topic_deep_dive', ''), ('key_differentiators', []),
+            ('quick_revision', ''), ('pyq_frequency', ''), ('similar_pyq', ''),
+        ):
+            result.setdefault(key, default)
+        # A model that still writes "Imported" is not echoed to students
+        # (nor cached or stored by the callers).
+        with_public_subject(result)
+        if not self.is_valid_explanation(result):
+            raise AIOutputUnusable('The AI explanation has no usable body', passages=results)
+        # Cache the result for 24 hours (keyed by question, not user)
+        try:
             cache.set(cache_key, result, timeout=86400)
-            return result
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Failed to parse explain_after_answer JSON: {e}")
-            # Second-pass: try to extract JSON object from anywhere in the raw text
-            if raw:
-                start = raw.find('{')
-                end = raw.rfind('}')
-                if start != -1 and end > start:
-                    try:
-                        result = json.loads(raw[start:end + 1])
-                        result['citations'] = citations
-                        result['is_correct'] = is_correct
-                        result.setdefault('why_correct', '')
-                        result.setdefault('why_wrong', {})
-                        result.setdefault('mnemonic', '')
-                        result.setdefault('core_concept', '')
-                        result.setdefault('category', subject or '')
-                        result.setdefault('sub_category', topic or '')
-                        result.setdefault('question_type', '')
-                        result.setdefault('around_concepts', [])
-                        result.setdefault('high_yield_points', [])
-                        result.setdefault('clinical_pearl', '')
-                        result.setdefault('exam_tip', '')
-                        result.setdefault('topic_deep_dive', '')
-                        result.setdefault('key_differentiators', [])
-                        result.setdefault('quick_revision', '')
-                        result.setdefault('pyq_frequency', '')
-                        result.setdefault('similar_pyq', '')
-                        return result
-                    except Exception:
-                        pass
-            # Final fallback — strip any JSON/code fence artifacts from raw text
-            fallback_text = raw[:500] if raw else "AI explanation unavailable."
-            for prefix in ['```json', '```', 'json']:
-                if fallback_text.strip().startswith(prefix):
-                    fallback_text = fallback_text.strip()[len(prefix):].strip()
-            fallback_text = fallback_text.rstrip('`').strip()
-            return {
-                "why_correct": fallback_text,
-                "why_wrong": {},
-                "textbook_reference": {"book": "", "chapter": "", "page": "", "section": ""},
-                "mnemonic": "",
-                "core_concept": "",
-                "category": subject or "",
-                "sub_category": topic or "",
-                "question_type": "",
-                "around_concepts": [],
-                "high_yield_points": [],
-                "clinical_pearl": "",
-                "exam_tip": "",
-                "topic_deep_dive": "",
-                "key_differentiators": [],
-                "quick_revision": "",
-                "pyq_frequency": "",
-                "similar_pyq": "",
-                "citations": citations,
-                "is_correct": is_correct,
-                "raw_response": raw[:800] if raw else "",
-            }
+        except Exception:
+            logger.debug("explain_after_answer: cache write failed", exc_info=True)
+        return result
+
+    @staticmethod
+    def _parse_explanation_json(raw: str) -> Optional[dict]:
+        """The JSON object in a model reply (fenced or wrapped in prose), or None."""
+        if not raw:
+            return None
+        text = raw.strip()
+        # Robust markdown fence stripping — handles ```json, ``` json, ```JSON etc.
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+        if text.endswith('```'):
+            text = text[:-3]
+        text = text.strip()
+        if text.lower().startswith('json'):
+            text = text[4:].strip()
+        # Sometimes AI wraps in extra quotes or has trailing commas
+        text = text.rstrip(',')
+        for candidate in (text, raw[raw.find('{'): raw.rfind('}') + 1] if '{' in raw else ''):
+            if not candidate:
+                continue
+            try:
+                parsed = json.loads(candidate)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return None
+
+    # The admin prompt is an operator instruction stored in the DB; bound it
+    # so a pasted document cannot blow up every generation's cost.
+    MAX_ADMIN_PROMPT_CHARS = 4000
 
     def generate_admin_explanation(
         self, question_text: str, options: dict, correct_answer: str,
         subject: str = "", topic: str = "", exam_type: str = "cms",
         existing_explanation: str = "", image_descriptions: list = None,
+        user_prompt: str = "",
     ) -> dict:
         """Generate a complete explanation for a question in the admin editor.
 
         Used by the content-team workflow: admin selects the correct answer → clicks
         "AI Generate" → all explanation fields are populated. The admin's selected
         correct_answer is the source of truth; the AI must NOT change it.
+
+        ``user_prompt`` is the active admin prompt version
+        (``AdminAIPromptVersion.prompt_text``), led with like
+        ``analyze_question``'s, while the JSON contract below stays binding.
 
         Returns a dict mapping field names → values that can be applied directly
         to the Question model instance.
@@ -1381,6 +1693,17 @@ RULES:
 - Do NOT include any markdown code fences — return raw JSON only
 """
 
+        admin_instruction = (user_prompt or "").strip()[:self.MAX_ADMIN_PROMPT_CHARS]
+        if admin_instruction:
+            prompt = (
+                f"{admin_instruction}\n\n"
+                "Apply the editorial instruction above to the explanation fields, "
+                "but keep the verified correct answer and respond in the exact JSON "
+                "format requested below.\n\n---\n\n"
+                f"{prompt}"
+            )
+
+        raw = ''
         try:
             raw = self._call_ai(prompt, max_tokens=4000, temperature=0.2)
             text = raw.strip()
@@ -1412,6 +1735,8 @@ RULES:
                     pass  # Keep it — it likely has useful "why it's right" content
             return result
         except (json.JSONDecodeError, Exception) as e:
+            # Includes AIUnavailable (every provider failed): `raw` stays ''
+            # and the `_failed` result below tells the caller to save nothing.
             logger.warning(f"Failed to parse admin explanation JSON: {e}")
             # Second-pass JSON extraction
             if raw:
@@ -1433,7 +1758,8 @@ RULES:
                     except (json.JSONDecodeError, Exception):
                         pass
             return {
-                'explanation': f'AI generation failed: {str(e)}. Please edit manually.',
+                '_failed': True,
+                'explanation': '',
                 'concept_explanation': '', 'mnemonic': '', 'book_name': '', 'chapter': '',
                 'page_number': '', 'reference_text': '', 'shortcut_tip': '',
                 'concept_keywords': [], 'why_correct': '', 'why_wrong_a': '',
@@ -1449,6 +1775,9 @@ RULES:
         Used during batch enrichment, not real-time requests.
         """
         from collections import Counter
+
+        if ai_offline_mode():
+            return None
 
         prompt = f"""Given this medical MCQ, respond with ONLY the correct answer letter (A, B, C, or D):
 

@@ -3,8 +3,17 @@
 > **Important**: Google applies its highest EEAT scrutiny to medical YMYL sites.
 > All outreach below uses your real medical credentials. NEVER fabricate
 > credentials — that is a manual-action trigger. If you have not yet
-> onboarded a named medical reviewer (Dr. Ananya Reddy or your own MD/MBBS
-> graduate), do that FIRST before sending any pitches.
+> onboarded a named medical reviewer (a real, consenting MD/MBBS graduate
+> whose registration you can show), do that FIRST before sending any pitches.
+>
+> Status (2026-11): the site has no named medical reviewer. The earlier
+> example reviewer "Dr. Ananya Reddy" (AIR-1, 578/960) was fabricated and has
+> been removed from the site, as has the `ReviewerByline` component and the
+> `dr-aarav-mehta` author byline (`/blog/author/dr-aarav-mehta` 308-redirects
+> to `/blog/author/crackcms-editorial`, the only author profile;
+> `frontend/src/content/authors.ts`). The rank / score lines in the templates
+> below are placeholders for a real person's verified credentials, not claims
+> to reuse.
 
 This document is the **outreach template library** + **HARO signup steps** +
 **original-data study plan** for earning white-hat backlinks to cracklabs.app.
@@ -47,7 +56,7 @@ I'd be happy to comment on "[their exact topic]". Two things worth flagging:
    residency posts in many states, making CMS the smarter financial choice
    for a fresh MBBS graduate."]
 
-Quick bio: I'm a [role, e.g. "UPSC CMS AIR-1 (2024) and practising physician
+Quick bio: I'm a [your verified role, e.g. "practising physician (MBBS, MD)
 at XYZ Hospital"], and I lead medical content at CrackLabs AI
 (cracklabs.app), a free UPSC CMS / NEET PG prep platform used by 47k+
 medical aspirants.
@@ -71,11 +80,12 @@ Subject: Guest post idea — "What UPSC CMS toppers actually do differently"
 
 Hi [Editor Name],
 
-I'm a UPSC CMS AIR-1 (2024) and the lead medical reviewer at CrackLabs
-(cracklabs.app). I have a guest post idea your readers will love:
+I'm a [your verified credential, e.g. "UPSC CMS <rank> (<year>)"] and the
+lead medical reviewer at CrackLabs (cracklabs.app). I have a guest post idea
+your readers will love:
 
    "What UPSC CMS toppers actually do differently — 7 habits that took
-    me from MBBS average to AIR-1"
+    me from MBBS average to [your rank]"
 
 The piece covers:
 - The exact 6-month study plan I followed (Harrison + Bailey + Park focus)
@@ -104,7 +114,7 @@ Subject: Original data study — "What 10 years of UPSC CMS PYQs tell us about e
 
 Hi [Editor Name],
 
-I'm a UPSC CMS AIR-1 (2024) and lead medical reviewer at CrackLabs AI. I've
+I'm a [your verified credential] and lead medical reviewer at CrackLabs AI. I've
 just finished an analysis of all UPSC CMS PYQs from 2014-2024 — 2,400+
 questions across 11 years — and the results are striking:
 

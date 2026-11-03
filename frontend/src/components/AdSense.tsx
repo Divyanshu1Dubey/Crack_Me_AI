@@ -8,11 +8,18 @@
  *   <AdSense slot="sidebar" />
  *   <AdSense slot="leaderboard" />
  *
- * Ad slots are loaded only after user consent for marketing cookies.
- * Falls back to an empty div on ad-blockers or before consent.
+ * Renders NOTHING unless all of these hold:
+ *   1. a real publisher id is configured (NEXT_PUBLIC_ADSENSE_CLIENT =
+ *      "ca-pub-" + 16 digits — the old hard-coded ca-pub-0000000000000000
+ *      could never serve),
+ *   2. a numeric ad-unit id exists for the slot
+ *      (NEXT_PUBLIC_ADSENSE_SLOT_IN_CONTENT / _SIDEBAR / _LEADERBOARD),
+ *   3. the visitor allowed the `marketing` consent category.
+ * Only then is adsbygoogle.js fetched and the unit pushed. This removes the
+ * empty grey "Advertisement" boxes and the pre-consent ad-script load.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { consent } from '@/lib/consent';
 
 interface AdSenseProps {
@@ -20,72 +27,68 @@ interface AdSenseProps {
     className?: string;
 }
 
-const SLOT_CONFIG: Record<string, { className: string; placeholderText: string }> = {
-    'in-content': {
-        className: 'w-full max-w-3xl mx-auto my-6 min-h-[250px]',
-        placeholderText: 'Advertisement',
-    },
-    'sidebar': {
-        className: 'w-full min-h-[250px]',
-        placeholderText: 'Advertisement',
-    },
-    'leaderboard': {
-        className: 'w-full max-w-7xl mx-auto my-4 min-h-[90px]',
-        placeholderText: 'Advertisement',
-    },
+const ADSENSE_CLIENT = (process.env.NEXT_PUBLIC_ADSENSE_CLIENT || '').trim();
+
+// Referenced literally so Next can inline each NEXT_PUBLIC_ value.
+const SLOT_IDS: Record<AdSenseProps['slot'], string> = {
+    'in-content': (process.env.NEXT_PUBLIC_ADSENSE_SLOT_IN_CONTENT || '').trim(),
+    sidebar: (process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR || '').trim(),
+    leaderboard: (process.env.NEXT_PUBLIC_ADSENSE_SLOT_LEADERBOARD || '').trim(),
 };
 
+const SLOT_CLASS: Record<AdSenseProps['slot'], string> = {
+    'in-content': 'w-full max-w-3xl mx-auto my-6',
+    sidebar: 'w-full',
+    leaderboard: 'w-full max-w-7xl mx-auto my-4',
+};
+
+const isRealPublisherId = (id: string) => /^ca-pub-\d{16}$/.test(id) && !/^ca-pub-0+$/.test(id);
+
+type AdsWindow = Window & { adsbygoogle?: unknown[]; __adsenseLoaded?: boolean };
+
 export default function AdSense({ slot, className }: AdSenseProps) {
-    const [shouldLoad, setShouldLoad] = useState(false);
-    const [mounted, setMounted] = useState(false);
+    const slotId = SLOT_IDS[slot];
+    const configured = isRealPublisherId(ADSENSE_CLIENT) && /^\d+$/.test(slotId);
+    const [allowed, setAllowed] = useState(false);
+    const pushed = useRef(false);
 
     useEffect(() => {
-        setMounted(true);
-        // Check consent on mount — load ads only if marketing consent granted
-        if (consent.isAllowed('marketing')) {
-            setShouldLoad(true);
+        if (!configured) return;
+        setAllowed(consent.isAllowed('marketing'));
+        return consent.onChange((state) => setAllowed(state.marketing === true));
+    }, [configured]);
+
+    useEffect(() => {
+        if (!configured || !allowed || pushed.current) return;
+        const win = window as AdsWindow;
+        if (!win.__adsenseLoaded) {
+            const s = document.createElement('script');
+            s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(ADSENSE_CLIENT)}`;
+            s.async = true;
+            s.crossOrigin = 'anonymous';
+            (document.head || document.body).appendChild(s);
+            win.__adsenseLoaded = true;
         }
-        // Listen for consent changes
-        const unsub = consent.onChange((state) => {
-            if (state.marketing && !shouldLoad) {
-                setShouldLoad(true);
-            }
-        });
-        return unsub;
-    }, []);
+        try {
+            (win.adsbygoogle = win.adsbygoogle || []).push({});
+            pushed.current = true;
+        } catch {
+            /* ad blockers */
+        }
+    }, [configured, allowed]);
 
-    // Inject AdSense script once (global side-effect, guarded)
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        if ((window as any).__adsenseLoaded) return;
-        const s = document.createElement('script');
-        s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-        s.async = true;
-        s.crossOrigin = 'anonymous';
-        (document.head || document.body).appendChild(s);
-        (window as any).__adsenseLoaded = true;
-    }, []);
-
-    if (!mounted) return null;
-
-    const config = SLOT_CONFIG[slot] || SLOT_CONFIG['in-content'];
+    if (!configured || !allowed) return null;
 
     return (
-        <div className={`${config.className} ${className || ''}`}>
-            {shouldLoad ? (
-                <ins
-                    className="adsbygoogle block"
-                    style={{ display: 'block', textAlign: 'center' }}
-                    data-ad-client="ca-pub-0000000000000000"
-                    data-ad-slot={`cracklabs-${slot}`}
-                    data-ad-format="auto"
-                    data-full-width-responsive="true"
-                />
-            ) : (
-                <div className="flex items-center justify-center min-h-[90px] bg-gray-100 dark:bg-slate-800 rounded text-xs text-gray-400 dark:text-slate-500">
-                    {config.placeholderText}
-                </div>
-            )}
+        <div className={`${SLOT_CLASS[slot]} ${className || ''}`}>
+            <ins
+                className="adsbygoogle block"
+                style={{ display: 'block', textAlign: 'center' }}
+                data-ad-client={ADSENSE_CLIENT}
+                data-ad-slot={slotId}
+                data-ad-format="auto"
+                data-full-width-responsive="true"
+            />
         </div>
     );
 }

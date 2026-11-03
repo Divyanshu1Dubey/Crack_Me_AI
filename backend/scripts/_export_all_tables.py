@@ -1,12 +1,26 @@
 # -*- coding: utf-8 -*-
+"""Export every questions-app table (plus subscriptions) as JSON rows.
+
+    python scripts/_export_all_tables.py --output-dir <directory outside the repository>
+
+The rows include user data (attempts, bookmarks, notes, flashcards,
+discussions, feedback, subscriptions), so the directory must be outside the
+repository (scripts/_safe_paths.py). It used to be <checkout>/../../backup,
+which is inside the main checkout when this runs from a git worktree.
+"""
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding='utf-8')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import django
-import os
+from _safe_paths import output_dir_from_argv  # noqa: E402
+
+backup_dir = output_dir_from_argv(description=__doc__.splitlines()[0])
+
+import django  # noqa: E402
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crack_cms.settings')
 django.setup()
 
@@ -38,9 +52,6 @@ export_plan = [
     ('questions', 'RemovedQuestion'),
     ('accounts', 'Subscription'),
 ]
-
-backup_dir = Path(__file__).resolve().parent.parent.parent.parent / 'backup' / 'db_dumps'
-backup_dir.mkdir(parents=True, exist_ok=True)
 
 total_rows = 0
 for app_label, model_name in export_plan:

@@ -33,7 +33,7 @@ LOG = logging.getLogger("mce.stage_10_rag")
 
 def _chunk_id(question_id: str, chunk_type: str, suffix: str = "") -> str:
     raw = f"{question_id}|{chunk_type}|{suffix}"
-    return f"chk_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16]}"
+    return f"chk_{hashlib.sha1(raw.encode('utf-8'), usedforsecurity=False).hexdigest()[:16]}"
 
 
 def _make_chunk(question: dict[str, Any], chunk_type: str, body: str,

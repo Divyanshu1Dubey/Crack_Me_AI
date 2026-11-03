@@ -68,7 +68,7 @@ Current state: Railway primary data loaded, Supabase still active for auth
 
 In Railway dashboard → Crack_Me_AI service → Variables:
 ```
-DATABASE_URL = postgresql://postgres:kLpKLuPyUucGftxyyFsfCnReVNSTzrdh@tramway.proxy.rlwy.net:24963/railway
+DATABASE_URL = postgresql://postgres:<RAILWAY_DB_PASSWORD>@tramway.proxy.rlwy.net:24963/railway
 SUPABASE_DATABASE_URL = <same as above>  # optional fallback
 ```
 

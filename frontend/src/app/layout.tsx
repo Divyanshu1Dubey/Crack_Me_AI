@@ -24,8 +24,9 @@ import { FloatingDock } from "@/components/FloatingDock";
 import { PaywallRoot } from "@/components/paywall/PaywallRoot";
 import { PaywallProvider } from "@/lib/paywall/paywallContext";
 import Footer from "@/components/Footer";
-import { brandName, defaultOgImage, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
-import { graphSchema, orgSchema, softwareAppSchema, websiteSchema } from "@/lib/metadata";
+import PublicNav from "@/components/PublicNav";
+import { defaultOgImage, defaultOgImageSize, seoKeywords, siteDescription, siteName, siteTitle, siteUrl } from "@/lib/seo";
+import { graphSchema, jsonLdString, orgSchema, websiteSchema } from "@/lib/metadata";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MM88RT1QQK";
 const analyticsInDev = process.env.NEXT_PUBLIC_ANALYTICS_IN_DEV === "true";
@@ -56,26 +57,20 @@ export const metadata: Metadata = {
     default: siteTitle,
     template: `%s | ${siteName}`,
   },
-  // Google Search Console verification — paste the meta-tag code from
-  // https://search.google.com/search-console → URL Prefix → www.cracklabs.app
-  // → Verification → HTML tag. Rendered as <meta name="google-site-verification">
-  // by Next.js. Drop the value below; the env-var override is for Vercel.
-  verification: {
-    google: process.env.NEXT_PUBLIC_GSC_VERIFICATION || 'REPLACE_WITH_GSC_VERIFICATION_TOKEN',
-  },
+  // Google Search Console verification — set NEXT_PUBLIC_GSC_VERIFICATION to
+  // the HTML-tag token from https://search.google.com/search-console. No tag
+  // is emitted when it is unset (a placeholder token used to be published).
+  ...(process.env.NEXT_PUBLIC_GSC_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GSC_VERIFICATION } }
+    : {}),
   other: {
     'msvalidate.01': process.env.NEXT_PUBLIC_BING_VERIFICATION || '77389C63E8905F63F9327386A62DCC9A',
   },
   description: siteDescription,
-  alternates: {
-    canonical: "/",
-    languages: {
-      "en-IN": "/",
-      "en-US": "/",
-      "en-GB": "/",
-      "x-default": "/",
-    },
-  },
+  // No `alternates` here on purpose: a canonical/hreflang set in the root
+  // layout is inherited by every page that does not override it, which made
+  // /jobs, /practice, /quests ... claim to be the homepage. Each public page
+  // declares its own canonical (the homepage does so in app/page.tsx).
   applicationName: siteName,
   keywords: seoKeywords,
   category: "education",
@@ -84,15 +79,15 @@ export const metadata: Metadata = {
   publisher: siteName,
   openGraph: {
     type: "website",
-    url: siteUrl,
+    // No og:url here for the same reason as the canonical: it would be
+    // inherited by every page that has no openGraph of its own.
     title: siteTitle,
     description: siteDescription,
     siteName,
     images: [
       {
         url: defaultOgImage,
-        width: 1200,
-        height: 630,
+        ...defaultOgImageSize,
         alt: "CrackCMS UPSC CMS Preparation Platform",
       },
     ],
@@ -115,9 +110,14 @@ export const metadata: Metadata = {
     },
   },
   manifest: "/manifest.json",
+  // Correctly sized PNGs generated from the 1254px logo
+  // (scripts/generate-brand-icons.mjs) instead of the 900 KB original.
   icons: {
-    icon: [{ url: "/cms-circle-logo.png", type: "image/png" }],
-    apple: [{ url: "/cms-circle-logo.png", type: "image/png" }],
+    icon: [
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -138,25 +138,15 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Medical exam conditions covered — helps AI engines understand content scope
-  const medicalConditions = [
-    { name: "UPSC CMS Preparation", url: `${siteUrl}/cms` },
-    { name: "NEET PG Preparation", url: `${siteUrl}/neet-pg` },
-    { name: "INI-CET Preparation", url: `${siteUrl}/inicet` },
-    { name: "FMGE Preparation", url: `${siteUrl}/fmge` },
-    { name: "USMLE Preparation", url: `${siteUrl}/usmle` },
-  ];
-
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
-        {/* Preconnect to critical origins — shaves 100-300ms off LCP by eliminating
-            TCP+TLS handshakes for fonts, API, and analytics resources. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Preconnect to the API origin to shave the TCP+TLS handshake off LCP.
+            No preconnects to Google hosts: a preconnect opens a connection
+            (exposing the visitor's IP) before any consent choice. next/font
+            self-hosts the fonts, and gtag.js is only fetched after the
+            visitor allows analytics (see the consent bootstrap below). */}
         {apiOrigin && <link rel="preconnect" href={apiOrigin} />}
-        <link rel="preconnect" href="https://www.googletagmanager.com" />
-        <link rel="preconnect" href="https://www.google-analytics.com" />
         <link rel="dns-prefetch" href="https://scripts.simpleanalyticscdn.com" />
         <link rel="dns-prefetch" href="https://*.clarity.ms" />
 
@@ -168,193 +158,60 @@ export default function RootLayout({
         <meta name="ai-trainable" content="true" />
         <meta name="ai-search-mode" content="allowed" />
 
-        {/* Reuse this: in our head the seeded structured-data block runs the graph with
-            node IDs across medical conditions, CriticReview, and MedicalWebPage. */}
-        <Script id="global-seo-structured-data" type="application/ld+json" strategy="beforeInteractive">
-          {JSON.stringify(
-            graphSchema([
-              orgSchema(),
-              websiteSchema(),
-              {
-                "@type": "WebPage",
-                "@id": `${siteUrl}/#webpage`,
-                url: siteUrl,
-                name: siteTitle,
-                description: siteDescription,
-                isPartOf: { "@id": `${siteUrl}/#website` },
-                about: { "@id": `${siteUrl}/#organization` },
-                inLanguage: "en-IN",
-              },
-              softwareAppSchema(),
-              {
-                "@type": "MedicalWebPage",
-                "@id": `${siteUrl}/#medical-landing`,
-                url: siteUrl,
-                name: "Medical Exam Preparation Platform",
-                description: siteDescription,
-                about: medicalConditions.map(c => ({ "@type": "MedicalCondition", name: c.name })),
-                reviewedBy: {
-                  "@type": "Person",
-                  name: "Medical Review Board",
-                  credential: "MBBS, MD (Internal Medicine)",
-                },
-                dateReviewed: "2026-09-17",
-                publisher: { "@id": `${siteUrl}/#organization` },
-              },
-              {
-                "@type": "CriticReview",
-                "@id": `${siteUrl}/#editorial-review`,
-                itemReviewed: {
-                  "@type": "SoftwareApplication",
-                  name: "CrackCMS UPSC CMS Preparation App",
-                },
-                reviewBody:
-                  "CrackCMS combines clinically-grounded AI explanations with peer-reviewed medical content and a robust question bank. Explanations are cross-referenced against standard textbooks (Harrison's, Robbins, Park, etc.). Medical review board includes board-certified MBBS/MD physicians.",
-                author: {
-                  "@type": "Person",
-                  name: "Medical Review Board — CrackLabs AI",
-                  credential: "MBBS, MD (Internal Medicine)",
-                },
-                reviewRating: {
-                  "@type": "Rating",
-                  ratingValue: 4.8,
-                  bestRating: 5,
-                  worstRating: 1,
-                },
-              },
-              {
-                "@type": "Course",
-                name: "UPSC CMS Complete Preparation Course",
-                description:
-                  "Comprehensive UPSC Combined Medical Services exam preparation with PYQs, AI-powered explanations, subject-wise mock tests and performance analytics.",
-                provider: { "@id": `${siteUrl}/#organization` },
-                url: `${siteUrl}/cms`,
-                educationalLevel: "Postgraduate",
-                inLanguage: "en-IN",
-                hasCourseInstance: {
-                  "@type": "CourseInstance",
-                  courseMode: "online",
-                  courseSchedule: { "@type": "Schedule", repeatFrequency: "P1D" },
-                },
-                offers: {
-                  "@type": "Offer",
-                  price: "199",
-                  priceCurrency: "INR",
-                  availability: "https://schema.org/InStock",
-                },
-              },
-              {
-                "@type": "Course",
-                name: "NEET PG Complete Preparation Course",
-                description:
-                  "Medical PG revision with previous year questions, AI tutor, clinical MCQs and mock test simulator.",
-                provider: { "@id": `${siteUrl}/#organization` },
-                url: `${siteUrl}/neet-pg`,
-                educationalLevel: "Postgraduate",
-                inLanguage: "en-IN",
-                offers: {
-                  "@type": "Offer",
-                  price: "199",
-                  priceCurrency: "INR",
-                  availability: "https://schema.org/InStock",
-                },
-              },
-              {
-                "@type": "FAQPage",
-                mainEntity: [
-                  {
-                    "@type": "Question",
-                    name: "What is CrackCMS?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "CrackCMS is an AI-powered preparation platform for UPSC CMS and medical entrance exams. It offers previous year questions, AI explanations, topic-wise practice, mock tests, flashcards and performance analytics.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Is CrackCMS free for UPSC CMS preparation?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Yes. CrackCMS offers a free tier for question practice and revision. Premium plans unlock broader AI tutor access, mock tests, analytics and study tools.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "How many previous year questions does CrackCMS have?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "CrackCMS organizes medical exam questions by subject, topic, year and difficulty. Questions include AI-generated explanations, references and clinical pearls where available.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Does CrackCMS have NEET PG questions?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Yes, CrackCMS includes a comprehensive NEET PG question bank with previous year papers from 2020-2025, AI-powered solutions, and subject-wise practice across General Medicine, Surgery, Pediatrics, OBG, and PSM.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "What AI features does CrackCMS offer?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "CrackCMS offers an AI Study Assistant trained on standard medical textbooks (Harrison's, Robbins, etc.), AI-powered question explanations with mnemonics and clinical pearls, an AI Question Generator for custom practice, and intelligent analytics that identify your weak areas.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Who medically reviews content on CrackCMS?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "All medical content on CrackCMS is reviewed by board-certified MBBS/MD physicians including MD (Internal Medicine) and MD (Pediatrics) specialists. AI-generated explanations are cross-referenced against standard textbooks before publication.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "How does the AI tutor generate explanations?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "The AI tutor uses a multi-model round-robin pipeline across 11 LLM providers with RAG (Retrieval-Augmented Generation) over indexed textbook chapters. Every explanation cites textbook references and is verified for medical accuracy.",
-                    },
-                  },
-                ],
-              },
-              {
-                "@type": "BreadcrumbList",
-                itemListElement: [
-                  { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
-                  { "@type": "ListItem", position: 2, name: "UPSC CMS Preparation", item: `${siteUrl}/cms` },
-                  { "@type": "ListItem", position: 3, name: "NEET PG Preparation", item: `${siteUrl}/neet-pg` },
-                  { "@type": "ListItem", position: 4, name: "Pricing", item: `${siteUrl}/subscription` },
-                  { "@type": "ListItem", position: 5, name: "Blog", item: `${siteUrl}/blog` },
-                  { "@type": "ListItem", position: 6, name: "About", item: `${siteUrl}/about` },
-                ],
-              },
-            ])
-          )}
-        </Script>
+        {/* Site-wide structured data: only the nodes that are true for every
+            URL (Organization + WebSite). Page-specific markup (WebPage, FAQ,
+            Course, Breadcrumb) lives on the page that shows that content.
+            A plain <script> keeps it in the server HTML for crawlers. */}
+        <script
+          id="global-seo-structured-data"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdString(graphSchema([orgSchema(), websiteSchema()])) }}
+        />
         {shouldInjectGoogleTag && (
-          <>
-            <Script
-              id="google-tag-src"
-              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
-              strategy="beforeInteractive"
-            />
-            <Script id="google-tag-inline" strategy="beforeInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                window.gtag = window.gtag || gtag;
+          // Google Analytics with Consent Mode. gtag.js itself is only
+          // fetched once the visitor allows the "analytics" category (stored
+          // by lib/consent.ts under crackcms_consent_v1); until then the
+          // queued commands never leave the browser. Consent defaults are
+          // set to "denied" before any config call, and a later
+          // "crackcms:consent" event (banner choice) updates or loads it.
+          <Script id="google-tag-consent-bootstrap" strategy="beforeInteractive">
+            {`
+              (function () {
+                var w = window, d = document, loaded = false;
+                w.dataLayer = w.dataLayer || [];
+                function gtag(){ w.dataLayer.push(arguments); }
+                w.gtag = w.gtag || gtag;
+                gtag('consent', 'default', {
+                  analytics_storage: 'denied',
+                  ad_storage: 'denied',
+                  ad_user_data: 'denied',
+                  ad_personalization: 'denied',
+                  wait_for_update: 500
+                });
+                function apply(state) {
+                  if (!state || typeof state.analytics !== 'boolean') return;
+                  gtag('consent', 'update', {
+                    analytics_storage: state.analytics ? 'granted' : 'denied',
+                    ad_storage: state.marketing ? 'granted' : 'denied',
+                    ad_user_data: state.marketing ? 'granted' : 'denied',
+                    ad_personalization: state.marketing ? 'granted' : 'denied'
+                  });
+                  if (state.analytics && !loaded) {
+                    loaded = true;
+                    var s = d.createElement('script');
+                    s.async = true;
+                    s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}';
+                    (d.head || d.documentElement).appendChild(s);
+                  }
+                }
+                try { apply(JSON.parse(w.localStorage.getItem('crackcms_consent_v1') || 'null')); } catch (e) {}
                 gtag('js', new Date());
                 gtag('config', '${gaMeasurementId}', { send_page_view: false });
-              `}
-            </Script>
-          </>
+                w.addEventListener('crackcms:consent', function (e) { apply(e && e.detail); });
+              })();
+            `}
+          </Script>
         )}
-
-        {/* Google AdSense — loaded on all public pages. */}
-        <link rel="ads.txt" href="/ads.txt" />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
         <a href="#main-content" className="skip-link">Skip to main content</a>
@@ -376,6 +233,8 @@ export default function RootLayout({
                             <TrafficAnalytics />
                           </Suspense>
                           <BackendWarmup />
+                          {/* Brand + Log in bar for public pages that have no header of their own. */}
+                          <PublicNav />
                           <main id="main-content">{children}</main>
                           <Footer />
                           <FloatingDock />

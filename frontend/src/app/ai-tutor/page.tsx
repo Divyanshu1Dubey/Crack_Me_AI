@@ -8,10 +8,11 @@
 import React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
+import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
-import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock } from 'lucide-react';
+import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { decodeMojiB, coerceToText } from '@/lib/textCleanup';
 
@@ -20,7 +21,13 @@ interface Message {
     content: string;
     type?: string;
     citations?: Array<{ book: string; page: number; excerpt: string; relevance: number }>;
+    /** Answer assembled from the textbook library without an AI model. */
+    offline?: boolean;
 }
+
+/** Fields every AI Tutor call sends so the backend saves the turn to history
+ *  (strings, so they fit every aiAPI payload type; the backend parses both). */
+type HistoryFields = { save_history: 'true'; chat_session_id?: string };
 
 interface ChatSession {
     id: number;
@@ -39,7 +46,9 @@ const looksLikeProviderErrorResponse = (text: string) => {
         normalized.includes('no endpoints provided') ||
         normalized.includes('model endpoint not found') ||
         normalized.includes('service unavailable') ||
-        normalized.includes('upstream request failed')
+        normalized.includes('upstream request failed') ||
+        normalized.includes('all ai services are temporarily unavailable') ||
+        normalized.includes('ai answer generation is unavailable')
     );
 };
 
@@ -189,6 +198,7 @@ function SafeUserText({ content }: { content: unknown }) {
 
 export default function AITutorPage() {
     const { ready } = useRequireAuth();
+    const { user, refreshProfile } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -214,8 +224,15 @@ export default function AITutorPage() {
             // Sanitize legacy/malformed session rows so the renderer never
             // dereferences a missing field (caused the "Something went wrong"
             // crash on /ai-tutor when session.updated_at was null).
+            // The endpoint returns a plain array; older deployments paginated
+            // it as {count, results}.
             const raw: unknown = res.data || [];
-            const list = (Array.isArray(raw) ? raw : []).map((s: any) => ({
+            const rows: unknown[] = Array.isArray(raw)
+                ? raw
+                : Array.isArray((raw as { results?: unknown[] })?.results)
+                    ? (raw as { results: unknown[] }).results
+                    : [];
+            const list = rows.map((s: any) => ({
                 id: typeof s?.id === 'number' ? s.id : 0,
                 title: typeof s?.title === 'string' ? s.title : '',
                 mode: typeof s?.mode === 'string' ? s.mode : 'tutor',
@@ -259,10 +276,53 @@ export default function AITutorPage() {
                     chatRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             }, 100);
+            return true;
         } catch {
             setShowHistory(false);
+            return false;
         }
     };
+
+    // Reopen the chat that was open before a page refresh (ported from
+    // branch feat/ai-production-unification). Keyed per user so a shared
+    // browser never reopens someone else's chat.
+    const sessionStorageKey = user?.id ? `ai_tutor_session_id:${user.id}` : null;
+    const restoredSessionRef = useRef(false);
+    useEffect(() => {
+        if (!ready || !sessionStorageKey || restoredSessionRef.current) return;
+        restoredSessionRef.current = true;
+        let saved: number | null = null;
+        try {
+            const raw = window.localStorage.getItem(sessionStorageKey);
+            const parsed = raw ? Number(raw) : NaN;
+            saved = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+        } catch {
+            saved = null;
+        }
+        if (saved === null) return;
+        loadSession(saved).then((ok) => {
+            if (!ok) {
+                try {
+                    window.localStorage.removeItem(sessionStorageKey);
+                } catch {
+                    // storage unavailable
+                }
+            }
+        });
+    }, [ready, sessionStorageKey]);
+
+    useEffect(() => {
+        if (!sessionStorageKey || !restoredSessionRef.current) return;
+        try {
+            if (currentSessionId) {
+                window.localStorage.setItem(sessionStorageKey, String(currentSessionId));
+            } else {
+                window.localStorage.removeItem(sessionStorageKey);
+            }
+        } catch {
+            // storage unavailable — the chat still works, it just won't reopen
+        }
+    }, [currentSessionId, sessionStorageKey]);
 
     const startNewChat = () => {
         setMessages([]);
@@ -309,50 +369,82 @@ export default function AITutorPage() {
         setMessages(prev => [...prev, { role: 'user', content: userMsg, type: mode }]);
         setLoading(true);
 
+        // The mode that actually answered (the textbook path can fall back
+        // to the tutor); `mode` from state would be stale inside this call.
+        let effectiveMode = mode;
+        // The backend saves both turns of every answered message to the
+        // user's chat history (and returns the session id to continue in).
+        const history: HistoryFields = currentSessionId
+            ? { save_history: 'true', chat_session_id: String(currentSessionId) }
+            : { save_history: 'true' };
         try {
             let response: string;
             let citations: Message['citations'] = undefined;
+            let data: { chat_session_id?: unknown; offline?: unknown; citations?: unknown } | undefined;
 
             if (mode === 'tutor') {
-                const res = await aiAPI.askTutor({ question: userMsg });
+                const res = await aiAPI.askTutor({ question: userMsg, ...history });
+                data = res.data;
                 response = res.data.response;
             } else if (mode === 'mnemonic') {
-                const res = await aiAPI.generateMnemonic({ topic: userMsg });
+                const res = await aiAPI.generateMnemonic({ topic: userMsg, ...history });
+                data = res.data;
                 response = res.data.mnemonic;
             } else if (mode === 'explain') {
-                const res = await aiAPI.explain({ concept: userMsg });
+                const res = await aiAPI.explain({ concept: userMsg, ...history });
+                data = res.data;
                 response = res.data.explanation;
             } else if (mode === 'textbook') {
-                const res = await aiAPI.ragAnswer({ question: userMsg });
+                const res = await aiAPI.ragAnswer({ question: userMsg, ...history });
                 // If RAG backend has no indexed textbooks (e.g. fresh host),
                 // fall back to AI Tutor so the student always gets an answer.
+                // (The backend gives the textbook attempt's message back, so
+                // this costs one message, not two.)
                 if (res.data?.error === 'textbook_search_unavailable') {
+                    effectiveMode = 'tutor';
                     setMode('tutor');
-                    const tutorRes = await aiAPI.askTutor({ question: userMsg });
+                    const tutorRes = await aiAPI.askTutor({ question: userMsg, ...history });
+                    data = tutorRes.data;
                     response = tutorRes.data.response;
                 } else {
+                    data = res.data;
                     response = res.data.answer;
                     citations = res.data.citations;
                 }
             } else {
-                const res = await aiAPI.analyzeQuestion({ question_text: userMsg });
+                const res = await aiAPI.analyzeQuestion({ question_text: userMsg, ...history });
+                data = res.data;
                 response = res.data.analysis;
             }
 
             if (!response || looksLikeProviderErrorResponse(response)) {
                 response = '⚠️ AI is temporarily unavailable right now. Please retry in a few seconds.';
             }
+            // Every mode can return textbook citations (offline extracts always
+            // do); list them under the answer, not only in Textbook Search.
+            if (!citations && Array.isArray(data?.citations) && data.citations.length > 0) {
+                citations = data.citations as Message['citations'];
+            }
+            const offline = data?.offline === true;
+            if (typeof data?.chat_session_id === 'number') {
+                setCurrentSessionId(data.chat_session_id);
+            }
 
-            setMessages(prev => [...prev, { role: 'ai', content: response, type: mode, citations }]);
+            setMessages(prev => [...prev, { role: 'ai', content: response, type: effectiveMode, citations, offline }]);
             // Scroll to show AI answer from top after it's added
             scrollToLatestAiMessage();
             // Refresh sessions to include the new one
             loadSessions();
+            // Keep the free-tier usage banner ("N/2 AI chats used today") current.
+            if (typeof user?.ai_tutor_daily_cap === 'number') {
+                refreshProfile().catch(() => { /* banner refreshes on next load */ });
+            }
         } catch (err: unknown) {
             const statusCode = (err as { response?: { status?: number; data?: unknown } })?.response?.status;
             const errorPayload = (err as { response?: { data?: unknown } })?.response?.data;
             const errorCode = (errorPayload as { code?: string } | undefined)?.code;
             const is429 = statusCode === 429;
+            const unavailableMessage = (errorPayload as { message?: string } | undefined)?.message;
             // Freemium conversion layer (Task 11): when the api.ts interceptor
             // fires the global UpgradeModal on `code: 'upgrade_required'`,
             // suppress the noisy inline error message — the modal already
@@ -362,14 +454,18 @@ export default function AITutorPage() {
             if (isUpgradeRequired) {
                 setMessages(prev => prev.slice(0, -1));
             } else {
+                // `ai_unavailable`: no AI answer and nothing in the textbook
+                // library matched; the backend did not charge for it.
                 const message = is429
                     ? '⚠️ **AI Tokens Exhausted** — Your daily/weekly free tokens are used up. [Buy more tokens](/tokens) to continue using AI features.'
-                    : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
+                    : errorCode === 'ai_unavailable' && unavailableMessage
+                        ? `⚠️ ${unavailableMessage}`
+                        : `⚠️ ${extractApiErrorMessage(errorPayload, 'Failed to get a response from AI. Please try again shortly.')}`;
 
                 setMessages(prev => [...prev, {
                     role: 'ai',
                     content: message,
-                    type: mode
+                    type: effectiveMode
                 }]);
                 scrollToLatestAiMessage();
             }
@@ -410,6 +506,11 @@ export default function AITutorPage() {
             default: return MessageSquare;
         }
     };
+
+    // Brand hues are -600/-700 shades that read well on light surfaces but
+    // turn dim on the dark theme; mixing them with the theme foreground keeps
+    // the hue and lifts the text contrast in both themes.
+    const legibleOn = (hex: string) => `color-mix(in srgb, ${hex} 55%, var(--color-foreground))`;
 
     const modes = [
         { key: 'tutor' as const, label: 'AI Tutor', icon: Brain, color: '#0e7490', desc: 'Ask any medical question' },
@@ -467,7 +568,7 @@ export default function AITutorPage() {
                             style={{
                                 background: 'rgba(14, 116, 144, 0.08)',
                                 borderColor: 'rgba(14, 116, 144, 0.28)',
-                                color: '#0e7490',
+                                color: legibleOn('#0e7490'),
                             }}>
                             <Plus className="w-4 h-4" />
                             New Chat
@@ -494,8 +595,8 @@ export default function AITutorPage() {
                                 <History className="w-4 h-4" style={{ color: '#0284c7' }} />
                                 Chat History
                             </h3>
-                            <button onClick={() => setShowHistory(false)} className="p-1 hover:bg-white/10 rounded">
-                                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                            <button onClick={() => setShowHistory(false)} aria-label="Close chat history" className="p-1 hover:bg-white/10 rounded">
+                                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} aria-hidden="true" />
                             </button>
                         </div>
                         {loadingSessions ? (
@@ -516,8 +617,18 @@ export default function AITutorPage() {
                                     return (
                                         <div
                                             key={session.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-current={isActive ? 'true' : undefined}
                                             onClick={() => loadSession(session.id)}
-                                            className={`group flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all ${isActive ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
+                                            onKeyDown={(e) => {
+                                                if (e.target !== e.currentTarget) return;
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    loadSession(session.id);
+                                                }
+                                            }}
+                                            className={`group flex cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary items-center gap-3 rounded-xl p-3 transition-all ${isActive ? 'scale-[1.01]' : 'hover:scale-[1.005]'}`}
                                             style={{
                                                 background: isActive ? 'rgba(14, 116, 144, 0.12)' : 'rgba(139, 149, 168, 0.05)',
                                                 border: `1px solid ${isActive ? 'rgba(14, 116, 144, 0.28)' : 'transparent'}`,
@@ -527,7 +638,7 @@ export default function AITutorPage() {
                                                 <ModeIcon className="w-4 h-4" style={{ color: isActive ? 'white' : 'var(--text-secondary)' }} />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate" style={{ color: isActive ? '#0e7490' : 'var(--text-primary)' }}>
+                                                <p className="text-sm font-medium truncate" style={{ color: isActive ? legibleOn('#0e7490') : 'var(--text-primary)' }}>
                                                     {session.title || 'Untitled Chat'}
                                                 </p>
                                                 <div className="flex items-center gap-2 mt-0.5">
@@ -542,9 +653,10 @@ export default function AITutorPage() {
                                             </div>
                                             <button
                                                 onClick={(e) => deleteSession(session.id, e)}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all hover:bg-red-500/20"
+                                                aria-label={`Delete chat "${session.title || 'Untitled Chat'}"`}
+                                                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 p-1.5 rounded-lg transition-all hover:bg-red-500/20"
                                                 style={{ color: '#ef4444' }}>
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-4 h-4" aria-hidden="true" />
                                             </button>
                                         </div>
                                     );
@@ -562,7 +674,7 @@ export default function AITutorPage() {
                             style={{
                                 background: mode === m.key ? `${m.color}20` : 'rgba(139, 149, 168, 0.05)',
                                 borderColor: mode === m.key ? m.color : 'transparent',
-                                color: mode === m.key ? m.color : 'var(--text-secondary)',
+                                color: mode === m.key ? legibleOn(m.color) : 'var(--text-secondary)',
                             }}>
                             <m.icon className="w-4 h-4" />
                             {m.label}
@@ -583,7 +695,7 @@ export default function AITutorPage() {
                                 {modes.find(m => m.key === mode)?.desc}
                             </h3>
                             <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                                {mode === 'textbook' ? 'Searches across Harrison, Ghai, Nelson & Park textbooks' : 'Powered by Gemini + Groq AI'}
+                                {mode === 'textbook' ? 'Searches across Harrison, Ghai, Nelson & Park textbooks' : 'Exam-focused answers with textbook references'}
                             </p>
                             <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
                                 {(suggestions[mode] || []).map((s, i) => (
@@ -618,6 +730,13 @@ export default function AITutorPage() {
                                         }}>
                                         {msg.role === 'ai' ? (
                                             <div className="ai-response text-foreground">
+                                                {msg.offline && (
+                                                    <div className="mb-2 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold"
+                                                        style={{ background: 'rgba(217, 119, 6, 0.12)', color: '#b45309' }}>
+                                                        <WifiOff className="w-3 h-3" aria-hidden="true" />
+                                                        Offline answer · from the textbook library, no AI model · not charged
+                                                    </div>
+                                                )}
                                                 {/*
                                                   NOTE: do NOT use Tailwind `prose` here.
                                                   Tailwind 4 doesn't ship the typography
@@ -703,6 +822,7 @@ export default function AITutorPage() {
                 <div className="glass-card p-3 flex items-center gap-3 sticky bottom-0">
                     <input
                         className="input-field flex-1"
+                        aria-label="Message the AI tutor"
                         placeholder={
                             mode === 'tutor' ? 'Ask a medical question...' :
                                 mode === 'mnemonic' ? 'Enter a topic for mnemonic...' :
@@ -715,8 +835,8 @@ export default function AITutorPage() {
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                         disabled={loading}
                     />
-                    <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary py-3 px-4 rounded-xl">
-                        <Send className="w-5 h-5" />
+                    <button onClick={handleSend} disabled={loading || !input.trim()} aria-label="Send message" className="btn-primary py-3 px-4 rounded-xl">
+                        <Send className="w-5 h-5" aria-hidden="true" />
                     </button>
                 </div>
             </div>

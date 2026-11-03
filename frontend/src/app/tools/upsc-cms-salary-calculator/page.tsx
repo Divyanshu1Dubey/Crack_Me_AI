@@ -8,7 +8,7 @@ const title = 'UPSC CMS Salary Calculator 2026 — In-Hand Pay, NPA, Promotion';
 const description = 'Calculate your in-hand salary as a UPSC CMS Medical Officer. Interactive salary calculator with pay level, NPA, HRA, DA, and promotion growth from MO to CMO to DGHS.';
 const slug = 'upsc-cms-salary-calculator';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',

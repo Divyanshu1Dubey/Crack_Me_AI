@@ -38,7 +38,10 @@ class AuthApiTests(TestCase):
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         FRONTEND_URL="http://localhost:3000",
     )
-    def test_password_reset_request_sends_reset_link(self):
+    def test_password_reset_request_is_gone(self):
+        """ACC-17: password reset is Supabase-only. The Django endpoint used to
+        mail a uid/token link the /reset-password page ignores; it is now 410
+        and sends nothing."""
         user = User.objects.create_user(
             username="reset_user",
             email="reset@example.com",
@@ -52,14 +55,12 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(mail.outbox), 1)
-        message = mail.outbox[0]
-        self.assertIn(user.email, message.to)
-        self.assertIn("/reset-password?uid=", message.body)
-        self.assertIn("token=", message.body)
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response.json().get("error"), "endpoint_gone")
+        self.assertEqual(len(mail.outbox), 0)
 
-    def test_password_reset_confirm_updates_password(self):
+    def test_password_reset_confirm_is_gone(self):
+        """ACC-17: a valid Django reset token no longer sets a Django password."""
         user = User.objects.create_user(
             username="confirm_user",
             email="confirm@example.com",
@@ -83,9 +84,9 @@ class AuthApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 410)
         user.refresh_from_db()
-        self.assertTrue(user.check_password("NewPass123!"))
+        self.assertTrue(user.check_password("OldPass123!"))
 
     def test_login_endpoint_disabled_regardless_of_identifier(self):
         """Local login is disabled whether using email or username."""
@@ -134,6 +135,7 @@ class AuthApiTests(TestCase):
         auth_backend._upsert_local_user(
             {
                 "email": "meduraa.web@gmail.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",
@@ -165,6 +167,7 @@ class AuthApiTests(TestCase):
         auth_backend._upsert_local_user(
             {
                 "email": "attacker@example.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "attacker",
                     "first_name": "Attacker",
@@ -180,8 +183,14 @@ class AuthApiTests(TestCase):
         self.assertFalse(user.is_superuser)
         self.assertFalse(user.is_staff)
 
-    def test_supabase_sync_demotes_user(self):
-        """Supabase sync should demote an admin when admin flags are removed."""
+    def test_supabase_sync_preserves_existing_admin(self):
+        """Fix P1 (2026-09-23): a Supabase login whose metadata lacks admin
+        flags must NOT demote an existing local admin (admins were losing
+        their role on every login). Revocation is done in Django admin.
+
+        The admin row is linked to its Supabase identity (supabase_uid); an
+        UNLINKED admin row is never linked by email to an untrusted identity
+        (accounts.tests_wave2_auth)."""
         user = User.objects.create_user(
             username="deeksha",
             email="demoted.user@example.com",
@@ -189,12 +198,15 @@ class AuthApiTests(TestCase):
             role="admin",
             is_superuser=True,
             is_staff=True,
+            supabase_uid="9b2f4c1e-0000-4000-8000-000000000001",
         )
 
         auth_backend = SupabaseJWTAuthentication()
         auth_backend._upsert_local_user(
             {
+                "id": "9b2f4c1e-0000-4000-8000-000000000001",
                 "email": "demoted.user@example.com",
+                "email_confirmed_at": "2026-01-01T00:00:00Z",
                 "user_metadata": {
                     "username": "deeksha",
                     "first_name": "deeksha",
@@ -207,9 +219,9 @@ class AuthApiTests(TestCase):
         )
 
         user.refresh_from_db()
-        self.assertEqual(user.role, "student")
-        self.assertFalse(user.is_superuser)
-        self.assertFalse(user.is_staff)
+        self.assertEqual(user.role, "admin")
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
 
 
 class ProfileAndSubscriptionTests(TestCase):
@@ -579,11 +591,12 @@ class SubscriptionWorkflowTests(TestCase):
     # ── SubscriptionStatusView response shape (B6 fix) ───────────────
 
     def test_legacy_user_status_has_full_shape(self):
-        """PR-A B6: legacy (user.is_subscribed=True but no Subscription row)
-        must return a serialized subscription stub with all required fields."""
-        # Make user look like a legacy/lifetime user
-        self.user.is_subscribed = True
-        self.user.save()
+        """PR-A B6: a legacy lifetime member must get a serialized subscription
+        with all required fields. (Such members have a real 'legacy' row: a
+        bare is_subscribed flag no longer counts, see accounts.0026.)"""
+        from .models import Subscription
+
+        Subscription.activate_from_payment(user=self.user, plan='legacy', amount_paid=199.00)
 
         self.client.force_login(self.user)
         resp = self.client.get(reverse('subscribe_status'))
@@ -1300,7 +1313,7 @@ class AITutorDailyUsageTests(TestCase):
         from django.db import IntegrityError, transaction
         from django.utils import timezone
         consume_ai_tutor_message(self.student)
-        today = timezone.now().date()
+        today = timezone.localdate()  # matches consume_ai_tutor_message (IST day)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 AITutorDailyUsage.objects.create(

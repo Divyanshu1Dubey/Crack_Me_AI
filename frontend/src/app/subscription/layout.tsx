@@ -6,7 +6,10 @@ export const metadata: Metadata = {
   title: pageMetadata['/subscription'].title,
   description: pageMetadata['/subscription'].description,
   keywords: [...seoKeywords, 'CrackCMS premium', 'UPSC CMS premium plan', 'medical exam test series price'],
-  robots: { index: true, follow: true },
+  // /subscription is login-only (useRequireAuth): crawlers only ever see the
+  // sign-in redirect, so it is not indexed or listed in the sitemap. Public
+  // pricing lives on the homepage.
+  robots: { index: false, follow: true },
   alternates: { canonical: '/subscription' },
   openGraph: {
     type: 'website',

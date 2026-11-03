@@ -9,13 +9,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { normaliseRelatedTopics, type RelatedTopic } from "@/components/question/practiceData";
 
 interface Item {
   id: number;
   year?: number | null;
   session?: string;
   question_text?: string;
-  topic?: string;
 }
 
 interface Props {
@@ -26,22 +26,28 @@ interface Props {
 
 export default function RelatedPanel({ questionId, kind, limit = 8 }: Props) {
   const [items, setItems] = useState<Item[]>([]);
+  const [topics, setTopics] = useState<RelatedTopic[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     const path = kind === "related_pyqs"
-      ? `/api/questions/${questionId}/ai/related_pyqs/?limit=${limit}`
-      : `/api/questions/${questionId}/ai/related_topics/?limit=${limit}`;
+      ? `/questions/${questionId}/ai/related_pyqs/?limit=${limit}`
+      : `/questions/${questionId}/ai/related_topics/?limit=${limit}`;
     (async () => {
       try {
         const r = await api.get(path);
         if (alive) {
-          setItems(kind === "related_pyqs" ? r.data?.related_pyqs || [] : r.data?.related_topics || []);
+          if (kind === "related_pyqs") {
+            setItems(Array.isArray(r.data?.related_pyqs) ? r.data.related_pyqs : []);
+          } else {
+            // Rows are `values('topic_id', 'topic__name')` + a count.
+            setTopics(normaliseRelatedTopics(r.data?.related_topics));
+          }
         }
       } catch {
-        if (alive) setItems([]);
+        if (alive) { setItems([]); setTopics([]); }
       } finally {
         if (alive) setLoading(false);
       }
@@ -50,26 +56,34 @@ export default function RelatedPanel({ questionId, kind, limit = 8 }: Props) {
   }, [questionId, kind, limit]);
 
   if (loading) {
-    return <p className="text-xs text-slate-400">Loading {kind === "related_pyqs" ? "related PYQs" : "related topics"}…</p>;
+    return <p className="text-xs text-muted-foreground">Loading {kind === "related_pyqs" ? "related PYQs" : "related topics"}…</p>;
   }
-  if (items.length === 0) {
-    return <p className="text-xs text-slate-500">No {kind === "related_pyqs" ? "related PYQs" : "related topics"} found.</p>;
+  const empty = kind === "related_pyqs" ? items.length === 0 : topics.length === 0;
+  if (empty) {
+    return <p className="text-xs text-muted-foreground">No {kind === "related_pyqs" ? "related PYQs" : "related topics"} found.</p>;
+  }
+  if (kind === "related_topics") {
+    return (
+      <ul className="space-y-2">
+        {topics.map((t) => (
+          <li key={t.id} className="rounded border border-border bg-card p-2 text-sm">
+            <span className="text-xs text-muted-foreground">topic{t.count != null ? ` · ${t.count} questions` : ""}</span>
+            <p className="text-foreground">{t.name}</p>
+          </li>
+        ))}
+      </ul>
+    );
   }
   return (
     <ul className="space-y-2">
       {items.map((it) => (
-        <li key={it.id} className="rounded border border-slate-700/40 bg-slate-900/40 p-2 text-sm">
-          {kind === "related_pyqs" ? (
-            <Link href={`/questions/practice?id=${it.id}`} className="block">
-              <span className="text-xs text-slate-400">{it.year ?? "—"} · #{it.id}</span>
-              <p className="line-clamp-2 text-slate-100">{(it.question_text || "").slice(0, 160)}…</p>
-            </Link>
-          ) : (
-            <span>
-              <span className="text-xs text-slate-400">topic</span>
-              <p className="text-slate-100">{(it as any).topic || `Topic #${it.id}`}</p>
-            </span>
-          )}
+        <li key={it.id} className="rounded border border-border bg-card p-2 text-sm">
+          {/* /practice opens the requested id directly; /questions/practice
+              needs a ?year= and bounced these links to /questions. */}
+          <Link href={`/practice?id=${it.id}`} className="block hover:text-primary">
+            <span className="text-xs text-muted-foreground">{it.year ?? "—"} · #{it.id}</span>
+            <p className="line-clamp-2 text-foreground">{(it.question_text || "").slice(0, 160)}…</p>
+          </Link>
         </li>
       ))}
     </ul>

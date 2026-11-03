@@ -34,7 +34,7 @@ class _PdfParserAdapter(BaseParser):
     extensions = (".pdf",)
 
     def parse(self, path: str) -> ParsedDocument:
-        # PDFParser is lazily imported — `pypdf`/`pdfplumber` is optional.
+        # PDFParser imports its PDF library lazily (PyMuPDF, pypdf or pdfplumber).
         try:
             from .pdf_parser import PDFParser
             return PDFParser().parse(path)
@@ -44,7 +44,7 @@ class _PdfParserAdapter(BaseParser):
                 file_format="pdf",
                 detected_type="unknown",
                 parser_used="pdf",
-                errors=["PDF parser not available (pypdf/pdfplumber missing)."],
+                errors=["PDF parser not available (PyMuPDF / pypdf / pdfplumber missing)."],
             )
 
 

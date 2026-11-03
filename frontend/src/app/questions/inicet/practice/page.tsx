@@ -9,8 +9,10 @@
  * panels, image rendering, discussion thread, year modal, and keyboard
  * shortcuts.
  *
- * The standalone `IniCetPlayer` is still used by `/tests/[id]` for the
- * immersive timed test player — that page is unchanged.
+ * The standalone `IniCetPlayer` was no longer imported anywhere (the timed
+ * test player at `/tests/[id]` has its own UI) and has been removed. The
+ * one-question fullscreen view is `/questions/practice?year=…&exam=ini_cet`,
+ * opened from the bank's "Practice Fullscreen" / year-modal buttons.
  *
  * URL contract (backwards-compatible):
  *   /questions/inicet/practice                       — full bank, INI-CET
@@ -63,6 +65,7 @@ function IniCetPracticeInner() {
             examType="ini_cet"
             examSource="INI-CET"
             defaultYear={searchParams.get('year')}
+            initialSubject={searchParams.get('subject')}
             initialQueryId={searchParams.get('q')}
             initialBookmarkOnly={searchParams.get('bookmarked') === '1'}
         />

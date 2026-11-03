@@ -97,7 +97,22 @@ Track progress:
 
 ```bash
 venv\Scripts\python.exe manage.py neetpg_status [--job-id N]
+venv\Scripts\python.exe manage.py neetpg_status --importer inicet   # INI-CET recall jobs
+venv\Scripts\python.exe manage.py neetpg_retry --job-id N           # re-runs with the importer that created the job
 ```
+
+Every recall job records its importer in `QuestionImportJob.summary["importer"]`
+(`neetpg` / `inicet`; jobs created before that are NEET PG's). The admin APIs
+`/api/imports/neetpg/jobs/` and `/api/imports/inicet/jobs/` list, show and
+retry only their own importer's jobs; the job list is paginated (`count` /
+`next` / `results`, 20 per page, `?page_size=` up to 100). Both need an admin
+(`IsControlTowerAdmin`), and `neetpg_import_run` / the API `POST` queue a
+django-q task, so a `qcluster` worker must be running.
+
+`import_neet_pg` (the bundled 2025 / 2020 paper loader) is **not** run on
+deploy any more. Run it by hand (`--dry-run` first); databases that ran the old
+deploy step need the one-time `import_neet_pg --replace --dry-run` /
+`--replace` cleanup described in [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §7.
 
 ## 5. Adding a new Subject / Topic
 

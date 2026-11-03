@@ -44,7 +44,7 @@ class AITutorDailyUsage(models.Model):
 
 def get_today_usage(user) -> int:
     """Return today's count, or 0 if no row yet."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     row = (
         AITutorDailyUsage.objects
         .filter(user=user, date=today)
@@ -72,7 +72,7 @@ def check_and_consume(user, cap: int) -> Tuple[bool, int]:
     / admin. The helper itself does not re-check — keeping the check
     in the view lets us avoid a duplicate ``Subscription`` roundtrip.
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     with transaction.atomic():
         # First, try to lock an existing row.
         row = (
@@ -110,9 +110,28 @@ def check_and_consume(user, cap: int) -> Tuple[bool, int]:
         return True, row.message_count
 
 
+def release_ai_tutor_message(user, date=None) -> bool:
+    """Give back one message consumed by ``check_and_consume``.
+
+    Called when the request that took the slot did not deliver an AI answer
+    (insufficient tokens, every provider failed, RAG unavailable, no textbook
+    match), so a failed call never burns the free daily allowance. ``date``
+    is the day the slot was taken (defaults to today), so a release after
+    midnight does not hand back a slot of the new day. Never goes below 0.
+    Returns True when a slot was released.
+    """
+    day = date or timezone.localdate()
+    updated = (
+        AITutorDailyUsage.objects
+        .filter(user=user, date=day, message_count__gt=0)
+        .update(message_count=F('message_count') - 1, updated_at=timezone.now())
+    )
+    return bool(updated)
+
+
 def get_or_create_today(user) -> AITutorDailyUsage:
     """Helper used by admin / reporting UIs. Not used on the hot path."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     row, _ = AITutorDailyUsage.objects.get_or_create(
         user=user, date=today, defaults={'message_count': 0}
     )

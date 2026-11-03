@@ -131,17 +131,17 @@ export default function LeaderboardPage() {
 
                     {!loading && !error && !showEmptyState && me && (
                         <>
-                            <MyRankCard me={me} />
+                            <MyRankCard me={me} period={period} />
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <RivalCard rival={rival} meRank={me.rank} meXp={me.xp_points} />
+                                <RivalCard rival={rival} meRank={me.rank} meStreak={me.current_streak} period={period} />
                                 {invite && !liveEnabled && <InviteGate invite={invite} />}
                             </div>
 
                             <WeeklyStatsRow me={me} />
 
                             {liveEnabled && liveBoard && (
-                                <LiveBoard rows={liveBoard} myUserId={userId} />
+                                <LiveBoard rows={liveBoard} myUserId={userId} period={period} />
                             )}
                         </>
                     )}

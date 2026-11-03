@@ -310,7 +310,7 @@ def _merge(det: dict[str, Any], llm: dict[str, Any]) -> dict[str, Any]:
         for r in llm_refs:
             if isinstance(r, dict) and r.get("citation_text"):
                 refs.append({
-                    "id": f"ref_{hashlib.sha1(str(r['citation_text']).encode('utf-8')).hexdigest()[:12]}",
+                    "id": f"ref_{hashlib.sha1(str(r['citation_text']).encode('utf-8'), usedforsecurity=False).hexdigest()[:12]}",
                     "citation_text": str(r["citation_text"]).strip(),
                     "source_type": r.get("source_type") or "textbook",
                     "locator": str(r.get("locator") or r["citation_text"]).strip()[:120],

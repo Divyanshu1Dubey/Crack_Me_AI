@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { siteName, siteUrl, defaultOgImage } from "@/lib/seo";
+import { CMS_PYQ_COUNT, CMS_PYQ_YEARS } from "@/lib/bankStats";
+
+/** The square source logo (1254×1254) — used for Organization/publisher logos. */
+const LOGO_PATH = "/cms-circle-logo.png";
 
 /**
  * Build a canonical absolute URL for a given path. Strips trailing slashes
@@ -10,6 +14,16 @@ export function buildCanonical(path: string): string {
     if (!path || path === "/") return `${siteUrl}/`;
     const cleaned = `/${String(path).replace(/^\/+/, "").replace(/\/+$/, "")}`;
     return `${siteUrl}${cleaned}`;
+}
+
+/**
+ * Drop a trailing brand suffix ("… | CrackCMS", "… — CrackCMS",
+ * "… — CrackCMS by CrackLabs AI") from a page title. The root layout's
+ * title template already appends " | CrackCMS", so titles that carried their
+ * own suffix rendered as "… | CrackCMS | CrackCMS".
+ */
+export function stripBrandSuffix(title: string): string {
+    return title.replace(/\s*[|—–-]\s*(CrackCMS(?:\s+by\s+CrackLabs AI)?|CrackLabs AI)\s*$/i, "").trim();
 }
 
 /**
@@ -44,7 +58,7 @@ export function buildPageMetadata({
     const canonical = buildCanonical(path);
     const ogImage = buildOgImage(image);
     return {
-        title,
+        title: stripBrandSuffix(title),
         description,
         keywords,
         alternates: {
@@ -60,8 +74,10 @@ export function buildPageMetadata({
             images: [
                 {
                     url: ogImage,
-                    width: 1200,
-                    height: 630,
+                    // The raw logo is a 1254×1254 square; the default image
+                    // and the blog covers are 1200×630 OG renders.
+                    width: image === LOGO_PATH ? 1254 : 1200,
+                    height: image === LOGO_PATH ? 1254 : 630,
                     alt: `${title} — ${siteName}`,
                 },
             ],
@@ -105,11 +121,12 @@ export function orgSchema() {
         logo: {
             "@type": "ImageObject",
             url: `${siteUrl}/cms-circle-logo.png`,
-            width: 512,
-            height: 512,
+            // Actual pixel size of the shipped file.
+            width: 1254,
+            height: 1254,
         },
         description:
-            "CrackCMS is a free study desk for MBBS graduates preparing for UPSC CMS, NEET PG, INI-CET, FMGE, USMLE or Medical Officer recruitment exams. Built by clinicians, organised around 3,300+ previous-year questions.",
+            `CrackCMS is a study platform for MBBS graduates preparing for UPSC CMS and NEET PG, organised around ${CMS_PYQ_COUNT} UPSC CMS previous-year questions (${CMS_PYQ_YEARS}) with AI explanations, mock tests and analytics.`,
         sameAs: [
             "https://github.com/Divyanshu1Dubey/Crack_Me_AI",
             "https://twitter.com/cracklabs",
@@ -134,14 +151,8 @@ export function websiteSchema() {
         url: siteUrl,
         inLanguage: "en-IN",
         publisher: { "@id": `${siteUrl}/#organization` },
-        potentialAction: {
-            "@type": "SearchAction",
-            target: {
-                "@type": "EntryPoint",
-                urlTemplate: `${siteUrl}/questions?search={search_term_string}`,
-            },
-            "query-input": "required name=search_term_string",
-        },
+        // No SearchAction: the site has no public search-results URL that
+        // reads a query parameter (/questions ignores ?search= and is login-only).
     };
 }
 
@@ -199,7 +210,7 @@ export function articleSchema({
     speakable?: string[];
     /** If true, emits @type `MedicalWebPage` (extends `WebPage` with
      *  medical-specialty metadata) instead of plain `Article`. Use for
-     *  clinically-reviewed medical content. */
+     *  medical content that cites references. */
     medicalPageType?: boolean;
 }) {
     const baseAuthor = {
@@ -308,13 +319,8 @@ export function softwareAppSchema() {
             priceCurrency: "INR",
             description: "Free tier available with premium medical exam preparation plans.",
         },
-        aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: "4.8",
-            ratingCount: "1250",
-            bestRating: "5",
-            worstRating: "1",
-        },
+        // No aggregateRating: there are no collected user reviews to back one,
+        // and self-awarded ratings break Google's structured-data policy.
     };
 }
 
@@ -343,6 +349,18 @@ export function howToSchema({
             text: s.text,
         })),
     };
+}
+
+/**
+ * Serialise a JSON-LD payload for a plain `<script type="application/ld+json"
+ * dangerouslySetInnerHTML>` tag. Use a plain script (not next/script with
+ * strategy="beforeInteractive"): in the App Router that strategy only queues
+ * the payload for the client bootstrap, so the structured data is missing
+ * from the server HTML that crawlers read. `<` is escaped so a value
+ * containing "</script>" cannot end the tag early.
+ */
+export function jsonLdString(data: unknown): string {
+    return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
 /** Combine multiple JSON-LD node payloads under @graph */
@@ -480,7 +498,7 @@ export function medicalWebPageSchema({
 }
 
 /**
- * `CriticReview` — for content that has been medically reviewed.
+ * `CriticReview` — for content a named, verifiable reviewer has reviewed.
  * Signals E-E-A-T to AI search engines.
  */
 export function criticReviewSchema({

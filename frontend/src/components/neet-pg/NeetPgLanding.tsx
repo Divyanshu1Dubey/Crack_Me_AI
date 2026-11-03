@@ -3,8 +3,11 @@
  *
  * Distinct from the shared exam microsite (used by /exams/cms, /exams/neet-pg,
  * /exams/usmle). Renders a hero with cinematic gradient, live stats loaded
- * from /api/questions/ + /api/questions/subjects/, year tiles that route into
- * the dedicated NEET PG player, and a subject grid that uses live counts.
+ * from /api/questions/stats/?exam_source=NEET PG, year tiles that route into
+ * the dedicated NEET PG player, and a subject grid built from that same
+ * NEET PG breakdown (the generic /subjects/ list is every exam's taxonomy,
+ * paginated, with all-exam counts — it used to fill this grid with INI-CET
+ * duplicates and empty buckets while real NEET PG subjects were missing).
  *
  * Visual language: emerald-teal medical palette with ECG-style line art,
  * image-rich subject cards, and dark-mode support.
@@ -25,21 +28,19 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
+import {
+  pgSubjectsFromStats, questionCountLabel, yearSpanLabel, yearTilesFromStats,
+  type SubjectStat, type YearStat,
+} from './neetPgLandingData';
 
 // ──────────────────────────────────────────────────── types ──
 
-interface SubjectRow {
-  id: number;
-  name: string;
-  code: string;
-  question_count: number;
-  paper?: number;
-}
 interface StatsPayload {
   total: number;
   total_solved: number;
-  by_year: { year: number; count: number; solved: number }[];
-  by_subject?: { id: number; name: string; count: number; solved: number }[];
+  by_year: YearStat[];
+  by_subject?: SubjectStat[];
 }
 
 // ──────────────────────────────────────────── subject metadata ──
@@ -65,6 +66,8 @@ const SUBJECT_VISUAL: Record<string, { icon: any; gradient: string; ring: string
   RAD: { icon: ImageIcon, gradient: 'from-blue-600 to-indigo-700', ring: 'ring-blue-300', tone: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', blurb: 'Imaging modalities, signs, interventional.' },
   ANS: { icon: Pill, gradient: 'from-violet-500 to-fuchsia-600', ring: 'ring-violet-300', tone: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300', blurb: 'General + regional anaesthesia, critical care.' },
 };
+// Pharmacology's Subject code in the database is PHM (create_neetpg_subjects.py).
+SUBJECT_VISUAL.PHM = SUBJECT_VISUAL.PHR;
 
 const DEFAULT_VISUAL = {
   icon: BookOpen, gradient: 'from-emerald-500 to-teal-600', ring: 'ring-emerald-300',
@@ -86,7 +89,7 @@ const HOW_IT_WORKS = [
     n: '01',
     icon: BookOpen,
     title: 'Open a NEET PG paper',
-    body: 'Pick a year from 2018-2025. Every question is loaded with subject, topic, image, and correct answer.',
+    body: 'Pick a year or a subject. Each question comes with its subject, topic, images where the recall has them, and the answer key.',
   },
   {
     n: '02',
@@ -98,14 +101,14 @@ const HOW_IT_WORKS = [
     n: '03',
     icon: TrendingUp,
     title: 'Track + revise',
-    body: 'Year-wise + subject-wise analytics, spaced-repetition flashcards, and AIR-rank prediction after every mock.',
+    body: 'Year-wise + subject-wise analytics, a mistake notebook and spaced-repetition flashcards after every session.',
   },
 ];
 
 const FAQS = [
   { q: 'What is NEET PG?', a: 'NEET PG is the single-window entrance exam for MD / MS / PG Diploma admissions across India, conducted by the National Board of Examinations (NBE).' },
   { q: 'How many questions in NEET PG?', a: '200 MCQs, 800 marks, 3 hours 30 minutes. Negative marking: -1 for wrong, +4 for correct.' },
-  { q: 'How many NEET PG PYQs are on CrackCMS?', a: '2,300+ verified PYQs across 19 PG subjects, image-rich recalls from 2018-2025.' },
+  { q: 'How many NEET PG PYQs are on CrackCMS?', a: `${NEET_PG_QUESTION_COUNT} NEET PG questions across the PG subjects, mostly image-rich exam recalls. NBE does not publish its papers, so these are recalls rather than an official question paper.` },
   { q: 'Does it support image-based questions?', a: 'Yes — image-heavy recalls (radiology, histopathology, dermatology, ECG) are pinned to the question and shown in a zoomable viewer.' },
   { q: 'Does the AI tutor work on NEET PG?', a: 'Yes. The AI tutor is grounded on Harrison, Robbins, Bailey & Love, Ghai, Park, and KD Tripathi. It pulls the closest matching recall chunks for every question.' },
 ];
@@ -114,30 +117,24 @@ const FAQS = [
 
 export default function NeetPgLanding() {
   const [stats, setStats] = useState<StatsPayload | null>(null);
-  const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [statsRes, subjectsRes] = await Promise.all([
-          questionsAPI.getStats({ exam_source: 'NEET PG' }),
-          questionsAPI.getSubjects(),
-        ]);
+        // One call: the stats endpoint scopes every breakdown (total, years,
+        // subjects) to NEET PG, so the grid shows NEET PG subjects with NEET
+        // PG counts.
+        const statsRes = await questionsAPI.getStats({ exam_source: 'NEET PG' });
         if (cancelled) return;
         const rawStats = statsRes.data as any;
-        const subjRows = ((subjectsRes.data as any)?.results || (subjectsRes.data as any) || []) as SubjectRow[];
-        // Combine live stats with full subject list (subjects endpoint gives
-        // every Subject row, while stats only lists subjects that actually
-        // have NEET PG questions). Show all 19 so the grid feels complete.
         setStats({
           total: rawStats.total ?? 0,
           total_solved: rawStats.total_solved ?? 0,
           by_year: rawStats.by_year ?? [],
           by_subject: rawStats.by_subject ?? [],
         });
-        setSubjects(subjRows);
       } catch {
         // graceful degradation — empty state, no crash
       } finally {
@@ -147,21 +144,30 @@ export default function NeetPgLanding() {
     return () => { cancelled = true; };
   }, []);
 
-  const totalQs = stats?.total && stats.total > 0 ? stats.total : 2300;
-  const totalYears = stats?.by_year.length ?? 0;
-  const totalSubjects = subjects.length > 0 ? subjects.length : 19;
+  // Only show a live count when it really came from the API; otherwise the
+  // same rounded figure the rest of the site uses.
+  const liveTotal = stats?.total && stats.total > 0 ? stats.total : null;
+  const totalLabel = liveTotal ? liveTotal.toLocaleString('en-IN') : NEET_PG_QUESTION_COUNT;
+  const pgSubjects = useMemo(() => pgSubjectsFromStats(stats?.by_subject), [stats]);
+  const yearTiles = useMemo(() => yearTilesFromStats(stats?.by_year), [stats]);
+  const totalYears = yearTiles.length;
+  const yearSpan = yearSpanLabel(yearTiles);
+  // 19 = the NEET PG syllabus, used only until the live breakdown arrives.
+  const totalSubjects = pgSubjects.length > 0 ? pgSubjects.length : 19;
 
-  // Featured year (most recent with content)
-  const featuredYear = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    if (!stats?.by_year?.length) return currentYear;
-    const top = [...stats.by_year].sort((a, b) => b.year - a.year)[0];
-    return top?.year ?? currentYear;
-  }, [stats]);
+  // Featured year: the most recent year with a real paper's worth of
+  // questions. Without one, the CTAs open the whole NEET PG bank instead of
+  // an empty "<current year>" paper.
+  const featuredYear: number | null = yearTiles[0]?.year ?? null;
+  const practiceHref = featuredYear
+    ? `/questions/neet-pg/practice?year=${featuredYear}`
+    : '/questions/neet-pg/practice';
+  const practiceLabel = featuredYear ? `Start NEET PG ${featuredYear}` : 'Start NEET PG practice';
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Same container as the hero below, so the crumb lines up with it. */}
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
         <Breadcrumbs items={[{ name: 'NEET PG', path: '/neet-pg' }]} />
       </div>
       {/* ════════════════ HERO ════════════════ */}
@@ -197,19 +203,19 @@ export default function NeetPgLanding() {
           <h1 className="text-4xl md:text-5xl lg:text-7xl font-extrabold tracking-tight leading-[1.05] max-w-4xl">
             NEET PG
             <span className="block text-2xl md:text-3xl lg:text-4xl font-semibold mt-3 text-white/90">
-              Crack it with 2,300+ PYQs, AI Tutor & Image-Rich Recalls
+              Crack it with {NEET_PG_QUESTION_COUNT} Questions, AI Tutor &amp; Image-Rich Recalls
             </span>
           </h1>
 
           <p className="mt-6 text-base md:text-xl max-w-2xl text-white/90 leading-relaxed">
-            India&apos;s most dedicated NEET PG platform — 19 PG subjects, image-heavy clinical vignettes, AI tutor grounded on Harrison &amp; Robbins, and full mock tests with AIR prediction.
+            India&apos;s most dedicated NEET PG platform — 19 PG subjects, image-heavy clinical vignettes, AI tutor grounded on Harrison &amp; Robbins, and full mock tests.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg" className="bg-white text-emerald-800 hover:bg-white/95 font-bold shadow-2xl shadow-emerald-900/30">
-              <Link href={`/questions/neet-pg/practice?year=${featuredYear}`}>
+              <Link href={practiceHref}>
                 <Zap className="w-4 h-4 mr-2 fill-emerald-700" />
-                Start NEET PG {featuredYear}
+                {practiceLabel}
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline"
@@ -223,15 +229,19 @@ export default function NeetPgLanding() {
                     className="bg-emerald-500/20 border-white/30 text-white hover:bg-emerald-500/30 backdrop-blur-sm font-semibold">
               <Link href="#subjects">
                 <Layers className="w-4 h-4 mr-2" />
-                Browse 19 Subjects
+                Browse {totalSubjects} Subjects
               </Link>
             </Button>
           </div>
 
           {/* Live stats row */}
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl">
-            <StatTile value={loading ? '—' : `${totalQs.toLocaleString()}+`} label="NEET PG PYQs" sub="live from API" />
-            <StatTile value={loading ? '—' : `${totalYears}`} label="Years covered" sub="2018 – 2025" />
+            <StatTile value={loading ? '—' : totalLabel} label="NEET PG questions" sub="image-rich exam recalls" />
+            <StatTile
+              value={loading ? '—' : `${totalYears}`}
+              label={totalYears === 1 ? 'Year covered' : 'Years covered'}
+              sub={yearSpan || undefined}
+            />
             <StatTile value={loading ? '—' : `${totalSubjects}`} label="PG Subjects" sub="clinical + para + pre" />
             <StatTile value="800" label="Max Marks" sub="200 Qs · +4 / -1" />
           </div>
@@ -239,18 +249,18 @@ export default function NeetPgLanding() {
       </section>
 
       {/* ════════════════ YEAR GRID ════════════════ */}
-      <section id="years" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <section id="years" className="scroll-mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
           <div>
             <h2 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
               <Calendar className="w-7 h-7 text-emerald-600" /> Year-wise PYQ Practice
             </h2>
             <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-2xl">
-              Click a year to launch the full NEET PG paper in our image-first player. Image-based recalls, AI tutor, and progress tracking included.
+              Click a year to practise that year&apos;s NEET PG recall questions in our image-first player. Image-based recalls, AI tutor, and progress tracking included.
             </p>
           </div>
           <Badge variant="secondary" className="text-xs">
-            {loading ? '—' : totalYears} years of PYQs available
+            {loading ? '—' : totalYears} {totalYears === 1 ? 'year' : 'years'} of PYQs available
           </Badge>
         </div>
 
@@ -262,7 +272,7 @@ export default function NeetPgLanding() {
           </div>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-            {stats?.by_year.map((y) => (
+            {yearTiles.map((y) => (
               <Link key={y.year} href={`/questions/neet-pg/practice?year=${y.year}`} className="group">
                 <div className="aspect-square rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 bg-linear-to-br from-emerald-50/60 via-white to-teal-50/60 dark:from-emerald-950/40 dark:via-slate-900 dark:to-teal-950/30 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/10 transition-all flex flex-col items-center justify-center text-center p-2 group-hover:scale-[1.03]">
                   <div className="text-2xl md:text-3xl font-extrabold text-emerald-800 dark:text-emerald-300 group-hover:text-emerald-600">
@@ -272,7 +282,7 @@ export default function NeetPgLanding() {
                     NEET PG
                   </div>
                   <div className="mt-1 text-[10px] font-semibold text-muted-foreground">
-                    {y.count.toLocaleString()} Qs
+                    {questionCountLabel(y.count)}
                   </div>
                   <div className="w-full bg-emerald-100/60 dark:bg-emerald-900/40 h-1 rounded-full overflow-hidden mt-1.5">
                     <div
@@ -302,19 +312,19 @@ export default function NeetPgLanding() {
 
 
       {/* ════════════════ SUBJECT GRID ════════════════ */}
-      <section id="subjects" className="bg-linear-to-br from-emerald-50/40 via-background to-teal-50/40 border-y border-border/60">
+      <section id="subjects" className="scroll-mt-20 bg-linear-to-br from-emerald-50/40 via-background to-teal-50/40 dark:from-emerald-950/30 dark:via-background dark:to-teal-950/20 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
           <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
             <div>
               <h2 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
-                <Layers className="w-7 h-7 text-emerald-600" />
-                19 PG Subjects · Tap to Practise
+                <Layers className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                {totalSubjects} PG Subjects · Tap to Practise
               </h2>
               <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-2xl">
-                Every NEET PG subject from Anatomy to Anaesthesia — image-heavy recalls, AI explanations, year-wise PYQs.
+                The NEET PG subjects in our bank, biggest first — image-heavy recalls, AI explanations, year-wise PYQs.
               </p>
             </div>
-            <Button asChild variant="outline" size="sm" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+            <Button asChild variant="outline" size="sm" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950/40">
               <Link href="/questions?exam=neet-pg">
                 Open QBank <ChevronRight className="w-4 h-4 ml-1" />
               </Link>
@@ -327,12 +337,20 @@ export default function NeetPgLanding() {
                 <Skeleton key={i} className="h-44 rounded-2xl" />
               ))}
             </div>
+          ) : pgSubjects.length === 0 ? (
+            <p className="rounded-2xl border border-border/60 bg-card/90 p-6 text-sm text-muted-foreground">
+              Subject counts could not be loaded right now.{' '}
+              <Link href="/questions?exam=neet-pg" className="font-semibold text-emerald-700 hover:underline dark:text-emerald-300">
+                Open the NEET PG QBank
+              </Link>{' '}
+              to browse every subject.
+            </p>
           ) : (
             <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {subjects.map((s) => {
+              {pgSubjects.map((s) => {
                 const v = SUBJECT_VISUAL[s.code] ?? DEFAULT_VISUAL;
                 const Icon = v.icon;
-                const count = s.question_count ?? 0;
+                const count = s.count ?? 0;
                 return (
                   <Link key={s.id} href={`/questions/neet-pg/practice?subject=${s.id}`}
                         className="group">
@@ -383,7 +401,7 @@ export default function NeetPgLanding() {
       </section>
 
       {/* ════════════════ HIGH-YIELD ════════════════ */}
-      <section id="high-yield" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <section id="high-yield" className="scroll-mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="flex items-center gap-3 mb-6">
           <Sparkles className="w-7 h-7 text-emerald-600" />
           <h2 className="text-2xl md:text-4xl font-bold">High-yield topics that show up every year</h2>
@@ -489,12 +507,12 @@ export default function NeetPgLanding() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[
             {
-              slug: 'neet-pg-cutoff-2024',
+              slug: 'neet-pg-2024-cutoff-category-wise',
               title: 'NEET PG 2024 Cutoff: Qualifying Percentile + Closing Ranks',
               excerpt: 'Category-wise cutoff + closing ranks for clinical branches — verified against NBE data.',
             },
             {
-              slug: 'neet-pg-preparation-strategy',
+              slug: 'neet-pg-preparation-strategy-study-plans',
               title: 'NEET PG Preparation Strategy: Study Plans & Time Management',
               excerpt: 'Complete preparation strategy with subject triage, daily time-blocking, and final-30-day protocol.',
             },
@@ -533,16 +551,18 @@ export default function NeetPgLanding() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 text-center">
           <Award className="w-12 h-12 mx-auto mb-4 text-emerald-200" />
           <h2 className="text-3xl md:text-5xl font-extrabold max-w-3xl mx-auto">
-            Ready to crack NEET PG {featuredYear + 1}?
+            Ready to crack NEET PG?
           </h2>
           <p className="mt-3 text-emerald-100/90 max-w-xl mx-auto">
-            Start practising the {featuredYear} paper today. Image-rich player, AI tutor, year-wise analytics.
+            {featuredYear
+              ? `Start practising the ${featuredYear} recalls today. Image-rich player, AI tutor, year-wise analytics.`
+              : 'Start practising today. Image-rich player, AI tutor, year-wise analytics.'}
           </p>
           <div className="mt-7 flex flex-wrap gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-emerald-800 hover:bg-white/95 font-bold shadow-xl">
-              <Link href={`/questions/neet-pg/practice?year=${featuredYear}`}>
+              <Link href={practiceHref}>
                 <Zap className="w-4 h-4 mr-2 fill-emerald-700" />
-                Start {featuredYear} Paper
+                {featuredYear ? `Start ${featuredYear} recalls` : 'Start practising'}
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 font-semibold">
@@ -564,7 +584,7 @@ export default function NeetPgLanding() {
             <p className="mt-1 font-semibold group-hover:underline">NEET PG vs USMLE <ArrowRight className="inline ml-1 h-3 w-3" /></p>
             <p className="mt-1 text-xs text-muted-foreground">Which is better for Indian MBBS graduates?</p>
           </Link>
-          <Link href="/neet-pg/vs-upsc-cms" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
+          <Link href="/cms/vs-neet-pg" className="group rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-md">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Comparison</p>
             <p className="mt-1 font-semibold group-hover:underline">NEET PG vs UPSC CMS <ArrowRight className="inline ml-1 h-3 w-3" /></p>
             <p className="mt-1 text-xs text-muted-foreground">Clinical MD/MS vs Government MO post</p>
@@ -581,23 +601,7 @@ export default function NeetPgLanding() {
           </Link>
         </div>
       </section>
-
-      {/* ════════════════ FOOTER ════════════════ */}
-      <footer className="border-t border-border/40 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} CrackCMS · NEET PG microsite</span>
-          <span className="flex items-center gap-3">
-            <Link href="/exams/cms" className="hover:text-primary">UPSC CMS</Link>
-            <span>·</span>
-            <Link href="/neet-pg" className="hover:text-primary font-semibold">NEET PG</Link>
-            <span>·</span>
-            <Link href="/exams/usmle" className="hover:text-primary">USMLE</Link>
-            <span>·</span>
-            <Link href="/inicet" className="hover:text-primary">INI-CET</Link>
-          </span>
-        </div>
-      </footer>
-    </main>
+    </div>
   );
 }
 

@@ -18,79 +18,225 @@ import {
   isInvalidRefreshTokenError,
   isSupabaseAuthEnabled,
 } from './supabase';
+import { clearLocalTokens, getLocalAccessToken, isLocalAuthMode, refreshLocalAccessToken } from './localAuth';
+import { createRefreshGate } from './sessionRefreshGate';
+import { DEVICE_LIMIT_SETTINGS_URL, shouldOpenSettingsForDeviceLimit } from './deviceLimit';
 
-const isAppRunningLocally = () => {
-  if (typeof window === 'undefined') {
-    return process.env.NODE_ENV !== 'production';
-  }
+import {
+  USE_API_PROXY,
+  API_BASE_URL,
+  resolveFallbackApiBaseUrl,
+} from './apiBase';
+// Never a remote (production) API for a local run -- see resolveFallbackApiBaseUrl.
+const FALLBACK_API_BASE_URL = resolveFallbackApiBaseUrl();
 
-  const host = window.location.hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
-};
+// Last Supabase session seen by the request interceptor.
+let cachedSession: { access_token: string } | null = null;
 
-const USE_API_PROXY = isAppRunningLocally() && (process.env.NEXT_PUBLIC_USE_API_PROXY ?? 'false') === 'true';
-const DEFAULT_LOCAL_API_URL = 'http://localhost:8000/api';
-const DEFAULT_PRODUCTION_API_URL = 'https://api.cracklabs.app/api';
-const LEGACY_UNHEALTHY_API_HOSTS = [
-  'crackcms-backend.onrender.com',
-  '.onrender.com',
-  'crackcms-vsthc.ondigitalocean.app',
-  '.ondigitalocean.app',
-];
+// Device id sent as X-Session-ID. The backend binds it to the Supabase
+// session of the access token (accounts/supabase_rest_auth.py), so signing in
+// again on this browser keeps its device slot.
+const DEVICE_ID_KEY = 'crack_device_id';
+const DEVICE_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-const normalizeApiBaseUrl = (url: string) => {
-  const normalized = url.replace(/\/+$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-};
+const newDeviceId = () => 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
 
-const isLocalhostApiUrl = (url: string) => {
+const readDeviceIdCookie = (): string | null => {
   try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    const match = document.cookie.match(new RegExp(`(?:^|; )${DEVICE_ID_KEY}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
   } catch {
-    return false;
+    return null;
   }
 };
 
-const shouldIgnoreConfiguredApiUrl = (url: string) =>
-  isLocalhostApiUrl(url) && !isAppRunningLocally();
-
-const isKnownUnhealthyApiHost = (url: string) =>
-  LEGACY_UNHEALTHY_API_HOSTS.some((host) => url.includes(host));
-
-const resolveApiBaseUrl = () => {
-  if (USE_API_PROXY) {
-    return '/api/proxy';
+const writeDeviceIdCookie = (id: string | null) => {
+  try {
+    document.cookie = id
+      ? `${DEVICE_ID_KEY}=${encodeURIComponent(id)}; Path=/; SameSite=Lax; Max-Age=${DEVICE_ID_COOKIE_MAX_AGE}`
+      : `${DEVICE_ID_KEY}=; Path=/; SameSite=Lax; Max-Age=0`;
+  } catch {
+    // Cookies blocked as well.
   }
-
-  const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-  if (configured) {
-    const normalized = normalizeApiBaseUrl(configured);
-    if (shouldIgnoreConfiguredApiUrl(normalized) || isKnownUnhealthyApiHost(normalized)) {
-      return DEFAULT_PRODUCTION_API_URL;
-    }
-    return normalized;
-  }
-
-  return process.env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_API_URL : DEFAULT_LOCAL_API_URL;
 };
 
-const API_BASE_URL = resolveApiBaseUrl();
-const configuredFallback = normalizeApiBaseUrl((process.env.NEXT_PUBLIC_API_FALLBACK_URL || DEFAULT_PRODUCTION_API_URL).trim());
-const FALLBACK_API_BASE_URL = USE_API_PROXY
-  ? API_BASE_URL
-  : (shouldIgnoreConfiguredApiUrl(configuredFallback) ? DEFAULT_PRODUCTION_API_URL : configuredFallback);
-
-// Helper for generating page-session tracking ID
+// Storage access can throw (site data blocked, some privacy modes / webviews).
+// Then keep the id in a first-party cookie. If that cannot be persisted
+// either, send no X-Session-ID at all: the backend then counts this browser
+// by its Supabase session (one device per sign-in). A new id per page load
+// used to enrol a new device on every visit and use up the 2-device
+// allowance within two page loads.
 const getOrCreateSessionId = (): string => {
   if (typeof window === 'undefined') return '';
-  let id = localStorage.getItem('crack_device_id');
-  if (!id) {
-    id = 'dev_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-    localStorage.setItem('crack_device_id', id);
+  try {
+    let id = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = newDeviceId();
+      window.localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    let id = readDeviceIdCookie();
+    if (!id) {
+      writeDeviceIdCookie(newDeviceId());
+      id = readDeviceIdCookie();
+    }
+    return id || '';
   }
-  return id;
+};
+
+/** Forget this browser's device id, so the next sign-in enrols a new device. */
+const resetDeviceId = () => {
+  if (typeof window === 'undefined') return;
+  writeDeviceIdCookie(null);
+  try {
+    window.localStorage.removeItem(DEVICE_ID_KEY);
+  } catch {
+    // Storage unavailable: the cookie was cleared above.
+  }
+};
+
+/**
+ * Backend error codes that end this browser's session
+ * (accounts/supabase_rest_auth.py; local dev auth also answers a blocked
+ * account with `account_blocked`, `user_inactive` is SimpleJWT's own code,
+ * kept for older backends). `session_invalid` is the legacy single-session
+ * code, kept for older backends.
+ */
+const SESSION_ENDING_MESSAGES: Record<string, string> = {
+  account_blocked: 'Your account has been blocked. Contact support if you think this is a mistake.',
+  user_inactive: 'Your account has been blocked. Contact support if you think this is a mistake.',
+  device_inactive: 'This device was signed out. Please sign in again.',
+  email_not_confirmed: 'Please confirm your email address, then sign in again.',
+  email_required: 'Sign in with an email address to use CrackLabs.',
+  account_link_required:
+    'This account must be verified by an administrator before it can sign in. Please contact support.',
+  session_invalid: "You're logged in on another device",
+};
+
+/** `code` field of a backend error response, if any. */
+export const getApiErrorCode = (error: unknown): string | undefined => {
+  const data = (error as { response?: { data?: unknown } } | null)?.response?.data;
+  const code = data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined;
+  return typeof code === 'string' ? code : undefined;
+};
+
+/** User-facing message when `error` means the session is over (blocked account, logged-out device, ...). */
+export const getSessionEndingMessage = (error: unknown): string | null => {
+  const code = getApiErrorCode(error);
+  return code && Object.prototype.hasOwnProperty.call(SESSION_ENDING_MESSAGES, code)
+    ? SESSION_ENDING_MESSAGES[code]
+    : null;
+};
+
+let sessionEndRedirecting = false;
+
+/**
+ * Sign this browser out locally after the backend ended the session, then
+ * show the reason on /login. Returns true while the page is navigating away.
+ * On /login itself it does not navigate, so the login form can show the error.
+ */
+export const endSessionAfterApiError = async (error: unknown): Promise<boolean> => {
+  const message = getSessionEndingMessage(error);
+  if (!message || typeof window === 'undefined') return false;
+  if (sessionEndRedirecting) return true;
+  if (getApiErrorCode(error) === 'device_inactive') resetDeviceId();
+  cachedSession = null;
+  if (isLocalAuthMode()) {
+    clearLocalTokens();
+  } else {
+    await clearSupabaseLocalSession();
+  }
+  if (window.location.pathname.startsWith('/login')) return false;
+  sessionEndRedirecting = true;
+  window.location.href = '/login?authError=' + encodeURIComponent(message);
+  return true;
+};
+
+// Only these are replayed against the fallback base URL: a 502/503/504 can
+// arrive after the backend already processed a POST/PATCH (order creation,
+// test submission, AI generation), and replaying it would run it twice.
+const IDEMPOTENT_METHODS = new Set(['get', 'head', 'options']);
+
+// 429 `auth_verification_busy`: the backend could not check the access token
+// with Supabase right now (accounts/supabase_rest_auth.py caps those checks).
+// It is answered during authentication, before any view runs, so retrying
+// once after Retry-After (at most 2 s) is safe for every method.
+export const AUTH_BUSY_CODE = 'auth_verification_busy';
+const AUTH_BUSY_MAX_WAIT_MS = 2000;
+
+/** Delay before retrying an `auth_verification_busy` answer (Retry-After, capped). */
+export const authBusyRetryDelayMs = (retryAfter: unknown): number => {
+  const seconds = Number(typeof retryAfter === 'string' || typeof retryAfter === 'number' ? retryAfter : NaN);
+  if (!Number.isFinite(seconds) || seconds < 0) return 1000;
+  return Math.min(AUTH_BUSY_MAX_WAIT_MS, seconds * 1000);
+};
+
+/**
+ * Token to retry a `device_inactive` answer with, or null to end the session.
+ *
+ * The backend refuses a Supabase session that was logged out or replaced by
+ * a newer sign-in on this browser. A request still carrying an older
+ * session's token (another tab, an in-flight call during a sign-in) must not
+ * sign out the CURRENT session: it is retried once with the current token.
+ */
+export const staleSessionRetryToken = (
+  code: string | undefined,
+  sentWith: string | null,
+  current: string | null,
+): string | null => (code === 'device_inactive' && sentWith && current && sentWith !== current ? current : null);
+
+// ── Supabase session refresh after a 401 ─────────────────────────────────
+// Bounded on purpose (see sessionRefreshGate.ts): when the backend rejects a
+// session that is actually valid, an unbounded refresh-per-401 looped with
+// the auth listener until Supabase rate-limited token refreshes for the IP.
+
+/** Bearer token a request was sent with (AxiosHeaders or a plain object). */
+const bearerTokenOf = (headers: unknown): string | null => {
+  if (!headers || typeof headers !== 'object') return null;
+  const h = headers as { get?: (name: string) => unknown } & Record<string, unknown>;
+  const raw = typeof h.get === 'function' ? h.get('Authorization') : (h.Authorization ?? h.authorization);
+  const value = typeof raw === 'string' ? raw : '';
+  return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() || null : null;
+};
+
+const refreshSupabaseAccessToken = async (): Promise<string | null> => {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      if (isInvalidRefreshTokenError(error)) {
+        await clearSupabaseLocalSession();
+        cachedSession = null;
+      }
+      return null;
+    }
+    if (data.session?.access_token) cachedSession = data.session;
+    return data.session?.access_token || null;
+  } catch (refreshError) {
+    if (isInvalidRefreshTokenError(refreshError)) {
+      await clearSupabaseLocalSession();
+      cachedSession = null;
+    }
+    return null;
+  }
+};
+
+/** A fresh access token to retry with after `failedToken` got a 401, or null. */
+const supabaseTokenAfter401 = createRefreshGate(refreshSupabaseAccessToken);
+
+/** The current Supabase session's access token (null in local-auth mode or when signed out). */
+const currentSupabaseAccessToken = async (): Promise<string | null> => {
+  if (typeof window === 'undefined' || isLocalAuthMode() || !isSupabaseAuthEnabled()) return null;
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
+  }
 };
 
 const api = axios.create({
@@ -101,15 +247,19 @@ const api = axios.create({
 });
 
 // Add auth token and session tracking to requests
-let cachedSession: { access_token: string } | null = null;
-
 api.interceptors.request.use(async (config) => {
   const sessionId = getOrCreateSessionId();
   if (sessionId) {
     config.headers['X-Session-ID'] = sessionId;
   }
 
-  if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
+  if (config.headers.Authorization) {
+    // The caller passed a token explicitly (e.g. AuthProvider's profile
+    // fetch right after sign-in): keep it.
+  } else if (typeof window !== 'undefined' && isLocalAuthMode()) {
+    const localToken = getLocalAccessToken();
+    if (localToken) config.headers.Authorization = `Bearer ${localToken}`;
+  } else if (typeof window !== 'undefined' && isSupabaseAuthEnabled()) {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       try {
@@ -134,7 +284,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle token refresh on 401 and single session logout on session_invalid
+// Handle session-ending codes, token refresh on 401, and 5xx failover
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -142,20 +292,58 @@ api.interceptors.response.use(
       _retry?: boolean;
       _apiBaseFailover?: boolean;
       _tokenRefresh?: boolean;
+      _authBusyRetry?: boolean;
+      _staleSessionRetry?: boolean;
       baseURL?: string;
+      method?: string;
       headers?: Record<string, string>;
     };
     const status = error.response?.status as number | undefined;
     const currentBaseUrl = originalRequest.baseURL || API_BASE_URL;
+    const errorCode = getApiErrorCode(error);
 
-    // Single session validation check
-    const errorCode = error.response?.data?.code;
-    if (errorCode === 'session_invalid') {
-      if (typeof window !== 'undefined') {
-        await clearSupabaseLocalSession();
-        window.location.href = '/login?authError=' + encodeURIComponent("You're logged in on another device");
-        return new Promise(() => {}); // Stop request chain
+    if (status === 429 && errorCode === AUTH_BUSY_CODE && error.config && !originalRequest._authBusyRetry) {
+      originalRequest._authBusyRetry = true;
+      const headers = (error.response?.headers || {}) as { get?: (name: string) => unknown } & Record<string, unknown>;
+      const retryAfter = typeof headers.get === 'function' ? headers.get('retry-after') : headers['retry-after'];
+      await new Promise((resolve) => setTimeout(resolve, authBusyRetryDelayMs(retryAfter)));
+      return api(originalRequest);
+    }
+
+    // device_inactive for a request sent with an older session's token: retry
+    // once with the current session instead of signing that one out.
+    if (errorCode === 'device_inactive' && !originalRequest._staleSessionRetry) {
+      const retryToken = staleSessionRetryToken(
+        errorCode, bearerTokenOf(originalRequest.headers), await currentSupabaseAccessToken(),
+      );
+      if (retryToken && error.config) {
+        originalRequest._staleSessionRetry = true;
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${retryToken}`;
+        return api(originalRequest);
       }
+    }
+
+    // Blocked account, device logged out (Settings / admin), unconfirmed
+    // email: sign out locally and explain on /login. Must run before the
+    // 401 refresh below -- a fresh token does not change these answers.
+    if (getSessionEndingMessage(error)) {
+      if (await endSessionAfterApiError(error)) {
+        return new Promise(() => {}); // page is navigating to /login
+      }
+      return Promise.reject(error);
+    }
+
+    // Too many devices: keep the session but open Settings, where the
+    // device list and "remove device" still work for this device. Settings
+    // and Subscription (buy the 4-device plan) are left alone, so their
+    // background requests cannot bounce the device away (see deviceLimit.ts).
+    if (errorCode === 'device_limit_reached') {
+      if (typeof window !== 'undefined' && shouldOpenSettingsForDeviceLimit(window.location.pathname)) {
+        window.location.href = DEVICE_LIMIT_SETTINGS_URL;
+        return new Promise(() => {});
+      }
+      return Promise.reject(error);
     }
 
     // Freemium conversion layer (Task 9) — backend gates free users with
@@ -184,45 +372,51 @@ api.interceptors.response.use(
       });
     }
 
-    // SECURITY / UX (Fix #7): on 401, attempt a one-shot Supabase session
-    // refresh and retry the original request once. Supabase access tokens
-    // are short-lived (default 1h). Without this, a paying user who keeps
-    // a long-lived frontend session tab open for >1h starts seeing 401s
-    // on every API call and has to manually reload — and the profile
-    // refresh in auth.tsx falls back to mapSupabaseUser which has NO
-    // subscription_info, so the paying user appears unsubscribed until
-    // a hard reload. One refresh attempt + one retry closes both loops.
+    // SECURITY / UX (Fix #7): on 401, refresh the Supabase session and retry
+    // the original request once. Supabase access tokens are short-lived
+    // (default 1h). Without this, a paying user who keeps a long-lived tab
+    // open for >1h starts seeing 401s on every API call and has to reload --
+    // and the profile refresh in auth.tsx falls back to mapSupabaseUser,
+    // which has NO subscription_info. The refresh itself is bounded (see
+    // supabaseTokenAfter401) so a backend that rejects valid sessions
+    // cannot drive a refresh loop.
     if (
       status === 401 &&
       !originalRequest._tokenRefresh &&
       typeof window !== 'undefined' &&
+      isLocalAuthMode()
+    ) {
+      originalRequest._tokenRefresh = true;
+      const newToken = await refreshLocalAccessToken();
+      if (newToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        return api(originalRequest);
+      }
+    }
+
+    if (
+      status === 401 &&
+      !originalRequest._tokenRefresh &&
+      typeof window !== 'undefined' &&
+      !isLocalAuthMode() &&
       isSupabaseAuthEnabled()
     ) {
       originalRequest._tokenRefresh = true;
-      try {
-        const supabase = getSupabaseBrowserClient();
-        if (supabase) {
-          const { data, error: refreshErr } = await supabase.auth.refreshSession();
-          if (!refreshErr && data.session?.access_token) {
-            const newToken = data.session.access_token;
-            originalRequest.headers = originalRequest.headers || {};
-            (originalRequest.headers as Record<string, string>)['Authorization'] =
-              `Bearer ${newToken}`;
-            return api(originalRequest);
-          }
-        }
-      } catch (refreshError) {
-        if (isInvalidRefreshTokenError(refreshError)) {
-          await clearSupabaseLocalSession();
-        }
-        // fall through to reject so the caller can render its own UI
+      const newToken = await supabaseTokenAfter401(bearerTokenOf(originalRequest.headers));
+      if (newToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        return api(originalRequest);
       }
+      // fall through to reject so the caller can render its own UI
     }
 
     const shouldFailover =
       !USE_API_PROXY &&
       !originalRequest._apiBaseFailover &&
       currentBaseUrl !== FALLBACK_API_BASE_URL &&
+      IDEMPOTENT_METHODS.has((originalRequest.method || 'get').toLowerCase()) &&
       (status === 502 || status === 503 || status === 504);
 
     if (shouldFailover) {
@@ -235,6 +429,25 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Admin system actions. scope 'all' rewrites every user's data, so the backend
+ * also requires `confirm` to be the phrase the admin typed ('RESET ALL').
+ * The payload is sent as given: there is no default phrase, so a call that
+ * says scope 'all' by mistake is refused (400 confirmation_required) instead
+ * of wiping everyone's data.
+ */
+type SystemActionPayload = { scope: 'all' | 'user'; user_id?: number; confirm?: string };
+
+/** Scholarship challenge question as served by POST /auth/scholarship/start/ (no answer). */
+export interface ScholarshipChallengeQuestion {
+  id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+}
+
 // Auth API
 export const authAPI = {
   register: (data: Record<string, string>) => api.post('/auth/register/', data),
@@ -246,14 +459,21 @@ export const authAPI = {
     api.post('/auth/subscribe/order/', { plan, request_id: requestId }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
+  // Local mock payments only (backend mounts this when PAYMENTS_MODE=mock + DEBUG).
+  subscribeMockCheckout: (orderId: string) => api.post('/auth/subscribe/mock-checkout/', { order_id: orderId }),
   subscriptionStatus: () => api.get('/auth/subscribe/status/'),
   subscriptionHistory: () => api.get('/auth/subscribe/history/'),
   subscriptionInvoice: (subscriptionId: number) => api.get(`/auth/subscribe/invoice/${subscriptionId}/`),
-  verifyScholarship: (answers: Record<string, string>) => api.post('/auth/verify-scholarship/', { answers }),
-  // Password reset
-  requestPasswordReset: (data: { email: string }) => api.post('/auth/password-reset/', data),
-  confirmPasswordReset: (data: { uid: string; token: string; new_password: string }) =>
-    api.post('/auth/password-reset/confirm/', data),
+  // Scholarship: the server picks the five questions and returns a signed
+  // challenge_token that verifyScholarship must send back.
+  startScholarship: () =>
+    api.post<{ questions: ScholarshipChallengeQuestion[]; challenge_token: string | null; expires_in: number }>(
+      '/auth/scholarship/start/',
+    ),
+  verifyScholarship: (answers: Record<string, string>, challengeToken?: string | null) =>
+    api.post('/auth/verify-scholarship/', { answers, challenge_token: challengeToken || undefined }),
+  // Password reset is Supabase-only (auth.tsx resetPassword); the old Django
+  // /auth/password-reset/ endpoints now return 410.
   // Device management
   getDevices: () => api.get('/auth/devices/'),
   logoutDevice: (device_id: number) => api.post('/auth/devices/logout/', { device_id }),
@@ -261,8 +481,8 @@ export const authAPI = {
   getTokenBalance: () => api.get('/auth/tokens/'),
   purchaseTokens: (data: { amount: number; payment_id?: string }) => api.post('/auth/tokens/purchase/', data),
   getTokenHistory: () => api.get('/auth/tokens/history/'),
-  // Admin token management
-  adminGetAllUsers: () => api.get('/auth/tokens/admin/users/'),
+  // Admin token management (paged: limit / offset)
+  adminGetAllUsers: (params?: { limit?: number; offset?: number }) => api.get('/auth/tokens/admin/users/', { params }),
   adminGrantTokens: (data: { user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/grant/', data),
   adminTransferTokens: (data: { from_user_id?: number; to_user_id: number; amount: number; note?: string }) => api.post('/auth/tokens/admin/transfer/', data),
   adminAuditLogs: (params?: Record<string, string | number>) => api.get('/auth/tokens/admin/audit-logs/', { params }),
@@ -270,9 +490,9 @@ export const authAPI = {
   adminToggleUserBlock: (userId: number, blocked: boolean) => api.patch(`/auth/admin/users/${userId}/block/`, { blocked }),
   adminUpdateUserRole: (userId: number, role: 'admin' | 'student') => api.patch(`/auth/admin/users/${userId}/role/`, { role }),
   adminResetUserProgress: (userId: number) => api.post(`/auth/admin/users/${userId}/reset-progress/`),
-  adminResetAttempts: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/reset-attempts/', data),
-  adminClearAnalytics: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/clear-analytics/', data),
-  adminRerunEvaluation: (data: { scope: 'all' | 'user'; user_id?: number }) => api.post('/auth/admin/system/rerun-evaluation/', data),
+  adminResetAttempts: (data: SystemActionPayload) => api.post('/auth/admin/system/reset-attempts/', data),
+  adminClearAnalytics: (data: SystemActionPayload) => api.post('/auth/admin/system/clear-analytics/', data),
+  adminRerunEvaluation: (data: SystemActionPayload) => api.post('/auth/admin/system/rerun-evaluation/', data),
   
   adminBackupData: () => api.post('/auth/admin/system/backup-data/'),
   adminRestoreData: () => api.post('/auth/admin/system/restore-data/'),
@@ -291,6 +511,14 @@ export const authAPI = {
 export const extractApiErrorMessage = (payload: unknown, fallback = 'Request failed') => {
   if (typeof payload === 'string') {
     const lowerPayload = payload.toLowerCase();
+    // Django's own error pages (the DEBUG traceback page, or the plain
+    // "Server Error (500)" page) are server errors, not a gateway timeout.
+    if (lowerPayload.includes('operationalerror at')) {
+      return 'Server database is not ready. Please try again in a minute.';
+    }
+    if (lowerPayload.includes('server error (500)') || lowerPayload.includes('debug = true')) {
+      return 'Something went wrong on our server. Please try again.';
+    }
     if (
       lowerPayload.includes('<!doctype html') ||
       lowerPayload.includes('<html') ||
@@ -351,12 +579,16 @@ export const ingestionAPI = {
   // Jobs
   listJobs: (params?: Record<string, string | number>) =>
     api.get('/ingestion/jobs/', { params }),
+  // Jobs per status over every job (the list holds only the newest 200).
+  jobCounts: () =>
+    api.get<{ counts: Record<string, number>; total: number }>('/ingestion/jobs/counts/'),
   getJob: (id: number) => api.get(`/ingestion/jobs/${id}/`),
   createJob: (data: {
     material_sha16: string;
     parent_exam: string;
     batch_id?: number;
-    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+    // 'auto-all' is no longer accepted by the API (400).
+    strategy?: 'auto-pr-only' | 'manual';
   }) => api.post('/ingestion/jobs/', data),
   retryJob: (id: number) => api.post(`/ingestion/jobs/${id}/retry/`, {}),
   cancelJob: (id: number) => api.post(`/ingestion/jobs/${id}/cancel/`, {}),
@@ -388,7 +620,8 @@ export const ingestionAPI = {
     name: string;
     material_sha16s: string[];
     parent_exam: string;
-    strategy?: 'auto-pr-only' | 'auto-all' | 'manual';
+    // 'auto-all' is no longer accepted by the API (400).
+    strategy?: 'auto-pr-only' | 'manual';
   }) => api.post('/ingestion/batches/', data),
 };
 // Questions API
@@ -400,10 +633,13 @@ export const questionsAPI = {
   getSubjects: (params?: Record<string, string | number>) => api.get('/questions/subjects/', { params }),
   getTopics: (params?: Record<string, string | number>) => api.get('/questions/topics/', { params }),
   getExamTracks: (params?: Record<string, string | number>) => api.get('/questions/exam-tracks/', { params }),
-  getYears: () => api.get('/questions/years/'),
+  // Years with active questions (year 0 / inactive rows excluded), optionally for one exam.
+  getYears: (params?: { exam_type?: string; exam_source?: string }) => api.get('/questions/years/', { params }),
   getStats: (params?: Record<string, string | number>) => api.get('/questions/stats/', { params }),
   bookmark: (id: number) => api.post(`/questions/${id}/bookmark/`),
-  attempt: (id: number, data: { selected_answer: string }) => api.post(`/questions/${id}/attempt/`, data),
+  // time_spent_seconds feeds server-side study-time tracking (optional).
+  attempt: (id: number, data: { selected_answer: string; time_spent_seconds?: number }) =>
+    api.post(`/questions/${id}/attempt/`, data),
   getBookmarks: () => api.get('/questions/bookmarks/'),
   upload: (data: Record<string, unknown>[]) => api.post('/questions/upload/', data),
   create: (data: Record<string, unknown>) => api.post('/questions/', data),
@@ -434,7 +670,9 @@ export const questionsAPI = {
   extractionItemAutotag: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/autotag/`),
   extractionItemApprove: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/approve/`),
   extractionItemReject: (itemId: number, data?: Record<string, unknown>) => api.post(`/questions/extraction/items/${itemId}/reject/`, data || {}),
-  extractionItemPublish: (itemId: number) => api.post(`/questions/extraction/items/${itemId}/publish/`),
+  // exam_type: the exam the published question belongs to (the backend falls back to the job's exam).
+  extractionItemPublish: (itemId: number, data?: { exam_type?: string }) =>
+    api.post(`/questions/extraction/items/${itemId}/publish/`, data || {}),
   aiOverride: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-override/`, data),
   aiLock: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/ai-lock/`, data),
   forceRegenerate: (id: number) => api.post(`/questions/${id}/force-regenerate/`),
@@ -451,7 +689,7 @@ export const questionsAPI = {
   updateReference: (id: number, data: Record<string, unknown>) => api.patch(`/questions/${id}/reference/`, data),
   formatFix: (id: number) => api.patch(`/questions/${id}/format-fix/`),
   // Admin AI explanation generation
-  generateExplanation: (id: number, data: { correct_answer: string; regenerate_if_exists?: boolean; update_correct_answer?: boolean }) =>
+  generateExplanation: (id: number, data: { correct_answer: string; regenerate_if_exists?: boolean; update_correct_answer?: boolean; dry_run?: boolean }) =>
     api.post(`/questions/${id}/generate-explanation/`, data),
   uploadImage: (data: { questionId: number; file: File; role?: 'primary' | 'option' | 'illustration' | 'explanation' }) => {
     const form = new FormData();
@@ -507,8 +745,9 @@ export const testsAPI = {
   start: (id: number) => api.post(`/tests/${id}/start/`),
   submit: (id: number, data: Record<string, unknown>) => api.post(`/tests/${id}/submit/`, data),
   review: (id: number, attemptId: number) => api.get(`/tests/${id}/review/`, { params: { attempt_id: attemptId } }),
-  generateAdaptive: (data: { num_questions?: number }) => api.post('/tests/generate-adaptive/', data),
-  pyqSimulation: (data: { year: number; paper?: number }) => api.post('/tests/pyq-simulation/', data),
+  // exam_type scopes the paper / adaptive pool (e.g. 'cms', 'neet_pg').
+  generateAdaptive: (data: { num_questions?: number; exam_type?: string }) => api.post('/tests/generate-adaptive/', data),
+  pyqSimulation: (data: { year: number; paper?: number; exam_type?: string }) => api.post('/tests/pyq-simulation/', data),
   getAttempts: () => api.get('/tests/attempts/'),
   getAttempt: (id: number) => api.get(`/tests/attempts/${id}/`),
 };
@@ -523,8 +762,8 @@ export const analyticsAPI = {
   getRecentAttempts: () => api.get('/analytics/recent-attempts/'),
   getScorePrediction: () => api.get('/analytics/score-prediction/'),
   getPerformanceTrend: () => api.get('/analytics/performance-trend/'),
-  // Feedback
-  getFeedback: () => api.get('/analytics/feedback/'),
+  // Feedback (paged)
+  getFeedback: (params?: { page?: number; page_size?: number }) => api.get('/analytics/feedback/', { params }),
   submitFeedback: (data: { category: string; rating: number; title: string; message: string }) =>
     api.post('/analytics/feedback/', data),
   replyFeedback: (id: number, data: { admin_reply: string }) =>
@@ -534,8 +773,8 @@ export const analyticsAPI = {
     api.post('/analytics/contact/', data),
   exportData: (type?: string) => api.get('/analytics/export/', { params: { type: type || 'all' } }),
   exportCSV: (type: string) => api.get('/analytics/export/csv/', { params: { type }, responseType: 'blob' }),
-  // Announcements
-  getAnnouncements: () => api.get('/analytics/announcements/'),
+  // Announcements ({scope: 'all'} lets admins include expired / inactive ones)
+  getAnnouncements: (params?: Record<string, string | number>) => api.get('/analytics/announcements/', { params }),
   createAnnouncement: (data: { title: string; message: string; priority: string; expires_at?: string }) =>
     api.post('/analytics/announcements/', data),
   updateAnnouncement: (id: number, data: Record<string, unknown>) =>
@@ -568,6 +807,9 @@ export const aiAPI = {
   explain: (data: { concept: string; level?: string }) => api.post('/ai/explain/', data, { timeout: AI_TIMEOUT }),
   analyzeQuestion: (data: Record<string, string>) => api.post('/ai/analyze/', data, { timeout: AI_TIMEOUT }),
   explainAfterAnswer: (data: {
+    // Bank question id: lets the backend use (and store) the question's own
+    // explanation and apply its answer-access rules.
+    question_id?: number;
     question_text: string;
     options?: Record<string, string>;
     correct_answer?: string;
@@ -645,15 +887,19 @@ export const discussionsAPI = {
 
 // Topic Notes API — PYQ explanation → revision notes pipeline
 export const topicNotesAPI = {
-  list: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
-  get: (id: number) => api.get(`/questions/notes/${id}/`),
+  // `/questions/notes/` is the *personal* notes endpoint; admin topic notes
+  // live under `/questions/topic-notes/library/`.
+  list: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/library/', { params }),
+  get: (id: number) => api.get(`/questions/topic-notes/library/${id}/`),
   create: (data: { subject: number; topic: number; exam_type?: string; title: string; content?: string; source_question_ids?: number[] }) =>
-    api.post('/questions/notes/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
-  delete: (id: number) => api.delete(`/questions/notes/${id}/`),
-  generateFromTopic: (id: number) => api.post(`/questions/notes/${id}/generate/`),
+    api.post('/questions/topic-notes/library/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/topic-notes/library/${id}/`, data),
+  delete: (id: number) => api.delete(`/questions/topic-notes/library/${id}/`),
+  generateFromTopic: (id: number) => api.post(`/questions/topic-notes/library/${id}/generate/`),
+  // Published notes for students (paged).
+  published: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/published/', { params }),
   // Admin topic notes (exam_type-specific)
-  adminList: (params?: Record<string, string | number>) => api.get('/questions/notes/', { params }),
+  adminList: (params?: Record<string, string | number>) => api.get('/questions/topic-notes/library/', { params }),
   adminCreate: (data: Record<string, unknown>) => api.post('/questions/topic-notes/', data),
   adminGenerate: (id: number) => api.post(`/questions/topic-notes/${id}/generate/`),
 };
@@ -667,7 +913,8 @@ export const mistakeNotebookAPI = {
   update: (id: number, data: Record<string, unknown>) => api.patch(`/analytics/mistake-notebook/${id}/`, data),
   remove: (id: number) => api.delete(`/analytics/mistake-notebook/${id}/`),
   review: (id: number) => api.post(`/analytics/mistake-notebook/${id}/review/`),
-  due: () => api.get('/analytics/mistake-notebook/due/'),
+  // Paged like list(): ?page=&page_size= (at most 100); `count` is the whole due set.
+  due: (params?: Record<string, string | number>) => api.get('/analytics/mistake-notebook/due/', { params }),
   stats: () => api.get('/analytics/mistake-notebook/stats/'),
 };
 
@@ -684,29 +931,48 @@ export const questsAPI = {
   list: (params?: { status?: string }) =>
     api.get('/analytics/quests/', { params }),
   get: (id: number) => api.get(`/analytics/quests/${id}/`),
-  complete: (id: number) => api.post(`/analytics/quests/${id}/complete/`, { is_completed: true }),
+  // Claim a finished quest; the server validates progress and awards XP.
+  complete: (id: number) => api.patch(`/analytics/quests/${id}/`, { is_completed: true }),
   remove: (id: number) => api.delete(`/analytics/quests/${id}/`),
   getStreak: () => api.get('/analytics/quests/streak/'),
   toggleFreeze: () => api.post('/analytics/quests/streak/freeze/'),
+  // Explicit state: a double click cannot flip it back.
+  setFreeze: (frozen: boolean) => api.post('/analytics/quests/streak/freeze/', { streak_frozen: frozen }),
 };
 
 // Notes API — user personal notes
 export const notesAPI = {
   list: (params?: { question?: number; topic?: number }) => api.get('/questions/notes/', { params }),
   create: (data: { question?: number; topic?: number; title?: string; content: string }) => api.post('/questions/notes/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/notes/${id}/`, data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/notes/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/notes/${id}/`),
 };
+
+/** GET /questions/flashcards/analytics/ (questions.views.FlashcardAnalyticsView). */
+export interface FlashcardAnalytics {
+  total_cards: number;
+  due_today: number;
+  /** Older name of due_today. */
+  cards_due_today: number;
+  reviewed_cards: number;
+  total_reviews: number;
+  lapses: number;
+  /** 1 - lapses / total_reviews; null until the first review. */
+  retention_rate: number | null;
+  avg_ease_factor: number;
+  avg_interval: number;
+  interval_distribution: Record<string, number>;
+}
 
 // Flashcards API
 export const flashcardsAPI = {
   list: (params?: { subject?: number; due?: string }) => api.get('/questions/flashcards/', { params }),
-  create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string }) =>
+  create: (data: { question?: number; subject?: number; front: string; back: string; difficulty?: string; personal_note?: string }) =>
     api.post('/questions/flashcards/', data),
-  update: (id: number, data: Record<string, unknown>) => api.put(`/questions/flashcards/${id}/`, data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/questions/flashcards/${id}/`, data),
   delete: (id: number) => api.delete(`/questions/flashcards/${id}/`),
   review: (id: number, quality: number) => api.post(`/questions/flashcards/${id}/review/`, { quality }),
-  analytics: () => api.get('/questions/flashcards/analytics/'),
+  analytics: () => api.get<FlashcardAnalytics>('/questions/flashcards/analytics/'),
 };
 
 // Admin Import Center API (Phase 1)

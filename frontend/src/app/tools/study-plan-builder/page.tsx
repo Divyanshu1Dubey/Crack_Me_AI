@@ -8,7 +8,7 @@ const title = 'Study Plan Builder — NEET PG / UPSC CMS / INI-CET | CrackCMS';
 const description = 'Build a personalised study plan for NEET PG, UPSC CMS, or INI-CET. Enter your exam date, available hours, and weak subjects to get a day-by-day 6-month preparation schedule.';
 const slug = 'study-plan-builder';
 
-export const metadata: Metadata = buildGuideMetadata({ title, description, slug });
+export const metadata: Metadata = buildGuideMetadata({ title, description, slug, path: `/tools/${slug}` });
 
 const jsonLd = {
     '@context': 'https://schema.org',
@@ -25,7 +25,7 @@ export default function StudyPlanBuilderPage() {
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
             <div className="min-h-screen bg-background text-foreground">
                 <div className="mx-auto max-w-5xl px-4 pt-6 sm:px-6">
-                    <Breadcrumbs items={[{ name: 'Tools', path: '/tools' }, { name: 'Study Plan Builder', path: '/tools/study-plan-builder' }]} />
+                    <Breadcrumbs items={[{ name: 'UPSC CMS', path: '/cms' }, { name: 'Study Plan Builder', path: '/tools/study-plan-builder' }]} />
                 </div>
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
                     <h1 className="text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">

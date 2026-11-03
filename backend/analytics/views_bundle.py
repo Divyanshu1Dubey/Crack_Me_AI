@@ -16,14 +16,13 @@ import datetime
 
 from tests_engine.models import TestAttempt
 from questions.models import QuestionAttempt, Question
-from analytics.models import (
-    DailyActivity, StudyStreak, Announcement,
-    UserTopicPerformance,
-)
+from analytics.models import DailyActivity, StudyStreak
 from analytics.serializers import (
     DailyActivitySerializer, StudyStreakSerializer,
-    AnnouncementSerializer,
+    StudentAnnouncementSerializer,
 )
+from analytics.views import (ANSWERED_TEST_ATTEMPT, promote_due_scheduled_announcements, student_announcements,
+                             subject_totals)
 
 
 def _exam_source_q(exam_source: str) -> Q:
@@ -50,11 +49,12 @@ class DashboardBundleView(APIView):
         if cached is not None:
             return Response(cached)
 
-        now = timezone.now().date()
+        now = timezone.localdate()
         days_120 = now - datetime.timedelta(days=120)
 
-        # ── 1. Overall stats + subject performance (mirrors DashboardView) ──
-        attempts = TestAttempt.objects.filter(user=user, is_completed=True)
+        # ── 1. Overall stats + subject performance (mirrors DashboardView;
+        # an empty submit is not a test taken) ──
+        attempts = TestAttempt.objects.filter(user=user, is_completed=True).filter(ANSWERED_TEST_ATTEMPT)
         overall = attempts.aggregate(
             total_tests=Count('id'),
             avg_score=Avg('score'),
@@ -74,13 +74,9 @@ class DashboardBundleView(APIView):
         total_incorrect = (overall['total_incorrect'] or 0) + qbank_incorrect
         overall_accuracy = round(total_correct / total_q * 100, 1) if total_q > 0 else 0
 
-        # Bulk-fetch all subject performance in 1 query
-        subject_stats = UserTopicPerformance.objects.filter(
-            user=user, subject__isnull=False
-        ).values('subject__name', 'subject__code', 'subject__color').annotate(
-            total=Sum('total_attempts'),
-            correct=Sum('correct_answers'),
-        )
+        # Subject performance (subject-level rows; summing the topic rows too
+        # double-counted every answer)
+        subject_stats = subject_totals(user)
         subject_performance = [
             {
                 'subject': s['subject__name'],
@@ -102,6 +98,7 @@ class DashboardBundleView(APIView):
                 'total_incorrect': total_incorrect,
                 'overall_accuracy': overall_accuracy,
                 'total_time_hours': round((overall['total_time'] or 0) / 3600, 1),
+                'total_time_minutes': round((overall['total_time'] or 0) / 60),
             },
             'subject_performance': subject_performance,
         }
@@ -116,28 +113,12 @@ class DashboardBundleView(APIView):
         streak, _ = StudyStreak.objects.get_or_create(user=user)
         streak_data = StudyStreakSerializer(streak).data
 
-        # ── 4. Announcements ──
+        # ── 4. Announcements (same audience rules as /announcements/;
+        # student fields only -- no targeting rules or delivery stats) ──
         now_dt = timezone.now()
-        announcements_qs = Announcement.objects.filter(
-            is_active=True,
-            delivery_status='sent',
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now_dt)
-        ).filter(
-            Q(scheduled_for__isnull=True) | Q(scheduled_for__lte=now_dt)
-        )
-        user_role = getattr(user, 'role', None)
-        user_target = getattr(user, 'target_year', None)
-        announcements_qs = announcements_qs.filter(
-            Q(audience_filter__role__isnull=True)
-            | Q(audience_filter__role='')
-            | Q(audience_filter__role=user_role)
-        ).filter(
-            Q(audience_filter__target_year__isnull=True)
-            | Q(audience_filter__target_year='')
-            | Q(audience_filter__target_year=user_target)
-        )
-        announcements_data = AnnouncementSerializer(
+        promote_due_scheduled_announcements(now_dt)
+        announcements_qs = student_announcements(user, now_dt).order_by('-created_at')
+        announcements_data = StudentAnnouncementSerializer(
             announcements_qs[:10], many=True
         ).data
 

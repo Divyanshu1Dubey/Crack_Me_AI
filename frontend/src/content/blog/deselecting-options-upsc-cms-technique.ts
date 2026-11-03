@@ -1,4 +1,11 @@
 import type { BlogPost } from '@/lib/blog';
+import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
+
+// UPSC CMS marking (lib/examPatterns.ts): +2.08 per correct answer and
+// one-third of that (−0.69) per wrong answer — not "+3/-1".
+const fmt = (n: number) => round2(n).toFixed(2);
+/** Expected marks from guessing among `left` remaining options (one correct). */
+const ev = (left: number) => (1 / left) * CMS_MARKS_PER_QUESTION - ((left - 1) / left) * CMS_PENALTY_PER_WRONG;
 
 const post: BlogPost = {
     slug: 'deselecting-options-upsc-cms-technique',
@@ -10,21 +17,22 @@ const post: BlogPost = {
     subcategory: 'Question-Solving',
     tags: ['Elimination', 'Deselection', 'MCQ Strategy', 'UPSC CMS', 'NEET PG', 'Smart Guessing'],
     difficulty: 'intermediate',
-    authorId: 'dr-aarav-mehta',
-    reviewedBy: 'dr-aarav-mehta',
-    author: 'Dr. Aarav Mehta, MBBS, MD (Internal Medicine)',
-    authorRole: 'Senior Editor — Medicine, CrackCMS',
+    authorId: 'crackcms-editorial',
+    reviewedBy: 'crackcms-editorial',
+    author: 'CrackCMS Editorial Team',
+    authorRole: 'Clinical Content Editors, CrackCMS',
     datePublished: '2026-09-19',
-    dateModified: '2026-09-19',
-    updatedAt: '2026-09-19',
+    dateModified: '2026-11-01',
+    updatedAt: '2026-11-01',
     readingTime: '9 min',
     wordCount: 2800,
-    primaryCta: { label: 'Practice with Elimination Mode', href: '/questions?mode=elimination' },
+    // There is no "elimination mode"; the bank ignored ?mode=.
+    primaryCta: { label: 'Practise UPSC CMS PYQs', href: '/questions?exam=cms' },
     relatedExamPaths: ['/cms', '/neet-pg'],
     faqs: [
         { q: 'What is the deselection technique?', a: 'Instead of finding the right answer, you eliminate the three clearly wrong options. This is psychologically easier and statistically increases your accuracy from 25% (random guess) to near 100% when 3 options are eliminated.' },
-        { q: 'When should I guess in UPSC CMS?', a: 'When you have eliminated at least 2 options. With 2 remaining and -1 negative marking, your expected value from guessing is positive (0.5 * +3 - 0.5 * -1 = +1 per question).' },
-        { q: 'Is educated guessing better than leaving blank?', a: 'Yes — in UPSC CMS (+3/-1 marking), with 2 options eliminated, guessing has positive expected value. With only 1 option eliminated, the expected value is break-even (0.25 * +3 - 0.75 * -1 = 0).' },
+        { q: 'When should I guess in UPSC CMS?', a: `Whenever you can eliminate at least one option. UPSC CMS deducts one-third of a question's marks for a wrong answer (−${fmt(CMS_PENALTY_PER_WRONG)} against +${fmt(CMS_MARKS_PER_QUESTION)}), so with 2 options left a guess is worth 0.5 × ${fmt(CMS_MARKS_PER_QUESTION)} − 0.5 × ${fmt(CMS_PENALTY_PER_WRONG)} = +${fmt(ev(2))} marks on average.` },
+        { q: 'Is educated guessing better than leaving blank?', a: `Yes. With one option eliminated the expected value is +${fmt(ev(3))}; with two eliminated it is +${fmt(ev(2))}. Only a blind guess among all four options breaks even (0.25 × ${fmt(CMS_MARKS_PER_QUESTION)} − 0.75 × ${fmt(CMS_PENALTY_PER_WRONG)} = 0).` },
     ],
     toc: [
         { id: 'psychology', label: 'The Psychology of Elimination' },
@@ -34,7 +42,10 @@ const post: BlogPost = {
         { id: 'math', label: 'The Math Behind Guessing' },
     ],
     references: [],
-    revisionLog: [{ date: '2026-09-19', note: 'Initial publication' }],
+    revisionLog: [
+        { date: '2026-09-19', note: 'Initial publication' },
+        { date: '2026-11-01', note: 'Corrected the guessing maths to the UPSC CMS one-third negative marking (+2.08 / −0.69).' },
+    ],
     body: `## The Psychology of Elimination
 
 Finding the right answer among 4 options is hard. Eliminating 3 wrong ones is easier and more reliable. Your brain is better at detecting errors than confirming correctness.
@@ -53,10 +64,10 @@ Use the stem (question stem) for clues. Often the answer is in the question text
 
 ## The Math Behind Guessing
 
-With +3/-1 marking in UPSC CMS:
-- Eliminate 2 options: EV = +1 (guess!)
-- Eliminate 1 option: EV = 0 (neutral)
-- Eliminate 0 options: EV = -0.5 (skip)`,
+UPSC CMS gives +${fmt(CMS_MARKS_PER_QUESTION)} for a correct answer and takes one-third of that (−${fmt(CMS_PENALTY_PER_WRONG)}) for a wrong one:
+- Eliminate 2 options: EV = +${fmt(ev(2))} (guess!)
+- Eliminate 1 option: EV = +${fmt(ev(3))} (small but positive — guess)
+- Eliminate 0 options: EV = ${fmt(ev(4))} (pure gamble — skip unless you have a real hunch)`,
     prelude: undefined,
     outro: undefined,
     pinned: false,

@@ -1,16 +1,19 @@
-Django>=5.0,<6.0
-djangorestframework>=3.15
+Django>=5.2.18,<6.0
+djangorestframework>=3.18.3
 djangorestframework-simplejwt>=5.3
 django-cors-headers>=4.3
 django-filter>=24.0
-Pillow>=10.0
+# Pillow cannot reach the patched 12.1.1+ line while moviepy is installed:
+# moviepy 2.2.1 (the latest release) requires pillow<12.0. Pillow 11.3.0 has
+# open advisories (pip-audit, 2026-11-01). See docs/audit/OVERNIGHT_MISSION_FINAL_REPORT.md.
+Pillow>=11.3
 python-dotenv>=1.0
 dj-database-url>=2.2
 psycopg[binary]>=3.2
 google-generativeai>=0.8
 google-genai>=1.0
 groq>=0.11
-openai>=1.0
+openai>=2.32.0
 gunicorn>=22.0
 whitenoise>=6.7
 cerebras-cloud-sdk>=1.0
@@ -21,20 +24,49 @@ django-axes>=7.0
 # Argon2 password hasher (industry-standard, PWH winner)
 argon2-cffi>=21.3
 # Phase 7: Monitoring & structured logging
-sentry-sdk[django]>=2.0
-ddtrace>=2.9
-python-json-logger>=3.0
+sentry-sdk[django]>=2.58.0
+ddtrace>=4.15.6
+python-json-logger>=4.1.0
 # PDF parsing for NEET PG
 PyMuPDF>=1.23.0
+# Admin Import Center parsers (material_importer/parser/: DOCX, PDF, PPTX).
+# They import these lazily and report "not installed" errors without them,
+# so every DOCX/PDF/PPTX upload failed on deploys built from this file.
+python-docx==1.2.0
+pdfplumber==0.11.9
+python-pptx==1.0.2
 # Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
 django-redis>=5.4
 # Supabase admin operations
-supabase>=2.0
+supabase>=2.28.3
 razorpay>=1.3.0
 # Phase 3: Video generation & Background tasks
 edge-tts>=6.1
-moviepy>=1.0
+# video_engine uses the moviepy 2.x API (with_duration / with_audio).
+moviepy>=2.0,<3
 django-q2>=1.6
 # Knowledge Base: embeddings + optional pgvector + local reranker
 sentence-transformers>=2.7.0
 numpy>=1.26
+# Security floors for transitive dependencies: the first versions without
+# known advisories (pip-audit, 2026-11-01). Without them pip keeps older,
+# vulnerable copies that are already installed or cached in a build layer.
+# Raise them when pip-audit reports new advisories.
+aiohttp>=3.14.4
+anyio>=4.14.2
+certifi>=2026.10.18
+cryptography>=50.0.0
+filelock>=4.2.1
+fsspec>=2026.6.0
+h2>=4.4.1
+hpack>=4.2.0
+httplib2>=0.32.0
+idna>=3.15
+multidict>=6.9.1
+opentelemetry-api>=1.45.1
+pyasn1>=0.6.5
+Pygments>=2.20.0
+PyJWT>=2.15.1
+requests>=2.33.0
+sqlparse>=0.6.0
+urllib3>=2.8.0
