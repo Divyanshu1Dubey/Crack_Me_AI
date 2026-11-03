@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import secrets
 from datetime import timedelta
 
@@ -320,7 +321,12 @@ class _NativeView(APIView):
         return super().initial(request, *args, **kwargs)
 
     def throttled(self, request, wait):
-        raise exceptions.Throttled(wait=wait, detail={'detail': TOO_MANY_DETAIL, 'code': 'too_many_attempts'})
+        # Not Throttled(wait=..., detail={...}): with a wait, DRF appends "Expected available in N
+        # seconds" to the detail with str.join, which raises TypeError for a dict (HTTP 500 instead
+        # of 429). Setting .wait afterwards keeps the Retry-After header DRF's handler sends.
+        exc = exceptions.Throttled(detail={'detail': TOO_MANY_DETAIL, 'code': 'too_many_attempts'})
+        exc.wait = math.ceil(wait) if wait is not None else None
+        raise exc
 
     def handle_exception(self, exc):
         if isinstance(exc, NativeAuthError):

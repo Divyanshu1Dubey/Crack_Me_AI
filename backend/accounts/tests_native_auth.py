@@ -205,6 +205,21 @@ class NativeLoginTests(_NativeTestCase):
         # The owner elsewhere is not locked out.
         self.assertEqual(self.login('target@example.com', ip='10.0.0.7').status_code, 200)
 
+    def test_drf_rate_limit_answers_429_with_code_and_retry_after(self):
+        # Regression: Throttled(wait=..., detail=<dict>) raised TypeError inside DRF (HTTP 500).
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_login': '2/min'}):
+            for i in range(2):
+                self.assert_code(self.login(f'nobody{i}@example.com', 'guess', ip='10.2.0.1'), 401, 'invalid_credentials')
+            limited = self.login('nobody9@example.com', 'guess', ip='10.2.0.1')
+            self.assert_code(limited, 429, 'too_many_attempts')
+            self.assertGreaterEqual(int(limited['Retry-After']), 1)
+            # Another client IP has its own bucket.
+            self.assert_code(self.login('nobody9@example.com', 'guess', ip='10.2.0.2'), 401, 'invalid_credentials')
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_refresh': '1/min'}):
+            self.client.post('/api/auth/native/refresh/', {'refresh': 'x'}, format='json', REMOTE_ADDR='10.2.0.3')
+            refused = self.client.post('/api/auth/native/refresh/', {'refresh': 'x'}, format='json', REMOTE_ADDR='10.2.0.3')
+            self.assertIn(refused.status_code, (401, 429), refused.data)  # never 500
+
     def test_per_email_limit_counts_failures_from_every_ip(self):
         make_user('spray', 'spray@example.com')
         with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_login_email': '3/hour'}):
