@@ -83,6 +83,37 @@ AI_CALL_MAX_ATTEMPTS = int(os.getenv('AI_CALL_MAX_ATTEMPTS', '12'))
 #     preparation. Disabling by default in production caused every
 #     textbook-search query to surface "RAG pipeline not initialized"
 #     to paying users — see 2026-07-29 live-audit fix.
+def _models_from_env(env_name: str, default) -> list:
+    """Model ids for one provider: comma-separated env override, else ``default``.
+
+    Providers retire hosted models without notice (2026-11: Groq's
+    llama-3.3-70b-versatile, every Cerebras llama id and all the OpenRouter
+    ``:free`` ids the code used were gone, so almost every call failed and the
+    AI features answered 503). An operator can now switch models on Railway
+    (GROQ_MODELS, CEREBRAS_MODELS, OPENROUTER_FREE_MODELS,
+    OPENROUTER2_FREE_MODELS) without a code change.
+    """
+    raw = os.getenv(env_name, '')
+    models = [m.strip() for m in raw.split(',') if m.strip()]
+    return models or list(default)
+
+
+# Defaults verified against the providers' model lists on 2026-11-03.
+GROQ_DEFAULT_MODELS = ('openai/gpt-oss-120b', 'qwen/qwen3.8-27b')
+CEREBRAS_DEFAULT_MODELS = ('gpt-oss-120b', 'qwen-3.8-27b')
+OPENROUTER_DEFAULT_FREE_MODELS = (
+    'nvidia/nemotron-3.5-lightning:free',
+    'google/gemma-4-31b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+)
+OPENROUTER2_DEFAULT_FREE_MODELS = (
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3.5-lightning:free',
+    'google/gemma-4-31b-it:free',
+)
+
+
 def rag_disabled() -> bool:
     """True when an operator opted out of RAG (read at call time, so the
     switch works without re-importing this module)."""
@@ -465,35 +496,45 @@ class AIService:
         return None
 
     def _call_groq(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Call Groq (LLama 3.3 70B)."""
+        """Call Groq: GROQ_MODELS in order (default: gpt-oss-120b, then qwen3.8-27b)."""
         if not self.groq:
             return None
-        timeout = self._attempt_timeout(15.0)
-        try:
-            messages = []
-            if system:
-                messages.append({"role": "system", "content": system})
-            messages.append({"role": "user", "content": prompt})
-            response = self.groq.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=timeout,
-            )
-            text = response.choices[0].message.content
-            if text:
-                logger.info("Groq OK")
-                return text
-        except Exception as e:
-            err = str(e)
-            if '401' in err or 'invalid_api_key' in err:
-                logger.warning("Groq API key invalid/expired — skipping")
-                self.groq = None  # Disable for this instance
-            elif '429' in err:
-                logger.info("Groq rate limit hit")
-            else:
-                logger.warning(f"Groq error: {e}")
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        for model_id in _models_from_env('GROQ_MODELS', GROQ_DEFAULT_MODELS):
+            timeout = self._attempt_timeout(15.0)
+            kwargs = {}
+            if 'gpt-oss' in model_id:
+                # Reasoning model: keep reasoning short so it does not eat the answer's token budget.
+                kwargs['extra_body'] = {'reasoning_effort': 'low'}
+            try:
+                response = self.groq.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    **kwargs,
+                )
+                text = response.choices[0].message.content
+                if text:
+                    logger.info(f"Groq OK ({model_id})")
+                    return text
+            except Exception as e:
+                err = str(e)
+                if 'timed out' in err.lower() or 'timeout' in type(e).__name__.lower():
+                    logger.warning(f"Groq timed out ({timeout:.0f}s)")
+                    return None
+                if '401' in err or 'invalid_api_key' in err:
+                    logger.warning("Groq API key invalid/expired — skipping")
+                    self.groq = None  # Disable for this instance
+                    return None
+                if '429' in err:
+                    logger.info(f"Groq rate limit hit ({model_id}), trying next model")
+                else:
+                    logger.warning(f"Groq error with '{model_id}': {e}")
         return None
 
 
@@ -512,7 +553,7 @@ class AIService:
             return None
         # Per-call candidate order; the first id that returns a 200 wins
         # for this call. Order matches the file header docstring first.
-        candidate_models = ("llama-3.1-8b", "llama3.1-8b", "gemma-4-31b")
+        candidate_models = _models_from_env('CEREBRAS_MODELS', CEREBRAS_DEFAULT_MODELS)
         last_err = None
         for model_id in candidate_models:
             # SDK-level timeout (the old ThreadPoolExecutor wrapper could not
@@ -547,6 +588,11 @@ class AIService:
                 # the rest of the candidate list.
                 if '401' in err or 'invalid_api_key' in err:
                     logger.warning("Cerebras API key invalid — disabling")
+                    self.cerebras = None
+                    return None
+                # 402: the account's free quota ended (Cerebras requires billing since 2026-11).
+                if '402' in err or 'payment_required' in err:
+                    logger.warning("Cerebras needs billing (402 payment required) — skipping")
                     self.cerebras = None
                     return None
                 # 404 / model_not_found — try the next candidate instead
@@ -611,12 +657,7 @@ class AIService:
         if not self.openrouter:
             return None
         # Try free models in preference order
-        free_models = [
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'google/gemma-3-27b-it:free',
-            'qwen/qwen-2.5-72b-instruct:free',
-            'mistralai/mistral-7b-instruct:free',
-        ]
+        free_models = _models_from_env('OPENROUTER_FREE_MODELS', OPENROUTER_DEFAULT_FREE_MODELS)
         for model_name in free_models:
             timeout = self._attempt_timeout(20.0)
             try:
@@ -786,13 +827,10 @@ class AIService:
         return None
 
     def _call_openrouter2(self, prompt: str, system: str, temperature: float, max_tokens: int) -> Optional[str]:
-        """Call OpenRouter with second API key — tries 3 free models."""
+        """Call OpenRouter with the second API key (OPENROUTER2_FREE_MODELS)."""
         if not self.openrouter2:
             return None
-        free_models = [
-            "google/gemma-2-9b-it:free",
-            "microsoft/phi-3-medium-128k-instruct:free",
-        ]
+        free_models = _models_from_env('OPENROUTER2_FREE_MODELS', OPENROUTER2_DEFAULT_FREE_MODELS)
         for model_name in free_models:
             timeout = self._attempt_timeout(20.0)
             try:
