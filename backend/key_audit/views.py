@@ -87,8 +87,9 @@ def _queue(request):
             qs = qs.filter(question_id=int(params['q']))
         except ValueError:
             qs = qs.none()
-    if params.get('unclaimed') == 'true':
-        qs = qs.exclude(question_id__in=list(_active_claims()))
+    if params.get('unclaimed') == 'true':   # hide what other reviewers hold; your own claims stay listed
+        qs = qs.exclude(question_id__in=[qid for qid, claim in _active_claims().items()
+                                         if claim.claimed_by_id != request.user.pk])
     return qs.order_by('-priority', 'question_id')
 
 

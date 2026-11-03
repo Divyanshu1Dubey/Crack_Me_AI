@@ -103,6 +103,15 @@ export default function ReviewQueuePage() {
     }
   }, [params]);
 
+  // On a phone the detail sits below the filters: bring it into view when a question is opened.
+  const detailRef = React.useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (selected === null || typeof window === 'undefined') return;
+    if (window.matchMedia?.('(max-width: 1023px)').matches) {
+      detailRef.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [selected]);
+
   useEffect(() => { if (isAdmin) loadSummary(); }, [isAdmin, loadSummary]);
   useEffect(() => { if (isAdmin) loadList(); }, [isAdmin, loadList]);
   useEffect(() => { setPage(1); setTicked(new Set()); }, [status, exam, reason, printedOnly, unclaimed, search]);
@@ -224,7 +233,7 @@ export default function ReviewQueuePage() {
         </label>
         <label className="flex items-center gap-1.5 pb-1.5">
           <input type="checkbox" checked={unclaimed} onChange={(e) => setUnclaimed(e.target.checked)} />
-          <span>Hide claimed</span>
+          <span>Hide claimed by others</span>
         </label>
       </div>
 
@@ -302,7 +311,9 @@ export default function ReviewQueuePage() {
           )}
         </section>
 
-        <section aria-label="Selected question" className={selected ? '' : 'hidden lg:block'}>
+        {/* min-h-screen on phones: the page must be tall enough to scroll the detail up while it loads */}
+        <section ref={detailRef} aria-label="Selected question"
+          className={`scroll-mt-20 lg:scroll-mt-4 ${selected ? 'min-h-screen lg:min-h-0' : 'hidden lg:block'}`}>
           {selected ? (
             <div className="lg:sticky lg:top-4">
               <button type="button" onClick={() => setSelected(null)} className="mb-2 text-sm text-primary lg:hidden">← Back to the list</button>

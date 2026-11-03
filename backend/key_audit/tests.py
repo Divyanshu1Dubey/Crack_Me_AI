@@ -442,8 +442,10 @@ class ReviewQueueApiTests(_Fixture):
                                 {'resolution': 'key_confirmed', 'reason': 'confirmed by the second admin'},
                                 format='json')
         self.assertEqual(res.status_code, 409)
+        listed = other_client.get(self.url('queue-list'), {'unclaimed': 'true'}).data['results']
+        self.assertNotIn(self.q.pk, [r['question_id'] for r in listed])      # hidden from the other reviewer
         listed = self.client.get(self.url('queue-list'), {'unclaimed': 'true'}).data['results']
-        self.assertNotIn(self.q.pk, [r['question_id'] for r in listed])
+        self.assertIn(self.q.pk, [r['question_id'] for r in listed])         # still listed for its claimant
         ReviewClaim.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
         self.assertEqual(other_client.post(self.url('queue-claim', self.q.pk)).status_code, 200)
 
