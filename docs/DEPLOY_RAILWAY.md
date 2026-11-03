@@ -80,22 +80,27 @@ Required:
 | `MEDIA_ROOT` | `/data/media` |
 | `SUPABASE_STORAGE_MIRROR_DIR` | `/data/storage-mirror` (serves the 495 images whose stored URL is an old Supabase Storage URL) |
 | `CORE_DATA_BACKUP_PATH` | `/data/backups/core_data.json` (a file path; its folder is created) |
-| `NUM_PROXIES` | `1` -- the hop Railway's edge appends to `X-Forwarded-For` (also what the settings assume on Railway when it is unset; set it explicitly anyway). Without a proxy depth the client-IP header below is never read, and the sign-in rate limits and lockouts, the question-bank limiter and the Supabase-era budgets all share the address of Railway's proxy (`check --deploy` warns `accounts.W007`). |
-| `TRUSTED_CLIENT_IP_HEADER` | `CF-Connecting-IP` (Cloudflare in front). Read only when the hop Railway appended is one of Cloudflare's published addresses (`crack_cms/client_ip.py`), so a request sent to the `*.up.railway.app` hostname directly cannot name its own client address. |
+| `TRUSTED_CLIENT_IP_HEADER` | `CF-Connecting-IP` (Cloudflare in front): the visitor's address for the sign-in rate limits, lockouts and the question-bank limiter. |
 
-Optional, for the client address:
+Client address, hardening (opt-in; set these only after the check below):
 
 | Name | Value |
 |---|---|
-| `TRUSTED_CLIENT_IP_HEADER_FROM` | Networks the header is accepted from: `cloudflare` (default for `CF-Connecting-IP`), CIDRs, or `any`. |
-| `TRUSTED_CLIENT_IP_SECRET` / `TRUSTED_CLIENT_IP_SECRET_HEADER` | A random value that a Cloudflare Transform Rule (Rules → Transform Rules → Modify Request Header, zone `cracklabs.app`) adds as a request header (default name `X-Edge-Auth`). Then the header is only read from requests through this zone, not from someone else's Cloudflare account. |
+| `NUM_PROXIES` | The number of proxies that append to `X-Forwarded-For` in front of Django (Railway: expected `1`). There is no default: until it is set, DRF throttles keep their historical key and `check --deploy` warns `accounts.W007`. |
+| `TRUSTED_CLIENT_IP_HEADER_FROM` | `cloudflare`: `CF-Connecting-IP` is then read only when the hop Railway appended is one of Cloudflare's published addresses, so a request sent to the origin directly (around Cloudflare) cannot name its own client address. Unset = `any` (the header is read from every peer, as before). Also accepts CIDRs. |
+| `TRUSTED_CLIENT_IP_SECRET` / `TRUSTED_CLIENT_IP_SECRET_HEADER` | A random value that a Cloudflare Transform Rule (Rules → Transform Rules → Modify Request Header, zone `cracklabs.app`) adds as a request header (default name `X-Edge-Auth`). Then the header is only read from requests through this zone. This works whatever Railway does with `X-Forwarded-For`. |
 
-Check the client address after the deploy, as an admin: `GET https://api.cracklabs.app/api/health/client-ip/`
-must show `peer` = a Cloudflare address, `edge_header_honoured: true` and `client_ip` = your own public
-address. Then call the service's `*.up.railway.app` hostname directly with forged headers
-(`X-Forwarded-For: 1.2.3.4`, `CF-Connecting-IP: 1.2.3.4`): `client_ip` must still be your real address and
-`edge_header_honoured` false. If `peer` is a Railway-internal address instead, Railway added another hop:
-raise `NUM_PROXIES` to 2 and check again.
+Why opt-in: Railway does not document whether its edge appends to or replaces `X-Forwarded-For`, and
+reports of extra CDN layers in its edge differ. If the right-most hop is not Cloudflare's address,
+`TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare` would put every visitor into one rate-limit bucket. Check first,
+as an admin: `GET https://api.cracklabs.app/api/health/client-ip/` shows `remote_addr`, the raw
+`X-Forwarded-For` chain and the edge headers. If the right-most `X-Forwarded-For` entry is a Cloudflare
+address (`crack_cms/client_ip.py` lists the ranges), set `NUM_PROXIES=1` and
+`TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare`, then check again: `peer` = a Cloudflare address,
+`edge_header_honoured: true`, `client_ip` = your own public address; and on the `*.up.railway.app`
+hostname with forged headers (`X-Forwarded-For: 1.2.3.4`, `CF-Connecting-IP: 1.2.3.4`) `client_ip` must
+still be your real address with `edge_header_honoured` false. If the right-most entry is something else,
+use the Transform Rule secret instead (with `TRUSTED_CLIENT_IP_HEADER_FROM=any`).
 
 Keep from the old deployment: the AI provider keys, `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` /
 `RAZORPAY_WEBHOOK_SECRET`, `SENTRY_DSN` (optional). Remove every `SUPABASE_*` variable.
@@ -151,7 +156,8 @@ page, Vercel `MIDDLEWARE_INVOCATION_FAILED`, when the Supabase keys were removed
    section 1 (`import_supabase_auth --leaked-password-file ...`, then `withhold_leaked_passwords
    --password-file ... --apply` wherever an earlier import already wrote hashes). Admin accounts get a new
    password (`manage.py changepassword` or "Forgot password"); rotate that password wherever else it was used.
-3. Railway: apply the settings and variables above (volume, domain, `NUM_PROXIES=1`); the deploy runs
+3. Railway: apply the settings and variables above (volume, domain; the client-address hardening after
+   its check); the deploy runs
    `release.sh` (migrations, seeds) before the new version starts, and the started container restores the
    media in the background. Check `GET /api/auth/config/` → `{"auth_provider": "django", ...}` before
    switching the frontend (a django-mode frontend in front of a backend still on Supabase shows "Sign-in is

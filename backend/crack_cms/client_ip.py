@@ -21,9 +21,15 @@ result is then ``REMOTE_ADDR``, as before):
 
   - ``TRUSTED_CLIENT_IP_HEADER_FROM`` (env): comma-separated networks and/or
     ``cloudflare`` (Cloudflare's published ranges, ``CLOUDFLARE_IP_RANGES``),
-    or ``any``. Default: ``cloudflare`` for ``CF-Connecting-IP`` /
-    ``CF-Connecting-IPv6``; ``any`` for every other header (an edge that every
-    request has to pass, such as DigitalOcean's ``DO-Connecting-IP``).
+    or ``any``. Default (unset): ``any``, the behaviour before this setting
+    existed. Restricting the header to Cloudflare is opt-in because it relies
+    on the platform proxy appending the Cloudflare hop to X-Forwarded-For
+    (NUM_PROXIES): if the hop is something else (another proxy layer in the
+    platform's edge), every visitor would share that address in the rate
+    limits and lockouts. Check GET /api/health/client-ip/ first (the
+    right-most X-Forwarded-For entry of a request through Cloudflare must be a
+    Cloudflare address), then set ``NUM_PROXIES=1`` and
+    ``TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare`` (docs/DEPLOY_RAILWAY.md).
   - ``TRUSTED_CLIENT_IP_SECRET`` (+ ``TRUSTED_CLIENT_IP_SECRET_HEADER``,
     default ``X-Edge-Auth``), optional: the header is additionally only
     honoured when the request carries this secret, e.g. added by a Cloudflare
@@ -37,7 +43,7 @@ django-axes (AXES_CLIENT_IP_CALLABLE), the question-bank limiter and DRF's
 throttles (crack_cms/throttling.py) all key on ``get_client_ip``.
 
 Kept free of module-level Django imports so settings.py can import
-``num_proxies_from_env`` (NUM_PROXIES defaults to 1 on Railway).
+``num_proxies_from_env``.
 """
 from __future__ import annotations
 
@@ -92,17 +98,15 @@ def parse_num_proxies(raw) -> int | None:
 
 
 def num_proxies_from_env(environ) -> int | None:
-    """NUM_PROXIES from the environment (settings.py).
+    """NUM_PROXIES from the environment (settings.py): an explicit value only (0 = no proxy).
 
-    On Railway (RAILWAY_ENVIRONMENT_ID is set on every deployment) an unset
-    value means 1: Railway's edge proxy fronts every public request and
-    appends one hop, and without it every visitor shared the proxy's address
-    in the rate limits and lockouts. An explicit value (0 = no proxy) wins.
+    There is deliberately no platform default: what the right-most
+    X-Forwarded-For entry is depends on the platform's edge (Railway's answers
+    on whether it appends or replaces the header, and on extra CDN layers,
+    differ), so the depth is set by the operator after checking
+    GET /api/health/client-ip/. Unset keeps DRF's historical keys.
     """
-    value = parse_num_proxies(environ.get("NUM_PROXIES"))
-    if value is None and (environ.get("RAILWAY_ENVIRONMENT_ID") or "").strip():
-        return 1
-    return value
+    return parse_num_proxies(environ.get("NUM_PROXIES"))
 
 
 def header_to_meta_key(header: str | None) -> str:
@@ -146,9 +150,8 @@ def _header_sources(spec: str, header_key: str) -> tuple[tuple, bool]:
     """(networks allowed to set the client-IP header, any peer allowed) for TRUSTED_CLIENT_IP_HEADER_FROM."""
     tokens = [t for t in re.split(r"[\s,]+", (spec or "").strip().lower()) if t]
     if not tokens:
-        if header_key not in CLOUDFLARE_HEADERS:
-            return (), True
-        tokens = ["cloudflare"]
+        # Unset: any peer, as before the setting existed (opt-in restriction, module docstring).
+        return (), True
     if "any" in tokens:
         return (), True
     networks = []

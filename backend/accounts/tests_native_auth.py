@@ -442,6 +442,27 @@ class NativeDeviceLimitTests(_NativeTestCase):
         self.assertEqual(AuthSession.objects.get(sid=phone_tokens['session_id']).revoked_reason, 'device_logout')
         self.assert_code(phone.get(PROBE), 401, 'device_inactive')
 
+    def _old_device(self, device_id, days_ago):
+        row = UserDevice.objects.create(user=self.user, device_fingerprint=device_id, device_name='old',
+                                        is_active=True, session_id=None)
+        UserDevice.objects.filter(pk=row.pk).update(last_login=timezone.now() - timedelta(days=days_ago))
+
+    def test_devices_unseen_for_30_days_do_not_block_a_returning_browser(self):
+        # After the outage every device row was older than 30 days; the browser in use (its own row
+        # the oldest of three) got device_limit_reached on every page although no slot was in use.
+        self._old_device(DEVICE_A, 40)
+        self._old_device(DEVICE_B, 35)
+        self._old_device(DEVICE_C, 34)
+        client, _ = self.device(DEVICE_A)
+        self.assertEqual(client.get(PROBE).status_code, 200)
+
+    def test_recently_used_devices_still_hold_their_slots(self):
+        self._old_device(DEVICE_A, 40)
+        self._old_device(DEVICE_B, 1)
+        self._old_device(DEVICE_C, 1)
+        client, _ = self.device(DEVICE_A)
+        self.assert_code(client.get(PROBE), 401, 'device_limit_reached')
+
     def test_admins_are_exempt(self):
         make_user('boss', 'boss@example.com', role='admin', is_staff=True)
         for device_id in (DEVICE_A, DEVICE_B, DEVICE_C):
@@ -732,10 +753,11 @@ class NativeClientAddressTests(_NativeTestCase):
         return self.client.post('/api/auth/native/login/', {'email': 'a@example.com', 'password': 'x'},
                                 format='json', **meta)
 
-    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP')
+    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP', TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare')
     def test_documented_header_without_num_proxies_cannot_be_steered(self):
         """Verifier probe: TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP and no NUM_PROXIES let every
-        request with a new forged X-Forwarded-For / CF-Connecting-IP into a new bucket."""
+        request with a new forged X-Forwarded-For / CF-Connecting-IP into a new bucket. With the
+        (opt-in) Cloudflare restriction the forged headers no longer count."""
         with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': None}), \
                 mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_login': '1/min'}):
             statuses = [
@@ -745,7 +767,7 @@ class NativeClientAddressTests(_NativeTestCase):
             ]
         self.assertEqual(statuses, [401, 429, 429])
 
-    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP')
+    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP', TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare')
     def test_behind_railway_and_cloudflare_each_visitor_has_a_bucket(self):
         railway_proxy = '100.64.0.2'
         with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1}), \
